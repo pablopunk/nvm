@@ -46,7 +46,11 @@ function fakeWindowUi(indicators: any[]) {
   };
 }
 
-function fakeWindowActions(invalidations: string[]) {
+function fakeWindowActions(
+  invalidations: string[],
+  contributionRefreshCalls: unknown[][],
+  refreshImplementation: FakeWindowContextOptions['refreshContributions'],
+) {
   return {
     input: {
       prompt: (input: any) => ({ type: 'prompt-action', ...input }),
@@ -57,6 +61,10 @@ function fakeWindowActions(invalidations: string[]) {
         handler,
         ...options,
       }),
+      refreshContributions: recordingCall(
+        contributionRefreshCalls,
+        refreshImplementation ?? (() => Promise.resolve({ ok: true })),
+      ),
     },
     views: {
       refresh: () => ({ type: 'refresh-action' }),
@@ -94,6 +102,7 @@ export interface FakeWindowContextOptions {
   appleScript?: (...args: unknown[]) => Promise<unknown>;
   withWindowManagementFacet?: boolean;
   withWindowManagementCapability?: boolean;
+  refreshContributions?: (...args: unknown[]) => Promise<unknown>;
 }
 
 export function fakeWindowManagementContext(
@@ -104,6 +113,7 @@ export function fakeWindowManagementContext(
   const applyCalls: unknown[][] = [];
   const appleScriptCalls: unknown[][] = [];
   const invalidations: string[] = [];
+  const contributionRefreshCalls: unknown[][] = [];
   const storage = memoryExtensionStorage(options.storage);
   const ctx = {
     storage,
@@ -119,7 +129,11 @@ export function fakeWindowManagementContext(
       info: () => undefined,
     },
     ...fakeWindowUi(indicators),
-    ...fakeWindowActions(invalidations),
+    ...fakeWindowActions(
+      invalidations,
+      contributionRefreshCalls,
+      options.refreshContributions,
+    ),
   };
   return {
     ctx: ctx as any,
@@ -129,5 +143,6 @@ export function fakeWindowManagementContext(
     appleScriptCalls,
     logs,
     invalidations,
+    contributionRefreshCalls,
   };
 }

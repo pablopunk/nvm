@@ -167,9 +167,10 @@ test('a missing window management facet shows unavailable feedback', async () =>
 });
 
 test('each catalog layout contributes a layout.<id> action with a run handler', () => {
-  const actions = windowLayoutActions();
+  const { ctx } = fakeWindowManagementContext();
+  const actions = windowLayoutActions(ctx);
   assert.equal(actions.length, Object.keys(WINDOW_LAYOUT_SPECS).length);
-  assert.equal(windowLayoutAction('restore').id, 'layout.restore');
+  assert.equal(windowLayoutAction(ctx, 'restore').id, 'layout.restore');
   for (const action of actions) {
     assert.equal(action.mode, 'noView');
     assert.equal(typeof action.run, 'function');

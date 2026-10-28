@@ -4,6 +4,7 @@ import type {
   ExtensionFormValue,
   ExtensionView,
 } from '../resources/nevermind-extension-api';
+import { refreshWindowManagementContributions } from './window-management-contributions';
 import {
   type CustomWindowCommand,
   type CustomWindowCommandsStore,
@@ -146,6 +147,7 @@ async function saveCustomWindowCommand(
     editingId,
   );
   await store.save(nextCustomWindowCommands(commands, command, editingId));
+  await refreshWindowManagementContributions(ctx);
   ctx.views.invalidate();
   return { navigation: 'pop' as const, action: ctx.views.refresh() };
 }

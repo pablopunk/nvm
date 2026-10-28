@@ -5,9 +5,10 @@ import type {
 } from '../resources/nevermind-extension-api';
 import {
   applyWindowSpecWithSettings,
-  WINDOW_MANAGEMENT_OS_CAPABILITY,
   WINDOW_MANAGEMENT_SUBTITLE,
+  windowLayoutKeywords,
 } from './window-management-commands';
+import { refreshWindowManagementContributions } from './window-management-contributions';
 import {
   customCommandFormValues,
   customWindowCommandFormView,
@@ -25,6 +26,7 @@ import {
   exactWindowLayoutSpec,
   formatExactDimension,
 } from './window-management-exact-values';
+import { windowManagementSettingsAction } from './window-management-settings-action';
 
 const LIST_VIEW_ID = 'window-management-custom-commands';
 
@@ -64,6 +66,7 @@ function deleteCustomCommandAction(
     async (innerCtx) => {
       const commands = await store.load();
       await store.save(commands.filter((entry) => entry.id !== command.id));
+      await refreshWindowManagementContributions(innerCtx);
       innerCtx.views.invalidate();
       return {
         patch: { items: await customWindowCommandItems(innerCtx, store) },
@@ -117,8 +120,37 @@ function createCustomCommandRow(
   });
 }
 
-function matchesQuery(command: CustomWindowCommand, needle: string) {
-  return command.title.toLowerCase().includes(needle);
+function customWindowCommandActionLocalId(command: CustomWindowCommand) {
+  return `layout.custom.${command.id}`;
+}
+
+function customWindowCommandAction(
+  ctx: ExtensionContext,
+  command: CustomWindowCommand,
+) {
+  return {
+    id: customWindowCommandActionLocalId(command),
+    title: command.title,
+    subtitle: describeCustomWindowCommand(command),
+    icon: ROW_ICON,
+    keywords: windowLayoutKeywords(),
+    mode: 'noView' as const,
+    dismissAfterRun: 'auto' as const,
+    actions: [windowManagementSettingsAction(ctx)],
+    run: (innerCtx: ExtensionContext) =>
+      applyCustomWindowCommand(innerCtx, command),
+  };
+}
+
+async function loadCustomWindowCommandsOrEmpty(ctx: ExtensionContext) {
+  try {
+    return await extensionWindowCustomCommandsStore(ctx).load();
+  } catch (error) {
+    ctx.logs.error('Custom window commands could not be loaded', {
+      error: String(error),
+    });
+    return [];
+  }
 }
 
 export const CUSTOM_COMMANDS_TITLE = 'Custom Window Commands';
@@ -127,16 +159,22 @@ export function describeCustomWindowCommand(command: CustomWindowCommand) {
   return describeDimensionPart(command).join(' · ');
 }
 
+export function applyCustomWindowCommand(
+  ctx: ExtensionContext,
+  command: CustomWindowCommand,
+) {
+  return applyWindowSpecWithSettings(ctx, command.title, () =>
+    exactWindowLayoutSpec(customWindowCommandDimensions(command)),
+  );
+}
+
 export function runCustomWindowCommandAction(
   ctx: ExtensionContext,
   command: CustomWindowCommand,
 ) {
   return ctx.actions.run(
     command.title,
-    (innerCtx) =>
-      applyWindowSpecWithSettings(innerCtx, command.title, () =>
-        exactWindowLayoutSpec(customWindowCommandDimensions(command)),
-      ),
+    (innerCtx) => applyCustomWindowCommand(innerCtx, command),
     { dismissAfterRun: 'auto' },
   );
 }
@@ -176,27 +214,7 @@ export function customWindowCommandsCommand() {
   };
 }
 
-export async function customWindowCommandSearchItems(
-  ctx: ExtensionContext,
-  query: string,
-): Promise<ExtensionItem[]> {
-  const needle = query.trim().toLowerCase();
-  if (!needle) {
-    return [];
-  }
-  if (!ctx.system.capabilities.has(WINDOW_MANAGEMENT_OS_CAPABILITY)) {
-    return [];
-  }
-  const commands = await extensionWindowCustomCommandsStore(ctx).load();
-  return commands
-    .filter((command) => matchesQuery(command, needle))
-    .map((command) =>
-      ctx.ui.item({
-        id: `custom:${command.id}`,
-        title: command.title,
-        subtitle: describeCustomWindowCommand(command),
-        icon: ROW_ICON,
-        primaryAction: runCustomWindowCommandAction(ctx, command),
-      }),
-    );
+export async function customWindowCommandActions(ctx: ExtensionContext) {
+  const commands = await loadCustomWindowCommandsOrEmpty(ctx);
+  return commands.map((command) => customWindowCommandAction(ctx, command));
 }

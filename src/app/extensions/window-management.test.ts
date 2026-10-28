@@ -3,8 +3,25 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { WINDOW_LAYOUT_IDS } from '../electron/os/window-layout-catalog';
 import { createWindowManagementExtension } from './window-management';
+import { CUSTOM_WINDOW_COMMANDS_KEY } from './window-management-custom-store';
 import { WINDOW_LAYOUT_PRESENTATION } from './window-management-layout-presentation';
 import { fakeWindowManagementContext } from './window-management-test-doubles';
+
+const SETTINGS_ACTION_TITLE = 'Window Management Settings';
+
+const DESKTOP_LOCAL_IDS = ['next-desktop', 'previous-desktop'];
+
+const EXACT_ACTION_COUNT = 2;
+
+const BUILT_IN_ACTION_COUNT =
+  WINDOW_LAYOUT_IDS.length + EXACT_ACTION_COUNT + DESKTOP_LOCAL_IDS.length;
+
+const LEFT_THIRD = {
+  id: 'custom-left-third',
+  title: 'Left third',
+  x: { value: 0, unit: 'points' },
+  width: { value: 33, unit: 'percent' },
+};
 
 const P1_PERSISTED_IDS = [
   'extension-action:window-management:layout.left-half',
@@ -22,35 +39,55 @@ const EXACT_AND_DESKTOP_PERSISTED_IDS = [
   'extension-action:window-management:previous-desktop',
 ];
 
+const CUSTOM_PERSISTED_IDS = [
+  'extension-action:window-management:layout.custom.custom-left-third',
+];
+
 const COMMAND_PERSISTED_IDS = [
   'extension:window-management:settings',
   'extension:window-management:custom-commands',
 ];
 
-function contextFor(hasWindowManagement: boolean) {
+function contextFor(
+  hasWindowManagement: boolean,
+  storage: Record<string, unknown> = {},
+) {
   return fakeWindowManagementContext({
+    storage,
     withWindowManagementCapability: hasWindowManagement,
   }).ctx;
 }
 
-function actionsFor(hasWindowManagement: boolean) {
-  return createWindowManagementExtension().actions(
-    contextFor(hasWindowManagement) as any,
-  ) as Array<{ id: string; title: string; icon: string }>;
+async function actionsFor(
+  hasWindowManagement: boolean,
+  storage: Record<string, unknown> = {},
+) {
+  const actions = await createWindowManagementExtension().actions(
+    contextFor(hasWindowManagement, storage) as any,
+  );
+  return actions as Array<{
+    id: string;
+    title: string;
+    icon: string;
+    actions?: Array<{ title: string }>;
+  }>;
 }
 
 function persistedIdOf(localId: string) {
   return `extension-action:window-management:${localId}`;
 }
 
-function layoutActionsFor(hasWindowManagement: boolean) {
-  return actionsFor(hasWindowManagement).filter((action) =>
-    action.id.startsWith('layout.'),
-  );
+async function layoutActionsFor(hasWindowManagement: boolean) {
+  const actions = await actionsFor(hasWindowManagement);
+  return actions.filter((action) => action.id.startsWith('layout.'));
 }
 
-test('persisted ids of the P1 layouts are unchanged', () => {
-  const persistedIds = layoutActionsFor(true).map((action) =>
+function customStorageWith(commands: unknown[]) {
+  return { [CUSTOM_WINDOW_COMMANDS_KEY]: commands };
+}
+
+test('persisted ids of the P1 layouts are unchanged', async () => {
+  const persistedIds = (await layoutActionsFor(true)).map((action) =>
     persistedIdOf(action.id),
   );
   for (const expectedId of P1_PERSISTED_IDS) {
@@ -58,16 +95,16 @@ test('persisted ids of the P1 layouts are unchanged', () => {
   }
 });
 
-test('every catalog layout is contributed exactly once as a durable action', () => {
+test('every catalog layout is contributed exactly once as a durable action', async () => {
   assert.deepEqual(
-    layoutActionsFor(true).map((action) => action.id),
+    (await layoutActionsFor(true)).map((action) => action.id),
     WINDOW_LAYOUT_IDS.map((id) => `layout.${id}`),
   );
 });
 
-test('each layout action carries its presentation title and icon', () => {
+test('each layout action carries its presentation title and icon', async () => {
   assert.deepEqual(
-    layoutActionsFor(true).map((action) => [action.title, action.icon]),
+    (await layoutActionsFor(true)).map((action) => [action.title, action.icon]),
     WINDOW_LAYOUT_IDS.map((id) => [
       WINDOW_LAYOUT_PRESENTATION[id].title,
       WINDOW_LAYOUT_PRESENTATION[id].icon,
@@ -75,12 +112,15 @@ test('each layout action carries its presentation title and icon', () => {
   );
 });
 
-test('layout actions are omitted when window management is unsupported', () => {
-  assert.deepEqual(actionsFor(false), []);
+test('no durable actions are contributed when window management is unsupported', async () => {
+  assert.deepEqual(
+    await actionsFor(false, customStorageWith([LEFT_THIRD])),
+    [],
+  );
 });
 
-test('Move, Resize, and desktop actions get persisted ids that never change', () => {
-  const persistedIds = actionsFor(true)
+test('Move, Resize, and desktop actions get persisted ids that never change', async () => {
+  const persistedIds = (await actionsFor(true))
     .filter((action) => !action.id.startsWith('layout.'))
     .map((action) => persistedIdOf(action.id));
   assert.deepEqual(persistedIds, EXACT_AND_DESKTOP_PERSISTED_IDS);
@@ -93,8 +133,8 @@ test('root commands keep their persisted ids', () => {
   assert.deepEqual(commandIds, COMMAND_PERSISTED_IDS);
 });
 
-test('Move, Resize, and desktop actions are hidden when the capability is absent', () => {
-  const titles = actionsFor(false).map((action) => action.title);
+test('Move, Resize, and desktop actions are hidden when the capability is absent', async () => {
+  const titles = (await actionsFor(false)).map((action) => action.title);
   assert.equal(titles.includes('Move Window…'), false);
   assert.equal(titles.includes('Resize Window…'), false);
   assert.equal(titles.includes('Next Desktop'), false);
@@ -124,8 +164,70 @@ test('contributes the Custom Window Commands root command', () => {
   assert.equal(typeof customCommand.run, 'function');
 });
 
-test('root search contributes no custom command rows for an empty query', async () => {
-  const extension = createWindowManagementExtension();
-  const items = await extension.searchItems(contextFor(true) as any, '');
-  assert.deepEqual(items, []);
+test('custom commands are not searched as root rows; they are durable actions', () => {
+  assert.equal(createWindowManagementExtension().searchItems, undefined);
+});
+
+test('each stored custom command is a durable action with a layout.custom.<id> local id', async () => {
+  const actions = await actionsFor(true, customStorageWith([LEFT_THIRD]));
+  const customIds = actions
+    .filter((action) => action.id.startsWith('layout.custom.'))
+    .map((action) => persistedIdOf(action.id));
+  assert.deepEqual(customIds, CUSTOM_PERSISTED_IDS);
+});
+
+test('actions resolve built-ins followed by one durable action per stored custom command', async () => {
+  const second = { ...LEFT_THIRD, id: 'custom-right', title: 'Right' };
+  const actions = await actionsFor(
+    true,
+    customStorageWith([LEFT_THIRD, second]),
+  );
+  assert.equal(actions.length, BUILT_IN_ACTION_COUNT + 2);
+  assert.deepEqual(
+    actions.slice(BUILT_IN_ACTION_COUNT).map((action) => action.id),
+    ['layout.custom.custom-left-third', 'layout.custom.custom-right'],
+  );
+});
+
+test('a custom command storage failure keeps every built-in action', async () => {
+  const harness = fakeWindowManagementContext();
+  harness.storage.get = () => Promise.reject(new Error('storage unavailable'));
+
+  const actions = await createWindowManagementExtension().actions(
+    harness.ctx as any,
+  );
+
+  assert.equal(actions.length, BUILT_IN_ACTION_COUNT);
+  assert.equal(harness.logs.length, 1);
+});
+
+test('every layout, exact, and custom action offers one Window Management Settings secondary action', async () => {
+  const actions = await actionsFor(true, customStorageWith([LEFT_THIRD]));
+  const durableActions = actions.filter(
+    (action) => !DESKTOP_LOCAL_IDS.includes(action.id),
+  );
+
+  assert.equal(
+    durableActions.length,
+    WINDOW_LAYOUT_IDS.length + EXACT_ACTION_COUNT + 1,
+  );
+  for (const action of durableActions) {
+    assert.deepEqual(
+      (action.actions ?? []).map((secondary) => secondary.title),
+      [SETTINGS_ACTION_TITLE],
+      action.id,
+    );
+  }
+});
+
+test('desktop actions carry no secondary actions', async () => {
+  const actions = await actionsFor(true);
+  const desktopActions = actions.filter((action) =>
+    DESKTOP_LOCAL_IDS.includes(action.id),
+  );
+
+  assert.equal(desktopActions.length, 2);
+  for (const action of desktopActions) {
+    assert.equal(action.actions, undefined, action.id);
+  }
 });

@@ -11,6 +11,7 @@ import { showExtensionFeedback } from './feedback';
 import { WINDOW_LAYOUT_PRESENTATION } from './window-management-layout-presentation';
 import { windowManagementOptionsFor } from './window-management-options';
 import { extensionWindowManagementSettingsStore } from './window-management-settings';
+import { windowManagementSettingsAction } from './window-management-settings-action';
 import type { WindowManagementSettings } from './window-management-settings-model';
 import { windowLayoutSpecFor } from './window-management-specs';
 
@@ -39,6 +40,10 @@ export function windowLayoutLocalId(id: WindowLayoutId) {
   return `layout.${id}`;
 }
 
+export function windowLayoutKeywords() {
+  return [...WINDOW_LAYOUT_KEYWORDS];
+}
+
 export async function applyWindowSpecWithSettings(
   ctx: ExtensionContext,
   title: string,
@@ -60,20 +65,21 @@ export function applyWindowLayout(ctx: ExtensionContext, id: WindowLayoutId) {
   );
 }
 
-export function windowLayoutAction(id: WindowLayoutId) {
+export function windowLayoutAction(ctx: ExtensionContext, id: WindowLayoutId) {
   const presentation = WINDOW_LAYOUT_PRESENTATION[id];
   return {
     id: windowLayoutLocalId(id),
     title: presentation.title,
     subtitle: WINDOW_MANAGEMENT_SUBTITLE,
     icon: presentation.icon,
-    keywords: [...WINDOW_LAYOUT_KEYWORDS, ...presentation.keywords],
+    keywords: [...windowLayoutKeywords(), ...presentation.keywords],
     mode: 'noView' as const,
     dismissAfterRun: 'auto' as const,
-    run: (ctx: ExtensionContext) => applyWindowLayout(ctx, id),
+    actions: [windowManagementSettingsAction(ctx)],
+    run: (innerCtx: ExtensionContext) => applyWindowLayout(innerCtx, id),
   };
 }
 
-export function windowLayoutActions() {
-  return WINDOW_LAYOUT_IDS.map((id) => windowLayoutAction(id));
+export function windowLayoutActions(ctx: ExtensionContext) {
+  return WINDOW_LAYOUT_IDS.map((id) => windowLayoutAction(ctx, id));
 }

@@ -17,6 +17,7 @@ import {
   exactWindowLayoutSpec,
   parseExactDimensions,
 } from './window-management-exact-values';
+import { windowManagementSettingsAction } from './window-management-settings-action';
 
 interface ExactWindowPresentation {
   id: string;
@@ -195,6 +196,7 @@ export function exactWindowAction(
     subtitle: WINDOW_MANAGEMENT_SUBTITLE,
     icon: presentation.icon,
     keywords: presentation.keywords,
+    actions: [windowManagementSettingsAction(ctx)],
     action: ctx.input.prompt({
       title: presentation.title,
       message: EXACT_WINDOW_HINT,

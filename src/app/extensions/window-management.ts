@@ -7,7 +7,7 @@ import {
   windowLayoutActions,
 } from './window-management-commands';
 import {
-  customWindowCommandSearchItems,
+  customWindowCommandActions,
   customWindowCommandsCommand,
 } from './window-management-custom-commands';
 import { windowDesktopActions } from './window-management-desktops';
@@ -37,19 +37,15 @@ export function createWindowManagementExtension() {
       windowManagementSettingsCommand(),
       customWindowCommandsCommand(),
     ],
-    searchItems(ctx, query) {
-      return windowManagementSupported(ctx)
-        ? customWindowCommandSearchItems(ctx, query)
-        : [];
-    },
-    actions(ctx) {
+    async actions(ctx) {
       if (!windowManagementSupported(ctx)) {
         return [];
       }
       return [
-        ...windowLayoutActions(),
+        ...windowLayoutActions(ctx),
         ...exactWindowActions(ctx),
         ...windowDesktopActions(),
+        ...(await customWindowCommandActions(ctx)),
       ];
     },
   } satisfies NevermindExtension;

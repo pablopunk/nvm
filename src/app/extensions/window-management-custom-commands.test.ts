@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_WINDOW_MANAGEMENT_OPTIONS } from '../electron/os/window-management-types';
 import {
+  customWindowCommandActions,
   customWindowCommandItems,
-  customWindowCommandSearchItems,
   customWindowCommandsView,
   describeCustomWindowCommand,
 } from './window-management-custom-commands';
@@ -117,7 +117,8 @@ test('Edit opens the form prefilled with the command values', async () => {
 });
 
 test('saving an edit keeps the id and replaces the command', async () => {
-  const { ctx, storage, invalidations } = seededContext();
+  const { ctx, storage, invalidations, contributionRefreshCalls } =
+    seededContext();
   const [row] = rowsOf(await customWindowCommandsView(ctx));
   const form = await panelActionsOf(row)[0].handler(ctx);
 
@@ -135,10 +136,11 @@ test('saving an edit keeps the id and replaces the command', async () => {
     },
   ]);
   assert.deepEqual(invalidations, ['root-items']);
+  assert.equal(contributionRefreshCalls.length, 1);
 });
 
 test('creating a command stores a new id with only the set dimensions', async () => {
-  const { ctx, storage } = seededContext([]);
+  const { ctx, storage, contributionRefreshCalls } = seededContext([]);
   const view = (await customWindowCommandsView(ctx)) as any;
   const form = await view.items[0].primaryAction.handler(ctx);
 
@@ -154,6 +156,38 @@ test('creating a command stores a new id with only the set dimensions', async ()
     title: 'Half screen',
     width: { value: 50, unit: 'percent' },
   });
+  assert.equal(contributionRefreshCalls.length, 1);
+});
+
+test('a failed contribution refresh does not block saving the command', async () => {
+  const { ctx, storage } = fakeWindowManagementContext({
+    storage: { [CUSTOM_WINDOW_COMMANDS_KEY]: [] },
+    refreshContributions: () => Promise.reject(new Error('refresh failed')),
+  });
+  const view = (await customWindowCommandsView(ctx)) as any;
+  const form = await view.items[0].primaryAction.handler(ctx);
+
+  const result = await form.submitAction.handler(ctx, {
+    formValues: formValuesFor({ title: 'Half screen', width: '50' }),
+  });
+
+  assert.equal(result.navigation, 'pop');
+  assert.equal(
+    (storage.values.get(CUSTOM_WINDOW_COMMANDS_KEY) as unknown[]).length,
+    1,
+  );
+});
+
+test('an invalid form does not refresh contributions', async () => {
+  const { ctx, contributionRefreshCalls } = seededContext([]);
+  const view = (await customWindowCommandsView(ctx)) as any;
+  const form = await view.items[0].primaryAction.handler(ctx);
+
+  await form.submitAction.handler(ctx, {
+    formValues: formValuesFor({ title: '  ', width: '0' }),
+  });
+
+  assert.equal(contributionRefreshCalls.length, 0);
 });
 
 test('an empty title and an out-of-range width re-show the form with errors', async () => {
@@ -202,7 +236,7 @@ test('creating past the limit is refused with a title error', async () => {
 });
 
 test('delete asks for confirmation and removes the command from the list', async () => {
-  const { ctx, storage } = seededContext();
+  const { ctx, storage, contributionRefreshCalls } = seededContext();
   const [row] = rowsOf(await customWindowCommandsView(ctx));
   const deleteAction = panelActionsOf(row)[1];
 
@@ -217,33 +251,34 @@ test('delete asks for confirmation and removes the command from the list', async
     patch.patch.items.map((item: any) => item.id),
     ['create-custom-command'],
   );
+  assert.equal(contributionRefreshCalls.length, 1);
 });
 
-test('root search matches command titles and runs the match', async () => {
+test('custom command actions are durable, one per stored command, with exact-spec runs', async () => {
   const { ctx, applyCalls } = seededContext();
 
-  const items = await customWindowCommandSearchItems(ctx, ' LEFT ');
-  await items[0].primaryAction.handler(ctx);
+  const [action] = await customWindowCommandActions(ctx);
+  await action.run(ctx);
 
+  assert.equal(action.id, 'layout.custom.custom-left-third');
+  assert.equal(action.title, 'Left third');
+  assert.equal(action.subtitle, 'X offset 0 pt · Width 33%');
+  assert.equal(action.mode, 'noView');
+  assert.equal(action.dismissAfterRun, 'auto');
+  assert.deepEqual(action.keywords, ['snap', 'tile']);
   assert.deepEqual(
-    items.map((item: any) => item.id),
-    [`custom:${LEFT_THIRD.id}`],
+    action.actions.map((secondary: any) => secondary.title),
+    ['Window Management Settings'],
   );
   assert.equal(applyCalls.length, 1);
 });
 
-test('root search stays silent for an empty query or unsupported systems', async () => {
-  const { ctx } = seededContext();
-  assert.deepEqual(await customWindowCommandSearchItems(ctx, '  '), []);
+test('custom command actions are empty when the store is unreadable', async () => {
+  const harness = seededContext();
+  harness.storage.get = () => Promise.reject(new Error('storage unavailable'));
 
-  const unsupported = fakeWindowManagementContext({
-    storage: { [CUSTOM_WINDOW_COMMANDS_KEY]: [LEFT_THIRD] },
-    withWindowManagementCapability: false,
-  });
-  assert.deepEqual(
-    await customWindowCommandSearchItems(unsupported.ctx, 'left'),
-    [],
-  );
+  assert.deepEqual(await customWindowCommandActions(harness.ctx), []);
+  assert.equal(harness.logs.length, 1);
 });
 
 test('row items reflect the store contents at build time', async () => {
