@@ -3441,6 +3441,89 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);
 });
 
+test('google proxy rejects unsupported operation paths before reserving credits or calling upstream', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gemini-3-flash' }) }));
+  const fetchedUrls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    fetchedUrls.push(String(input instanceof Request ? input.url : input));
+    return Response.json({});
+  };
+  for (const path of [
+    'placeholder:streamGenerateContent/../../chat/completions',
+    'x:foo',
+  ]) {
+    const response = await postGoogleModel({
+      ...routeContext(authorizedGoogleRequest()),
+      params: { path },
+    } as any);
+    assert.equal(response.status, 400);
+    const body = await response.json() as any;
+    assert.equal(body.error.type, 'unsupported_request_shape');
+    assert.equal(body.error.message, 'Unsupported Google model operation.');
+  }
+  assert.deepEqual(fetchedUrls, []);
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('google proxy forwards only an allowlisted alt query parameter upstream', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  const upstreamUrls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    }
+    upstreamUrls.push(url);
+    return new Response(streamFromTextChunks(splitGoogleUsageStream), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const requestUrl = new URL(
+    'https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?key=evil&alt=sse',
+  );
+  const response = await postGoogleModel({
+    ...routeContext(authorizedGoogleRequest(), requestUrl),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(upstreamUrls, [
+    'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse',
+  ]);
+});
+
+test('google proxy returns model_route_changed when the route resolves to a non-Google API', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  const response = await postGoogleModel({
+    ...routeContext(authorizedGoogleRequest()),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as any).error.type, 'model_route_changed');
+  assert.equal(db.insertedValues.length, 0);
+});
+
 test('proxy failover: primary 5xx falls back to next provider in chain', async () => {
   resetPricingCacheForTests();
   process.env.OPENCODE_API_KEY = 'primary-key';
