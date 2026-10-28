@@ -212,6 +212,19 @@ test('route choices require function tools and exclude incompatible reasoning wi
   }
 });
 
+test('verified Responses route offers GPT-6.1 Sol only for smart', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: { models: { 'openai/gpt-6.1-sol': {
+      id: 'openai/gpt-6.1-sol', reasoning: true, tool_call: true,
+      modalities: { input: ['text', 'image'], output: ['text'] },
+      cost: { input: 1, output: 2 },
+    } } },
+  });
+  assert.ok((await listModelsForRouteKind('openrouter', 'smart')).includes('openai/gpt-6.1-sol'));
+  assert.equal(await modelFitsRouteKind('openrouter', 'openai/gpt-6.1-sol', 'smart'), true);
+  assert.equal(await modelFitsRouteKind('openrouter', 'openai/gpt-6.1-sol', 'fast'), false);
+});
+
 test('route model choices follow the slot criteria from the catalog', async () => {
   globalThis.fetch = mockFetch({
     openrouter: {

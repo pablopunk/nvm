@@ -6,6 +6,7 @@ export class UpstreamConfigError extends Error {}
 
 export function selectApiForModel(provider: string, modelId: string): UpstreamApi {
   if ((provider === 'opencode_zen' || provider === 'openai') && modelId === 'gpt-6.1-sol') return 'openai-responses';
+  if (provider === 'openrouter' && modelId === 'openai/gpt-6.1-sol') return 'openai-responses';
   if (provider === 'openrouter') return 'openai-completions';
   if (modelId.startsWith('gemini-')) return 'google-generative-ai';
   if (modelId.startsWith('claude-')) return 'anthropic-messages';
@@ -30,7 +31,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     apiKeyEnv: 'OPENROUTER_API_KEY',
     baseUrlEnv: 'OPENROUTER_BASE_URL',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
-    apiFormats: ['openai-completions'],
+    apiFormats: ['openai-completions', 'openai-responses'],
   },
   anthropic: {
     apiKeyEnv: 'ANTHROPIC_API_KEY',

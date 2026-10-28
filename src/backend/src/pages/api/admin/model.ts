@@ -9,6 +9,7 @@ import {
 } from '../../../lib/admin-mutations';
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
+import { supportsModelThinkingLevel } from '../../../lib/model-capabilities';
 import {
   lookupModelCost,
   modelFitsRouteKind,
@@ -161,6 +162,8 @@ export const PUT: APIRoute = async ({ request }) => {
       : ((body.thinkingLevel as ThinkingLevel | undefined) ??
         (await safeRoute(slot))?.thinkingLevel ??
         DEFAULT_THINKING_LEVEL);
+  if (!supportsModelThinkingLevel(route.modelId, thinkingLevel))
+    return Response.json({ error: { type: 'unsupported_thinking_level', message: 'This model requires a thinking level of low or higher.' } }, { status: 400 });
   const idempotencyKey = adminMutationKeyFromRequest(request);
   if (!idempotencyKey) {
     return Response.json(

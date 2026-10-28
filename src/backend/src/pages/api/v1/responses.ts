@@ -21,6 +21,7 @@ function parseResponsesUsage(json: any): UsageTokens | null {
     outputTokens: usage.output_tokens ?? 0,
     cachedInputTokens: usage.input_tokens_details?.cached_tokens ?? 0,
     reasoningTokens: usage.output_tokens_details?.reasoning_tokens ?? 0,
+    providerCostUsd: typeof usage.cost === 'number' ? usage.cost : undefined,
   };
 }
 
@@ -51,6 +52,7 @@ function parseResponsesStream(
       acc.outputTokens = usage.outputTokens;
       acc.cachedInputTokens = usage.cachedInputTokens;
       acc.reasoningTokens = usage.reasoningTokens;
+      acc.providerCostUsd = usage.providerCostUsd;
       acc.finalized = true;
     }
   }

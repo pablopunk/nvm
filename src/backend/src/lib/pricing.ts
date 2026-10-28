@@ -416,10 +416,10 @@ export function routeKindForSlot(slot: string): RouteKind {
  * Both routes require tool calls and token prices. Smart routes also require
  * image input and reasoning compatible with tools; fast routes disable thinking.
  */
-function fitsRouteKind(model: ModelsDevModel, kind: RouteKind): boolean {
+function fitsRouteKind(provider: string, model: ModelsDevModel, kind: RouteKind): boolean {
   if (!hasValidPricing(model.cost)) return false;
   if (model.tool_call !== true) return false;
-  if (requiresResponsesForTools(model.id)) return false;
+  if (requiresResponsesForTools(model.id) && (kind === 'fast' || !['openai', 'openrouter'].includes(provider))) return false;
   const input = model.modalities?.input ?? ['text'];
   const output = model.modalities?.output ?? ['text'];
   if (!input.includes('text') || !output.includes('text')) return false;
@@ -436,7 +436,7 @@ export async function modelFitsRouteKind(
 ): Promise<boolean> {
   const resolved = await runtimeModel(provider, modelId);
   return Boolean(
-    resolved && resolved.source !== 'fallback' && fitsRouteKind(resolved.model, kind),
+    resolved && resolved.source !== 'fallback' && fitsRouteKind(provider, resolved.model, kind),
   );
 }
 
@@ -451,7 +451,7 @@ export async function listModelsForRouteKind(
     ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
   };
   return Object.entries(models)
-    .filter(([, model]) => fitsRouteKind(model, kind))
+    .filter(([, model]) => fitsRouteKind(provider, model, kind))
     .map(([modelId]) => modelId)
     .sort();
 }
