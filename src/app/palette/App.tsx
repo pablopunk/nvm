@@ -3229,10 +3229,6 @@ export function App() {
     );
   }
 
-  function showPrimaryExtensionView(view: ExtensionView) {
-    extensionNavigation.startShortcut(view, crypto.randomUUID(), true);
-  }
-
   function popExtensionView() {
     setExtensionItemOptionsFor(null);
     const currentFrame = extensionNavigation.currentFrame();
