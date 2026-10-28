@@ -22,7 +22,7 @@ function reportWindowLayoutResult(
 ) {
   if (!result) {
     showExtensionFeedback(ctx, title, WINDOW_UNAVAILABLE_MESSAGE, 'error');
-  } else if (!result.ok) {
+  } else if (result.ok === false) {
     showExtensionFeedback(ctx, title, result.message, 'error');
   } else if (result.outcome === 'partial' && result.reason) {
     showExtensionFeedback(ctx, title, result.reason);

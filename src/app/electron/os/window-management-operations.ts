@@ -43,7 +43,7 @@ export async function runWindowOperation(
   const writable = await resolveWritableWindow(dependencies, target, {
     allowFullScreen: spec.kind === 'toggle-full-screen',
   });
-  if (!writable.ok) {
+  if (writable.ok === false) {
     return writable.failure;
   }
   if (source === 'shortcut') {

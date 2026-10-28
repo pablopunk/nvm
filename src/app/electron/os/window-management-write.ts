@@ -100,7 +100,7 @@ export async function writeWithCorrection(
       frame: requested,
     }),
   );
-  if (!first.ok) {
+  if (first.ok === false) {
     return first.failure;
   }
   const written = first.value;

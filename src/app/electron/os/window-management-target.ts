@@ -61,7 +61,7 @@ export async function resolveWritableWindow(
     return { ok: false, failure: failure('denied') };
   }
   const focused = unwrapEnvelope(await manager.focusedWindow(target.pid));
-  if (!focused.ok) {
+  if (focused.ok === false) {
     return focused;
   }
   const rejection = describeFocusedWindowRejection(
@@ -73,7 +73,7 @@ export async function resolveWritableWindow(
     return { ok: false, failure: rejection };
   }
   const displays = unwrapEnvelope(await manager.displays());
-  if (!displays.ok) {
+  if (displays.ok === false) {
     return displays;
   }
   if (displays.value.length === 0) {

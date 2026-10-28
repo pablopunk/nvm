@@ -18,7 +18,7 @@ export async function applyFullScreenToggle(
       !focused.isFullScreen,
     ),
   );
-  if (!settled.ok) {
+  if (settled.ok === false) {
     return settled.failure;
   }
   const { outcome, changed, frame, reason } = settled.value;

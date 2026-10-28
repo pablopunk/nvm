@@ -83,10 +83,10 @@ for (const [label, input, accepted] of PARSE_CASES) {
   test(`parse: ${label}`, () => {
     const result = parseWholeNumberSettingInput(input, GAP_SETTING);
     assert.equal(result.ok, accepted);
-    if (result.ok) {
-      assert.equal(result.value, Number(String(input).trim()));
-    } else {
+    if (result.ok === false) {
       assert.equal(result.message, 'Enter a whole number from 0 to 100.');
+    } else {
+      assert.equal(result.value, Number(String(input).trim()));
     }
   });
 }

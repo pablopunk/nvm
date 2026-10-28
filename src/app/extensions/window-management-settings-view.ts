@@ -74,7 +74,7 @@ function wholeNumberSaveAction(
   return ctx.actions.run(SAVE_TITLE, async (innerCtx, action) => {
     const raw = action.formValues?.[VALUE_FIELD_ID];
     const parsed = parseWholeNumberSettingInput(raw, editor.definition);
-    if (!parsed.ok) {
+    if (parsed.ok === false) {
       return {
         view: wholeNumberPromptView(
           innerCtx,
