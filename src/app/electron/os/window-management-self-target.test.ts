@@ -36,13 +36,22 @@ test('refuses to move Nevermind itself and never touches the helper', async () =
       pickDisplayForFrame: () => {
         throw new Error('engine must not run');
       },
+      moveFrameToDisplay: () => {
+        throw new Error('engine must not run');
+      },
+      adjacentDisplay: () => {
+        throw new Error('engine must not run');
+      },
+      cycleSequence: () => {
+        throw new Error('engine must not run');
+      },
     },
     supported: () => true,
     selfPid: SELF_PID,
   });
   const result = await service.apply(
     LEFT_HALF,
-    { gap: 0 },
+    { gap: 0, cycle: true },
     {
       source: 'shortcut',
       target: { bundleId: 'com.nevermind.app', pid: SELF_PID },

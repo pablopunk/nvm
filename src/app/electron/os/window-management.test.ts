@@ -55,7 +55,11 @@ test('reports availability from the supported probe', () => {
 for (const [spec, gap] of INVALID_LAYOUTS) {
   test(`rejects the malformed layout ${JSON.stringify(spec)} with gap ${gap} before touching any window`, async () => {
     const { service, calls } = createHarness();
-    const result = await service.apply(spec, { gap }, paletteInvocation());
+    const result = await service.apply(
+      spec,
+      { gap, cycle: true },
+      paletteInvocation(),
+    );
     assert.equal(result.ok === false && result.reason, 'invalid-spec');
     assert.deepEqual(calls, []);
   });

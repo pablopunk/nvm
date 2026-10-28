@@ -1,4 +1,7 @@
+// biome-ignore-all lint/style/noMagicNumbers: fixture geometry reads best as literals
 import { createWindowManagementService } from './window-management';
+import type { SimulatedWindow } from './window-management.simulated-window';
+import type { WindowManagementEngine } from './window-management-engine-port';
 import type {
   DisplayInfo,
   EngineInput,
@@ -7,6 +10,7 @@ import type {
   MacosWindowManager,
   SetFrameData,
   SetFrameRequest,
+  WindowCycleGroup,
   WindowFocusTarget,
   WindowInfo,
   WindowInvocation,
@@ -26,6 +30,9 @@ const ORIGINAL_HEIGHT = 400;
 const FINDER_PID = 42;
 const OTHER_PID_VALUE = 43;
 const UNRELATED_PID = 99;
+const HALF = 1 / 2;
+const TWO_THIRDS = 2 / 3;
+const THIRD = 1 / 3;
 
 const WORK_AREA: Frame = {
   x: 0,
@@ -70,7 +77,7 @@ const REQUESTED_LEFT_HALF: Frame = {
   width: SCREEN_WIDTH / 2,
   height: WORK_AREA_HEIGHT,
 };
-const NO_OPTIONS = { gap: 0 };
+const NO_OPTIONS = { gap: 0, cycle: true };
 
 function paletteInvocation(
   target: WindowFocusTarget | null = FINDER,
@@ -122,24 +129,122 @@ function bundleIdForPid(pid: number) {
   return pid === OTHER_APP.pid ? OTHER_APP.bundleId : FINDER.bundleId;
 }
 
-const engine = {
-  computeTargetFrame({ spec, workArea, currentFrame }: EngineInput): Frame {
-    if (spec.kind === 'center') {
-      return {
-        x: workArea.x + (workArea.width - currentFrame.width) / 2,
-        y: workArea.y + (workArea.height - currentFrame.height) / 2,
-        width: currentFrame.width,
-        height: currentFrame.height,
-      };
+function overlapArea(first: Frame, second: Frame) {
+  const width =
+    Math.min(first.x + first.width, second.x + second.width) -
+    Math.max(first.x, second.x);
+  const height =
+    Math.min(first.y + first.height, second.y + second.height) -
+    Math.max(first.y, second.y);
+  return Math.max(0, width) * Math.max(0, height);
+}
+
+function pickDisplayForFrame(
+  displays: DisplayInfo[],
+  frame: Frame,
+): DisplayInfo {
+  let best = displays[0] ?? DISPLAY;
+  let bestArea = 0;
+  for (const display of displays) {
+    const area = overlapArea(display.workArea, frame);
+    if (area > bestArea) {
+      best = display;
+      bestArea = area;
     }
+  }
+  return best;
+}
+
+function adjacentDisplayFor(
+  displays: DisplayInfo[],
+  from: DisplayInfo,
+  direction: 'next' | 'previous',
+): DisplayInfo | null {
+  const ordered = [...displays].sort(
+    (first, second) =>
+      first.frame.x - second.frame.x || first.frame.y - second.frame.y,
+  );
+  const index = ordered.findIndex((display) => display.id === from.id);
+  if (ordered.length < 2 || index < 0) {
+    return null;
+  }
+  const step = direction === 'next' ? 1 : -1;
+  return ordered[(index + step + ordered.length) % ordered.length] ?? null;
+}
+
+function moveFrameToDisplayKeepingOffset({
+  frame,
+  from,
+  to,
+}: {
+  frame: Frame;
+  from: DisplayInfo;
+  to: DisplayInfo;
+}): Frame {
+  return {
+    x: to.workArea.x + (frame.x - from.workArea.x),
+    y: to.workArea.y + (frame.y - from.workArea.y),
+    width: frame.width,
+    height: frame.height,
+  };
+}
+
+function cycleStepFor(group: WindowCycleGroup, size: number): WindowLayoutSpec {
+  const isHorizontal = group === 'left' || group === 'right';
+  const start = group === 'right' || group === 'bottom' ? 1 - size : 0;
+  return isHorizontal
+    ? {
+        kind: 'fraction',
+        x: start,
+        y: 0,
+        width: size,
+        height: 1,
+        cycleGroup: group,
+      }
+    : {
+        kind: 'fraction',
+        x: 0,
+        y: start,
+        width: 1,
+        height: size,
+        cycleGroup: group,
+      };
+}
+
+function cycleSequenceFor(group: WindowCycleGroup): WindowLayoutSpec[] {
+  return [HALF, TWO_THIRDS, THIRD].map((size) => cycleStepFor(group, size));
+}
+
+function computeFractionOrCenterFrame({
+  spec,
+  workArea,
+  currentFrame,
+}: EngineInput): Frame {
+  if (spec.kind === 'center') {
     return {
-      x: workArea.x + spec.x * workArea.width,
-      y: workArea.y + spec.y * workArea.height,
-      width: spec.width * workArea.width,
-      height: spec.height * workArea.height,
+      x: workArea.x + (workArea.width - currentFrame.width) / 2,
+      y: workArea.y + (workArea.height - currentFrame.height) / 2,
+      width: currentFrame.width,
+      height: currentFrame.height,
     };
-  },
-  pickDisplayForFrame: (displays: DisplayInfo[]) => displays[0] ?? DISPLAY,
+  }
+  if (spec.kind !== 'fraction') {
+    throw new Error(`harness engine does not compute ${spec.kind}`);
+  }
+  return {
+    x: workArea.x + spec.x * workArea.width,
+    y: workArea.y + spec.y * workArea.height,
+    width: spec.width * workArea.width,
+    height: spec.height * workArea.height,
+  };
+}
+
+const DEFAULT_ENGINE: WindowManagementEngine = {
+  computeTargetFrame: computeFractionOrCenterFrame,
+  pickDisplayForFrame,
+  moveFrameToDisplay: moveFrameToDisplayKeepingOffset,
+  adjacentDisplay: adjacentDisplayFor,
+  cycleSequence: cycleSequenceFor,
 };
 
 interface HarnessOptions {
@@ -151,6 +256,8 @@ interface HarnessOptions {
   restored?: boolean;
   frontmost?: WindowFocusTarget | null;
   frontmostAfterRestore?: (restored: WindowFocusTarget) => WindowFocusTarget;
+  simulation?: SimulatedWindow;
+  engine?: Partial<WindowManagementEngine>;
 }
 
 function createFakeManager(
@@ -159,6 +266,7 @@ function createFakeManager(
   setFrameRequests: SetFrameRequest[],
 ): MacosWindowManager {
   const writes = [...(harnessOptions.writes ?? [])];
+  const { simulation } = harnessOptions;
   return {
     permissionState() {
       calls.push('permissions');
@@ -175,6 +283,9 @@ function createFakeManager(
       if (harnessOptions.focusedRead) {
         return harnessOptions.focusedRead(pid);
       }
+      if (simulation) {
+        return simulation.focusedRead();
+      }
       return Promise.resolve(
         ok(focusedWindow({ bundleId: bundleIdForPid(pid) })),
       );
@@ -182,11 +293,21 @@ function createFakeManager(
     setFrame(request) {
       calls.push('setFrame');
       setFrameRequests.push(request);
-      return Promise.resolve(writes.shift() ?? writeOk(request.frame));
+      const scripted = writes.shift();
+      if (scripted) {
+        return Promise.resolve(scripted);
+      }
+      return simulation
+        ? simulation.setFrame(request)
+        : Promise.resolve(writeOk(request.frame));
     },
-    setFullScreen() {
+    setFullScreen(pid, windowKey, fullScreen) {
+      calls.push(`fullscreen:${fullScreen}`);
+      if (simulation) {
+        return simulation.setFullScreen(pid, windowKey, fullScreen);
+      }
       return Promise.reject(
-        new Error('setFullScreen is not part of phase one'),
+        new Error('setFullScreen needs a simulated window'),
       );
     },
   };
@@ -223,7 +344,7 @@ function createHarness(harnessOptions: HarnessOptions = {}) {
   const service = createWindowManagementService({
     manager: createFakeManager(harnessOptions, calls, setFrameRequests),
     ports: createFakePorts(harnessOptions, calls),
-    engine,
+    engine: { ...DEFAULT_ENGINE, ...harnessOptions.engine },
     supported: () => harnessOptions.supported ?? true,
   });
   return { service, calls, setFrameRequests };
@@ -234,6 +355,7 @@ const OTHER_PID = OTHER_APP.pid;
 export type { HarnessOptions };
 export {
   createHarness,
+  cycleSequenceFor,
   DISPLAY,
   FINDER,
   fail,
@@ -244,6 +366,7 @@ export {
   OTHER_APP,
   OTHER_PID,
   ok,
+  overlapArea,
   paletteInvocation,
   REQUESTED_LEFT_HALF,
   shortcutInvocation,
