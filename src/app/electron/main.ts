@@ -2057,7 +2057,6 @@ const { pickFormFieldPaths } = createFormFieldPathPicker({
   dialog,
   paletteWindow,
 });
-
 app.whenReady().then(async () => {
   appReady = true;
   if (isNvmTestMode) {
@@ -2065,6 +2064,7 @@ app.whenReady().then(async () => {
     await loadUserState();
     portableConfigService.startPollingPortableConfig();
     await loadExtensions();
+    registerActionShortcuts();
     registerTestModeIpcHandlers();
     paletteWindow.createWindow();
     paletteWindow.showPaletteWhenReady();

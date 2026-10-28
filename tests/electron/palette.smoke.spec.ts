@@ -702,6 +702,35 @@ test('saves a shortcut from the recorder with Enter', async () => {
   }
 });
 
+test('restores a portable shortcut after startup and restart', async () => {
+  const profile = path.join(userDataDir, 'portable-shortcut-restart');
+  const actionId = 'extension:nevermind.system:builtin:settings';
+  const accelerator =
+    process.platform === 'darwin'
+      ? 'Command+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+  await fs.mkdir(profile, { recursive: true });
+  await fs.writeFile(
+    path.join(profile, 'config.json'),
+    JSON.stringify({ version: 1, shortcuts: { [actionId]: accelerator } }),
+  );
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const launched = await launchTestApplication(profile);
+    try {
+      await expect
+        .poll(() =>
+          launched.page.evaluate(
+            (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+            accelerator,
+          ),
+        )
+        .toEqual({ registered: true });
+    } finally {
+      await closeTestApplication(launched.app, launched.trackedPids);
+    }
+  }
+});
+
 test('reloads portable shortcut edits and preserves the last valid file state', async () => {
   test.setTimeout(40_000);
   const profile = path.join(userDataDir, 'portable-shortcut-live');
