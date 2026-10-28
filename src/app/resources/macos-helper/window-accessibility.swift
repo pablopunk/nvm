@@ -41,19 +41,26 @@ func windowIDResolutionIsSupported() -> Bool {
   accessibilityWindowIDFunction != nil
 }
 
-func accessibilityApplication(pid: pid_t) -> AXUIElement {
+func accessibilityApplication(
+  pid: pid_t,
+  timeoutSeconds: Float = windowMessagingTimeoutSeconds
+) -> AXUIElement {
   let application = AXUIElementCreateApplication(pid)
-  _ = AXUIElementSetMessagingTimeout(application, windowMessagingTimeoutSeconds)
+  _ = AXUIElementSetMessagingTimeout(application, timeoutSeconds)
   return application
 }
 
-func accessibleWindow(_ element: AXUIElement, pid: pid_t) -> AccessibleWindow? {
+func accessibleWindow(
+  _ element: AXUIElement,
+  pid: pid_t,
+  timeoutSeconds: Float = windowMessagingTimeoutSeconds
+) -> AccessibleWindow? {
   guard let resolveWindowID = accessibilityWindowIDFunction else { return nil }
   var identifier: CGWindowID = 0
   guard resolveWindowID(element, &identifier) == .success, identifier != 0 else {
     return nil
   }
-  _ = AXUIElementSetMessagingTimeout(element, windowMessagingTimeoutSeconds)
+  _ = AXUIElementSetMessagingTimeout(element, timeoutSeconds)
   return AccessibleWindow(element: element, pid: pid, id: identifier)
 }
 
@@ -74,6 +81,41 @@ func accessibilityWindows(_ application: AXUIElement) -> [AXUIElement] {
 func focusedOrMainWindowElement(_ application: AXUIElement) -> AXUIElement? {
   copyElementAttribute(application, kAXFocusedWindowAttribute as CFString)
     ?? copyElementAttribute(application, kAXMainWindowAttribute as CFString)
+}
+
+func focusedManageableWindowElement(_ application: AXUIElement) -> AXUIElement? {
+  guard let focused = focusedOrMainWindowElement(application) else { return nil }
+  guard isTransientWindowElement(focused) else { return focused }
+  return owningWindowElement(ofTransient: focused, application: application)
+}
+
+func isTransientWindowElement(_ element: AXUIElement) -> Bool {
+  if isSheetElement(element) { return true }
+  guard let subrole = stringAttribute(element, kAXSubroleAttribute as CFString) else {
+    return false
+  }
+  return rejectedWindowSubroles.contains(subrole)
+}
+
+func isSheetElement(_ element: AXUIElement) -> Bool {
+  stringAttribute(element, kAXRoleAttribute as CFString) == "AXSheet"
+}
+
+func owningWindowElement(ofTransient transient: AXUIElement, application: AXUIElement) -> AXUIElement? {
+  if isSheetElement(transient), let sheetWindow = sheetParentWindowElement(transient) {
+    return sheetWindow
+  }
+  return copyElementAttribute(application, kAXMainWindowAttribute as CFString)
+}
+
+func sheetParentWindowElement(_ sheet: AXUIElement) -> AXUIElement? {
+  guard
+    let parent = copyElementAttribute(sheet, kAXParentAttribute as CFString),
+    stringAttribute(parent, kAXRoleAttribute as CFString) == "AXWindow"
+  else {
+    return nil
+  }
+  return parent
 }
 
 func windowRejectionReason(_ window: AccessibleWindow) -> String? {

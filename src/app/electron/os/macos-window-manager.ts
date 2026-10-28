@@ -6,6 +6,7 @@ import type {
   DisplayInfo,
   HelperCode,
   HelperEnvelope,
+  ListedWindow,
   MacosWindowManager,
   RunningApp,
   SetFrameData,
@@ -207,6 +208,7 @@ export function createMacosWindowManager(
         String(fullScreen),
       ]),
     runningApps: () => invokeWindowHelper<RunningApp[]>(dependencies, ['apps']),
+    allWindows: () => invokeWindowHelper<ListedWindow[]>(dependencies, ['all']),
     windows: (pid) =>
       invokeWindowHelper<WindowInfo[]>(dependencies, ['list', String(pid)]),
     raiseWindow: (pid, windowKey) =>

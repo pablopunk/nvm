@@ -11,6 +11,7 @@ const sources = [
   'window-manager.swift',
   'window-subcommands.swift',
   'window-accessibility.swift',
+  'window-all.swift',
   'window-display.swift',
   'window-frame-writer.swift',
   'window-fullscreen.swift',
