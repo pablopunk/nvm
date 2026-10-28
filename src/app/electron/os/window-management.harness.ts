@@ -114,7 +114,7 @@ function focusedWindow(overrides: Partial<WindowInfo> = {}): WindowInfo {
   return {
     bundleId: FINDER.bundleId,
     windowKey: '42:7',
-    title: 'Finder',
+    title: 'Notes',
     frame: ORIGINAL_FRAME,
     displayId: 'main',
     isFullScreen: false,

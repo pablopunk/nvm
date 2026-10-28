@@ -1123,18 +1123,18 @@
       "surface": "clipboard-text-image-paste"
     },
     {
-      "key": "os-frontmost-focus-target-platform-selector-d1555a2bdfb3",
+      "key": "os-frontmost-focus-target-platform-selector-c77003fb0aea",
       "file": "src/app/electron/os/os.ts",
       "category": "platform-selector",
-      "selector": "function:frontmostAppFocusTarget::platform-selector::darwin: () => new Promise<AppFocusTarget | null>((resolve) => { execFile('/usr/bin/lsappinfo', […#d1555a2bdfb3::self",
+      "selector": "function:frontmostAppFocusTarget::platform-selector::darwin: () => new Promise<AppFocusTarget | null>((resolve) => { execFile('/usr/bin/lsappinfo', […#c77003fb0aea::self",
       "disposition": "capability-selector",
       "surface": "window-behavior"
     },
     {
-      "key": "os-restore-focus-platform-selector-a1826a63e1a7",
+      "key": "os-restore-focus-platform-selector-d9a897a89ff2",
       "file": "src/app/electron/os/os.ts",
       "category": "platform-selector",
-      "selector": "function:restoreAppFocus::platform-selector::darwin: async () => { const script = `tell application \"System Events\" set matchingProcesses to …#a1826a63e1a7::self",
+      "selector": "function:restoreAppFocus::platform-selector::darwin: async () => { const script = macosAppFocusRestoreScript( appleScriptString(bundleId), ap…#d9a897a89ff2::self",
       "disposition": "capability-selector",
       "surface": "window-behavior"
     },
