@@ -1,4 +1,72 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: fake extension contexts mirror the untyped runtime bridge.
+
+function recordingCall(
+  calls: unknown[][],
+  implementation: ((...args: unknown[]) => Promise<unknown>) | undefined,
+) {
+  return (...args: unknown[]) => {
+    calls.push(args);
+    return (implementation ?? (() => Promise.resolve(undefined)))(...args);
+  };
+}
+
+function fakeCapabilities(hasWindowManagement: boolean) {
+  return {
+    capabilities: {
+      has: (capability: string) =>
+        hasWindowManagement && capability === 'window-management',
+    },
+  };
+}
+
+function fakeDesktop(
+  options: FakeWindowContextOptions,
+  apply: unknown,
+  appleScript: unknown,
+) {
+  return {
+    ...(options.withWindowManagementFacet === false
+      ? {}
+      : { windowManagement: { apply } }),
+    shell: { appleScript },
+  };
+}
+
+function fakeWindowUi(indicators: any[]) {
+  return {
+    indicator: {
+      show: (input: any) => {
+        indicators.push(input);
+      },
+      hide: () => undefined,
+    },
+    item: (item: any) => item,
+    list: (view: any) => ({ type: 'list', ...view }),
+    form: (view: any) => ({ type: 'form', ...view }),
+  };
+}
+
+function fakeWindowActions(invalidations: string[]) {
+  return {
+    input: {
+      prompt: (input: any) => ({ type: 'prompt-action', ...input }),
+    },
+    actions: {
+      run: (title: string, handler: any, options: any = {}) => ({
+        title,
+        handler,
+        ...options,
+      }),
+    },
+    views: {
+      refresh: () => ({ type: 'refresh-action' }),
+      invalidate: () => {
+        invalidations.push('root-items');
+      },
+    },
+  };
+}
+
 export function memoryExtensionStorage(initial: Record<string, unknown> = {}) {
   const values = new Map<string, unknown>(Object.entries(initial));
   return {
@@ -23,42 +91,43 @@ export function memoryExtensionStorage(initial: Record<string, unknown> = {}) {
 export interface FakeWindowContextOptions {
   storage?: Record<string, unknown>;
   apply?: (...args: unknown[]) => Promise<unknown>;
+  appleScript?: (...args: unknown[]) => Promise<unknown>;
   withWindowManagementFacet?: boolean;
+  withWindowManagementCapability?: boolean;
 }
 
 export function fakeWindowManagementContext(
   options: FakeWindowContextOptions = {},
 ) {
   const indicators: any[] = [];
+  const logs: any[] = [];
   const applyCalls: unknown[][] = [];
+  const appleScriptCalls: unknown[][] = [];
+  const invalidations: string[] = [];
   const storage = memoryExtensionStorage(options.storage);
-  const apply = (...args: unknown[]) => {
-    applyCalls.push(args);
-    return (options.apply ?? (() => Promise.resolve(undefined)))(...args);
-  };
   const ctx = {
     storage,
-    desktop:
-      options.withWindowManagementFacet === false
-        ? {}
-        : { windowManagement: { apply } },
-    ui: {
-      indicator: {
-        show: (input: any) => {
-          indicators.push(input);
-        },
-        hide: () => undefined,
-      },
-      item: (item: any) => item,
-      list: (view: any) => ({ type: 'list', ...view }),
+    system: fakeCapabilities(options.withWindowManagementCapability !== false),
+    desktop: fakeDesktop(
+      options,
+      recordingCall(applyCalls, options.apply),
+      recordingCall(appleScriptCalls, options.appleScript),
+    ),
+    logs: {
+      error: (message: string, data?: unknown) =>
+        logs.push({ level: 'error', message, data }),
+      info: () => undefined,
     },
-    input: {
-      prompt: (input: any) => ({ type: 'prompt-action', ...input }),
-    },
-    actions: {
-      run: (title: string, handler: any) => ({ title, handler }),
-    },
-    views: { refresh: () => ({ type: 'refresh-action' }) },
+    ...fakeWindowUi(indicators),
+    ...fakeWindowActions(invalidations),
   };
-  return { ctx: ctx as any, storage, indicators, applyCalls };
+  return {
+    ctx: ctx as any,
+    storage,
+    indicators,
+    applyCalls,
+    appleScriptCalls,
+    logs,
+    invalidations,
+  };
 }

@@ -35,6 +35,14 @@ import {
   webviewView,
 } from './ui/simple-view-fixtures.ts';
 import { textInputView } from './ui/text-input-fixture.ts';
+import {
+  windowManagementCustomCommandsFixtureView,
+  windowManagementCustomFormErrorFixtureView,
+} from './ui/window-management-custom-fixture.ts';
+import {
+  windowManagementMovePromptFixtureView,
+  windowManagementResizeErrorFixtureView,
+} from './ui/window-management-exact-fixture.ts';
 import { windowManagementSettingsFixtureView } from './ui/window-management-settings-fixture.ts';
 
 const extension: NevermindExtension = {
@@ -127,6 +135,30 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Window Management Settings',
       icon: 'ruler',
       run: (ctx) => windowManagementSettingsFixtureView(ctx),
+    },
+    {
+      id: 'window-management-custom-commands',
+      title: 'Dev UI: Custom Window Commands',
+      icon: 'layout-list',
+      run: (ctx) => windowManagementCustomCommandsFixtureView(ctx),
+    },
+    {
+      id: 'window-management-custom-form-error',
+      title: 'Dev UI: Custom Window Command Form Error',
+      icon: 'list-plus',
+      run: (ctx) => windowManagementCustomFormErrorFixtureView(ctx),
+    },
+    {
+      id: 'window-management-move-window',
+      title: 'Dev UI: Move Window Prompt',
+      icon: 'move',
+      run: (ctx) => windowManagementMovePromptFixtureView(ctx),
+    },
+    {
+      id: 'window-management-resize-error',
+      title: 'Dev UI: Resize Window Error',
+      icon: 'scaling',
+      run: (ctx) => windowManagementResizeErrorFixtureView(ctx),
     },
     {
       id: 'clipboard',
