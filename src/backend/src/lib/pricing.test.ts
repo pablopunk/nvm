@@ -7,6 +7,7 @@ import {
   lookupModelCost,
   lookupModelDescriptor,
   lookupModelPricing,
+  modelFitsRouteKind,
   resetPricingCacheForTests,
 } from './pricing';
 
@@ -201,9 +202,13 @@ test('route choices require function tools and exclude incompatible reasoning wi
   const fast = await listModelsForRouteKind('opencode_zen', 'fast');
   assert.ok(!smart.includes('gpt-6.1-sol'));
   assert.ok(fast.includes('gpt-6.1-sol'));
+  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'smart'), false);
+  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'fast'), true);
   for (const model of ['no-tools', 'unknown-tools']) {
     assert.ok(!smart.includes(model));
     assert.ok(!fast.includes(model));
+    assert.equal(await modelFitsRouteKind('opencode_zen', model, 'smart'), false);
+    assert.equal(await modelFitsRouteKind('opencode_zen', model, 'fast'), false);
   }
 });
 
@@ -213,17 +218,20 @@ test('route model choices follow the slot criteria from the catalog', async () =
       models: {
         'vendor/smart-model': {
           id: 'vendor/smart-model',
+          tool_call: true,
           reasoning: true,
           modalities: { input: ['text', 'image'], output: ['text'] },
           cost: { input: 1, output: 2 },
         },
         'vendor/image-no-reasoning': {
           id: 'vendor/image-no-reasoning',
+          tool_call: true,
           modalities: { input: ['text', 'image'], output: ['text'] },
           cost: { input: 1, output: 2 },
         },
         'vendor/text-model': {
           id: 'vendor/text-model',
+          tool_call: true,
           modalities: { input: ['text'], output: ['text'] },
           cost: { input: 0.1, output: 0.2 },
         },
@@ -253,6 +261,26 @@ test('route model choices follow the slot criteria from the catalog', async () =
   assert.ok(fast.includes('vendor/image-no-reasoning'));
   assert.ok(!fast.includes('vendor/unpriced-model'));
   assert.ok(!fast.includes('vendor/image-generator'));
+});
+
+test('route listing and validation use the same current catalog capabilities', async () => {
+  globalThis.fetch = mockFetch({
+    openrouter: {
+      models: {
+        'google/gemini-2.5-flash': {
+          id: 'google/gemini-2.5-flash',
+          reasoning: true,
+          tool_call: false,
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
+        },
+      },
+    },
+  });
+  for (const kind of ['smart', 'fast'] as const) {
+    assert.ok(!(await listModelsForRouteKind('openrouter', kind)).includes('google/gemini-2.5-flash'));
+    assert.equal(await modelFitsRouteKind('openrouter', 'google/gemini-2.5-flash', kind), false);
+  }
 });
 
 test('active runtime models do not wait for the remote catalog', async () => {

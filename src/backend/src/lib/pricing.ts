@@ -1,3 +1,5 @@
+import { requiresNoReasoningWithTools } from './model-capabilities';
+
 export type ModelCost = {
   provider: string;
   modelId: string;
@@ -47,6 +49,7 @@ type ModelsDevModel = {
   id: string;
   name?: string;
   reasoning?: boolean;
+  tool_call?: boolean;
   attachment?: boolean;
   modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; input?: number; output?: number };
@@ -103,6 +106,7 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         id: 'gpt-5.6-luna',
         name: 'GPT-5.6 Luna',
         reasoning: true,
+        tool_call: true,
         modalities: { input: ['text', 'image', 'pdf'], output: ['text'] },
         limit: { context: 1_050_000, output: 128_000 },
         cost: { input: 0.2, output: 1.2 },
@@ -111,6 +115,7 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         id: 'deepseek-v4-flash',
         name: 'DeepSeek V4 Flash',
         reasoning: true,
+        tool_call: true,
         modalities: { input: ['text'], output: ['text'] },
         limit: { context: 1_000_000, output: 384_000 },
         cost: { input: 0.14, output: 0.28 },
@@ -123,6 +128,7 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         id: 'deepseek/deepseek-v4-flash-0731',
         name: 'DeepSeek V4 Flash 0731',
         reasoning: true,
+        tool_call: true,
         modalities: { input: ['text'], output: ['text'] },
         limit: { context: 1_310_720, output: 393_216 },
         cost: { input: 0.14, output: 0.28 },
@@ -131,6 +137,7 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         id: 'deepseek/deepseek-v4-pro-0813',
         name: 'DeepSeek V4 Pro 0813',
         reasoning: true,
+        tool_call: true,
         modalities: { input: ['text'], output: ['text'] },
         limit: { context: 1_048_576, output: 384_000 },
         cost: { input: 1.188, output: 3.564 },
@@ -139,6 +146,7 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
         id: 'google/gemini-2.5-flash',
         name: 'Gemini 2.5 Flash',
         reasoning: true,
+        tool_call: true,
         attachment: true,
         modalities: {
           input: ['text', 'image', 'audio', 'video', 'pdf'],
@@ -405,15 +413,21 @@ export function routeKindForSlot(slot: string): RouteKind {
 }
 
 /**
- * Smart routes need image input and adjustable reasoning; fast routes are
- * text in, text out with thinking off. Both need catalog token prices.
+ * Both routes require tool calls and token prices. Smart routes also require
+ * image input and reasoning compatible with tools; fast routes disable thinking.
  */
 function fitsRouteKind(model: ModelsDevModel, kind: RouteKind): boolean {
   if (!hasValidPricing(model.cost)) return false;
+  if (model.tool_call !== true) return false;
   const input = model.modalities?.input ?? ['text'];
   const output = model.modalities?.output ?? ['text'];
   if (!input.includes('text') || !output.includes('text')) return false;
-  return kind === 'fast' || (Boolean(model.reasoning) && input.includes('image'));
+  return (
+    kind === 'fast' ||
+    (Boolean(model.reasoning) &&
+      input.includes('image') &&
+      !requiresNoReasoningWithTools(model.id))
+  );
 }
 
 export async function modelFitsRouteKind(
@@ -434,8 +448,8 @@ export async function listModelsForRouteKind(
   await fetchCatalog();
   const key = modelsDevKey(provider);
   const models = {
-    ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
     ...BUNDLED_RUNTIME_MODELS[key]?.models,
+    ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
   };
   return Object.entries(models)
     .filter(([, model]) => fitsRouteKind(model, kind))

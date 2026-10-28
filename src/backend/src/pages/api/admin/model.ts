@@ -126,8 +126,8 @@ export const PUT: APIRoute = async ({ request }) => {
           type: 'unsupported_route_model',
           message:
             kind === 'smart'
-              ? 'Smart routes need a priced model with image input and reasoning.'
-              : 'Fast routes need a priced text-to-text model.',
+              ? 'Smart routes need a priced model with image input, function tools, and compatible reasoning.'
+              : 'Fast routes need a priced text-to-text model with function tools.',
         },
       },
       { status: 400 },

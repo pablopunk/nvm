@@ -2754,6 +2754,43 @@ test('proxy spends free credits first without granting a Free user Pro model ent
   assert.equal((db.insertedValues[1] as any).kind, 'free');
 });
 
+test('already configured gpt-6.1-sol routes disable reasoning when tools are sent', async () => {
+  for (const provider of ['opencode_zen', 'openrouter']) {
+    resetPricingCacheForTests();
+    process.env.OPENCODE_API_KEY = 'upstream-key';
+    process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+    process.env.OPENROUTER_API_KEY = 'upstream-key';
+    process.env.OPENROUTER_BASE_URL = 'https://upstream.example/v1';
+    const model = provider === 'openrouter' ? 'openai/gpt-6.1-sol' : 'gpt-6.1-sol';
+    installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model, routeProvider: provider, thinkingLevel: 'high' }) }));
+    let forwarded: any;
+    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (url === 'https://models.dev/api.json') {
+        return Response.json({ [provider === 'openrouter' ? 'openrouter' : 'opencode']: { models: { [model]: { id: model, cost: { input: 1, output: 2 } } } } });
+      }
+      forwarded = JSON.parse(String(init?.body));
+      return Response.json({ choices: [{ message: { role: 'assistant', content: 'hello' } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
+    };
+    const response = await postChatCompletion(routeContext(authorizedChatRequest({
+      model: 'placeholder',
+      reasoning_effort: 'high',
+      messages: [{ role: 'user', content: 'hello' }],
+      tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object', properties: {} } } }],
+    })));
+    await response.text();
+    await waitForBackgroundTasks();
+    assert.equal(response.status, 200);
+    assert.equal(forwarded.tools[0].function.name, 'lookup');
+    if (provider === 'openrouter') {
+      assert.deepEqual(forwarded.reasoning, { effort: 'none' });
+      assert.equal(forwarded.reasoning_effort, undefined);
+    } else {
+      assert.equal(forwarded.reasoning_effort, 'none');
+    }
+  }
+});
+
 test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
