@@ -22,13 +22,13 @@ test('model options include only enabled providers with configured keys', async 
   globalThis.fetch = (async () => ({
     ok: true,
     json: async () => ({
-      openrouter: { models: { 'test-model': { id: 'test-model', tool_call: true, cost: { input: 1, output: 1 } } } },
-      opencode: { models: { 'test-model': { id: 'test-model', tool_call: true, cost: { input: 1, output: 1 } } } },
+      openrouter: { models: { 'google/gemini-2.5-flash': { id: 'google/gemini-2.5-flash', tool_call: true, modalities: { input: ['text', 'image'], output: ['text'] }, limit: { context: 100_000 }, cost: { input: 1, output: 1 } } } },
+      opencode: { models: { 'test-model': { id: 'test-model', tool_call: true, modalities: { input: ['text', 'image'], output: ['text'] }, limit: { context: 100_000 }, cost: { input: 1, output: 1 } } } },
     }),
   })) as unknown as typeof fetch;
   try {
     const refs = await listAdminModelRefs('fast');
-    assert.ok(refs.includes('openrouter/test-model'));
+    assert.ok(refs.includes('openrouter/google/gemini-2.5-flash'));
     assert.ok(refs.every((ref) => !ref.startsWith('opencode_zen/')));
   } finally {
     globalThis.fetch = originalFetch;

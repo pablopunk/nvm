@@ -13,12 +13,14 @@ import {
   getAudioModelRoute,
   getModelRoute,
   modelRouteToRef,
+  parseModelRouteRef,
   ModelNotConfiguredError,
   THINKING_LEVELS,
   type ModelRouteConfig,
   type ModelRouteSlot,
 } from '../lib/settings';
 import { routeKindForSlot } from '../lib/pricing';
+import { supportsModelThinkingLevel } from '../lib/model-capabilities';
 import { listAdminModelRefs } from '../lib/admin-model-options';
 import { listTranscriptionModels } from '../lib/transcription-models';
 
@@ -55,6 +57,10 @@ const modelRows = modelRoutes.map((row) => {
   const kind = routeKindForSlot(row.slot);
   return { ...row, kind, options: kind === 'smart' ? smartModelRefs : fastModelRefs };
 });
+const modelThinkingLevels = Object.fromEntries(
+  [...new Set([...smartModelRefs, ...modelRows.flatMap((row) => row.route ? [row.route.ref] : [])])]
+    .map((ref) => [ref, THINKING_LEVELS.filter((level) => supportsModelThinkingLevel(parseModelRouteRef(ref)?.modelId ?? '', level))]),
+);
 const audioRoute = await getAudioModelRoute().catch(() => null);
 const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
 const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
@@ -118,7 +124,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
 
     <Card className="section admin-panel"><section>
       <h2>Models</h2>
-      <p class="muted">From the models.dev catalog, priced models only. Smart: image input and reasoning. Fast: text in, text out, thinking off. Dictation: audio transcription.</p>
+      <p class="muted">Available models have reviewed image and function-tool support. Smart supports reasoning; Fast has thinking off. Dictation uses audio transcription.</p>
       <div class="model-routes">
         {modelRows.map(({ slot, title, route, kind, options }) => (
           <section class="model-route-row" data-model-route={slot}>
@@ -150,7 +156,7 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
     </section></Card>
   </div>
 
-  <script is:inline define:vars={{ actionButtonClass: buttonVariants({ variant: "outline", size: "sm" }), emailButtonClass: buttonVariants({ variant: "ghost", size: "sm" }) }}>
+  <script is:inline define:vars={{ actionButtonClass: buttonVariants({ variant: "outline", size: "sm" }), emailButtonClass: buttonVariants({ variant: "ghost", size: "sm" }), modelThinkingLevels }}>
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const integer = new Intl.NumberFormat('en-US');
     const monthInput = document.getElementById('month');
@@ -343,9 +349,19 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
       try { await adminMutation(path, 'PUT', payload); setStatus(status, 'Saved', 'ok'); }
       catch (error) { setStatus(status, error.message, 'err'); }
     }
+    function updateThinkingOptions(row, adjust) {
+      const thinking = row.querySelector('.thinking-select');
+      if (!thinking) return;
+      const allowed = modelThinkingLevels[row.querySelector('.model-select').value];
+      if (!allowed) return;
+      for (const option of thinking.options) option.disabled = !allowed.includes(option.value);
+      if (adjust && !allowed.includes(thinking.value)) thinking.value = 'low';
+    }
     document.querySelectorAll('[data-model-route]').forEach((row) => {
       loadRoutePricing(row);
+      updateThinkingOptions(row, false);
       row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
+        if (select.classList.contains('model-select')) updateThinkingOptions(row, true);
         await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select')?.value ?? 'off' });
         loadRoutePricing(row);
       }));

@@ -198,6 +198,7 @@ type FixtureScenario =
   | 'prepare-cancel'
   | 'queue-conversations'
   | 'api-switch'
+  | 'responses-builder'
   | 'complete';
 
 async function readRequestBody(request: IncomingMessage) {
@@ -404,6 +405,43 @@ function sendBuilderToolCall(
   usage?: typeof ZERO_USAGE,
 ) {
   sendToolCall(response, 'read_extension_api', params, usage);
+}
+
+function sendResponsesBuilderToolCall(response: ServerResponse) {
+  const item = {
+    type: 'function_call',
+    id: 'fc_fixture',
+    call_id: 'call_fixture',
+    name: 'read_extension_api',
+    arguments: '{}',
+    status: 'completed',
+  };
+  const events = [
+    {
+      type: 'response.output_item.added',
+      output_index: 0,
+      item: { ...item, arguments: '' },
+    },
+    {
+      type: 'response.function_call_arguments.delta',
+      output_index: 0,
+      delta: '{}',
+    },
+    { type: 'response.output_item.done', output_index: 0, item },
+    {
+      type: 'response.completed',
+      response: {
+        id: 'resp_fixture',
+        status: 'completed',
+        output: [item],
+        usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 },
+      },
+    },
+  ];
+  response.writeHead(200, { 'content-type': 'text/event-stream' });
+  response.end(
+    events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+  );
 }
 
 function sendToolCall(
@@ -792,7 +830,11 @@ function createProtocolFixture(
         name: 'Fixture Model',
         provider: 'nevermind',
         api:
-          scenario === 'api-switch' ? fixture.currentApi : 'openai-completions',
+          scenario === 'api-switch'
+            ? fixture.currentApi
+            : scenario === 'responses-builder'
+              ? api
+              : 'openai-completions',
         baseUrl: `${fixture.baseUrl}/v1`,
         contextWindow,
         maxInputTokens: contextWindow,
@@ -1042,6 +1084,12 @@ function createProtocolFixture(
         fixture.currentApi,
         'The fixture request completed.',
       );
+      return;
+    }
+    if (scenario === 'responses-builder') {
+      if (callIndex === 1) sendResponsesBuilderToolCall(response);
+      else
+        sendTextForApi(response, api, 'The extension operation is complete.');
       return;
     }
     if (scenario === 'complete' || scenario === 'prepare-cancel') {
@@ -2304,6 +2352,43 @@ test('overlapping prompts on one extension session settle in request order', asy
       await ai.disposeAllSessions();
     }
   });
+});
+
+test('the extension builder executes a function tool through Responses', async () => {
+  await withFixture(
+    'responses-builder',
+    'responses-builder',
+    async (fixture) => {
+      const events: FixtureAiEvent[] = [];
+      const ai = createAi(fixture, events);
+      try {
+        await ai.send('Inspect the extension API.', 'responses-builder-chat');
+        assert.deepEqual(
+          terminalEvents(events).map((event) => event.type),
+          ['done'],
+        );
+        assert.ok(
+          events.some(
+            (event) =>
+              event.type === 'tool_trace_end' &&
+              event.name === 'read_extension_api',
+          ),
+        );
+        assert.equal(fixture.requests.length, 2);
+        assert.ok(
+          fixture.requests.every((request) => request.path === '/v1/responses'),
+        );
+        assert.ok(
+          fixture.requests[1].body.input.some(
+            (item: any) => item.type === 'function_call_output',
+          ),
+        );
+      } finally {
+        await ai.disposeAllSessions();
+      }
+    },
+    'openai-responses',
+  );
 });
 
 test('a conversation preserves text and image history when switching API formats in both directions', async () => {

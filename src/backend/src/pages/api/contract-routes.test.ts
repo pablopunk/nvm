@@ -4116,3 +4116,41 @@ test('active model describes the Responses route to a released desktop request',
   assert.equal(body.id, 'gpt-6.1-sol');
   assert.match(body.baseUrl, /\/api\/v1$/);
 });
+
+test('Responses accepts bounded inline images alongside function tools', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol', imageAdmission: true }) }));
+  let forwarded: any;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 }, modalities: { input: ['text', 'image'], output: ['text'] } } } } });
+    assert.equal(url, 'https://upstream.example/v1/responses');
+    forwarded = JSON.parse(String(init?.body));
+    return Response.json({ status: 'completed', output: [], usage: { input_tokens: 100, output_tokens: 10 } });
+  };
+  const response = await postResponses(routeContext(authorizedChatRequest({ input: [{ role: 'user', content: [{ type: 'input_text', text: 'Describe this' }, { type: 'input_image', image_url: inlinePngDataUrl() }] }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], max_output_tokens: 64 })));
+  await response.text();
+  assert.equal(response.status, 200);
+  assert.equal(forwarded.input[0].content[1].image_url, inlinePngDataUrl());
+  assert.equal(forwarded.tools[0].name, 'lookup');
+  assert.ok(db.insertedValues.length > 0);
+});
+
+test('Responses reserves at least the reviewed OpenRouter rate even for text-only requests', async () => {
+  process.env.OPENROUTER_API_KEY = 'upstream-key';
+  process.env.OPENROUTER_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'openai/gpt-6.1-sol', routeProvider: 'openrouter' }) }));
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json({ openrouter: { models: { 'openai/gpt-6.1-sol': { id: 'openai/gpt-6.1-sol', cost: { input: 0.01, output: 0.02 }, limit: { context: 100000, output: 1000 }, modalities: { input: ['text', 'image'], output: ['text'] } } } } });
+    return Response.json({ status: 'completed', output: [], usage: { input_tokens: 10, output_tokens: 5 } });
+  };
+  const body = { input: 'hello', max_output_tokens: 100 };
+  const response = await postResponses(routeContext(authorizedChatRequest(body)));
+  await response.text();
+  assert.equal(response.status, 200);
+  const reservation = db.insertedValues.find((value) => value !== null && typeof value === 'object' && 'estimatedProviderCostMicrocents' in value) as { estimatedProviderCostMicrocents: number };
+  const tokens = estimateInputTokensFromBody(JSON.stringify(body));
+  assert.equal(reservation.estimatedProviderCostMicrocents, Math.round(((tokens * 2.75 + 100 * 11) / 1_000_000) * 1e8));
+});

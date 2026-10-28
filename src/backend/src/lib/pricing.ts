@@ -1,4 +1,5 @@
-import { requiresResponsesForTools } from './model-capabilities';
+import { isReviewedModelRoute, requiresResponsesForTools, supportsChatCompletionsTools } from './model-capabilities';
+import { selectApiForModel } from './upstream';
 
 export type ModelCost = {
   provider: string;
@@ -100,6 +101,19 @@ function hasValidPricing(
 }
 
 const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
+  openai: {
+    models: {
+      'gpt-6.1-sol': {
+        id: 'gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        reasoning: true,
+        tool_call: true,
+        modalities: { input: ['text', 'image'], output: ['text'] },
+        limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+        cost: { input: 2, output: 10, cache_read: 0.1, cache_write: 2.5, tiers: [{ input: 4, output: 15, cache_read: 0.2, cache_write: 5, tier: { type: 'context', size: 272_000 } }] },
+      },
+    },
+  },
   opencode: {
     models: {
       'gpt-5.6-luna': {
@@ -124,6 +138,15 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
   },
   openrouter: {
     models: {
+      'openai/gpt-6.1-sol': {
+        id: 'openai/gpt-6.1-sol',
+        name: 'GPT-6.1 Sol',
+        reasoning: true,
+        tool_call: true,
+        modalities: { input: ['text', 'image'], output: ['text'] },
+        limit: { context: 1_050_000, input: 922_000, output: 128_000 },
+        cost: { input: 2.2, output: 11, cache_read: 0.11, cache_write: 2.75, tiers: [{ input: 4.4, output: 16.5, cache_read: 0.22, cache_write: 5.5, tier: { type: 'context', size: 272_000 } }] },
+      },
       'deepseek/deepseek-v4-flash-0731': {
         id: 'deepseek/deepseek-v4-flash-0731',
         name: 'DeepSeek V4 Flash 0731',
@@ -413,16 +436,19 @@ export function routeKindForSlot(slot: string): RouteKind {
 }
 
 /**
- * Both routes require tool calls and token prices. Smart routes also require
- * image input and reasoning compatible with tools; fast routes disable thinking.
+ * Both routes require text, images, function tools and bounded image pricing.
+ * Smart routes also require reasoning; fast routes disable thinking.
  */
-function fitsRouteKind(provider: string, model: ModelsDevModel, kind: RouteKind): boolean {
+function fitsRouteKind(provider: string, modelId: string, model: ModelsDevModel, kind: RouteKind): boolean {
+  if (model.id !== modelId || !isReviewedModelRoute(provider, modelId, kind)) return false;
   if (!hasValidPricing(model.cost)) return false;
   if (model.tool_call !== true) return false;
   if (requiresResponsesForTools(model.id) && (kind === 'fast' || !['openai', 'openrouter'].includes(provider))) return false;
+  if (selectApiForModel(provider, model.id) === 'openai-completions' && !supportsChatCompletionsTools(model.id, kind === 'fast')) return false;
   const input = model.modalities?.input ?? ['text'];
   const output = model.modalities?.output ?? ['text'];
-  if (!input.includes('text') || !output.includes('text')) return false;
+  if (!input.includes('text') || !input.includes('image') || !output.includes('text')) return false;
+  if (!Number.isSafeInteger(model.limit?.context) || (model.limit?.context ?? 0) <= 0) return false;
   return (
     kind === 'fast' ||
     (Boolean(model.reasoning) && input.includes('image'))
@@ -434,10 +460,7 @@ export async function modelFitsRouteKind(
   modelId: string,
   kind: RouteKind,
 ): Promise<boolean> {
-  const resolved = await runtimeModel(provider, modelId);
-  return Boolean(
-    resolved && resolved.source !== 'fallback' && fitsRouteKind(provider, resolved.model, kind),
-  );
+  return (await listModelsForRouteKind(provider, kind)).includes(modelId);
 }
 
 export async function listModelsForRouteKind(
@@ -451,7 +474,7 @@ export async function listModelsForRouteKind(
     ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
   };
   return Object.entries(models)
-    .filter(([, model]) => fitsRouteKind(provider, model, kind))
+    .filter(([modelId, model]) => fitsRouteKind(provider, modelId, model, kind))
     .map(([modelId]) => modelId)
     .sort();
 }
@@ -492,8 +515,12 @@ export function loadedImageTokenLimits(
     !hasValidPricing(model.cost)
   )
     return undefined;
+  const reviewed = provider === 'openrouter' && modelId === 'openai/gpt-6.1-sol'
+    ? bundledRuntimeModel(provider, modelId)
+    : undefined;
+  const maximumPricing = hasValidPricing(reviewed?.cost) ? reviewed.cost : model.cost;
   const { provider: _provider, modelId: _modelId, ...maximumCost } =
-    modelCostFromCatalog(provider, modelId, model.cost);
+    modelCostFromCatalog(provider, modelId, maximumPricing);
   return {
     contextWindow,
     maxInputTokens: model.limit?.input ?? contextWindow,

@@ -172,9 +172,10 @@ function requestReservationCostUsd(
   imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
+  conservative = false,
 ) {
   const totalOutputTokens = outputTokens * completionCount;
-  return imageCount > 0
+  return imageCount > 0 || conservative
     ? computeMaximumTokenPricedCost(
         costRow,
         inputTokens,
@@ -191,6 +192,7 @@ function requestReservationCredits(
   imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
+  conservative = false,
 ) {
   return usdToCredits(
     requestReservationCostUsd(
@@ -200,6 +202,7 @@ function requestReservationCredits(
       imageCount,
       completionCount,
       imageLimits,
+      conservative,
     ),
   );
 }
@@ -1199,7 +1202,7 @@ async function tryUpstreamProviders(
       ? primaryDescriptor
       : await lookupModelDescriptor(providerId, modelId);
     const imageLimits =
-      imageCount > 0
+      imageCount > 0 || cfg.wireApi === 'openai-responses'
         ? imageTokenLimits(providerId, modelId)
         : undefined;
     if (
@@ -1268,6 +1271,7 @@ async function tryUpstreamProviders(
             imageCount,
             completionCount,
             imageLimits,
+            cfg.wireApi === 'openai-responses',
           );
     const candidateCredits =
       candidateCostUsd == null ? undefined : usdToCredits(candidateCostUsd);
@@ -1700,7 +1704,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       maxOutputTokens = initialAdmission.maxOutputTokens;
       reservationInputTokenCeiling = initialAdmission.inputTokensForReservation;
       const initialImageLimits =
-        imageCount > 0
+        imageCount > 0 || cfg.wireApi === 'openai-responses'
           ? imageTokenLimits(routing.provider, routing.activeModelId)
           : undefined;
       if (
@@ -1753,6 +1757,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         imageCount,
         completionCount,
         initialImageLimits,
+        cfg.wireApi === 'openai-responses',
       );
       const estimatedProviderCostUsd = requestReservationCostUsd(
         routing.costRow,
@@ -1761,6 +1766,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         imageCount,
         completionCount,
         initialImageLimits,
+        cfg.wireApi === 'openai-responses',
       );
       let reservation = await reserveCredits({
         requestId,
@@ -1813,12 +1819,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               freeMaxOutputTokens,
               imageCount,
               completionCount,
-              freeImageRouteSupported && imageCount > 0
+              freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                 ? imageTokenLimits(
                     freeRouting.provider,
                     freeRouting.activeModelId,
                   )
                 : undefined,
+              cfg.wireApi === 'openai-responses',
             );
             const freeReservation = await reserveCredits({
               requestId,
@@ -1832,12 +1839,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 freeMaxOutputTokens,
                 imageCount,
                 completionCount,
-                freeImageRouteSupported && imageCount > 0
+                freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                   ? imageTokenLimits(
                       freeRouting.provider,
                       freeRouting.activeModelId,
                     )
                   : undefined,
+                cfg.wireApi === 'openai-responses',
               ),
               estimateCostSource: 'catalog_estimate',
             });
