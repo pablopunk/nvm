@@ -12,6 +12,7 @@ import {
 import { mimeTypeForPath } from '../files/mime-type';
 import { ocrImage } from '../files/ocr';
 import { limitedOutput } from '../platform/limited-output';
+import { ExtensionAiDecisionInputError } from './extension-ai-decision-request';
 
 const EXTENSION_AI_ATTACHMENT_LIMIT = 8;
 const EXTENSION_AI_TEXT_ATTACHMENT_LIMIT = 80_000;
@@ -111,6 +112,7 @@ export async function normalizeExtensionAiAttachments(
   extension,
   attachments,
   capabilities,
+  options: { requireReadableFiles?: boolean } = {},
 ) {
   const textSections: string[] = [];
   const images: Array<{ type: 'image'; data: string; mimeType: string }> = [];
@@ -182,6 +184,18 @@ export async function normalizeExtensionAiAttachments(
         (attachment.as === 'image' ||
           (!attachment.as && isImagePath(resolvedPath))) &&
         attachment.as !== 'text';
+      if (
+        options.requireReadableFiles &&
+        !shouldAttachImage &&
+        !attachment.ocr &&
+        attachment.as !== 'ocr' &&
+        (attachment.as === 'metadata' ||
+          !isTextLikeAttachmentPath(resolvedPath))
+      )
+        throw new ExtensionAiDecisionInputError(
+          'decision_attachment_unreadable',
+          `Attachment ${path.basename(resolvedPath)} cannot be read as text or an image, so it was not sent.`,
+        );
       if (shouldAttachImage)
         images.push(await extensionAiPathImage(resolvedPath));
       if (

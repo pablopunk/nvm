@@ -21,6 +21,20 @@ const DOWNLOADING_INDICATOR: ExtensionIndicatorInput = {
   status: 'loading',
 };
 
+const TRIAGE_RESULT_INDICATOR: ExtensionIndicatorInput = {
+  id: INDICATOR_ID,
+  title: 'Triage Selected Text with AI',
+  subtitle: 'question · urgency 4/5 · needs reply',
+  status: 'success',
+};
+
+const TRIAGE_ERROR_INDICATOR: ExtensionIndicatorInput = {
+  id: INDICATOR_ID,
+  title: 'Triage Selected Text with AI',
+  subtitle: 'The decision model is unavailable. Try again shortly.',
+  status: 'error',
+};
+
 const TRANSCRIBING_INDICATOR: ExtensionIndicatorInput = {
   id: INDICATOR_ID,
   title: 'Dictation Fixture',
@@ -56,6 +70,16 @@ function indicatorView(ctx: ExtensionContext) {
     TRANSCRIBING_INDICATOR,
     true,
   )(ctx);
+  const triageResult = indicatorAction(
+    'Show Triage Result',
+    TRIAGE_RESULT_INDICATOR,
+    true,
+  )(ctx);
+  const triageError = indicatorAction(
+    'Show Triage Error',
+    TRIAGE_ERROR_INDICATOR,
+    true,
+  )(ctx);
   const hide = ctx.actions.background('Hide Indicator', (innerCtx) => {
     innerCtx.ui.indicator.hide(INDICATOR_ID);
     showExtensionFeedback(innerCtx, 'Indicator Fixture', 'Indicator hidden');
@@ -86,6 +110,20 @@ function indicatorView(ctx: ExtensionContext) {
         subtitle: 'In-place update state',
         icon: 'audio-lines',
         primaryAction: transcribing,
+      },
+      {
+        id: 'triage-result',
+        title: 'Show Triage Result',
+        subtitle: 'Success state with a decision summary',
+        icon: 'list-checks',
+        primaryAction: triageResult,
+      },
+      {
+        id: 'triage-error',
+        title: 'Show Triage Error',
+        subtitle: 'Error state with a decision failure message',
+        icon: 'triangle-alert',
+        primaryAction: triageError,
       },
       {
         id: 'hide',

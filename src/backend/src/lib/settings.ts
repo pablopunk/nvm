@@ -23,6 +23,7 @@ const PRO_FAST_MODEL_ROUTE_KEY = 'pro_fast_model_route';
 const FREE_SMART_MODEL_ROUTE_KEY = 'free_smart_model_route';
 const FREE_FAST_MODEL_ROUTE_KEY = 'free_fast_model_route';
 const AUDIO_MODEL_ROUTE_KEY = 'audio_model_route';
+const DECISION_MODEL_ROUTE_KEY = 'decision_model_route';
 const ACTIVE_PROVIDER_KEY = 'active_provider';
 const DEFAULT_PROVIDER = 'opencode_zen';
 const KNOWN_PROVIDERS = new Set([
@@ -66,7 +67,8 @@ type ModelSettingKey =
   | 'pro_fast_model_route'
   | 'free_smart_model_route'
   | 'free_fast_model_route'
-  | 'audio_model_route';
+  | 'audio_model_route'
+  | 'decision_model_route';
 
 export class ModelNotConfiguredError extends Error {
   constructor(public key: ModelSettingKey) {
@@ -191,6 +193,29 @@ export async function setAudioModelRoute(
     throw new Error(`Unknown provider: ${route.provider}`);
   await setSetting(
     AUDIO_MODEL_ROUTE_KEY,
+    JSON.stringify({ ...route, thinkingLevel: 'off' }),
+    executor,
+  );
+}
+
+export type DecisionModelRoute = ModelRoute;
+
+export async function getDecisionModelRoute(): Promise<DecisionModelRoute> {
+  const stored = parseStoredModelRoute(
+    await getSetting(DECISION_MODEL_ROUTE_KEY),
+  );
+  if (!stored) throw new ModelNotConfiguredError(DECISION_MODEL_ROUTE_KEY);
+  return { provider: stored.provider, modelId: stored.modelId };
+}
+
+export async function setDecisionModelRoute(
+  route: DecisionModelRoute,
+  executor: SettingsExecutor = db,
+) {
+  if (!KNOWN_PROVIDERS.has(route.provider))
+    throw new Error(`Unknown provider: ${route.provider}`);
+  await setSetting(
+    DECISION_MODEL_ROUTE_KEY,
     JSON.stringify({ ...route, thinkingLevel: 'off' }),
     executor,
   );

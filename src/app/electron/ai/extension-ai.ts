@@ -8,6 +8,8 @@ import {
   normalizeExtensionAiAttachments,
   normalizeExtensionAiCallOptions,
 } from './extension-ai-attachments';
+import { buildDecisionWireRequest } from './extension-ai-decision-request';
+import { requestNevermindDecision } from './nevermind-decision-client';
 
 export type ExtensionAiDeps = {
   checkAiRateLimit: (extension: any) => boolean;
@@ -103,6 +105,24 @@ export function createExtensionAiFactory(deps: ExtensionAiDeps) {
       return getNevermindAi().ask(
         String(prompt || ''),
         await normalizeOptions(options),
+      );
+    };
+    ai.decide = async (options: any = {}) => {
+      enforceAiQuota();
+      const normalized = await normalizeExtensionAiAttachments(
+        extension,
+        options.attachments || [],
+        capabilities,
+        { requireReadableFiles: true },
+      );
+      return requestNevermindDecision(
+        buildDecisionWireRequest({
+          input: String(options.input ?? ''),
+          contextText: normalized.context,
+          images: normalized.images,
+          questions: options.questions ?? [],
+        }),
+        options.signal,
       );
     };
     ai.prepare = async (options: any = {}) =>

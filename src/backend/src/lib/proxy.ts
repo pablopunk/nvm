@@ -954,13 +954,13 @@ function isStreamingContentType(contentType: string | null): boolean {
   );
 }
 
-function withRequestId(res: Response, requestId: string): Response {
+export function withRequestId(res: Response, requestId: string): Response {
   res.headers.set('x-request-id', requestId);
   res.headers.set('x-nevermind-backend-version', backendVersion());
   return res;
 }
 
-async function readRequestBodyWithinLimit(
+export async function readRequestBodyWithinLimit(
   request: Request,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   const body = request.body;
@@ -993,7 +993,7 @@ async function readRequestBodyWithinLimit(
   return bytes;
 }
 
-function requestTooLargeResponse(requestId: string) {
+export function requestTooLargeResponse(requestId: string) {
   return withRequestId(
     Response.json(
       {
