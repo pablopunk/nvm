@@ -57,7 +57,7 @@ function isTrustedDevRendererPage(
 export function isTrustedAppPage(
   url: string,
   isDev: boolean,
-  rendererUrl = process.env.ELECTRON_RENDERER_URL || '',
+  rendererUrl = '',
   rendererIndexPath?: string,
 ) {
   return (

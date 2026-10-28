@@ -19,7 +19,7 @@ func focusedWindowResponse(_ arguments: [String]) -> WindowResponse {
   guard arguments.count == 2, let pid = pid_t(arguments[1]) else { return usageResponse }
   guard windowIDResolutionIsSupported() else { return unsupportedResponse }
   guard
-    let element = focusedOrMainWindowElement(accessibilityApplication(pid: pid))
+    let element = focusedManageableWindowElement(accessibilityApplication(pid: pid))
   else {
     return noWindowResponse("No focused window")
   }

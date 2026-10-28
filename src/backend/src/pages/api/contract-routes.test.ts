@@ -2550,6 +2550,55 @@ test('proxy rejects separately billed OpenRouter web search before reservation',
   assert.equal(db.insertedValues.length, 0);
 });
 
+test('proxy rejects OpenAI-hosted web search tools before reservation', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    upstreamCalls += 1;
+    throw new Error(`Unexpected upstream request: ${url}`);
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        messages: [{ role: 'user', content: 'Search for this.' }],
+        tools: [{ type: 'web_search_preview' }],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unpriced-provider-tool-error'),
+  );
+  assert.equal(upstreamCalls, 0);
+  assert.equal(db.insertedValues.length, 0);
+});
+
 test('OpenRouter proxy reserves prompt context from the requested output limit', async () => {
   process.env.OPENROUTER_API_KEY = 'openrouter-key';
   process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
@@ -3439,6 +3488,236 @@ test('google proxy records split streaming usage metadata', async () => {
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
   assert.equal((db.insertedValues.at(-1) as any).costCredits, 1);
+});
+
+test('google proxy records usage from a non-streamed JSON array of chunks', async () => {
+  installModelsDevFetch();
+  const modelsDevFetch = globalThis.fetch;
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(
+    createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }),
+  );
+  const jsonChunks = [
+    { candidates: [{ content: { parts: [{ text: 'hi' }] } }] },
+    { usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 4, thoughtsTokenCount: 2 } },
+  ];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return modelsDevFetch(input, init);
+    assert.equal(
+      url,
+      'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent',
+    );
+    return new Response(JSON.stringify(jsonChunks), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const response = await postGoogleModel({
+    ...routeContext(
+      authorizedGoogleRequest(),
+      new URL('https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent'),
+    ),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 6);
+});
+
+test('google proxy rejects generation_config before reserving credits or calling upstream', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const modelsDevFetch = globalThis.fetch;
+  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  const fetchedUrls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return modelsDevFetch(input, init);
+    fetchedUrls.push(url);
+    return Response.json({});
+  };
+  const response = await postGoogleModel({
+    ...routeContext(
+      authorizedGoogleRequest({
+        contents: [{ parts: [{ text: 'hello' }] }],
+        generation_config: { maxOutputTokens: 10 },
+      }),
+    ),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  assert.equal(response.status, 400);
+  const body = await response.json() as any;
+  assert.equal(body.error.type, 'unsupported_request_shape');
+  assert.equal(body.error.message, 'Unsupported Google request shape.');
+  assert.equal(fetchedUrls.some((url) => url.startsWith('https://upstream.example/')), false);
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('google proxy clamps an existing generationConfig.maxOutputTokens to the server maximum', async () => {
+  resetPricingCacheForTests();
+  installModelsDevFetch();
+  const modelsDevFetch = globalThis.fetch;
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  let forwardedBody: any;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return modelsDevFetch(input, init);
+    assert.equal(url, 'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse');
+    forwardedBody = JSON.parse(String(init?.body));
+    return new Response(streamFromTextChunks(splitGoogleUsageStream), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const response = await postGoogleModel({
+    ...routeContext(
+      authorizedGoogleRequest({
+        contents: [{ parts: [{ text: 'hello' }] }],
+        generationConfig: { maxOutputTokens: 999999999 },
+      }),
+    ),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBody.generationConfig.maxOutputTokens, 8192);
+  assert.equal(forwardedBody.generation_config, undefined);
+});
+
+test('google proxy sets maxOutputTokens when omitted and drops the snake_case alias', async () => {
+  resetPricingCacheForTests();
+  installModelsDevFetch();
+  const modelsDevFetch = globalThis.fetch;
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  let forwardedBody: any;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return modelsDevFetch(input, init);
+    assert.equal(url, 'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse');
+    forwardedBody = JSON.parse(String(init?.body));
+    return new Response(streamFromTextChunks(splitGoogleUsageStream), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const response = await postGoogleModel({
+    ...routeContext(
+      authorizedGoogleRequest({
+        contents: [{ parts: [{ text: 'hello' }] }],
+        generationConfig: { max_output_tokens: 999999999, temperature: 0.2 },
+      }),
+    ),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.equal(forwardedBody.generationConfig.maxOutputTokens, 8192);
+  assert.equal(forwardedBody.generationConfig.max_output_tokens, undefined);
+  assert.equal(forwardedBody.generationConfig.temperature, 0.2);
+});
+
+test('google proxy rejects unsupported operation paths before reserving credits or calling upstream', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const modelsDevFetch = globalThis.fetch;
+  const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  const fetchedUrls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return modelsDevFetch(input, init);
+    fetchedUrls.push(url);
+    return Response.json({});
+  };
+  for (const path of [
+    'placeholder:streamGenerateContent/../../chat/completions',
+    'x:foo',
+  ]) {
+    const response = await postGoogleModel({
+      ...routeContext(authorizedGoogleRequest()),
+      params: { path },
+    } as any);
+    assert.equal(response.status, 400);
+    const body = await response.json() as any;
+    assert.equal(body.error.type, 'unsupported_request_shape');
+    assert.equal(body.error.message, 'Unsupported Google model operation.');
+  }
+  assert.deepEqual(fetchedUrls, []);
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('google proxy forwards only an allowlisted alt query parameter upstream', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
+  const upstreamUrls: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') {
+      return Response.json({
+        opencode: {
+          models: {
+            'gemini-3-flash': {
+              id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    }
+    upstreamUrls.push(url);
+    return new Response(streamFromTextChunks(splitGoogleUsageStream), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' },
+    });
+  };
+
+  const requestUrl = new URL(
+    'https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?key=evil&alt=sse',
+  );
+  const response = await postGoogleModel({
+    ...routeContext(authorizedGoogleRequest(), requestUrl),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  await response.text();
+  await waitForBackgroundTasks();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(upstreamUrls, [
+    'https://upstream.example/v1/models/gemini-3-flash:streamGenerateContent?alt=sse',
+  ]);
+});
+
+test('google proxy returns model_route_changed when the route resolves to a non-Google API', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  const response = await postGoogleModel({
+    ...routeContext(authorizedGoogleRequest()),
+    params: { path: 'placeholder:streamGenerateContent' },
+  } as any);
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as any).error.type, 'model_route_changed');
+  assert.equal(db.insertedValues.length, 0);
 });
 
 test('proxy failover: primary 5xx falls back to next provider in chain', async () => {

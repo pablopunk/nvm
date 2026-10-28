@@ -1,6 +1,7 @@
 import type {
   Frame,
   HelperEnvelope,
+  ListedWindow,
   SetFrameData,
   SetFrameRequest,
   WindowInfo,
@@ -8,6 +9,8 @@ import type {
 
 const SIMULATED_BUNDLE_ID = 'com.apple.finder';
 const SIMULATED_WINDOW_KEY = '42:7';
+const SIMULATED_PID = 42;
+const SIMULATED_APP_NAME = 'Simulated app';
 
 function okEnvelope<Data>(data: Data): HelperEnvelope<Data> {
   return { ok: true, code: 'ok', data };
@@ -51,6 +54,7 @@ export interface SimulatedWindow {
   state: SimulatedWindowState;
   focusedRead(): Promise<HelperEnvelope<WindowInfo>>;
   windowsRead(): Promise<HelperEnvelope<WindowInfo[]>>;
+  allWindowsRead(): Promise<HelperEnvelope<ListedWindow[]>>;
   setFrame(request: SetFrameRequest): Promise<HelperEnvelope<SetFrameData>>;
   setFullScreen(
     pid: number,
@@ -74,6 +78,17 @@ export function createSimulatedWindow(
     focusedRead: () => Promise.resolve(okEnvelope(simulatedWindowInfo(state))),
     windowsRead: () =>
       Promise.resolve(okEnvelope([simulatedWindowInfo(state)])),
+    allWindowsRead: () =>
+      Promise.resolve(
+        okEnvelope([
+          {
+            ...simulatedWindowInfo(state),
+            pid: SIMULATED_PID,
+            appName: SIMULATED_APP_NAME,
+            zIndex: 0,
+          },
+        ]),
+      ),
     setFrame(request) {
       const changed = !sameFrame(state.frame, request.frame);
       state.frame = request.frame;

@@ -9,6 +9,7 @@ import {
 import { customWindowCommandsCommand } from './window-management-custom-commands';
 import { windowDesktopActions } from './window-management-desktops';
 import { exactWindowActions } from './window-management-exact-commands';
+import { windowFocusActions } from './window-management-focus-commands';
 import { windowManagementSettingsView } from './window-management-settings-view';
 
 function windowManagementSettingsCommand() {
@@ -41,6 +42,7 @@ export function createWindowManagementExtension() {
       return [
         ...windowLayoutActions(ctx),
         ...exactWindowActions(ctx),
+        ...windowFocusActions(),
         ...windowDesktopActions(),
       ];
     },

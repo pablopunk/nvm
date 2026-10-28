@@ -168,6 +168,11 @@ export function loadingView(ctx: ExtensionContext) {
         title: 'Loading fixture item…',
         subtitle: 'The list wraps this row instead of filling the palette.',
         icon: 'loader-circle',
+        primaryAction: ctx.ui.confirm({
+          title: 'Confirm while loading',
+          message: 'The confirmation should not inherit the loading border.',
+          onConfirm: ctx.actions.run('Confirm', () => {}),
+        }),
       },
     ],
   });

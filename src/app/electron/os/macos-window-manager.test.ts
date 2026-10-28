@@ -205,6 +205,7 @@ const WINDOW_LIST_METHODS: Record<
   (windowManager: WindowManagerUnderTest) => Promise<HelperEnvelope<unknown>>
 > = {
   runningApps: (windowManager) => windowManager.runningApps(),
+  allWindows: (windowManager) => windowManager.allWindows(),
   windows: (windowManager) => windowManager.windows(42),
   raiseWindow: (windowManager) => windowManager.raiseWindow(42, '42:7'),
 };
@@ -256,6 +257,35 @@ test('lists running apps with the apps subcommand', async () => {
     message: undefined,
   });
   assert.deepEqual(args, [['apps']]);
+});
+
+test('lists every window across apps with the all subcommand', async () => {
+  const listed = [
+    {
+      pid: 42,
+      appName: 'Finder',
+      zIndex: 0,
+      bundleId: 'com.apple.finder',
+      windowKey: '42:7',
+      title: 'Downloads',
+      frame: SAMPLE_FRAME,
+      displayId: '1',
+      isFullScreen: false,
+      isMinimized: false,
+      isMovable: true,
+      isResizable: true,
+    },
+  ];
+  const { windowManager, args } = manager({
+    stdout: envelopeJson('ok', { data: listed }),
+  });
+  assert.deepEqual(await windowManager.allWindows(), {
+    ok: true,
+    code: 'ok',
+    data: listed,
+    message: undefined,
+  });
+  assert.deepEqual(args, [['all']]);
 });
 
 test('lists windows of one pid with the list subcommand', async () => {

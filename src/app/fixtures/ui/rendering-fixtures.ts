@@ -121,6 +121,12 @@ export function sidePreviewView(ctx: ExtensionContext) {
         title: 'Text Preview',
         subtitle: 'Plain text renders in the side pane',
         icon: 'clipboard',
+        primaryAction: ctx.ui.confirm({
+          title: 'Confirm side preview action',
+          message: 'Confirmation rows should remain compact.',
+          confirmLabel: 'Confirm',
+          onConfirm: ctx.actions.run('Confirm', () => {}),
+        }),
         detail: {
           title: 'Text Preview',
           subtitle: 'Side preview fixture',

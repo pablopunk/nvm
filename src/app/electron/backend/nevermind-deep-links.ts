@@ -57,7 +57,7 @@ export function createNevermindDeepLinks(deps: NevermindDeepLinksDeps) {
         return;
       }
       const existing = await getNevermindAuth();
-      if (existing && parsed.intent !== 'reconnect') {
+      if (existing) {
         logInfo(
           'deep_link.already_authed',
           { email: existing.email },

@@ -39,7 +39,6 @@ import {
   shell,
   systemPreferences,
 } from 'electron';
-import electronUpdater from 'electron-updater';
 import { createAiChatEventBroadcaster } from './ai/ai-chat-events';
 import { createAiChatImageStorage } from './ai/ai-chat-image-storage';
 import {
@@ -197,8 +196,7 @@ import {
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
-import { installNevermindChannelFeed } from './app/update-channel-feed';
-import { createUpdateManager } from './app/update-manager';
+import { createAppUpdateManager } from './app/update-manager-setup';
 import { createUpdatesService } from './app/updates-service';
 import {
   installExternalNavigationPolicy,
@@ -292,6 +290,7 @@ import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
+import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
   error as logError,
@@ -325,8 +324,8 @@ import { createUserStatePersistence } from './state/user-state-persistence';
 import { createDefaultUserState } from './state/user-state-shape';
 import { createUserStateStore } from './state/user-state-store';
 
-const { autoUpdater } = electronUpdater;
-const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
+const rendererUrl = resolveRendererUrl(process.env, app.isPackaged);
+const isDev = Boolean(rendererUrl);
 configureLogger(isDev);
 if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
@@ -345,28 +344,11 @@ if (process.platform === 'linux') {
   }
 }
 
-const updateManager: any = isNvmTestMode
-  ? {
-      state: { status: 'unsupported' as const },
-      canUseAutoUpdates: () => false,
-      configure: () => {},
-      onStateChange: () => {},
-      checkForUpdates: async () => {},
-      downloadAvailableUpdate: async () => {},
-      quitAndInstall: () => false,
-      clearTimers: () => {},
-      discardUpdateChannelState: () => {},
-      handleUpdateChannelChanged: () => {},
-    }
-  : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt, {
-      getUpdateChannel: () => getUpdateChannel(),
-      prepareUpdateFeed: () =>
-        installNevermindChannelFeed(autoUpdater as any, () =>
-          getUpdateChannel(),
-        ),
-      createCancellationToken: () => new electronUpdater.CancellationToken(),
-    });
-const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+const updateManager: any = createAppUpdateManager({
+  isTestMode: isNvmTestMode,
+  recordInstallAttempt: recordUpdateInstallAttempt,
+  getUpdateChannel: () => getUpdateChannel(),
+});
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 ipcMain.handle('diagnostics:renderer-failure', (event) => {

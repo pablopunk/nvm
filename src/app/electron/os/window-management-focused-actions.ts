@@ -16,7 +16,7 @@ import type {
 } from './window-management-types';
 import { describeInvalidRequest } from './window-management-validation';
 
-function noTargetMessage(source: WindowInvocation['source']) {
+export function noTargetMessage(source: WindowInvocation['source']) {
   return source === 'palette' ? PALETTE_NO_TARGET : SHORTCUT_NO_TARGET;
 }
 

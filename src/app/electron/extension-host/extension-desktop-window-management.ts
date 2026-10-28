@@ -5,13 +5,17 @@ import {
 import type {
   DisplayInfo,
   Frame,
+  NeighborDirection,
+  NeighborOptions,
   WindowApplyResult,
   WindowDescriptor,
+  WindowFocusResult,
   WindowInvocation,
   WindowLayoutSpec,
   WindowListQuery,
   WindowManagementService,
 } from '../os/window-management-types';
+import { NEIGHBOR_DIRECTIONS } from '../os/window-neighbors';
 import {
   currentWindowInvocationScope,
   type WindowInvocationScope,
@@ -39,6 +43,9 @@ const MISSING_INVOCATION_MESSAGE =
 
 const UNKNOWN_WINDOW_MESSAGE =
   'Pass a window handle from windows() or waitForWindow().';
+
+const INVALID_DIRECTION_MESSAGE =
+  'Pass left, right, up or down as the direction.';
 
 const DEFAULT_WAIT_TIMEOUT_MS = 5000;
 
@@ -207,6 +214,13 @@ async function applyLayoutToExtensionWindow(
   return toExtensionApplyResult(result);
 }
 
+function toExtensionFocusResult(result: WindowFocusResult) {
+  if (result.ok === false) {
+    return { ok: false, reason: result.reason, message: result.message };
+  }
+  return { ok: true };
+}
+
 async function focusExtensionWindow(
   deps: DesktopWindowManagementDeps,
   window: ExtensionWindowHandleInput,
@@ -215,11 +229,35 @@ async function focusExtensionWindow(
   if (handleId === null) {
     return unknownWindowResult();
   }
-  const result = await deps.service.focusWindow(handleId);
-  if (result.ok === false) {
-    return { ok: false, reason: result.reason, message: result.message };
+  return toExtensionFocusResult(await deps.service.focusWindow(handleId));
+}
+
+function invalidDirectionResult() {
+  return {
+    ok: false,
+    reason: 'invalid-spec',
+    message: INVALID_DIRECTION_MESSAGE,
+  };
+}
+
+async function focusNeighborForCurrentScope(
+  deps: DesktopWindowManagementDeps,
+  direction: NeighborDirection,
+  options?: NeighborOptions,
+) {
+  if (!NEIGHBOR_DIRECTIONS.includes(direction)) {
+    return invalidDirectionResult();
   }
-  return { ok: true };
+  const invocation = deps.resolveInvocation(currentWindowInvocationScope());
+  if (!invocation) {
+    return missingInvocationResult();
+  }
+  const result = await deps.service.focusNeighbor(
+    direction,
+    { wrap: options?.wrap === true },
+    invocation,
+  );
+  return toExtensionFocusResult(result);
 }
 
 function createDesktopWindowManagement(
@@ -245,6 +283,8 @@ function createDesktopWindowManagement(
     ) => applyLayoutToExtensionWindow(deps, window, spec, options),
     focus: (window: ExtensionWindowHandleInput) =>
       focusExtensionWindow(deps, window),
+    focusNeighbor: (direction: NeighborDirection, options?: NeighborOptions) =>
+      focusNeighborForCurrentScope(deps, direction, options),
   };
 }
 

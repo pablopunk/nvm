@@ -69,6 +69,7 @@ import {
   getUpstreamConfig,
   providerSupportsFormat,
   selectApiForModel,
+  type UpstreamApi,
   UpstreamConfigError,
 } from './upstream';
 import { ensureMonthlyFreeCredits, getBalances } from './users';
@@ -87,6 +88,7 @@ export type UsageTokens = {
 export type ProxyConfig = {
   request: Request;
   wireApi?: 'openai-completions' | 'openai-responses';
+  requiredApi?: UpstreamApi;
   authHeaderName: PatHeaderName;
   upstreamAuthHeaderName: 'authorization' | 'x-api-key' | 'x-goog-api-key';
   formatUpstreamAuthValue: (apiKey: string) => string;
@@ -960,6 +962,10 @@ function isStreamingContentType(contentType: string | null): boolean {
   );
 }
 
+function modelRouteChangedResponse(requestId: string): Response {
+  return withRequestId(Response.json({ error: { type: 'model_route_changed', message: 'The model route changed. Refresh the model and try again.' } }, { status: 409 }), requestId);
+}
+
 export function withRequestId(res: Response, requestId: string): Response {
   res.headers.set('x-request-id', requestId);
   res.headers.set('x-nevermind-backend-version', backendVersion());
@@ -1488,7 +1494,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
   if (routing instanceof Response) return withRequestId(routing, requestId);
   const resolvedApi = await selectApiForModel(routing.provider, routing.activeModelId);
   if (cfg.wireApi && cfg.wireApi !== resolvedApi && (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses')) {
-    return withRequestId(Response.json({ error: { type: 'model_route_changed', message: 'The model route changed. Refresh the model and try again.' } }, { status: 409 }), requestId);
+    return modelRouteChangedResponse(requestId);
+  }
+  if (cfg.requiredApi && resolvedApi !== cfg.requiredApi) {
+    return modelRouteChangedResponse(requestId);
   }
   const routingFinishedAt = Date.now();
 

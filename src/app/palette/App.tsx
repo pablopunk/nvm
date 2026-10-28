@@ -113,6 +113,7 @@ import type {
   PaletteMode,
   ShortcutRecord,
 } from './preload-api';
+import { resultsCardClassName } from './results-card-layout';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -134,11 +135,11 @@ import {
   EMPTY_ROOT_TITLE,
   EmptyState,
   type FormValue,
-  MarkdownContent,
   SearchAccessory,
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
+import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
 
@@ -1031,8 +1032,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     void runAction(action);
   }
 
-  function renderMarkdown(content: string) {
-    return <MarkdownContent content={content} />;
+  function renderMarkdown(content: string, options?: MarkdownOptions) {
+    return <MarkdownContent content={content} {...options} />;
   }
 
   function runDefaultAction(item: ExtensionViewItem) {
@@ -2775,9 +2776,6 @@ export function App() {
       (shortcutManagerOpen && !shortcutOptionsFor) ||
       isFilterableExtensionView,
   );
-  const isLargeExtensionView = extensionView?.size === 'large';
-  const isSidePreviewView =
-    !previewFor && extensionView?.presentation === 'side-preview';
   const isChildOpen = Boolean(
     shortcutFor ||
       shortcutOptionsFor ||
@@ -4821,9 +4819,9 @@ export function App() {
     );
   }
 
-  function renderMarkdown(content: string) {
+  function renderMarkdown(content: string, options?: MarkdownOptions) {
     markDebugPerformance('markdown.render', { contentLength: content.length });
-    return <MarkdownContent content={content} />;
+    return <MarkdownContent content={content} {...options} />;
   }
 
   function runDefaultViewAction(item: ExtensionViewItem) {
@@ -5739,7 +5737,7 @@ export function App() {
       >
         <Command
           ref={paletteRef}
-          className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
+          className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${!activePaneObscured && extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
           label="Nevermind"
           loop={true}
           shouldFilter={false}
@@ -5835,7 +5833,8 @@ export function App() {
           <Command.List
             ref={resultsListRef}
             data-pane-stack={siblingViews.length > 0 || undefined}
-            className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+            // biome-ignore format: Keep the legacy palette within its file-size budget.
+            className={resultsCardClassName({ stacked: isVisuallyStacked, obscured: activePaneObscured, confirmation: Boolean(confirmRemoveFor || confirmViewActionFor || confirmBuilderPreviewAction), builder: builderWorkspaceVisible, view: extensionView })}
           >
             {extensionNavigation.frames.flatMap((frame, frameIndex) =>
               frame.history.map((entry, historyIndex) => {
