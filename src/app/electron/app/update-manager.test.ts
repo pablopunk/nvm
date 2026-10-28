@@ -135,7 +135,7 @@ test('configuring the updater disables downgrades and installs the channel feed 
 test('ignores update results stamped for a channel the user has left', () => {
   const calls: string[] = [];
   const updater = createEventedAutoUpdater(calls);
-  let channel = 'nightly';
+  let channel: 'stable' | 'nightly' = 'nightly';
   const manager = createUpdateManager(updater, undefined, {
     getUpdateChannel: () => channel,
   });
@@ -189,7 +189,7 @@ test('does not download a check result stamped for another channel', async () =>
         isUpdateAvailable: true,
         updateInfo: {
           version: '0.17.1-nightly.20261028.42',
-          updateChannel: 'nightly',
+          updateChannel: 'nightly' as const,
         },
       };
     },
@@ -219,7 +219,7 @@ test('refuses to install a downloaded build from another channel', () => {
 
 test('changing channel cancels an in-flight download without reporting an error', async () => {
   const calls: string[] = [];
-  let channel = 'nightly';
+  let channel: 'stable' | 'nightly' = 'nightly';
   const tokens: FakeCancellationToken[] = [];
   const updater = createEventedAutoUpdater(calls);
   let abortDownload: (error: Error) => void = () => {};

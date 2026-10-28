@@ -16,5 +16,5 @@ test('sends the installed nightly version to the backend without changing it', (
     '0.24.1-nightly.20261028.1',
   );
   assert.equal(headers['X-Nevermind-API-Version'], '1');
-  assert.equal(headers.authorization, 'Bearer test');
+  assert.equal(new Headers(headers).get('authorization'), 'Bearer test');
 });
