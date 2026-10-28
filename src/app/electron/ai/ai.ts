@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
+import os from 'node:os';
 import { app } from 'electron';
 import ts from 'typescript';
 import type {
@@ -26,6 +27,11 @@ import {
   type AiSessionOutcome,
   type AiSessionOutcomeTracker,
 } from './ai-session-outcome';
+import {
+  createCredentialPathGuardExtension,
+  nevermindPrivatePaths,
+} from './ai-credential-path-guard';
+import { ensurePiExtensionsLoaded } from './ai-pi-extension-load';
 import { createBuilderTools } from './ai-builder-tools';
 import { formatBuilderValidationError } from './ai-builder-read-page';
 import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
@@ -2039,28 +2045,20 @@ async function createGeneralResourceLoader(
     noThemes: true,
     noContextFiles: true,
     systemPrompt: sessionSystemPrompt,
+    extensionFactories: [
+      createCredentialPathGuardExtension({
+        homeDir: os.homedir(),
+        extraDeniedPaths: nevermindPrivatePaths(
+          app.getPath('userData'),
+          agentDir,
+        ),
+      }),
+    ],
   };
   const loader = new pi.DefaultResourceLoader(resourceLoaderOptions);
   await loader.reload();
   ensurePiExtensionsLoaded(loader, 'general session');
   return loader;
-}
-
-function ensurePiExtensionsLoaded(
-  loader: InstanceType<PiApi['DefaultResourceLoader']>,
-  mode: string,
-) {
-  const loadErrors = loader.getExtensions().errors;
-  if (loadErrors.length > 0) {
-    logger.error(
-      'ai.web-access.load.failed',
-      { errors: loadErrors },
-      { source: 'host', scope: 'ai' },
-    );
-    throw new Error(
-      `Pi extensions failed to load for ${mode}: ${loadErrors[0].error}`,
-    );
-  }
 }
 
 export async function stageAiGeneratedExtension(
