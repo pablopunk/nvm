@@ -5,10 +5,14 @@ import {
 import type {
   ExtensionContext,
   ExtensionWindowApplyResult,
+  ExtensionWindowLayoutSpec,
 } from '../resources/nevermind-extension-api';
 import { showExtensionFeedback } from './feedback';
 import { WINDOW_LAYOUT_PRESENTATION } from './window-management-layout-presentation';
-import { extensionWindowManagementSettingsStore } from './window-management-settings';
+import {
+  extensionWindowManagementSettingsStore,
+  type WindowManagementSettings,
+} from './window-management-settings';
 import { windowLayoutSpecFor } from './window-management-specs';
 
 const WINDOW_UNAVAILABLE_MESSAGE =
@@ -30,21 +34,34 @@ function reportWindowLayoutResult(
 }
 
 export const WINDOW_MANAGEMENT_SUBTITLE = 'Window Management';
+export const WINDOW_MANAGEMENT_OS_CAPABILITY = 'window-management';
 
 export function windowLayoutLocalId(id: WindowLayoutId) {
   return `layout.${id}`;
 }
 
-export async function applyWindowLayout(
+export async function applyWindowSpecWithSettings(
   ctx: ExtensionContext,
-  id: WindowLayoutId,
+  title: string,
+  buildSpec: (settings: WindowManagementSettings) => ExtensionWindowLayoutSpec,
 ) {
   const settings = await extensionWindowManagementSettingsStore(ctx).load();
   const result = await ctx.desktop.windowManagement?.apply(
-    windowLayoutSpecFor(id, settings),
-    { gap: settings.gap, cycle: settings.cycle },
+    buildSpec(settings),
+    {
+      gap: settings.gap,
+      cycle: settings.cycle,
+    },
   );
-  reportWindowLayoutResult(ctx, WINDOW_LAYOUT_PRESENTATION[id].title, result);
+  reportWindowLayoutResult(ctx, title, result);
+}
+
+export function applyWindowLayout(ctx: ExtensionContext, id: WindowLayoutId) {
+  return applyWindowSpecWithSettings(
+    ctx,
+    WINDOW_LAYOUT_PRESENTATION[id].title,
+    (settings) => windowLayoutSpecFor(id, settings),
+  );
 }
 
 export function windowLayoutAction(id: WindowLayoutId) {

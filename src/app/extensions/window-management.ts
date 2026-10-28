@@ -2,10 +2,17 @@ import type {
   ExtensionContext,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { windowLayoutActions } from './window-management-commands';
+import {
+  WINDOW_MANAGEMENT_OS_CAPABILITY,
+  windowLayoutActions,
+} from './window-management-commands';
+import {
+  customWindowCommandSearchItems,
+  customWindowCommandsCommand,
+} from './window-management-custom-commands';
+import { windowDesktopActions } from './window-management-desktops';
+import { exactWindowActions } from './window-management-exact-commands';
 import { windowManagementSettingsView } from './window-management-settings-view';
-
-const WINDOW_MANAGEMENT_OS_CAPABILITY = 'window-management';
 
 function windowManagementSettingsCommand() {
   return {
@@ -17,17 +24,33 @@ function windowManagementSettingsCommand() {
   };
 }
 
+function windowManagementSupported(ctx: ExtensionContext) {
+  return ctx.system.capabilities.has(WINDOW_MANAGEMENT_OS_CAPABILITY);
+}
+
 export function createWindowManagementExtension() {
   return {
     id: 'window-management',
     title: 'Window Management',
-    capabilities: ['desktop.window-management'],
-    commands: [windowManagementSettingsCommand()],
+    capabilities: ['desktop.window-management', 'system'],
+    commands: [
+      windowManagementSettingsCommand(),
+      customWindowCommandsCommand(),
+    ],
+    searchItems(ctx, query) {
+      return windowManagementSupported(ctx)
+        ? customWindowCommandSearchItems(ctx, query)
+        : [];
+    },
     actions(ctx) {
-      if (!ctx.system.capabilities.has(WINDOW_MANAGEMENT_OS_CAPABILITY)) {
+      if (!windowManagementSupported(ctx)) {
         return [];
       }
-      return windowLayoutActions();
+      return [
+        ...windowLayoutActions(),
+        ...exactWindowActions(ctx),
+        ...windowDesktopActions(),
+      ];
     },
   } satisfies NevermindExtension;
 }
