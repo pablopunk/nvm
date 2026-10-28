@@ -12,7 +12,7 @@ const COST: ModelCost = {
   provider: 'openrouter',
   modelId: 'typesafe/jev-1.13',
   inputUsdPerMtok: 1,
-  outputUsdPerMtok: 2,
+  outputUsdPerMtok: 0,
 };
 const ACCOUNT: DecisionAccount = {
   user: { id: 'user-1', plan: 'pro' },
@@ -60,6 +60,8 @@ function fixtureDeps(options: {
     modelId: ROUTE.modelId,
     name: 'Jev',
     acceptsImages: options.textOnlyModel !== true,
+    contextLength: 262_144,
+    imageTokenPriced: true,
   };
   const deps = {
     reserve: (async (input: unknown) => {
@@ -119,6 +121,23 @@ test('reserves the ceiling, calls the native endpoint once, and settles provider
   assert.equal(settlement.costSource, 'provider_reported');
   assert.equal(settlement.modality, 'text');
   assert.equal(settlement.status, 200);
+});
+
+test('reserves the model context as the image input bound', async () => {
+  const { deps, calls } = fixtureDeps({});
+  const response = await runDecision({
+    requestId: 'image-bound',
+    account: ACCOUNT,
+    route: ROUTE,
+    request: requestFixture(true),
+    deps,
+  });
+  assert.equal(response.status, 200);
+  assert.equal(
+    (calls.reserve[0] as { estimatedProviderCostUsd: number })
+      .estimatedProviderCostUsd,
+    262_144 / 1_000_000,
+  );
 });
 
 test('refuses images on a text-only configured model before any charge', async () => {

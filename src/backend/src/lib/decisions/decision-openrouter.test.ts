@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { DecisionProviderResponseError } from './decision-contract';
 import {
   buildOpenRouterDecisionBody,
   openRouterDecisionsUrl,
   parseOpenRouterDecisionResponse,
 } from './decision-openrouter';
-import { DecisionProviderResponseError } from './decision-contract';
 import { type DecisionRequest, parseDecisionRequest } from './decision-request';
 
 function requestFixture(extra: Record<string, unknown> = {}): DecisionRequest {
@@ -48,9 +48,13 @@ function responseFixture(overrides: Record<string, unknown> = {}) {
         probabilities: { checkout: 0.8, login: 0.2 },
         confidence: 0.75,
       },
-      urgency: { type: 'score', score: 3 },
+      urgency: {
+        type: 'score',
+        score: 1.75,
+        probabilities: { '0': 0.05, '1': 0.15, '2': 0.8 },
+      },
     },
-    usage: { input_tokens: 120, output_tokens: 12, cost: 0.00001 },
+    usage: { input_tokens: 120, output_tokens: 12, cost: 0.000_01 },
     ...overrides,
   };
 }
@@ -68,7 +72,7 @@ test('builds a text-only state string and typed questions for OpenRouter', () =>
       area: {
         type: 'choice',
         instructions: 'Which area?',
-        criteria: { checkout: null, login: null },
+        criteria: { checkout: 'checkout', login: 'login' },
       },
       urgency: {
         type: 'score',
@@ -123,13 +127,13 @@ test('maps predicate, choice and score answers with optional probability and con
     },
     urgency: {
       type: 'score',
-      value: 3,
-      probabilities: undefined,
+      value: 2.75,
+      probabilities: { '1': 0.05, '2': 0.15, '3': 0.8 },
       confidence: undefined,
     },
   });
   assert.deepEqual(parsed.usage, { inputTokens: 120, outputTokens: 12 });
-  assert.equal(parsed.providerCostUsd, 0.00001);
+  assert.equal(parsed.providerCostUsd, 0.000_01);
   assert.equal(parsed.providerModel, 'typesafe/jev-1.13-2026-10-01');
 });
 

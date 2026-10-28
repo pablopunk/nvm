@@ -1,7 +1,7 @@
 // biome-ignore-all lint: Extension AI options and attachments are dynamic extension-supplied payloads.
 import path from 'node:path';
-import { trustedExtensionApiUnavailable } from '../extension-host/extension-context-capabilities';
 import { getNevermindAuth } from '../backend/nevermind-auth';
+import { trustedExtensionApiUnavailable } from '../extension-host/extension-context-capabilities';
 import { ocrImage } from '../files/ocr';
 import {
   extensionAiOcrText,
@@ -117,7 +117,10 @@ export function createExtensionAiFactory(deps: ExtensionAiDeps) {
       );
       return requestNevermindDecision(
         buildDecisionWireRequest({
-          input: String(options.input ?? ''),
+          input:
+            typeof options.input === 'string'
+              ? options.input
+              : JSON.stringify(options.input ?? ''),
           contextText: normalized.context,
           images: normalized.images,
           questions: options.questions ?? [],

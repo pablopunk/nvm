@@ -1,3 +1,4 @@
+import type { ModelCost } from '../cost';
 import { getUpstreamBaseUrl } from '../upstream';
 
 export const DECISION_CATALOG_TTL_MS = 15 * 60 * 1000;
@@ -8,11 +9,21 @@ export type DecisionModel = {
   modelId: string;
   name: string;
   acceptsImages: boolean;
+  cost?: ModelCost | null;
+  contextLength?: number;
+  imageTokenPriced?: boolean;
 };
 
 type OpenRouterModel = {
   id?: unknown;
   name?: unknown;
+  pricing?: {
+    prompt?: unknown;
+    completion?: unknown;
+    image?: unknown;
+    request?: unknown;
+  };
+  context_length?: unknown;
   architecture?: {
     input_modalities?: unknown;
     output_modalities?: unknown;
@@ -39,7 +50,58 @@ export function decisionModelFromCatalog(
     modelId: model.id,
     name: typeof model.name === 'string' ? model.name : model.id,
     acceptsImages: hasModality(model.architecture?.input_modalities, 'image'),
+    cost: decisionCatalogCost(model),
+    ...(typeof model.context_length === 'number' &&
+    Number.isSafeInteger(model.context_length) &&
+    model.context_length > 0
+      ? { contextLength: model.context_length }
+      : {}),
+    imageTokenPriced:
+      isZeroPrice(model.pricing?.image) &&
+      (model.pricing?.request === undefined ||
+        isZeroPrice(model.pricing.request)),
   };
+}
+
+function isZeroPrice(value: unknown): boolean {
+  return (
+    typeof value === 'string' && value.trim() !== '' && Number(value) === 0
+  );
+}
+
+function decisionCatalogCost(model: OpenRouterModel): ModelCost | null {
+  const input = model.pricing?.prompt;
+  const output = model.pricing?.completion;
+  if (
+    typeof model.id !== 'string' ||
+    typeof input !== 'string' ||
+    typeof output !== 'string' ||
+    !input.trim() ||
+    !output.trim()
+  )
+    return null;
+  const inputRate = Number(input);
+  const outputRate = Number(output);
+  if (
+    !Number.isFinite(inputRate) ||
+    inputRate < 0 ||
+    !Number.isFinite(outputRate) ||
+    outputRate < 0
+  )
+    return null;
+  return {
+    provider: 'openrouter',
+    modelId: model.id,
+    inputUsdPerMtok: inputRate * 1_000_000,
+    outputUsdPerMtok: outputRate * 1_000_000,
+  };
+}
+
+export async function lookupDecisionModelCost(
+  provider: string,
+  modelId: string,
+): Promise<ModelCost | null> {
+  return (await findEligibleDecisionModel(provider, modelId))?.cost ?? null;
 }
 
 async function fetchOpenRouterDecisionModels(): Promise<DecisionModel[]> {
@@ -47,7 +109,7 @@ async function fetchOpenRouterDecisionModels(): Promise<DecisionModel[]> {
   const response = await fetch(
     `${baseUrl}/models?output_modalities=decisions`,
     {
-      signal: AbortSignal.timeout(8_000),
+      signal: AbortSignal.timeout(8000),
     },
   );
   if (!response.ok)

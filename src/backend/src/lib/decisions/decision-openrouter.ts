@@ -1,4 +1,3 @@
-import type { DecisionRequest, DecisionQuestion } from './decision-request';
 import {
   type DecisionAnswer,
   DecisionProviderResponseError,
@@ -6,10 +5,11 @@ import {
   isProbability,
   type ParsedDecisionResponse,
 } from './decision-contract';
+import type { DecisionQuestion, DecisionRequest } from './decision-request';
 
 type OpenRouterQuestion =
   | { type: 'noul'; instructions: string }
-  | { type: 'choice'; instructions: string; criteria: Record<string, null> }
+  | { type: 'choice'; instructions: string; criteria: Record<string, string> }
   | { type: 'score'; instructions: string; criteria: string[] };
 
 type OpenRouterAnswerRecord = Record<string, unknown>;
@@ -39,7 +39,7 @@ export function openRouterQuestion(
       type: 'choice',
       instructions: question.question,
       criteria: Object.fromEntries(
-        question.options.map((option) => [option, null]),
+        question.options.map((option) => [option, option]),
       ),
     };
   return {
@@ -101,10 +101,10 @@ function probabilityMap(
   allowedKeys: readonly string[],
   label: string,
 ): Record<string, number> | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) return;
   const record = requireRecord(value, label);
   for (const [key, probability] of Object.entries(record)) {
-    if (!allowedKeys.includes(key) || !isProbability(probability))
+    if (!(allowedKeys.includes(key) && isProbability(probability)))
       throw new DecisionProviderResponseError(
         `${label} has an invalid entry ${key}`,
       );
@@ -113,7 +113,7 @@ function probabilityMap(
 }
 
 function optionalConfidence(value: unknown, label: string): number | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) return;
   if (!isProbability(value))
     throw new DecisionProviderResponseError(`${label} confidence is invalid`);
   return value;
@@ -149,14 +149,33 @@ function scoreAnswer(
   label: string,
 ): DecisionAnswer {
   const levels = scoreLevels(question);
-  if (!levels.includes(raw.score as number))
+  if (
+    typeof raw.score !== 'number' ||
+    !Number.isFinite(raw.score) ||
+    raw.score < 0 ||
+    raw.score > levels.length - 1
+  )
     throw new DecisionProviderResponseError(
       `${label} score is outside its levels`,
     );
   return {
     type: 'score',
-    value: raw.score as number,
-    probabilities: probabilityMap(raw.probabilities, levels.map(String), label),
+    value: raw.score + question.min,
+    probabilities:
+      raw.probabilities === undefined
+        ? undefined
+        : Object.fromEntries(
+            Object.entries(
+              probabilityMap(
+                raw.probabilities,
+                levels.map((_, index) => String(index)),
+                label,
+              ) ?? {},
+            ).map(([index, probability]) => [
+              String(Number(index) + question.min),
+              probability,
+            ]),
+          ),
     confidence: optionalConfidence(raw.confidence, label),
   };
 }
@@ -166,6 +185,9 @@ function answerFor(
   raw: OpenRouterAnswerRecord,
 ): DecisionAnswer {
   const label = `answer ${question.id}`;
+  const expectedType = question.type === 'predicate' ? 'noul' : question.type;
+  if (raw.type !== expectedType)
+    throw new DecisionProviderResponseError(`${label} has an unexpected type`);
   if (question.type === 'predicate') return predicateAnswer(raw, label);
   if (question.type === 'choice') return choiceAnswer(raw, question, label);
   return scoreAnswer(raw, question, label);
@@ -174,8 +196,10 @@ function answerFor(
 function parseUsage(value: unknown) {
   const usage = requireRecord(value, 'usage');
   if (
-    !isNonNegativeInteger(usage.input_tokens) ||
-    !isNonNegativeInteger(usage.output_tokens)
+    !(
+      isNonNegativeInteger(usage.input_tokens) &&
+      isNonNegativeInteger(usage.output_tokens)
+    )
   )
     throw new DecisionProviderResponseError('usage token counts are invalid');
   const cost = usage.cost;

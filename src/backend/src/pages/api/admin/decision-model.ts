@@ -7,7 +7,6 @@ import {
   executeAdminMutation,
 } from '../../../lib/admin-mutations';
 import { recordAuditStrict } from '../../../lib/audit';
-import { lookupModelCost } from '../../../lib/cost';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
   findEligibleDecisionModel,
@@ -66,13 +65,16 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response('Model is not an eligible decision model', {
       status: 400,
     });
-  const pricing = await lookupModelCost(route.provider, route.modelId).catch(
-    () => null,
-  );
+  const pricing = eligible.cost;
   if (!pricing)
     return new Response('Model does not have verified token pricing', {
       status: 400,
     });
+  if (pricing.outputUsdPerMtok !== 0)
+    return new Response(
+      'Decision models with priced output require a verified output cost bound',
+      { status: 400 },
+    );
   const idempotencyKey = adminMutationKeyFromRequest(request);
   if (!idempotencyKey)
     return Response.json(

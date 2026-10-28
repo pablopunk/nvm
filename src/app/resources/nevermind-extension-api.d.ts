@@ -1163,9 +1163,11 @@ export type ExtensionDecisionAnswer =
 
 export type ExtensionDecisionOptions = {
   /** Shared text evaluated by every question in one batched call. May be empty when images carry the content. */
-  input: string;
+  input: string | Record<string, unknown> | unknown[];
   /** Text, file, clipboard or image attachments. Images are never dropped: unsupported images fail the call. */
-  attachments?: ExtensionAiAttachment[];
+  attachments?:
+    | ExtensionAiResolvableAttachment
+    | ExtensionAiResolvableAttachment[];
   questions: ExtensionDecisionQuestion[];
   signal?: AbortSignal;
 };

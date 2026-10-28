@@ -1,4 +1,8 @@
-import { lookupModelCost, type ModelCost } from '../cost';
+import {
+  computeMaximumTokenPricedCost,
+  type ModelCost,
+  usdToCredits,
+} from '../cost';
 import { finalizeReservation, reserveCredits } from '../credit-reservations';
 import { freeSpendCapErrorBody } from '../free-spend-cap';
 import { log } from '../log';
@@ -6,19 +10,23 @@ import { getUpstreamConfig, UpstreamConfigError } from '../upstream';
 import type { DecisionAccount } from './decision-account';
 import { decisionAdapterFor } from './decision-adapter';
 import {
-  DecisionProviderResponseError,
-  type ParsedDecisionResponse,
-} from './decision-contract';
-import {
+  decisionOutputTokenCeiling,
   decisionReservationCostUsd,
   decisionReservationCredits,
   settleDecisionCost,
 } from './decision-billing';
 import {
+  DecisionProviderResponseError,
+  type ParsedDecisionResponse,
+} from './decision-contract';
+import {
   decisionErrorResponse,
   decisionProviderStatusResponse,
 } from './decision-errors';
-import { findEligibleDecisionModel } from './decision-models';
+import {
+  findEligibleDecisionModel,
+  lookupDecisionModelCost,
+} from './decision-models';
 import type { DecisionRequest } from './decision-request';
 
 export const DECISION_PROVIDER_TIMEOUT_MS = 90_000;
@@ -28,7 +36,7 @@ export type DecisionRoute = { provider: string; modelId: string };
 type Dependencies = {
   reserve: typeof reserveCredits;
   finalize: typeof finalizeReservation;
-  lookupCost: typeof lookupModelCost;
+  lookupCost: typeof lookupDecisionModelCost;
   findModel: typeof findEligibleDecisionModel;
   upstream: typeof getUpstreamConfig;
   fetchImpl: (url: string, init: RequestInit) => Promise<Response>;
@@ -37,7 +45,7 @@ type Dependencies = {
 const defaultDependencies: Dependencies = {
   reserve: reserveCredits,
   finalize: finalizeReservation,
-  lookupCost: lookupModelCost,
+  lookupCost: lookupDecisionModelCost,
   findModel: findEligibleDecisionModel,
   upstream: getUpstreamConfig,
   fetchImpl: (input, init) => fetch(input, init),
@@ -198,6 +206,7 @@ export async function runDecision(input: {
       'decision_model_unavailable',
       'The decision model provider is not supported.',
     );
+  let imageInputLimit: number | undefined;
   if (request.images.length > 0) {
     const model = await deps
       .findModel(route.provider, route.modelId)
@@ -214,6 +223,22 @@ export async function runDecision(input: {
         'unsupported_image_route',
         `The configured decision model ${route.modelId} does not accept images. Remove the images or ask the admin to configure an image-capable decision model.`,
       );
+    if (!(model.contextLength && model.imageTokenPriced))
+      return decisionErrorResponse(
+        503,
+        'decision_model_unavailable',
+        'Image billing limits are unavailable for the configured decision model.',
+      );
+    if (
+      route.modelId.startsWith('typesafe/jev-') &&
+      request.images.some((image) => image.mediaType === 'image/webp')
+    )
+      return decisionErrorResponse(
+        400,
+        'unsupported_image_route',
+        'The configured decision model accepts PNG and JPEG images.',
+      );
+    imageInputLimit = model.contextLength;
   }
 
   const costRow = await deps.lookupCost(route.provider, route.modelId);
@@ -223,9 +248,30 @@ export async function runDecision(input: {
       'decision_model_unavailable',
       'The decision model has no verified pricing.',
     );
+  if (
+    costRow.outputUsdPerMtok !== 0 ||
+    costRow.tiers?.some(
+      (tier) => (tier.outputUsdPerMtok ?? costRow.outputUsdPerMtok) !== 0,
+    )
+  )
+    return decisionErrorResponse(
+      503,
+      'decision_model_unavailable',
+      'The configured decision model has no verified output cost bound.',
+    );
 
-  const credits = decisionReservationCredits(costRow, request);
-  const reservedCostUsd = decisionReservationCostUsd(costRow, request);
+  const reservedCostUsd =
+    imageInputLimit === undefined
+      ? decisionReservationCostUsd(costRow, request)
+      : computeMaximumTokenPricedCost(
+          costRow,
+          imageInputLimit,
+          decisionOutputTokenCeiling(request),
+        );
+  const credits =
+    imageInputLimit === undefined
+      ? decisionReservationCredits(costRow, request)
+      : usdToCredits(reservedCostUsd);
   const reservation = await deps.reserve({
     requestId,
     userId: account.user.id,
