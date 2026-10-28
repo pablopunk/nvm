@@ -17,6 +17,10 @@ import {
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
 import { debug as logDebug, warn as logWarn } from '../platform/logger';
+import {
+  macosAppFocusRestoreScript,
+  parseLsappinfoTarget,
+} from './macos-app-focus';
 import { macosSelectionAccess } from './macos-selected-text';
 import { createLinuxDesktopText } from './linux-desktop-text';
 import { createWindowsDesktopText } from './windows-desktop-text';
@@ -72,6 +76,7 @@ const macOnlyCapabilities = new Set([
   'window-panel-policy',
   'file-date-added',
   'app-uninstall',
+  'window-management',
 ]);
 
 export function validatedWindowsImageName(rawName: string) {
@@ -1156,17 +1161,12 @@ export async function frontmostAppFocusTarget() {
             execFile(
               '/usr/bin/lsappinfo',
               ['info', '-only', 'bundleID', '-only', 'pid', asn],
-              (infoError, infoStdout) => {
-                if (infoError) return resolve(null);
-                const bundleId =
-                  String(infoStdout || '').match(
-                    /"CFBundleIdentifier"="([^"]+)"/,
-                  )?.[1] || '';
-                const pid = Number(
-                  String(infoStdout || '').match(/"pid"=(\d+)/)?.[1] || 0,
-                );
-                resolve(bundleId && pid ? { bundleId, pid } : null);
-              },
+              (infoError, infoStdout) =>
+                resolve(
+                  infoError
+                    ? null
+                    : parseLsappinfoTarget(String(infoStdout || '')),
+                ),
             );
           });
         }),
@@ -1187,12 +1187,10 @@ export async function restoreAppFocus(appIdentity: {
       linux: () => linuxDesktopText.restore(appIdentity as DesktopTextTarget),
       win32: () => windowsDesktopText.restore(appIdentity as DesktopTextTarget),
       darwin: async () => {
-        const script = `tell application "System Events"
-set matchingProcesses to application processes whose bundle identifier is ${appleScriptString(bundleId)}
-if (count of matchingProcesses) is 0 then return false
-set frontmost of item 1 of matchingProcesses to true
-return true
-end tell`;
+        const script = macosAppFocusRestoreScript(
+          appleScriptString(bundleId),
+          appIdentity.pid,
+        );
         const result = await runAppleScript(script, 5000);
         return result.exitCode === 0 && result.stdout.trim() === 'true';
       },

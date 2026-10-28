@@ -5,15 +5,16 @@ import {
   markDebugPerformance,
   measureDebugPerformance,
 } from '../diagnostics/debug-performance';
-import { isNvmTestMode } from '../platform/test-mode';
-import { error as logError, warn as logWarn } from '../platform/logger';
 import type { JobRegistry } from '../platform/jobs';
+import { error as logError, warn as logWarn } from '../platform/logger';
+import { isNvmTestMode } from '../platform/test-mode';
 import { createProgressiveSearchTestExtension } from '../search/search-test-extension';
 import {
   applyExtensionMetadata,
   normalizedExtensionMetadata,
 } from './extension-metadata';
 import { loadExtensionModule } from './extension-module-loader';
+import type { ExtensionRegistration } from './extension-registration';
 import type {
   ExtensionRuntimeRegistries,
   ExtensionRuntimeState,
@@ -33,8 +34,10 @@ export type ExtensionLoaderDeps = ExtensionRuntimeRegistries & {
   initExtensionRuntimeContext: () => void;
   stopFrontmostAppPolling: () => void;
   syncFrontmostAppPolling: () => void;
-  registerExtension: (extension: any) => void;
-  registerInternalExtensions: () => void;
+  registration: Pick<
+    ExtensionRegistration,
+    'registerExtension' | 'registerInternalExtensions'
+  >;
   loadDevExtensions: () => Promise<void>;
   initializeExtensionManager: () => Promise<void>;
   extensionFileIsEnabled: (filename: string) => boolean;
@@ -65,8 +68,7 @@ export function createExtensionLoader(deps: ExtensionLoaderDeps) {
     initExtensionRuntimeContext,
     stopFrontmostAppPolling,
     syncFrontmostAppPolling,
-    registerExtension,
-    registerInternalExtensions,
+    registration,
     loadDevExtensions,
     initializeExtensionManager,
     extensionFileIsEnabled,
@@ -120,9 +122,11 @@ export function createExtensionLoader(deps: ExtensionLoaderDeps) {
           watcher.close();
         runtimeState.extensionFileWatchers = [];
         initExtensionRuntimeContext();
-        registerInternalExtensions();
+        await registration.registerInternalExtensions();
         if (isNvmTestMode)
-          registerExtension(createProgressiveSearchTestExtension());
+          await registration.registerExtension(
+            createProgressiveSearchTestExtension(),
+          );
         if (isDev)
           await measureDebugPerformance('extensions.load-dev', undefined, () =>
             loadDevExtensions(),
@@ -151,7 +155,7 @@ export function createExtensionLoader(deps: ExtensionLoaderDeps) {
                 extension.__filePath = fullPath;
                 extension.__generated = true;
                 await applyExtensionMetadataOverrides(extension);
-                registerExtension(extension);
+                await registration.registerExtension(extension);
               },
             );
           } catch (error) {

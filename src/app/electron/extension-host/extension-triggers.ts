@@ -139,6 +139,10 @@ export type ExtensionTriggersDeps = {
   executeViewAction: (action: any, launchContext?: any) => Promise<any>;
 };
 
+function extensionBackgroundJobId(extension, item) {
+  return `extension.${extension.id}.${item.id}`;
+}
+
 export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
   const {
     jobRegistry,
@@ -273,9 +277,22 @@ export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
       .filter(Boolean);
   }
 
+  function unregisterExtensionBackgroundJob(extension, item) {
+    const id = extensionBackgroundJobId(extension, item);
+    jobRegistry.unregister(id);
+    runtimeState.extensionFileWatchers =
+      runtimeState.extensionFileWatchers.filter((watcher) => {
+        const owned =
+          watcher.extensionId === extension.id &&
+          watcher.event.startsWith(`files.changed:${id}:`);
+        if (owned) watcher.close();
+        return !owned;
+      });
+  }
+
   function registerExtensionBackgroundJob(entry, item) {
     const mode = item.mode || (item.background ? 'background' : 'view');
-    const id = `extension.${entry.extension.id}.${item.id}`;
+    const id = extensionBackgroundJobId(entry.extension, item);
     const triggers = jobTriggersFromExtensionTriggers(
       entry.extension,
       item.triggers || [],
@@ -312,5 +329,9 @@ export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
     else jobRegistry.register(definition);
   }
 
-  return { attachExtensionFileTrigger, registerExtensionBackgroundJob };
+  return {
+    attachExtensionFileTrigger,
+    registerExtensionBackgroundJob,
+    unregisterExtensionBackgroundJob,
+  };
 }

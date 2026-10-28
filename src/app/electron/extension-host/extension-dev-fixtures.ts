@@ -19,7 +19,7 @@ export type ExtensionDevFixturesDeps = Pick<
   runtimeState: ExtensionRuntimeState;
   getAppPath: () => string;
   extensionActionFromContribution: (entry: any) => any;
-  registerExtension: (extension: any) => void;
+  registerExtension: (extension: any) => Promise<void>;
 };
 
 export function createExtensionDevFixtures(deps: ExtensionDevFixturesDeps) {
@@ -123,7 +123,7 @@ export function createExtensionDevFixtures(deps: ExtensionDevFixturesDeps) {
         extension.__filePath = fullPath;
         extension.__dev = true;
         extension.__fixture = true;
-        registerExtension(extension);
+        await registerExtension(extension);
         runtimeState.fixtureExtensions.push(extension);
       } catch (error) {
         logError('extension.dev.load.failed', error, {
@@ -134,7 +134,7 @@ export function createExtensionDevFixtures(deps: ExtensionDevFixturesDeps) {
       }
     }
     if (runtimeState.fixtureExtensions.length)
-      registerExtension(createFixturesExtension());
+      await registerExtension(createFixturesExtension());
   }
 
   return { loadDevExtensions };

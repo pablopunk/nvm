@@ -3,6 +3,9 @@ import { test } from 'node:test';
 import { Command } from 'cmdk';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { feedbackView } from '../feedback';
+import type { CommandAction, CommandFormField, CommandView } from '../model';
+import { MarkdownContent } from '../ui';
 import {
   EXTENSION_WEBVIEW_ALLOW,
   EXTENSION_WEBVIEW_SANDBOX,
@@ -11,9 +14,6 @@ import {
   extensionWebviewAllow,
   NevermindLimitGate,
 } from './extension-view';
-import { feedbackView } from '../feedback';
-import type { CommandAction, CommandFormField, CommandView } from '../model';
-import { MarkdownContent } from '../ui';
 import {
   nextNavigationState,
   previousNavigationState,
@@ -818,4 +818,21 @@ test('extension webview privileged iframe permissions are explicit and allowlist
   });
   assert.match(microphoneHtml, /allow="microphone"/);
   assert.doesNotMatch(microphoneHtml, /allow-same-origin/);
+});
+
+test('a root-presentation list with sections renders its section items', () => {
+  const html = renderExtensionView({
+    type: 'list',
+    title: 'Sectioned',
+    presentation: 'root',
+    sections: [
+      {
+        title: 'First section',
+        items: [{ id: 'first-item', title: 'First item' }],
+      },
+    ],
+  });
+
+  assert.match(html, /First section/);
+  assert.match(html, /First item/);
 });

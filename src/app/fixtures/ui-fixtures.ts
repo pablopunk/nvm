@@ -35,6 +35,14 @@ import {
   webviewView,
 } from './ui/simple-view-fixtures.ts';
 import { textInputView } from './ui/text-input-fixture.ts';
+import {
+  windowManagementMovePromptFixtureView,
+  windowManagementResizeErrorFixtureView,
+} from './ui/window-management-exact-fixture.ts';
+import {
+  windowManagementSettingsErrorFixtureView,
+  windowManagementSettingsFixtureView,
+} from './ui/window-management-settings-fixture.ts';
 
 const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
@@ -120,6 +128,30 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Text Input',
       icon: 'keyboard',
       run: (ctx) => textInputView(ctx),
+    },
+    {
+      id: 'window-management-settings',
+      title: 'Dev UI: Window Management Settings',
+      icon: 'ruler',
+      run: (ctx) => windowManagementSettingsFixtureView(ctx),
+    },
+    {
+      id: 'window-management-settings-error',
+      title: 'Dev UI: Window Gap Validation Error',
+      icon: 'ruler',
+      run: (ctx) => windowManagementSettingsErrorFixtureView(ctx),
+    },
+    {
+      id: 'window-management-move-window',
+      title: 'Dev UI: Move Window Prompt',
+      icon: 'move',
+      run: (ctx) => windowManagementMovePromptFixtureView(ctx),
+    },
+    {
+      id: 'window-management-resize-error',
+      title: 'Dev UI: Resize Window Error',
+      icon: 'scaling',
+      run: (ctx) => windowManagementResizeErrorFixtureView(ctx),
     },
     {
       id: 'clipboard',
