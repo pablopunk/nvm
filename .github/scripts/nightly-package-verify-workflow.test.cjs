@@ -20,6 +20,7 @@ const nightly = fs.readFileSync(
 const SHARED_PACKAGE_CONTRACT = [
   'pnpm run dist:win:x64',
   'pnpm run dist:mac:all',
+  "'-c.publish.channel=nightly'",
   'set-package-version --version "$NIGHTLY_VERSION"',
   "CSC_IDENTITY_AUTO_DISCOVERY: 'false'",
   '-UpdaterMetadataName nightly.yml',

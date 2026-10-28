@@ -174,7 +174,7 @@ jobs:
       - name: Build unsigned Windows x64 NSIS and portable packages
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: mise exec -- pnpm run dist:win:x64
+        run: mise exec -- pnpm run dist:win:x64 '-c.publish.channel=nightly'
 
       - name: Verify unsigned Windows nightly packages
         shell: pwsh
@@ -270,7 +270,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
-        run: mise exec -- pnpm run dist:mac:all
+        run: mise exec -- pnpm run dist:mac:all '-c.publish.channel=nightly'
 
       - name: Collect macOS nightly artifacts
         run: |
@@ -335,7 +335,7 @@ jobs:
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build Linux nightly
-        run: xvfb-run -a mise exec -- pnpm run dist:linux:${{ matrix.arch }}
+        run: xvfb-run -a mise exec -- pnpm run dist:linux:${{ matrix.arch }} '-c.publish.channel=nightly'
 
       - name: Generate Linux AppImage blockmap
         run: |
