@@ -118,6 +118,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
 test('Uninstall candidate list defaults to the app, patches selection, and confirms host snapshot paths', async () => {
   const indicators: any[] = [];
   let trashedValues: Record<string, unknown> = {};
+  let trashResult: any;
   const app = {
     id: 'example',
     name: 'Example',
@@ -156,12 +157,14 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
         candidates.filter((candidate) => values[candidate.id] === true),
       trash: async (_snapshot, values = {}) => {
         trashedValues = values;
-        return {
-          status: 'complete',
-          moved: [app.path],
-          untouched: [],
-          notes: [],
-        };
+        return (
+          trashResult || {
+            status: 'complete',
+            moved: [app.path],
+            untouched: [],
+            notes: [],
+          }
+        );
       },
     },
     actionAliases: () => [],
@@ -235,4 +238,23 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(complete, undefined);
   assert.equal(indicators.at(-1).subtitle, '1 item moved to Trash');
   assert.equal(indicators.at(-1).status, 'success');
+  trashResult = {
+    status: 'failed',
+    moved: [],
+    untouched: [
+      { path: candidates[1].path, code: 'trash-failed', message: 'Not moved' },
+      { path: app.path, code: 'associated-failed', message: 'Kept' },
+    ],
+    notes: [],
+  };
+  const failed = await confirmation.onConfirm.__handler();
+  const retry = failed.items.find(
+    (item: any) => item.title === 'Uninstall without unavailable files',
+  );
+  assert.ok(retry);
+  assert.match(retry.primaryAction.message, /~\/Library\/Caches/);
+  trashResult = undefined;
+  await retry.primaryAction.onConfirm.__handler();
+  assert.deepEqual(trashedValues, { 'app-id': true });
+  assert.match(indicators.at(-1).subtitle, /1 item left behind/);
 });

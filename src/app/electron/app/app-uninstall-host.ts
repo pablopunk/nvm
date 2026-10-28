@@ -22,7 +22,13 @@ export function createHostAppUninstallService(input: {
           error && typeof error === 'object' && 'code' in error
             ? String(error.code)
             : 'unknown';
-        warn('app-uninstall.trash-failed', { code });
+        const message =
+          error instanceof Error
+            ? error.message
+                .replaceAll(itemPath, '[item]')
+                .replaceAll(os.homedir(), '~')
+            : 'Unknown error';
+        warn('app-uninstall.trash-failed', { code, message });
         throw error;
       }
     },
@@ -33,3 +39,4 @@ export function createHostAppUninstallService(input: {
     nevermindBundleId: NEVERMIND_BUNDLE_ID,
   });
 }
+import os from 'node:os';
