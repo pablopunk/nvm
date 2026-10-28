@@ -1,10 +1,8 @@
 // biome-ignore-all lint/style/noMagicNumbers: fixture geometry reads best as literals
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  INVALID_OPTIONS_MESSAGE,
-  INVALID_SPEC_MESSAGE,
-} from './window-management-failures';
+import { INVALID_SPEC_MESSAGE } from './window-management-failures';
+import { resolveWindowManagementOptions } from './window-management-options';
 import type {
   WindowCycleGroup,
   WindowEdge,
@@ -13,7 +11,7 @@ import type {
 } from './window-management-types';
 import { describeInvalidRequest } from './window-management-validation';
 
-const VALID_OPTIONS: WindowManagementOptions = { gap: 0, cycle: true };
+const VALID_OPTIONS: WindowManagementOptions = resolveWindowManagementOptions();
 const INVALID_EDGE = 'diagonal' as WindowEdge;
 const INVALID_DIRECTION = 'bigger' as 'larger';
 const INVALID_DISPLAY_DIRECTION = 'sideways' as 'next';
@@ -140,28 +138,103 @@ for (const [name, spec] of VALID_SPECS) {
   });
 }
 
-test('rejects a non-boolean cycle option', () => {
-  const options = {
-    gap: 0,
-    cycle: 'yes',
-  } as unknown as WindowManagementOptions;
-  assert.equal(
-    describeInvalidRequest({ kind: 'center' }, options),
-    INVALID_OPTIONS_MESSAGE,
-  );
-});
+const CENTER: WindowLayoutSpec = { kind: 'center' };
+function outerGapRangeMessage(edge: string): string {
+  return `The outer ${edge} gap must be a whole number from 0 to 40.`;
+}
+const INNER_GAP_RANGE_MESSAGE =
+  'The inner gap must be a whole number from 0 to 40.';
 
-test('rejects a missing cycle option', () => {
-  const options = { gap: 0 } as unknown as WindowManagementOptions;
-  assert.equal(
-    describeInvalidRequest({ kind: 'center' }, options),
-    INVALID_OPTIONS_MESSAGE,
-  );
+function optionsWith(patch: Record<string, unknown>): WindowManagementOptions {
+  return { ...VALID_OPTIONS, ...patch } as unknown as WindowManagementOptions;
+}
+
+const INVALID_OPTION_CASES: Array<[string, Record<string, unknown>, string]> = [
+  [
+    'a non-boolean cycle',
+    { cycle: 'yes' },
+    'The cycle option must be true or false.',
+  ],
+  [
+    'a missing cycle',
+    { cycle: undefined },
+    'The cycle option must be true or false.',
+  ],
+  ['an inner gap above 40', { innerGap: 41 }, INNER_GAP_RANGE_MESSAGE],
+  ['a fractional inner gap', { innerGap: 1.5 }, INNER_GAP_RANGE_MESSAGE],
+  ['a negative inner gap', { innerGap: -1 }, INNER_GAP_RANGE_MESSAGE],
+  ['a string inner gap', { innerGap: '4' }, INNER_GAP_RANGE_MESSAGE],
+  ['a missing outer gap', { outerGap: undefined }, outerGapRangeMessage('top')],
+  [
+    'an outer right gap above 40',
+    { outerGap: { ...VALID_OPTIONS.outerGap, right: 41 } },
+    outerGapRangeMessage('right'),
+  ],
+  [
+    'a partial outer gap',
+    { outerGap: { top: 8 } },
+    outerGapRangeMessage('right'),
+  ],
+  [
+    'a negative outer bottom gap',
+    { outerGap: { ...VALID_OPTIONS.outerGap, bottom: -2 } },
+    outerGapRangeMessage('bottom'),
+  ],
+  [
+    'a non-boolean apply gap to maximize',
+    { applyGapToMaximize: 'no' },
+    'The apply gap to maximize option must be true or false.',
+  ],
+  [
+    'an unknown cycle order',
+    { cycleOrder: 'third-first' },
+    'The cycle order must be half-two-thirds-third or half-third-two-thirds.',
+  ],
+  [
+    'an unknown display order',
+    { displayOrder: 'diagonal' },
+    'The display order must be left-to-right or top-to-bottom.',
+  ],
+  [
+    'an unknown display move sizing',
+    { displayMoveSizing: 'stretch' },
+    'The display move sizing must be proportional or keep-size.',
+  ],
+];
+
+for (const [name, patch, message] of INVALID_OPTION_CASES) {
+  test(`rejects ${name} with the option message`, () => {
+    assert.equal(describeInvalidRequest(CENTER, optionsWith(patch)), message);
+  });
+}
+
+test('accepts gaps at the 0 and 40 point limits on every edge', () => {
+  const options = optionsWith({
+    outerGap: { top: 0, right: 40, bottom: 0, left: 40 },
+    innerGap: 40,
+  });
+  assert.equal(describeInvalidRequest(CENTER, options), null);
 });
 
 test('accepts cycle set to false', () => {
   assert.equal(
-    describeInvalidRequest({ kind: 'center' }, { gap: 100, cycle: false }),
+    describeInvalidRequest(CENTER, optionsWith({ cycle: false })),
     null,
   );
+});
+
+test('accepts every cycle order, display order and display move sizing', () => {
+  for (const cycleOrder of ['half-two-thirds-third', 'half-third-two-thirds']) {
+    for (const displayOrder of ['left-to-right', 'top-to-bottom']) {
+      for (const displayMoveSizing of ['proportional', 'keep-size']) {
+        assert.equal(
+          describeInvalidRequest(
+            CENTER,
+            optionsWith({ cycleOrder, displayOrder, displayMoveSizing }),
+          ),
+          null,
+        );
+      }
+    }
+  }
 });

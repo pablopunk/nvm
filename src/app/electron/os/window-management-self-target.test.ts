@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createWindowManagementService } from './window-management';
+import { resolveWindowManagementOptions } from './window-management-options';
 import type { WindowLayoutSpec } from './window-management-types';
 
 const SELF_PID = 4242;
@@ -51,7 +52,7 @@ test('refuses to move Nevermind itself and never touches the helper', async () =
   });
   const result = await service.apply(
     LEFT_HALF,
-    { gap: 0, cycle: true },
+    resolveWindowManagementOptions(),
     {
       source: 'shortcut',
       target: { bundleId: 'com.nevermind.app', pid: SELF_PID },

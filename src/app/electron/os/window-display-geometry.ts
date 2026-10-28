@@ -13,29 +13,69 @@ import type {
   DisplayInfo,
   Frame,
   WindowCycleGroup,
+  WindowCycleOrder,
+  WindowDisplayMoveSizing,
+  WindowDisplayOrder,
   WindowLayoutSpec,
 } from './window-management-types';
 
-const CYCLE_LAYOUT_IDS: Record<WindowCycleGroup, WindowLayoutId[]> = {
-  left: ['left-half', 'first-two-thirds', 'first-third'],
-  right: ['right-half', 'last-two-thirds', 'last-third'],
-  top: ['top-half', 'top-two-thirds', 'top-third'],
-  bottom: ['bottom-half', 'bottom-two-thirds', 'bottom-third'],
+interface CycleStepLayoutIds {
+  half: WindowLayoutId;
+  twoThirds: WindowLayoutId;
+  third: WindowLayoutId;
+}
+
+const CYCLE_STEP_LAYOUT_IDS: Record<WindowCycleGroup, CycleStepLayoutIds> = {
+  left: {
+    half: 'left-half',
+    twoThirds: 'first-two-thirds',
+    third: 'first-third',
+  },
+  right: {
+    half: 'right-half',
+    twoThirds: 'last-two-thirds',
+    third: 'last-third',
+  },
+  top: { half: 'top-half', twoThirds: 'top-two-thirds', third: 'top-third' },
+  bottom: {
+    half: 'bottom-half',
+    twoThirds: 'bottom-two-thirds',
+    third: 'bottom-third',
+  },
 };
 
-function compareDisplayPosition(a: DisplayInfo, b: DisplayInfo): number {
+type SpanRelocator = (
+  sourceArea: AxisSpan,
+  targetArea: AxisSpan,
+  windowSpan: AxisSpan,
+) => AxisSpan;
+
+function compareLeftToRight(a: DisplayInfo, b: DisplayInfo): number {
   return a.frame.x - b.frame.x || a.frame.y - b.frame.y;
 }
+
+function compareTopToBottom(a: DisplayInfo, b: DisplayInfo): number {
+  return a.frame.y - b.frame.y || a.frame.x - b.frame.x;
+}
+
+const DISPLAY_COMPARATORS: Record<
+  WindowDisplayOrder,
+  (a: DisplayInfo, b: DisplayInfo) => number
+> = {
+  'left-to-right': compareLeftToRight,
+  'top-to-bottom': compareTopToBottom,
+};
 
 function findAdjacentDisplay(
   displays: DisplayInfo[],
   from: DisplayInfo,
   direction: DisplayDirection,
+  order: WindowDisplayOrder,
 ): DisplayInfo | null {
   if (displays.length < 2) {
     return null;
   }
-  const ordered = [...displays].sort(compareDisplayPosition);
+  const ordered = [...displays].sort(DISPLAY_COMPARATORS[order]);
   const currentIndex = ordered.findIndex((display) => display.id === from.id);
   if (currentIndex === -1) {
     return null;
@@ -59,17 +99,40 @@ function scaledSpan(
   );
 }
 
-function relocateFrameToDisplay({ frame, from, to }: DisplayMoveInput): Frame {
+function keptSizeSpan(
+  sourceArea: AxisSpan,
+  targetArea: AxisSpan,
+  windowSpan: AxisSpan,
+): AxisSpan {
+  const length = Math.min(windowSpan.length, targetArea.length);
+  const sourceCenter = windowSpan.origin + windowSpan.length / 2;
+  const relativeCenter = (sourceCenter - sourceArea.origin) / sourceArea.length;
+  const targetCenter = targetArea.origin + relativeCenter * targetArea.length;
+  return placeSpan(targetArea, length, targetCenter - length / 2);
+}
+
+const SPAN_RELOCATORS: Record<WindowDisplayMoveSizing, SpanRelocator> = {
+  proportional: scaledSpan,
+  'keep-size': keptSizeSpan,
+};
+
+function relocateFrameToDisplay({
+  frame,
+  from,
+  to,
+  sizing,
+}: DisplayMoveInput): Frame {
+  const relocate = SPAN_RELOCATORS[sizing];
   const source = axesOf(from.workArea);
   const target = axesOf(to.workArea);
   const windowAxes = axesOf(frame);
   return frameFromAxes({
-    horizontal: scaledSpan(
+    horizontal: relocate(
       source.horizontal,
       target.horizontal,
       windowAxes.horizontal,
     ),
-    vertical: scaledSpan(source.vertical, target.vertical, windowAxes.vertical),
+    vertical: relocate(source.vertical, target.vertical, windowAxes.vertical),
   });
 }
 
@@ -86,9 +149,21 @@ function fractionWithoutCycleGroup(spec: WindowLayoutSpec): FractionLayoutSpec {
   };
 }
 
-function cycleSequenceFor(group: WindowCycleGroup): FractionLayoutSpec[] {
-  return CYCLE_LAYOUT_IDS[group].map((layoutId) =>
-    fractionWithoutCycleGroup(WINDOW_LAYOUT_SPECS[layoutId]),
+function orderedCycleLayoutIds(
+  steps: CycleStepLayoutIds,
+  order: WindowCycleOrder,
+): WindowLayoutId[] {
+  return order === 'half-third-two-thirds'
+    ? [steps.half, steps.third, steps.twoThirds]
+    : [steps.half, steps.twoThirds, steps.third];
+}
+
+function cycleSequenceFor(
+  group: WindowCycleGroup,
+  order: WindowCycleOrder,
+): FractionLayoutSpec[] {
+  return orderedCycleLayoutIds(CYCLE_STEP_LAYOUT_IDS[group], order).map(
+    (layoutId) => fractionWithoutCycleGroup(WINDOW_LAYOUT_SPECS[layoutId]),
   );
 }
 

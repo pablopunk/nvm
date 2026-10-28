@@ -3,6 +3,9 @@ import type {
   DisplayInfo,
   Frame,
   WindowCycleGroup,
+  WindowCycleOrder,
+  WindowDisplayMoveSizing,
+  WindowDisplayOrder,
   WindowLayoutSpec,
 } from './window-management-types';
 
@@ -15,6 +18,7 @@ export interface DisplayMoveInput {
   frame: Frame;
   from: DisplayInfo;
   to: DisplayInfo;
+  sizing: WindowDisplayMoveSizing;
 }
 
 export type MoveFrameToDisplay = (input: DisplayMoveInput) => Frame;
@@ -23,9 +27,13 @@ export type AdjacentDisplay = (
   displays: DisplayInfo[],
   from: DisplayInfo,
   direction: DisplayDirection,
+  order: WindowDisplayOrder,
 ) => DisplayInfo | null;
 
-export type CycleSequence = (group: WindowCycleGroup) => WindowLayoutSpec[];
+export type CycleSequence = (
+  group: WindowCycleGroup,
+  order: WindowCycleOrder,
+) => WindowLayoutSpec[];
 
 export interface WindowManagementEngine {
   computeTargetFrame: ComputeTargetFrame;

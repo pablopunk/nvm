@@ -2,6 +2,7 @@ import { resolveCycleStep } from './window-management-cycling';
 import type { OperationContext } from './window-management-dependencies';
 import { fitRequestedFrame } from './window-management-frames';
 import { rememberAppliedLayout } from './window-management-history';
+import { windowGapsFrom } from './window-management-options';
 import type { WritableWindow } from './window-management-target';
 import type {
   Frame,
@@ -21,7 +22,7 @@ function layoutFrameFor(
     spec,
     workArea,
     currentFrame: focused.frame,
-    gap: context.request.options.gap,
+    gaps: windowGapsFrom(context.request.options),
   });
   return fitRequestedFrame(computed, focused, workArea);
 }
@@ -38,6 +39,7 @@ export async function applyLayoutOperation(
     currentFrame: focused.frame,
     spec: request.spec,
     cycleEnabled: request.options.cycle,
+    cycleOrder: request.options.cycleOrder,
   });
   const result = await writeWithCorrection(
     dependencies.manager,

@@ -1,9 +1,16 @@
 import { exactFrame } from './window-layout-exact';
+import {
+  type AxisInsets,
+  fractionInsets,
+  maximizedAxisInsets,
+} from './window-layout-gaps';
 import type {
   DisplayInfo,
   EngineInput,
   Frame,
   WindowEdge,
+  WindowEdgeGaps,
+  WindowGaps,
   WindowLayoutSpec,
 } from './window-management-types';
 
@@ -31,7 +38,6 @@ interface FrameAxes {
 
 type EdgeAlignment = 'start' | 'end' | 'keep';
 
-const EDGE_EPSILON = 1e-6;
 const MIN_RESIZED_LENGTH = 100;
 
 const EDGE_ALIGNMENTS: Record<
@@ -83,11 +89,34 @@ function centeredSpan(area: AxisSpan, length: number): AxisSpan {
   return placeSpan(area, length, area.origin + (area.length - length) / 2);
 }
 
-function insetSpan(area: AxisSpan, gap: number): AxisSpan {
-  return {
-    origin: area.origin + gap,
-    length: Math.max(0, area.length - 2 * gap),
-  };
+function clampedInsetSpan(
+  area: AxisSpan,
+  origin: number,
+  end: number,
+): AxisSpan {
+  const areaEnd = area.origin + area.length;
+  const clampedOrigin = Math.min(Math.max(origin, area.origin), areaEnd);
+  const clampedEnd = Math.min(Math.max(end, clampedOrigin), areaEnd);
+  return { origin: clampedOrigin, length: clampedEnd - clampedOrigin };
+}
+
+function insetSpan(area: AxisSpan, insets: AxisInsets): AxisSpan {
+  return clampedInsetSpan(
+    area,
+    area.origin + insets.leading,
+    area.origin + area.length - insets.trailing,
+  );
+}
+
+function fractionSpanInArea(
+  area: AxisSpan,
+  start: number,
+  length: number,
+  insets: AxisInsets,
+): AxisSpan {
+  const low = Math.round(area.origin + start * area.length);
+  const high = Math.round(area.origin + (start + length) * area.length);
+  return clampedInsetSpan(area, low + insets.leading, high - insets.trailing);
 }
 
 function alignedSpan(
@@ -134,37 +163,24 @@ function scaledLength(
 
 function fractionFrameInWorkArea(
   spec: FractionLayoutSpec,
-  workArea: Frame,
-  gap: number,
+  area: FrameAxes,
+  gaps: WindowGaps,
 ): Frame {
-  const left = Math.round(workArea.x + spec.x * workArea.width);
-  const right = Math.round(workArea.x + (spec.x + spec.width) * workArea.width);
-  const top = Math.round(workArea.y + spec.y * workArea.height);
-  const bottom = Math.round(
-    workArea.y + (spec.y + spec.height) * workArea.height,
-  );
-
-  const x = left + leadingInset(spec.x > EDGE_EPSILON, gap);
-  const trailingX =
-    right - trailingInset(spec.x + spec.width < 1 - EDGE_EPSILON, gap);
-  const y = top + leadingInset(spec.y > EDGE_EPSILON, gap);
-  const trailingY =
-    bottom - trailingInset(spec.y + spec.height < 1 - EDGE_EPSILON, gap);
-
-  return {
-    x,
-    y,
-    width: Math.max(0, trailingX - x),
-    height: Math.max(0, trailingY - y),
-  };
-}
-
-function leadingInset(isInteriorEdge: boolean, gap: number): number {
-  return isInteriorEdge ? gap - Math.floor(gap / 2) : gap;
-}
-
-function trailingInset(isInteriorEdge: boolean, gap: number): number {
-  return isInteriorEdge ? Math.floor(gap / 2) : gap;
+  const insets = fractionInsets(spec, gaps);
+  return frameFromAxes({
+    horizontal: fractionSpanInArea(
+      area.horizontal,
+      spec.x,
+      spec.width,
+      insets.horizontal,
+    ),
+    vertical: fractionSpanInArea(
+      area.vertical,
+      spec.y,
+      spec.height,
+      insets.vertical,
+    ),
+  });
 }
 
 function scaledCenterFrame(
@@ -187,9 +203,10 @@ function edgeFrame(
   edge: WindowEdge,
   area: FrameAxes,
   current: FrameAxes,
-  gap: number,
+  outerGap: WindowEdgeGaps,
 ): Frame {
   const alignment = EDGE_ALIGNMENTS[edge];
+  const gap = outerGap[edge];
   return frameFromAxes({
     horizontal: alignedSpan(
       area.horizontal,
@@ -202,6 +219,42 @@ function edgeFrame(
       current.vertical,
       alignment.vertical,
       gap,
+    ),
+  });
+}
+
+function maximizeWidthFrame(
+  area: FrameAxes,
+  current: FrameAxes,
+  gaps: WindowGaps,
+): Frame {
+  return frameFromAxes({
+    horizontal: insetSpan(
+      area.horizontal,
+      maximizedAxisInsets(gaps, gaps.outer.left, gaps.outer.right),
+    ),
+    vertical: placeSpan(
+      area.vertical,
+      current.vertical.length,
+      current.vertical.origin,
+    ),
+  });
+}
+
+function maximizeHeightFrame(
+  area: FrameAxes,
+  current: FrameAxes,
+  gaps: WindowGaps,
+): Frame {
+  return frameFromAxes({
+    horizontal: placeSpan(
+      area.horizontal,
+      current.horizontal.length,
+      current.horizontal.origin,
+    ),
+    vertical: insetSpan(
+      area.vertical,
+      maximizedAxisInsets(gaps, gaps.outer.top, gaps.outer.bottom),
     ),
   });
 }
@@ -241,7 +294,7 @@ function unhandledLayoutSpec(spec: never): never {
 }
 
 function computeTargetFrame(input: EngineInput): Frame {
-  const { spec, workArea, currentFrame, gap } = input;
+  const { spec, workArea, currentFrame, gaps } = input;
   if (isServiceHandledLayoutSpec(spec)) {
     throw new Error(`${spec.kind} is handled by the window management service`);
   }
@@ -249,34 +302,20 @@ function computeTargetFrame(input: EngineInput): Frame {
   const current = axesOf(currentFrame);
   switch (spec.kind) {
     case 'fraction':
-      return fractionFrameInWorkArea(spec, workArea, gap);
+      return fractionFrameInWorkArea(spec, area, gaps);
     case 'center':
       return frameFromAxes({
         horizontal: centeredSpan(area.horizontal, current.horizontal.length),
         vertical: centeredSpan(area.vertical, current.vertical.length),
       });
     case 'maximize-width':
-      return frameFromAxes({
-        horizontal: insetSpan(area.horizontal, gap),
-        vertical: placeSpan(
-          area.vertical,
-          current.vertical.length,
-          current.vertical.origin,
-        ),
-      });
+      return maximizeWidthFrame(area, current, gaps);
     case 'maximize-height':
-      return frameFromAxes({
-        horizontal: placeSpan(
-          area.horizontal,
-          current.horizontal.length,
-          current.horizontal.origin,
-        ),
-        vertical: insetSpan(area.vertical, gap),
-      });
+      return maximizeHeightFrame(area, current, gaps);
     case 'scaled-center':
       return scaledCenterFrame(spec, area);
     case 'edge':
-      return edgeFrame(spec.edge, area, current, gap);
+      return edgeFrame(spec.edge, area, current, gaps.outer);
     case 'resize-step':
       return resizedFrame(spec, area, current);
     case 'exact':

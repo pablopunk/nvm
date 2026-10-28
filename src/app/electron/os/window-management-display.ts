@@ -20,7 +20,12 @@ function findAdjacentDisplay(
     return null;
   }
   const from = engine.pickDisplayForFrame(displays, focused.frame);
-  const to = engine.adjacentDisplay(displays, from, direction);
+  const to = engine.adjacentDisplay(
+    displays,
+    from,
+    direction,
+    context.request.options.displayOrder,
+  );
   return to ? { from, to } : null;
 }
 
@@ -40,6 +45,7 @@ export async function applyDisplayOperation(
     frame: focused.frame,
     from: route.from,
     to: route.to,
+    sizing: request.options.displayMoveSizing,
   });
   const result = await writeWithCorrection(
     manager,

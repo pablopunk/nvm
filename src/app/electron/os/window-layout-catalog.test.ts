@@ -5,6 +5,7 @@ import {
   WINDOW_LAYOUT_SPECS,
   type WindowLayoutId,
 } from './window-layout-catalog';
+import { NO_GAPS } from './window-layout-gaps.fixture';
 import {
   computeTargetFrame,
   isServiceHandledLayoutSpec,
@@ -90,7 +91,7 @@ function tiledFramesFor(layoutIds: WindowLayoutId[], workArea: Frame): Frame[] {
       spec: WINDOW_LAYOUT_SPECS[layoutId],
       workArea,
       currentFrame: probeFrame,
-      gap: 0,
+      gaps: NO_GAPS,
     }),
   );
 }
@@ -156,7 +157,7 @@ test('every catalog spec is accepted by the engine or is service-handled', () =>
           spec,
           workArea: probeWorkArea,
           currentFrame: probeFrame,
-          gap: 0,
+          gaps: NO_GAPS,
         }),
       );
       continue;
@@ -165,7 +166,7 @@ test('every catalog spec is accepted by the engine or is service-handled', () =>
       spec,
       workArea: probeWorkArea,
       currentFrame: probeFrame,
-      gap: 0,
+      gaps: NO_GAPS,
     });
     assert.ok(
       Number.isFinite(frame.x) && Number.isFinite(frame.width),

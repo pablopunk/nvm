@@ -5,6 +5,7 @@ import {
   createHarness,
   fail,
   focusedWindow,
+  gapOptions,
   LEFT_HALF,
   NO_OPTIONS,
   ok,
@@ -57,7 +58,7 @@ for (const [spec, gap] of INVALID_LAYOUTS) {
     const { service, calls } = createHarness();
     const result = await service.apply(
       spec,
-      { gap, cycle: true },
+      gapOptions(gap),
       paletteInvocation(),
     );
     assert.equal(result.ok === false && result.reason, 'invalid-spec');

@@ -1,8 +1,6 @@
 import { describeInvalidExactSpec } from './window-management-exact-validation';
-import {
-  INVALID_OPTIONS_MESSAGE,
-  INVALID_SPEC_MESSAGE,
-} from './window-management-failures';
+import { INVALID_SPEC_MESSAGE } from './window-management-failures';
+import { describeInvalidWindowManagementOptions } from './window-management-options-validation';
 import type {
   WindowCycleGroup,
   WindowEdge,
@@ -13,13 +11,11 @@ import type {
 type FractionSpec = Extract<WindowLayoutSpec, { kind: 'fraction' }>;
 
 const FRACTION_EDGE_EPSILON = 1e-6;
-const MAX_GAP_POINTS = 100;
 const MIN_RESIZE_STEP = 0.01;
 const MAX_RESIZE_STEP = 0.25;
 const WINDOW_EDGES: readonly WindowEdge[] = ['left', 'right', 'top', 'bottom'];
 const RESIZE_DIRECTIONS: readonly string[] = ['larger', 'smaller'];
 const DISPLAY_DIRECTIONS: readonly string[] = ['next', 'previous'];
-const INVALID_GAP_MESSAGE = `The window gap must be a whole number from 0 to ${MAX_GAP_POINTS}.`;
 
 function isWindowEdge(value: unknown): value is WindowEdge {
   return (WINDOW_EDGES as readonly unknown[]).includes(value);
@@ -29,14 +25,6 @@ function isOptionalCycleGroup(
   value: unknown,
 ): value is WindowCycleGroup | undefined {
   return value === undefined || isWindowEdge(value);
-}
-
-function isValidGap(gap: number) {
-  return Number.isInteger(gap) && gap >= 0 && gap <= MAX_GAP_POINTS;
-}
-
-function isValidCycleOption(cycle: unknown) {
-  return typeof cycle === 'boolean';
 }
 
 function isValidFractionRect(spec: FractionSpec) {
@@ -138,11 +126,8 @@ export function describeInvalidRequest(
   spec: WindowLayoutSpec,
   options: WindowManagementOptions,
 ): string | null {
-  if (!isValidGap(options.gap)) {
-    return INVALID_GAP_MESSAGE;
-  }
-  if (!isValidCycleOption(options.cycle)) {
-    return INVALID_OPTIONS_MESSAGE;
-  }
-  return describeInvalidLayoutSpec(spec);
+  return (
+    describeInvalidWindowManagementOptions(options) ??
+    describeInvalidLayoutSpec(spec)
+  );
 }

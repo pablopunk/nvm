@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { WINDOW_LAYOUT_SPECS } from './window-layout-catalog';
+import { NO_GAPS, uniformGaps } from './window-layout-gaps.fixture';
 import {
   computeTargetFrame,
   isServiceHandledLayoutSpec,
@@ -27,7 +28,12 @@ function frameForCase({
   gap = 0,
   currentFrame = windowFrame,
 }: EngineCase): Frame {
-  return computeTargetFrame({ spec, workArea, currentFrame, gap });
+  return computeTargetFrame({
+    spec,
+    workArea,
+    currentFrame,
+    gaps: uniformGaps(gap),
+  });
 }
 
 const maximizeWidthCases: EngineCase[] = [
@@ -85,15 +91,15 @@ const maximizeHeightCases: EngineCase[] = [
 
 const scaledCenterCases: EngineCase[] = [
   {
-    name: 'reasonable-size caps a 3000x2000 display at 1025x900',
+    name: 'reasonable-size is not capped on a 3000x2000 display',
     spec: WINDOW_LAYOUT_SPECS['reasonable-size'],
     workArea: { x: 0, y: 0, width: 3000, height: 2000 },
-    expected: { x: 988, y: 550, width: 1025, height: 900 },
+    expected: { x: 450, y: 300, width: 2100, height: 1400 },
   },
   {
-    name: 'reasonable-size scales a 1440x900 display to 60 percent',
+    name: 'reasonable-size scales a 1440x900 display to 70 percent',
     spec: WINDOW_LAYOUT_SPECS['reasonable-size'],
-    expected: { x: 288, y: 180, width: 864, height: 540 },
+    expected: { x: 216, y: 135, width: 1008, height: 630 },
   },
   {
     name: 'almost-maximize centers 90 percent of the work area',
@@ -116,7 +122,7 @@ const scaledCenterCases: EngineCase[] = [
     name: 'reasonable-size on a portrait display',
     spec: WINDOW_LAYOUT_SPECS['reasonable-size'],
     workArea: { x: -1080, y: 0, width: 1080, height: 1920 },
-    expected: { x: -864, y: 510, width: 648, height: 900 },
+    expected: { x: -918, y: 288, width: 756, height: 1344 },
   },
   {
     name: 'almost-maximize rounds an odd work area width',
@@ -302,7 +308,7 @@ for (const spec of serviceHandledSpecs) {
           spec,
           workArea: primaryWorkArea,
           currentFrame: windowFrame,
-          gap: 0,
+          gaps: NO_GAPS,
         }),
       {
         message: `${spec.kind} is handled by the window management service`,
@@ -331,7 +337,7 @@ test('fraction cycleGroup does not change the computed frame', () => {
     },
     workArea: primaryWorkArea,
     currentFrame: windowFrame,
-    gap: 0,
+    gaps: NO_GAPS,
   });
   assert.deepEqual(withGroup, { x: 0, y: 0, width: 720, height: 900 });
 });

@@ -1,6 +1,7 @@
 // biome-ignore-all lint/style/noMagicNumbers: fixture geometry reads best as literals
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { NO_GAPS, uniformGaps } from './window-layout-gaps.fixture';
 import { computeTargetFrame } from './window-layouts';
 import type {
   Frame,
@@ -167,7 +168,7 @@ for (const exactCase of exactCases) {
       spec: exactCase.spec,
       workArea: exactCase.workArea ?? MENU_BAR_WORK_AREA,
       currentFrame: exactCase.currentFrame ?? CURRENT_FRAME,
-      gap: exactCase.gap ?? 0,
+      gaps: uniformGaps(exactCase.gap ?? 0),
     });
     assert.deepEqual(frame, exactCase.expected);
   });
@@ -184,7 +185,7 @@ test('exact layout with the same work area and frame keeps the frame', () => {
     },
     workArea: MENU_BAR_WORK_AREA,
     currentFrame: { x: 0, y: 25, width: 800, height: 500 },
-    gap: 0,
+    gaps: NO_GAPS,
   });
   assert.deepEqual(frame, { x: 0, y: 25, width: 800, height: 500 });
 });

@@ -43,7 +43,6 @@ export const NO_DISPLAY_MESSAGE =
 export const SELF_TARGET_MESSAGE =
   'Nevermind is in front. Focus the window you want to move, then run the command again.';
 export const INVALID_SPEC_MESSAGE = FAILURE_MESSAGES['invalid-spec'];
-export const INVALID_OPTIONS_MESSAGE = 'The window layout options are invalid.';
 export const CORRECTION_FAILED_REASON =
   'Part of the window stayed outside its display.';
 

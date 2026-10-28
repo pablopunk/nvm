@@ -7,6 +7,7 @@ import type { AppliedLayoutRecord } from './window-management-memory';
 import type {
   Frame,
   WindowCycleGroup,
+  WindowCycleOrder,
   WindowLayoutSpec,
 } from './window-management-types';
 
@@ -35,6 +36,7 @@ export interface CycleStepInput {
   currentFrame: Frame;
   spec: WindowLayoutSpec;
   cycleEnabled: boolean;
+  cycleOrder: WindowCycleOrder;
 }
 
 export function nextCycleIndex(
@@ -54,12 +56,13 @@ export function resolveCycleStep({
   currentFrame,
   spec,
   cycleEnabled,
+  cycleOrder,
 }: CycleStepInput): CycleStep {
   if (!cycleEnabled || spec.kind !== 'fraction' || !spec.cycleGroup) {
     return { spec, cycleIndex: 0 };
   }
   const cycleIndex = nextCycleIndex(lastApplied, currentFrame, spec.cycleGroup);
-  const sequence = engine.cycleSequence(spec.cycleGroup);
+  const sequence = engine.cycleSequence(spec.cycleGroup, cycleOrder);
   return {
     spec: sequence[cycleIndex] ?? spec,
     cycleGroup: spec.cycleGroup,

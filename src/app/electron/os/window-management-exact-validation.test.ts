@@ -1,6 +1,7 @@
 // biome-ignore-all lint/style/noMagicNumbers: validation limits read best as literals
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { resolveWindowManagementOptions } from './window-management-options';
 import type {
   WindowDimension,
   WindowLayoutSpec,
@@ -8,7 +9,7 @@ import type {
 } from './window-management-types';
 import { describeInvalidRequest } from './window-management-validation';
 
-const VALID_OPTIONS: WindowManagementOptions = { gap: 0, cycle: true };
+const VALID_OPTIONS: WindowManagementOptions = resolveWindowManagementOptions();
 const NO_FIELDS_MESSAGE =
   'Choose at least one window value: x, y, width, or height.';
 

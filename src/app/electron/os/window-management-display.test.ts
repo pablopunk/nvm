@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createHarness,
   DISPLAY,
+  gapOptions,
   NO_OPTIONS,
   ORIGINAL_FRAME,
   ok,
@@ -86,7 +87,7 @@ test('applies the frame returned by moveFrameToDisplay and passes it the source 
   });
   const result = await service.apply(
     NEXT_DISPLAY,
-    { gap: 20, cycle: true },
+    gapOptions(20),
     shortcutInvocation(),
   );
   assert.deepEqual(result, {

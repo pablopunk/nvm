@@ -9,6 +9,7 @@ import {
 import { createSimulatedWindow } from './window-management.simulated-window';
 import type {
   WindowLayoutSpec,
+  WindowManagementOptions,
   WindowManagementService,
 } from './window-management-types';
 
@@ -27,7 +28,7 @@ const LEFT_PLAIN: WindowLayoutSpec = {
   width: 0.5,
   height: 1,
 };
-const CYCLE_OFF = { gap: 0, cycle: false };
+const CYCLE_OFF = { ...NO_OPTIONS, cycle: false };
 const MANUALLY_MOVED_FRAME = { x: 300, y: 25, width: 720, height: 875 };
 
 async function pressLeft(
@@ -50,6 +51,23 @@ test('three presses of the same half cycle through half, two-thirds and third', 
     await pressLeft(service, simulation),
   ];
   assert.deepEqual(widths, [720, 960, 480, 720]);
+});
+
+const THIRD_BEFORE_TWO_THIRDS: WindowManagementOptions = {
+  ...NO_OPTIONS,
+  cycleOrder: 'half-third-two-thirds',
+};
+
+test('cycleOrder half-third-two-thirds presses half, third and two-thirds', async () => {
+  const simulation = createSimulatedWindow({});
+  const { service } = createHarness({ simulation });
+  const widths = [
+    await pressLeft(service, simulation, LEFT_CYCLE, THIRD_BEFORE_TWO_THIRDS),
+    await pressLeft(service, simulation, LEFT_CYCLE, THIRD_BEFORE_TWO_THIRDS),
+    await pressLeft(service, simulation, LEFT_CYCLE, THIRD_BEFORE_TWO_THIRDS),
+    await pressLeft(service, simulation, LEFT_CYCLE, THIRD_BEFORE_TWO_THIRDS),
+  ];
+  assert.deepEqual(widths, [720, 480, 960, 720]);
 });
 
 test('a plain half command without a cycle group ends the cycle', async () => {

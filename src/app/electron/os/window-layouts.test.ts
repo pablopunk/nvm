@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { WindowLayoutId } from './window-layout-catalog';
 import { WINDOW_LAYOUT_SPECS } from './window-layout-catalog';
+import { uniformGaps } from './window-layout-gaps.fixture';
 import { computeTargetFrame, pickDisplayForFrame } from './window-layouts';
 import type { DisplayInfo, Frame } from './window-management-types';
 
@@ -18,7 +19,7 @@ function targetFor(
     spec: WINDOW_LAYOUT_SPECS[layoutId],
     workArea,
     currentFrame,
-    gap,
+    gaps: uniformGaps(gap),
   });
 }
 

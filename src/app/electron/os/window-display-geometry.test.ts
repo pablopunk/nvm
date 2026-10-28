@@ -10,6 +10,8 @@ import type {
   DisplayInfo,
   Frame,
   WindowCycleGroup,
+  WindowDisplayMoveSizing,
+  WindowDisplayOrder,
 } from './window-management-types';
 
 function displayAt(id: string, frame: Frame, isPrimary = false): DisplayInfo {
@@ -37,6 +39,7 @@ const adjacentCases: Array<{
   displays: DisplayInfo[];
   currentDisplayId: string;
   direction: 'next' | 'previous';
+  order?: WindowDisplayOrder;
   expectedId: string | null;
 }> = [
   {
@@ -138,14 +141,38 @@ for (const adjacentCase of adjacentCases) {
       adjacentCase.displays,
       displayNamed(adjacentCase.displays, adjacentCase.currentDisplayId),
       adjacentCase.direction,
+      adjacentCase.order ?? 'left-to-right',
     );
     assert.equal(result?.id ?? null, adjacentCase.expectedId);
   });
 }
 
+const stackedDisplays = [primary, above, left, right];
+
+test('previous display from primary is the display above it when ordered left-to-right', () => {
+  assert.equal(
+    adjacentDisplay(stackedDisplays, primary, 'previous', 'left-to-right')?.id,
+    'above',
+  );
+});
+
+test('previous display from primary is the display to its left when ordered top-to-bottom', () => {
+  assert.equal(
+    adjacentDisplay(stackedDisplays, primary, 'previous', 'top-to-bottom')?.id,
+    'left',
+  );
+});
+
+test('next display from the rightmost display wraps to the top when ordered top-to-bottom', () => {
+  assert.equal(
+    adjacentDisplay(stackedDisplays, right, 'next', 'top-to-bottom')?.id,
+    'above',
+  );
+});
+
 test('adjacent display does not reorder the caller array', () => {
   const displays = [right, primary, left];
-  adjacentDisplay(displays, primary, 'next');
+  adjacentDisplay(displays, primary, 'next', 'left-to-right');
   assert.deepEqual(
     displays.map((display) => display.id),
     ['right', 'primary', 'left'],
@@ -157,6 +184,7 @@ const moveCases: Array<{
   frame: Frame;
   from: DisplayInfo;
   to: DisplayInfo;
+  sizing?: WindowDisplayMoveSizing;
   expected: Frame;
 }> = [
   {
@@ -217,6 +245,40 @@ for (const moveCase of moveCases) {
         frame: moveCase.frame,
         from: moveCase.from,
         to: moveCase.to,
+        sizing: moveCase.sizing ?? 'proportional',
+      }),
+      moveCase.expected,
+    );
+  });
+}
+
+const keepSizeMoveCases: typeof moveCases = [
+  {
+    name: 'keep-size keeps the window size and its relative center on a larger display',
+    frame: { x: 0, y: 0, width: 720, height: 900 },
+    from: primary,
+    to: right,
+    sizing: 'keep-size',
+    expected: { x: 1560, y: 90, width: 720, height: 900 },
+  },
+  {
+    name: 'keep-size caps the window to a smaller display and clamps it inside',
+    frame: { x: 0, y: 0, width: 1500, height: 1000 },
+    from: fullHd,
+    to: primary,
+    sizing: 'keep-size',
+    expected: { x: 0, y: 0, width: 1440, height: 900 },
+  },
+];
+
+for (const moveCase of keepSizeMoveCases) {
+  test(moveCase.name, () => {
+    assert.deepEqual(
+      moveFrameToDisplay({
+        frame: moveCase.frame,
+        from: moveCase.from,
+        to: moveCase.to,
+        sizing: moveCase.sizing ?? 'proportional',
       }),
       moveCase.expected,
     );
@@ -268,6 +330,25 @@ const cycleCases: Array<{
 
 for (const cycleCase of cycleCases) {
   test(`${cycleCase.group} cycle runs half, two-thirds, third without cycleGroup`, () => {
-    assert.deepEqual(cycleSequence(cycleCase.group), cycleCase.expected);
+    assert.deepEqual(
+      cycleSequence(cycleCase.group, 'half-two-thirds-third'),
+      cycleCase.expected,
+    );
   });
 }
+
+test('left cycle runs half, third, two-thirds when the third step comes first', () => {
+  assert.deepEqual(cycleSequence('left', 'half-third-two-thirds'), [
+    { kind: 'fraction', x: 0, y: 0, width: HALF, height: 1 },
+    { kind: 'fraction', x: 0, y: 0, width: THIRD, height: 1 },
+    { kind: 'fraction', x: 0, y: 0, width: TWO_THIRDS, height: 1 },
+  ]);
+});
+
+test('bottom cycle runs half, third, two-thirds when the third step comes first', () => {
+  assert.deepEqual(cycleSequence('bottom', 'half-third-two-thirds'), [
+    { kind: 'fraction', x: 0, y: HALF, width: 1, height: HALF },
+    { kind: 'fraction', x: 0, y: TWO_THIRDS, width: 1, height: THIRD },
+    { kind: 'fraction', x: 0, y: THIRD, width: 1, height: TWO_THIRDS },
+  ]);
+});

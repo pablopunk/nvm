@@ -1,7 +1,13 @@
 // biome-ignore-all lint/style/noMagicNumbers: fixture geometry reads best as literals
+
+import { uniformEdgeGaps } from './window-layout-gaps.fixture';
 import { createWindowManagementService } from './window-management';
 import type { SimulatedWindow } from './window-management.simulated-window';
-import type { WindowManagementEngine } from './window-management-engine-port';
+import type {
+  DisplayMoveInput,
+  WindowManagementEngine,
+} from './window-management-engine-port';
+import { resolveWindowManagementOptions } from './window-management-options';
 import type {
   DisplayInfo,
   EngineInput,
@@ -11,11 +17,14 @@ import type {
   SetFrameData,
   SetFrameRequest,
   WindowCycleGroup,
+  WindowCycleOrder,
+  WindowDisplayOrder,
   WindowFocusTarget,
   WindowInfo,
   WindowInvocation,
   WindowInvocationPorts,
   WindowLayoutSpec,
+  WindowManagementOptions,
   WindowPermissionState,
 } from './window-management-types';
 
@@ -77,7 +86,14 @@ const REQUESTED_LEFT_HALF: Frame = {
   width: SCREEN_WIDTH / 2,
   height: WORK_AREA_HEIGHT,
 };
-const NO_OPTIONS = { gap: 0, cycle: true };
+const NO_OPTIONS = gapOptions(0);
+
+function gapOptions(points: number): WindowManagementOptions {
+  return resolveWindowManagementOptions({
+    outerGap: uniformEdgeGaps(points),
+    innerGap: points,
+  });
+}
 
 function paletteInvocation(
   target: WindowFocusTarget | null = FINDER,
@@ -155,15 +171,25 @@ function pickDisplayForFrame(
   return best;
 }
 
+function compareHarnessLeftToRight(first: DisplayInfo, second: DisplayInfo) {
+  return first.frame.x - second.frame.x || first.frame.y - second.frame.y;
+}
+
+function compareHarnessTopToBottom(first: DisplayInfo, second: DisplayInfo) {
+  return first.frame.y - second.frame.y || first.frame.x - second.frame.x;
+}
+
 function adjacentDisplayFor(
   displays: DisplayInfo[],
   from: DisplayInfo,
   direction: 'next' | 'previous',
+  order: WindowDisplayOrder,
 ): DisplayInfo | null {
-  const ordered = [...displays].sort(
-    (first, second) =>
-      first.frame.x - second.frame.x || first.frame.y - second.frame.y,
-  );
+  const compare =
+    order === 'top-to-bottom'
+      ? compareHarnessTopToBottom
+      : compareHarnessLeftToRight;
+  const ordered = [...displays].sort(compare);
   const index = ordered.findIndex((display) => display.id === from.id);
   if (ordered.length < 2 || index < 0) {
     return null;
@@ -176,11 +202,7 @@ function moveFrameToDisplayKeepingOffset({
   frame,
   from,
   to,
-}: {
-  frame: Frame;
-  from: DisplayInfo;
-  to: DisplayInfo;
-}): Frame {
+}: DisplayMoveInput): Frame {
   return {
     x: to.workArea.x + (frame.x - from.workArea.x),
     y: to.workArea.y + (frame.y - from.workArea.y),
@@ -211,8 +233,17 @@ function cycleStepFor(group: WindowCycleGroup, size: number): WindowLayoutSpec {
       };
 }
 
-function cycleSequenceFor(group: WindowCycleGroup): WindowLayoutSpec[] {
-  return [HALF, TWO_THIRDS, THIRD].map((size) => cycleStepFor(group, size));
+function cycleSizesFor(order: WindowCycleOrder): number[] {
+  return order === 'half-third-two-thirds'
+    ? [HALF, THIRD, TWO_THIRDS]
+    : [HALF, TWO_THIRDS, THIRD];
+}
+
+function cycleSequenceFor(
+  group: WindowCycleGroup,
+  order: WindowCycleOrder,
+): WindowLayoutSpec[] {
+  return cycleSizesFor(order).map((size) => cycleStepFor(group, size));
 }
 
 function computeFractionOrCenterFrame({
@@ -365,6 +396,7 @@ export {
   FINDER,
   fail,
   focusedWindow,
+  gapOptions,
   LEFT_HALF,
   NO_OPTIONS,
   ORIGINAL_FRAME,
