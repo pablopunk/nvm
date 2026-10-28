@@ -167,6 +167,7 @@ test('creating through a symlink keeps the link and writes the target', async ()
     const target = path.join(directory, 'dotfiles.json');
     await fs.writeFile(target, VALID_TEXT, { mode: 0o640 });
     await fs.chmod(target, 0o640);
+    const originalMode = (await fs.stat(target)).mode & 0o777;
     const link = path.join(directory, 'config.json');
     await fs.symlink(target, link);
     const store = storeFor(link);
@@ -175,6 +176,6 @@ test('creating through a symlink keeps the link and writes the target', async ()
     const result = await store.persist(withHotkey('Command+Alt+Q'));
     assert.equal(result.ok, true);
     assert.equal((await fs.lstat(link)).isSymbolicLink(), true);
-    assert.equal((await fs.stat(target)).mode & 0o777, 0o640);
+    assert.equal((await fs.stat(target)).mode & 0o777, originalMode);
   });
 });

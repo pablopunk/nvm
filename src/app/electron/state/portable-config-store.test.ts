@@ -155,6 +155,7 @@ test('writes through a symlink update the target and keep the link and file mode
     const realPath = path.join(directory, 'dotfiles-config.json');
     await fs.writeFile(realPath, VALID_TEXT, { mode: 0o640 });
     await fs.chmod(realPath, 0o640);
+    const originalMode = (await fs.stat(realPath)).mode & 0o777;
     await fs.symlink(realPath, filePath);
     const { store } = createTestStore(filePath);
     await store.load();
@@ -164,7 +165,7 @@ test('writes through a symlink update the target and keep the link and file mode
     assert.equal((await fs.lstat(filePath)).isSymbolicLink(), true);
     const written = JSON.parse(await fs.readFile(realPath, 'utf8'));
     assert.equal(written.settings.paletteHotkey, 'Command+Alt+J');
-    assert.equal((await fs.stat(realPath)).mode & 0o777, 0o640);
+    assert.equal((await fs.stat(realPath)).mode & 0o777, originalMode);
   });
 });
 
