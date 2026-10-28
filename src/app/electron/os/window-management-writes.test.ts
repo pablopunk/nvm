@@ -201,6 +201,7 @@ test('lets applies for different pids overlap', async () => {
     },
   });
   const blocked = service.apply(LEFT_HALF, NO_OPTIONS, paletteInvocation());
+  await flushPendingWork();
   const overlapping = service.apply(
     LEFT_HALF,
     NO_OPTIONS,
