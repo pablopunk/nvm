@@ -913,7 +913,7 @@ function ListExtensionView({
   selectedItemId,
 }: ExtensionViewSurfaceProps) {
   const items = filterItems(view.items);
-  if (view.presentation === 'root')
+  if (view.presentation === 'root' && !view.sections?.length)
     return (
       <RootCommandList
         items={items}
