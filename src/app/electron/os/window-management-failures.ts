@@ -30,6 +30,8 @@ export const PALETTE_NO_TARGET =
   'No target app was captured. Reopen Nevermind from the app you want to move, then try again.';
 export const PALETTE_FOCUS_NOT_RESTORED =
   'Could not return focus to the target app. No window was changed.';
+export const PALETTE_TARGET_CHANGED =
+  'The target app changed. Reopen Nevermind from the window you want to move.';
 export const SHORTCUT_NO_TARGET =
   'No frontmost app was available when the shortcut ran.';
 export const SHORTCUT_FOCUS_CHANGED =

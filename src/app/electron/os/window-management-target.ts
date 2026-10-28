@@ -6,6 +6,7 @@ import {
   failure,
   NO_DISPLAY_MESSAGE,
   PALETTE_FOCUS_NOT_RESTORED,
+  PALETTE_TARGET_CHANGED,
   SHORTCUT_FOCUS_CHANGED,
   TARGET_WINDOW_CHANGED,
 } from './window-management-failures';
@@ -97,6 +98,9 @@ export async function restorePaletteFocus(
   ports: WindowInvocationPorts,
   target: WindowFocusTarget,
 ): Promise<FailedResult | null> {
+  if (ports.paletteFocusTarget()?.pid !== target.pid) {
+    return failure('focus-not-restored', PALETTE_TARGET_CHANGED);
+  }
   const restored = await ports.hidePaletteAndRestoreFocus(target);
   if (restored && (await isFrontmostPid(ports, target.pid))) {
     return null;

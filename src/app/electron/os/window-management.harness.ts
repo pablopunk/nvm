@@ -255,6 +255,7 @@ interface HarnessOptions {
   writes?: HelperEnvelope<SetFrameData>[];
   restored?: boolean;
   frontmost?: WindowFocusTarget | null;
+  paletteTarget?: WindowFocusTarget | null;
   frontmostAfterRestore?: (restored: WindowFocusTarget) => WindowFocusTarget;
   simulation?: SimulatedWindow;
   engine?: Partial<WindowManagementEngine>;
@@ -319,8 +320,12 @@ function createFakePorts(
 ): WindowInvocationPorts {
   let frontmost =
     harnessOptions.frontmost === undefined ? FINDER : harnessOptions.frontmost;
+  const paletteTarget =
+    harnessOptions.paletteTarget === undefined
+      ? FINDER
+      : harnessOptions.paletteTarget;
   return {
-    paletteFocusTarget: () => FINDER,
+    paletteFocusTarget: () => paletteTarget,
     hidePaletteAndRestoreFocus(restoreTarget) {
       calls.push(`restore:${restoreTarget.pid}`);
       const restored = harnessOptions.restored ?? true;
