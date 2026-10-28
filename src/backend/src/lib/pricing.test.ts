@@ -170,30 +170,10 @@ test('admin model listing includes bundled runtime models', async () => {
   assert.ok(models.includes('deepseek/deepseek-v4-flash-0731'));
 });
 
-test('GPT-6.1 Sol retains reviewed pricing and image limits when the catalog is unavailable', async () => {
-  globalThis.fetch = (async () => new Response('', { status: 503 })) as typeof fetch;
-  const openai = await lookupModelCost('openai', 'gpt-6.1-sol');
-  const openrouter = await lookupModelCost('openrouter', 'openai/gpt-6.1-sol');
-  assert.equal(openai?.inputUsdPerMtok, 2);
-  assert.equal(openai?.tiers?.[0]?.inputUsdPerMtok, 4);
-  assert.equal(openrouter?.inputUsdPerMtok, 2.2);
-  assert.equal(openrouter?.tiers?.[0]?.outputUsdPerMtok, 16.5);
-  assert.equal(await modelFitsRouteKind('openrouter', 'openai/gpt-6.1-sol', 'smart'), true);
-  assert.ok((await listModelsForRouteKind('openrouter', 'smart')).includes('openai/gpt-6.1-sol'));
-});
-
-test('route choices require function tools and exclude incompatible reasoning with tools', async () => {
+test('route choices require function tools', async () => {
   globalThis.fetch = mockFetch({
     opencode: {
       models: {
-        'gpt-6.1-sol': {
-          id: 'gpt-6.1-sol',
-          reasoning: true,
-          tool_call: true,
-          modalities: { input: ['text', 'image'], output: ['text'] },
-          limit: { context: 100_000 },
-          cost: { input: 1, output: 2 },
-        },
         'no-tools': {
           id: 'no-tools',
           reasoning: true,
@@ -213,69 +193,45 @@ test('route choices require function tools and exclude incompatible reasoning wi
     },
   });
 
-  const smart = await listModelsForRouteKind('opencode_zen', 'smart');
-  const fast = await listModelsForRouteKind('opencode_zen', 'fast');
-  assert.ok(!smart.includes('gpt-6.1-sol'));
-  assert.ok(!fast.includes('gpt-6.1-sol'));
-  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'smart'), false);
-  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'fast'), false);
-  for (const model of ['no-tools', 'unknown-tools']) {
-    assert.ok(!smart.includes(model));
-    assert.ok(!fast.includes(model));
-    assert.equal(await modelFitsRouteKind('opencode_zen', model, 'smart'), false);
-    assert.equal(await modelFitsRouteKind('opencode_zen', model, 'fast'), false);
+  for (const kind of ['smart', 'fast'] as const) {
+    const choices = await listModelsForRouteKind('opencode_zen', kind);
+    for (const model of ['no-tools', 'unknown-tools']) {
+      assert.ok(!choices.includes(model));
+      assert.equal(await modelFitsRouteKind('opencode_zen', model, kind), false);
+    }
   }
 });
 
-test('verified Responses route offers GPT-6.1 Sol only for smart', async () => {
-  globalThis.fetch = mockFetch({
-    openrouter: { models: { 'openai/gpt-6.1-sol': {
-      id: 'openai/gpt-6.1-sol', reasoning: true, tool_call: true,
-      modalities: { input: ['text', 'image'], output: ['text'] },
-      limit: { context: 100_000 },
-      cost: { input: 1, output: 2 },
-    } } },
-  });
-  assert.ok((await listModelsForRouteKind('openrouter', 'smart')).includes('openai/gpt-6.1-sol'));
-  assert.equal(await modelFitsRouteKind('openrouter', 'openai/gpt-6.1-sol', 'smart'), true);
-  assert.equal(await modelFitsRouteKind('openrouter', 'openai/gpt-6.1-sol', 'fast'), false);
-});
-
-test('route choices require reviewed capabilities, images, tools, pricing and image bounds', async () => {
+test('route choices come from catalog capabilities, images, tools, pricing and context', async () => {
   globalThis.fetch = mockFetch({
     openrouter: { models: {
-      'google/gemini-2.5-flash': {
-        id: 'google/gemini-2.5-flash', tool_call: true, reasoning: true,
+      'vendor/reasoner': {
+        id: 'vendor/reasoner', tool_call: true, reasoning: true,
         modalities: { input: ['text', 'image'], output: ['text'] },
         limit: { context: 100_000 }, cost: { input: 1, output: 2 },
       },
-      'openai/gpt-6-sol': {
-        id: 'openai/gpt-6-sol', tool_call: true, reasoning: true,
+      'vendor/non-reasoner': {
+        id: 'vendor/non-reasoner', tool_call: true, reasoning: false,
         modalities: { input: ['text', 'image'], output: ['text'] },
         limit: { context: 100_000 }, cost: { input: 1, output: 2 },
       },
-      'openai/gpt-6.1-terra': {
-        id: 'openai/gpt-6.1-terra', tool_call: true, reasoning: true,
+      'vendor/text-only': {
+        id: 'vendor/text-only', tool_call: true, reasoning: true,
         modalities: { input: ['text'], output: ['text'] },
         limit: { context: 100_000 }, cost: { input: 1, output: 2 },
       },
-      'openai/gpt-6.1-sol': {
-        id: 'openai/gpt-6.1-sol', tool_call: true, reasoning: true,
+      'vendor/no-context': {
+        id: 'vendor/no-context', tool_call: true, reasoning: true,
         modalities: { input: ['text', 'image'], output: ['text'] },
         cost: { input: 1, output: 2 },
       },
-      'deepseek/deepseek-v4.1-flash-1017': {
-        id: 'deepseek/deepseek-v4.1-flash-1017', tool_call: true, reasoning: true,
+      'vendor/unpriced': {
+        id: 'vendor/unpriced', tool_call: true, reasoning: true,
         modalities: { input: ['text', 'image'], output: ['text'] },
         limit: { context: 100_000 },
       },
-      'vendor/unreviewed': {
-        id: 'vendor/unreviewed', tool_call: true, reasoning: true,
-        modalities: { input: ['text', 'image'], output: ['text'] },
-        limit: { context: 100_000 }, cost: { input: 1, output: 2 },
-      },
       'vendor/spoofed': {
-        id: 'google/gemini-2.5-flash', tool_call: true, reasoning: true,
+        id: 'vendor/reasoner', tool_call: true, reasoning: true,
         modalities: { input: ['text', 'image'], output: ['text'] },
         limit: { context: 100_000 }, cost: { input: 1, output: 2 },
       },
@@ -283,13 +239,11 @@ test('route choices require reviewed capabilities, images, tools, pricing and im
   });
   const smart = await listModelsForRouteKind('openrouter', 'smart');
   const fast = await listModelsForRouteKind('openrouter', 'fast');
-  assert.ok(smart.includes('google/gemini-2.5-flash'));
-  assert.ok(fast.includes('google/gemini-2.5-flash'));
-  assert.ok(!smart.includes('openai/gpt-6-sol'));
-  assert.ok(fast.includes('openai/gpt-6-sol'));
-  for (const model of ['openai/gpt-6.1-terra', 'openai/gpt-6.1-sol', 'deepseek/deepseek-v4.1-flash-1017', 'vendor/unreviewed', 'vendor/spoofed']) {
-    assert.ok(!smart.includes(model));
-    assert.ok(!fast.includes(model));
+  assert.ok(smart.includes('vendor/reasoner'));
+  assert.ok(!smart.includes('vendor/non-reasoner'));
+  assert.ok(fast.includes('vendor/reasoner'));
+  assert.ok(fast.includes('vendor/non-reasoner'));
+  for (const model of ['vendor/text-only', 'vendor/no-context', 'vendor/unpriced', 'vendor/spoofed']) {
     assert.equal(await modelFitsRouteKind('openrouter', model, 'smart'), false);
     assert.equal(await modelFitsRouteKind('openrouter', model, 'fast'), false);
   }
@@ -315,7 +269,7 @@ test('route listing and validation use the same current catalog capabilities', a
   }
 });
 
-test('a reviewed model is still rejected when tool metadata is false or absent', async () => {
+test('a model is rejected when tool metadata is false or absent', async () => {
   for (const toolCall of [false, undefined]) {
     resetPricingCacheForTests();
     globalThis.fetch = mockFetch({

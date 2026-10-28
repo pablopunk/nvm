@@ -210,11 +210,13 @@ function installModelsDevFetch() {
           models: {
             'gpt-6.1-sol': {
               id: 'gpt-6.1-sol',
+              provider: { npm: '@ai-sdk/openai' },
               cost: { input: 1, output: 2 },
               limit: { context: 100000, output: 1000 },
             },
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               name: 'Gemini 3 Flash',
               cost: { input: 0.3, output: 2.5 },
               limit: { context: 100000, output: 8192 },
@@ -222,6 +224,7 @@ function installModelsDevFetch() {
             },
             'gemini-3-fast': {
               id: 'gemini-3-fast',
+              provider: { npm: '@ai-sdk/google' },
               name: 'Gemini 3 Fast',
               cost: { input: 0.1, output: 0.5 },
               limit: { context: 64000, output: 4096 },
@@ -437,6 +440,7 @@ function installOpenAiFetch(upstreamResponse: () => Response) {
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
               limit: { output: 8192 },
             },
@@ -1742,6 +1746,7 @@ test('active-model blocks requested-size estimates without validated pricing but
             models: {
               'gemini-3-flash': {
                 id: 'gemini-3-flash',
+                provider: { npm: '@ai-sdk/google' },
                 name: 'Gemini 3 Flash',
                 limit: { context: 100_000, output: 8_192 },
                 modalities: { input: ['text'] },
@@ -2326,6 +2331,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
           models: {
             'gemini-3-fast': {
               id: 'gemini-3-fast',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.1, output: 0.5 },
               limit: { context: 64_000, output: 4_096 },
             },
@@ -2739,6 +2745,7 @@ test('proxy spends free credits first without granting a Free user Pro model ent
           models: {
             'gemini-3-fast': {
               id: 'gemini-3-fast',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.1, output: 0.5 },
             },
           },
@@ -2796,6 +2803,7 @@ test('proxy preserves structured tool calls and debits the successful request', 
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -2884,6 +2892,7 @@ test('proxy rejects unsupported non-image multimodal payloads before reservation
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -2980,6 +2989,7 @@ test('proxy route preserves streaming responses and records stream usage', async
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3296,6 +3306,7 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3338,6 +3349,7 @@ test('anthropic proxy records usage from a split final frame without a newline',
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3385,6 +3397,7 @@ test('google proxy records split streaming usage metadata', async () => {
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3480,6 +3493,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3488,6 +3502,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
           models: {
             'gemini-3-fast': {
               id: 'gemini-3-fast',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.1, output: 0.5 },
               limit: { context: 64_000, output: 4_096 },
             },
@@ -3588,6 +3603,7 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3596,6 +3612,7 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
           models: {
             'gemini-3-fast': {
               id: 'gemini-3-fast',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.1, output: 0.5 },
               limit: { context: 64_000, output: 4_096 },
             },
@@ -3683,6 +3700,7 @@ test('proxy failover: when all providers fail, last error passes through', async
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3691,6 +3709,7 @@ test('proxy failover: when all providers fail, last error passes through', async
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3760,6 +3779,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3768,6 +3788,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3837,6 +3858,7 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -3907,6 +3929,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
           models: {
             'claude-sonnet-4-6': {
               id: 'claude-sonnet-4-6',
+              provider: { npm: '@ai-sdk/anthropic' },
               cost: { input: 3, output: 15 },
             },
           },
@@ -3915,6 +3938,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
           models: {
             'claude-sonnet-4-6': {
               id: 'claude-sonnet-4-6',
+              provider: { npm: '@ai-sdk/anthropic' },
               cost: { input: 3, output: 15 },
             },
           },
@@ -4010,6 +4034,7 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
           models: {
             'gemini-3-flash': {
               id: 'gemini-3-flash',
+              provider: { npm: '@ai-sdk/google' },
               cost: { input: 0.3, output: 2.5 },
             },
           },
@@ -4040,7 +4065,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
   let forwarded: any;
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', provider: { npm: '@ai-sdk/openai' }, cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
     assert.equal(url, 'https://upstream.example/v1/responses');
     forwarded = JSON.parse(String(init?.body));
     return new Response(streamFromTextChunks([
@@ -4058,7 +4083,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
   assert.equal(forwarded.max_output_tokens, 64);
   assert.equal(forwarded.store, false);
   assert.equal(forwarded.service_tier, undefined);
-  assert.equal(forwarded.reasoning.effort, 'low');
+  assert.equal(forwarded.reasoning.effort, 'none');
   assert.deepEqual(forwarded.tools, body.tools);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 8);
@@ -4076,7 +4101,7 @@ test('Responses rejects hosted tools before reserving credits', async () => {
   assert.equal(db.insertedValues.length, 0);
 });
 
-test('a stale chat-completions route fails before credit reservation when the model requires Responses', async () => {
+test('a stale chat-completions route fails before credit reservation when the catalog routes the model to Responses', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   installModelsDevFetch();
@@ -4093,7 +4118,7 @@ test('Responses failed stream without output releases its reservation', async ()
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', provider: { npm: '@ai-sdk/openai' }, cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
     return new Response('data: {"type":"response.failed","response":{"status":"failed"}}\n\n', { headers: { 'content-type': 'text/event-stream' } });
   };
   const response = await postResponses(routeContext(authorizedChatRequest({ input: 'hello', stream: true })));
@@ -4125,7 +4150,7 @@ test('Responses accepts bounded inline images alongside function tools', async (
   let forwarded: any;
   globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 }, modalities: { input: ['text', 'image'], output: ['text'] } } } } });
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', provider: { npm: '@ai-sdk/openai' }, cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 }, modalities: { input: ['text', 'image'], output: ['text'] } } } } });
     assert.equal(url, 'https://upstream.example/v1/responses');
     forwarded = JSON.parse(String(init?.body));
     return Response.json({ status: 'completed', output: [], usage: { input_tokens: 100, output_tokens: 10 } });
@@ -4138,20 +4163,3 @@ test('Responses accepts bounded inline images alongside function tools', async (
   assert.ok(db.insertedValues.length > 0);
 });
 
-test('Responses reserves at least the reviewed OpenRouter rate even for text-only requests', async () => {
-  process.env.OPENROUTER_API_KEY = 'upstream-key';
-  process.env.OPENROUTER_BASE_URL = 'https://upstream.example/v1';
-  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'openai/gpt-6.1-sol', routeProvider: 'openrouter' }) }));
-  globalThis.fetch = async (input: string | URL | Request) => {
-    const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') return Response.json({ openrouter: { models: { 'openai/gpt-6.1-sol': { id: 'openai/gpt-6.1-sol', cost: { input: 0.01, output: 0.02 }, limit: { context: 100000, output: 1000 }, modalities: { input: ['text', 'image'], output: ['text'] } } } } });
-    return Response.json({ status: 'completed', output: [], usage: { input_tokens: 10, output_tokens: 5 } });
-  };
-  const body = { input: 'hello', max_output_tokens: 100 };
-  const response = await postResponses(routeContext(authorizedChatRequest(body)));
-  await response.text();
-  assert.equal(response.status, 200);
-  const reservation = db.insertedValues.find((value) => value !== null && typeof value === 'object' && 'estimatedProviderCostMicrocents' in value) as { estimatedProviderCostMicrocents: number };
-  const tokens = estimateInputTokensFromBody(JSON.stringify(body));
-  assert.equal(reservation.estimatedProviderCostMicrocents, Math.round(((tokens * 2.75 + 100 * 11) / 1_000_000) * 1e8));
-});

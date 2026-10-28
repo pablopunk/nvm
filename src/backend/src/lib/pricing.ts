@@ -1,6 +1,3 @@
-import { isReviewedModelRoute, requiresResponsesForTools, supportsChatCompletionsTools } from './model-capabilities';
-import { selectApiForModel } from './upstream';
-
 export type ModelCost = {
   provider: string;
   modelId: string;
@@ -52,6 +49,7 @@ type ModelsDevModel = {
   reasoning?: boolean;
   tool_call?: boolean;
   attachment?: boolean;
+  provider?: CatalogSdk;
   modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; input?: number; output?: number };
   cost?: {
@@ -68,7 +66,9 @@ type ModelsDevModel = {
     }>;
   };
 };
-type ModelsDevProvider = { models: Record<string, ModelsDevModel> };
+/** The SDK models.dev declares for a provider or model; it determines the wire API. */
+export type CatalogSdk = { npm?: string; shape?: string };
+type ModelsDevProvider = { npm?: string; models: Record<string, ModelsDevModel> };
 type ModelsDevApi = Record<string, ModelsDevProvider>;
 
 type ValidModelPricing = NonNullable<ModelsDevModel['cost']> & {
@@ -101,19 +101,6 @@ function hasValidPricing(
 }
 
 const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
-  openai: {
-    models: {
-      'gpt-6.1-sol': {
-        id: 'gpt-6.1-sol',
-        name: 'GPT-6.1 Sol',
-        reasoning: true,
-        tool_call: true,
-        modalities: { input: ['text', 'image'], output: ['text'] },
-        limit: { context: 1_050_000, input: 922_000, output: 128_000 },
-        cost: { input: 2, output: 10, cache_read: 0.1, cache_write: 2.5, tiers: [{ input: 4, output: 15, cache_read: 0.2, cache_write: 5, tier: { type: 'context', size: 272_000 } }] },
-      },
-    },
-  },
   opencode: {
     models: {
       'gpt-5.6-luna': {
@@ -138,15 +125,6 @@ const BUNDLED_RUNTIME_MODELS: ModelsDevApi = {
   },
   openrouter: {
     models: {
-      'openai/gpt-6.1-sol': {
-        id: 'openai/gpt-6.1-sol',
-        name: 'GPT-6.1 Sol',
-        reasoning: true,
-        tool_call: true,
-        modalities: { input: ['text', 'image'], output: ['text'] },
-        limit: { context: 1_050_000, input: 922_000, output: 128_000 },
-        cost: { input: 2.2, output: 11, cache_read: 0.11, cache_write: 2.75, tiers: [{ input: 4.4, output: 16.5, cache_read: 0.22, cache_write: 5.5, tier: { type: 'context', size: 272_000 } }] },
-      },
       'deepseek/deepseek-v4-flash-0731': {
         id: 'deepseek/deepseek-v4-flash-0731',
         name: 'DeepSeek V4 Flash 0731',
@@ -435,24 +413,23 @@ export function routeKindForSlot(slot: string): RouteKind {
   return slot.includes('fast') ? 'fast' : 'smart';
 }
 
-/**
- * Both routes require text, images, function tools and bounded image pricing.
- * Smart routes also require reasoning; fast routes disable thinking.
- */
-function fitsRouteKind(provider: string, modelId: string, model: ModelsDevModel, kind: RouteKind): boolean {
-  if (model.id !== modelId || !isReviewedModelRoute(provider, modelId, kind)) return false;
-  if (!hasValidPricing(model.cost)) return false;
-  if (model.tool_call !== true) return false;
-  if (requiresResponsesForTools(model.id) && (kind === 'fast' || !['openai', 'openrouter'].includes(provider))) return false;
-  if (selectApiForModel(provider, model.id) === 'openai-completions' && !supportsChatCompletionsTools(model.id, kind === 'fast')) return false;
+function supportsEveryTierFeature(model: ModelsDevModel): boolean {
   const input = model.modalities?.input ?? ['text'];
   const output = model.modalities?.output ?? ['text'];
-  if (!input.includes('text') || !input.includes('image') || !output.includes('text')) return false;
-  if (!Number.isSafeInteger(model.limit?.context) || (model.limit?.context ?? 0) <= 0) return false;
   return (
-    kind === 'fast' ||
-    (Boolean(model.reasoning) && input.includes('image'))
+    model.tool_call === true &&
+    input.includes('text') &&
+    input.includes('image') &&
+    output.includes('text') &&
+    hasValidPricing(model.cost) &&
+    Number.isSafeInteger(model.limit?.context) &&
+    (model.limit?.context ?? 0) > 0
   );
+}
+
+function fitsRouteKind(modelId: string, model: ModelsDevModel, kind: RouteKind): boolean {
+  if (model.id !== modelId || !supportsEveryTierFeature(model)) return false;
+  return kind === 'fast' || Boolean(model.reasoning);
 }
 
 export async function modelFitsRouteKind(
@@ -474,7 +451,7 @@ export async function listModelsForRouteKind(
     ...(cache?.source === 'models.dev' ? cache.data[key]?.models : {}),
   };
   return Object.entries(models)
-    .filter(([modelId, model]) => fitsRouteKind(provider, modelId, model, kind))
+    .filter(([modelId, model]) => fitsRouteKind(modelId, model, kind))
     .map(([modelId]) => modelId)
     .sort();
 }
@@ -515,17 +492,26 @@ export function loadedImageTokenLimits(
     !hasValidPricing(model.cost)
   )
     return undefined;
-  const reviewed = provider === 'openrouter' && modelId === 'openai/gpt-6.1-sol'
-    ? bundledRuntimeModel(provider, modelId)
-    : undefined;
-  const maximumPricing = hasValidPricing(reviewed?.cost) ? reviewed.cost : model.cost;
   const { provider: _provider, modelId: _modelId, ...maximumCost } =
-    modelCostFromCatalog(provider, modelId, maximumPricing);
+    modelCostFromCatalog(provider, modelId, model.cost);
   return {
     contextWindow,
     maxInputTokens: model.limit?.input ?? contextWindow,
     maxTokens: model.limit?.output ?? DEFAULT_DESCRIPTOR.maxTokens,
     maximumCost,
+  };
+}
+
+export async function catalogSdkForModel(
+  provider: string,
+  modelId: string,
+): Promise<CatalogSdk> {
+  const catalog = await fetchCatalog();
+  const catalogProvider = catalog[modelsDevKey(provider)];
+  const modelSdk = catalogProvider?.models?.[modelId]?.provider;
+  return {
+    npm: modelSdk?.npm ?? catalogProvider?.npm,
+    shape: modelSdk?.shape,
   };
 }
 

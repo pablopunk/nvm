@@ -1,8 +1,17 @@
 import assert from 'node:assert/strict';
 import { test, describe, afterEach } from 'node:test';
+import { resetPricingCacheForTests } from './pricing';
 import { getUpstreamConfig, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
 
+const originalFetch = globalThis.fetch;
+
+function mockCatalog(json: unknown) {
+  globalThis.fetch = (async () => Response.json(json)) as typeof globalThis.fetch;
+}
+
 afterEach(() => {
+  globalThis.fetch = originalFetch;
+  resetPricingCacheForTests();
   delete process.env.OPENCODE_API_KEY;
   delete process.env.OPENROUTER_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
@@ -11,34 +20,21 @@ afterEach(() => {
 });
 
 describe('selectApiForModel', () => {
-  test('GPT-6.1 Sol uses Responses on supported direct providers', () => {
-    assert.equal(selectApiForModel('openai', 'gpt-6.1-sol'), 'openai-responses');
-    assert.equal(selectApiForModel('opencode_zen', 'gpt-6.1-sol'), 'openai-responses');
-    assert.equal(selectApiForModel('openrouter', 'openai/gpt-6.1-sol'), 'openai-responses');
+  test('reports the catalog API even when the provider cannot serve it, so failover skips it', async () => {
+    mockCatalog({ openrouter: { models: { 'vendor/model': { id: 'vendor/model', provider: { npm: '@ai-sdk/anthropic' } } } } });
+    assert.equal(await selectApiForModel('openrouter', 'vendor/model'), 'anthropic-messages');
+    assert.equal(providerSupportsFormat('openrouter', 'anthropic-messages'), false);
   });
 
-  test('fallback chain uses the actual primary route API without changing unconfigured routes', () => {
-    assert.equal(selectApiForModelChain({ provider: 'openrouter', modelId: 'openai/gpt-6.1-sol' }, 'openai/gpt-6.1-sol'), 'openai-responses');
-    assert.equal(selectApiForModelChain(null, 'gemini-3-flash'), 'google-generative-ai');
-  });
-  test('openrouter provider → openai-completions', () => {
-    assert.strictEqual(selectApiForModel('openrouter', 'any-model'), 'openai-completions');
+  test('unknown models default to Chat Completions', async () => {
+    mockCatalog({});
+    assert.equal(await selectApiForModel('opencode_zen', 'some-unknown-model'), 'openai-completions');
   });
 
-  test('gemini- prefixed models → google-generative-ai', () => {
-    assert.strictEqual(selectApiForModel('opencode_zen', 'gemini-3-flash'), 'google-generative-ai');
-  });
-
-  test('claude- prefixed models → anthropic-messages', () => {
-    assert.strictEqual(selectApiForModel('opencode_zen', 'claude-sonnet-4-6'), 'anthropic-messages');
-  });
-
-  test('openrouter provider check wins over model prefix check', () => {
-    assert.strictEqual(selectApiForModel('openrouter', 'gemini-flash'), 'openai-completions');
-  });
-
-  test('unknown model defaults to openai-completions', () => {
-    assert.strictEqual(selectApiForModel('opencode_zen', 'some-unknown-model'), 'openai-completions');
+  test('fallback chains use the primary route API only for the primary model', async () => {
+    mockCatalog({ openai: { npm: '@ai-sdk/openai', models: { model: { id: 'model' } } } });
+    assert.equal(await selectApiForModelChain({ provider: 'openai', modelId: 'model' }, 'model'), 'openai-responses');
+    assert.equal(await selectApiForModelChain(null, 'model'), 'openai-completions');
   });
 });
 
