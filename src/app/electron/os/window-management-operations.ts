@@ -42,13 +42,24 @@ function dispatchOperation(
   }
 }
 
+function windowKeyOf(context: OperationContext) {
+  const { selection } = context.request;
+  return selection.kind === 'handle' ? selection.windowKey : undefined;
+}
+
+function focusSourceOf(context: OperationContext) {
+  const { selection } = context.request;
+  return selection.kind === 'focused' ? selection.source : null;
+}
+
 export async function runWindowOperation(
   context: OperationContext,
 ): Promise<WindowApplyResult> {
   const { dependencies, request } = context;
   const { ports } = dependencies;
-  const { spec, source, target } = request;
-  if (source === 'palette') {
+  const { spec, target } = request;
+  const focusSource = focusSourceOf(context);
+  if (focusSource === 'palette') {
     const focusFailure = await restorePaletteFocus(ports, target);
     if (focusFailure) {
       return focusFailure;
@@ -56,11 +67,12 @@ export async function runWindowOperation(
   }
   const writable = await resolveWritableWindow(dependencies, target, {
     allowFullScreen: spec.kind === 'toggle-full-screen',
+    windowKey: windowKeyOf(context),
   });
   if (writable.ok === false) {
     return writable.failure;
   }
-  if (source === 'shortcut') {
+  if (focusSource === 'shortcut') {
     const focusFailure = await guardShortcutFocus(ports, target);
     if (focusFailure) {
       return focusFailure;

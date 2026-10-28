@@ -26,6 +26,9 @@ test('refuses to move Nevermind itself and never touches the helper', async () =
       focusedWindow: countHelperCall,
       setFrame: countHelperCall,
       setFullScreen: countHelperCall,
+      runningApps: countHelperCall,
+      windows: countHelperCall,
+      raiseWindow: countHelperCall,
     },
     ports: {
       paletteFocusTarget: () => null,

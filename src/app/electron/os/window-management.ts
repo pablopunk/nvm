@@ -2,26 +2,34 @@ import type {
   ApplyRequest,
   WindowManagementServiceDependencies,
 } from './window-management-dependencies';
+import type { FailedResult } from './window-management-failures';
+import { failure } from './window-management-failures';
 import {
-  failure,
-  PALETTE_NO_TARGET,
-  SELF_TARGET_MESSAGE,
-  SHORTCUT_NO_TARGET,
-} from './window-management-failures';
-import { createWindowMemory } from './window-management-memory';
+  applyFocusedWindow,
+  type FocusedActionContext,
+} from './window-management-focused-actions';
+import {
+  applyWindowByHandle,
+  focusWindowByHandle,
+  type HandleActionContext,
+} from './window-management-handle-actions';
+import { createWindowHandleRegistry } from './window-management-handles';
+import { listDisplaysFrom, listWindowsFrom } from './window-management-listing';
+import {
+  createWindowMemory,
+  type WindowMemory,
+} from './window-management-memory';
 import { runWindowOperation } from './window-management-operations';
 import { enqueueForPid } from './window-management-queue';
 import type {
   WindowApplyResult,
-  WindowInvocation,
-  WindowLayoutSpec,
-  WindowManagementOptions,
   WindowManagementService,
 } from './window-management-types';
-import { describeInvalidRequest } from './window-management-validation';
 
-function noTargetMessage(source: WindowInvocation['source']) {
-  return source === 'palette' ? PALETTE_NO_TARGET : SHORTCUT_NO_TARGET;
+interface WindowRuntime {
+  dependencies: WindowManagementServiceDependencies;
+  memory: WindowMemory;
+  queues: Map<number, Promise<void>>;
 }
 
 function isTargetGone(result: WindowApplyResult) {
@@ -31,50 +39,62 @@ function isTargetGone(result: WindowApplyResult) {
   );
 }
 
+function runQueuedRequest(runtime: WindowRuntime, request: ApplyRequest) {
+  return enqueueForPid(runtime.queues, request.target.pid, async () => {
+    const result = await runWindowOperation({
+      dependencies: runtime.dependencies,
+      memory: runtime.memory,
+      request,
+    });
+    if (isTargetGone(result)) {
+      runtime.memory.dropPid(request.target.pid);
+    }
+    return result;
+  });
+}
+
+function whenSupported<Result>(
+  dependencies: WindowManagementServiceDependencies,
+  run: () => Promise<Result>,
+): Promise<Result | FailedResult> {
+  return dependencies.supported()
+    ? run()
+    : Promise.resolve(failure('unsupported'));
+}
+
 export function createWindowManagementService(
   dependencies: WindowManagementServiceDependencies,
 ): WindowManagementService {
-  const queues = new Map<number, Promise<void>>();
-  const memory = createWindowMemory();
-
-  function runQueuedRequest(request: ApplyRequest) {
-    return enqueueForPid(queues, request.target.pid, async () => {
-      const result = await runWindowOperation({
-        dependencies,
-        memory,
-        request,
-      });
-      if (isTargetGone(result)) {
-        memory.dropPid(request.target.pid);
-      }
-      return result;
-    });
-  }
-
-  function apply(
-    spec: WindowLayoutSpec,
-    options: WindowManagementOptions,
-    invocation: WindowInvocation,
-  ): Promise<WindowApplyResult> {
-    const invalidMessage = describeInvalidRequest(spec, options);
-    if (invalidMessage) {
-      return Promise.resolve(failure('invalid-spec', invalidMessage));
-    }
-    if (!dependencies.supported()) {
-      return Promise.resolve(failure('unsupported'));
-    }
-    const { target, source } = invocation;
-    if (!target) {
-      return Promise.resolve(failure('no-target', noTargetMessage(source)));
-    }
-    if (target.pid === dependencies.selfPid) {
-      return Promise.resolve(failure('no-target', SELF_TARGET_MESSAGE));
-    }
-    return runQueuedRequest({ spec, options, source, target });
-  }
-
+  const runtime: WindowRuntime = {
+    dependencies,
+    memory: createWindowMemory(),
+    queues: new Map(),
+  };
+  const handles = createWindowHandleRegistry({
+    now: dependencies.now,
+    createId: dependencies.createHandleId,
+  });
+  const runRequest = (request: ApplyRequest) =>
+    runQueuedRequest(runtime, request);
+  const focusedContext: FocusedActionContext = { dependencies, runRequest };
+  const handleContext: HandleActionContext = {
+    dependencies,
+    handles,
+    runRequest,
+    enqueue: (pid, task) => enqueueForPid(runtime.queues, pid, task),
+  };
   return {
     available: () => dependencies.supported(),
-    apply,
+    apply: (spec, options, invocation) =>
+      applyFocusedWindow(focusedContext, spec, options, invocation),
+    applyToWindow: (handle, spec, options) =>
+      applyWindowByHandle(handleContext, handle, spec, options),
+    focusWindow: (handle) => focusWindowByHandle(handleContext, handle),
+    listDisplays: () =>
+      whenSupported(dependencies, () => listDisplaysFrom(dependencies.manager)),
+    listWindows: (query) =>
+      whenSupported(dependencies, () =>
+        listWindowsFrom(dependencies.manager, handles, query),
+      ),
   };
 }

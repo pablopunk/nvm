@@ -50,6 +50,7 @@ export interface SimulatedWindowOptions extends Partial<SimulatedWindowState> {
 export interface SimulatedWindow {
   state: SimulatedWindowState;
   focusedRead(): Promise<HelperEnvelope<WindowInfo>>;
+  windowsRead(): Promise<HelperEnvelope<WindowInfo[]>>;
   setFrame(request: SetFrameRequest): Promise<HelperEnvelope<SetFrameData>>;
   setFullScreen(
     pid: number,
@@ -71,6 +72,8 @@ export function createSimulatedWindow(
   return {
     state,
     focusedRead: () => Promise.resolve(okEnvelope(simulatedWindowInfo(state))),
+    windowsRead: () =>
+      Promise.resolve(okEnvelope([simulatedWindowInfo(state)])),
     setFrame(request) {
       const changed = !sameFrame(state.frame, request.frame);
       state.frame = request.frame;

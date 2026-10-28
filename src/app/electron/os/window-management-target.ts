@@ -1,3 +1,4 @@
+import { windowAccessFailure } from './window-management-access';
 import type { WindowManagementServiceDependencies } from './window-management-dependencies';
 import { unwrapEnvelope } from './window-management-envelopes';
 import type { Settled } from './window-management-failures';
@@ -13,23 +14,24 @@ import {
 import type {
   DisplayInfo,
   Frame,
+  MacosWindowManager,
   WindowFocusTarget,
   WindowInfo,
   WindowInvocationPorts,
 } from './window-management-types';
 
-function describeFocusedWindowRejection(
-  focused: WindowInfo,
+function describeTargetWindowRejection(
+  window: WindowInfo,
   target: WindowFocusTarget,
   options: WindowResolveOptions,
 ): FailedResult | null {
-  if (focused.bundleId !== target.bundleId) {
+  if (window.bundleId !== target.bundleId) {
     return failure('target-lost', TARGET_WINDOW_CHANGED);
   }
-  if (focused.isFullScreen && !options.allowFullScreen) {
+  if (window.isFullScreen && !options.allowFullScreen) {
     return failure('full-screen');
   }
-  if (focused.isMinimized) {
+  if (window.isMinimized) {
     return failure('minimized');
   }
   return null;
@@ -42,6 +44,24 @@ async function isFrontmostPid(
   return (await ports.frontmostTarget())?.pid === pid;
 }
 
+async function readTargetWindow(
+  manager: MacosWindowManager,
+  target: WindowFocusTarget,
+  windowKey: string | undefined,
+): Promise<Settled<WindowInfo>> {
+  if (windowKey === undefined) {
+    return unwrapEnvelope(await manager.focusedWindow(target.pid));
+  }
+  const listed = unwrapEnvelope(await manager.windows(target.pid));
+  if (listed.ok === false) {
+    return listed;
+  }
+  const match = listed.value.find((window) => window.windowKey === windowKey);
+  return match
+    ? { ok: true, value: match }
+    : { ok: false, failure: failure('target-lost') };
+}
+
 export interface WritableWindow {
   focused: WindowInfo;
   workArea: Frame;
@@ -50,6 +70,7 @@ export interface WritableWindow {
 
 export interface WindowResolveOptions {
   allowFullScreen: boolean;
+  windowKey?: string;
 }
 
 export async function resolveWritableWindow(
@@ -58,14 +79,15 @@ export async function resolveWritableWindow(
   options: WindowResolveOptions,
 ): Promise<Settled<WritableWindow>> {
   const { manager, engine } = dependencies;
-  if ((await manager.permissionState()) !== 'allowed') {
-    return { ok: false, failure: failure('denied') };
+  const denied = await windowAccessFailure(manager);
+  if (denied) {
+    return { ok: false, failure: denied };
   }
-  const focused = unwrapEnvelope(await manager.focusedWindow(target.pid));
+  const focused = await readTargetWindow(manager, target, options.windowKey);
   if (focused.ok === false) {
     return focused;
   }
-  const rejection = describeFocusedWindowRejection(
+  const rejection = describeTargetWindowRejection(
     focused.value,
     target,
     options,
