@@ -27,6 +27,7 @@ const SHARED_PACKAGE_CONTRACT = [
   'release/nightly.yml nightly-windows/',
   'release/nightly-mac.yml nightly-mac/',
   'cp release/nightly-linux-arm64.yml nightly-linux/nightly-linux-arm64.yml',
+  'cp release/nightly-linux.yml nightly-linux/nightly-linux-arm64.yml',
 ];
 
 function section(source, start, end) {

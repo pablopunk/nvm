@@ -358,8 +358,10 @@ jobs:
             nightly-linux/
           if [[ "${{ matrix.arch }}" == "x64" ]]; then
             cp release/nightly-linux.yml nightly-linux/nightly-linux.yml
-          else
+          elif [[ -f release/nightly-linux-arm64.yml ]]; then
             cp release/nightly-linux-arm64.yml nightly-linux/nightly-linux-arm64.yml
+          else
+            cp release/nightly-linux.yml nightly-linux/nightly-linux-arm64.yml
           fi
 
       - name: Validate Linux updater metadata
