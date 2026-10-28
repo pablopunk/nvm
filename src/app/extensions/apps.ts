@@ -17,11 +17,11 @@ function uninstallResult(ctx: any, result: any) {
     result.untouched.length > 0
       ? [
           ...result.untouched.map((item: any) => ({
-            title: item.path,
+            title: ctx.desktop.files.displayPath(item.path),
             subtitle: item.message,
           })),
           ...result.moved.map((path: string) => ({
-            title: path,
+            title: ctx.desktop.files.displayPath(path),
             subtitle: 'Moved to Trash',
           })),
         ]
@@ -56,8 +56,9 @@ function uninstallCandidateItem(
   selectedIds: Set<string>,
 ) {
   const selected = selectedIds.has(candidate.id);
+  const displayPath = ctx.desktop.files.displayPath(candidate.path);
   const toggle = ctx.actions.run(
-    `${selected ? 'Deselect' : 'Select'} ${candidate.path}`,
+    `${selected ? 'Deselect' : 'Select'} ${displayPath}`,
     () => {
       if (selectedIds.has(candidate.id)) {
         selectedIds.delete(candidate.id);
@@ -73,7 +74,7 @@ function uninstallCandidateItem(
   );
   return ctx.ui.item({
     id: candidate.id,
-    title: candidate.path,
+    title: displayPath,
     subtitle: candidate.reason,
     icon: candidate.kind === 'app' ? 'app-window' : 'folder',
     accessories: [
@@ -109,7 +110,9 @@ function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
       );
       return;
     }
-    const selectedPaths = selection.map((candidate: any) => candidate.path);
+    const selectedPaths = selection.map((candidate: any) =>
+      ctx.desktop.files.displayPath(candidate.path),
+    );
     const quitsApp = selection.some(
       (candidate: any) => candidate.kind === 'app',
     );
@@ -247,7 +250,7 @@ export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
-    capabilities: ['desktop.apps'] as const,
+    capabilities: ['desktop.apps', 'desktop.files'] as const,
     commands: [
       {
         id: 'force-quit-apps',

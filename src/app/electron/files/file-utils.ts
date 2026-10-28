@@ -174,9 +174,8 @@ async function partitionRootsByExistence(roots: string[]) {
   return { existing, missing };
 }
 
-function displayUserPath(filePath) {
-  const home = os.homedir();
-  return filePath.startsWith(home)
+function displayUserPath(filePath: string, home = os.homedir()) {
+  return filePath === home || filePath.startsWith(`${home}${path.sep}`)
     ? `~${filePath.slice(home.length)}`
     : filePath;
 }

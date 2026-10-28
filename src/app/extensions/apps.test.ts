@@ -76,7 +76,13 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
     rankAction: () => true,
   });
   const ctx = {
-    desktop: { apps: { list: () => [app] } },
+    desktop: {
+      apps: { list: () => [app] },
+      files: {
+        displayPath: (value: string) =>
+          value.replace(/^\/Users\/tester(?=\/|$)/, '~'),
+      },
+    },
     actions: {
       run: (title, handler, options = {}) => ({
         title,
@@ -111,6 +117,7 @@ test('app root/search work stays synchronous while Uninstall is a macOS-only laz
 // biome-ignore lint/complexity/noExcessiveLinesPerFunction: this scenario exercises the complete destructive-action journey.
 test('Uninstall candidate list defaults to the app, patches selection, and confirms host snapshot paths', async () => {
   const indicators: any[] = [];
+  let trashedValues: Record<string, unknown> = {};
   const app = {
     id: 'example',
     name: 'Example',
@@ -147,18 +154,27 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
       }),
       selected: (_snapshot, values = {}) =>
         candidates.filter((candidate) => values[candidate.id] === true),
-      trash: async () => ({
-        status: 'complete',
-        moved: [app.path],
-        untouched: [],
-        notes: [],
-      }),
+      trash: async (_snapshot, values = {}) => {
+        trashedValues = values;
+        return {
+          status: 'complete',
+          moved: [app.path],
+          untouched: [],
+          notes: [],
+        };
+      },
     },
     actionAliases: () => [],
     rankAction: () => true,
   });
   const ctx = {
-    desktop: { apps: { list: () => [app] } },
+    desktop: {
+      apps: { list: () => [app] },
+      files: {
+        displayPath: (value: string) =>
+          value.replace(/^\/Users\/tester(?=\/|$)/, '~'),
+      },
+    },
     actions: {
       run: (title, handler, options = {}) => ({
         title,
@@ -182,6 +198,10 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(list.id, 'uninstall:example');
   const candidateItems = list.sections[1].items;
   assert.equal(
+    candidateItems.find((candidate: any) => candidate.id === 'cache-id').title,
+    '~/Library/Caches/com.example.App',
+  );
+  assert.equal(
     candidateItems.find((candidate: any) => candidate.id === 'app-id')
       .accessories[0].text,
     'Selected',
@@ -201,10 +221,17 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
   assert.equal(indicators.at(-1).status, 'error');
   const selected = deselected.patch.items[0].primaryAction.__handler();
   assert.equal(selected.patch.items[0].accessories[0].text, 'Selected');
+  candidateItems
+    .find((candidate: any) => candidate.id === 'cache-id')
+    .primaryAction.__handler();
   const confirmation = review.__handler();
-  assert.equal(confirmation.message, app.path);
+  assert.equal(
+    confirmation.message,
+    `${app.path}\n~/Library/Caches/com.example.App\nIf running, the application will be asked to quit first.`,
+  );
   assert.equal(confirmation.onConfirm.requiresConfirmation, undefined);
   const complete = await confirmation.onConfirm.__handler();
+  assert.equal(trashedValues['cache-id'], true);
   assert.equal(complete, undefined);
   assert.equal(indicators.at(-1).subtitle, '1 item moved to Trash');
   assert.equal(indicators.at(-1).status, 'success');
