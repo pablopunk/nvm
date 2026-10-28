@@ -250,6 +250,7 @@ body:has(.landing-shell) {
   --muted: #a8a29e;
   --accent: #fafaf9;
   --accent-fg: #0c0a09;
+  --landing-gold: #f4cf86;
   background: #000;
   overflow-x: clip;
 }
