@@ -39,7 +39,6 @@ import {
   shell,
   systemPreferences,
 } from 'electron';
-import electronUpdater from 'electron-updater';
 import { createAiChatEventBroadcaster } from './ai/ai-chat-events';
 import { createAiChatImageStorage } from './ai/ai-chat-image-storage';
 import {
@@ -197,7 +196,7 @@ import {
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
-import { createUpdateManager } from './app/update-manager';
+import { createAppUpdateManager } from './app/update-manager-setup';
 import { createUpdatesService } from './app/updates-service';
 import {
   installExternalNavigationPolicy,
@@ -325,13 +324,11 @@ import { createUserStatePersistence } from './state/user-state-persistence';
 import { createDefaultUserState } from './state/user-state-shape';
 import { createUserStateStore } from './state/user-state-store';
 
-const { autoUpdater } = electronUpdater;
 const rendererUrl = resolveRendererUrl(process.env, app.isPackaged);
 const isDev = Boolean(rendererUrl);
 configureLogger(isDev);
 if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
-
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';
 if (process.platform === 'linux') {
   app.setDesktopName(LINUX_DESKTOP_NAME);
@@ -347,18 +344,11 @@ if (process.platform === 'linux') {
   }
 }
 
-const updateManager: any = isNvmTestMode
-  ? {
-      state: { status: 'unsupported' as const },
-      canUseAutoUpdates: () => false,
-      configure: () => {},
-      onStateChange: () => {},
-      checkForUpdates: async () => {},
-      downloadAvailableUpdate: async () => {},
-      quitAndInstall: () => false,
-      clearTimers: () => {},
-    }
-  : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt);
+const updateManager: any = createAppUpdateManager({
+  isTestMode: isNvmTestMode,
+  recordInstallAttempt: recordUpdateInstallAttempt,
+  getUpdateChannel: () => getUpdateChannel(),
+});
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 ipcMain.handle('diagnostics:renderer-failure', (event) => {
@@ -593,6 +583,9 @@ const { scheduleSaveState, saveUserState, persistUserState } =
   userStatePersistence;
 const activationStatus = createActivationStatus();
 const portableConfigService = createPortableConfigService({
+  afterConfigAdopted: (keys) =>
+    keys.includes('setting:updateChannel') &&
+    updateManager.handleUpdateChannelChanged(),
   filePath: () =>
     resolvePortableConfigPath({
       isTestMode: isNvmTestMode,
@@ -655,6 +648,7 @@ const { actionAliases, usageBoost, recentBoost, rankAction, recordRecent } =
   createActionRanker({ userStateStore, scheduleSaveState });
 const {
   getPaletteHotkey,
+  getUpdateChannel,
   availableSettingDefinitions,
   getSetting,
   setSetting,
@@ -672,6 +666,11 @@ const {
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
   buildRecordShortcutAction: (input, options) =>
     buildRecordShortcutAction(input, options),
+  afterSettingCommitted: (settingId) => {
+    if (settingId === 'updateChannel')
+      updateManager.handleUpdateChannelChanged();
+  },
+  canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
 
 const linuxX11Clipboard = createLinuxX11Clipboard();
@@ -1439,6 +1438,7 @@ const {
   getAppVersion: () => app.getVersion(),
   autoUpdatesUnavailableMessage,
   getActiveNevermindBaseUrl: () => activeNevermindBaseUrl,
+  getUpdateChannel,
   markAppQuitting,
   requestQuit: stateSafeQuit.requestQuit,
   quitApp: () => app.quit(),

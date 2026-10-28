@@ -1,5 +1,6 @@
 type JsonRecord = Record<string, unknown>;
 import { parsePublicOrigin } from '../../../app/shared/public-origin';
+import { isFullCommitSha } from './deployment-identity';
 
 type CompatibilityManifest = {
   backend: { environment: string; version: string };
@@ -15,9 +16,13 @@ type CompatibilityManifest = {
   };
 };
 
+export type DeployedSmokeOptions = {
+  expectedCommit?: string | null;
+};
+
 export type DeployedSmokeResult = {
   target: string;
-  health: { version: string; db: boolean; upstream: boolean };
+  health: { version: string; commit: string | null; db: boolean; upstream: boolean };
   compatibility: {
     backendEnvironment: string;
     backendVersion: string;
@@ -33,8 +38,10 @@ const REQUEST_TIMEOUT_MS = 10_000;
 export async function runDeployedSmoke(
   rawBaseUrl: string | undefined,
   fetchImplementation: typeof fetch = fetch,
+  options: DeployedSmokeOptions = {},
 ): Promise<DeployedSmokeResult> {
   const target = normalizeSmokeTarget(rawBaseUrl);
+  const expectedCommit = normalizeExpectedCommit(options.expectedCommit);
   const health = await requestJson(
     target,
     '/api/health',
@@ -42,6 +49,7 @@ export async function runDeployedSmoke(
     fetchImplementation,
   );
   assertHealthContract(target, health);
+  assertExpectedCommit(target, health.commit, expectedCommit);
 
   const discovery = assertCompatibilityContract(
     target,
@@ -99,6 +107,7 @@ export async function runDeployedSmoke(
     target,
     health: {
       version: health.version,
+      commit: isFullCommitSha(health.commit) ? health.commit : null,
       db: health.db,
       upstream: health.upstream,
     },
@@ -187,6 +196,7 @@ function assertHealthContract(
   db: boolean;
   upstream: boolean;
   version: string;
+  commit?: unknown;
 } {
   if (
     value.ok !== true ||
@@ -198,6 +208,29 @@ function assertHealthContract(
       `${target}/api/health returned an invalid health contract: ${redactResponseBody(JSON.stringify(value))}`,
     );
   }
+}
+
+function assertExpectedCommit(
+  target: string,
+  actual: unknown,
+  expected: string | null,
+) {
+  if (expected && (!isFullCommitSha(actual) || actual !== expected)) {
+    throw new Error(
+      `${target}/api/health reported commit ${actual}, expected ${expected}`,
+    );
+  }
+}
+
+function normalizeExpectedCommit(raw: string | null | undefined) {
+  const trimmed = raw?.trim();
+  if (!trimmed) return null;
+  if (!isFullCommitSha(trimmed)) {
+    throw new Error(
+      'NVM_SMOKE_EXPECTED_COMMIT must be a full lowercase 40-character commit SHA',
+    );
+  }
+  return trimmed;
 }
 
 function assertCompatibilityContract(

@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { settingValue } from './settings';
+import {
+  settingDefinition,
+  settingValue,
+  toggledSettingValue,
+} from './settings';
 
 test('technical reports can be disabled without disabling local diagnostics', () => {
   assert.equal(settingValue(undefined, 'errorReporting'), true);
@@ -19,4 +23,20 @@ test('stored palette shortcut overrides the empty default', () => {
     settingValue({ paletteHotkey: 'Control+Alt+K' }, 'paletteHotkey'),
     'Control+Alt+K',
   );
+});
+
+test('update channel defaults to stable and keeps a stored nightly preference', () => {
+  assert.equal(settingValue(undefined, 'updateChannel'), 'stable');
+  assert.equal(
+    settingValue({ updateChannel: 'nightly' }, 'updateChannel'),
+    'nightly',
+  );
+});
+
+test('update channel toggles between stable and nightly and normalizes unknown values', () => {
+  const definition = settingDefinition('updateChannel');
+  assert.ok(definition);
+  assert.equal(toggledSettingValue(definition, 'stable'), 'nightly');
+  assert.equal(toggledSettingValue(definition, 'nightly'), 'stable');
+  assert.equal(toggledSettingValue(definition, 'beta'), 'nightly');
 });

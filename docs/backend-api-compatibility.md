@@ -15,6 +15,8 @@ Nevermind's desktop app and backend do not deploy at the same cadence. Desktop u
 
 Support at least the latest two minor desktop versions or the last 90 days of released desktop versions, whichever keeps more users covered. Patch releases in a supported minor line remain supported.
 
+Nightly builds use the same API contract and support window. Prerelease versions sort before the corresponding stable version: a minimum of `0.7.0` does not include `0.7.0-nightly.1`. Changes to version comparison must preserve the behavior of supported released clients.
+
 Emergency security blocks may shorten the window, but the backend must return a clear compatibility response that lets desktop render an update prompt.
 
 ## Desktop request identity

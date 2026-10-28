@@ -52,6 +52,16 @@ migrations only. Preview and production deploy the selected workflow commit only
 after its migration succeeds; automatic Vercel Git deployments are disabled in
 `vercel.json` so this workflow remains the only deployment owner.
 
+Each deploy passes the checked-out full commit SHA to the Vercel CLI as
+`--build-env NVM_BUILD_COMMIT_SHA=<sha>`. The build bakes it into the server bundle, and
+`/api/health` and `/api/health/deployment` report it as `commit` next to the short
+`version`. The nightly release gate requires a valid deployed identity and checks the public alias before publication.
+`/api/health` probes the providers that live routes can reach, using the same resolution and refusals as requests: the free and pro smart and fast slots (their primary and the enabled failover links the proxy would try, after the proxy's key, format, and pricing skips), the audio route, and the decision route. A route the request path always refuses (a missing key or pricing, an unsupported provider) fails closed. A kill switch on the path takes its route out of the probe set, and a tripped route breaker is skipped as the proxy skips it. An unreadable breaker or failover lookup keeps the route serviceable but unverified, so readiness cannot pass on it. Each route's resolution errors stay with that route.
+
+Liveness and readiness are separate. `upstream` is chat liveness with the released meaning: each tiered chat route has a candidate that answers without a 5xx, and none is unresolved. Audio and decision routes are optional features beside chat, so a missing, disabled, or refused one never flips `upstream` and never 503s a deployment whose chat works. `upstreamReady` is strict: every route, optional ones included, must be configured and serviceable, with no lookup left unverified, and every candidate must return a 2xx model catalog with a `data` array (Google's is `models`) and an accepted key. A missing or disabled audio or decision route therefore reports `upstreamReady: false`. OpenRouter's catalog answers anonymously, so its key is verified on the authenticated `/key` endpoint. OpenCode also serves its catalog anonymously for legacy keyless access, but it refuses an invalid bearer with 401, so a 2xx with the configured key does show the key is accepted. Readiness does not prove credit balance, rate limits, or that an authenticated inference call succeeds.
+
+Each instance runs at most one provider evaluation at a time and caches a completed result for 30 seconds when ready and 5 seconds otherwise. A request waits at most 8 seconds for it. If that wait ends first, `upstreamReady` is false, and `upstream` carries the last completed liveness for up to 60 seconds, so a slow evaluation of a deployment that was live does not 503 it. On a cold instance with no completed evaluation, a first evaluation that outlasts that wait reports `upstream: false` until it completes. The database check stays live. The nightly gate requires `upstreamReady`.
+
 Use expand-and-contract migrations: apply a backward-compatible schema change,
 deploy compatible code only after migration succeeds, migrate data if needed,
 and remove old schema in a later release. If a deployment fails after migration, roll code

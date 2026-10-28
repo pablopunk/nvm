@@ -1547,6 +1547,8 @@ export type ExtensionSystem = {
 /** Serializable snapshot of the host update manager, returned by `ctx.updates.getState()`. */
 export type ExtensionUpdateState = {
   currentVersion: string;
+  /** Update channel the user selected in Settings; `nightly` also considers nightly prereleases. */
+  channel: 'stable' | 'nightly';
   status: string;
   supported: boolean;
   checking: boolean;

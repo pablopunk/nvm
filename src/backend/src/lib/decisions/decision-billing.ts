@@ -9,6 +9,16 @@ export const DECISION_OUTPUT_TOKENS_PER_QUESTION = 64;
 
 export type DecisionCostSource = 'provider_reported' | 'catalog_estimate';
 
+/** Decisions are only bounded when every output tier is free of charge. */
+export function decisionOutputIsUnbilled(costRow: ModelCost): boolean {
+  return (
+    costRow.outputUsdPerMtok === 0 &&
+    !costRow.tiers?.some(
+      (tier) => (tier.outputUsdPerMtok ?? costRow.outputUsdPerMtok) !== 0,
+    )
+  );
+}
+
 export function decisionInputTokenCeiling(request: DecisionRequest): number {
   const textTokens = estimateInputTokensFromValue({
     input: request.input,

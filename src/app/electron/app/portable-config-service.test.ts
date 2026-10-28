@@ -223,6 +223,51 @@ test('a same-key edit made on disk after load rejects the commit and adopts the 
   });
 });
 
+test('notifies after an external configuration value is adopted', async () => {
+  await withConfigFile(async (filePath) => {
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        settings: { paletteHotkey: 'Command+Alt+K' },
+      }),
+    );
+    const record = emptyRecord();
+    const observed: Array<{ keys: readonly string[]; value: unknown }> = [];
+    const { live } = recordingLive();
+    const service = createPortableConfigService({
+      filePath: () => filePath,
+      settingKinds: KINDS,
+      userStateStore: { get: () => record },
+      live,
+      scheduleSaveState: () => {},
+      afterConfigAdopted: (keys) =>
+        observed.push({ keys, value: record.settings.paletteHotkey }),
+    });
+    await service.loadPortableConfig();
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        settings: { paletteHotkey: 'Command+Alt+B' },
+      }),
+    );
+    await service.commit({
+      label: 'palette-hotkey',
+      mutate: (draft) => {
+        draft.settings.paletteHotkey = 'Command+Alt+C';
+      },
+    });
+    assert.ok(
+      observed.some(
+        (entry) =>
+          entry.keys.includes('setting:paletteHotkey') &&
+          entry.value === 'Command+Alt+B',
+      ),
+    );
+  });
+});
+
 test('unresolved shortcut IDs survive a later portable commit', async () => {
   await withConfigFile(async (filePath) => {
     await fs.writeFile(

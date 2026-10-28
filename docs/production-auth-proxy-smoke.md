@@ -16,7 +16,8 @@ NVM_SMOKE_BASE_URL=https://api.nvm.fyi mise exec -- pnpm smoke:deployed
 ```
 
 Confirm the deployment version and public aliases point at the intended release.
-Do not continue if health, compatibility, or aliases identify a different deploy.
+Set `NVM_SMOKE_EXPECTED_COMMIT=<full 40-character SHA>` to fail unless `/api/health`
+reports that exact commit. Do not continue if health, compatibility, or aliases identify a different deploy.
 
 ## Manual production check
 
