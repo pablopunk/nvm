@@ -255,7 +255,7 @@ test('windows are empty when access is denied', async () => {
 
 test('waitForWindow resolves to the first match once it appears', async () => {
   let listing = 0;
-  const { facet, calls } = createServiceAndFacet({
+  const { facet } = createServiceAndFacet({
     listWindows: () => {
       listing += 1;
       return Promise.resolve({
@@ -269,26 +269,34 @@ test('waitForWindow resolves to the first match once it appears', async () => {
     { timeoutMs: 2000 },
   );
   assert.equal(window.handle.id, 'opaque-handle-1');
-  assert.equal(countCalls(calls, 'listWindows'), 3);
+  assert.equal(listing, 3);
 });
 
 test('waitForWindow resolves to null after the timeout with bounded polling', async () => {
-  const { facet, calls } = createServiceAndFacet({
-    listWindows: () => Promise.resolve({ ok: true, windows: [] }),
+  let listing = 0;
+  const { facet } = createServiceAndFacet({
+    listWindows: () => {
+      listing += 1;
+      return Promise.resolve({ ok: true, windows: [] });
+    },
   });
   const started = Date.now();
   const window = await facet.waitForWindow({}, { timeoutMs: 600 });
   assert.equal(window, null);
   assert.ok(Date.now() - started < 2000);
-  assert.ok(countCalls(calls, 'listWindows') <= 4);
+  assert.ok(listing >= 2 && listing <= 4);
 });
 
 test('waitForWindow with a zero timeout lists once and resolves to null', async () => {
-  const { facet, calls } = createServiceAndFacet({
-    listWindows: () => Promise.resolve({ ok: true, windows: [] }),
+  let listing = 0;
+  const { facet } = createServiceAndFacet({
+    listWindows: () => {
+      listing += 1;
+      return Promise.resolve({ ok: true, windows: [] });
+    },
   });
   assert.equal(await facet.waitForWindow({}, { timeoutMs: 0 }), null);
-  assert.equal(countCalls(calls, 'listWindows'), 1);
+  assert.equal(listing, 1);
 });
 
 test('clampWaitTimeoutMs defaults missing or non-finite values and clamps to 0..30000', () => {

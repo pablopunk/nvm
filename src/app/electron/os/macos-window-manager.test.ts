@@ -285,6 +285,7 @@ test('maps a raise target-lost envelope with its message', async () => {
   assert.deepEqual(await windowManager.raiseWindow(42, '42:7'), {
     ok: false,
     code: 'target-lost',
+    data: undefined,
     message: 'Window is no longer available',
   });
 });

@@ -377,7 +377,7 @@ test('raises a listed window through its handle', async () => {
   const { service, calls } = createHarness({ windowsRead: windowsOfPid });
   const handle = await listedHandle(service, { title: 'Notes' });
   assert.deepEqual(await service.focusWindow(handle), { ok: true });
-  assert.ok(calls.includes('raise:42:7'));
+  assert.ok(calls.includes('raise:42:42:7'));
 });
 
 test('forgets a handle when raising reports target-lost', async () => {
