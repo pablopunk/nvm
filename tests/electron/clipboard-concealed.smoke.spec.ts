@@ -42,7 +42,7 @@ function pasteboardScript(text: string, concealed: boolean) {
   return `
 ObjC.import('AppKit');
 const pasteboard = $.NSPasteboard.generalPasteboard;
-pasteboard.clearContents();
+pasteboard.clearContents;
 pasteboard.declareTypesOwner($(${types}), null);
 if (!pasteboard.setStringForType(${JSON.stringify(text)}, $.NSPasteboardTypeString)) throw new Error('text write failed');
 ${concealedWrite}
