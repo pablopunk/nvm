@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { compareVersions } from './desktop-version';
 import { log } from './log';
 
 export const DESKTOP_API_VERSION = 1;
@@ -167,16 +168,6 @@ export function compatibilityError(request: Request, message = 'This version of 
   );
 }
 
-export function compareVersions(left: string, right: string) {
-  const leftParts = versionParts(left);
-  const rightParts = versionParts(right);
-  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
-    const diff = (leftParts[index] || 0) - (rightParts[index] || 0);
-    if (diff !== 0) return diff > 0 ? 1 : -1;
-  }
-  return 0;
-}
-
 function logDesktopClientSeen(client: DesktopClient, context: CompatibilityContext, compatible: boolean) {
   log.info('desktop_client_seen', {
     request_id: context.requestId || undefined,
@@ -188,14 +179,6 @@ function logDesktopClientSeen(client: DesktopClient, context: CompatibilityConte
     client_arch: client.arch,
     compatible,
   });
-}
-
-function versionParts(version: string) {
-  return String(version || '')
-    .replace(/^v/i, '')
-    .split(/[.-]/)
-    .map((part) => Number.parseInt(part, 10))
-    .filter((part) => Number.isFinite(part));
 }
 
 function blankToNull(value: string | null) {

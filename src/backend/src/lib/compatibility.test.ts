@@ -3,7 +3,6 @@ import { readFileSync } from 'node:fs';
 import { afterEach, test } from 'node:test';
 import {
   backendKillSwitchEnabled,
-  compareVersions,
   compatibilityError,
   compatibilityManifestForRequest,
   desktopClientFromRequest,
@@ -18,6 +17,18 @@ afterEach(() => {
   delete process.env.VERCEL_GIT_COMMIT_SHA;
   delete process.env.VERCEL_ENV;
 });
+
+function desktopRequestWithVersion(version: string) {
+  return new Request('https://api.nvm.fyi/api/compatibility', {
+    headers: {
+      'x-nevermind-client': 'desktop',
+      'x-nevermind-client-version': version,
+      'x-nevermind-api-version': '1',
+      'x-nevermind-platform': 'linux',
+      'x-nevermind-arch': 'x64',
+    },
+  });
+}
 
 function fixture(name: string) {
   return JSON.parse(readFileSync(new URL(`../fixtures/contracts/desktop-v1/${name}.json`, import.meta.url), 'utf8'));
@@ -67,10 +78,55 @@ test('detects unsupported desktop versions and API versions', () => {
   assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.0', apiVersion: 0, platform: 'darwin', arch: 'arm64' }), 'unsupported_api_version');
 });
 
-test('compares semver-like desktop versions', () => {
-  assert.equal(compareVersions('v0.6.0', '0.6.0'), 0);
-  assert.equal(compareVersions('0.6.1', '0.6.0'), 1);
-  assert.equal(compareVersions('0.5.9', '0.6.0'), -1);
+test('treats nightly prereleases of the minimum base version as unsupported', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.7.0';
+
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.7.0-nightly.20261028.1', apiVersion: 1, platform: 'linux', arch: 'x64' }), 'unsupported_desktop_version');
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.7.0', apiVersion: 1, platform: 'linux', arch: 'x64' }), null);
+});
+
+test('admits nightlies above the minimum and rejects nightlies just below a stable minimum', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.7.1';
+
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.7.1-nightly.20261028.9', apiVersion: 1, platform: 'linux', arch: 'x64' }), 'unsupported_desktop_version');
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.7.2-nightly.20261028.1', apiVersion: 1, platform: 'linux', arch: 'x64' }), null);
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.7.1-nightly.20261029.1', apiVersion: 1, platform: 'linux', arch: 'x64' }), 'unsupported_desktop_version');
+});
+
+test('keeps stable desktop clients and their unsupported reasons unchanged', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.6.0';
+
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.0', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), null);
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.1', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), null);
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.5.9', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), 'unsupported_desktop_version');
+});
+
+test('continues to accept legacy requests without desktop identity headers', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.7.0';
+  const manifest = compatibilityManifestForRequest(new Request('https://api.nvm.fyi/api/compatibility'));
+  assert.equal(manifest.client.version, null);
+  assert.equal(manifest.client.compatible, true);
+  assert.equal(manifest.client.unsupportedReason, null);
+});
+
+test('reports compatibility for nightly clients in the manifest', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.7.0';
+  const belowMinimum = compatibilityManifestForRequest(desktopRequestWithVersion('0.7.0-nightly.20261028.1'));
+  assert.equal(belowMinimum.client.compatible, false);
+  assert.equal(belowMinimum.client.unsupportedReason, 'unsupported_desktop_version');
+  assert.equal(belowMinimum.desktop.minimumSupportedVersion, '0.7.0');
+
+  const aboveMinimum = compatibilityManifestForRequest(desktopRequestWithVersion('0.7.1-nightly.20261028.1'));
+  assert.equal(aboveMinimum.client.compatible, true);
+  assert.equal(aboveMinimum.client.unsupportedReason, null);
+});
+
+test('keeps legacy results for versions that are not strict semver', () => {
+  process.env.NEVERMIND_MIN_DESKTOP_VERSION = '0.6.0';
+
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: 'not-a-version', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), 'unsupported_desktop_version');
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.6.0.1', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), null);
+  assert.equal(unsupportedClientReason({ name: 'desktop', version: '0.5.9.9', apiVersion: 1, platform: 'darwin', arch: 'arm64' }), 'unsupported_desktop_version');
 });
 
 test('evaluates backend kill switches from comma-list and JSON config', () => {
