@@ -15,6 +15,8 @@ mock.module('electron-log/main', {
 
 const { createMacosWindowManager } = await import('./macos-window-manager');
 
+import type { HelperEnvelope } from './window-management-types';
+
 const HELPER_CODES = [
   'denied',
   'no-window',
@@ -194,4 +196,95 @@ test('reports an unavailable trust probe as unknown without running the helper',
   });
   assert.equal(await throwingTrust.permissionState(), 'unknown');
   assert.equal((await throwingTrust.displays()).code, 'error');
+});
+
+type WindowManagerUnderTest = ReturnType<typeof manager>['windowManager'];
+
+const WINDOW_LIST_METHODS: Record<
+  string,
+  (windowManager: WindowManagerUnderTest) => Promise<HelperEnvelope<unknown>>
+> = {
+  runningApps: (windowManager) => windowManager.runningApps(),
+  windows: (windowManager) => windowManager.windows(42),
+  raiseWindow: (windowManager) => windowManager.raiseWindow(42, '42:7'),
+};
+
+for (const [methodName, callMethod] of Object.entries(WINDOW_LIST_METHODS)) {
+  for (const code of HELPER_CODES) {
+    test(`${methodName} returns the ${code} helper code from the JSON envelope`, async () => {
+      const { windowManager } = manager({
+        exitCode: 1,
+        stdout: envelopeJson(code, { message: `${code} message` }),
+      });
+      const result = await callMethod(windowManager);
+      assert.deepEqual(
+        [result.ok, result.code, result.message],
+        [false, code, `${code} message`],
+      );
+    });
+  }
+
+  for (const stdout of UNREADABLE_OUTPUTS) {
+    test(`${methodName} maps unreadable output ${JSON.stringify(stdout)} to an error envelope`, async () => {
+      const { windowManager } = manager({ exitCode: 0, stdout });
+      const result = await callMethod(windowManager);
+      assert.equal(result.code, 'error');
+      assert.match(result.message ?? '', HELPER_UNREADABLE);
+    });
+  }
+
+  test(`${methodName} never spawns the helper when Accessibility is not trusted`, async () => {
+    const { windowManager, args } = manager(
+      { stdout: envelopeJson('ok') },
+      false,
+    );
+    const result = await callMethod(windowManager);
+    assert.deepEqual([result.ok, result.code], [false, 'denied']);
+    assert.deepEqual(args, []);
+  });
+}
+
+test('lists running apps with the apps subcommand', async () => {
+  const apps = [{ pid: 42, bundleId: 'com.apple.finder', name: 'Finder' }];
+  const { windowManager, args } = manager({
+    stdout: envelopeJson('ok', { data: apps }),
+  });
+  assert.deepEqual(await windowManager.runningApps(), {
+    ok: true,
+    code: 'ok',
+    data: apps,
+    message: undefined,
+  });
+  assert.deepEqual(args, [['apps']]);
+});
+
+test('lists windows of one pid with the list subcommand', async () => {
+  const { windowManager, args } = manager({
+    stdout: envelopeJson('ok', { data: [] }),
+  });
+  assert.deepEqual((await windowManager.windows(42)).data, []);
+  assert.deepEqual(args, [['list', '42']]);
+});
+
+test('raises a window with the raise subcommand and reports success without data', async () => {
+  const { windowManager, args } = manager({
+    stdout: envelopeJson('ok', { data: null }),
+  });
+  const result = await windowManager.raiseWindow(42, '42:7');
+  assert.deepEqual([result.ok, result.code], [true, 'ok']);
+  assert.deepEqual(args, [['raise', '42', '42:7']]);
+});
+
+test('maps a raise target-lost envelope with its message', async () => {
+  const { windowManager } = manager({
+    exitCode: 4,
+    stdout: envelopeJson('target-lost', {
+      message: 'Window is no longer available',
+    }),
+  });
+  assert.deepEqual(await windowManager.raiseWindow(42, '42:7'), {
+    ok: false,
+    code: 'target-lost',
+    message: 'Window is no longer available',
+  });
 });

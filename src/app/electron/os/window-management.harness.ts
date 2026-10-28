@@ -14,6 +14,7 @@ import type {
   Frame,
   HelperEnvelope,
   MacosWindowManager,
+  RunningApp,
   SetFrameData,
   SetFrameRequest,
   WindowCycleGroup,
@@ -290,6 +291,56 @@ interface HarnessOptions {
   frontmostAfterRestore?: (restored: WindowFocusTarget) => WindowFocusTarget;
   simulation?: SimulatedWindow;
   engine?: Partial<WindowManagementEngine>;
+  runningApps?: () => Promise<HelperEnvelope<RunningApp[]>>;
+  windowsRead?: (pid: number) => Promise<HelperEnvelope<WindowInfo[]>>;
+  raiseResponse?: (pid: number, windowKey: string) => HelperEnvelope<null>;
+  now?: () => number;
+  createHandleId?: () => string;
+  writeGate?: Promise<unknown>;
+}
+
+const RUNNING_APPS: RunningApp[] = [
+  { pid: FINDER_PID, bundleId: FINDER.bundleId, name: 'Harness App' },
+  {
+    pid: OTHER_PID_VALUE,
+    bundleId: OTHER_APP.bundleId,
+    name: 'Other Harness App',
+  },
+];
+
+function createWindowListingFake(
+  harnessOptions: HarnessOptions,
+  calls: string[],
+): Pick<MacosWindowManager, 'runningApps' | 'windows' | 'raiseWindow'> {
+  const { simulation } = harnessOptions;
+  return {
+    runningApps() {
+      calls.push('apps');
+      return harnessOptions.runningApps
+        ? harnessOptions.runningApps()
+        : Promise.resolve(ok(RUNNING_APPS));
+    },
+    windows(pid) {
+      calls.push(`windows:${pid}`);
+      if (harnessOptions.windowsRead) {
+        return harnessOptions.windowsRead(pid);
+      }
+      if (simulation) {
+        return simulation.windowsRead();
+      }
+      return Promise.resolve(
+        ok([focusedWindow({ bundleId: bundleIdForPid(pid) })]),
+      );
+    },
+    raiseWindow(pid, windowKey) {
+      calls.push(`raise:${pid}:${windowKey}`);
+      return Promise.resolve(
+        harnessOptions.raiseResponse
+          ? harnessOptions.raiseResponse(pid, windowKey)
+          : ok(null),
+      );
+    },
+  };
 }
 
 function createFakeManager(
@@ -322,16 +373,22 @@ function createFakeManager(
         ok(focusedWindow({ bundleId: bundleIdForPid(pid) })),
       );
     },
+    ...createWindowListingFake(harnessOptions, calls),
     setFrame(request) {
       calls.push('setFrame');
       setFrameRequests.push(request);
       const scripted = writes.shift();
-      if (scripted) {
-        return Promise.resolve(scripted);
-      }
-      return simulation
-        ? simulation.setFrame(request)
-        : Promise.resolve(writeOk(request.frame));
+      const answer = () => {
+        if (scripted) {
+          return Promise.resolve(scripted);
+        }
+        return simulation
+          ? simulation.setFrame(request)
+          : Promise.resolve(writeOk(request.frame));
+      };
+      return harnessOptions.writeGate
+        ? harnessOptions.writeGate.then(answer)
+        : answer();
     },
     setFullScreen(pid, windowKey, fullScreen) {
       calls.push(`fullscreen:${fullScreen}`);
@@ -352,12 +409,14 @@ function createFakePorts(
   let frontmost =
     harnessOptions.frontmost === undefined ? FINDER : harnessOptions.frontmost;
   const configuredPaletteTarget = harnessOptions.paletteTarget;
-  const paletteTarget = () =>
-    typeof configuredPaletteTarget === 'function'
-      ? configuredPaletteTarget()
-      : configuredPaletteTarget === undefined
-        ? FINDER
-        : configuredPaletteTarget;
+  function paletteTarget() {
+    if (typeof configuredPaletteTarget === 'function') {
+      return configuredPaletteTarget();
+    }
+    return configuredPaletteTarget === undefined
+      ? FINDER
+      : configuredPaletteTarget;
+  }
   return {
     paletteFocusTarget: paletteTarget,
     hidePaletteAndRestoreFocus(restoreTarget) {
@@ -385,6 +444,8 @@ function createHarness(harnessOptions: HarnessOptions = {}) {
     ports: createFakePorts(harnessOptions, calls),
     engine: { ...DEFAULT_ENGINE, ...harnessOptions.engine },
     supported: () => harnessOptions.supported ?? true,
+    now: harnessOptions.now,
+    createHandleId: harnessOptions.createHandleId,
   });
   return { service, calls, setFrameRequests };
 }

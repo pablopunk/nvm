@@ -29,7 +29,7 @@ struct WindowResponse {
   var message: String? = nil
 }
 
-let windowUsage = "Usage: macos-selected-text window <permissions|displays|focused <pid>|set-frame <pid> <windowKey> <x> <y> [<width> <height>] [--position-only]|set-fullscreen <pid> <windowKey> <true|false>>"
+let windowUsage = "Usage: macos-selected-text window <permissions|displays|apps|list <pid>|focused <pid>|raise <pid> <windowKey>|set-frame <pid> <windowKey> <x> <y> [<width> <height>] [--position-only]|set-fullscreen <pid> <windowKey> <true|false>>"
 
 let accessDeniedResponse = WindowResponse(
   code: .denied,
@@ -56,7 +56,10 @@ func windowCommandResponse(_ arguments: [String]) -> WindowResponse {
   switch arguments.first ?? "" {
   case "permissions": return WindowResponse(code: .ok)
   case "displays": return displaysResponse()
+  case "apps": return runningAppsResponse()
+  case "list": return windowListResponse(arguments)
   case "focused": return focusedWindowResponse(arguments)
+  case "raise": return raiseWindowResponse(arguments)
   case "set-frame": return setFrameResponse(arguments)
   case "set-fullscreen": return setFullScreenResponse(arguments)
   default: return usageResponse

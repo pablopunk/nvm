@@ -8,6 +8,9 @@ export type Settled<Value> =
   | { ok: true; value: Value }
   | { ok: false; failure: FailedResult };
 
+export const UNKNOWN_WINDOW_MESSAGE =
+  'That window handle is no longer valid. List windows again.';
+
 export const FAILURE_MESSAGES: Record<WindowApplyFailureReason, string> = {
   'no-target': 'No target app was captured. Reopen Nevermind and try again.',
   'focus-not-restored':
@@ -17,13 +20,14 @@ export const FAILURE_MESSAGES: Record<WindowApplyFailureReason, string> = {
   'full-screen': 'Exit full screen before moving this window.',
   minimized: 'Restore the window before moving it.',
   denied:
-    'Accessibility access is blocked. Open Nevermind OS Permissions, enable access, then restart Nevermind.',
+    'Window access is not available. Grant window access, then try again.',
   unapplied: 'The window did not accept the new frame.',
   'not-resizable': 'This window cannot be resized.',
-  unsupported: 'Window management is not supported on this Mac.',
+  unsupported: 'Window management is not supported on this device.',
   'invalid-spec': 'The window layout request is invalid.',
   'no-history': 'There is no earlier position to restore for this window.',
   'single-display': 'Only one display is connected.',
+  'unknown-window': UNKNOWN_WINDOW_MESSAGE,
 };
 
 export const PALETTE_NO_TARGET =

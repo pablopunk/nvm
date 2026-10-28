@@ -30,21 +30,10 @@ func focusedWindowResponse(_ arguments: [String]) -> WindowResponse {
   guard let frame = windowFrame(element) else {
     return noWindowResponse("Window frame is unavailable")
   }
-  let displays = currentWindowDisplays()
-  let display = displayWithLargestOverlap(frame, in: displays)
-    ?? primaryWindowDisplay(in: displays)
-  let data: [String: Any] = [
-    "bundleId": bundleIdentifier(pid: pid),
-    "windowKey": window.key,
-    "title": windowTitle(element),
-    "frame": rectDictionary(frame),
-    "displayId": display?.id ?? "",
-    "isFullScreen": booleanAttribute(element, axFullScreenAttribute) ?? false,
-    "isMinimized": booleanAttribute(element, kAXMinimizedAttribute as CFString) ?? false,
-    "isMovable": isAttributeSettable(element, kAXPositionAttribute as CFString),
-    "isResizable": isAttributeSettable(element, kAXSizeAttribute as CFString),
-  ]
-  return WindowResponse(code: .ok, data: data)
+  return WindowResponse(
+    code: .ok,
+    data: windowDescriptor(window, frame: frame, displays: currentWindowDisplays())
+  )
 }
 
 func setFrameResponse(_ arguments: [String]) -> WindowResponse {

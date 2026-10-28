@@ -76,7 +76,7 @@ test('refuses to run when the platform is unsupported', async () => {
   assert.deepEqual(result, {
     ok: false,
     reason: 'unsupported',
-    message: 'Window management is not supported on this Mac.',
+    message: 'Window management is not supported on this device.',
   });
   assert.deepEqual(calls, []);
 });

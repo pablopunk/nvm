@@ -15,12 +15,18 @@ export interface WindowManagementServiceDependencies {
   engine: WindowManagementEngine;
   supported(): boolean;
   selfPid?: number;
+  now?: () => number;
+  createHandleId?: () => string;
 }
+
+export type WindowSelection =
+  | { kind: 'focused'; source: WindowInvocation['source'] }
+  | { kind: 'handle'; windowKey: string };
 
 export interface ApplyRequest {
   spec: WindowLayoutSpec;
   options: WindowManagementOptions;
-  source: WindowInvocation['source'];
+  selection: WindowSelection;
   target: WindowFocusTarget;
 }
 
