@@ -109,7 +109,15 @@ export class NevermindChannelProvider extends GitHubProvider {
         this.createRequestOptions(channelFileUrl),
         cancellationToken,
       );
-      return parseUpdateInfo(rawData, channelFile, channelFileUrl);
+      const info = parseUpdateInfo(rawData, channelFile, channelFileUrl);
+      if (info.version !== version)
+        throw Object.assign(
+          new Error(
+            `Update metadata for ${tag} reports version ${info.version}`,
+          ),
+          { code: 'ERR_UPDATER_INVALID_UPDATE_INFO' },
+        );
+      return info;
     } catch (error) {
       if ((error as { statusCode?: number }).statusCode === 404) return null;
       throw error;

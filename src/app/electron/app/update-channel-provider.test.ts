@@ -339,6 +339,17 @@ test('malformed or empty update metadata fails the lookup instead of skipping to
   }
 });
 
+test('rejects update metadata whose version does not match the release tag', async () => {
+  const github = createFakeGitHub({
+    ...latestRelease(STABLE_TAG),
+    ...releaseFeed([NIGHTLY_NEWEST_TAG]),
+    [metadataPath(NIGHTLY_NEWEST_TAG, 'nightly.yml')]: metadataYaml('0.16.0'),
+  });
+  await assert.rejects(createProvider('nightly', github).getLatestVersion(), {
+    code: 'ERR_UPDATER_INVALID_UPDATE_INFO',
+  });
+});
+
 const PLATFORM_METADATA_CASES: Array<{
   platform: ProviderPlatform;
   arch?: string;
