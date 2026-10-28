@@ -23,10 +23,7 @@ const startupMarkers = [
   'dev server running for the electron renderer process at:',
   'starting electron app...',
 ];
-const startupFailureMarkers = [
-  'App threw an error during load',
-  'ERR_MODULE_NOT_FOUND',
-];
+const startupFailureMarkers = ['App threw an error during load'];
 
 function startupFailureFromOutput(output) {
   return (

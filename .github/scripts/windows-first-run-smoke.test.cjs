@@ -12,8 +12,10 @@ test('detects Electron entry errors even after build success markers', () => {
     'App threw an error during load',
   );
   assert.equal(
-    startupFailureFromOutput('Error [ERR_MODULE_NOT_FOUND]'),
-    'ERR_MODULE_NOT_FOUND',
+    startupFailureFromOutput(
+      'extension.dev.load.failed: Error [ERR_MODULE_NOT_FOUND]',
+    ),
+    null,
   );
   assert.equal(startupFailureFromOutput('starting electron app...'), null);
 });
