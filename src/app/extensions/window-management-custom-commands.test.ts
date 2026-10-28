@@ -205,7 +205,7 @@ test('an empty title and an out-of-range width re-show the form with errors', as
     fieldValue(result.view, 'width').error,
     'Enter a number above 0, up to 100%.',
   );
-  assert.equal(storage.values.get(CUSTOM_WINDOW_COMMANDS_KEY), undefined);
+  assert.deepEqual(storage.values.get(CUSTOM_WINDOW_COMMANDS_KEY), []);
 });
 
 test('creating past the limit is refused with a title error', async () => {

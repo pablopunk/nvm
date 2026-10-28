@@ -126,7 +126,7 @@ test('durable action exposes secondary actions in its Cmd+K panel', async () => 
   const action = registeredActionFor(harness, 'synthetic', 'layout');
 
   assert.equal(action.kind, 'extension-action');
-  assert.equal(action.actionId, 'extension-action:synthetic:layout');
+  assert.equal(action.id, 'extension-action:synthetic:layout');
   assert.deepEqual(
     action.actionPanel.sections[0].actions.map((item) => item.title),
     ['Edit Layout', 'Remove'],
@@ -185,7 +185,7 @@ test('refresh adds new actions, drops removed ones, and keeps unchanged identiti
     actions: () => layouts.map(layoutAction),
   };
   await harness.registration.registerExtension(extension);
-  const keptActionId = registeredActionFor(harness, 'custom', 'keep').actionId;
+  const keptActionId = registeredActionFor(harness, 'custom', 'keep').id;
 
   layouts = ['keep', 'added'];
   const result =
@@ -195,10 +195,7 @@ test('refresh adds new actions, drops removed ones, and keeps unchanged identiti
   assert.equal(harness.extensionActionRegistry.has('custom:added'), true);
   assert.equal(harness.extensionActionRegistry.has('custom:drop'), false);
   assert.deepEqual(harness.effects.jobsUnregistered, ['drop', 'keep', 'added']);
-  assert.equal(
-    registeredActionFor(harness, 'custom', 'keep').actionId,
-    keptActionId,
-  );
+  assert.equal(registeredActionFor(harness, 'custom', 'keep').id, keptActionId);
   assert.equal(harness.effects.shortcutSyncs, 1);
   assert.equal(harness.effects.rootInvalidations, 1);
 });
