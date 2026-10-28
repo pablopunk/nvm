@@ -48,7 +48,7 @@ const OPENROUTER_LIVE_SETTINGS = {
 };
 
 function resolveWith(fixture: RouteFixture): Promise<LiveRouteVerdict[]> {
-  return withTestDb(fakeRouteDb(fixture), () => resolveLiveRouteVerdicts());
+  return Promise.resolve(withTestDb(fakeRouteDb(fixture), () => resolveLiveRouteVerdicts()));
 }
 
 function verdictFor(verdicts: LiveRouteVerdict[], route: string): LiveRouteVerdict {
