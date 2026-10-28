@@ -72,6 +72,11 @@ export interface MacosWindowManager {
 
 export type WindowEdge = 'left' | 'right' | 'top' | 'bottom';
 
+export type WindowDimension = {
+  value: number;
+  unit: 'points' | 'percent';
+};
+
 export type WindowCycleGroup = WindowEdge;
 
 export type WindowLayoutSpec =
@@ -97,7 +102,14 @@ export type WindowLayoutSpec =
   | { kind: 'resize-step'; direction: 'larger' | 'smaller'; step: number }
   | { kind: 'display'; direction: 'next' | 'previous' }
   | { kind: 'restore' }
-  | { kind: 'toggle-full-screen' };
+  | { kind: 'toggle-full-screen' }
+  | {
+      kind: 'exact';
+      x?: WindowDimension;
+      y?: WindowDimension;
+      width?: WindowDimension;
+      height?: WindowDimension;
+    };
 
 export type WindowManagementOptions = {
   gap: number;

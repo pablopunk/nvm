@@ -77,7 +77,24 @@ export type ExtensionWindowLayoutSpec =
   /** Return the window to the frame it had before the first layout was applied. */
   | { kind: 'restore' }
   /** Enter or leave native full screen. The only operation that accepts a full-screen window. */
-  | { kind: 'toggle-full-screen' };
+  | { kind: 'toggle-full-screen' }
+  /**
+   * Place and/or size the window exactly. `x`/`y` are offsets from the top-left of the display work area; `width`/`height` are sizes.
+   * Each value is in `points` (>= 0 for offsets, > 0 for sizes, at most 100000) or `percent` of the work area (offsets 0..100, sizes above 0 and at most 100).
+   * Omitted fields keep the window's current value. The result is clamped to stay fully inside the work area.
+   */
+  | {
+      kind: 'exact';
+      x?: ExtensionWindowDimension;
+      y?: ExtensionWindowDimension;
+      width?: ExtensionWindowDimension;
+      height?: ExtensionWindowDimension;
+    };
+
+export type ExtensionWindowDimension = {
+  value: number;
+  unit: 'points' | 'percent';
+};
 
 export type ExtensionWindowManagementOptions = {
   /** Whole pixels between windows and display edges, 0..100. Default 0. */
