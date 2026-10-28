@@ -16,6 +16,14 @@ test('only stable extension and default action IDs are portable', () => {
     true,
   );
   assert.equal(isPortableActionId('extension-root:my-tools:open-notes'), true);
+  assert.equal(
+    isPortableActionId('extension:nevermind.system:builtin:settings'),
+    true,
+  );
+  assert.equal(
+    isPortableActionId('extension:nevermind.apps:app:/Users/example/App'),
+    false,
+  );
   assert.equal(isPortableActionId('default:calculator'), true);
   assert.equal(isPortableActionId('ai-chat:9f2c1e7a-chat'), false);
   assert.equal(isPortableActionId('clipboard:3f9a0b'), false);

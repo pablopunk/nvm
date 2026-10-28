@@ -956,13 +956,13 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     expect(survivors).toEqual([]);
     firstLaunchExited = true;
 
-    const persistedState = JSON.parse(
+    const persistedConfig = JSON.parse(
       await fs.readFile(
-        path.join(stateSafetyUserDataDir, 'state.json'),
+        path.join(stateSafetyUserDataDir, 'config.json'),
         'utf8',
       ),
     );
-    expect(persistedState.localShortcuts[scheduledShortcut.actionId]).toBe(
+    expect(persistedConfig.shortcuts[scheduledShortcut.actionId]).toBe(
       scheduledShortcut.accelerator,
     );
 

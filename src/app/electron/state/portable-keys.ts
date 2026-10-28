@@ -2,7 +2,7 @@ import type { PortableChange } from './portable-config-projection';
 import type { PortableConfig } from './portable-config-schema';
 
 const PORTABLE_ACTION_ID_PATTERN =
-  /^(?:extension-action|extension-root):[A-Za-z0-9][A-Za-z0-9._-]{0,127}:[A-Za-z0-9][A-Za-z0-9._-]{0,127}$|^default:[a-z][a-z-]{0,63}$/;
+  /^(?:extension|extension-action|extension-root):[A-Za-z0-9][A-Za-z0-9._-]{0,127}(?::[A-Za-z0-9][A-Za-z0-9._-]{0,127}){1,3}$|^default:[a-z][a-z-]{0,63}$/;
 
 type IdMap<T> = Record<string, T>;
 
