@@ -1,0 +1,338 @@
+name: Nightly package verification
+
+# Reusable pre-merge gate. It builds nightly-versioned Windows, macOS, and Linux
+# packages with the same commands as nightly-release.yml, then validates the
+# assembled asset set and updater metadata. Callers pass no secrets: this workflow
+# never signs, publishes, tags, or contacts production.
+on:
+  workflow_call:
+    inputs:
+      base_sha:
+        description: Base commit of the change under review
+        type: string
+        required: true
+      head_sha:
+        description: Head commit of the change under review
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-package-verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  plan:
+    name: Plan nightly package verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.plan.outputs.build }}
+      version: ${{ steps.plan.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Select nightly-affecting changes and nightly version
+        id: plan
+        env:
+          BASE_SHA: ${{ inputs.base_sha }}
+          HEAD_SHA: ${{ inputs.head_sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          set -euo pipefail
+          mise exec -- node <<'NODE' > plan.json
+          const { execFileSync } = require('node:child_process');
+          const {
+            classifyNightlyAppChanges,
+            isVersionOnlyPackageJsonChange,
+          } = require('./.github/scripts/nightly-app-paths.cjs');
+          const {
+            formatNightlyVersion,
+            madridDateStamp,
+          } = require('./.github/scripts/nightly-versioning.cjs');
+
+          const VERIFIER_INPUT_PATTERN =
+            /^\.github\/(?:workflows\/(?:nightly-package-verify|nightly-release|ci)\.yml|scripts\/nightly-[^/]+\.cjs)$/;
+          const { BASE_SHA, HEAD_SHA, RUN_NUMBER } = process.env;
+
+          function git(args) {
+            return execFileSync('git', args, { encoding: 'utf8' });
+          }
+
+          function showIfPresent(revision, filePath) {
+            try {
+              return git(['show', `${revision}:${filePath}`]);
+            } catch {
+              return null;
+            }
+          }
+
+          const changedPaths = git([
+            'diff',
+            '--name-only',
+            '--no-renames',
+            `${BASE_SHA}...${HEAD_SHA}`,
+          ])
+            .split('\n')
+            .filter(Boolean);
+          const classification = classifyNightlyAppChanges(changedPaths, {
+            isPackageJsonVersionOnly: (filePath) =>
+              isVersionOnlyPackageJsonChange(
+                showIfPresent(BASE_SHA, filePath),
+                showIfPresent(HEAD_SHA, filePath),
+              ),
+          });
+          const verifierInputs = changedPaths.filter((filePath) =>
+            VERIFIER_INPUT_PATTERN.test(filePath),
+          );
+          const matchedPaths = [...classification.matched, ...verifierInputs];
+          const version = formatNightlyVersion({
+            baseVersion: require('./package.json').version,
+            dateStamp: madridDateStamp(new Date()),
+            runNumber: Number(RUN_NUMBER),
+          });
+          process.stdout.write(
+            `${JSON.stringify({
+              build: matchedPaths.length > 0,
+              version,
+              matchedPaths,
+              reason:
+                matchedPaths.length > 0
+                  ? `${matchedPaths.length} nightly-affecting path(s) changed`
+                  : 'no nightly-affecting changes between base and head',
+            })}\n`,
+          );
+          NODE
+          cat plan.json
+          echo "build=$(jq -r 'if .build then "true" else "false" end' plan.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r '.version' plan.json)" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Nightly package verification"
+            echo "- Build and validate: \`$(jq -r '.build' plan.json)\`"
+            echo "- Reason: $(jq -r '.reason' plan.json)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build-windows:
+    name: Build Windows nightly package
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Stamp nightly package version
+        shell: bash
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build unsigned Windows x64 NSIS and portable nightly packages
+        run: mise exec -- pnpm run dist:win:x64
+
+      - name: Verify unsigned Windows nightly packages
+        shell: pwsh
+        run: |
+          $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
+          & .github/scripts/verify-windows-package.ps1 `
+            -PackageRoot (Resolve-Path release).Path `
+            -ExpectedVersion $env:NIGHTLY_VERSION `
+            -ExpectedArch x64 `
+            -AsarExecutable $asar `
+            -UpdaterMetadataPolicy Nsis `
+            -UpdaterMetadataName nightly.yml
+
+      - name: Collect Windows nightly artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-windows
+          cp "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe" \
+            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-portable.exe" \
+            release/nightly.yml nightly-windows/
+          for staged in nightly-windows/*; do
+            [ -s "$staged" ] || { echo "Staged file is empty: $staged" >&2; exit 1; }
+          done
+
+      - name: Upload Windows nightly verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-verify-windows
+          path: nightly-windows/*
+          if-no-files-found: error
+          retention-days: 1
+
+  build-mac:
+    name: Build macOS nightly package
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Stamp nightly package version
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build unsigned macOS nightly packages
+        run: mise exec -- pnpm run dist:mac:all
+
+      - name: Collect macOS nightly artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-mac
+          cp "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip.blockmap" \
+            release/nightly-mac.yml nightly-mac/
+
+      - name: Upload macOS nightly verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-verify-mac
+          path: nightly-mac/*
+          if-no-files-found: error
+          retention-days: 1
+
+  build-linux:
+    name: Build Linux nightly (${{ matrix.arch }})
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            appimage-arch: x86_64
+            deb-arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            appimage-arch: arm64
+            deb-arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb
+
+      - name: Stamp nightly package version
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build unsigned Linux nightly packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: xvfb-run -a mise exec -- pnpm run dist:linux:${{ matrix.arch }}
+
+      - name: Generate Linux AppImage blockmap
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name "Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage" -print)
+          if (( ${#appimages[@]} != 1 )); then
+            printf 'Expected one AppImage, found %s\n' "${#appimages[@]}" >&2
+            find release -maxdepth 1 -type f -print >&2
+            exit 1
+          fi
+          mise exec -- node scripts/generate-linux-appimage-blockmap.cjs "${appimages[0]}"
+
+      - name: Collect Linux nightly artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-linux
+          cp "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage" \
+            "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.deb-arch }}.deb" \
+            nightly-linux/
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            cp release/nightly-linux.yml nightly-linux/nightly-linux.yml
+          else
+            cp release/nightly-linux-arm64.yml nightly-linux/nightly-linux-arm64.yml
+          fi
+
+      - name: Validate Linux updater metadata
+        run: >-
+          mise exec -- node scripts/validate-linux-updater-metadata.cjs
+          nightly-linux/nightly-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+          nightly-linux
+
+      - name: Upload Linux nightly verification artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-verify-linux-${{ matrix.arch }}
+          path: nightly-linux/*
+          if-no-files-found: error
+          retention-days: 1
+
+  validate-assets:
+    name: Validate assembled nightly package set
+    needs: [plan, build-windows, build-mac, build-linux]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Download staged nightly verification artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-verify-*
+          merge-multiple: true
+          path: dist-nightly
+
+      - name: Validate every asset and updater checksum
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs validate-assets --dir dist-nightly --version "$VERSION"
