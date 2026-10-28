@@ -4,7 +4,8 @@ param(
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
   [Parameter(Mandatory = $true)][ValidateSet('x64')][string]$ExpectedArch,
   [Parameter(Mandatory = $true)][string]$AsarExecutable,
-  [Parameter(Mandatory = $true)][ValidateSet('Absent', 'Nsis')][string]$UpdaterMetadataPolicy
+  [Parameter(Mandatory = $true)][ValidateSet('Absent', 'Nsis')][string]$UpdaterMetadataPolicy,
+  [ValidateSet('latest.yml', 'nightly.yml')][string]$UpdaterMetadataName = 'latest.yml'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -124,15 +125,15 @@ try {
   & node (Join-Path $RepoRoot 'scripts/check-packaged-runtime-imports.cjs') $ExtractionRoot
   Assert-Condition ($LASTEXITCODE -eq 0) 'Packaged runtime import check failed.'
 
-  $latest = Join-Path $ResolvedPackageRoot 'latest.yml'
+  $latest = Join-Path $ResolvedPackageRoot $UpdaterMetadataName
   $updaterMetadata = [ordered]@{ policy = $UpdaterMetadataPolicy; file = $null; sha256 = $null }
   if ($UpdaterMetadataPolicy -eq 'Absent') {
-    Assert-Condition (-not (Test-Path -LiteralPath $latest)) 'Unsigned smoke must not contain stale latest.yml updater metadata.'
+    Assert-Condition (-not (Test-Path -LiteralPath $latest)) "Unsigned smoke must not contain stale $UpdaterMetadataName updater metadata."
   } else {
-    Assert-Condition (Test-Path -LiteralPath $latest) 'NSIS updater policy requires latest.yml.'
+    Assert-Condition (Test-Path -LiteralPath $latest) "NSIS updater policy requires $UpdaterMetadataName."
     & node (Join-Path $RepoRoot 'scripts/validate-windows-updater-metadata.cjs') $latest $ResolvedPackageRoot $ExpectedVersion $ExpectedArch
     Assert-Condition ($LASTEXITCODE -eq 0) 'Windows updater metadata check failed.'
-    $updaterMetadata.file = 'latest.yml'
+    $updaterMetadata.file = $UpdaterMetadataName
     $updaterMetadata.sha256 = Get-Sha256Hex $latest
   }
 
