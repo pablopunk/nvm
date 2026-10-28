@@ -125,24 +125,27 @@ const adjacentCases: Array<{
   },
 ];
 
+function displayNamed(displays: DisplayInfo[], id: string): DisplayInfo {
+  return (
+    displays.find((display) => display.id === id) ??
+    displayAt(id, primary.frame)
+  );
+}
+
 for (const adjacentCase of adjacentCases) {
   test(adjacentCase.name, () => {
-    const result = adjacentDisplay({
-      displays: adjacentCase.displays,
-      currentDisplayId: adjacentCase.currentDisplayId,
-      direction: adjacentCase.direction,
-    });
+    const result = adjacentDisplay(
+      adjacentCase.displays,
+      displayNamed(adjacentCase.displays, adjacentCase.currentDisplayId),
+      adjacentCase.direction,
+    );
     assert.equal(result?.id ?? null, adjacentCase.expectedId);
   });
 }
 
 test('adjacent display does not reorder the caller array', () => {
   const displays = [right, primary, left];
-  adjacentDisplay({
-    displays,
-    currentDisplayId: 'primary',
-    direction: 'next',
-  });
+  adjacentDisplay(displays, primary, 'next');
   assert.deepEqual(
     displays.map((display) => display.id),
     ['right', 'primary', 'left'],

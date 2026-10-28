@@ -3,31 +3,18 @@ import { WINDOW_LAYOUT_SPECS } from './window-layout-catalog';
 import type { AxisSpan, FractionLayoutSpec } from './window-layouts';
 import { axesOf, frameFromAxes, placeSpan } from './window-layouts';
 import type {
+  AdjacentDisplay,
+  CycleSequence,
+  DisplayDirection,
+  DisplayMoveInput,
+  MoveFrameToDisplay,
+} from './window-management-engine-port';
+import type {
   DisplayInfo,
   Frame,
   WindowCycleGroup,
   WindowLayoutSpec,
 } from './window-management-types';
-
-type AdjacentDirection = 'next' | 'previous';
-
-interface AdjacentDisplayInput {
-  displays: DisplayInfo[];
-  currentDisplayId: string;
-  direction: AdjacentDirection;
-}
-
-type AdjacentDisplay = (input: AdjacentDisplayInput) => DisplayInfo | null;
-
-interface DisplayMoveInput {
-  frame: Frame;
-  from: DisplayInfo;
-  to: DisplayInfo;
-}
-
-type MoveFrameToDisplay = (input: DisplayMoveInput) => Frame;
-
-type CycleSequence = (group: WindowCycleGroup) => FractionLayoutSpec[];
 
 const CYCLE_LAYOUT_IDS: Record<WindowCycleGroup, WindowLayoutId[]> = {
   left: ['left-half', 'first-two-thirds', 'first-third'],
@@ -40,18 +27,16 @@ function compareDisplayPosition(a: DisplayInfo, b: DisplayInfo): number {
   return a.frame.x - b.frame.x || a.frame.y - b.frame.y;
 }
 
-function findAdjacentDisplay({
-  displays,
-  currentDisplayId,
-  direction,
-}: AdjacentDisplayInput): DisplayInfo | null {
+function findAdjacentDisplay(
+  displays: DisplayInfo[],
+  from: DisplayInfo,
+  direction: DisplayDirection,
+): DisplayInfo | null {
   if (displays.length < 2) {
     return null;
   }
   const ordered = [...displays].sort(compareDisplayPosition);
-  const currentIndex = ordered.findIndex(
-    (display) => display.id === currentDisplayId,
-  );
+  const currentIndex = ordered.findIndex((display) => display.id === from.id);
   if (currentIndex === -1) {
     return null;
   }
@@ -112,12 +97,3 @@ export const adjacentDisplay: AdjacentDisplay = findAdjacentDisplay;
 export const moveFrameToDisplay: MoveFrameToDisplay = relocateFrameToDisplay;
 
 export const cycleSequence: CycleSequence = cycleSequenceFor;
-
-export type {
-  AdjacentDirection,
-  AdjacentDisplay,
-  AdjacentDisplayInput,
-  CycleSequence,
-  DisplayMoveInput,
-  MoveFrameToDisplay,
-};

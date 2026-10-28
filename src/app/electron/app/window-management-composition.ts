@@ -16,14 +16,14 @@ import type {
   WindowInvocationPorts,
 } from '../os/window-management-types';
 
-type WindowManagementCompositionDependencies = {
+interface WindowManagementCompositionDependencies {
   paletteWindow: {
     peekFocusReturnTarget(): unknown;
     hidePalette(): Promise<unknown>;
     win?: { isVisible(): boolean } | null;
   };
   frontmostTarget(): Promise<WindowFocusTarget | null>;
-};
+}
 
 function focusTargetFrom(value: unknown): WindowFocusTarget | null {
   const candidate = value as Partial<WindowFocusTarget> | null;
@@ -45,9 +45,12 @@ export function createWindowManagementComposition(
       if (
         focusTargetFrom(paletteWindow.peekFocusReturnTarget())?.pid !==
         target.pid
-      )
+      ) {
         return false;
-      if (paletteWindow.win?.isVisible()) await paletteWindow.hidePalette();
+      }
+      if (paletteWindow.win?.isVisible()) {
+        await paletteWindow.hidePalette();
+      }
       return true;
     },
     frontmostTarget,
@@ -60,8 +63,7 @@ export function createWindowManagementComposition(
       pickDisplayForFrame,
       moveFrameToDisplay,
       cycleSequence,
-      adjacentDisplay: (displays, from, direction) =>
-        adjacentDisplay({ displays, currentDisplayId: from.id, direction }),
+      adjacentDisplay,
     },
     supported: () => hasCapability('window-management'),
     selfPid: process.pid,
