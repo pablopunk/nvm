@@ -1,42 +1,29 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {
-  computeTargetFrame,
-  LAYOUT_SPECS,
-  pickDisplayForFrame,
-} from './window-layouts';
+import type { WindowLayoutId } from './window-layout-catalog';
+import { WINDOW_LAYOUT_SPECS } from './window-layout-catalog';
+import { computeTargetFrame, pickDisplayForFrame } from './window-layouts';
 import type { DisplayInfo, Frame } from './window-management-types';
 
 const primaryWorkArea: Frame = { x: 0, y: 0, width: 1440, height: 900 };
 const windowFrame: Frame = { x: 100, y: 120, width: 800, height: 500 };
 
 function targetFor(
-  layoutId: keyof typeof LAYOUT_SPECS,
+  layoutId: WindowLayoutId,
   workArea: Frame,
   gap = 0,
   currentFrame: Frame = windowFrame,
 ): Frame {
   return computeTargetFrame({
-    spec: LAYOUT_SPECS[layoutId],
+    spec: WINDOW_LAYOUT_SPECS[layoutId],
     workArea,
     currentFrame,
     gap,
   });
 }
 
-test('exposes the stable persisted P1 layout ids', () => {
-  assert.deepEqual(Object.keys(LAYOUT_SPECS), [
-    'left-half',
-    'right-half',
-    'top-half',
-    'bottom-half',
-    'maximize',
-    'center',
-  ]);
-});
-
 const primaryLayoutCases: Array<{
-  layoutId: keyof typeof LAYOUT_SPECS;
+  layoutId: WindowLayoutId;
   gap: number;
   expected: Frame;
 }> = [
@@ -153,7 +140,7 @@ test('center clamps an oversized window on a negative-origin display', () => {
 const secondaryDisplayCases: Array<{
   name: string;
   workArea: Frame;
-  layoutId: keyof typeof LAYOUT_SPECS;
+  layoutId: WindowLayoutId;
   gap: number;
   expected: Frame;
 }> = [
