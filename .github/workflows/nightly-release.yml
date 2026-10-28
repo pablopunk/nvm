@@ -33,7 +33,7 @@ jobs:
       contents: read
       actions: read
     outputs:
-      build: ${{ steps.plan.outputs.build == 'true' && steps.identity.outputs.verified == 'true' }}
+      build: ${{ steps.plan.outputs.build == 'true' && (steps.identity.outputs.verified == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)) }}
       source_sha: ${{ steps.pin.outputs.sha }}
       version: ${{ steps.plan.outputs.version }}
       tag: ${{ steps.plan.outputs.tag }}
@@ -42,10 +42,10 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout main
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && github.sha || 'main' }}
           fetch-depth: 0
 
       - name: Setup mise
@@ -75,7 +75,7 @@ jobs:
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
 
       - name: Fetch CI push runs for the source commit
-        if: steps.schedule.outputs.run == 'true'
+        if: steps.schedule.outputs.run == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           SOURCE_SHA: ${{ steps.pin.outputs.sha }}
         run: |
@@ -85,7 +85,7 @@ jobs:
 
       - name: Require passing CI for the source commit
         id: ci
-        if: steps.schedule.outputs.run == 'true'
+        if: steps.schedule.outputs.run == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           SOURCE_SHA: ${{ steps.pin.outputs.sha }}
         run: |
@@ -97,7 +97,7 @@ jobs:
 
       - name: Select app-affecting changes and next version
         id: plan
-        if: steps.schedule.outputs.run == 'true' && steps.ci.outputs.ok == 'true'
+        if: steps.schedule.outputs.run == 'true' && (steps.ci.outputs.ok == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run))
         env:
           SOURCE_SHA: ${{ steps.pin.outputs.sha }}
         run: |
@@ -115,7 +115,7 @@ jobs:
 
       - name: Verify production serves the source commit
         id: identity
-        if: steps.plan.outputs.build == 'true'
+        if: steps.plan.outputs.build == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
           SOURCE_SHA: ${{ steps.pin.outputs.sha }}
         run: |
@@ -130,7 +130,7 @@ jobs:
       - name: Summarize nightly decision
         if: always()
         env:
-          BUILD: ${{ steps.plan.outputs.build == 'true' && steps.identity.outputs.verified == 'true' }}
+          BUILD: ${{ steps.plan.outputs.build == 'true' && (steps.identity.outputs.verified == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run)) }}
           REASON: ${{ steps.identity.outputs.reason || steps.plan.outputs.reason || steps.ci.outputs.reason || steps.schedule.outputs.reason }}
           SOURCE_SHA: ${{ steps.pin.outputs.sha }}
         run: |

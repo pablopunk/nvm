@@ -36,6 +36,12 @@ test('manual trigger defaults to a dry run that never publishes', () => {
     /dry_run: \$\{\{ github\.event_name == 'workflow_dispatch' && inputs\.dry_run \}\}/,
   );
   assert.match(workflow, /needs\.plan\.outputs\.dry_run != 'true'/);
+  assert.match(workflow, /inputs\.dry_run && github\.sha \|\| 'main'/);
+  assert.match(
+    workflow,
+    /build: \$\{\{ steps\.plan\.outputs\.build == 'true' && \(steps\.identity\.outputs\.verified == 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.dry_run\)\) \}\}/,
+  );
+  assert.match(workflow, /  validate-assets:/);
 });
 
 test('runs are serialized and never cancel an in-flight publication', () => {
