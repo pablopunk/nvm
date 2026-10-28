@@ -291,6 +291,7 @@ import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
+import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
   error as logError,
@@ -325,7 +326,8 @@ import { createDefaultUserState } from './state/user-state-shape';
 import { createUserStateStore } from './state/user-state-store';
 
 const { autoUpdater } = electronUpdater;
-const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
+const rendererUrl = resolveRendererUrl(process.env, app.isPackaged);
+const isDev = Boolean(rendererUrl);
 configureLogger(isDev);
 if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
@@ -357,7 +359,6 @@ const updateManager: any = isNvmTestMode
       clearTimers: () => {},
     }
   : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt);
-const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
 ipcMain.handle('diagnostics:renderer-failure', (event) => {
