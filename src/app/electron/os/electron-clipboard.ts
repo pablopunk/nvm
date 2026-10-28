@@ -28,6 +28,7 @@ export type ClipboardApi = {
   readBookmark: () => MaybePromise<ClipboardBookmark>;
   readImage: () => MaybePromise<NativeImage>;
   readBuffer: (format: string) => MaybePromise<Buffer>;
+  hasFormat: (format: string) => MaybePromise<boolean>;
   write: (data: ClipboardWriteData) => MaybePromise<void>;
   writeText: (text: string) => MaybePromise<void>;
   writeBuffer: (format: string, buffer: Buffer) => MaybePromise<void>;
@@ -100,6 +101,32 @@ export function createElectronClipboardApi(deps: {
     );
   }
 
+  async function probeNativeFormat(format: string) {
+    try {
+      return await deps.clipboard.has(rawClipboardFormat(format));
+    } catch {
+      return false;
+    }
+  }
+
+  async function itemTypesIncludeFormat(format: string) {
+    try {
+      return Boolean(
+        await findClipboardItem(deps.clipboard, [
+          rawClipboardFormat(format),
+          format,
+        ]),
+      );
+    } catch {
+      return false;
+    }
+  }
+
+  async function hasFormat(format: string) {
+    if (await probeNativeFormat(format)) return true;
+    return itemTypesIncludeFormat(format);
+  }
+
   async function readBookmark() {
     const found = await findClipboardItem(deps.clipboard, [BOOKMARK_MIME_TYPE]);
     if (!found) return { title: '', url: '' };
@@ -161,6 +188,7 @@ export function createElectronClipboardApi(deps: {
     readImage,
     readBuffer: (format) =>
       readClipboardBuffer(deps.clipboard, readFormatsFor(format)),
+    hasFormat,
     write,
     writeText: (text) =>
       deps.writeText ? deps.writeText(text) : deps.clipboard.writeText(text),

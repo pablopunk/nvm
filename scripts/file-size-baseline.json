@@ -1,7 +1,7 @@
 {
   "electron/ai.ts": 2524,
   "electron/calculator.ts": 1406,
-  "electron/clipboard-history.ts": 1023,
+  "electron/clipboard-history.ts": 1021,
   "electron/extension-window-manager.ts": 1039,
   "electron/learning-store.ts": 935,
   "electron/main.ts": 2221,
