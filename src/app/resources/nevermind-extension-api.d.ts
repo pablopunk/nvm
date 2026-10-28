@@ -118,7 +118,7 @@ export type ExtensionWindowHandle = { readonly id: string };
 
 export type ExtensionWindowInfo = {
   handle: ExtensionWindowHandle;
-  /** Bundle identifier of the owning app. */
+  /** Stable platform identifier of the owning app (the bundle identifier on macOS). Treat it as an opaque string; do not hard-code identifiers when `ctx.desktop.apps` can resolve the app. */
   appId: string;
   appName: string;
   title: string;
@@ -1998,7 +1998,7 @@ export type ExtensionContext = {
       /** Icon for an app path as a data URL, or null when unavailable. */
       icon(appPath: string): Promise<string | null>;
     };
-    /** Move and resize the focused window of another app. Check `ctx.system.capabilities.has('window-management')` for support; macOS only today. */
+    /** Move, resize, list and focus windows of other apps. The API is platform-neutral (points, work areas, opaque handles, stable app identifiers); only some platforms implement it, and where unsupported this facet is `undefined` and window commands are omitted — check `ctx.system.capabilities.has('window-management')`. */
     windowManagement?: {
       /** Apply a layout to the focused window of the app that was frontmost before Nevermind opened (or when a global shortcut fired). Never throws for runtime failures; inspect `ok`. */
       apply(
@@ -2008,7 +2008,7 @@ export type ExtensionContext = {
       /** Displays with their frames and work areas (menu bar and Dock excluded), in global points with a top-left origin. */
       displays(): Promise<ExtensionDisplayInfo[]>;
       /**
-       * List windows of running apps, optionally narrowed by bundle id (`appId`) and/or a case-insensitive `title` substring.
+       * List windows of running apps, optionally narrowed by app identifier (`appId`) and/or a case-insensitive `title` substring.
        * Handles are opaque, short-lived, and only valid in this session; list again when `applyTo`/`focus` reports `unknown-window`.
        * Minimized and other-Space windows may be missing. Returns an empty list when access is denied.
        */
