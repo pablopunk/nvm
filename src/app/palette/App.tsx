@@ -113,6 +113,7 @@ import type {
   PaletteMode,
   ShortcutRecord,
 } from './preload-api';
+import { resultsCardClassName } from './results-card-layout';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -2775,10 +2776,6 @@ export function App() {
       (shortcutManagerOpen && !shortcutOptionsFor) ||
       isFilterableExtensionView,
   );
-  const isLargeExtensionView =
-    !activePaneObscured && extensionView?.size === 'large';
-  const isSidePreviewView =
-    !activePaneObscured && extensionView?.presentation === 'side-preview';
   const isChildOpen = Boolean(
     shortcutFor ||
       shortcutOptionsFor ||
@@ -5740,7 +5737,7 @@ export function App() {
       >
         <Command
           ref={paletteRef}
-          className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
+          className={`palette ${isVisuallyStacked ? 'isStacked' : ''} ${!activePaneObscured && extensionView?.contentSizing === 'fit' ? 'fitContent' : ''}`}
           label="Nevermind"
           loop={true}
           shouldFilter={false}
@@ -5836,7 +5833,8 @@ export function App() {
           <Command.List
             ref={resultsListRef}
             data-pane-stack={siblingViews.length > 0 || undefined}
-            className={`results card ${isVisuallyStacked ? 'optionsCard' : 'resultsCard'} ${extensionView?.type === 'form' ? 'formResultsCard' : ''} ${confirmViewActionFor || extensionView?.contentSizing === 'fit' ? 'fitContentCard' : ''} ${isLargeExtensionView ? 'largeResultsCard' : ''} ${extensionView?.aiChat ? 'aiChatResultsCard' : ''} ${builderWorkspaceVisible ? 'builderResultsCard' : ''} ${isSidePreviewView ? 'sidePreviewCard' : ''} ${extensionView?.isLoading ? 'loadingBorder' : ''}`}
+            // biome-ignore format: Keep the legacy palette within its file-size budget.
+            className={resultsCardClassName({ stacked: isVisuallyStacked, obscured: activePaneObscured, confirmation: Boolean(confirmRemoveFor || confirmViewActionFor || confirmBuilderPreviewAction), builder: builderWorkspaceVisible, view: extensionView })}
           >
             {extensionNavigation.frames.flatMap((frame, frameIndex) =>
               frame.history.map((entry, historyIndex) => {
