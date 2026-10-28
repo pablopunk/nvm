@@ -29,6 +29,7 @@ const { spawn } = require('node:child_process');
       'node_modules/@playwright/test/cli.js',
       'test',
       'tests/electron/palette.smoke.spec.ts',
+      'tests/electron/clipboard-concealed.smoke.spec.ts',
     ],
     { cwd: root, env, stdio: 'inherit' },
   );

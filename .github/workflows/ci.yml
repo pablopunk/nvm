@@ -356,6 +356,14 @@ jobs:
           ARCH="$(node -p 'process.arch')"
           mise exec -- node .github/scripts/verify-packaged-pi-electron-evidence.cjs \
             "test-results/packaged-pi-electron-darwin-${ARCH}" "$GITHUB_SHA" "darwin-${ARCH}"
+      - name: Verify fused packaged macOS app refuses Node injection and starts
+        timeout-minutes: 5
+        shell: bash
+        run: |
+          APPS=(release/mac*/Nevermind.app)
+          test "${#APPS[@]}" -eq 1
+          mise exec -- node .github/scripts/verify-packaged-macos-fuses.cjs \
+            "${APPS[0]}" test-results/packaged-macos-fuses
       - name: Upload packaged macOS Pi evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -364,6 +372,7 @@ jobs:
           path: |
             test-results/packaged-diagnostics-darwin-*
             test-results/packaged-pi-electron-darwin-*
+            test-results/packaged-macos-fuses
             test-results/pi-macos-package.log
           if-no-files-found: error
           retention-days: 14
