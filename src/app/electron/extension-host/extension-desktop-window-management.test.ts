@@ -80,7 +80,7 @@ test('apply inside a shortcut scope passes the snapshot and a zero default gap',
     facet?.apply(HALF),
   );
   assert.deepEqual(calls, [
-    [HALF, { gap: 0 }, { source: 'shortcut', target: SAFARI }],
+    [HALF, { gap: 0, cycle: true }, { source: 'shortcut', target: SAFARI }],
   ]);
 });
 
@@ -90,7 +90,7 @@ test('apply forwards an explicit gap from options', async () => {
   await runInWindowInvocationScope({ source: 'palette' }, () =>
     facet?.apply(HALF, { gap: 8 }),
   );
-  assert.deepEqual(calls[0]?.[1], { gap: 8 });
+  assert.deepEqual(calls[0]?.[1], { gap: 8, cycle: true });
   assert.deepEqual(calls[0]?.[2], { source: 'palette', target: SAFARI });
 });
 

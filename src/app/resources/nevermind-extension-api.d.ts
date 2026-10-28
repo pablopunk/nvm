@@ -45,13 +45,45 @@
 
 /** Fractions are of the display work area (menu bar and Dock excluded), origin top-left. `x` and `y` are 0..1, `width` and `height` are above 0 and at most 1, and `x + width` and `y + height` are at most 1. */
 export type ExtensionWindowLayoutSpec =
-  | { kind: 'fraction'; x: number; y: number; width: number; height: number }
+  | {
+      kind: 'fraction';
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      /** Repeating the same command on the same window cycles its size (½ → ⅔ → ⅓) when `options.cycle` is on. */
+      cycleGroup?: 'left' | 'right' | 'top' | 'bottom';
+    }
   /** Keep the window's size and center it on its display. */
-  | { kind: 'center' };
+  | { kind: 'center' }
+  /** Fill the display width, keeping vertical position and height. */
+  | { kind: 'maximize-width' }
+  /** Fill the display height, keeping horizontal position and width. */
+  | { kind: 'maximize-height' }
+  /** Center a window sized as fractions (0..1) of the work area, optionally capped in points. */
+  | {
+      kind: 'scaled-center';
+      widthFraction: number;
+      heightFraction: number;
+      maxWidth?: number;
+      maxHeight?: number;
+    }
+  /** Move the window to a screen edge, keeping its size. */
+  | { kind: 'edge'; edge: 'left' | 'right' | 'top' | 'bottom' }
+  /** Grow or shrink around the window's center by `step` (fraction of the work area, 0.01..0.25). */
+  | { kind: 'resize-step'; direction: 'larger' | 'smaller'; step: number }
+  /** Move to the next or previous display (left-to-right, top-to-bottom, wrapping), scaling proportionally. */
+  | { kind: 'display'; direction: 'next' | 'previous' }
+  /** Return the window to the frame it had before the first layout was applied. */
+  | { kind: 'restore' }
+  /** Enter or leave native full screen. The only operation that accepts a full-screen window. */
+  | { kind: 'toggle-full-screen' };
 
 export type ExtensionWindowManagementOptions = {
   /** Whole pixels between windows and display edges, 0..100. Default 0. */
   gap?: number;
+  /** Cycle repeated half commands. Default true. */
+  cycle?: boolean;
 };
 
 export type ExtensionWindowApplyResult =
@@ -77,7 +109,9 @@ export type ExtensionWindowApplyResult =
         | 'unapplied'
         | 'not-resizable'
         | 'unsupported'
-        | 'invalid-spec';
+        | 'invalid-spec'
+        | 'no-history'
+        | 'single-display';
       /** Palette-ready explanation. */
       message: string;
     };

@@ -19,6 +19,7 @@ interface DesktopWindowManagementDeps {
 
 interface ExtensionWindowApplyOptions {
   gap?: number;
+  cycle?: boolean;
 }
 
 const MISSING_INVOCATION_MESSAGE =
@@ -35,7 +36,7 @@ async function applyWindowLayoutForCurrentScope(
   }
   const result = await deps.service.apply(
     spec,
-    { gap: options.gap ?? 0 },
+    { gap: options.gap ?? 0, cycle: options.cycle ?? true },
     invocation,
   );
   return toExtensionApplyResult(result);

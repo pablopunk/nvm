@@ -70,6 +70,10 @@ export interface MacosWindowManager {
   ): Promise<HelperEnvelope<SetFrameData>>;
 }
 
+export type WindowEdge = 'left' | 'right' | 'top' | 'bottom';
+
+export type WindowCycleGroup = WindowEdge;
+
 export type WindowLayoutSpec =
   | {
       kind: 'fraction';
@@ -77,15 +81,32 @@ export type WindowLayoutSpec =
       y: number;
       width: number;
       height: number;
+      cycleGroup?: WindowCycleGroup;
     }
-  | { kind: 'center' };
+  | { kind: 'center' }
+  | { kind: 'maximize-width' }
+  | { kind: 'maximize-height' }
+  | {
+      kind: 'scaled-center';
+      widthFraction: number;
+      heightFraction: number;
+      maxWidth?: number;
+      maxHeight?: number;
+    }
+  | { kind: 'edge'; edge: WindowEdge }
+  | { kind: 'resize-step'; direction: 'larger' | 'smaller'; step: number }
+  | { kind: 'display'; direction: 'next' | 'previous' }
+  | { kind: 'restore' }
+  | { kind: 'toggle-full-screen' };
 
-export interface WindowManagementOptions {
+export type WindowManagementOptions = {
   gap: number;
-}
+  cycle: boolean;
+};
 
 export const DEFAULT_WINDOW_MANAGEMENT_OPTIONS: WindowManagementOptions = {
   gap: 0,
+  cycle: true,
 };
 
 export interface EngineInput {
@@ -117,7 +138,9 @@ export type WindowApplyFailureReason =
   | 'unapplied'
   | 'not-resizable'
   | 'unsupported'
-  | 'invalid-spec';
+  | 'invalid-spec'
+  | 'no-history'
+  | 'single-display';
 
 export type WindowApplyResult =
   | {
