@@ -1,11 +1,10 @@
-// biome-ignore-all lint/style/noProcessEnv: The renderer URL env var is a dev-only override read at install time.
 import { session } from 'electron';
 import { canRequestMediaPermission } from '../os/os';
 import { isTrustedAppPage } from './window-navigation-policy';
 
 export function installPermissionHandlers(
   isDev: boolean,
-  rendererUrl = process.env.ELECTRON_RENDERER_URL || '',
+  rendererUrl = '',
   rendererIndexPath?: string,
 ) {
   const allowedPermissions = [
