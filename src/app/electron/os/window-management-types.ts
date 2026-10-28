@@ -195,6 +195,7 @@ export type WindowApplyFailureReason =
   | 'invalid-spec'
   | 'no-history'
   | 'unknown-window'
+  | 'no-neighbor'
   | 'single-display';
 
 export type WindowApplyResult =
@@ -240,6 +241,12 @@ export type DisplayListResult =
 
 export type WindowFocusResult = { ok: true } | WindowOperationFailure;
 
+export type NeighborDirection = 'left' | 'right' | 'up' | 'down';
+
+export interface NeighborOptions {
+  wrap?: boolean;
+}
+
 export interface WindowManagementService {
   available(): boolean;
   apply(
@@ -255,6 +262,11 @@ export interface WindowManagementService {
     options: WindowManagementOptions,
   ): Promise<WindowApplyResult>;
   focusWindow(handle: string): Promise<WindowFocusResult>;
+  focusNeighbor(
+    direction: NeighborDirection,
+    options: NeighborOptions,
+    invocation: WindowInvocation,
+  ): Promise<WindowFocusResult>;
 }
 
 export interface WindowInvocationPorts {

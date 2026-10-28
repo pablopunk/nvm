@@ -14,6 +14,7 @@ import type {
   WindowHandleTarget,
 } from './window-management-handles';
 import type {
+  MacosWindowManager,
   WindowApplyResult,
   WindowFocusResult,
   WindowLayoutSpec,
@@ -29,16 +30,27 @@ function focusTargetOf(target: WindowHandleTarget) {
   return { bundleId: target.appId, pid: target.pid };
 }
 
-async function raiseTargetWindow(
+function raiseTargetWindow(
   context: HandleActionContext,
   target: WindowHandleTarget,
 ): Promise<WindowFocusResult> {
-  const { manager } = context.dependencies;
+  return raiseWindowKey(
+    context.dependencies.manager,
+    target.pid,
+    target.windowKey,
+  );
+}
+
+export async function raiseWindowKey(
+  manager: MacosWindowManager,
+  pid: number,
+  windowKey: string,
+): Promise<WindowFocusResult> {
   const denied = await windowAccessFailure(manager);
   if (denied) {
     return denied;
   }
-  const raised = await manager.raiseWindow(target.pid, target.windowKey);
+  const raised = await manager.raiseWindow(pid, windowKey);
   return raised.ok ? { ok: true } : helperFailure(raised);
 }
 

@@ -14,10 +14,21 @@ const SETTINGS_ACTION_TITLE = 'Window Management Settings';
 
 const DESKTOP_LOCAL_IDS = ['next-desktop', 'previous-desktop'];
 
+const FOCUS_LOCAL_IDS = [
+  'layout.focus-left',
+  'layout.focus-right',
+  'layout.focus-up',
+  'layout.focus-down',
+];
+
+const SECONDARY_FREE_LOCAL_IDS = [...DESKTOP_LOCAL_IDS, ...FOCUS_LOCAL_IDS];
+
 const EXACT_ACTION_COUNT = 2;
 
 const BUILT_IN_ACTION_COUNT =
-  WINDOW_LAYOUT_IDS.length + EXACT_ACTION_COUNT + DESKTOP_LOCAL_IDS.length;
+  WINDOW_LAYOUT_IDS.length +
+  EXACT_ACTION_COUNT +
+  SECONDARY_FREE_LOCAL_IDS.length;
 
 const P1_PERSISTED_IDS = [
   'extension-action:window-management:layout.left-half',
@@ -64,7 +75,10 @@ function persistedIdOf(localId: string) {
 
 async function layoutActionsFor(hasWindowManagement: boolean) {
   const actions = await actionsFor(hasWindowManagement);
-  return actions.filter((action) => action.id.startsWith('layout.'));
+  return actions.filter(
+    (action) =>
+      action.id.startsWith('layout.') && !FOCUS_LOCAL_IDS.includes(action.id),
+  );
 }
 
 function rootCommands() {
@@ -101,7 +115,7 @@ test('no durable actions are contributed when window management is unsupported',
   assert.deepEqual(await actionsFor(false), []);
 });
 
-test('built-in durable actions are exactly the layouts, exact commands, and desktop commands', async () => {
+test('built-in durable actions are exactly the layouts, exact commands, focus, and desktop commands', async () => {
   assert.equal((await actionsFor(true)).length, BUILT_IN_ACTION_COUNT);
 });
 
@@ -170,7 +184,7 @@ test('the AI-builder copy points at the command palette and the Safari and Termi
 test('every layout and exact action offers one Window Management Settings secondary action', async () => {
   const actions = await actionsFor(true);
   const durableActions = actions.filter(
-    (action) => !DESKTOP_LOCAL_IDS.includes(action.id),
+    (action) => !SECONDARY_FREE_LOCAL_IDS.includes(action.id),
   );
 
   assert.equal(

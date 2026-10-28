@@ -28,6 +28,7 @@ export const FAILURE_MESSAGES: Record<WindowApplyFailureReason, string> = {
   'no-history': 'There is no earlier position to restore for this window.',
   'single-display': 'Only one display is connected.',
   'unknown-window': UNKNOWN_WINDOW_MESSAGE,
+  'no-neighbor': 'No window lies in that direction.',
 };
 
 export const PALETTE_NO_TARGET =

@@ -15,7 +15,7 @@ import { windowManagementSettingsAction } from './window-management-settings-act
 import type { WindowManagementSettings } from './window-management-settings-model';
 import { windowLayoutSpecFor } from './window-management-specs';
 
-const WINDOW_UNAVAILABLE_MESSAGE =
+export const WINDOW_UNAVAILABLE_MESSAGE =
   'Window management is not available on this system.';
 const WINDOW_LAYOUT_KEYWORDS = ['snap', 'tile'];
 

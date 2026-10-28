@@ -2035,6 +2035,16 @@ export type ExtensionContext = {
       focus(
         window: ExtensionWindowHandle,
       ): Promise<{ ok: true } | { ok: false; reason: string; message: string }>;
+      /**
+       * Focus the nearest window in a direction from the invoking app's focused window (or the window a shortcut targeted), measured in global points.
+       * A window counts as in that direction when its center lies beyond the current window's center on that axis; windows overlapping the current window on the perpendicular axis are preferred.
+       * Only non-minimized, non-full-screen windows of other running apps are candidates. `wrap: true` falls back to the farthest window on the opposite side when nothing lies in the direction.
+       * Fails with `no-neighbor` when no candidate qualifies. Never throws for runtime failures; inspect `ok`.
+       */
+      focusNeighbor(
+        direction: 'left' | 'right' | 'up' | 'down',
+        options?: { wrap?: boolean },
+      ): Promise<{ ok: true } | { ok: false; reason: string; message: string }>;
     };
     files?: {
       /**
