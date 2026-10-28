@@ -27,6 +27,7 @@ import { POST as prepareAudioTranscription } from './v1/audio/transcription-prep
 import { POST as postAudioTranscription } from './v1/audio/transcriptions';
 import { POST as postChatCompletion } from './v1/chat/completions';
 import { POST as postGoogleModel } from './v1/models/[...path]';
+import { POST as postResponses } from './v1/responses';
 
 type FakeDb = {
   insertedValues: unknown[];
@@ -207,6 +208,11 @@ function installModelsDevFetch() {
       return Response.json({
         opencode: {
           models: {
+            'gpt-6.1-sol': {
+              id: 'gpt-6.1-sol',
+              cost: { input: 1, output: 2 },
+              limit: { context: 100000, output: 1000 },
+            },
             'gemini-3-flash': {
               id: 'gemini-3-flash',
               name: 'Gemini 3 Flash',
@@ -2754,43 +2760,6 @@ test('proxy spends free credits first without granting a Free user Pro model ent
   assert.equal((db.insertedValues[1] as any).kind, 'free');
 });
 
-test('already configured gpt-6.1-sol routes disable reasoning when tools are sent', async () => {
-  for (const provider of ['opencode_zen', 'openrouter']) {
-    resetPricingCacheForTests();
-    process.env.OPENCODE_API_KEY = 'upstream-key';
-    process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-    process.env.OPENROUTER_API_KEY = 'upstream-key';
-    process.env.OPENROUTER_BASE_URL = 'https://upstream.example/v1';
-    const model = provider === 'openrouter' ? 'openai/gpt-6.1-sol' : 'gpt-6.1-sol';
-    installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model, routeProvider: provider, thinkingLevel: 'high' }) }));
-    let forwarded: any;
-    globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
-      const url = String(input instanceof Request ? input.url : input);
-      if (url === 'https://models.dev/api.json') {
-        return Response.json({ [provider === 'openrouter' ? 'openrouter' : 'opencode']: { models: { [model]: { id: model, cost: { input: 1, output: 2 } } } } });
-      }
-      forwarded = JSON.parse(String(init?.body));
-      return Response.json({ choices: [{ message: { role: 'assistant', content: 'hello' } }], usage: { prompt_tokens: 2, completion_tokens: 3 } });
-    };
-    const response = await postChatCompletion(routeContext(authorizedChatRequest({
-      model: 'placeholder',
-      reasoning_effort: 'high',
-      messages: [{ role: 'user', content: 'hello' }],
-      tools: [{ type: 'function', function: { name: 'lookup', parameters: { type: 'object', properties: {} } } }],
-    })));
-    await response.text();
-    await waitForBackgroundTasks();
-    assert.equal(response.status, 200);
-    assert.equal(forwarded.tools[0].function.name, 'lookup');
-    if (provider === 'openrouter') {
-      assert.deepEqual(forwarded.reasoning, { effort: 'none' });
-      assert.equal(forwarded.reasoning_effort, undefined);
-    } else {
-      assert.equal(forwarded.reasoning_effort, 'none');
-    }
-  }
-});
-
 test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {
   installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
@@ -4062,4 +4031,57 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
     'All configured upstream providers are unavailable',
   );
   assert.ok(response.headers.get('x-request-id'));
+});
+
+test('Responses proxies function calls with server-owned limits and settles streaming usage', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  let forwarded: any;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
+    assert.equal(url, 'https://upstream.example/v1/responses');
+    forwarded = JSON.parse(String(init?.body));
+    return new Response(streamFromTextChunks([
+      'data: {"type":"response.function_call_arguments.delta","delta":"{}"}\n\n',
+      'data: {"type":"response.completed","response":{"usage":{"input_tokens":12,"output_tokens":8,"input_tokens_details":{"cached_tokens":2},"output_tokens_details":{"reasoning_tokens":3}}}}\n\n',
+    ]), { headers: { 'content-type': 'text/event-stream' } });
+  };
+  const body = { model: 'other', input: [{ role: 'user', content: 'hello' }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], max_output_tokens: 64, store: true, service_tier: 'priority', stream: true };
+  const response = await postResponses(routeContext(authorizedChatRequest(body)));
+  const streamed = await response.text();
+  await waitForBackgroundTasks();
+  assert.equal(response.status, 200);
+  assert.match(streamed, /response.completed/);
+  assert.equal(forwarded.model, 'gpt-6.1-sol');
+  assert.equal(forwarded.max_output_tokens, 64);
+  assert.equal(forwarded.store, false);
+  assert.equal(forwarded.service_tier, undefined);
+  assert.deepEqual(forwarded.tools, body.tools);
+  assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
+  assert.equal((db.insertedValues.at(-1) as any).outputTokens, 8);
+  assert.equal((db.insertedValues.at(-1) as any).reasoningTokens, 3);
+});
+
+test('Responses rejects hosted tools before reserving credits', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  const response = await postResponses(routeContext(authorizedChatRequest({ input: 'hello', tools: [{ type: 'web_search' }] })));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json() as any).error.type, 'unsupported_request_shape');
+  assert.equal(db.insertedValues.length, 0);
+});
+
+test('a stale chat-completions route fails before credit reservation when the model requires Responses', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  installModelsDevFetch();
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  const response = await postChatCompletion(routeContext(authorizedChatRequest()));
+  assert.equal(response.status, 409);
+  assert.equal((await response.json() as any).error.type, 'model_route_changed');
+  assert.equal(db.insertedValues.length, 0);
 });

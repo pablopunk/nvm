@@ -86,9 +86,11 @@ export type UsageTokens = {
 
 export type ProxyConfig = {
   request: Request;
+  wireApi?: 'openai-completions' | 'openai-responses';
   authHeaderName: PatHeaderName;
   upstreamAuthHeaderName: 'authorization' | 'x-api-key' | 'x-goog-api-key';
   formatUpstreamAuthValue: (apiKey: string) => string;
+  validateRequestBody?: (body: unknown) => string | null;
   buildUpstreamUrl: (cfg: {
     upstreamBaseUrl: string;
     activeModelId: string;
@@ -1366,6 +1368,7 @@ async function tryUpstreamProviders(
       cfg.upstreamAuthHeaderName,
       cfg.formatUpstreamAuthValue(upstreamCfg.apiKey),
     );
+    if (cfg.wireApi === 'openai-responses') headers.delete('openai-beta');
 
     let resp;
     creditFailure = null;
@@ -1478,6 +1481,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
+  const resolvedApi = selectApiForModel(routing.provider, routing.activeModelId);
+  if (cfg.wireApi && cfg.wireApi !== resolvedApi && (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses')) {
+    return withRequestId(Response.json({ error: { type: 'model_route_changed', message: 'The model route changed. Refresh the model and try again.' } }, { status: 409 }), requestId);
+  }
   const routingFinishedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
@@ -1536,6 +1543,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         bodyIsJson = true;
       } catch {
         bodyIsJson = false;
+      }
+      const validationError = cfg.validateRequestBody?.(parsedBody);
+      if (validationError) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json({ error: { type: 'unsupported_request_shape', message: validationError } }, { status: 400 }),
+          requestId,
+        );
       }
       const inspectedBody = bodyIsJson
         ? withoutSchemaDefinitions(parsedBody)

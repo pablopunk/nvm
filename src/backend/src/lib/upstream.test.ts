@@ -11,6 +11,11 @@ afterEach(() => {
 });
 
 describe('selectApiForModel', () => {
+  test('GPT-6.1 Sol uses Responses on supported direct providers', () => {
+    assert.equal(selectApiForModel('openai', 'gpt-6.1-sol'), 'openai-responses');
+    assert.equal(selectApiForModel('opencode_zen', 'gpt-6.1-sol'), 'openai-responses');
+    assert.equal(selectApiForModel('openrouter', 'openai/gpt-6.1-sol'), 'openai-completions');
+  });
   test('openrouter provider → openai-completions', () => {
     assert.strictEqual(selectApiForModel('openrouter', 'any-model'), 'openai-completions');
   });

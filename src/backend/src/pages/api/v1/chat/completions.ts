@@ -1,5 +1,4 @@
 import type { APIRoute } from 'astro';
-import { requiresNoReasoningWithTools } from '../../../../lib/model-capabilities';
 import {
   completeStreamLines,
   parseStreamUsageJson,
@@ -41,14 +40,6 @@ function rewriteOpenAiModel(
     delete parsed.max_tokens;
   } else {
     parsed.max_tokens = maxOutputTokens;
-  }
-  if (
-    requiresNoReasoningWithTools(routing.activeModelId) &&
-    Array.isArray(parsed.tools) &&
-    parsed.tools.length > 0
-  ) {
-    if (routing.provider === 'openrouter') parsed.reasoning = { effort: 'none' };
-    else parsed.reasoning_effort = 'none';
   }
   if (parsed.stream === true) {
     parsed.stream_options = {
@@ -120,6 +111,7 @@ function parseUsageFromOpenAiStreamChunk(
 export const POST: APIRoute = ({ request }) =>
   proxyAndBill({
     request,
+    wireApi: 'openai-completions',
     authHeaderName: 'authorization',
     upstreamAuthHeaderName: 'authorization',
     formatUpstreamAuthValue: (k) => `Bearer ${k}`,

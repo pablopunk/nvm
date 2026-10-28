@@ -1,4 +1,4 @@
-import { requiresNoReasoningWithTools } from './model-capabilities';
+import { requiresResponsesForTools } from './model-capabilities';
 
 export type ModelCost = {
   provider: string;
@@ -419,14 +419,13 @@ export function routeKindForSlot(slot: string): RouteKind {
 function fitsRouteKind(model: ModelsDevModel, kind: RouteKind): boolean {
   if (!hasValidPricing(model.cost)) return false;
   if (model.tool_call !== true) return false;
+  if (requiresResponsesForTools(model.id)) return false;
   const input = model.modalities?.input ?? ['text'];
   const output = model.modalities?.output ?? ['text'];
   if (!input.includes('text') || !output.includes('text')) return false;
   return (
     kind === 'fast' ||
-    (Boolean(model.reasoning) &&
-      input.includes('image') &&
-      !requiresNoReasoningWithTools(model.id))
+    (Boolean(model.reasoning) && input.includes('image'))
   );
 }
 

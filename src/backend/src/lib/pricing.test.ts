@@ -201,9 +201,9 @@ test('route choices require function tools and exclude incompatible reasoning wi
   const smart = await listModelsForRouteKind('opencode_zen', 'smart');
   const fast = await listModelsForRouteKind('opencode_zen', 'fast');
   assert.ok(!smart.includes('gpt-6.1-sol'));
-  assert.ok(fast.includes('gpt-6.1-sol'));
+  assert.ok(!fast.includes('gpt-6.1-sol'));
   assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'smart'), false);
-  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'fast'), true);
+  assert.equal(await modelFitsRouteKind('opencode_zen', 'gpt-6.1-sol', 'fast'), false);
   for (const model of ['no-tools', 'unknown-tools']) {
     assert.ok(!smart.includes(model));
     assert.ok(!fast.includes(model));
