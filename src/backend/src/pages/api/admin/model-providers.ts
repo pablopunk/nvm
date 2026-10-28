@@ -27,6 +27,7 @@ import {
   providerSupportsFormat,
   selectApiForModel,
   selectApiForModelChain,
+  type UpstreamApi,
 } from '../../../lib/upstream';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -64,6 +65,29 @@ const putProvidersSchema = z
   })
   .strict();
 
+async function modelsUsingFormat(
+  providerId: string,
+  modelIds: string[],
+  format: UpstreamApi,
+): Promise<string[]> {
+  const formats = await Promise.all(
+    modelIds.map((modelId) => selectApiForModel(providerId, modelId)),
+  );
+  return modelIds.filter((_, index) => formats[index] === format);
+}
+
+async function everyRouteUsesFormat(
+  routes: Array<{ providerId: string; modelId: string }>,
+  format: UpstreamApi,
+): Promise<boolean> {
+  for (const route of routes) {
+    if (!providerSupportsFormat(route.providerId, format)) return false;
+    if ((await selectApiForModel(route.providerId, route.modelId)) !== format)
+      return false;
+  }
+  return true;
+}
+
 export const GET: APIRoute = async ({ request, url }) => {
   if (!(await requireAdmin(request)))
     return new Response('Forbidden', { status: 403 });
@@ -76,15 +100,14 @@ export const GET: APIRoute = async ({ request, url }) => {
     listAllProviders(),
     getModelRoute(slot),
   ]);
-  const format = selectApiForModelChain(primaryRoute, modelId);
+  const format = await selectApiForModelChain(primaryRoute, modelId);
   const providerOptions = await Promise.all(
     providers.map(async (provider) => {
       const compatibleModels = providerSupportsFormat(provider.id, format)
-        ? (
-            await listModelsForRouteKind(provider.id, routeKindForSlot(slot))
-          ).filter(
-            (candidateModelId) =>
-              selectApiForModel(provider.id, candidateModelId) === format,
+        ? await modelsUsingFormat(
+            provider.id,
+            await listModelsForRouteKind(provider.id, routeKindForSlot(slot)),
+            format,
           )
         : [];
       return {
@@ -186,14 +209,8 @@ export const PUT: APIRoute = async ({ request }) => {
     if (error instanceof ModelNotConfiguredError) return null;
     throw error;
   });
-  const format = selectApiForModelChain(primaryRoute, body.modelId);
-  if (
-    routes.some(
-      (route) =>
-        !providerSupportsFormat(route.providerId, format) ||
-        selectApiForModel(route.providerId, route.modelId) !== format,
-    )
-  ) {
+  const format = await selectApiForModelChain(primaryRoute, body.modelId);
+  if (!(await everyRouteUsesFormat(routes, format))) {
     return Response.json(
       {
         error: {

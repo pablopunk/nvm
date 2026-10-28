@@ -1033,7 +1033,7 @@ async function hasConfiguredImageRoute(
   routing: ModelRouting,
   primaryDescriptor: ModelDescriptor | null,
 ) {
-  const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
+  const apiFormat = await selectApiForModel(routing.provider, routing.activeModelId);
   let configuredFallbacks: Array<{ providerId: string; modelId: string }> = [];
   if (!backendKillSwitchEnabled('ai_failover')) {
     try {
@@ -1055,7 +1055,7 @@ async function hasConfiguredImageRoute(
   for (const candidate of candidates) {
     if (
       !providerSupportsFormat(candidate.providerId, apiFormat) ||
-      selectApiForModel(candidate.providerId, candidate.modelId) !== apiFormat
+      (await selectApiForModel(candidate.providerId, candidate.modelId)) !== apiFormat
     )
       continue;
     const descriptor =
@@ -1110,7 +1110,7 @@ async function tryUpstreamProviders(
       status: number;
     }
 > {
-  const apiFormat = selectApiForModel(routing.provider, routing.activeModelId);
+  const apiFormat = await selectApiForModel(routing.provider, routing.activeModelId);
   const failoverEnabled = !backendKillSwitchEnabled('ai_failover');
 
   let chainProviders: Array<{ providerId: string; modelId: string }> = [];
@@ -1161,7 +1161,7 @@ async function tryUpstreamProviders(
       providerId === routing.provider && modelId === routing.activeModelId;
     if (
       !providerSupportsFormat(providerId, apiFormat) ||
-      selectApiForModel(providerId, modelId) !== apiFormat
+      (await selectApiForModel(providerId, modelId)) !== apiFormat
     ) {
       log.info('upstream_format_skip', {
         request_id: requestId,
@@ -1486,7 +1486,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
-  const resolvedApi = selectApiForModel(routing.provider, routing.activeModelId);
+  const resolvedApi = await selectApiForModel(routing.provider, routing.activeModelId);
   if (cfg.wireApi && cfg.wireApi !== resolvedApi && (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses')) {
     return withRequestId(Response.json({ error: { type: 'model_route_changed', message: 'The model route changed. Refresh the model and try again.' } }, { status: 409 }), requestId);
   }
@@ -1798,8 +1798,8 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           return withRequestId(freeRouting, requestId);
         }
         if (
-          selectApiForModel(freeRouting.provider, freeRouting.activeModelId) ===
-          selectApiForModel(routing.provider, routing.activeModelId)
+          (await selectApiForModel(freeRouting.provider, freeRouting.activeModelId)) ===
+          (await selectApiForModel(routing.provider, routing.activeModelId))
         ) {
           const freeDescriptor = await lookupModelDescriptor(
             freeRouting.provider,

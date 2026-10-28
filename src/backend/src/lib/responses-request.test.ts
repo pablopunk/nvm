@@ -56,24 +56,16 @@ test('Responses rewrite owns model, cost ceiling and storage', () => {
   assert.deepEqual(body.tools, request.tools);
 });
 
-test('Responses normalizes legacy unsupported GPT-6.1 Sol reasoning levels', () => {
-  for (const effort of ['none', 'minimal']) {
+test('Responses forwards the client reasoning level unchanged', () => {
+  for (const effort of ['none', 'minimal', 'high']) {
     const body = JSON.parse(
       rewriteResponsesRequest(
         JSON.stringify({ ...request, reasoning: { effort, summary: 'auto' } }),
-        { activeModelId: 'gpt-6.1-sol' },
+        { activeModelId: 'any-model' },
         200,
       ),
     );
-    assert.equal(body.reasoning.effort, 'low');
+    assert.equal(body.reasoning.effort, effort);
     assert.equal(body.reasoning.summary, 'auto');
   }
-  const body = JSON.parse(
-    rewriteResponsesRequest(
-      JSON.stringify({ ...request, reasoning: { effort: 'high' } }),
-      { activeModelId: 'gpt-6.1-sol' },
-      200,
-    ),
-  );
-  assert.equal(body.reasoning.effort, 'high');
 });

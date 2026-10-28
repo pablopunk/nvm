@@ -1,20 +1,28 @@
 import { env } from './env';
+import { catalogSdkForModel, type CatalogSdk } from './pricing';
 
 export type UpstreamApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
 
 export class UpstreamConfigError extends Error {}
 
-export function selectApiForModel(provider: string, modelId: string): UpstreamApi {
-  if ((provider === 'opencode_zen' || provider === 'openai') && modelId === 'gpt-6.1-sol') return 'openai-responses';
-  if (provider === 'openrouter' && modelId === 'openai/gpt-6.1-sol') return 'openai-responses';
-  if (provider === 'openrouter') return 'openai-completions';
-  if (modelId.startsWith('gemini-')) return 'google-generative-ai';
-  if (modelId.startsWith('claude-')) return 'anthropic-messages';
-  return 'openai-completions';
+const API_FOR_CATALOG_SDK: Record<string, UpstreamApi> = {
+  '@ai-sdk/openai': 'openai-responses',
+  '@ai-sdk/anthropic': 'anthropic-messages',
+  '@ai-sdk/google': 'google-generative-ai',
+};
+
+function apiForCatalogSdk(sdk: CatalogSdk): UpstreamApi {
+  if (sdk.shape === 'responses') return 'openai-responses';
+  return API_FOR_CATALOG_SDK[sdk.npm ?? ''] ?? 'openai-completions';
 }
 
-export function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): UpstreamApi {
-  return selectApiForModel(primary?.modelId === modelId ? primary.provider : 'configured', modelId);
+export async function selectApiForModel(provider: string, modelId: string): Promise<UpstreamApi> {
+  const api = apiForCatalogSdk(await catalogSdkForModel(provider, modelId));
+  return providerSupportsFormat(provider, api) ? api : 'openai-completions';
+}
+
+export async function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): Promise<UpstreamApi> {
+  return primary?.modelId === modelId ? selectApiForModel(primary.provider, modelId) : 'openai-completions';
 }
 
 type ProviderConfig = {

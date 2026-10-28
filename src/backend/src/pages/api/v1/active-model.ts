@@ -170,8 +170,8 @@ export const GET: APIRoute = async ({ request }) => {
             routeCredits: costEstimate,
             freeRouteCredits: freeEstimate,
             freeFallbackAllowed:
-              selectApiForModel(freeRoute.provider, freeRoute.modelId) ===
-              selectApiForModel(route.provider, route.modelId),
+              (await selectApiForModel(freeRoute.provider, freeRoute.modelId)) ===
+              (await selectApiForModel(route.provider, route.modelId)),
           });
           if (fundingChoice.freeFallback) {
             decision = freeDecision;
@@ -216,7 +216,7 @@ export const GET: APIRoute = async ({ request }) => {
     );
   }
 
-  const api = selectApiForModel(provider, modelId);
+  const api = await selectApiForModel(provider, modelId);
   const requestScopedOrigin = previewTarget || localOrigin;
   const baseUrl =
     api === 'anthropic-messages'

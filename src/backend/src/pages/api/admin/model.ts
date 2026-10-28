@@ -9,7 +9,6 @@ import {
 } from '../../../lib/admin-mutations';
 import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
-import { supportsModelThinkingLevel } from '../../../lib/model-capabilities';
 import {
   lookupModelCost,
   modelFitsRouteKind,
@@ -127,7 +126,7 @@ export const PUT: APIRoute = async ({ request }) => {
           type: 'unsupported_route_model',
           message:
             kind === 'smart'
-              ? 'Smart routes need a priced, image-capable model with function tools, a context limit, and compatible reasoning.'
+              ? 'Smart routes need a priced, image-capable model with function tools, a context limit, and reasoning.'
               : 'Fast routes need a priced, image-capable model with function tools and a context limit.',
         },
       },
@@ -162,8 +161,6 @@ export const PUT: APIRoute = async ({ request }) => {
       : ((body.thinkingLevel as ThinkingLevel | undefined) ??
         (await safeRoute(slot))?.thinkingLevel ??
         DEFAULT_THINKING_LEVEL);
-  if (!supportsModelThinkingLevel(route.modelId, thinkingLevel))
-    return Response.json({ error: { type: 'unsupported_thinking_level', message: 'This model requires a thinking level of low or higher.' } }, { status: 400 });
   const idempotencyKey = adminMutationKeyFromRequest(request);
   if (!idempotencyKey) {
     return Response.json(

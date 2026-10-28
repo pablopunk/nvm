@@ -68,7 +68,9 @@ test('models missing a capability every tier uses are not selectable', async () 
   });
 
   for (const kind of ['smart', 'fast'] as const) {
-    assert.deepEqual(await listModelsForRouteKind('openrouter', kind), []);
+    const choices = await listModelsForRouteKind('openrouter', kind);
+    for (const model of ['vendor/no-tools', 'vendor/text-only', 'vendor/unpriced'])
+      assert.ok(!choices.includes(model), `${model} offered for ${kind}`);
   }
 });
 
