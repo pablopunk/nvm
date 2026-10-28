@@ -1,3 +1,11 @@
+import {
+  DEFAULT_UPDATE_CHANNEL,
+  UPDATE_CHANNEL_OPTIONS,
+  type UpdateChannel,
+} from './update-channel';
+
+export type ChoiceSettingOption = { value: string; label: string };
+
 export type SettingDefinition =
   | {
       id: 'paletteHotkey' | 'hyperKey';
@@ -19,6 +27,15 @@ export type SettingDefinition =
       type: 'boolean';
       default: boolean;
       capability?: string;
+    }
+  | {
+      id: 'updateChannel';
+      title: string;
+      description: string;
+      icon: string;
+      type: 'choice';
+      default: UpdateChannel;
+      options: ReadonlyArray<ChoiceSettingOption>;
     };
 
 export type SettingId = SettingDefinition['id'];
@@ -75,6 +92,16 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     default: false,
     capability: 'launch-at-login',
   },
+  {
+    id: 'updateChannel',
+    title: 'Update Channel',
+    description:
+      'Stable installs released versions. Nightly also installs the newest nightly build.',
+    icon: 'restart',
+    type: 'choice',
+    default: DEFAULT_UPDATE_CHANNEL,
+    options: UPDATE_CHANNEL_OPTIONS,
+  },
 ];
 
 export function settingDefinition(id: string) {
@@ -91,9 +118,48 @@ export function settingValue(
   return stored === undefined ? definition.default : stored;
 }
 
+type ChoiceSettingShape = {
+  default: string;
+  options: ReadonlyArray<ChoiceSettingOption>;
+};
+
+export function choiceSettingValue(
+  definition: ChoiceSettingShape,
+  value: unknown,
+) {
+  return definition.options.some((option) => option.value === value)
+    ? String(value)
+    : definition.default;
+}
+
+export function choiceSettingLabel(
+  definition: ChoiceSettingShape,
+  value: unknown,
+) {
+  const effective = choiceSettingValue(definition, value);
+  return (
+    definition.options.find((option) => option.value === effective)?.label ??
+    effective
+  );
+}
+
+export function nextChoiceSettingValue(
+  definition: ChoiceSettingShape,
+  current: unknown,
+) {
+  const effective = choiceSettingValue(definition, current);
+  const index = definition.options.findIndex(
+    (option) => option.value === effective,
+  );
+  return definition.options[(index + 1) % definition.options.length].value;
+}
+
 export function toggledSettingValue(
   definition: SettingDefinition,
   current: unknown,
 ) {
-  return definition.type === 'boolean' ? !current : current;
+  if (definition.type === 'boolean') return !current;
+  if (definition.type === 'choice')
+    return nextChoiceSettingValue(definition, current);
+  return current;
 }

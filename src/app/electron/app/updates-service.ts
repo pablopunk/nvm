@@ -1,6 +1,7 @@
 // biome-ignore-all lint: Update views and prompt actions are dynamic view payloads moved verbatim from main.ts.
 import { currentNevermindCompatibilityManifest } from '../backend/nevermind-compatibility';
 import { isNewerVersion as isVersionNewerThan } from '../platform/version-utils';
+import { type UpdateChannel, updateChannelLabel } from './update-channel';
 import type { createUpdateManager } from './update-manager';
 
 export type UpdatesServiceDeps = {
@@ -8,6 +9,7 @@ export type UpdatesServiceDeps = {
   getAppVersion: () => string;
   autoUpdatesUnavailableMessage: () => string;
   getActiveNevermindBaseUrl: () => string | null;
+  getUpdateChannel: () => UpdateChannel;
   markAppQuitting: () => void;
   requestQuit: (reason: string, quit: () => void) => Promise<void>;
   quitApp: () => void;
@@ -32,6 +34,7 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     getAppVersion,
     autoUpdatesUnavailableMessage,
     getActiveNevermindBaseUrl,
+    getUpdateChannel,
     markAppQuitting,
     requestQuit,
     quitApp,
@@ -81,6 +84,13 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
                 ? 'Checking...'
                 : 'Check Again',
             };
+    const channelName = updateChannelLabel(getUpdateChannel());
+    const currentVersionLine = `Current version: ${getAppVersion()} · ${channelName} channel`;
+    const aheadOfLatest =
+      !downloadedInfo &&
+      !availableInfo &&
+      Boolean(updateManager.state.latestVersion) &&
+      isVersionNewerThan(getAppVersion(), updateManager.state.latestVersion);
     const title = unsupported
       ? 'Updates unavailable'
       : installing
@@ -93,7 +103,9 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
               ? 'Checking for updates...'
               : updateManager.state.status === 'error'
                 ? 'Update check failed'
-                : 'No versions available';
+                : aheadOfLatest
+                  ? `Nevermind ${getAppVersion()} is ahead of the latest ${channelName} release`
+                  : 'No versions available';
     const subtitle = unsupported
       ? autoUpdatesUnavailableMessage()
       : installing
@@ -103,10 +115,12 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
           : availableInfo
             ? 'Download the update before installing it'
             : updateManager.state.checkInFlight
-              ? `Current version: ${getAppVersion()}`
+              ? currentVersionLine
               : updateManager.state.status === 'error'
                 ? updateManager.state.errorMessage
-                : `Current version: ${getAppVersion()}`;
+                : aheadOfLatest
+                  ? `Nevermind won't downgrade automatically. ${channelName} updates resume with the next newer ${channelName.toLowerCase()} release.`
+                  : currentVersionLine;
     return {
       type: 'list',
       id: 'app-updates',
@@ -145,6 +159,7 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
       : null;
     return {
       currentVersion: getAppVersion(),
+      channel: getUpdateChannel(),
       status: String(state.status || 'idle'),
       supported:
         updateManager.canUseAutoUpdates() && state.status !== 'unsupported',

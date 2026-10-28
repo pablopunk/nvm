@@ -1,10 +1,14 @@
 // biome-ignore-all lint: Setting definitions and open-view patches are dynamic payloads moved verbatim from main.ts.
 import type { UserStateStore } from '../state/user-state-store';
 import {
+  choiceSettingLabel,
+  choiceSettingValue,
+  nextChoiceSettingValue,
   SETTING_DEFINITIONS,
   settingDefinition,
   settingValue,
 } from './settings';
+import { parseUpdateChannel, type UpdateChannel } from './update-channel';
 
 export type SettingsServiceDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
@@ -22,6 +26,8 @@ export type SettingsServiceDeps = {
   osLabel: () => string;
   patchOpenView: (viewId: string, patch: any) => void;
   buildRecordShortcutAction: (input: any, options: any) => any;
+  afterSettingCommitted?: (settingId: string) => void;
+  canChangeUpdateChannel?: () => boolean;
 };
 
 export function createSettingsService(deps: SettingsServiceDeps) {
@@ -35,10 +41,15 @@ export function createSettingsService(deps: SettingsServiceDeps) {
     activationFailure,
     patchOpenView,
     buildRecordShortcutAction,
+    afterSettingCommitted,
   } = deps;
 
   function getPaletteHotkey() {
     return String(getSetting('paletteHotkey') ?? '');
+  }
+
+  function getUpdateChannel(): UpdateChannel {
+    return parseUpdateChannel(getSetting('updateChannel'));
   }
 
   function settingIsAvailable(definition: any) {
@@ -59,10 +70,27 @@ export function createSettingsService(deps: SettingsServiceDeps) {
   async function setSetting(id: any, value: any) {
     const definition = settingDefinition(String(id));
     if (!definition) return { ok: false, message: 'Setting not found' };
+    if (
+      definition.id === 'updateChannel' &&
+      deps.canChangeUpdateChannel?.() === false
+    )
+      return {
+        ok: false,
+        message:
+          'Wait for the update installation to finish before changing channels',
+      };
     if (!settingIsAvailable(definition))
       return {
         ok: false,
         message: `${definition.title} is not available on ${osLabel()}`,
+      };
+    if (
+      definition.type === 'choice' &&
+      choiceSettingValue(definition, value) !== value
+    )
+      return {
+        ok: false,
+        message: `${definition.title} has no ${value} option`,
       };
     const result = await commitPortable({
       label: `setting:${definition.id}`,
@@ -71,7 +99,14 @@ export function createSettingsService(deps: SettingsServiceDeps) {
       },
     });
     if (!result.ok) return result;
+    afterSettingCommitted?.(definition.id);
     return { ok: true, message: `${definition.title} updated` };
+  }
+
+  function settingToggleTitle(definition, value) {
+    if (definition.type === 'choice')
+      return `Switch to ${choiceSettingLabel(definition, nextChoiceSettingValue(definition, value))}`;
+    return value ? 'Turn Off' : 'Turn On';
   }
 
   function settingItemPatch(definition) {
@@ -84,7 +119,9 @@ export function createSettingsService(deps: SettingsServiceDeps) {
           : 'Off'
         : definition.type === 'shortcut'
           ? ''
-          : String(value);
+          : definition.type === 'choice'
+            ? choiceSettingLabel(definition, value)
+            : String(value);
     const shortcutInput =
       definition.id === 'paletteHotkey'
         ? {
@@ -102,7 +139,7 @@ export function createSettingsService(deps: SettingsServiceDeps) {
         ? buildRecordShortcutAction(shortcutInput, {})
         : {
             type: 'toggleSetting',
-            title: value ? 'Turn Off' : 'Turn On',
+            title: settingToggleTitle(definition, value),
             settingId: definition.id,
           };
     return {
@@ -151,6 +188,7 @@ export function createSettingsService(deps: SettingsServiceDeps) {
 
   return {
     getPaletteHotkey,
+    getUpdateChannel,
     settingIsAvailable,
     availableSettingDefinitions,
     getSetting,

@@ -53,6 +53,7 @@ export type PortableConfigServiceDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   live: PortableLive;
   scheduleSaveState: () => void;
+  afterConfigAdopted?: (keys: readonly string[]) => void;
   pollMs?: number;
 };
 
@@ -127,6 +128,7 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
     const keys = changedKeysOf(diffPortableConfig(previous, next));
     writeRecord(next, localIds);
     if (keys.length) reportFailures(live.apply(previous, next, keys));
+    if (keys.length) deps.afterConfigAdopted?.(keys);
   }
 
   async function commitNow(

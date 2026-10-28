@@ -25,7 +25,10 @@ export function createSettingActionHandlers(deps: SettingActionHandlerDeps) {
 
   async function handleToggleSetting(action) {
     const definition = settingDefinition(action.settingId);
-    if (!definition || definition.type !== 'boolean')
+    if (
+      !definition ||
+      (definition.type !== 'boolean' && definition.type !== 'choice')
+    )
       return { toast: { message: 'Setting not found', tone: 'error' } };
     const result = await setSetting(
       definition.id,

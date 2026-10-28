@@ -197,6 +197,7 @@ import {
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
+import { installNevermindChannelFeed } from './app/update-channel-feed';
 import { createUpdateManager } from './app/update-manager';
 import { createUpdatesService } from './app/updates-service';
 import {
@@ -329,7 +330,6 @@ const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
 configureLogger(isDev);
 if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
 setDeepLinkLogger({ warn: logWarn });
-
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';
 if (process.platform === 'linux') {
   app.setDesktopName(LINUX_DESKTOP_NAME);
@@ -355,8 +355,17 @@ const updateManager: any = isNvmTestMode
       downloadAvailableUpdate: async () => {},
       quitAndInstall: () => false,
       clearTimers: () => {},
+      discardUpdateChannelState: () => {},
+      handleUpdateChannelChanged: () => {},
     }
-  : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt);
+  : createUpdateManager(autoUpdater as any, recordUpdateInstallAttempt, {
+      getUpdateChannel: () => getUpdateChannel(),
+      prepareUpdateFeed: () =>
+        installNevermindChannelFeed(autoUpdater as any, () =>
+          getUpdateChannel(),
+        ),
+      createCancellationToken: () => new electronUpdater.CancellationToken(),
+    });
 const rendererUrl = process.env.ELECTRON_RENDERER_URL;
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
@@ -592,6 +601,9 @@ const { scheduleSaveState, saveUserState, persistUserState } =
   userStatePersistence;
 const activationStatus = createActivationStatus();
 const portableConfigService = createPortableConfigService({
+  afterConfigAdopted: (keys) =>
+    keys.includes('setting:updateChannel') &&
+    updateManager.handleUpdateChannelChanged(),
   filePath: () =>
     resolvePortableConfigPath({
       isTestMode: isNvmTestMode,
@@ -654,6 +666,7 @@ const { actionAliases, usageBoost, recentBoost, rankAction, recordRecent } =
   createActionRanker({ userStateStore, scheduleSaveState });
 const {
   getPaletteHotkey,
+  getUpdateChannel,
   availableSettingDefinitions,
   getSetting,
   setSetting,
@@ -671,6 +684,11 @@ const {
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
   buildRecordShortcutAction: (input, options) =>
     buildRecordShortcutAction(input, options),
+  afterSettingCommitted: (settingId) => {
+    if (settingId === 'updateChannel')
+      updateManager.handleUpdateChannelChanged();
+  },
+  canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
 
 const linuxX11Clipboard = createLinuxX11Clipboard();
@@ -1438,6 +1456,7 @@ const {
   getAppVersion: () => app.getVersion(),
   autoUpdatesUnavailableMessage,
   getActiveNevermindBaseUrl: () => activeNevermindBaseUrl,
+  getUpdateChannel,
   markAppQuitting,
   requestQuit: stateSafeQuit.requestQuit,
   quitApp: () => app.quit(),

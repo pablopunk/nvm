@@ -5,7 +5,10 @@ import {
 
 export const PORTABLE_CONFIG_VERSION = 1;
 
-export type PortableSettingKinds = Record<string, 'boolean' | 'shortcut'>;
+export type PortableSettingKinds = Record<
+  string,
+  'boolean' | 'shortcut' | 'choice'
+>;
 export type PortableSettingValue = string | boolean;
 
 export type PortableConfig = {
