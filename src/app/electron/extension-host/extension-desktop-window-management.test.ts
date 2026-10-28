@@ -59,7 +59,7 @@ function recordingStub(
   calls: StubCalls,
   name: string,
   implementation: (...args: any[]) => unknown,
-) {
+): (...args: any[]) => Promise<any> {
   return (...args: unknown[]) => {
     calls[name] = [...(calls[name] ?? []), args];
     return Promise.resolve(implementation(...args));

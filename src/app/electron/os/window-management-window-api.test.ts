@@ -78,7 +78,7 @@ function flushPromises() {
 function reasonOf(
   result: WindowApplyResult | WindowFocusResult | DisplayListResult,
 ) {
-  return result.ok ? null : result.reason;
+  return result.ok === false ? result.reason : null;
 }
 
 function windowsOf(result: WindowListResult): WindowDescriptor[] {
