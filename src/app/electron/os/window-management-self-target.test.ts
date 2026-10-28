@@ -27,6 +27,7 @@ test('refuses to move Nevermind itself and never touches the helper', async () =
       setFrame: countHelperCall,
       setFullScreen: countHelperCall,
       runningApps: countHelperCall,
+      allWindows: countHelperCall,
       windows: countHelperCall,
       raiseWindow: countHelperCall,
     },

@@ -17,12 +17,12 @@ const FOCUS_PRESENTATION: Record<FocusDirection, FocusPresentation> = {
   left: {
     title: 'Focus Window Left',
     icon: 'arrow-left',
-    keywords: ['focus', 'select', 'previous window', 'left'],
+    keywords: ['focus', 'select', 'left'],
   },
   right: {
     title: 'Focus Window Right',
     icon: 'arrow-right',
-    keywords: ['focus', 'select', 'next window', 'right'],
+    keywords: ['focus', 'select', 'right'],
   },
   up: {
     title: 'Focus Window Up',

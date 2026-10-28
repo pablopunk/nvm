@@ -94,6 +94,19 @@ test('persisted ids of the P1 layouts are unchanged', async () => {
   }
 });
 
+test('persisted ids of the focus commands are unchanged', async () => {
+  const actions = await actionsFor(true);
+  const focusIds = actions
+    .filter((action) => FOCUS_LOCAL_IDS.includes(action.id))
+    .map((action) => persistedIdOf(action.id));
+  assert.deepEqual(focusIds, [
+    'extension-action:window-management:layout.focus-left',
+    'extension-action:window-management:layout.focus-right',
+    'extension-action:window-management:layout.focus-up',
+    'extension-action:window-management:layout.focus-down',
+  ]);
+});
+
 test('every catalog layout is contributed exactly once as a durable action', async () => {
   assert.deepEqual(
     (await layoutActionsFor(true)).map((action) => action.id),
