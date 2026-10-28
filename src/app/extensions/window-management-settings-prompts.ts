@@ -15,6 +15,7 @@ type SettingsContext = Pick<ExtensionContext, 'actions' | 'input' | 'views'>;
 interface WholeNumberSettingEditor {
   definition: WholeNumberSettingDefinition;
   store: WindowManagementSettingsStore;
+  buildView: (ctx: ExtensionContext) => Promise<ExtensionView>;
 }
 
 function settingPromptFields(
@@ -60,8 +61,8 @@ function settingSaveAction(
       [definition.key]: parsed.value,
     } as WindowManagementSettings);
     return {
+      view: await editor.buildView(innerCtx),
       navigation: 'pop' as const,
-      action: innerCtx.views.refresh(),
     };
   });
 }

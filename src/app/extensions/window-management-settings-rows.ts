@@ -1,6 +1,7 @@
 import type {
   ExtensionContext,
   ExtensionItem,
+  ExtensionView,
 } from '../resources/nevermind-extension-api';
 import { showExtensionFeedback } from './feedback';
 import type { WindowManagementSettingsStore } from './window-management-settings';
@@ -64,6 +65,7 @@ function wholeNumberRow(
   store: WindowManagementSettingsStore,
   definition: WholeNumberSettingDefinition,
   settings: WindowManagementSettings,
+  buildView: (ctx: ExtensionContext) => Promise<ExtensionView>,
 ): ExtensionItem {
   return ctx.ui.item({
     id: definition.key,
@@ -73,7 +75,7 @@ function wholeNumberRow(
     accessories: [settingAccessory(definition, settings)],
     primaryAction: settingPromptAction(
       ctx,
-      { definition, store },
+      { definition, store, buildView },
       settings[definition.key] as number | null,
     ),
   });
@@ -145,9 +147,10 @@ export function settingRowFor(
   store: WindowManagementSettingsStore,
   definition: WindowManagementSettingDefinition,
   settings: WindowManagementSettings,
+  buildView: (ctx: ExtensionContext) => Promise<ExtensionView>,
 ): ExtensionItem {
   if (definition.kind === 'whole-number') {
-    return wholeNumberRow(ctx, store, definition, settings);
+    return wholeNumberRow(ctx, store, definition, settings, buildView);
   }
   if (definition.kind === 'boolean') {
     return booleanRow(ctx, store, definition, settings);
@@ -159,6 +162,7 @@ export function resetSectionRow(
   ctx: RowContext,
   store: WindowManagementSettingsStore,
   section: WindowManagementSettingSection,
+  buildView: (ctx: ExtensionContext) => Promise<ExtensionView>,
 ): ExtensionItem {
   return ctx.ui.item({
     id: `reset-${section.id}`,
@@ -180,7 +184,7 @@ export function resetSectionRow(
         return {
           patch: {
             items: section.settings.map((setting) =>
-              settingRowFor(innerCtx, store, setting, next),
+              settingRowFor(innerCtx, store, setting, next, buildView),
             ),
           },
         };

@@ -14,11 +14,6 @@ import {
   Zap,
 } from 'lucide-react';
 import {
-  ArcherContainer,
-  ArcherElement,
-  type ArcherContainerRef,
-} from 'react-archer';
-import {
   type MouseEvent,
   useEffect,
   useLayoutEffect,
@@ -26,6 +21,11 @@ import {
   useRef,
   useState,
 } from 'react';
+import {
+  ArcherContainer,
+  type ArcherContainerRef,
+  ArcherElement,
+} from 'react-archer';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
   actionMenuHostIsStacked,
@@ -34,10 +34,8 @@ import {
   confirmationReturnSurface,
 } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
-import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
 import { chatSessionKey, useAiChatSessions } from './ai-chat/ai-chat-sessions';
-import { useSessionState } from './use-session-state';
-import { isAppIconPath } from './app-icons';
+import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
 import {
   applyBuilderPreviewActionResult,
   builderPreviewAutoRunAction,
@@ -52,6 +50,8 @@ import {
   retryBuilderPreviewHydration,
   upsertBuilderPreview,
 } from './ai-chat/builder-preview';
+import { useAiChat } from './ai-chat/use-ai-chat';
+import { isAppIconPath } from './app-icons';
 import {
   type CommandIconName,
   iconFor,
@@ -68,13 +68,6 @@ import {
 import { dictationDevices } from './dictation/dictation-devices';
 import { recordDictation } from './dictation/dictation-renderer';
 import { ExtensionViewRenderer } from './extension-view/extension-view';
-import { feedbackView } from './feedback';
-import {
-  allViewItems,
-  filterCommandItems,
-  filterCommandSections,
-  valuesMatch,
-} from './filtering';
 import {
   FORM_SAVE_ROW_ID,
   formApplyRowId,
@@ -82,6 +75,16 @@ import {
   formFieldValue,
   formRowId,
 } from './extension-view/form-fields';
+import { usePaletteForm } from './extension-view/palette-form';
+import { useExtensionNavigation } from './extension-view/use-extension-navigation';
+import { patchCommandView } from './extension-view/view-patches';
+import { feedbackView } from './feedback';
+import {
+  allViewItems,
+  filterCommandItems,
+  filterCommandSections,
+  valuesMatch,
+} from './filtering';
 import {
   actionDefinition,
   actionDescription,
@@ -97,7 +100,6 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
-import { usePaletteForm } from './extension-view/palette-form';
 import {
   resetTransientPaletteState,
   rootResultSelection,
@@ -137,10 +139,8 @@ import {
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
-import { useAiChat } from './ai-chat/use-ai-chat';
-import { useExtensionNavigation } from './extension-view/use-extension-navigation';
 import { useSearchResults } from './use-search-results';
-import { patchCommandView } from './extension-view/view-patches';
+import { useSessionState } from './use-session-state';
 
 type ActionKind =
   | 'open-url'
@@ -3229,10 +3229,6 @@ export function App() {
     );
   }
 
-  function showPrimaryExtensionView(view: ExtensionView) {
-    extensionNavigation.startShortcut(view, crypto.randomUUID(), true);
-  }
-
   function popExtensionView() {
     setExtensionItemOptionsFor(null);
     const currentFrame = extensionNavigation.currentFrame();
@@ -3339,8 +3335,10 @@ export function App() {
         if (result.toast)
           showFeedbackIndicator(result.toast.message, result.toast.tone);
         if (result.patch) applyViewPatch(result.patch);
-        if (result.navigation === 'pop') popExtensionView();
-        else if (result.view?.aiChat)
+        if (result.navigation === 'pop') {
+          popExtensionView();
+          if (result.view) showExtensionView(result.view, 'replace');
+        } else if (result.view?.aiChat)
           await openAiChat(
             result.view,
             result.navigation || fallbackNavigation,

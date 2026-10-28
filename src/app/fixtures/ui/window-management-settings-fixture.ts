@@ -44,6 +44,8 @@ export function windowManagementSettingsErrorFixtureView(
     {
       store: fixtureSettingsStore,
       definition: wholeNumberSettingFor('outerGap'),
+      buildView: (innerCtx) =>
+        windowManagementSettingsView(innerCtx, fixtureSettingsStore),
     },
     '150',
     'Enter a whole number from 0 to 40.',

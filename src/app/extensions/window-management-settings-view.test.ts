@@ -145,14 +145,21 @@ test('an edge override prompt is pre-filled blank and optional', async () => {
   );
 });
 
-test('a valid prompt value saves, pops the prompt, and refreshes the root view', async () => {
+test('a valid prompt value saves and returns to the refreshed settings list', async () => {
   const { rows, ctx, storage } = await settingsRootOf();
   const save = rowById(rows, 'outerGap').primaryAction.action;
 
   const result = await save.handler(ctx, { formValues: { value: '24' } });
 
   assert.equal(result.navigation, 'pop');
-  assert.deepEqual(result.action, { type: 'refresh-action' });
+  assert.equal(result.view.id, 'window-management-settings');
+  assert.equal(
+    rowById(
+      result.view.sections.flatMap((section: any) => section.items),
+      'outerGap',
+    ).accessories[0].text,
+    '24 px',
+  );
   assert.equal(
     ((await storage.get(WINDOW_MANAGEMENT_SETTINGS_KEY)) as any).outerGap,
     24,
