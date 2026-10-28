@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test, describe, afterEach } from 'node:test';
 import { resetPricingCacheForTests } from './pricing';
-import { getUpstreamConfig, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
+import { getUpstreamConfig, getUpstreamProbeSpec, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
 
 const originalFetch = globalThis.fetch;
 
@@ -94,5 +94,51 @@ describe('getUpstreamConfig', () => {
       () => getUpstreamConfig('openrouter'),
       UpstreamConfigError,
     );
+  });
+});
+
+describe('getUpstreamProbeSpec', () => {
+  test('openrouter probes an anonymous catalog and verifies the key on /key', () => {
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    const spec = getUpstreamProbeSpec('openrouter');
+    assert.deepStrictEqual(spec.headers, { authorization: 'Bearer or-key' });
+    assert.strictEqual(spec.catalogPath, '/models');
+    assert.deepStrictEqual(spec.verification, { kind: 'key', path: '/key' });
+  });
+
+  test('opencode_zen is verified by its key-gated catalog', () => {
+    process.env.OPENCODE_API_KEY = 'zen-key';
+    const spec = getUpstreamProbeSpec('opencode_zen');
+    assert.deepStrictEqual(spec.verification, { kind: 'catalog' });
+    assert.strictEqual(spec.headers.authorization, 'Bearer zen-key');
+  });
+
+  test('anthropic uses the x-api-key header, its versioned catalog path, and the required version header', () => {
+    process.env.ANTHROPIC_API_KEY = 'anthro-key';
+    const spec = getUpstreamProbeSpec('anthropic');
+    assert.strictEqual(spec.catalogPath, '/v1/models');
+    assert.deepStrictEqual(spec.headers, {
+      'anthropic-version': '2023-06-01',
+      'x-api-key': 'anthro-key',
+    });
+    assert.deepStrictEqual(spec.verification, { kind: 'catalog' });
+  });
+
+  test('google uses the x-goog-api-key header and lists its catalog under models', () => {
+    process.env.GOOGLE_API_KEY = 'google-key';
+    const spec = getUpstreamProbeSpec('google');
+    assert.deepStrictEqual(spec.headers, { 'x-goog-api-key': 'google-key' });
+    assert.strictEqual(spec.catalogListKey, 'models');
+  });
+
+  test('every other catalog lists its models under data', () => {
+    process.env.OPENROUTER_API_KEY = 'or-key';
+    assert.strictEqual(getUpstreamProbeSpec('openrouter').catalogListKey, 'data');
+  });
+
+  test('a missing key or unknown provider throws instead of producing an unauthenticated probe', () => {
+    delete process.env.OPENAI_API_KEY;
+    assert.throws(() => getUpstreamProbeSpec('openai'), UpstreamConfigError);
+    assert.throws(() => getUpstreamProbeSpec('made-up-provider'), UpstreamConfigError);
   });
 });

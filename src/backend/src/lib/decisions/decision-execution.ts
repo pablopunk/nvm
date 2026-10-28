@@ -7,6 +7,7 @@ import { imageDimensions } from '../../../../app/shared/ai-image-dimensions';
 import type { DecisionAccount } from './decision-account';
 import { decisionAdapterFor } from './decision-adapter';
 import {
+  decisionOutputIsUnbilled,
   decisionOutputTokenCeiling,
   decisionReservationCostUsd,
   decisionReservationCredits,
@@ -285,12 +286,7 @@ export async function runDecision(input: {
       'decision_model_unavailable',
       'The decision model has no verified pricing.',
     );
-  if (
-    costRow.outputUsdPerMtok !== 0 ||
-    costRow.tiers?.some(
-      (tier) => (tier.outputUsdPerMtok ?? costRow.outputUsdPerMtok) !== 0,
-    )
-  )
+  if (!decisionOutputIsUnbilled(costRow))
     return decisionErrorResponse(
       503,
       'decision_model_unavailable',

@@ -9,8 +9,13 @@ serving that commit or a verified newer commit on main. A deployment that does n
 report `upstreamReady` yet fails closed until the new backend is deployed. The
 production deployment workflow must also have completed its production deployment
 successfully. A failed or unverified backend deployment prevents publication.
-Some providers expose their catalog anonymously, so readiness does not prove an
-API key is valid or that an authenticated model request will succeed.
+Readiness covers the providers that live routes can reach, not a single default
+provider. Each must answer, and its key must be accepted. OpenRouter's catalog
+answers anonymously, so its key is verified on the authenticated `/key` endpoint.
+A missing or disabled audio or decision route also fails readiness, though it does
+not fail liveness, so chat outages and feature outages stay distinct.
+Readiness does not prove credit balance, rate limits, or that an authenticated
+model request will succeed.
 
 The workflow summary records why a run built or skipped. When a nightly is
 missing, inspect the **Nightly release** run and its plan summary first, then the
