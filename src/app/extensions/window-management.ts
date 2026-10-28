@@ -6,10 +6,7 @@ import {
   WINDOW_MANAGEMENT_OS_CAPABILITY,
   windowLayoutActions,
 } from './window-management-commands';
-import {
-  customWindowCommandActions,
-  customWindowCommandsCommand,
-} from './window-management-custom-commands';
+import { customWindowCommandsCommand } from './window-management-custom-commands';
 import { windowDesktopActions } from './window-management-desktops';
 import { exactWindowActions } from './window-management-exact-commands';
 import { windowManagementSettingsView } from './window-management-settings-view';
@@ -37,7 +34,7 @@ export function createWindowManagementExtension() {
       windowManagementSettingsCommand(),
       customWindowCommandsCommand(),
     ],
-    async actions(ctx) {
+    actions(ctx) {
       if (!windowManagementSupported(ctx)) {
         return [];
       }
@@ -45,7 +42,6 @@ export function createWindowManagementExtension() {
         ...windowLayoutActions(ctx),
         ...exactWindowActions(ctx),
         ...windowDesktopActions(),
-        ...(await customWindowCommandActions(ctx)),
       ];
     },
   } satisfies NevermindExtension;

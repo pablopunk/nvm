@@ -43,14 +43,11 @@ function fakeWindowUi(indicators: any[]) {
     item: (item: any) => item,
     list: (view: any) => ({ type: 'list', ...view }),
     form: (view: any) => ({ type: 'form', ...view }),
+    preview: (view: any) => ({ type: 'preview', ...view }),
   };
 }
 
-function fakeWindowActions(
-  invalidations: string[],
-  contributionRefreshCalls: unknown[][],
-  refreshImplementation: FakeWindowContextOptions['refreshContributions'],
-) {
+function fakeWindowActions(invalidations: string[]) {
   return {
     input: {
       prompt: (input: any) => ({ type: 'prompt-action', ...input }),
@@ -61,10 +58,6 @@ function fakeWindowActions(
         handler,
         ...options,
       }),
-      refreshContributions: recordingCall(
-        contributionRefreshCalls,
-        refreshImplementation ?? (() => Promise.resolve({ ok: true })),
-      ),
     },
     views: {
       refresh: () => ({ type: 'refresh-action' }),
@@ -102,7 +95,6 @@ export interface FakeWindowContextOptions {
   appleScript?: (...args: unknown[]) => Promise<unknown>;
   withWindowManagementFacet?: boolean;
   withWindowManagementCapability?: boolean;
-  refreshContributions?: (...args: unknown[]) => Promise<unknown>;
 }
 
 export function fakeWindowManagementContext(
@@ -113,7 +105,6 @@ export function fakeWindowManagementContext(
   const applyCalls: unknown[][] = [];
   const appleScriptCalls: unknown[][] = [];
   const invalidations: string[] = [];
-  const contributionRefreshCalls: unknown[][] = [];
   const storage = memoryExtensionStorage(options.storage);
   const ctx = {
     storage,
@@ -129,11 +120,7 @@ export function fakeWindowManagementContext(
       info: () => undefined,
     },
     ui: fakeWindowUi(indicators),
-    ...fakeWindowActions(
-      invalidations,
-      contributionRefreshCalls,
-      options.refreshContributions,
-    ),
+    ...fakeWindowActions(invalidations),
   };
   return {
     ctx: ctx as any,
@@ -143,6 +130,5 @@ export function fakeWindowManagementContext(
     appleScriptCalls,
     logs,
     invalidations,
-    contributionRefreshCalls,
   };
 }
