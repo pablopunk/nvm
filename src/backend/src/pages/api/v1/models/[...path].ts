@@ -3,14 +3,48 @@ import { completeStreamLines, parseStreamUsageJson, proxyAndBill, type StreamUsa
 
 export const config = { maxDuration: 300 };
 
-function rewriteGoogleModelInPath(originalPath: string, activeModelId: string): string {
-  const colonIdx = originalPath.indexOf(':');
-  const operation = colonIdx >= 0 ? originalPath.slice(colonIdx) : '';
-  return `${activeModelId}${operation}`;
+const SUPPORTED_GOOGLE_OPERATION_PATH = /^[^:]*:(generateContent|streamGenerateContent|countTokens)$/;
+const FORWARDED_GOOGLE_ALT_VALUES = new Set(['sse', 'json']);
+
+function isSupportedGoogleOperationPath(path: string): boolean {
+  return SUPPORTED_GOOGLE_OPERATION_PATH.test(path);
+}
+
+function googleOperationFromPath(supportedPath: string): string {
+  return supportedPath.slice(supportedPath.indexOf(':') + 1);
+}
+
+function forwardedGoogleSearch(url: URL): string {
+  const alt = url.searchParams.get('alt');
+  return alt !== null && FORWARDED_GOOGLE_ALT_VALUES.has(alt) ? `?alt=${alt}` : '';
+}
+
+function googleUpstreamUrl(upstreamBaseUrl: string, activeModelId: string, operation: string, search: string): string {
+  const expectedPathname = new URL(`${upstreamBaseUrl}/models/${activeModelId}:${operation}`).pathname;
+  const builtUrl = `${upstreamBaseUrl}/models/${activeModelId}:${operation}${search}`;
+  if (new URL(builtUrl).pathname !== expectedPathname) {
+    throw new Error('Google upstream URL path does not match the requested model operation');
+  }
+  return builtUrl;
+}
+
+function unsupportedGoogleOperationResponse(): Response {
+  return Response.json(
+    { error: { type: 'unsupported_request_shape', message: 'Unsupported Google model operation.' } },
+    { status: 400 },
+  );
+}
+
+function googleUsageMetadata(json: any): any {
+  if (!Array.isArray(json)) return json?.usageMetadata;
+  for (let index = json.length - 1; index >= 0; index--) {
+    if (json[index]?.usageMetadata) return json[index].usageMetadata;
+  }
+  return undefined;
 }
 
 function parseUsageFromGoogleJson(json: any): UsageTokens | null {
-  const u = json?.usageMetadata;
+  const u = googleUsageMetadata(json);
   if (!u) return null;
   return {
     inputTokens: u.promptTokenCount ?? 0,
@@ -18,6 +52,33 @@ function parseUsageFromGoogleJson(json: any): UsageTokens | null {
     cachedInputTokens: u.cachedContentTokenCount ?? 0,
     reasoningTokens: u.thoughtsTokenCount ?? 0,
   };
+}
+
+function unsupportedGoogleRequestShapeMessage(body: unknown): string | null {
+  if (body && typeof body === 'object' && Object.hasOwn(body, 'generation_config')) {
+    return 'Unsupported Google request shape.';
+  }
+  return null;
+}
+
+function rewriteGoogleRequestBody(
+  bodyText: string,
+  _routing: { activeModelId: string },
+  maxOutputTokens: number,
+): string {
+  const parsed = parseJsonObjectOrNull(bodyText);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return bodyText;
+  const { max_output_tokens: _snakeCaseLimit, ...generationConfig } = parsed.generationConfig ?? {};
+  parsed.generationConfig = { ...generationConfig, maxOutputTokens };
+  return JSON.stringify(parsed);
+}
+
+function parseJsonObjectOrNull(bodyText: string): any {
+  try {
+    return JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
 }
 
 function googleOutputTokens(usageMetadata: any): number {
@@ -53,16 +114,19 @@ function parseUsageFromGoogleStreamChunk(chunkText: string, acc: StreamUsageAccu
 
 export const POST: APIRoute = async ({ request, params, url }) => {
   const rawPath = (params.path ?? '').toString();
-  const search = url.search ?? '';
+  if (!isSupportedGoogleOperationPath(rawPath)) return unsupportedGoogleOperationResponse();
+  const operation = googleOperationFromPath(rawPath);
+  const search = forwardedGoogleSearch(url);
   return proxyAndBill({
     request,
+    requiredApi: 'google-generative-ai',
     authHeaderName: 'x-goog-api-key',
     upstreamAuthHeaderName: 'x-goog-api-key',
     formatUpstreamAuthValue: (k) => k,
-    buildUpstreamUrl: ({ upstreamBaseUrl, activeModelId }) => {
-      const rewritten = rewriteGoogleModelInPath(rawPath, activeModelId);
-      return `${upstreamBaseUrl}/models/${rewritten}${search}`;
-    },
+    validateRequestBody: unsupportedGoogleRequestShapeMessage,
+    buildUpstreamUrl: ({ upstreamBaseUrl, activeModelId }) =>
+      googleUpstreamUrl(upstreamBaseUrl, activeModelId, operation, search),
+    rewriteRequestBody: rewriteGoogleRequestBody,
     parseUsageFromJson: parseUsageFromGoogleJson,
     parseUsageFromStreamChunk: parseUsageFromGoogleStreamChunk,
   });
