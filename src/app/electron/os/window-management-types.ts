@@ -68,6 +68,15 @@ export interface MacosWindowManager {
     windowKey: string,
     fullScreen: boolean,
   ): Promise<HelperEnvelope<SetFrameData>>;
+  runningApps(): Promise<HelperEnvelope<RunningApp[]>>;
+  windows(pid: number): Promise<HelperEnvelope<WindowInfo[]>>;
+  raiseWindow(pid: number, windowKey: string): Promise<HelperEnvelope<null>>;
+}
+
+export interface RunningApp {
+  pid: number;
+  bundleId: string;
+  name: string;
 }
 
 export type WindowEdge = 'left' | 'right' | 'top' | 'bottom';
@@ -185,6 +194,7 @@ export type WindowApplyFailureReason =
   | 'unsupported'
   | 'invalid-spec'
   | 'no-history'
+  | 'unknown-window'
   | 'single-display';
 
 export type WindowApplyResult =
@@ -197,6 +207,38 @@ export type WindowApplyResult =
     }
   | { ok: false; reason: WindowApplyFailureReason; message: string };
 
+export interface WindowListQuery {
+  appId?: string;
+  title?: string;
+}
+
+export interface WindowDescriptor {
+  handle: string;
+  appId: string;
+  appName: string;
+  title: string;
+  frame: Frame;
+  displayId: string;
+  isFullScreen: boolean;
+  isMinimized: boolean;
+}
+
+export type WindowOperationFailure = {
+  ok: false;
+  reason: WindowApplyFailureReason;
+  message: string;
+};
+
+export type WindowListResult =
+  | { ok: true; windows: WindowDescriptor[] }
+  | WindowOperationFailure;
+
+export type DisplayListResult =
+  | { ok: true; displays: DisplayInfo[] }
+  | WindowOperationFailure;
+
+export type WindowFocusResult = { ok: true } | WindowOperationFailure;
+
 export interface WindowManagementService {
   available(): boolean;
   apply(
@@ -204,6 +246,14 @@ export interface WindowManagementService {
     options: WindowManagementOptions,
     invocation: WindowInvocation,
   ): Promise<WindowApplyResult>;
+  listDisplays(): Promise<DisplayListResult>;
+  listWindows(query: WindowListQuery): Promise<WindowListResult>;
+  applyToWindow(
+    handle: string,
+    spec: WindowLayoutSpec,
+    options: WindowManagementOptions,
+  ): Promise<WindowApplyResult>;
+  focusWindow(handle: string): Promise<WindowFocusResult>;
 }
 
 export interface WindowInvocationPorts {

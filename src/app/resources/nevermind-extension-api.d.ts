@@ -113,6 +113,28 @@ export type ExtensionWindowManagementOptions = {
   displayMoveSizing?: 'proportional' | 'keep-size';
 };
 
+/** Opaque host-owned window reference from `windows()`. Never construct one yourself. */
+export type ExtensionWindowHandle = { readonly id: string };
+
+export type ExtensionWindowInfo = {
+  handle: ExtensionWindowHandle;
+  /** Bundle identifier of the owning app. */
+  appId: string;
+  appName: string;
+  title: string;
+  frame: { x: number; y: number; width: number; height: number };
+  displayId: string;
+  isFullScreen: boolean;
+  isMinimized: boolean;
+};
+
+export type ExtensionDisplayInfo = {
+  id: string;
+  isPrimary: boolean;
+  frame: { x: number; y: number; width: number; height: number };
+  workArea: { x: number; y: number; width: number; height: number };
+};
+
 export type ExtensionWindowApplyResult =
   | {
       ok: true;
@@ -138,6 +160,7 @@ export type ExtensionWindowApplyResult =
         | 'unsupported'
         | 'invalid-spec'
         | 'no-history'
+        | 'unknown-window'
         | 'single-display';
       /** Palette-ready explanation. */
       message: string;
@@ -1982,6 +2005,35 @@ export type ExtensionContext = {
         spec: ExtensionWindowLayoutSpec,
         options?: ExtensionWindowManagementOptions,
       ): Promise<ExtensionWindowApplyResult>;
+      /** Displays with their frames and work areas (menu bar and Dock excluded), in global points with a top-left origin. */
+      displays(): Promise<ExtensionDisplayInfo[]>;
+      /**
+       * List windows of running apps, optionally narrowed by bundle id (`appId`) and/or a case-insensitive `title` substring.
+       * Handles are opaque, short-lived, and only valid in this session; list again when `applyTo`/`focus` reports `unknown-window`.
+       * Minimized and other-Space windows may be missing. Returns an empty list when access is denied.
+       */
+      windows(query?: {
+        appId?: string;
+        title?: string;
+      }): Promise<ExtensionWindowInfo[]>;
+      /**
+       * Poll `windows(query)` until a match exists or `timeoutMs` (default 5000, max 30000) passes; resolves to the first match or null.
+       * Pair it with `ctx.desktop.apps.launch(...)` to open an app and place its first window.
+       */
+      waitForWindow(
+        query: { appId?: string; title?: string },
+        options?: { timeoutMs?: number },
+      ): Promise<ExtensionWindowInfo | null>;
+      /** Apply a layout to a specific window from `windows()`/`waitForWindow()` instead of the invoking app's focused window. Same verification and result contract as `apply`. */
+      applyTo(
+        window: ExtensionWindowHandle,
+        spec: ExtensionWindowLayoutSpec,
+        options?: ExtensionWindowManagementOptions,
+      ): Promise<ExtensionWindowApplyResult>;
+      /** Bring a window to the front and focus its app. */
+      focus(
+        window: ExtensionWindowHandle,
+      ): Promise<{ ok: true } | { ok: false; reason: string; message: string }>;
     };
     files?: {
       /**
