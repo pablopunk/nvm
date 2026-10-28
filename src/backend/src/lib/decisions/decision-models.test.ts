@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decisionModelFromCatalog, isSelectableDecisionModel } from './decision-models';
+import {
+  decisionModelFromCatalog,
+  isSelectableDecisionModel,
+} from './decision-models';
 
 test('uses decision catalog token prices and records image billing bounds', () => {
   const model = decisionModelFromCatalog({
@@ -59,11 +62,39 @@ test('accepts the documented token-priced image billing for Jev 1.14 when the ca
 });
 
 test('only offers image decision models with safe billing bounds', () => {
-  const base = { provider: 'openrouter' as const, modelId: 'model', name: 'Model', acceptsImages: true, contextLength: 1000, imageTokenPriced: true, cost: { provider: 'openrouter', modelId: 'model', inputUsdPerMtok: 1, outputUsdPerMtok: 0 } };
+  const base = {
+    provider: 'openrouter' as const,
+    modelId: 'model',
+    name: 'Model',
+    acceptsImages: true,
+    contextLength: 1000,
+    imageTokenPriced: true,
+    cost: {
+      provider: 'openrouter',
+      modelId: 'model',
+      inputUsdPerMtok: 1,
+      outputUsdPerMtok: 0,
+    },
+  };
   assert.equal(isSelectableDecisionModel(base), true);
-  assert.equal(isSelectableDecisionModel({ ...base, acceptsImages: false }), false);
-  assert.equal(isSelectableDecisionModel({ ...base, imageTokenPriced: false }), false);
-  assert.equal(isSelectableDecisionModel({ ...base, contextLength: undefined }), false);
+  assert.equal(
+    isSelectableDecisionModel({ ...base, acceptsImages: false }),
+    false,
+  );
+  assert.equal(
+    isSelectableDecisionModel({ ...base, imageTokenPriced: false }),
+    false,
+  );
+  assert.equal(
+    isSelectableDecisionModel({ ...base, contextLength: undefined }),
+    false,
+  );
   assert.equal(isSelectableDecisionModel({ ...base, cost: null }), false);
-  assert.equal(isSelectableDecisionModel({ ...base, cost: { ...base.cost, outputUsdPerMtok: 1 } }), false);
+  assert.equal(
+    isSelectableDecisionModel({
+      ...base,
+      cost: { ...base.cost, outputUsdPerMtok: 1 },
+    }),
+    false,
+  );
 });

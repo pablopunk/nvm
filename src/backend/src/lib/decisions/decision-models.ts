@@ -74,8 +74,11 @@ function isZeroPrice(value: unknown): boolean {
 /** New routes must support images and have the billing bounds used by execution. */
 export function isSelectableDecisionModel(model: DecisionModel): boolean {
   return Boolean(
-    model.acceptsImages && model.contextLength && model.imageTokenPriced &&
-    model.cost && model.cost.outputUsdPerMtok === 0,
+    model.acceptsImages &&
+      model.contextLength &&
+      model.imageTokenPriced &&
+      model.cost &&
+      model.cost.outputUsdPerMtok === 0,
   );
 }
 

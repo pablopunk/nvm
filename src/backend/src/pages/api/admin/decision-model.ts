@@ -69,15 +69,8 @@ export const PUT: APIRoute = async ({ request }) => {
       status: 400,
     });
   if (!isSelectableDecisionModel(eligible))
-    return new Response('Decision model must support images and have verified billing bounds', { status: 400 });
-  const pricing = eligible.cost;
-  if (!pricing)
-    return new Response('Model does not have verified token pricing', {
-      status: 400,
-    });
-  if (pricing.outputUsdPerMtok !== 0)
     return new Response(
-      'Decision models with priced output require a verified output cost bound',
+      'Decision model must support images and have verified billing bounds',
       { status: 400 },
     );
   const idempotencyKey = adminMutationKeyFromRequest(request);

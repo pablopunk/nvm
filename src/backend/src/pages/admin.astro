@@ -150,7 +150,7 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         </section>
         <section class="model-route-row" data-decision-model-route>
           <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: model.acceptsImages ? `${modelRouteToRef(model)} · images` : `${modelRouteToRef(model)} · text only` }))]} /></label>
+          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: `${modelRouteToRef(model)} · images` }))]} /></label>
           <p class="muted">Only models that support images can be selected.</p>
         </section>
       </div>
