@@ -287,6 +287,10 @@ export type ExtensionActionContribution = {
   triggers?: ExtensionBackgroundTrigger[];
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction;
+  /** Secondary actions listed in this durable action's Cmd+K panel, beside the host-owned Set keyboard shortcut, Set alias, and Options rows. Same shape and placement rules as an item's `actions`; reference another durable action with `ctx.actions.ref(...)`. */
+  actions?: ExtensionAction[];
+  /** Cmd+K panel for this durable action when sections or titles are needed. Normalized like an item's `actionPanel`; prefer `actions` for a flat list. */
+  actionPanel?: ExtensionActionPanel;
   /** Handler to run when a simple declarative action is not enough. */
   run?: (
     ctx: ExtensionContext,
