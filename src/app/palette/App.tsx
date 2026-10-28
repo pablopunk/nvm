@@ -135,11 +135,11 @@ import {
   EMPTY_ROOT_TITLE,
   EmptyState,
   type FormValue,
-  MarkdownContent,
   SearchAccessory,
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
+import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
 
@@ -1032,8 +1032,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     void runAction(action);
   }
 
-  function renderMarkdown(content: string) {
-    return <MarkdownContent content={content} />;
+  function renderMarkdown(content: string, options?: MarkdownOptions) {
+    return <MarkdownContent content={content} {...options} />;
   }
 
   function runDefaultAction(item: ExtensionViewItem) {
@@ -4819,9 +4819,9 @@ export function App() {
     );
   }
 
-  function renderMarkdown(content: string) {
+  function renderMarkdown(content: string, options?: MarkdownOptions) {
     markDebugPerformance('markdown.render', { contentLength: content.length });
-    return <MarkdownContent content={content} />;
+    return <MarkdownContent content={content} {...options} />;
   }
 
   function runDefaultViewAction(item: ExtensionViewItem) {

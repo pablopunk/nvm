@@ -46,6 +46,10 @@ import {
 } from '../ui';
 import { ChatInputForm } from './chat-input-form';
 import { titleFromFirstContentLine } from './editor-title';
+import {
+  EXTENSION_WEBVIEW_SANDBOX,
+  extensionWebviewAllow,
+} from './extension-webview-permissions';
 import { formApplyRowId } from './form-fields';
 import type { usePaletteForm } from './palette-form';
 
@@ -87,7 +91,10 @@ export type ExtensionViewRendererProps = {
   >;
   filterItems: (items?: CommandItem[]) => CommandItem[];
   filterSections: (view: CommandView) => CommandView['sections'];
-  renderMarkdown: (content: string) => ReactNode;
+  renderMarkdown: (
+    content: string,
+    options?: { remoteImages?: 'links' },
+  ) => ReactNode;
   renderActionPanel: (rows: unknown[], emptyMessage?: string) => ReactNode;
   actionPanelRows: (
     panel?: CommandView['actionPanel'],
@@ -248,7 +255,10 @@ function ExtensionItemDetail({
   mediaPreview = false,
 }: {
   item?: CommandItem;
-  renderMarkdown: (content: string) => ReactNode;
+  renderMarkdown: (
+    content: string,
+    options?: { remoteImages?: 'links' },
+  ) => ReactNode;
   renderActionPanel: (rows: unknown[], emptyMessage?: string) => ReactNode;
   actionPanelRows: ExtensionViewRendererProps['actionPanelRows'];
   mediaPreview?: boolean;
@@ -536,7 +546,10 @@ function EditorSurface({
 }: {
   view: CommandView;
   actions: ReactNode;
-  renderMarkdown: (content: string) => ReactNode;
+  renderMarkdown: (
+    content: string,
+    options?: { remoteImages?: 'links' },
+  ) => ReactNode;
   runAction: (action: CommandAction) => void;
   surface?: 'palette' | 'window';
 }) {
@@ -804,36 +817,6 @@ type ExtensionViewSurfaceProps = ExtensionViewRendererProps & {
   renderEmpty: NonNullable<ExtensionViewRendererProps['renderEmpty']>;
 };
 
-export const EXTENSION_WEBVIEW_SANDBOX = 'allow-scripts allow-forms';
-export const DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS = ['autoplay'] as const;
-export const EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES = {
-  autoplay: 'autoplay',
-  camera: 'camera',
-  microphone: 'microphone',
-  'display-capture': 'display-capture',
-  'clipboard-read': 'clipboard-read',
-  'clipboard-write': 'clipboard-write',
-} as const;
-export const EXTENSION_WEBVIEW_ALLOW =
-  DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS.map(
-    (permission) => EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES[permission],
-  ).join('; ');
-
-export function extensionWebviewAllow(webviewPermissions?: readonly string[]) {
-  const permissions = webviewPermissions?.length
-    ? webviewPermissions
-    : DEFAULT_EXTENSION_WEBVIEW_PERMISSIONS;
-  return Array.from(new Set(permissions))
-    .map(
-      (permission) =>
-        EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES[
-          permission as keyof typeof EXTENSION_WEBVIEW_PERMISSION_ALLOW_VALUES
-        ],
-    )
-    .filter(Boolean)
-    .join('; ');
-}
-
 function ViewPagination({
   view,
   runAction,
@@ -1037,7 +1020,7 @@ function ChatExtensionView({
     content:
       index === streamingAssistantIndex
         ? message.content
-        : renderMarkdown(message.content),
+        : renderMarkdown(message.content, { remoteImages: 'links' }),
     streaming: index === streamingAssistantIndex,
   }));
   const chatInputRef = useRef<HTMLTextAreaElement>(null);
