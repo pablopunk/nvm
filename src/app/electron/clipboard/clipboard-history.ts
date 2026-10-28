@@ -1,7 +1,9 @@
 import type { ClipboardApi, MaybePromise } from '../os/electron-clipboard';
 import {
   type ClipboardHistoryItem,
+  clipboardFilePath,
   clipboardFilePaths,
+  clipboardIsMarkedSensitive,
   clipboardItemSubtitle,
   clipboardItemTitle,
 } from './clipboard-utils';
@@ -621,6 +623,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     const item =
       (await cheapClipboardItem()) || (await throttledClipboardImageItem());
     if (!item || item.id === watcherLastId) return;
+    if (await clipboardIsMarkedSensitive(deps.clipboard)) return;
     const suppressed = deps.getSuppressedItemIds();
     const suppressUntil = suppressed.get(item.id) || 0;
     if (suppressUntil > Date.now()) {
@@ -730,10 +733,6 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   }
 
   // ── desktop clipboard ───────────────────────────────────
-
-  async function clipboardFilePath(clipboard: ClipboardApi) {
-    return (await clipboardFilePaths(clipboard))[0] || null;
-  }
 
   async function clipboardFiles() {
     return Promise.all(
