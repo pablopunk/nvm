@@ -151,7 +151,7 @@ test('a valid prompt value saves and returns to the refreshed settings list', as
 
   const result = await save.handler(ctx, { formValues: { value: '24' } });
 
-  assert.equal(result.navigation, 'root');
+  assert.equal(result.navigation, 'pop');
   assert.equal(result.view.id, 'window-management-settings');
   assert.equal(
     rowById(
@@ -190,7 +190,7 @@ test('a blank edge override saves as null so the edge follows the outer gap', as
 
   const result = await save.handler(ctx, { formValues: { value: '' } });
 
-  assert.equal(result.navigation, 'root');
+  assert.equal(result.navigation, 'pop');
   assert.equal(
     ((await storage.get(WINDOW_MANAGEMENT_SETTINGS_KEY)) as any).outerGapRight,
     null,

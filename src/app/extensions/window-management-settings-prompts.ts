@@ -6,7 +6,6 @@ import type { WindowManagementSettingsStore } from './window-management-settings
 import type { WholeNumberSettingDefinition } from './window-management-settings-definitions';
 import { parseWholeNumberSettingInput } from './window-management-settings-input';
 import type { WindowManagementSettings } from './window-management-settings-model';
-import { windowManagementSettingsView } from './window-management-settings-view';
 
 const SAVE_TITLE = 'Save';
 const VALUE_FIELD_ID = 'value';
@@ -16,6 +15,7 @@ type SettingsContext = Pick<ExtensionContext, 'actions' | 'input' | 'views'>;
 interface WholeNumberSettingEditor {
   definition: WholeNumberSettingDefinition;
   store: WindowManagementSettingsStore;
+  buildView: (ctx: ExtensionContext) => Promise<ExtensionView>;
 }
 
 function settingPromptFields(
@@ -61,8 +61,8 @@ function settingSaveAction(
       [definition.key]: parsed.value,
     } as WindowManagementSettings);
     return {
-      view: await windowManagementSettingsView(innerCtx, store),
-      navigation: 'root' as const,
+      view: await editor.buildView(innerCtx),
+      navigation: 'pop' as const,
     };
   });
 }

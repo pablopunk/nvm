@@ -37,9 +37,13 @@ function settingsSectionFor(
     subtitle: section.subtitle,
     items: [
       ...section.settings.map((setting) =>
-        settingRowFor(ctx, store, setting, settings),
+        settingRowFor(ctx, store, setting, settings, (innerCtx) =>
+          windowManagementSettingsView(innerCtx, store),
+        ),
       ),
-      resetSectionRow(ctx, store, section),
+      resetSectionRow(ctx, store, section, (innerCtx) =>
+        windowManagementSettingsView(innerCtx, store),
+      ),
     ],
   };
 }
@@ -69,6 +73,7 @@ function resetDefaultsItem(
               store,
               setting,
               DEFAULT_WINDOW_MANAGEMENT_SETTINGS,
+              (refreshCtx) => windowManagementSettingsView(refreshCtx, store),
             ),
           ),
         },
