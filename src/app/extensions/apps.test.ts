@@ -117,11 +117,19 @@ test('Uninstall candidate list defaults to the app, patches selection, and confi
     path: '/Applications/Example.app',
   };
   const candidates = [
-    { id: 'app-id', kind: 'app', path: app.path },
+    {
+      id: 'app-id',
+      kind: 'app',
+      path: app.path,
+      selectedByDefault: true,
+      reason: 'Application bundle',
+    },
     {
       id: 'cache-id',
       kind: 'associated',
       path: '/Users/tester/Library/Caches/com.example.App',
+      selectedByDefault: false,
+      reason: 'Bundle ID prefix match; may belong to another app',
     },
   ];
   const snapshot = { candidates };

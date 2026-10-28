@@ -15,10 +15,16 @@ function uninstallResult(ctx: any, result: any) {
   }
   const details =
     result.untouched.length > 0
-      ? result.untouched.map((item: any) => ({
-          title: item.path,
-          subtitle: item.message,
-        }))
+      ? [
+          ...result.untouched.map((item: any) => ({
+            title: item.path,
+            subtitle: item.message,
+          })),
+          ...result.moved.map((path: string) => ({
+            title: path,
+            subtitle: 'Moved to Trash',
+          })),
+        ]
       : result.notes.map((note: any) => ({ title: note.message }));
   return feedbackView({
     id: 'uninstall-result',
@@ -68,10 +74,7 @@ function uninstallCandidateItem(
   return ctx.ui.item({
     id: candidate.id,
     title: candidate.path,
-    subtitle:
-      candidate.kind === 'app'
-        ? 'Application bundle'
-        : 'Conventional associated data',
+    subtitle: candidate.reason,
     icon: candidate.kind === 'app' ? 'app-window' : 'folder',
     accessories: [
       {
@@ -88,7 +91,7 @@ function uninstallCandidateItem(
 function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
   const selectedIds = new Set<string>(
     discovery.candidates
-      .filter((candidate: any) => candidate.kind === 'app')
+      .filter((candidate: any) => candidate.selectedByDefault)
       .map((candidate: any) => candidate.id),
   );
   const review = ctx.actions.run('Review selected items', () => {
@@ -107,9 +110,17 @@ function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
       return;
     }
     const selectedPaths = selection.map((candidate: any) => candidate.path);
+    const quitsApp = selection.some(
+      (candidate: any) => candidate.kind === 'app',
+    );
     return ctx.ui.confirm({
       title: `Move ${selectedPaths.length} item${selectedPaths.length === 1 ? '' : 's'} to Trash`,
-      message: selectedPaths.join('\n'),
+      message: [
+        ...selectedPaths,
+        ...(quitsApp
+          ? ['If running, the application will be asked to quit first.']
+          : []),
+      ].join('\n'),
       confirmLabel: 'Move to Trash',
       cancelLabel: 'Cancel',
       destructive: true,
