@@ -105,17 +105,10 @@ test('symlinks that resolve into ~/.ssh are denied', () => {
   });
 });
 
-test('credential directory names match case-insensitively only on darwin', () => {
+test('credential directory names match case-insensitively', () => {
   withFixture(({ home }) => {
     const upperCaseKey = path.join(home, '.SSH', 'id_ed25519');
-    assert.equal(
-      isCredentialPath(upperCaseKey, { homeDir: home, platform: 'darwin' }),
-      true,
-    );
-    assert.equal(
-      isCredentialPath(upperCaseKey, { homeDir: home, platform: 'linux' }),
-      false,
-    );
+    assert.equal(isCredentialPath(upperCaseKey, { homeDir: home }), true);
   });
 });
 

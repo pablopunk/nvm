@@ -14,14 +14,12 @@ export type CredentialPathPolicy = {
   homeDir: string;
   extraDeniedPaths?: readonly string[];
   allowedPaths?: readonly string[];
-  platform?: NodeJS.Platform;
 };
 
 type CanonicalCredentialPathPolicy = {
   homeDir: string;
   extraDeniedPaths: string[];
   allowedPaths: string[];
-  platform: NodeJS.Platform;
 };
 
 export const CREDENTIAL_PATH_BLOCK_REASON =
@@ -79,14 +77,12 @@ export function isCredentialPath(
   resolvedPath: string,
   policy: CredentialPathPolicy,
 ) {
-  const platform = policy.platform ?? process.platform;
-  const candidate = foldForPlatform(resolvedPath, platform);
+  const candidate = foldPathCase(resolvedPath);
   if (isEnvFileName(path.basename(candidate))) return true;
-  if (isInsideAnyRoot(candidate, homeCredentialRoots(policy.homeDir), platform))
+  if (isInsideAnyRoot(candidate, homeCredentialRoots(policy.homeDir)))
     return true;
-  if (isInsideAnyRoot(candidate, policy.allowedPaths ?? [], platform))
-    return false;
-  return isInsideAnyRoot(candidate, policy.extraDeniedPaths ?? [], platform);
+  if (isInsideAnyRoot(candidate, policy.allowedPaths ?? [])) return false;
+  return isInsideAnyRoot(candidate, policy.extraDeniedPaths ?? []);
 }
 
 export function nevermindPrivatePaths(userDataDir: string, agentDir: string) {
@@ -232,7 +228,6 @@ function canonicalizeCredentialPathPolicy(
     homeDir: canonicalOrOriginal(policy.homeDir),
     extraDeniedPaths: (policy.extraDeniedPaths ?? []).map(canonicalOrOriginal),
     allowedPaths: (policy.allowedPaths ?? []).map(canonicalOrOriginal),
-    platform: policy.platform ?? process.platform,
   };
 }
 
@@ -244,20 +239,14 @@ function canonicalOrOriginal(value: string) {
   }
 }
 
-function isInsideAnyRoot(
-  candidate: string,
-  roots: readonly string[],
-  platform: NodeJS.Platform,
-) {
+function isInsideAnyRoot(candidate: string, roots: readonly string[]) {
   return roots.some((root) =>
-    isInsidePath(candidate, foldForPlatform(path.resolve(root), platform)),
+    isInsidePath(candidate, foldPathCase(path.resolve(root))),
   );
 }
 
-function foldForPlatform(value: string, platform: NodeJS.Platform) {
-  return platform === 'darwin' || platform === 'win32'
-    ? value.toLowerCase()
-    : value;
+function foldPathCase(value: string) {
+  return value.toLowerCase();
 }
 
 function isInsidePath(candidate: string, root: string) {
