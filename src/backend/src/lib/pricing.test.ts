@@ -169,6 +169,44 @@ test('admin model listing includes bundled runtime models', async () => {
   assert.ok(models.includes('deepseek/deepseek-v4-flash-0731'));
 });
 
+test('route choices require function tools and exclude incompatible reasoning with tools', async () => {
+  globalThis.fetch = mockFetch({
+    opencode: {
+      models: {
+        'gpt-6.1-sol': {
+          id: 'gpt-6.1-sol',
+          reasoning: true,
+          tool_call: true,
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
+        },
+        'no-tools': {
+          id: 'no-tools',
+          reasoning: true,
+          tool_call: false,
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
+        },
+        'unknown-tools': {
+          id: 'unknown-tools',
+          reasoning: true,
+          modalities: { input: ['text', 'image'], output: ['text'] },
+          cost: { input: 1, output: 2 },
+        },
+      },
+    },
+  });
+
+  const smart = await listModelsForRouteKind('opencode_zen', 'smart');
+  const fast = await listModelsForRouteKind('opencode_zen', 'fast');
+  assert.ok(!smart.includes('gpt-6.1-sol'));
+  assert.ok(fast.includes('gpt-6.1-sol'));
+  for (const model of ['no-tools', 'unknown-tools']) {
+    assert.ok(!smart.includes(model));
+    assert.ok(!fast.includes(model));
+  }
+});
+
 test('route model choices follow the slot criteria from the catalog', async () => {
   globalThis.fetch = mockFetch({
     openrouter: {
