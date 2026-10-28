@@ -12,6 +12,7 @@
 
 ## Architecture
 
+* Never hardcode model IDs anywhere in code.
 * **Dogfood the Extension API as the app's primary development model. Treat extension APIs as declarative host points, not backdoors; fix missing primitives in the API instead of bypassing it with bespoke native code, and keep commands and provider items distinct to avoid duplication in search. When adding background or automation primitives, migrate an existing Nevermind host job first, then expose the extension API.**
 * Keep files small and focused. Refactor slow patterns when encountered.
 * Nest `src/app/electron` by layer (`platform < diagnostics < backend < os < files, search < clipboard < state < extension-host < ai, shortcuts, actions < app < ipc < main.ts`); `main.ts` is the composition root that only wires `createXService(deps)` factories with narrow ports. `scripts/check-electron-structure.cjs` enforces layers and cycles and `scripts/check-file-size.cjs` ratchets file size: lower baselines when code moves out, never raise them.
