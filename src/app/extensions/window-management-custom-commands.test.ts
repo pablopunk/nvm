@@ -25,8 +25,8 @@ const OK_RESULT = {
 const LEFT_THIRD = {
   id: 'custom-left-third',
   title: 'Left third',
-  x: { value: 0, unit: 'points' },
-  width: { value: 33, unit: 'percent' },
+  x: { value: 0, unit: 'points' as const },
+  width: { value: 33, unit: 'percent' as const },
 };
 
 function seededContext(commands: unknown[] = [LEFT_THIRD]) {

@@ -59,5 +59,5 @@ export function normalizeWindowManagementSettings(
       record[definition.key],
     );
   }
-  return settings as WindowManagementSettings;
+  return settings as unknown as WindowManagementSettings;
 }

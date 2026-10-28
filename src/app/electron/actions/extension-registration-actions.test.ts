@@ -70,6 +70,7 @@ function createRegistrationHarness() {
     userStateStore: { get: () => ({ aiChats: {} }) } as any,
     chatTouchedExtensionFiles: () => [],
     extensionActionFromContribution: normalizer.extensionActionFromContribution,
+    extensionRootActionFromItem: (_entry: any, item: any) => item,
   });
   return {
     extensionModules,

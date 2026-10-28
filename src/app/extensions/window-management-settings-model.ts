@@ -54,5 +54,5 @@ export function resetSettingsToDefaults(
   for (const key of keys) {
     next[key] = DEFAULT_WINDOW_MANAGEMENT_SETTINGS[key];
   }
-  return next as WindowManagementSettings;
+  return next as unknown as WindowManagementSettings;
 }

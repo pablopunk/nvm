@@ -165,7 +165,10 @@ test('contributes the Custom Window Commands root command', () => {
 });
 
 test('custom commands are not searched as root rows; they are durable actions', () => {
-  assert.equal(createWindowManagementExtension().searchItems, undefined);
+  assert.equal(
+    (createWindowManagementExtension() as Record<string, unknown>).searchItems,
+    undefined,
+  );
 });
 
 test('each stored custom command is a durable action with a layout.custom.<id> local id', async () => {

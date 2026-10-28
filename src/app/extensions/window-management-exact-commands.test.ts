@@ -17,7 +17,7 @@ const OK_RESULT = {
   frame: { x: 10, y: 0, width: 400, height: 300 },
 };
 
-function submitOf(kind: 'move' | 'resize', ctx: any) {
+function submitOf(kind: 'move' | 'resize', ctx: any): any {
   return exactWindowAction(ctx, kind).action.action;
 }
 
