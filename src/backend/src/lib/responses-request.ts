@@ -1,3 +1,5 @@
+import { supportsModelThinkingLevel } from './model-capabilities';
+
 const ALLOWED_FIELDS = new Set([
   'model',
   'input',
@@ -80,6 +82,12 @@ export function rewriteResponsesRequest(
   body.model = routing.activeModelId;
   body.max_output_tokens = maxOutputTokens;
   body.store = false;
+  if (
+    typeof body.reasoning?.effort === 'string' &&
+    !supportsModelThinkingLevel(routing.activeModelId, body.reasoning.effort)
+  ) {
+    body.reasoning.effort = 'low';
+  }
   delete body.service_tier;
   delete body.prompt_cache_key;
   delete body.prompt_cache_retention;

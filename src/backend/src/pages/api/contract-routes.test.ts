@@ -4048,7 +4048,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
       'data: {"type":"response.completed","response":{"usage":{"input_tokens":12,"output_tokens":8,"input_tokens_details":{"cached_tokens":2},"output_tokens_details":{"reasoning_tokens":3}}}}\n\n',
     ]), { headers: { 'content-type': 'text/event-stream' } });
   };
-  const body = { model: 'other', input: [{ role: 'user', content: 'hello' }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], max_output_tokens: 64, store: true, service_tier: 'priority', stream: true };
+  const body = { model: 'other', input: [{ role: 'user', content: 'hello' }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], reasoning: { effort: 'none' }, max_output_tokens: 64, store: true, service_tier: 'priority', stream: true };
   const response = await postResponses(routeContext(authorizedChatRequest(body)));
   const streamed = await response.text();
   await waitForBackgroundTasks();
@@ -4058,6 +4058,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
   assert.equal(forwarded.max_output_tokens, 64);
   assert.equal(forwarded.store, false);
   assert.equal(forwarded.service_tier, undefined);
+  assert.equal(forwarded.reasoning.effort, 'low');
   assert.deepEqual(forwarded.tools, body.tools);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 8);

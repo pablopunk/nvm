@@ -46,7 +46,7 @@ test('only reviewed provider, model and role combinations are selectable', () =>
 test('GPT-6.1 Sol requires Responses and a supported reasoning level', () => {
   for (const model of ['gpt-6.1-sol', 'openai/gpt-6.1-sol']) {
     assert.equal(requiresResponsesForTools(model), true);
-    for (const level of ['off', 'minimal'])
+    for (const level of ['off', 'none', 'minimal'])
       assert.equal(supportsModelThinkingLevel(model, level), false);
     for (const level of ['low', 'medium', 'high', 'xhigh', 'max'])
       assert.equal(supportsModelThinkingLevel(model, level), true);

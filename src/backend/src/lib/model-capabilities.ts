@@ -31,7 +31,8 @@ export function supportsModelThinkingLevel(
   level: string,
 ): boolean {
   return (
-    !requiresResponsesForTools(modelId) || !['off', 'minimal'].includes(level)
+    !requiresResponsesForTools(modelId) ||
+    !['off', 'none', 'minimal'].includes(level)
   );
 }
 
