@@ -1113,9 +1113,82 @@ export type ExtensionData = {
   }): ExtensionDataLoaderHandle;
 };
 
+/**
+ * One question answered against the shared `input` and `attachments`. Ids are
+ * unique per call and become the keys of `ExtensionDecisionResult.answers`.
+ */
+export type ExtensionDecisionQuestion =
+  | {
+      id: string;
+      type: 'predicate';
+      /** A yes/no question about the shared input. */
+      question: string;
+    }
+  | {
+      id: string;
+      type: 'choice';
+      question: string;
+      /** Two to 32 distinct option values. The answer is always one of them. */
+      options: string[];
+    }
+  | {
+      id: string;
+      type: 'score';
+      question: string;
+      /** Integer scale; at most 10 levels. `labels` keys name levels inside min..max. */
+      min: number;
+      max: number;
+      labels?: Record<string, string>;
+    };
+
+/**
+ * `probability` is the model's probability that the predicate holds; `value` is
+ * `probability >= 0.5`. `probabilities` and `confidence` are optional and
+ * present only when the model reports them.
+ */
+export type ExtensionDecisionAnswer =
+  | { type: 'predicate'; value: boolean; probability: number }
+  | {
+      type: 'choice';
+      value: string;
+      probabilities?: Record<string, number>;
+      confidence?: number;
+    }
+  | {
+      type: 'score';
+      value: number;
+      probabilities?: Record<string, number>;
+      confidence?: number;
+    };
+
+export type ExtensionDecisionOptions = {
+  /** Shared text evaluated by every question in one batched call. May be empty when images carry the content. */
+  input: string | Record<string, unknown> | unknown[];
+  /** Text, file, clipboard or image attachments. Images are never dropped: unsupported images fail the call. */
+  attachments?:
+    | ExtensionAiResolvableAttachment
+    | ExtensionAiResolvableAttachment[];
+  questions: ExtensionDecisionQuestion[];
+  signal?: AbortSignal;
+};
+
+export type ExtensionDecisionResult = {
+  id: string;
+  model: string;
+  answers: Record<string, ExtensionDecisionAnswer>;
+  usage: { inputTokens: number; outputTokens: number };
+};
+
 export type ExtensionAi = {
   /** Whether the user is signed in and can use Nevermind AI features. */
   isAvailable(): Promise<boolean>;
+  /**
+   * Batched structured decisions over one shared input. Answers are typed per
+   * question (predicate, choice or score). Quota-limited per extension; declare
+   * the `ai` capability for review. Rejects with `code: 'unsupported_image_route'`
+   * when the configured decision model cannot read the images; nothing is dropped.
+   */
+  decide(options: ExtensionDecisionOptions): Promise<ExtensionDecisionResult>;
   /** Easy one-shot AI call. Quota-limited per extension; declare the `ai` capability for review. Smart/fast routes are configured by the backend admin. */
   (prompt: string, model?: ExtensionAiModel): Promise<string>;
   (prompt: string, options?: ExtensionAiOptions): Promise<string>;

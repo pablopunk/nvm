@@ -1,5 +1,6 @@
 import { quickLookTitle, revealPathTitle } from '../electron/os/os';
 import { extensionContext } from './_context';
+import { semanticFileSearch } from './files-semantic-search';
 
 function buildPreviewItemActionForFile(input: any) {
   const kind =
@@ -66,7 +67,7 @@ function fileRootItem(item) {
     subtitle: item.displayPath,
     icon: isMedia ? item.kind : 'folder',
     score: 4,
-    dismissAfterRun: 'auto',
+    dismissAfterRun: 'auto' as const,
     filePath: item.path,
     videoUrl: item.videoUrl || undefined,
     thumbnailUrl: item.thumbnailUrl || undefined,
@@ -84,8 +85,18 @@ export function createFilesExtension() {
   return {
     id: 'nevermind.files',
     title: 'Files',
-    capabilities: ['desktop.files'] as const,
-    commands: [],
+    capabilities: ['desktop.files', 'ai'] as const,
+    commands: [
+      {
+        id: 'find-files-by-meaning',
+        title: 'Find Files by Meaning',
+        subtitle: 'Search recent file names using AI',
+        icon: 'sparkles',
+        run(ctx) {
+          return ctx.navigation.run(semanticFileSearch(ctx, fileRootItem));
+        },
+      },
+    ],
     rootItems(ctx) {
       return ctx.desktop.files
         .recent({ limit: extensionContext.FILE_RESULT_LIMIT })
