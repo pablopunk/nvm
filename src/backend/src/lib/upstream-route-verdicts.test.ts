@@ -233,12 +233,12 @@ test('a primary whose wire format the provider lacks falls through to a failover
       body: JSON.stringify({
         openrouter: {
           models: {
-            [OPENROUTER_MODEL]: { id: OPENROUTER_MODEL, provider: { npm: '@ai-sdk/anthropic' } },
+            [OPENROUTER_MODEL]: { id: OPENROUTER_MODEL, cost: { input: 1, output: 2 }, provider: { npm: '@ai-sdk/anthropic' } },
           },
         },
         opencode: {
           models: {
-            [OPENCODE_MODEL]: { id: OPENCODE_MODEL, provider: { npm: '@ai-sdk/anthropic' } },
+            [OPENCODE_MODEL]: { id: OPENCODE_MODEL, cost: { input: 1, output: 2 }, provider: { npm: '@ai-sdk/anthropic' } },
           },
         },
       }),
