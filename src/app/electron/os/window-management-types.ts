@@ -69,8 +69,16 @@ export interface MacosWindowManager {
     fullScreen: boolean,
   ): Promise<HelperEnvelope<SetFrameData>>;
   runningApps(): Promise<HelperEnvelope<RunningApp[]>>;
+  allWindows(): Promise<HelperEnvelope<ListedWindow[]>>;
   windows(pid: number): Promise<HelperEnvelope<WindowInfo[]>>;
   raiseWindow(pid: number, windowKey: string): Promise<HelperEnvelope<null>>;
+}
+
+export interface ListedWindow extends WindowInfo {
+  pid: number;
+  appName: string;
+  /** 0 is the front-most on-screen window; larger values are further back. Windows not on screen use a large value. */
+  zIndex: number;
 }
 
 export interface RunningApp {
