@@ -80,7 +80,7 @@ async function applyWindowLayout(ctx: ExtensionContext, layout: WindowLayout) {
   const result = await ctx.desktop.windowManagement?.apply(layout.spec);
   if (!result) {
     reportWindowLayoutFailure(ctx, layout, WINDOW_UNAVAILABLE_MESSAGE);
-  } else if (!result.ok) {
+  } else if (result.ok === false) {
     reportWindowLayoutFailure(ctx, layout, result.message);
   }
 }

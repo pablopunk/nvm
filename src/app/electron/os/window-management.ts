@@ -325,7 +325,7 @@ async function resolveWritableWindow(
     return { ok: false, failure: failure('denied') };
   }
   const focused = unwrapEnvelope(await manager.focusedWindow(target.pid));
-  if (!focused.ok) {
+  if (focused.ok === false) {
     return focused;
   }
   const rejection = describeFocusedWindowRejection(focused.value, target);
@@ -333,7 +333,7 @@ async function resolveWritableWindow(
     return { ok: false, failure: rejection };
   }
   const displays = unwrapEnvelope(await manager.displays());
-  if (!displays.ok) {
+  if (displays.ok === false) {
     return displays;
   }
   if (displays.value.length === 0) {
@@ -363,7 +363,7 @@ async function writeWithCorrection(
       frame: requested,
     }),
   );
-  if (!first.ok) {
+  if (first.ok === false) {
     return first.failure;
   }
   const written = first.value;
@@ -428,7 +428,7 @@ async function applyToTarget(
     }
   }
   const writable = await resolveWritableWindow(dependencies, target);
-  if (!writable.ok) {
+  if (writable.ok === false) {
     return writable.failure;
   }
   const requested = requestedFrameFor(

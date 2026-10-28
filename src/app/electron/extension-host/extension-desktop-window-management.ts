@@ -59,7 +59,7 @@ function pickFrame(frame: Frame): Frame {
 }
 
 function toExtensionApplyResult(result: WindowApplyResult) {
-  if (!result.ok) {
+  if (result.ok === false) {
     return { ok: false, reason: result.reason, message: result.message };
   }
   return {
