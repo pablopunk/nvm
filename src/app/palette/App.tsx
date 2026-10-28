@@ -2775,9 +2775,10 @@ export function App() {
       (shortcutManagerOpen && !shortcutOptionsFor) ||
       isFilterableExtensionView,
   );
-  const isLargeExtensionView = extensionView?.size === 'large';
+  const isLargeExtensionView =
+    !activePaneObscured && extensionView?.size === 'large';
   const isSidePreviewView =
-    !previewFor && extensionView?.presentation === 'side-preview';
+    !activePaneObscured && extensionView?.presentation === 'side-preview';
   const isChildOpen = Boolean(
     shortcutFor ||
       shortcutOptionsFor ||
