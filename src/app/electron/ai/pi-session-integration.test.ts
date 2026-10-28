@@ -197,6 +197,7 @@ type FixtureScenario =
   | 'general-transient'
   | 'prepare-cancel'
   | 'queue-conversations'
+  | 'api-switch'
   | 'complete';
 
 async function readRequestBody(request: IncomingMessage) {
@@ -358,6 +359,38 @@ function sendTextForApi(
   text: string,
   usage?: typeof ZERO_USAGE,
 ) {
+  if (api === 'openai-responses') {
+    const item = {
+      type: 'message',
+      id: 'msg_fixture',
+      role: 'assistant',
+      status: 'completed',
+      content: [{ type: 'output_text', text, annotations: [] }],
+    };
+    const events = [
+      {
+        type: 'response.output_item.added',
+        output_index: 0,
+        item: { ...item, content: [] },
+      },
+      { type: 'response.output_text.delta', output_index: 0, delta: text },
+      { type: 'response.output_item.done', output_index: 0, item },
+      {
+        type: 'response.completed',
+        response: {
+          id: 'resp_fixture',
+          status: 'completed',
+          output: [item],
+          usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 },
+        },
+      },
+    ];
+    response.writeHead(200, { 'content-type': 'text/event-stream' });
+    response.end(
+      events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(''),
+    );
+    return;
+  }
   if (api === 'anthropic-messages')
     return sendAnthropicText(response, text, usage);
   if (api === 'google-generative-ai')
@@ -450,6 +483,8 @@ function providerApiForRequestPath(
     request.search.length === 0
   )
     return 'openai-completions';
+  if (request.pathname === '/v1/responses' && request.search.length === 0)
+    return 'openai-responses';
   if (
     request.pathname === '/v1/messages' &&
     (request.search.length === 0 || request.search === '?beta=true')
@@ -756,14 +791,15 @@ function createProtocolFixture(
         id: 'fixture-model',
         name: 'Fixture Model',
         provider: 'nevermind',
-        api: 'openai-completions',
+        api:
+          scenario === 'api-switch' ? fixture.currentApi : 'openai-completions',
         baseUrl: `${fixture.baseUrl}/v1`,
         contextWindow,
         maxInputTokens: contextWindow,
         maxTokens: 2_048,
         reasoning: false,
         thinkingLevel: 'off',
-        input: ['text'],
+        input: scenario === 'api-switch' ? ['text', 'image'] : ['text'],
         modelTier: 'pro',
         creditKind: 'paid',
         credits: { paid: 1000, free: 0, total: 1000 },
@@ -776,7 +812,10 @@ function createProtocolFixture(
     const requestUrl = new URL(request.url || '/', fixture.baseUrl);
     const requestPath = `${requestUrl.pathname}${requestUrl.search}`;
     const requestApi = providerApiForRequestPath(request.url, fixture.baseUrl);
-    if (request.method !== 'POST' || requestApi !== api) {
+    if (
+      request.method !== 'POST' ||
+      requestApi !== (scenario === 'api-switch' ? fixture.currentApi : api)
+    ) {
       const route = {
         method: request.method || 'UNKNOWN',
         path: requestPath,
@@ -993,6 +1032,18 @@ function createProtocolFixture(
       return;
     }
 
+    if (scenario === 'api-switch') {
+      if (callIndex === 1) {
+        sendToolCall(response, 'ls', JSON.stringify({ path: '.' }));
+        return;
+      }
+      sendTextForApi(
+        response,
+        fixture.currentApi,
+        'The fixture request completed.',
+      );
+      return;
+    }
     if (scenario === 'complete' || scenario === 'prepare-cancel') {
       sendText(response, 'The fixture request completed.');
       return;
@@ -1092,6 +1143,7 @@ function createProtocolFixture(
     unexpectedRoutes,
     managedDescriptors,
     baseUrl: '',
+    currentApi: 'openai-completions',
     nextOffset: undefined as number | undefined,
     async listen() {
       await new Promise<void>((resolve) =>
@@ -2248,6 +2300,55 @@ test('overlapping prompts on one extension session settle in request order', asy
         finalOutcome: 'done',
         providerCalls: fixture.requests.length,
       });
+    } finally {
+      await ai.disposeAllSessions();
+    }
+  });
+});
+
+test('a conversation preserves text and image history when switching API formats in both directions', async () => {
+  await withFixture('api-switch', 'api-switch', async (fixture) => {
+    const ai = createAi(fixture, []);
+    const session = ai.session('api-switch-session', {
+      model: 'smart',
+      toolMode: 'conversation',
+    });
+    const image =
+      'iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGNQaDgARAwQCgAkDgWBfAdHdAAAAABJRU5ErkJggg==';
+    try {
+      await session.ask('First turn', {
+        images: [{ type: 'image', mimeType: 'image/png', data: image }],
+      });
+      fixture.currentApi = 'openai-responses';
+      await session.ask('Second turn');
+      fixture.currentApi = 'openai-completions';
+      await session.ask('Third turn');
+      assert.deepEqual(
+        fixture.requests.map((request) => request.path),
+        [
+          '/v1/chat/completions',
+          '/v1/chat/completions',
+          '/v1/responses',
+          '/v1/chat/completions',
+        ],
+      );
+      for (const request of fixture.requests.slice(2)) {
+        const body = JSON.stringify(request.body);
+        assert.ok(body.includes('First turn'));
+        assert.ok(body.includes(image));
+      }
+      const responsesInput = fixture.requests[2].body.input;
+      assert.ok(
+        responsesInput.some((item: any) => item.type === 'function_call'),
+      );
+      assert.ok(
+        responsesInput.some(
+          (item: any) => item.type === 'function_call_output',
+        ),
+      );
+      const chatMessages = fixture.requests[3].body.messages;
+      assert.ok(JSON.stringify(chatMessages).includes('Second turn'));
+      assert.ok(chatMessages.some((message: any) => message.role === 'tool'));
     } finally {
       await ai.disposeAllSessions();
     }
