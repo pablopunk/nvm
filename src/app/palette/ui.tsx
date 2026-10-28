@@ -35,8 +35,6 @@ import {
 } from './system-theme';
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
-export const EMPTY_ROOT_SUBTITLE =
-  'Nevermind starts with local actions; AI planning comes next.';
 export const EMPTY_RESULTS_TITLE = 'No results';
 export const EMPTY_ITEMS_TITLE = 'No items';
 export const EMPTY_ACTIONS_TITLE = 'No actions';
