@@ -1,4 +1,4 @@
-import { realpathSync } from 'node:fs';
+import { realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
@@ -57,6 +57,14 @@ const NEVERMIND_PRIVATE_USER_DATA_ENTRIES = [
   'extension-secrets',
 ] as const;
 
+const ENV_TEMPLATE_FILE_NAMES = new Set([
+  '.env.example',
+  '.env.sample',
+  '.env.template',
+  '.env.dist',
+  '.env.defaults',
+]);
+
 const PATH_GUARDED_TOOL_NAMES = new Set(['read', 'grep', 'find', 'ls']);
 const SEARCH_RESULT_TOOL_NAMES = new Set(['grep', 'find', 'ls']);
 const PI_NORMALIZED_UNICODE_SPACES = new RegExp(
@@ -65,7 +73,7 @@ const PI_NORMALIZED_UNICODE_SPACES = new RegExp(
 );
 const GREP_LINE_PATH_BOUNDARY = /(?=[:-]\d+[:-] )/g;
 
-export function resolveToolPath(
+export async function resolveToolPath(
   rawPath: string,
   { cwd, homeDir }: { cwd: string; homeDir: string },
 ) {
@@ -97,31 +105,47 @@ export function nevermindPrivatePaths(userDataDir: string, agentDir: string) {
 export function createCredentialPathGuardExtension(
   policy: CredentialPathPolicy,
 ): { name: string; factory: ExtensionFactory } {
-  const canonicalPolicy = canonicalizeCredentialPathPolicy(policy);
+  const loadCanonicalPolicy = memoizeCanonicalCredentialPathPolicy(policy);
   return {
     name: 'nevermind-credential-path-guard',
     factory: function installCredentialPathGuard(pi: ExtensionAPI) {
       pi.on('tool_call', function blockCredentialPathToolCall(event, ctx) {
-        return failOpenOnInternalError(() =>
-          credentialPathToolCallResult(event, ctx.cwd, canonicalPolicy),
+        return failOpenOnInternalErrorAsync(async () =>
+          credentialPathToolCallResult(
+            event,
+            ctx.cwd,
+            await loadCanonicalPolicy(),
+          ),
         );
       });
       pi.on('tool_result', function redactCredentialSearchResults(event, ctx) {
-        return failOpenOnInternalError(() =>
-          credentialFreeSearchResultPatch(event, ctx.cwd, canonicalPolicy),
+        return failOpenOnInternalErrorAsync(async () =>
+          credentialFreeSearchResultPatch(
+            event,
+            ctx.cwd,
+            await loadCanonicalPolicy(),
+          ),
         );
       });
     },
   };
 }
 
-function credentialPathToolCallResult(
+function memoizeCanonicalCredentialPathPolicy(policy: CredentialPathPolicy) {
+  let canonicalPolicy: Promise<CanonicalCredentialPathPolicy> | undefined;
+  return function loadCanonicalCredentialPathPolicy() {
+    canonicalPolicy ??= canonicalizeCredentialPathPolicy(policy);
+    return canonicalPolicy;
+  };
+}
+
+async function credentialPathToolCallResult(
   event: ToolCallEvent,
   cwd: string,
   policy: CanonicalCredentialPathPolicy,
-): ToolCallEventResult | undefined {
+): Promise<ToolCallEventResult | undefined> {
   if (!PATH_GUARDED_TOOL_NAMES.has(event.toolName)) return undefined;
-  const target = resolveToolPath(requestedSearchPath(event.input, cwd), {
+  const target = await resolveToolPath(requestedSearchPath(event.input, cwd), {
     cwd,
     homeDir: policy.homeDir,
   });
@@ -130,38 +154,64 @@ function credentialPathToolCallResult(
     : undefined;
 }
 
-function credentialFreeSearchResultPatch(
+async function credentialFreeSearchResultPatch(
   event: ToolResultEvent,
   cwd: string,
   policy: CanonicalCredentialPathPolicy,
-): ToolResultEventResult | undefined {
+): Promise<ToolResultEventResult | undefined> {
   if (!SEARCH_RESULT_TOOL_NAMES.has(event.toolName)) return undefined;
-  const searchRoot = resolveToolPath(requestedSearchPath(event.input, cwd), {
-    cwd,
-    homeDir: policy.homeDir,
-  });
-  const content = withoutCredentialOutputLines(event.content, (line) =>
-    searchOutputLinePathCandidates(event.toolName, line).some((candidate) =>
-      isCredentialPath(resolveSearchResultPath(candidate, searchRoot), policy),
-    ),
+  const searchRoot = await resolveToolPath(
+    requestedSearchPath(event.input, cwd),
+    { cwd, homeDir: policy.homeDir },
+  );
+  const content = await withoutCredentialOutputLines(event.content, (line) =>
+    isCredentialSearchOutputLine(event.toolName, line, searchRoot, policy),
   );
   return content ? { content } : undefined;
 }
 
-function withoutCredentialOutputLines(
+async function withoutCredentialOutputLines(
   content: ToolResultEvent['content'],
-  isCredentialLine: (line: string) => boolean,
+  isCredentialLine: (line: string) => Promise<boolean>,
 ) {
   let removedAnyLine = false;
-  const redactedContent = content.map((item) => {
-    if (item.type !== 'text') return item;
-    const lines = item.text.split('\n');
-    const keptLines = lines.filter((line) => !isCredentialLine(line));
-    if (keptLines.length === lines.length) return item;
-    removedAnyLine = true;
-    return { ...item, text: keptLines.join('\n') };
-  });
+  const redactedContent = await Promise.all(
+    content.map(async (item) => {
+      if (item.type !== 'text') return item;
+      const lines = item.text.split('\n');
+      const keptLines = await keptNonCredentialLines(lines, isCredentialLine);
+      if (keptLines.length === lines.length) return item;
+      removedAnyLine = true;
+      return { ...item, text: keptLines.join('\n') };
+    }),
+  );
   return removedAnyLine ? redactedContent : undefined;
+}
+
+async function keptNonCredentialLines(
+  lines: readonly string[],
+  isCredentialLine: (line: string) => Promise<boolean>,
+) {
+  const credentialFlags = await Promise.all(
+    lines.map((line) => isCredentialLine(line)),
+  );
+  return lines.filter((_line, index) => !credentialFlags[index]);
+}
+
+async function isCredentialSearchOutputLine(
+  toolName: string,
+  line: string,
+  searchRoot: string,
+  policy: CanonicalCredentialPathPolicy,
+) {
+  const resolvedCandidates = await Promise.all(
+    searchOutputLinePathCandidates(toolName, line).map((candidate) =>
+      resolveSearchResultPath(candidate, searchRoot),
+    ),
+  );
+  return resolvedCandidates.some((resolved) =>
+    isCredentialPath(resolved, policy),
+  );
 }
 
 function searchOutputLinePathCandidates(toolName: string, line: string) {
@@ -200,12 +250,14 @@ function expandToolPathPrefix(rawPath: string, homeDir: string) {
   return normalized;
 }
 
-function canonicalizeExistingAncestor(absolutePath: string): string {
+async function canonicalizeExistingAncestor(
+  absolutePath: string,
+): Promise<string> {
   const missingSegments: string[] = [];
   let current = absolutePath;
   for (;;) {
     try {
-      return path.join(realpathSync(current), ...missingSegments);
+      return path.join(await realpath(current), ...missingSegments);
     } catch {
       const parent = path.dirname(current);
       if (parent === current) return absolutePath;
@@ -221,19 +273,24 @@ function homeCredentialRoots(homeDir: string) {
   );
 }
 
-function canonicalizeCredentialPathPolicy(
+async function canonicalizeCredentialPathPolicy(
   policy: CredentialPathPolicy,
-): CanonicalCredentialPathPolicy {
-  return {
-    homeDir: canonicalOrOriginal(policy.homeDir),
-    extraDeniedPaths: (policy.extraDeniedPaths ?? []).map(canonicalOrOriginal),
-    allowedPaths: (policy.allowedPaths ?? []).map(canonicalOrOriginal),
-  };
+): Promise<CanonicalCredentialPathPolicy> {
+  const [homeDir, extraDeniedPaths, allowedPaths] = await Promise.all([
+    canonicalOrOriginal(policy.homeDir),
+    canonicalOrOriginals(policy.extraDeniedPaths ?? []),
+    canonicalOrOriginals(policy.allowedPaths ?? []),
+  ]);
+  return { homeDir, extraDeniedPaths, allowedPaths };
 }
 
-function canonicalOrOriginal(value: string) {
+function canonicalOrOriginals(values: readonly string[]) {
+  return Promise.all(values.map((value) => canonicalOrOriginal(value)));
+}
+
+async function canonicalOrOriginal(value: string) {
   try {
-    return canonicalizeExistingAncestor(path.resolve(value));
+    return await canonicalizeExistingAncestor(path.resolve(value));
   } catch {
     return value;
   }
@@ -257,12 +314,15 @@ function isInsidePath(candidate: string, root: string) {
 }
 
 function isEnvFileName(basename: string) {
+  if (ENV_TEMPLATE_FILE_NAMES.has(basename)) return false;
   return basename === '.env' || basename.startsWith('.env.');
 }
 
-function failOpenOnInternalError<T>(read: () => T): T | undefined {
+async function failOpenOnInternalErrorAsync<T>(
+  read: () => Promise<T>,
+): Promise<T | undefined> {
   try {
-    return read();
+    return await read();
   } catch {
     return undefined;
   }

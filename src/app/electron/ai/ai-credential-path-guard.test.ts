@@ -27,10 +27,12 @@ function createFixture() {
   return { root, home, documents };
 }
 
-function withFixture(run: (fixture: ReturnType<typeof createFixture>) => void) {
+async function withFixture(
+  run: (fixture: ReturnType<typeof createFixture>) => void | Promise<void>,
+) {
   const fixture = createFixture();
   try {
-    run(fixture);
+    await run(fixture);
   } finally {
     fs.rmSync(fixture.root, { recursive: true, force: true });
   }
@@ -65,17 +67,18 @@ function toolResultEvent(
   };
 }
 
-function resolvedIsCredential(
+async function resolvedIsCredential(
   rawPath: string,
   { cwd, home }: { cwd: string; home: string },
 ) {
-  return isCredentialPath(resolveToolPath(rawPath, { cwd, homeDir: home }), {
-    homeDir: home,
-  });
+  return isCredentialPath(
+    await resolveToolPath(rawPath, { cwd, homeDir: home }),
+    { homeDir: home },
+  );
 }
 
-test('credential reads are denied in every spelling pi accepts', () => {
-  withFixture(({ home, documents }) => {
+test('credential reads are denied in every spelling pi accepts', async () => {
+  await withFixture(async ({ home, documents }) => {
     const keyPath = path.join(home, '.ssh', 'id_ed25519');
     const cases: Array<[string, string]> = [
       ['~/.ssh/id_ed25519', documents],
@@ -85,12 +88,16 @@ test('credential reads are denied in every spelling pi accepts', () => {
       ['../.ssh/id_ed25519', documents],
     ];
     for (const [rawPath, cwd] of cases)
-      assert.equal(resolvedIsCredential(rawPath, { cwd, home }), true, rawPath);
+      assert.equal(
+        await resolvedIsCredential(rawPath, { cwd, home }),
+        true,
+        rawPath,
+      );
   });
 });
 
-test('symlinks that resolve into ~/.ssh are denied', () => {
-  withFixture(({ root, home }) => {
+test('symlinks that resolve into ~/.ssh are denied', async () => {
+  await withFixture(async ({ root, home }) => {
     const elsewhere = path.join(root, 'elsewhere');
     fs.mkdirSync(elsewhere);
     fs.symlinkSync(
@@ -99,45 +106,59 @@ test('symlinks that resolve into ~/.ssh are denied', () => {
       'dir',
     );
     assert.equal(
-      resolvedIsCredential('keys/id_ed25519', { cwd: elsewhere, home }),
+      await resolvedIsCredential('keys/id_ed25519', { cwd: elsewhere, home }),
       true,
     );
   });
 });
 
-test('credential directory names match case-insensitively', () => {
-  withFixture(({ home }) => {
+test('credential directory names match case-insensitively', async () => {
+  await withFixture(({ home }) => {
     const upperCaseKey = path.join(home, '.SSH', 'id_ed25519');
     assert.equal(isCredentialPath(upperCaseKey, { homeDir: home }), true);
   });
 });
 
-test('env files are denied wherever they live', () => {
-  withFixture(({ home, documents }) => {
+test('env files are denied wherever they live', async () => {
+  await withFixture(async ({ home, documents }) => {
     for (const name of ['.env', '.env.local', '.env.production'])
       assert.equal(
-        resolvedIsCredential(name, { cwd: documents, home }),
+        await resolvedIsCredential(name, { cwd: documents, home }),
         true,
         name,
       );
   });
 });
 
-test('ordinary notes stay readable', () => {
-  withFixture(({ home, documents }) => {
+test('env template files stay readable', async () => {
+  await withFixture(async ({ home, documents }) => {
+    for (const name of ['.env.example', '.env.sample', '.env.template'])
+      assert.equal(
+        await resolvedIsCredential(name, { cwd: documents, home }),
+        false,
+        name,
+      );
+  });
+});
+
+test('ordinary notes stay readable', async () => {
+  await withFixture(async ({ home, documents }) => {
     assert.equal(
-      resolvedIsCredential('~/Documents/notes.md', { cwd: documents, home }),
+      await resolvedIsCredential('~/Documents/notes.md', {
+        cwd: documents,
+        home,
+      }),
       false,
     );
     assert.equal(
-      resolvedIsCredential('notes.md', { cwd: documents, home }),
+      await resolvedIsCredential('notes.md', { cwd: documents, home }),
       false,
     );
   });
 });
 
-test('browser profiles and Nevermind userData are denied except the AI workspace', () => {
-  withFixture(({ home }) => {
+test('browser profiles and Nevermind userData are denied except the AI workspace', async () => {
+  await withFixture(({ home }) => {
     const userData = path.join(
       home,
       'Library',
@@ -174,37 +195,18 @@ test('browser profiles and Nevermind userData are denied except the AI workspace
   });
 });
 
-test('tool_call guard blocks credential reads and lets normal reads through', () => {
-  withFixture(({ home, documents }) => {
+test('tool_call guard blocks credential reads and lets normal reads through', async () => {
+  await withFixture(async ({ home, documents }) => {
     const toolCall = installGuard({ homeDir: home }).get('tool_call');
     assert.ok(toolCall);
     assert.deepEqual(
-      toolCall(toolCallEvent('read', { path: '~/.ssh/id_ed25519' }), {
+      await toolCall(toolCallEvent('read', { path: '~/.ssh/id_ed25519' }), {
         cwd: documents,
       }),
       { block: true, reason: CREDENTIAL_PATH_BLOCK_REASON },
     );
     assert.equal(
-      toolCall(toolCallEvent('read', { path: 'notes.md' }), { cwd: documents }),
-      undefined,
-    );
-  });
-});
-
-test('tool_call guard blocks grep, find and ls only when the search root is a credential location', () => {
-  withFixture(({ home, documents }) => {
-    const toolCall = installGuard({ homeDir: home }).get('tool_call');
-    assert.ok(toolCall);
-    const sshRoot = path.join(home, '.ssh');
-    for (const toolName of ['grep', 'find', 'ls'])
-      assert.deepEqual(
-        toolCall(toolCallEvent(toolName, { path: sshRoot }), {
-          cwd: documents,
-        }),
-        { block: true, reason: CREDENTIAL_PATH_BLOCK_REASON },
-      );
-    assert.equal(
-      toolCall(toolCallEvent('grep', { pattern: 'x', path: home }), {
+      await toolCall(toolCallEvent('read', { path: 'notes.md' }), {
         cwd: documents,
       }),
       undefined,
@@ -212,8 +214,29 @@ test('tool_call guard blocks grep, find and ls only when the search root is a cr
   });
 });
 
-test('tool_result drops search lines that point into credential locations', () => {
-  withFixture(({ home }) => {
+test('tool_call guard blocks grep, find and ls only when the search root is a credential location', async () => {
+  await withFixture(async ({ home, documents }) => {
+    const toolCall = installGuard({ homeDir: home }).get('tool_call');
+    assert.ok(toolCall);
+    const sshRoot = path.join(home, '.ssh');
+    for (const toolName of ['grep', 'find', 'ls'])
+      assert.deepEqual(
+        await toolCall(toolCallEvent(toolName, { path: sshRoot }), {
+          cwd: documents,
+        }),
+        { block: true, reason: CREDENTIAL_PATH_BLOCK_REASON },
+      );
+    assert.equal(
+      await toolCall(toolCallEvent('grep', { pattern: 'x', path: home }), {
+        cwd: documents,
+      }),
+      undefined,
+    );
+  });
+});
+
+test('tool_result drops search lines that point into credential locations', async () => {
+  await withFixture(async ({ home }) => {
     const toolResult = installGuard({ homeDir: home }).get('tool_result');
     assert.ok(toolResult);
     const grepText = [
@@ -224,7 +247,7 @@ test('tool_result drops search lines that point into credential locations', () =
       '[100 matches limit reached]',
     ].join('\n');
     assert.deepEqual(
-      toolResult(
+      await toolResult(
         toolResultEvent('grep', { pattern: 'x', path: home }, grepText),
         { cwd: home },
       ),
@@ -238,7 +261,7 @@ test('tool_result drops search lines that point into credential locations', () =
       },
     );
     assert.deepEqual(
-      toolResult(
+      await toolResult(
         toolResultEvent(
           'find',
           { path: home },
@@ -249,13 +272,14 @@ test('tool_result drops search lines that point into credential locations', () =
       { content: [{ type: 'text', text: 'Documents/' }] },
     );
     assert.deepEqual(
-      toolResult(toolResultEvent('ls', { path: home }, '.ssh/\nDocuments/'), {
-        cwd: home,
-      }),
+      await toolResult(
+        toolResultEvent('ls', { path: home }, '.ssh/\nDocuments/'),
+        { cwd: home },
+      ),
       { content: [{ type: 'text', text: 'Documents/' }] },
     );
     assert.equal(
-      toolResult(
+      await toolResult(
         toolResultEvent(
           'grep',
           { pattern: 'x', path: home },
@@ -268,8 +292,8 @@ test('tool_result drops search lines that point into credential locations', () =
   });
 });
 
-test('guard handlers fail open and never throw on garbage input', () => {
-  withFixture(({ home, documents }) => {
+test('guard handlers fail open and never throw on garbage input', async () => {
+  await withFixture(async ({ home, documents }) => {
     const handlers = installGuard({ homeDir: home });
     const garbageEvents = [
       null,
@@ -280,11 +304,9 @@ test('guard handlers fail open and never throw on garbage input', () => {
     ];
     for (const handlerName of ['tool_call', 'tool_result'])
       for (const event of garbageEvents)
-        assert.doesNotThrow(() =>
-          assert.equal(
-            handlers.get(handlerName)?.(event, { cwd: documents }),
-            undefined,
-          ),
+        assert.equal(
+          await handlers.get(handlerName)?.(event, { cwd: documents }),
+          undefined,
         );
     assert.doesNotThrow(() =>
       createCredentialPathGuardExtension({ homeDir: 42 as never }).factory({
