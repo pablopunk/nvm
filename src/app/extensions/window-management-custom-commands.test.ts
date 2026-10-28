@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: fake extension contexts mirror the untyped runtime bridge.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DEFAULT_WINDOW_MANAGEMENT_OPTIONS } from '../electron/os/window-management-types';
 import {
   customWindowCommandItems,
   customWindowCommandSearchItems,
@@ -95,7 +96,7 @@ test('Enter on a row applies its exact spec with the stored options', async () =
         x: { value: 0, unit: 'points' },
         width: { value: 33, unit: 'percent' },
       },
-      { gap: 0, cycle: true },
+      DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
     ],
   ]);
 });

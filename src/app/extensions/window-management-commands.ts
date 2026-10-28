@@ -9,10 +9,9 @@ import type {
 } from '../resources/nevermind-extension-api';
 import { showExtensionFeedback } from './feedback';
 import { WINDOW_LAYOUT_PRESENTATION } from './window-management-layout-presentation';
-import {
-  extensionWindowManagementSettingsStore,
-  type WindowManagementSettings,
-} from './window-management-settings';
+import { windowManagementOptionsFor } from './window-management-options';
+import { extensionWindowManagementSettingsStore } from './window-management-settings';
+import type { WindowManagementSettings } from './window-management-settings-model';
 import { windowLayoutSpecFor } from './window-management-specs';
 
 const WINDOW_UNAVAILABLE_MESSAGE =
@@ -48,10 +47,7 @@ export async function applyWindowSpecWithSettings(
   const settings = await extensionWindowManagementSettingsStore(ctx).load();
   const result = await ctx.desktop.windowManagement?.apply(
     buildSpec(settings),
-    {
-      gap: settings.gap,
-      cycle: settings.cycle,
-    },
+    windowManagementOptionsFor(settings),
   );
   reportWindowLayoutResult(ctx, title, result);
 }
