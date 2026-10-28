@@ -1,3 +1,7 @@
+import {
+  type PartialWindowManagementOptions,
+  resolveWindowManagementOptions,
+} from '../os/window-management-options';
 import type {
   Frame,
   WindowApplyResult,
@@ -17,18 +21,13 @@ interface DesktopWindowManagementDeps {
   ) => WindowInvocation | null;
 }
 
-interface ExtensionWindowApplyOptions {
-  gap?: number;
-  cycle?: boolean;
-}
-
 const MISSING_INVOCATION_MESSAGE =
   'Window commands run from the palette or a keyboard shortcut.';
 
 async function applyWindowLayoutForCurrentScope(
   deps: DesktopWindowManagementDeps,
   spec: WindowLayoutSpec,
-  options: ExtensionWindowApplyOptions = {},
+  options: PartialWindowManagementOptions = {},
 ) {
   const invocation = deps.resolveInvocation(currentWindowInvocationScope());
   if (!invocation) {
@@ -36,7 +35,7 @@ async function applyWindowLayoutForCurrentScope(
   }
   const result = await deps.service.apply(
     spec,
-    { gap: options.gap ?? 0, cycle: options.cycle ?? true },
+    resolveWindowManagementOptions(options),
     invocation,
   );
   return toExtensionApplyResult(result);
@@ -79,9 +78,9 @@ export function createDesktopWindowManagement(
     return;
   }
   return {
-    apply: (spec: WindowLayoutSpec, options?: ExtensionWindowApplyOptions) =>
+    apply: (spec: WindowLayoutSpec, options?: PartialWindowManagementOptions) =>
       applyWindowLayoutForCurrentScope(deps, spec, options),
   };
 }
 
-export type { DesktopWindowManagementDeps, ExtensionWindowApplyOptions };
+export type { DesktopWindowManagementDeps };

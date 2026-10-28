@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type {
-  WindowApplyResult,
-  WindowLayoutSpec,
-  WindowManagementService,
+import {
+  DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
+  type WindowApplyResult,
+  type WindowLayoutSpec,
+  type WindowManagementService,
 } from '../os/window-management-types';
 import {
   createDesktopWindowManagement,
@@ -73,24 +74,32 @@ test('apply without an invocation scope fails closed before reaching the service
   assert.equal(result?.reason, 'no-target');
 });
 
-test('apply inside a shortcut scope passes the snapshot and a zero default gap', async () => {
+test('apply inside a shortcut scope passes the snapshot and the default options', async () => {
   const { service, calls } = createServiceStub();
   const facet = createDesktopWindowManagement(createDeps(service));
   await runInWindowInvocationScope({ source: 'shortcut', target: SAFARI }, () =>
     facet?.apply(HALF),
   );
   assert.deepEqual(calls, [
-    [HALF, { gap: 0, cycle: true }, { source: 'shortcut', target: SAFARI }],
+    [
+      HALF,
+      DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
+      { source: 'shortcut', target: SAFARI },
+    ],
   ]);
 });
 
-test('apply forwards an explicit gap from options', async () => {
+test('apply merges explicit options over the defaults', async () => {
   const { service, calls } = createServiceStub();
   const facet = createDesktopWindowManagement(createDeps(service));
   await runInWindowInvocationScope({ source: 'palette' }, () =>
-    facet?.apply(HALF, { gap: 8 }),
+    facet?.apply(HALF, { innerGap: 12, outerGap: { top: 20 } }),
   );
-  assert.deepEqual(calls[0]?.[1], { gap: 8, cycle: true });
+  assert.deepEqual(calls[0]?.[1], {
+    ...DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
+    innerGap: 12,
+    outerGap: { ...DEFAULT_WINDOW_MANAGEMENT_OPTIONS.outerGap, top: 20 },
+  });
   assert.deepEqual(calls[0]?.[2], { source: 'palette', target: SAFARI });
 });
 
