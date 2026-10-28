@@ -23,6 +23,16 @@ const startupMarkers = [
   'dev server running for the electron renderer process at:',
   'starting electron app...',
 ];
+const startupFailureMarkers = [
+  'App threw an error during load',
+  'ERR_MODULE_NOT_FOUND',
+];
+
+function startupFailureFromOutput(output) {
+  return (
+    startupFailureMarkers.find((marker) => output.includes(marker)) ?? null
+  );
+}
 
 function resolveElectronExecutable() {
   const executablePath = resolveInstalledElectronExecutable();
@@ -76,6 +86,11 @@ function captureDevelopmentOutput({ chunk, finish, state, target }) {
   state.output += stripVTControlCharacters(chunk.toString());
   if (state.output.length > maximumCapturedOutputLength) {
     state.output = state.output.slice(-maximumCapturedOutputLength);
+  }
+  const failure = startupFailureFromOutput(state.output);
+  if (failure) {
+    finish(new Error(`Electron failed during startup: ${failure}`));
+    return;
   }
   if (
     !state.startupTimer &&
@@ -146,7 +161,11 @@ async function runFirstDevelopmentStartup() {
   await new Promise(monitorDevelopmentStartup);
 }
 
-runFirstDevelopmentStartup().catch((error) => {
-  process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
-  process.exitCode = 1;
-});
+module.exports = { startupFailureFromOutput };
+
+if (require.main === module) {
+  runFirstDevelopmentStartup().catch((error) => {
+    process.stderr.write(`${error instanceof Error ? error.stack : error}\n`);
+    process.exitCode = 1;
+  });
+}
