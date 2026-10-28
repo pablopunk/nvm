@@ -38,7 +38,7 @@ export type TestModeIpcDeps = {
     ExtensionRuntimeState,
     'testExtensionActivationFailurePhase'
   >;
-  registeredActionAccelerators: Set<string>;
+  isActionShortcutOwned: (accelerator: string) => boolean;
   startProgressiveSearch: (sender: any, input: any) => unknown;
   cancelProgressiveSearch: (sender: any, input: any) => void;
   searchActions: (query: any, options?: any) => Promise<any[]>;
@@ -66,7 +66,7 @@ export function createTestModeIpc(deps: TestModeIpcDeps) {
     extensionWindowManager,
     jobRegistry,
     extensionRuntimeState,
-    registeredActionAccelerators,
+    isActionShortcutOwned,
     startProgressiveSearch,
     cancelProgressiveSearch,
     searchActions,
@@ -131,7 +131,7 @@ export function createTestModeIpc(deps: TestModeIpcDeps) {
       const normalized = normalizeAccelerator(String(accelerator || ''));
       return {
         registered:
-          registeredActionAccelerators.has(normalized) &&
+          isActionShortcutOwned(normalized) &&
           globalShortcut.isRegistered(normalized),
       };
     });

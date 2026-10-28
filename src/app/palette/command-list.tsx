@@ -5,12 +5,7 @@ import {
   type CommandAction,
   type CommandItem,
 } from './model';
-import {
-  CommandRow,
-  EMPTY_ROOT_SUBTITLE,
-  EMPTY_ROOT_TITLE,
-  EmptyState,
-} from './ui';
+import { CommandRow, EMPTY_ROOT_TITLE, EmptyState } from './ui';
 
 export type RootCommandListProps = {
   items: CommandItem[];
@@ -44,7 +39,7 @@ export function RootCommandList({
   iconForItem,
   onSelect,
   emptyTitle = EMPTY_ROOT_TITLE,
-  emptySubtitle = EMPTY_ROOT_SUBTITLE,
+  emptySubtitle,
   isLoading = false,
   extraForItem,
   dragPathForItem,

@@ -3,6 +3,8 @@ import { Download } from '@lucide/astro';
 import BuildOnce from '../components/BuildOnce.astro';
 import LandingPaletteSection from '../components/LandingPaletteSection.astro';
 import BringYourOwnAi from '../components/BringYourOwnAi.astro';
+import DotfilesSetup from '../components/DotfilesSetup.astro';
+import Dogfooding from '../components/Dogfooding.astro';
 import GitHubIcon from '../components/GitHubIcon.astro';
 import LandingAccount from '../components/LandingAccount.astro';
 import LightningAccent from '../components/LightningAccent.astro';
@@ -18,7 +20,6 @@ import Layout from '../layouts/Layout.astro';
       </a>
       <nav class="landing-nav__links" aria-label="Product links">
         <a href="/pricing">Pricing</a>
-        <a href="https://github.com/pablopunk/nvm/releases">Releases</a>
       </nav>
       <div class="landing-nav__account">
         <LandingAccount placement="nav" server:defer>
@@ -69,6 +70,8 @@ import Layout from '../layouts/Layout.astro';
     </section>
     <BuildOnce />
     <LandingPaletteSection />
+    <DotfilesSetup />
+    <Dogfooding />
     <BringYourOwnAi />
   </div>
 </Layout>

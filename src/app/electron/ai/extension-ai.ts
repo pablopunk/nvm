@@ -1,13 +1,15 @@
 // biome-ignore-all lint: Extension AI options and attachments are dynamic extension-supplied payloads.
 import path from 'node:path';
-import { trustedExtensionApiUnavailable } from '../extension-host/extension-context-capabilities';
 import { getNevermindAuth } from '../backend/nevermind-auth';
+import { trustedExtensionApiUnavailable } from '../extension-host/extension-context-capabilities';
 import { ocrImage } from '../files/ocr';
 import {
   extensionAiOcrText,
   normalizeExtensionAiAttachments,
   normalizeExtensionAiCallOptions,
 } from './extension-ai-attachments';
+import { buildDecisionWireRequest } from './extension-ai-decision-request';
+import { requestNevermindDecision } from './nevermind-decision-client';
 
 export type ExtensionAiDeps = {
   checkAiRateLimit: (extension: any) => boolean;
@@ -103,6 +105,27 @@ export function createExtensionAiFactory(deps: ExtensionAiDeps) {
       return getNevermindAi().ask(
         String(prompt || ''),
         await normalizeOptions(options),
+      );
+    };
+    ai.decide = async (options: any = {}) => {
+      enforceAiQuota();
+      const normalized = await normalizeExtensionAiAttachments(
+        extension,
+        options.attachments || [],
+        capabilities,
+        { requireReadableFiles: true },
+      );
+      return requestNevermindDecision(
+        buildDecisionWireRequest({
+          input:
+            typeof options.input === 'string'
+              ? options.input
+              : JSON.stringify(options.input ?? ''),
+          contextText: normalized.context,
+          images: normalized.images,
+          questions: options.questions ?? [],
+        }),
+        options.signal,
       );
     };
     ai.prepare = async (options: any = {}) =>

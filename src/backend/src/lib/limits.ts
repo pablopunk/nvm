@@ -238,6 +238,7 @@ export function requestedMaxOutputTokens(body: unknown): number | undefined {
   return (
     positiveInteger(request.max_tokens) ??
     positiveInteger(request.max_completion_tokens) ??
+    positiveInteger(request.max_output_tokens) ??
     (request.generationConfig && typeof request.generationConfig === 'object'
       ? positiveInteger(
           (request.generationConfig as Record<string, unknown>).maxOutputTokens,

@@ -111,6 +111,7 @@ function parseUsageFromOpenAiStreamChunk(
 export const POST: APIRoute = ({ request }) =>
   proxyAndBill({
     request,
+    wireApi: 'openai-completions',
     authHeaderName: 'authorization',
     upstreamAuthHeaderName: 'authorization',
     formatUpstreamAuthValue: (k) => `Bearer ${k}`,

@@ -2,12 +2,15 @@ export type SettingActionHandlerDeps = {
   settingDefinition: (id: string) => any;
   toggledSettingValue: (definition: any, current: any) => any;
   getSetting: (id: any) => any;
-  setSetting: (id: any, value: any) => { ok: boolean; message?: string };
+  setSetting: (
+    id: any,
+    value: any,
+  ) => Promise<{ ok: boolean; message?: string }>;
   settingItemPatch: (definition: any) => any;
   setShortcutSetting: (
     settingId: any,
     accelerator: any,
-  ) => { ok: boolean; message?: string };
+  ) => Promise<{ ok: boolean; message?: string }>;
 };
 
 export function createSettingActionHandlers(deps: SettingActionHandlerDeps) {
@@ -20,11 +23,11 @@ export function createSettingActionHandlers(deps: SettingActionHandlerDeps) {
     setShortcutSetting,
   } = deps;
 
-  function handleToggleSetting(action) {
+  async function handleToggleSetting(action) {
     const definition = settingDefinition(action.settingId);
     if (!definition || definition.type !== 'boolean')
       return { toast: { message: 'Setting not found', tone: 'error' } };
-    const result = setSetting(
+    const result = await setSetting(
       definition.id,
       toggledSettingValue(definition, getSetting(definition.id)),
     );
@@ -33,8 +36,8 @@ export function createSettingActionHandlers(deps: SettingActionHandlerDeps) {
     return { patch: { items: [settingItemPatch(definition)] } };
   }
 
-  function handleSetSettingShortcut(action) {
-    const result = setShortcutSetting(
+  async function handleSetSettingShortcut(action) {
+    const result = await setShortcutSetting(
       action.settingId,
       action.accelerator || action.shortcut,
     );

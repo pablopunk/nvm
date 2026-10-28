@@ -2,11 +2,11 @@
 import { aiChatModelForChat, isAiChatModel } from '../../shared/ai-chat-model';
 import { getByoKey } from '../backend/byo-key';
 import type { UserStateStore } from '../state/user-state-store';
-import { isConversationAiChat } from './ai-chat-records';
 import type {
   ActiveConversationRequest,
   PendingAiChatSend,
 } from './ai-chat-lifecycle';
+import { isConversationAiChat } from './ai-chat-records';
 
 type AnyRecord = Record<string, any>;
 
@@ -19,6 +19,7 @@ export type AiChatModelChangeDeps = {
   pendingAiChatModelChanges: Set<string>;
   getNevermindAi: () => any;
   scheduleSaveState: () => void;
+  commitPortable: (input: any) => Promise<{ ok: boolean; message?: string }>;
   patchAiChatsItem: (chatId: string) => void;
   broadcastAiChatEvent: (event: any) => void;
 };
@@ -33,6 +34,7 @@ export function createAiChatModelChange(deps: AiChatModelChangeDeps) {
     pendingAiChatModelChanges,
     getNevermindAi,
     scheduleSaveState,
+    commitPortable,
     patchAiChatsItem,
     broadcastAiChatEvent,
   } = deps;
@@ -74,9 +76,15 @@ export function createAiChatModelChange(deps: AiChatModelChangeDeps) {
         })
         .reset();
       activeConversationSessionIds.delete(targetChatId);
+      const outcome = await commitPortable({
+        label: 'ai-default-model',
+        mutate: (draft) => {
+          draft.ai.defaultModel = model;
+        },
+      });
+      if (!outcome.ok) throw new Error(outcome.message);
       chat.model = model;
       chat.updatedAt = Date.now();
-      userStateStore.get().aiChatDefaultModel = model;
       scheduleSaveState();
       if (userStateStore.get().aiChats[targetChatId])
         patchAiChatsItem(targetChatId);

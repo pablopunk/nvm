@@ -3,6 +3,7 @@ import {
   performanceTraces,
   summarizeDebugValue,
 } from '../diagnostics/debug-performance';
+import { feedbackView } from '../../palette/feedback';
 import { recordOperationFailure } from '../diagnostics/observability';
 import type { createExtensionDraftStore } from '../extension-host/extension-draft-store';
 import { error as logError, warn as logWarn } from '../platform/logger';
@@ -184,6 +185,28 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
       if (!followUp.view && !followUp.patch)
         return { toast: followUp.toast || { message: 'Draft updated' } };
       result = followUp;
+    }
+    const returnedAction = isAction(result)
+      ? result
+      : isAction(result.action)
+        ? result.action
+        : null;
+    if (returnedAction?.requiresConfirmation) {
+      const view = feedbackView({
+        id: 'extension-action-confirmation',
+        title: returnedAction.title || 'Confirm action',
+        message: returnedAction.confirmMessage || 'Confirm this action.',
+        tone: 'info',
+        actions: [
+          {
+            ...returnedAction,
+            title: returnedAction.confirmLabel || returnedAction.title,
+            requiresConfirmation: false,
+          },
+          { type: 'popView', title: returnedAction.cancelLabel || 'Cancel' },
+        ],
+      });
+      return { view: normalizeExtensionView(view, entry), navigation: 'push' };
     }
     if (isAction(result))
       return executeViewAction(

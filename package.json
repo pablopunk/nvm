@@ -81,6 +81,7 @@
     "electron-builder": "^26.18.0",
     "electron-vite": "^5.0.0",
     "lucide-react": "^1.61.0",
+    "pi-ai-legacy": "npm:@earendil-works/pi-ai@0.80.10",
     "playwright": "^1.64.1",
     "react": "^19.3.1",
     "react-archer": "^5.1.0",

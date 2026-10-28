@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "unsupported_image_route",
+    "message": "The configured decision model typesafe/jev-1.13 does not accept images. Remove the images or ask the admin to configure an image-capable decision model."
+  }
+}

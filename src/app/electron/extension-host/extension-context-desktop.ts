@@ -174,6 +174,7 @@ function createDesktopFiles(deps: ContextDesktopDeps) {
           ),
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
+        displayPath: (filePath) => displayUserPath(expandUserPath(filePath)),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
         thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),
         metadata: (filePath) =>
