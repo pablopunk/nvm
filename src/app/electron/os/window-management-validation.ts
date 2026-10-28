@@ -1,3 +1,4 @@
+import { describeInvalidExactSpec } from './window-management-exact-validation';
 import {
   INVALID_OPTIONS_MESSAGE,
   INVALID_SPEC_MESSAGE,
@@ -102,26 +103,34 @@ function isValidDisplaySpec(
   return DISPLAY_DIRECTIONS.includes(spec.direction);
 }
 
-export function isValidLayoutSpec(spec: WindowLayoutSpec): boolean {
+function rejectUnknownSpecKind(_spec: never): string {
+  return INVALID_SPEC_MESSAGE;
+}
+
+export function describeInvalidLayoutSpec(
+  spec: WindowLayoutSpec,
+): string | null {
   switch (spec.kind) {
+    case 'exact':
+      return describeInvalidExactSpec(spec);
     case 'fraction':
-      return isValidFractionSpec(spec);
+      return isValidFractionSpec(spec) ? null : INVALID_SPEC_MESSAGE;
     case 'scaled-center':
-      return isValidScaledCenterSpec(spec);
+      return isValidScaledCenterSpec(spec) ? null : INVALID_SPEC_MESSAGE;
     case 'edge':
-      return isValidEdgeSpec(spec);
+      return isValidEdgeSpec(spec) ? null : INVALID_SPEC_MESSAGE;
     case 'resize-step':
-      return isValidResizeStepSpec(spec);
+      return isValidResizeStepSpec(spec) ? null : INVALID_SPEC_MESSAGE;
     case 'display':
-      return isValidDisplaySpec(spec);
+      return isValidDisplaySpec(spec) ? null : INVALID_SPEC_MESSAGE;
     case 'center':
     case 'maximize-width':
     case 'maximize-height':
     case 'restore':
     case 'toggle-full-screen':
-      return true;
+      return null;
     default:
-      return false;
+      return rejectUnknownSpecKind(spec);
   }
 }
 
@@ -135,5 +144,5 @@ export function describeInvalidRequest(
   if (!isValidCycleOption(options.cycle)) {
     return INVALID_OPTIONS_MESSAGE;
   }
-  return isValidLayoutSpec(spec) ? null : INVALID_SPEC_MESSAGE;
+  return describeInvalidLayoutSpec(spec);
 }

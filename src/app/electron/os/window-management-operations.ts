@@ -1,5 +1,6 @@
 import type { OperationContext } from './window-management-dependencies';
 import { applyDisplayOperation } from './window-management-display';
+import { failure } from './window-management-failures';
 import { applyFullScreenToggle } from './window-management-fullscreen';
 import { applyLayoutOperation } from './window-management-layout';
 import { applyRestoreOperation } from './window-management-restore';
@@ -10,6 +11,10 @@ import {
   type WritableWindow,
 } from './window-management-target';
 import type { WindowApplyResult } from './window-management-types';
+
+function rejectUnknownOperationKind(_spec: never): Promise<WindowApplyResult> {
+  return Promise.resolve(failure('invalid-spec'));
+}
 
 function dispatchOperation(
   context: OperationContext,
@@ -23,8 +28,17 @@ function dispatchOperation(
       return applyDisplayOperation(context, writable, spec.direction);
     case 'toggle-full-screen':
       return applyFullScreenToggle(context, writable);
-    default:
+    case 'fraction':
+    case 'center':
+    case 'maximize-width':
+    case 'maximize-height':
+    case 'scaled-center':
+    case 'edge':
+    case 'resize-step':
+    case 'exact':
       return applyLayoutOperation(context, writable);
+    default:
+      return rejectUnknownOperationKind(spec);
   }
 }
 

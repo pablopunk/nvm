@@ -1,3 +1,4 @@
+import { exactFrame } from './window-layout-exact';
 import type {
   DisplayInfo,
   EngineInput,
@@ -278,6 +279,8 @@ function computeTargetFrame(input: EngineInput): Frame {
       return edgeFrame(spec.edge, area, current, gap);
     case 'resize-step':
       return resizedFrame(spec, area, current);
+    case 'exact':
+      return exactFrame(spec, workArea, currentFrame);
     default:
       return unhandledLayoutSpec(spec);
   }
