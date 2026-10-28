@@ -19,6 +19,10 @@ import {
   createWindowMemory,
   type WindowMemory,
 } from './window-management-memory';
+import {
+  focusNeighborWindow,
+  type NeighborActionContext,
+} from './window-management-neighbor';
 import { runWindowOperation } from './window-management-operations';
 import { enqueueForPid } from './window-management-queue';
 import type {
@@ -77,12 +81,16 @@ export function createWindowManagementService(
   const runRequest = (request: ApplyRequest) =>
     runQueuedRequest(runtime, request);
   const focusedContext: FocusedActionContext = { dependencies, runRequest };
+  function enqueue<Result>(pid: number, task: () => Promise<Result>) {
+    return enqueueForPid(runtime.queues, pid, task);
+  }
   const handleContext: HandleActionContext = {
     dependencies,
     handles,
     runRequest,
-    enqueue: (pid, task) => enqueueForPid(runtime.queues, pid, task),
+    enqueue,
   };
+  const neighborContext: NeighborActionContext = { dependencies, enqueue };
   return {
     available: () => dependencies.supported(),
     apply: (spec, options, invocation) =>
@@ -90,6 +98,8 @@ export function createWindowManagementService(
     applyToWindow: (handle, spec, options) =>
       applyWindowByHandle(handleContext, handle, spec, options),
     focusWindow: (handle) => focusWindowByHandle(handleContext, handle),
+    focusNeighbor: (direction, options, invocation) =>
+      focusNeighborWindow(neighborContext, direction, options, invocation),
     listDisplays: () =>
       whenSupported(dependencies, () => listDisplaysFrom(dependencies.manager)),
     listWindows: (query) =>

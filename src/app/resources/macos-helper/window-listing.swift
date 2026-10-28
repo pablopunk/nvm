@@ -3,10 +3,12 @@ import ApplicationServices
 import Foundation
 
 func runningAppsResponse() -> WindowResponse {
-  let applications = NSWorkspace.shared.runningApplications
-    .filter(isListableApplication)
-    .map(runningAppDictionary)
+  let applications = listableApplications().map(runningAppDictionary)
   return WindowResponse(code: .ok, data: applications)
+}
+
+func listableApplications() -> [NSRunningApplication] {
+  NSWorkspace.shared.runningApplications.filter(isListableApplication)
 }
 
 func isListableApplication(_ application: NSRunningApplication) -> Bool {

@@ -69,8 +69,16 @@ export interface MacosWindowManager {
     fullScreen: boolean,
   ): Promise<HelperEnvelope<SetFrameData>>;
   runningApps(): Promise<HelperEnvelope<RunningApp[]>>;
+  allWindows(): Promise<HelperEnvelope<ListedWindow[]>>;
   windows(pid: number): Promise<HelperEnvelope<WindowInfo[]>>;
   raiseWindow(pid: number, windowKey: string): Promise<HelperEnvelope<null>>;
+}
+
+export interface ListedWindow extends WindowInfo {
+  pid: number;
+  appName: string;
+  /** 0 is the front-most on-screen window; larger values are further back. Windows not on screen use a large value. */
+  zIndex: number;
 }
 
 export interface RunningApp {
@@ -195,6 +203,7 @@ export type WindowApplyFailureReason =
   | 'invalid-spec'
   | 'no-history'
   | 'unknown-window'
+  | 'no-neighbor'
   | 'single-display';
 
 export type WindowApplyResult =
@@ -240,6 +249,12 @@ export type DisplayListResult =
 
 export type WindowFocusResult = { ok: true } | WindowOperationFailure;
 
+export type NeighborDirection = 'left' | 'right' | 'up' | 'down';
+
+export interface NeighborOptions {
+  wrap?: boolean;
+}
+
 export interface WindowManagementService {
   available(): boolean;
   apply(
@@ -255,6 +270,11 @@ export interface WindowManagementService {
     options: WindowManagementOptions,
   ): Promise<WindowApplyResult>;
   focusWindow(handle: string): Promise<WindowFocusResult>;
+  focusNeighbor(
+    direction: NeighborDirection,
+    options: NeighborOptions,
+    invocation: WindowInvocation,
+  ): Promise<WindowFocusResult>;
 }
 
 export interface WindowInvocationPorts {

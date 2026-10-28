@@ -84,6 +84,7 @@ function createServiceStub(
     })),
     applyToWindow: recordingStub(calls, 'applyToWindow', () => APPLIED),
     focusWindow: recordingStub(calls, 'focusWindow', () => ({ ok: true })),
+    focusNeighbor: recordingStub(calls, 'focusNeighbor', () => ({ ok: true })),
     ...overrides,
   };
   return { service, calls };
@@ -395,4 +396,36 @@ test('focus failure keeps only reason and message', async () => {
     reason: 'unknown-window',
     message: 'Window is gone.',
   });
+});
+
+test('focusNeighbor rejects an unknown direction without reaching the service', async () => {
+  const { facet, calls } = createServiceAndFacet();
+  const result = await runInWindowInvocationScope({ source: 'palette' }, () =>
+    facet.focusNeighbor('diagonal' as any),
+  );
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'invalid-spec');
+  assert.equal(countCalls(calls, 'focusNeighbor'), 0);
+});
+
+test('focusNeighbor without an invocation scope fails closed', async () => {
+  const { facet, calls } = createServiceAndFacet();
+  const result = await facet.focusNeighbor('left');
+  assert.equal(result.ok, false);
+  assert.equal(result.reason, 'no-target');
+  assert.equal(countCalls(calls, 'focusNeighbor'), 0);
+});
+
+test('focusNeighbor forwards the direction and only an explicit wrap flag', async () => {
+  const { facet, calls } = createServiceAndFacet();
+  await runInWindowInvocationScope({ source: 'palette' }, () =>
+    facet.focusNeighbor('right'),
+  );
+  await runInWindowInvocationScope({ source: 'palette' }, () =>
+    facet.focusNeighbor('up', { wrap: true }),
+  );
+  assert.equal(calls.focusNeighbor?.[0]?.[0], 'right');
+  assert.deepEqual(calls.focusNeighbor?.[0]?.[1], { wrap: false });
+  assert.equal(calls.focusNeighbor?.[1]?.[0], 'up');
+  assert.deepEqual(calls.focusNeighbor?.[1]?.[1], { wrap: true });
 });
