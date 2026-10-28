@@ -9,6 +9,7 @@ import {
 export type ContextActionsDeps = {
   buildRecordShortcutAction: (input: any, options: any) => unknown;
   buildRemoveShortcutAction: (input: any, options: any) => unknown;
+  refreshContributions: (extension: any) => Promise<unknown>;
 };
 
 function createActionsSystem() {
@@ -120,6 +121,7 @@ export function createContextActions(extension, deps: ContextActionsDeps) {
     trustedContextCapabilities;
   const { buildRecordShortcutAction, buildRemoveShortcutAction } = deps;
   return {
+    refreshContributions: () => deps.refreshContributions(extension),
     openPath: (filePath, title = 'Open', options: any = {}) => ({
       dismissAfterRun: 'auto',
       ...options,

@@ -67,6 +67,18 @@ export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
     );
   }
 
+  // A stored shortcut must not fall back to a sibling action when its own
+  // registration was removed, so only the exact registered id counts.
+  function storedExtensionActionEntry(action) {
+    if (!action.registeredActionId)
+      return extensionActionEntryForAction(action);
+    return (
+      extensionActionRegistry.get(
+        `${action.extensionId}:${action.registeredActionId}`,
+      ) || null
+    );
+  }
+
   function currentActionForStoredShortcut(action) {
     if (action?.kind === 'extension-root-item') {
       const persistentAction = action.persistentAction;
@@ -88,7 +100,7 @@ export function createExtensionActionLookup(deps: ExtensionActionLookupDeps) {
       return entry ? extensionActionFromContribution(entry) : null;
     }
     if (action?.kind === 'extension-action') {
-      const entry = extensionActionEntryForAction(action);
+      const entry = storedExtensionActionEntry(action);
       return entry ? extensionActionFromContribution(entry) : null;
     }
     return action;

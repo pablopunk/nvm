@@ -1438,10 +1438,10 @@ const createExtensionContext = createExtensionContextFactory({
     renameExtension(extension, command, metadata),
   ui: { extensionWindowManager },
   actions: {
-    buildRecordShortcutAction: (input, options) =>
-      buildRecordShortcutAction(input, options),
-    buildRemoveShortcutAction: (input, options) =>
-      buildRemoveShortcutAction(input, options),
+    buildRecordShortcutAction,
+    buildRemoveShortcutAction,
+    refreshContributions: (extension) =>
+      registration.refreshExtensionContributions(extension),
   },
   text: {
     readClipboardText: () => clipboardApi.readText(),
@@ -1450,14 +1450,12 @@ const createExtensionContext = createExtensionContextFactory({
   clipboardHistory: {
     clipboardHistorySnapshot: (options) => clipboardHistorySnapshot(options),
     clipboardHistoryGet: (id) => clipboardHistoryGet(id),
-    removeClipboardHistoryByAction: (action) =>
-      removeClipboardHistoryByAction(action),
+    removeClipboardHistoryByAction,
   },
   desktop: {
     windowManagement,
     clipboardApi,
-    writeDesktopClipboard: (item, options) =>
-      writeDesktopClipboard(item, options),
+    writeDesktopClipboard,
     clipboardImageDataUrl: () => clipboardImageDataUrl(),
     clipboardFiles: () => clipboardFiles(),
     readDesktopClipboard: (options) => readDesktopClipboard(options),
@@ -1470,8 +1468,7 @@ const createExtensionContext = createExtensionContextFactory({
     fileIndexSnapshot,
     reindexFiles,
     runInBackground: (task, traceId) => runInBackground(task, traceId),
-    runShellCommand: (command, args, options) =>
-      runShellCommand(command, args, options),
+    runShellCommand,
     runShellScript: (script, options) => runShellScript(script, options),
     shellSpawnEnv: (extraEnv) => shellSpawnEnv(extraEnv),
   },
@@ -1481,10 +1478,8 @@ const createExtensionContext = createExtensionContextFactory({
     createExtensionCache,
   },
   drafts: {
-    commitExtensionDraft: (extensionId, key, version) =>
-      commitExtensionDraft(extensionId, key, version),
-    discardExtensionDraft: (extensionId, key) =>
-      discardExtensionDraft(extensionId, key),
+    commitExtensionDraft,
+    discardExtensionDraft,
   },
   settings: {
     availableSettingDefinitions: () => availableSettingDefinitions(),
@@ -1559,32 +1554,37 @@ const { stopFrontmostAppPolling, syncFrontmostAppPolling, registerHostJobs } =
       loadedStatePath: userStateStore.loadedStatePath,
     },
   });
-const { attachExtensionFileTrigger, registerExtensionBackgroundJob } =
-  createExtensionTriggers({
-    jobRegistry,
-    runtimeState: extensionRuntimeState,
-    EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
-    executeViewAction: (action, launchContext) =>
-      executeViewAction(action, launchContext),
-  });
-const { registerExtension, registerInternalExtensions } =
-  createExtensionRegistration({
-    extensionModules,
-    extensionActionRegistry,
-    INTERNAL_EXTENSION_FACTORIES,
-    REQUIRED_INTERNAL_EXTENSIONS,
-    REQUIRED_INTERNAL_COMMANDS,
-    normalizeItemAppearance,
-    normalizeViewItems,
-    createExtensionContext,
-    registerExtensionBackgroundJob,
-  });
+const {
+  attachExtensionFileTrigger,
+  registerExtensionBackgroundJob,
+  unregisterExtensionBackgroundJob,
+} = createExtensionTriggers({
+  jobRegistry,
+  runtimeState: extensionRuntimeState,
+  EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+  executeViewAction: (action, launchContext) =>
+    executeViewAction(action, launchContext),
+});
+const registration = createExtensionRegistration({
+  extensionModules,
+  extensionActionRegistry,
+  INTERNAL_EXTENSION_FACTORIES,
+  REQUIRED_INTERNAL_EXTENSIONS,
+  REQUIRED_INTERNAL_COMMANDS,
+  normalizeItemAppearance,
+  normalizeViewItems,
+  createExtensionContext,
+  registerExtensionBackgroundJob,
+  unregisterExtensionBackgroundJob,
+  registerActionShortcuts: () => registerActionShortcuts(),
+  invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
+});
 const { loadDevExtensions } = createExtensionDevFixtures({
   extensionActionRegistry,
   runtimeState: extensionRuntimeState,
   getAppPath: () => app.getAppPath(),
   extensionActionFromContribution,
-  registerExtension,
+  registerExtension: registration.registerExtension,
 });
 const {
   initializeExtensionManager,
@@ -1622,8 +1622,7 @@ const { loadExtensions, applyExtensionMetadataOverrides, renameExtension } =
     initExtensionRuntimeContext: () => initExtensionRuntimeContext(),
     stopFrontmostAppPolling,
     syncFrontmostAppPolling,
-    registerExtension,
-    registerInternalExtensions,
+    registration,
     loadDevExtensions,
     initializeExtensionManager,
     extensionFileIsEnabled,
@@ -1649,7 +1648,7 @@ const {
   extensionRootItemsRefreshes,
   jobRegistry,
   runtimeState: extensionRuntimeState,
-  registerExtension,
+  registration,
   applyExtensionMetadataOverrides,
   attachExtensionFileTrigger,
   syncFrontmostAppPolling,

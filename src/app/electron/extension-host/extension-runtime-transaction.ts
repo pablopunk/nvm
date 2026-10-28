@@ -2,6 +2,7 @@
 import path from 'node:path';
 import type { JobDefinition, JobRegistry } from '../platform/jobs';
 import { sameExtensionSourceFile } from './extension-identity';
+import type { ExtensionRegistration } from './extension-registration';
 import type {
   ExtensionFileWatcher,
   ExtensionOwnedRecord,
@@ -27,7 +28,10 @@ function executionRecordBelongsToExtension(
 export type ExtensionRuntimeTransactionDeps = ExtensionRuntimeRegistries & {
   jobRegistry: JobRegistry;
   runtimeState: ExtensionRuntimeState;
-  registerExtension: (extension: any) => void;
+  registration: Pick<
+    ExtensionRegistration,
+    'declareExtensionActions' | 'registerDeclaredExtension'
+  >;
   applyExtensionMetadataOverrides: (extension: any) => Promise<void>;
   attachExtensionFileTrigger: (
     trigger: any,
@@ -53,7 +57,7 @@ export function createExtensionRuntimeTransaction(
     extensionRootItemsRefreshes,
     jobRegistry,
     runtimeState,
-    registerExtension,
+    registration,
     applyExtensionMetadataOverrides,
     attachExtensionFileTrigger,
     syncFrontmostAppPolling,
@@ -69,6 +73,8 @@ export function createExtensionRuntimeTransaction(
     extension.__filePath = activeFile;
     extension.__generated = true;
     await applyExtensionMetadataOverrides(extension);
+    const declaredItems =
+      (await registration.declareExtensionActions(extension)) ?? [];
 
     const live = {
       modules: new Map(extensionModules),
@@ -97,7 +103,7 @@ export function createExtensionRuntimeTransaction(
       rootActionExecutionRecords.clear();
       viewRefreshRecords.clear();
       runtimeState.extensionRuntimePreparation = { jobs, fileWatchers };
-      registerExtension(extension);
+      registration.registerDeclaredExtension(extension, declaredItems);
       if (!extensionModules.size)
         throw new Error(`Extension ${filename} does not export a valid id`);
       const extensionIds = new Set(extensionModules.keys());
