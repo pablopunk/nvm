@@ -936,8 +936,10 @@ export type ExtensionSettings = {
     [key: string]: unknown;
   }>;
   get<T = unknown>(id: string): T;
-  set<T = unknown>(id: string, value: T): T;
-  toggle(id: string): unknown;
+  /** Resolves after the value is saved to ~/.config/nevermind/config.json; rejects with the reason when it cannot be saved. */
+  set<T = unknown>(id: string, value: T): Promise<T>;
+  /** Resolves with the new value after it is saved; rejects with the reason when it cannot be saved. */
+  toggle(id: string): Promise<unknown>;
 };
 
 export type ExtensionDictationDevice = {
