@@ -6,6 +6,7 @@ import type { WindowManagementSettingsStore } from './window-management-settings
 import type { WholeNumberSettingDefinition } from './window-management-settings-definitions';
 import { parseWholeNumberSettingInput } from './window-management-settings-input';
 import type { WindowManagementSettings } from './window-management-settings-model';
+import { windowManagementSettingsView } from './window-management-settings-view';
 
 const SAVE_TITLE = 'Save';
 const VALUE_FIELD_ID = 'value';
@@ -60,8 +61,8 @@ function settingSaveAction(
       [definition.key]: parsed.value,
     } as WindowManagementSettings);
     return {
-      navigation: 'pop' as const,
-      action: innerCtx.views.refresh(),
+      view: await windowManagementSettingsView(innerCtx, store),
+      navigation: 'root' as const,
     };
   });
 }
