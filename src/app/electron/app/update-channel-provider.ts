@@ -3,11 +3,11 @@ import {
   CancellationToken,
   type UpdateInfo,
 } from 'electron-updater';
-import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider';
+import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider.js';
 import {
   parseUpdateInfo,
   type ProviderRuntimeOptions,
-} from 'electron-updater/out/providers/Provider';
+} from 'electron-updater/out/providers/Provider.js';
 import {
   channelMetadataNameFor,
   releaseTagsFromAtomFeed,
