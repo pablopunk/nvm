@@ -43,9 +43,35 @@ test('requires the latest matching production deployment to succeed', () => {
     status: 'completed',
     conclusion: 'success',
   };
+  const jobs = [
+    {
+      name: 'migrate',
+      status: 'completed',
+      conclusion: 'success',
+      steps: [{ name: 'Deploy production', conclusion: 'success' }],
+    },
+  ];
   assert.equal(
-    evaluateDeploymentGate({ commit: PRODUCTION, runs: [passed] }).status,
+    evaluateDeploymentGate({ commit: PRODUCTION, runs: [passed], jobs }).status,
     'verified',
+  );
+  assert.equal(
+    evaluateDeploymentGate({ commit: PRODUCTION, runs: [passed], jobs: [] })
+      .status,
+    'rejected',
+  );
+  assert.equal(
+    evaluateDeploymentGate({
+      commit: PRODUCTION,
+      runs: [passed],
+      jobs: [
+        {
+          ...jobs[0],
+          steps: [{ name: 'Deploy production', conclusion: 'skipped' }],
+        },
+      ],
+    }).status,
+    'rejected',
   );
   assert.equal(
     evaluateDeploymentGate({ commit: SOURCE, runs: [passed] }).status,

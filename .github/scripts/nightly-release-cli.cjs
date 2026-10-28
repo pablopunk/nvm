@@ -135,7 +135,7 @@ function commandPlan(options) {
   const releases = releasesWithResolvedTags(requireOption(options, 'releases'));
   const runNumber = Number(requireOption(options, 'run-number'));
   const stableTags = releases
-    .filter((release) => !release.draft && !release.prerelease)
+    .filter((release) => !(release.draft || release.prerelease))
     .map((release) => release.tag_name);
   const stable = newestStableRelease(stableTags);
   if (!stable)
@@ -240,9 +240,27 @@ function commandIdentity(options) {
       commit: null,
       reason: 'production deployment runs unavailable',
     };
+  const runs = JSON.parse(rawRuns);
+  const latest = runs
+    .filter(
+      (run) =>
+        run.head_sha === identity.commit &&
+        run.event === 'workflow_run' &&
+        run.head_branch === 'main',
+    )
+    .sort((left, right) => right.id - left.id)[0];
+  const rawJobs = latest
+    ? ghStatusOrNull([
+        'api',
+        `repos/${repo}/actions/runs/${latest.id}/jobs?per_page=100`,
+        '--jq',
+        '.jobs',
+      ])
+    : null;
   const deployment = evaluateDeploymentGate({
     commit: identity.commit,
-    runs: JSON.parse(rawRuns),
+    runs,
+    jobs: rawJobs ? JSON.parse(rawJobs) : null,
   });
   return deployment.status === 'verified' ? identity : deployment;
 }

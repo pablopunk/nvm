@@ -42,7 +42,8 @@ function evaluateScheduleGate({ event, now, scheduledCron }) {
   )
     return {
       run: false,
-      reason: `scheduled trigger is outside the selected Madrid 04:00 run or its delayed window`,
+      reason:
+        'scheduled trigger is outside the selected Madrid 04:00 run or its delayed window',
     };
   return { run: true, reason: 'scheduled Europe/Madrid 04:xx window' };
 }
@@ -81,7 +82,7 @@ function reject(reason) {
   return { status: 'rejected', commit: null, reason };
 }
 
-function evaluateDeploymentGate({ commit, runs }) {
+function evaluateDeploymentGate({ commit, runs, jobs }) {
   const matching = runs
     .filter(
       (run) =>
@@ -99,6 +100,18 @@ function evaluateDeploymentGate({ commit, runs }) {
     return reject(
       `no successful completed production deployment run for ${commit}`,
     );
+  const migration = Array.isArray(jobs)
+    ? jobs.find((job) => job.name === 'migrate')
+    : null;
+  const deploy = migration?.steps?.find(
+    (step) => step.name === 'Deploy production',
+  );
+  if (
+    migration?.status !== 'completed' ||
+    migration.conclusion !== 'success' ||
+    deploy?.conclusion !== 'success'
+  )
+    return reject(`production deploy step did not succeed in run ${latest.id}`);
   return {
     status: 'verified',
     commit,
