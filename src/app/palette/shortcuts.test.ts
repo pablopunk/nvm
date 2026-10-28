@@ -32,6 +32,18 @@ function keyboardEvent(
 test('acceleratorFromKeyboardEvent builds accelerators from modifier flags', () => {
   assert.equal(
     acceleratorFromKeyboardEvent(
+      keyboardEvent({
+        key: ' ',
+        code: 'KeyL',
+        metaKey: true,
+        ctrlKey: true,
+        altKey: true,
+      }),
+    ),
+    'Command+Control+Alt+L',
+  );
+  assert.equal(
+    acceleratorFromKeyboardEvent(
       keyboardEvent({ key: ' ', code: 'Space', ctrlKey: true }),
     ),
     'Control+Space',

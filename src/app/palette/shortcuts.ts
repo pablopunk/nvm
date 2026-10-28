@@ -25,6 +25,12 @@ export function keyNameForShortcut(event: Pick<KeyboardEvent, 'key' | 'code'>) {
   if (!key || ['Meta', 'Control', 'Alt', 'Shift'].includes(key)) {
     return '';
   }
+  if (DIGIT_CODE.test(event.code)) {
+    return event.code.slice('Digit'.length);
+  }
+  if (KEY_CODE.test(event.code)) {
+    return event.code.slice('Key'.length);
+  }
   if (key === ' ') {
     return 'Space';
   }
@@ -39,12 +45,6 @@ export function keyNameForShortcut(event: Pick<KeyboardEvent, 'key' | 'code'>) {
   }
   if (key === 'ArrowRight') {
     return 'Right';
-  }
-  if (DIGIT_CODE.test(event.code)) {
-    return event.code.slice('Digit'.length);
-  }
-  if (KEY_CODE.test(event.code)) {
-    return event.code.slice('Key'.length);
   }
   if (key.length === 1) {
     return key.toUpperCase();
