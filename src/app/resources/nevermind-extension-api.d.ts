@@ -287,11 +287,21 @@ export type ExtensionActionContribution = {
   triggers?: ExtensionBackgroundTrigger[];
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction;
+  /** Secondary actions listed in this durable action's Cmd+K panel, beside the host-owned Set keyboard shortcut, Set alias, and Options rows. Same shape and placement rules as an item's `actions`; reference another durable action with `ctx.actions.ref(...)`. */
+  actions?: ExtensionAction[];
+  /** Cmd+K panel for this durable action when sections or titles are needed. Normalized like an item's `actionPanel`; prefer `actions` for a flat list. */
+  actionPanel?: ExtensionActionPanel;
   /** Handler to run when a simple declarative action is not enough. */
   run?: (
     ctx: ExtensionContext,
     action: ExtensionAction,
   ) => ExtensionActionResult | Promise<ExtensionActionResult>;
+};
+
+/** Result of `ctx.actions.refreshContributions()`. `ok: false` means the previous durable actions are still registered. */
+export type ExtensionContributionRefreshResult = {
+  ok: boolean;
+  error?: string;
 };
 
 export type ExtensionPasteTextOptions = {
@@ -1584,6 +1594,14 @@ export type ExtensionContext = {
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
+    /**
+     * Imperative, unlike the declarative helpers here: runs now. Re-runs this extension's
+     * `actions(ctx)` and applies the difference. New ids register, removed ids lose their
+     * global shortcut and root-search entry, and unchanged ids keep their `actionId` and
+     * shortcut. A failing or superseded run keeps the previous set. Call after storage
+     * that backs `actions(ctx)` changes, e.g. when a user creates or deletes a custom command.
+     */
+    refreshContributions(): Promise<ExtensionContributionRefreshResult>;
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
     typeText(
       text: string,
@@ -2070,9 +2088,21 @@ export type NevermindExtension = {
    * opening a view. Dynamic/state-driven rows such as calendar events, search results,
    * and files belong in views, `rootItems`, or `searchItems` instead.
    */
+  /**
+   * May be async: the host awaits it at registration, bounded by a 10 second timeout;
+   * palette open never waits for it. Keep each contribution `id` and `actionId` stable
+   * across `ctx.actions.refreshContributions()` runs, because global shortcuts and aliases
+   * bind to them. A throw or timeout keeps the last successful set.
+   */
   actions?(
     ctx: ExtensionContext,
-  ): ExtensionActionContribution[] | { actions: ExtensionActionContribution[] };
+  ):
+    | ExtensionActionContribution[]
+    | { actions: ExtensionActionContribution[] }
+    | Promise<
+        | ExtensionActionContribution[]
+        | { actions: ExtensionActionContribution[] }
+      >;
   /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Prefer one primary item per capability; expose Settings and secondary actions through that item's `actionPanel` so they appear under Cmd+K. If a secondary action should also be independently searchable, register it with `actions(ctx)` and reference it with `ctx.actions.ref(...)`. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
   rootItems?(
     ctx: ExtensionContext,
