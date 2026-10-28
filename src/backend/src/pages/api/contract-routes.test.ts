@@ -4083,7 +4083,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
   assert.equal(forwarded.max_output_tokens, 64);
   assert.equal(forwarded.store, false);
   assert.equal(forwarded.service_tier, undefined);
-  assert.equal(forwarded.reasoning.effort, 'low');
+  assert.equal(forwarded.reasoning.effort, 'none');
   assert.deepEqual(forwarded.tools, body.tools);
   assert.equal((db.insertedValues.at(-1) as any).inputTokens, 12);
   assert.equal((db.insertedValues.at(-1) as any).outputTokens, 8);

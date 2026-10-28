@@ -17,8 +17,7 @@ function apiForCatalogSdk(sdk: CatalogSdk): UpstreamApi {
 }
 
 export async function selectApiForModel(provider: string, modelId: string): Promise<UpstreamApi> {
-  const api = apiForCatalogSdk(await catalogSdkForModel(provider, modelId));
-  return providerSupportsFormat(provider, api) ? api : 'openai-completions';
+  return apiForCatalogSdk(await catalogSdkForModel(provider, modelId));
 }
 
 export async function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): Promise<UpstreamApi> {

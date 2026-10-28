@@ -20,9 +20,10 @@ afterEach(() => {
 });
 
 describe('selectApiForModel', () => {
-  test('falls back to Chat Completions when the provider lacks the catalog API', async () => {
+  test('reports the catalog API even when the provider cannot serve it, so failover skips it', async () => {
     mockCatalog({ openrouter: { models: { 'vendor/model': { id: 'vendor/model', provider: { npm: '@ai-sdk/anthropic' } } } } });
-    assert.equal(await selectApiForModel('openrouter', 'vendor/model'), 'openai-completions');
+    assert.equal(await selectApiForModel('openrouter', 'vendor/model'), 'anthropic-messages');
+    assert.equal(providerSupportsFormat('openrouter', 'anthropic-messages'), false);
   });
 
   test('unknown models default to Chat Completions', async () => {
