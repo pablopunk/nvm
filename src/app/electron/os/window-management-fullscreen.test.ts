@@ -84,6 +84,7 @@ test('records no restore frame for a full-screen toggle', async () => {
   const simulation = createSimulatedWindow({});
   const { service } = createHarness({ simulation });
   await service.apply(TOGGLE_FULL_SCREEN, NO_OPTIONS, shortcutInvocation());
+  await service.apply(TOGGLE_FULL_SCREEN, NO_OPTIONS, shortcutInvocation());
   const restore = await service.apply(
     RESTORE,
     NO_OPTIONS,
