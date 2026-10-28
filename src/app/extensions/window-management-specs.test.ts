@@ -1,3 +1,4 @@
+// biome-ignore-all lint/style/noMagicNumbers: layout fraction tables are literal values.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
@@ -7,12 +8,13 @@ import {
 import {
   DEFAULT_WINDOW_MANAGEMENT_SETTINGS,
   type WindowManagementSettings,
-} from './window-management-settings';
+} from './window-management-settings-model';
 import { windowLayoutSpecFor } from './window-management-specs';
 
 const SETTINGS_DEPENDENT_IDS = new Set([
   'almost-maximize',
   'reasonable-size',
+  'center-half',
   'make-larger',
   'make-smaller',
 ]);
@@ -36,49 +38,60 @@ test('layouts without settings keep their catalog spec', () => {
   }
 });
 
-test('almost maximize uses the configured percent on both axes without caps', () => {
+test('almost maximize uses the configured width and height percents without caps', () => {
   assert.deepEqual(
     windowLayoutSpecFor(
       'almost-maximize',
-      settingsWith({ almostMaximizePercent: 90 }),
+      settingsWith({
+        almostMaximizeWidthPercent: 85,
+        almostMaximizeHeightPercent: 60,
+      }),
     ),
-    { kind: 'scaled-center', widthFraction: 0.9, heightFraction: 0.9 },
-  );
-  assert.deepEqual(
-    windowLayoutSpecFor(
-      'almost-maximize',
-      settingsWith({ almostMaximizePercent: 50 }),
-    ),
-    { kind: 'scaled-center', widthFraction: 0.5, heightFraction: 0.5 },
+    { kind: 'scaled-center', widthFraction: 0.85, heightFraction: 0.6 },
   );
 });
 
-test('reasonable size uses the configured percent and keeps the 1025x900 cap', () => {
+test('default almost maximize is 90 percent on both axes', () => {
+  assert.deepEqual(
+    windowLayoutSpecFor('almost-maximize', DEFAULT_WINDOW_MANAGEMENT_SETTINGS),
+    { kind: 'scaled-center', widthFraction: 0.9, heightFraction: 0.9 },
+  );
+});
+
+test('reasonable size uses its own width and height percents with no cap', () => {
   assert.deepEqual(
     windowLayoutSpecFor(
       'reasonable-size',
-      settingsWith({ reasonableSizePercent: 60 }),
+      settingsWith({
+        reasonableSizeWidthPercent: 100,
+        reasonableSizeHeightPercent: 30,
+      }),
     ),
-    {
-      kind: 'scaled-center',
-      widthFraction: 0.6,
-      heightFraction: 0.6,
-      maxWidth: 1025,
-      maxHeight: 900,
-    },
+    { kind: 'scaled-center', widthFraction: 1, heightFraction: 0.3 },
+  );
+});
+
+test('default reasonable size is 70 percent on both axes', () => {
+  assert.deepEqual(
+    windowLayoutSpecFor('reasonable-size', DEFAULT_WINDOW_MANAGEMENT_SETTINGS),
+    { kind: 'scaled-center', widthFraction: 0.7, heightFraction: 0.7 },
+  );
+});
+
+test('center half keeps the configured width and centers it horizontally', () => {
+  assert.deepEqual(
+    windowLayoutSpecFor(
+      'center-half',
+      settingsWith({ centerHalfWidthPercent: 50 }),
+    ),
+    { kind: 'fraction', x: 0.25, y: 0, width: 0.5, height: 1 },
   );
   assert.deepEqual(
     windowLayoutSpecFor(
-      'reasonable-size',
-      settingsWith({ reasonableSizePercent: 30 }),
+      'center-half',
+      settingsWith({ centerHalfWidthPercent: 60 }),
     ),
-    {
-      kind: 'scaled-center',
-      widthFraction: 0.3,
-      heightFraction: 0.3,
-      maxWidth: 1025,
-      maxHeight: 900,
-    },
+    { kind: 'fraction', x: 0.2, y: 0, width: 0.6, height: 1 },
   );
 });
 
@@ -96,17 +109,25 @@ test('make larger and make smaller use the configured resize step', () => {
   );
 });
 
-test('settings never change the half, maximize, or center geometry', () => {
+test('gap and size settings never change the half, maximize, or center geometry', () => {
   const customized = settingsWith({
-    gap: 40,
-    almostMaximizePercent: 55,
-    reasonableSizePercent: 35,
+    outerGap: 40,
+    innerGap: 40,
+    almostMaximizeWidthPercent: 55,
+    reasonableSizeWidthPercent: 35,
     resizeStepPercent: 20,
   });
   assert.deepEqual(
     windowLayoutSpecFor('left-half', customized),
     WINDOW_LAYOUT_SPECS['left-half'],
   );
+  assert.deepEqual(windowLayoutSpecFor('maximize', customized), {
+    kind: 'fraction',
+    x: 0,
+    y: 0,
+    width: 1,
+    height: 1,
+  });
   assert.deepEqual(windowLayoutSpecFor('center', customized), {
     kind: 'center',
   });

@@ -43,7 +43,10 @@ import {
   windowManagementMovePromptFixtureView,
   windowManagementResizeErrorFixtureView,
 } from './ui/window-management-exact-fixture.ts';
-import { windowManagementSettingsFixtureView } from './ui/window-management-settings-fixture.ts';
+import {
+  windowManagementSettingsErrorFixtureView,
+  windowManagementSettingsFixtureView,
+} from './ui/window-management-settings-fixture.ts';
 
 const extension: NevermindExtension = {
   id: 'dev.ui-fixtures',
@@ -135,6 +138,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Window Management Settings',
       icon: 'ruler',
       run: (ctx) => windowManagementSettingsFixtureView(ctx),
+    },
+    {
+      id: 'window-management-settings-error',
+      title: 'Dev UI: Window Gap Validation Error',
+      icon: 'ruler',
+      run: (ctx) => windowManagementSettingsErrorFixtureView(ctx),
     },
     {
       id: 'window-management-custom-commands',

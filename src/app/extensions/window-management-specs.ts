@@ -4,7 +4,7 @@ import {
 } from '../electron/os/window-layout-catalog';
 import type { WindowLayoutSpec } from '../electron/os/window-management-types';
 import type { ExtensionWindowLayoutSpec } from '../resources/nevermind-extension-api';
-import type { WindowManagementSettings } from './window-management-settings';
+import type { WindowManagementSettings } from './window-management-settings-model';
 
 type ScaledCenterLayoutSpec = Extract<
   WindowLayoutSpec,
@@ -21,12 +21,16 @@ function percentToFraction(percent: number) {
   return percent / PERCENT_PER_WHOLE;
 }
 
-function scaledCenterWithPercent(
+function scaledCenterWithPercents(
   spec: ScaledCenterLayoutSpec,
-  percent: number,
+  widthPercent: number,
+  heightPercent: number,
 ): ScaledCenterLayoutSpec {
-  const fraction = percentToFraction(percent);
-  return { ...spec, widthFraction: fraction, heightFraction: fraction };
+  return {
+    ...spec,
+    widthFraction: percentToFraction(widthPercent),
+    heightFraction: percentToFraction(heightPercent),
+  };
 }
 
 function resizeStepWithPercent(
@@ -37,17 +41,26 @@ function resizeStepWithPercent(
 }
 
 function buildAlmostMaximizeSpec(settings: WindowManagementSettings) {
-  return scaledCenterWithPercent(
+  return scaledCenterWithPercents(
     WINDOW_LAYOUT_SPECS['almost-maximize'],
-    settings.almostMaximizePercent,
+    settings.almostMaximizeWidthPercent,
+    settings.almostMaximizeHeightPercent,
   );
 }
 
 function buildReasonableSizeSpec(settings: WindowManagementSettings) {
-  return scaledCenterWithPercent(
+  return scaledCenterWithPercents(
     WINDOW_LAYOUT_SPECS['reasonable-size'],
-    settings.reasonableSizePercent,
+    settings.reasonableSizeWidthPercent,
+    settings.reasonableSizeHeightPercent,
   );
+}
+
+function buildCenterHalfSpec(
+  settings: WindowManagementSettings,
+): ExtensionWindowLayoutSpec {
+  const width = percentToFraction(settings.centerHalfWidthPercent);
+  return { kind: 'fraction', x: (1 - width) / 2, y: 0, width, height: 1 };
 }
 
 function buildMakeLargerSpec(settings: WindowManagementSettings) {
@@ -69,6 +82,7 @@ const SETTINGS_DEPENDENT_SPEC_BUILDERS: Partial<
 > = {
   'almost-maximize': buildAlmostMaximizeSpec,
   'reasonable-size': buildReasonableSizeSpec,
+  'center-half': buildCenterHalfSpec,
   'make-larger': buildMakeLargerSpec,
   'make-smaller': buildMakeSmallerSpec,
 };

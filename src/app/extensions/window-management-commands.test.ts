@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { WINDOW_LAYOUT_SPECS } from '../electron/os/window-layout-catalog';
+import { DEFAULT_WINDOW_MANAGEMENT_OPTIONS } from '../electron/os/window-management-types';
 import {
   applyWindowLayout,
   windowLayoutAction,
@@ -27,7 +28,11 @@ const PARTIAL_WITH_REASON = {
 test('applies the spec and the stored gap and cycle options', async () => {
   const { ctx, applyCalls } = fakeWindowManagementContext({
     storage: {
-      [WINDOW_MANAGEMENT_SETTINGS_KEY]: { gap: 8, cycle: false },
+      [WINDOW_MANAGEMENT_SETTINGS_KEY]: {
+        outerGap: 8,
+        innerGap: 2,
+        cycle: false,
+      },
     },
     apply: () => Promise.resolve(OK_RESULT),
   });
@@ -35,14 +40,25 @@ test('applies the spec and the stored gap and cycle options', async () => {
   await applyWindowLayout(ctx, 'left-half');
 
   assert.deepEqual(applyCalls, [
-    [WINDOW_LAYOUT_SPECS['left-half'], { gap: 8, cycle: false }],
+    [
+      WINDOW_LAYOUT_SPECS['left-half'],
+      {
+        ...DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
+        outerGap: { top: 8, right: 8, bottom: 8, left: 8 },
+        innerGap: 2,
+        cycle: false,
+      },
+    ],
   ]);
 });
 
 test('settings-dependent layouts apply the configured spec', async () => {
   const { ctx, applyCalls } = fakeWindowManagementContext({
     storage: {
-      [WINDOW_MANAGEMENT_SETTINGS_KEY]: { almostMaximizePercent: 80 },
+      [WINDOW_MANAGEMENT_SETTINGS_KEY]: {
+        almostMaximizeWidthPercent: 80,
+        almostMaximizeHeightPercent: 80,
+      },
     },
     apply: () => Promise.resolve(OK_RESULT),
   });
@@ -52,7 +68,7 @@ test('settings-dependent layouts apply the configured spec', async () => {
   assert.deepEqual(applyCalls, [
     [
       { kind: 'scaled-center', widthFraction: 0.8, heightFraction: 0.8 },
-      { gap: 0, cycle: true },
+      DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
     ],
   ]);
 });
@@ -67,7 +83,7 @@ test('defaults apply when no settings are stored', async () => {
   assert.deepEqual(applyCalls, [
     [
       { kind: 'resize-step', direction: 'larger', step: 0.05 },
-      { gap: 0, cycle: true },
+      DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
     ],
   ]);
 });

@@ -1,6 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: fake extension contexts mirror the untyped runtime bridge.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { DEFAULT_WINDOW_MANAGEMENT_OPTIONS } from '../electron/os/window-management-types';
 import {
   EXACT_WINDOW_PRESENTATION,
   exactWindowAction,
@@ -56,14 +57,20 @@ test('submitting an offset applies an exact spec with the chosen unit', async ()
   assert.deepEqual(applyCalls, [
     [
       { kind: 'exact', x: { value: 10, unit: 'percent' } },
-      { gap: 0, cycle: true },
+      DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
     ],
   ]);
 });
 
 test('submitting sizes applies width and height and forwards stored options', async () => {
   const { ctx, applyCalls } = fakeWindowManagementContext({
-    storage: { [WINDOW_MANAGEMENT_SETTINGS_KEY]: { gap: 4, cycle: false } },
+    storage: {
+      [WINDOW_MANAGEMENT_SETTINGS_KEY]: {
+        outerGap: 4,
+        innerGap: 4,
+        cycle: false,
+      },
+    },
     apply: () => Promise.resolve(OK_RESULT),
   });
 
@@ -78,7 +85,12 @@ test('submitting sizes applies width and height and forwards stored options', as
         width: { value: 800, unit: 'points' },
         height: { value: 600, unit: 'points' },
       },
-      { gap: 4, cycle: false },
+      {
+        ...DEFAULT_WINDOW_MANAGEMENT_OPTIONS,
+        outerGap: { top: 4, right: 4, bottom: 4, left: 4 },
+        innerGap: 4,
+        cycle: false,
+      },
     ],
   ]);
 });
