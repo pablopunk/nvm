@@ -64,15 +64,44 @@ export function fitRequestedFrame(
   if (focused.isResizable) {
     return computed;
   }
+  const { width, height } = focused.frame;
   return clampFrameInside(
     {
-      x: computed.x,
-      y: computed.y,
-      width: focused.frame.width,
-      height: focused.frame.height,
+      x: anchoredOrigin(
+        computed.x,
+        computed.width,
+        width,
+        workArea.x,
+        workArea.width,
+      ),
+      y: anchoredOrigin(
+        computed.y,
+        computed.height,
+        height,
+        workArea.y,
+        workArea.height,
+      ),
+      width,
+      height,
     },
     workArea,
   );
+}
+
+const EDGE_TOUCH_TOLERANCE = 1;
+
+function anchoredOrigin(
+  zoneStart: number,
+  zoneLength: number,
+  length: number,
+  areaStart: number,
+  areaLength: number,
+): number {
+  const touchesStart = zoneStart <= areaStart + EDGE_TOUCH_TOLERANCE;
+  const touchesEnd =
+    zoneStart + zoneLength >= areaStart + areaLength - EDGE_TOUCH_TOLERANCE;
+  const anchor = touchesStart === touchesEnd ? 0.5 : touchesEnd ? 1 : 0;
+  return Math.round(zoneStart + (zoneLength - length) * anchor);
 }
 
 export function classifyFinalOutcome(

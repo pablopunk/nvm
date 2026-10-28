@@ -258,10 +258,10 @@ const resizeStepCases: EngineCase[] = [
     expected: { x: 510, y: 310, width: 100, height: 100 },
   },
   {
-    name: 'smaller enforces the 100 point floor on an already small window',
+    name: 'smaller never grows an already small window',
     spec: { kind: 'resize-step', direction: 'smaller', step: 0.1 },
     currentFrame: { x: 500, y: 300, width: 80, height: 80 },
-    expected: { x: 490, y: 290, width: 100, height: 100 },
+    expected: { x: 500, y: 300, width: 80, height: 80 },
   },
   {
     name: 'larger on a negative-origin display',

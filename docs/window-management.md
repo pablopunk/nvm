@@ -22,3 +22,7 @@ Users can resize and move the focused window of another app from the palette or 
 - A command never reports success unless the window actually reached the requested frame. Apps that enforce a minimum size are reported as partially applied.
 - Layouts are fractions of the display work area, so the menu bar and Dock are respected on every display.
 - Global shortcuts for these commands run without opening the palette and must never steal focus from the target app.
+- Layouts include halves, thirds, two-thirds, quarters, fourths, sixths, maximize variants, center, almost maximize and reasonable size. Repeating a half command cycles its size (half, two-thirds, third) while the window stays where the command put it.
+- Windows can also be moved to a screen edge, grown or shrunk around their center, sent to the next or previous display, restored to their pre-layout frame, and toggled in and out of full screen. Only full-screen toggling accepts a full-screen window.
+- Windows that cannot be resized keep their size and are aligned inside the target zone: to its edge where the layout hugs a screen edge, otherwise centered.
+- Gap, cycling, and the almost-maximize, reasonable-size and step sizes are user settings inside the palette.

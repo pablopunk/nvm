@@ -109,7 +109,10 @@ function resizedSpan(
   delta: number,
 ): AxisSpan {
   const length = Math.round(
-    Math.max(current.length + delta, MIN_RESIZED_LENGTH),
+    Math.max(
+      current.length + delta,
+      Math.min(MIN_RESIZED_LENGTH, current.length),
+    ),
   );
   return placeSpan(
     area,

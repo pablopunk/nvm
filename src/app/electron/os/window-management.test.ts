@@ -305,7 +305,7 @@ test('keeps the size of a non-resizable window and clamps it inside the work are
   assert.equal(result.ok, true);
   assert.deepEqual(setFrameRequests[0]?.frame, {
     x: 840,
-    y: 25,
+    y: 263,
     width: 600,
     height: 400,
   });

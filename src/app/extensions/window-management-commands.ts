@@ -13,7 +13,7 @@ import { windowLayoutSpecFor } from './window-management-specs';
 
 const WINDOW_UNAVAILABLE_MESSAGE =
   'Window management is not available on this system.';
-const WINDOW_LAYOUT_KEYWORDS = ['window', 'snap', 'resize', 'tile'];
+const WINDOW_LAYOUT_KEYWORDS = ['snap', 'tile'];
 
 function reportWindowLayoutResult(
   ctx: Pick<ExtensionContext, 'ui'>,
