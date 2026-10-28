@@ -1811,6 +1811,8 @@ export type ExtensionContext = {
       reveal(filePath: string): unknown;
       preview(filePath: string): unknown;
       readText(filePath: string): Promise<string>;
+      /** Format a path for display, replacing the current user's home directory with `~`. Does not change the path used for file operations. */
+      displayPath(filePath: string): string;
       toFileUrl(filePath: string): string;
       /** Host-safe thumbnail URL for an image/video/file path when previewable. */
       thumbnail(filePath: string): string | null;

@@ -1,12 +1,11 @@
 {
   "electron/ai.ts": 2561,
-  "electron/app-uninstall-service.ts": 769,
   "electron/calculator.ts": 1406,
   "electron/clipboard-history.ts": 1023,
   "electron/extension-window-manager.ts": 1039,
   "electron/jobs.ts": 505,
   "electron/learning-store.ts": 935,
-  "electron/main.ts": 2282,
+  "electron/main.ts": 2270,
   "electron/nevermind-auth.ts": 692,
   "electron/os.ts": 1504,
   "electron/palette-window.ts": 540,
