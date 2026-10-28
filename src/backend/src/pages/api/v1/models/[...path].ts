@@ -67,8 +67,9 @@ function rewriteGoogleRequestBody(
   maxOutputTokens: number,
 ): string {
   const parsed = parseJsonObjectOrNull(bodyText);
-  if (parsed?.generationConfig?.maxOutputTokens === undefined) return bodyText;
-  parsed.generationConfig.maxOutputTokens = maxOutputTokens;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return bodyText;
+  const { max_output_tokens: _snakeCaseLimit, ...generationConfig } = parsed.generationConfig ?? {};
+  parsed.generationConfig = { ...generationConfig, maxOutputTokens };
   return JSON.stringify(parsed);
 }
 
