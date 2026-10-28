@@ -24,7 +24,7 @@ import { routeKindForSlot } from '../lib/pricing';
 import { supportsModelThinkingLevel } from '../lib/model-capabilities';
 import { listAdminModelRefs } from '../lib/admin-model-options';
 import { listTranscriptionModels } from '../lib/transcription-models';
-import { listDecisionModels } from '../lib/decisions/decision-models';
+import { isSelectableDecisionModel, listDecisionModels } from '../lib/decisions/decision-models';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
@@ -70,7 +70,9 @@ const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
 );
 const decisionRoute = await getDecisionModelRoute().catch(() => null);
 const decisionRouteRef = decisionRoute ? modelRouteToRef(decisionRoute) : null;
-const decisionModels = await listDecisionModels().catch(() => []);
+const decisionModels = (await listDecisionModels().catch(() => [])).filter(
+  isSelectableDecisionModel,
+);
 const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
 ---
 <Layout title="Nevermind · Admin" width="wide">
@@ -148,8 +150,8 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         </section>
         <section class="model-route-row" data-decision-model-route>
           <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: model.acceptsImages ? `${modelRouteToRef(model)} · images` : `${modelRouteToRef(model)} · text only` }))]} /></label>
-          <p class="muted">Text-only models refuse requests that include images; images are never dropped.</p>
+          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: `${modelRouteToRef(model)} · images` }))]} /></label>
+          <p class="muted">Only models that support images can be selected.</p>
         </section>
       </div>
     </section></Card>

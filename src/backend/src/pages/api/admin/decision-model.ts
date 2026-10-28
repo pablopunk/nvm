@@ -10,6 +10,7 @@ import { recordAuditStrict } from '../../../lib/audit';
 import { requireSameOrigin } from '../../../lib/csrf';
 import {
   findEligibleDecisionModel,
+  isSelectableDecisionModel,
   listDecisionModels,
 } from '../../../lib/decisions/decision-models';
 import {
@@ -38,7 +39,9 @@ export const GET: APIRoute = async ({ request }) => {
     return new Response('Forbidden', { status: 403 });
   return Response.json({
     current: await currentDecisionModel(),
-    models: await listDecisionModels().catch(() => []),
+    models: (await listDecisionModels().catch(() => [])).filter(
+      isSelectableDecisionModel,
+    ),
   });
 };
 
@@ -65,14 +68,9 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response('Model is not an eligible decision model', {
       status: 400,
     });
-  const pricing = eligible.cost;
-  if (!pricing)
-    return new Response('Model does not have verified token pricing', {
-      status: 400,
-    });
-  if (pricing.outputUsdPerMtok !== 0)
+  if (!isSelectableDecisionModel(eligible))
     return new Response(
-      'Decision models with priced output require a verified output cost bound',
+      'Decision model must support images and have verified billing bounds',
       { status: 400 },
     );
   const idempotencyKey = adminMutationKeyFromRequest(request);
