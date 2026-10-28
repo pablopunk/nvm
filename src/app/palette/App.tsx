@@ -129,7 +129,6 @@ import {
   type ActionPanelRow,
   EMPTY_ACTIONS_TITLE,
   EMPTY_ITEMS_TITLE,
-  EMPTY_ROOT_SUBTITLE,
   EMPTY_ROOT_TITLE,
   EmptyState,
   type FormValue,

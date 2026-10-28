@@ -172,10 +172,7 @@ import {
   createAppIndexService,
   trackFirstSeenApps,
 } from './app/app-index-service';
-import {
-  createProductionAppUninstallService,
-  NEVERMIND_BUNDLE_ID,
-} from './app/app-uninstall-service';
+import { createHostAppUninstallService } from './app/app-uninstall-host';
 import {
   CHARACTER_RECORDS_BY_ID,
   characterCodePoints,
@@ -188,9 +185,12 @@ import {
   createPaletteWindowController,
   installPermissionHandlers,
 } from './app/palette-window';
+import { createPortableConfigLive } from './app/portable-config-live';
+import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
 import { createRunningAppStatusService } from './app/running-app-status';
 import {
+  SETTING_DEFINITIONS,
   settingDefinition,
   settingValue,
   toggledSettingValue,
@@ -261,6 +261,7 @@ import { createOpenWithApps } from './files/quick-look-and-open-with';
 import { startFileDrag } from './files/start-file-drag';
 import { createThumbnailService } from './files/thumbnails';
 import { registerAppIpcHandlers } from './ipc/app-ipc-handlers';
+import { registerDictationIpc } from './ipc/dictation-ipc';
 import { createMeasuredIpcRegistrar } from './ipc/ipc-registration';
 import {
   type AppFocusTarget,
@@ -287,6 +288,7 @@ import {
 } from './os/os';
 import { createSelectedTextReader } from './os/selected-text';
 import { createSystemAudioMuteCapability } from './os/system-audio';
+import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
 import {
@@ -315,6 +317,7 @@ import { createShortcutRunner } from './shortcuts/shortcut-runner';
 import { createWindowManagementComposition } from './app/window-management-composition';
 import { createViewLoaderRegistry } from './state/data-loader';
 import { LocalLearningStore } from './state/learning-store';
+import { resolvePortableConfigPath } from './state/portable-config-file';
 import { createStateSafeQuit } from './state/state-safe-quit';
 import { createUserStateLoader } from './state/user-state-loader';
 import { createUserStatePersistence } from './state/user-state-persistence';
@@ -387,7 +390,6 @@ const windowManagement = createWindowManagementComposition({
   frontmostTarget: frontmostAppFocusTarget,
 });
 const systemAudioMute = createSystemAudioMuteCapability();
-const MAX_DICTATION_AUDIO_BYTES = 4_194_304;
 const dictationService = createDictationService(
   (command) => {
     paletteWindow.win?.webContents.send('dictation:command', command);
@@ -588,6 +590,36 @@ const userStatePersistence = createUserStatePersistence({
 });
 const { scheduleSaveState, saveUserState, persistUserState } =
   userStatePersistence;
+const activationStatus = createActivationStatus();
+const portableConfigService = createPortableConfigService({
+  filePath: () =>
+    resolvePortableConfigPath({
+      isTestMode: isNvmTestMode,
+      userDataDirectory: app.getPath('userData'),
+    }),
+  settingKinds: Object.fromEntries(
+    SETTING_DEFINITIONS.map((definition) => [definition.id, definition.type]),
+  ),
+  userStateStore,
+  scheduleSaveState,
+  live: createPortableConfigLive({
+    registerPaletteHotkey: (accelerator) =>
+      paletteWindow.registerHotkey(accelerator),
+    setLaunchAtLogin: (enabled) => setLaunchAtLoginEnabled(enabled),
+    setDiagnosticReporting: (enabled) => setDiagnosticReporting(enabled),
+    patchSettingsView: (settingId) => patchSettingsView(settingId),
+    invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
+    invalidateShortcutCaches: () => invalidateShortcutCaches(),
+    patchKeyboardShortcutsView: () => patchKeyboardShortcutsView(),
+    applyJobEnablement: (overrides) =>
+      jobRegistry.applyEnabledOverrides(overrides),
+    applyShortcutView: (view) => applyShortcutView(view),
+    activation: activationStatus,
+  }),
+});
+function registerActionShortcuts() {
+  void portableConfigService.refreshShortcutBindings();
+}
 
 const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
@@ -627,15 +659,15 @@ const {
   setSetting,
   settingItemPatch,
   settingsItems,
+  patchSettingsView,
 } = createSettingsService({
   userStateStore,
   hasCapability,
   getLaunchAtLoginEnabled,
   setLaunchAtLoginEnabled,
   osLabel,
-  setDiagnosticReporting,
-  scheduleSaveState,
-  invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
+  commitPortable: (input) => portableConfigService.commit(input),
+  activationFailure: (key) => activationStatus.failureFor(key),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
   buildRecordShortcutAction: (input, options) =>
     buildRecordShortcutAction(input, options),
@@ -828,17 +860,8 @@ const runningAppStatus = createRunningAppStatusService({
       scope: 'apps',
     }),
 });
-const nevermindBundlePath =
-  process.execPath.match(/^(.*\.app)(?:\/|$)/)?.[1] || null;
-const appUninstallService = createProductionAppUninstallService({
+const appUninstallService = createHostAppUninstallService({
   trashItem: (itemPath) => shell.trashItem(itemPath),
-  nevermindAppPath: nevermindBundlePath,
-  nevermindBundleId: NEVERMIND_BUNDLE_ID,
-  runningAppPaths: (appPath) =>
-    detectRunningAppPaths([
-      ...appIndexService.get(),
-      { id: `uninstall:${appPath}`, path: appPath },
-    ]),
 });
 const { processPendingThumbnails, thumbnailResponseForPath } =
   createThumbnailService({
@@ -951,7 +974,6 @@ const { patchOpenView } = createOpenViewPatcher({
   sendToPalette: (channel, ...args) =>
     paletteWindow.win?.webContents.send(channel, ...args),
 });
-const registeredActionAccelerators = new Set<string>();
 const {
   declaredGlobalShortcuts,
   getShortcuts,
@@ -963,8 +985,9 @@ const {
   userStateStore,
   visibleExtensionActionEntries: () => visibleExtensionActionEntries(),
   extensionActionFromContribution,
-  currentActionForStoredShortcut: (action) =>
-    currentActionForStoredShortcut(action),
+  resolveStoredShortcutAction: (actionId) =>
+    resolveStoredShortcutAction(actionId),
+  activationFailure: (key) => activationStatus.failureFor(key),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
@@ -984,27 +1007,16 @@ const { executeShortcutAction } = createShortcutRunner({
   normalizeHostViewResult,
   actionFailedFeedbackView: () => actionFailedFeedbackView(),
 });
-const {
-  unregisterShortcutForAction,
-  registerActionShortcut,
-  unregisterActionShortcuts,
-  registerActionShortcuts,
-} = createGlobalShortcutRegistration({
-  globalShortcut: {
-    register: (accelerator, listener) =>
-      globalShortcut.register(accelerator, listener),
-    unregister: (accelerator) => globalShortcut.unregister(accelerator),
-    isRegistered: (accelerator) => globalShortcut.isRegistered(accelerator),
-  },
-  paletteWindow,
-  registeredActionAccelerators,
-  userStateStore,
-  invalidateShortcutCaches,
-  executeShortcutAction,
-  currentActionForStoredShortcut: (action) =>
-    currentActionForStoredShortcut(action),
-  declaredGlobalShortcuts,
-});
+const { applyShortcutView, releaseAllShortcuts, isActionShortcutOwned } =
+  createGlobalShortcutRegistration({
+    globalShortcut,
+    isPaletteHotkeyReserved: (accelerator) =>
+      paletteWindow.isHotkeyReserved(accelerator),
+    resolveStoredShortcutAction: (actionId) =>
+      resolveStoredShortcutAction(actionId),
+    declaredGlobalShortcuts,
+    executeShortcutAction,
+  });
 const {
   removeShortcut,
   setAlias,
@@ -1020,20 +1032,13 @@ const {
 } = createActionCustomization({
   userStateStore,
   scheduleSaveState,
-  globalShortcut: {
-    unregister: (accelerator) => globalShortcut.unregister(accelerator),
-  },
   paletteWindow,
-  actionAliases: (actionId) => actionAliases(actionId),
+  commitPortable: (input) => portableConfigService.commit(input),
   chatTouchedExtensionFiles: (chat) => chatTouchedExtensionFiles(chat),
   getPaletteHotkey: () => getPaletteHotkey(),
   setSetting: (id, value) => setSetting(id, value),
   settingDefinition,
   declaredGlobalShortcuts,
-  invalidateShortcutCaches,
-  patchKeyboardShortcutsView,
-  unregisterShortcutForAction,
-  registerActionShortcut,
 });
 const { extensionRootActionFromItem } = createExtensionRootActionNormalizer({
   extensionActionRegistry,
@@ -1051,6 +1056,7 @@ const {
   extensionEntryForAction,
   extensionModuleForAction,
   currentActionForStoredShortcut,
+  resolveStoredShortcutAction,
   resolveRegisteredActionRef,
 } = createExtensionActionLookup({
   extensionActionRegistry,
@@ -1058,6 +1064,8 @@ const {
   userStateStore,
   chatTouchedExtensionFiles: (chat) => chatTouchedExtensionFiles(chat),
   extensionActionFromContribution,
+  extensionRootActionFromItem: (entry, item) =>
+    extensionRootActionFromItem(entry, item),
 });
 const {
   extensionRootItemsCache,
@@ -1393,6 +1401,9 @@ const {
   userStateStore,
   extensionActionRegistry,
   scheduleSaveState,
+  commitPortable: (input) => portableConfigService.commit(input),
+  logWarn: (message, data) =>
+    logWarn(message, data, { source: 'host', scope: 'ai' }),
   invalidateExtensionRootItems,
   actionAliases,
   extensionActionFromContribution,
@@ -1704,7 +1715,7 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
   extensionWindowManager,
   jobRegistry,
   extensionRuntimeState,
-  registeredActionAccelerators,
+  isActionShortcutOwned,
   startProgressiveSearch,
   cancelProgressiveSearch,
   searchActions,
@@ -1789,6 +1800,7 @@ const { initNevermindAi } = createNevermindAiInitializer({
 });
 const { setAiChatModel } = createAiChatModelChange({
   userStateStore,
+  commitPortable: (input) => portableConfigService.commit(input),
   draftAiChats,
   pendingAiChatSends,
   activeConversationRequests,
@@ -1912,6 +1924,13 @@ function initExtensionRuntimeContext() {
     createExtensionContext,
     scheduleSaveState,
     saveUserState,
+    setJobEnabled: (id: string, enabled: boolean) =>
+      portableConfigService.commit({
+        label: 'job',
+        mutate: (draft) => {
+          draft.jobs.enabled[id] = enabled;
+        },
+      }),
     invalidateExtensionRootItems,
     broadcastAuthChanged,
     isPackaged: app.isPackaged,
@@ -1997,15 +2016,12 @@ const { loadUserState } = createUserStateLoader({
   },
   clipboardLimit: CLIPBOARD_LIMIT,
   hydrateJobEnabled: (enabled) => jobRegistry.hydrateEnabled(enabled),
+  loadPortableConfig: () => portableConfigService.loadPortableConfig(),
   scheduleSaveState,
 });
 
 function captureRuntimeStateIntoUserState() {
   userStateStore.get().clipboardHistory = clipboardHistory;
-  userStateStore.get().jobSettings = {
-    ...(userStateStore.get().jobSettings || {}),
-    enabled: jobRegistry.enabledOverridesSnapshot(),
-  };
 }
 
 const { pickFormFieldPaths } = createFormFieldPathPicker({
@@ -2013,13 +2029,14 @@ const { pickFormFieldPaths } = createFormFieldPathPicker({
   dialog,
   paletteWindow,
 });
-
 app.whenReady().then(async () => {
   appReady = true;
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
+    portableConfigService.startPollingPortableConfig();
     await loadExtensions();
+    registerActionShortcuts();
     registerTestModeIpcHandlers();
     paletteWindow.createWindow();
     paletteWindow.showPaletteWhenReady();
@@ -2036,6 +2053,7 @@ app.whenReady().then(async () => {
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
 
   await loadUserState();
+  portableConfigService.startPollingPortableConfig();
   await appIndexService.startWatcher();
   await Promise.all([hydrateExtensionDrafts(), hydrateExtensionWindowsState()]);
   extensionPrSubmitter = createExtensionPrSubmitter({
@@ -2096,7 +2114,7 @@ app.whenReady().then(async () => {
     openSystemKeyboardSettings,
     getShortcuts,
     removeShortcut,
-    unregisterActionShortcuts,
+    unregisterActionShortcuts: releaseAllShortcuts,
     registerActionShortcuts,
     suspendPaletteHotkey,
     resumePaletteHotkey,
@@ -2147,73 +2165,21 @@ app.whenReady().then(async () => {
 
   paletteWindow.createWindow();
   const paletteHotkeyStatus = paletteWindow.registerHotkey();
+  activationStatus.set(
+    'setting:paletteHotkey',
+    paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured
+      ? null
+      : `Could not register ${paletteHotkeyStatus.accelerator}`,
+  );
   if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
     paletteWindow.showPaletteWhenReady();
 
-  ipcMain.handle('microphone:get-status', () =>
-    systemPreferences.getMediaAccessStatus('microphone'),
-  );
-  ipcMain.on('dictation:level', (event, level) => {
-    if (event.sender !== paletteWindow.win?.webContents) return;
-    const normalized =
-      typeof level === 'number' && Number.isFinite(level)
-        ? Math.min(1, Math.max(0, level))
-        : null;
-    extensionWindowManager.sendToIndicator(
-      'nevermind.dictation',
-      'dictation',
-      'indicator:mic-level',
-      normalized,
-    );
-  });
-  ipcMain.on('dictation:reply', (event, reply) => {
-    if (event.sender !== paletteWindow.win?.webContents) return;
-    if (!reply || typeof reply !== 'object') return;
-    if (reply.type === 'recording' && typeof reply.operationId === 'string') {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (
-      reply.type === 'audio' &&
-      typeof reply.operationId === 'string' &&
-      typeof reply.mimeType === 'string' &&
-      reply.mimeType.toLowerCase().startsWith('audio/webm') &&
-      Array.isArray(reply.segments) &&
-      reply.segments.length > 0 &&
-      reply.segments.length <= 120 &&
-      reply.segments.every(
-        (segment) =>
-          segment instanceof Uint8Array &&
-          segment.byteLength > 0 &&
-          segment.byteLength <= MAX_DICTATION_AUDIO_BYTES,
-      )
-    ) {
-      if (reply.debug && typeof reply.debug === 'object')
-        loggerDebug('dictation.capture-stats', reply.debug, {
-          source: 'renderer',
-          scope: 'dictation',
-        });
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (reply.type === 'audio' && typeof reply.operationId === 'string') {
-      dictationService.reply({
-        type: 'error',
-        operationId: reply.operationId,
-        message: 'The dictation recording is empty, unsupported, or too large.',
-      });
-      return;
-    }
-    if (reply.type === 'devices' && Array.isArray(reply.devices)) {
-      dictationService.reply(reply as DictationRendererReply);
-      return;
-    }
-    if (
-      reply.type === 'error' &&
-      typeof reply.message === 'string' &&
-      (reply.operationId === undefined || typeof reply.operationId === 'string')
-    )
-      dictationService.reply(reply as DictationRendererReply);
+  registerDictationIpc({
+    ipcMain,
+    systemPreferences,
+    paletteWindow,
+    extensionWindowManager,
+    dictationService,
   });
 
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>

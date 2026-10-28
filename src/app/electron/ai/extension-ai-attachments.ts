@@ -12,6 +12,7 @@ import {
 import { mimeTypeForPath } from '../files/mime-type';
 import { ocrImage } from '../files/ocr';
 import { limitedOutput } from '../platform/limited-output';
+import { ExtensionAiDecisionInputError } from './extension-ai-decision-request';
 
 const EXTENSION_AI_ATTACHMENT_LIMIT = 8;
 const EXTENSION_AI_TEXT_ATTACHMENT_LIMIT = 80_000;
@@ -77,7 +78,7 @@ async function extensionAiFileContext(filePath, options: any = {}) {
   return `${header}\n\n${limitedOutput(text, EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`;
 }
 
-async function resolveExtensionAiAttachmentList(input) {
+async function resolveExtensionAiAttachmentList(input, rejectExcess = false) {
   const output: any[] = [];
   async function visit(value) {
     const resolved = await value;
@@ -89,6 +90,10 @@ async function resolveExtensionAiAttachmentList(input) {
     output.push(resolved);
   }
   await visit(input);
+  if (rejectExcess && output.length > EXTENSION_AI_ATTACHMENT_LIMIT)
+    throw new Error(
+      `AI decisions accept at most ${EXTENSION_AI_ATTACHMENT_LIMIT} attachments`,
+    );
   return output.slice(0, EXTENSION_AI_ATTACHMENT_LIMIT);
 }
 
@@ -111,11 +116,13 @@ export async function normalizeExtensionAiAttachments(
   extension,
   attachments,
   capabilities,
+  options: { requireReadableFiles?: boolean } = {},
 ) {
   const textSections: string[] = [];
   const images: Array<{ type: 'image'; data: string; mimeType: string }> = [];
   for (const attachment of await resolveExtensionAiAttachmentList(
     attachments || [],
+    options.requireReadableFiles,
   )) {
     if (typeof attachment === 'string') {
       textSections.push(
@@ -176,12 +183,32 @@ export async function normalizeExtensionAiAttachments(
         throw trustedExtensionApiUnavailable('desktop.files');
       const filePath =
         attachment.path || attachment.file?.path || attachment.filePath;
-      if (!filePath) continue;
+      if (!filePath) {
+        if (options.requireReadableFiles)
+          throw new ExtensionAiDecisionInputError(
+            'decision_attachment_unreadable',
+            'Decision file attachment has no path.',
+          );
+        continue;
+      }
       const resolvedPath = expandUserPath(filePath);
+      if (options.requireReadableFiles) await fs.access(resolvedPath);
       const shouldAttachImage =
         (attachment.as === 'image' ||
           (!attachment.as && isImagePath(resolvedPath))) &&
         attachment.as !== 'text';
+      if (
+        options.requireReadableFiles &&
+        !shouldAttachImage &&
+        !attachment.ocr &&
+        attachment.as !== 'ocr' &&
+        (attachment.as === 'metadata' ||
+          !isTextLikeAttachmentPath(resolvedPath))
+      )
+        throw new ExtensionAiDecisionInputError(
+          'decision_attachment_unreadable',
+          `Attachment ${path.basename(resolvedPath)} cannot be read as text or an image, so it was not sent.`,
+        );
       if (shouldAttachImage)
         images.push(await extensionAiPathImage(resolvedPath));
       if (
@@ -198,7 +225,13 @@ export async function normalizeExtensionAiAttachments(
           `### ${attachment.title || `OCR ${path.basename(resolvedPath)}`}\n${limitedOutput(extensionAiOcrText(await ocrImage(resolvedPath)), EXTENSION_AI_TEXT_ATTACHMENT_LIMIT)}`,
         );
       }
+      continue;
     }
+    if (options.requireReadableFiles)
+      throw new ExtensionAiDecisionInputError(
+        'decision_attachment_unreadable',
+        'Unsupported decision attachment.',
+      );
   }
   return { context: textSections.filter(Boolean).join('\n\n'), images };
 }

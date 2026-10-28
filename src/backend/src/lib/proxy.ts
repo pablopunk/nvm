@@ -86,9 +86,11 @@ export type UsageTokens = {
 
 export type ProxyConfig = {
   request: Request;
+  wireApi?: 'openai-completions' | 'openai-responses';
   authHeaderName: PatHeaderName;
   upstreamAuthHeaderName: 'authorization' | 'x-api-key' | 'x-goog-api-key';
   formatUpstreamAuthValue: (apiKey: string) => string;
+  validateRequestBody?: (body: unknown) => string | null;
   buildUpstreamUrl: (cfg: {
     upstreamBaseUrl: string;
     activeModelId: string;
@@ -116,6 +118,7 @@ export type StreamUsageAccumulator = {
   providerCostUsd?: number;
   observedOutputCharacters?: number;
   finalized: boolean;
+  failed?: boolean;
   pendingText?: string;
   reportMalformedFrame?: (error: unknown) => void;
 };
@@ -169,9 +172,10 @@ function requestReservationCostUsd(
   imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
+  conservative = false,
 ) {
   const totalOutputTokens = outputTokens * completionCount;
-  return imageCount > 0
+  return imageCount > 0 || conservative
     ? computeMaximumTokenPricedCost(
         costRow,
         inputTokens,
@@ -188,6 +192,7 @@ function requestReservationCredits(
   imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
+  conservative = false,
 ) {
   return usdToCredits(
     requestReservationCostUsd(
@@ -197,6 +202,7 @@ function requestReservationCredits(
       imageCount,
       completionCount,
       imageLimits,
+      conservative,
     ),
   );
 }
@@ -538,8 +544,8 @@ function aiRequestShape(value: unknown) {
       : {};
   const tools = Array.isArray(body.tools) ? body.tools : [];
   return {
-    message_bytes: serializedByteLength(body.messages ?? body.contents),
-    system_bytes: serializedByteLength(body.system ?? body.system_instruction),
+    message_bytes: serializedByteLength(body.messages ?? body.contents ?? body.input),
+    system_bytes: serializedByteLength(body.system ?? body.system_instruction ?? body.instructions),
     tool_bytes: serializedByteLength(tools),
     tool_count: tools.length,
   };
@@ -954,13 +960,13 @@ function isStreamingContentType(contentType: string | null): boolean {
   );
 }
 
-function withRequestId(res: Response, requestId: string): Response {
+export function withRequestId(res: Response, requestId: string): Response {
   res.headers.set('x-request-id', requestId);
   res.headers.set('x-nevermind-backend-version', backendVersion());
   return res;
 }
 
-async function readRequestBodyWithinLimit(
+export async function readRequestBodyWithinLimit(
   request: Request,
 ): Promise<Uint8Array<ArrayBuffer> | null> {
   const body = request.body;
@@ -993,7 +999,7 @@ async function readRequestBodyWithinLimit(
   return bytes;
 }
 
-function requestTooLargeResponse(requestId: string) {
+export function requestTooLargeResponse(requestId: string) {
   return withRequestId(
     Response.json(
       {
@@ -1196,7 +1202,7 @@ async function tryUpstreamProviders(
       ? primaryDescriptor
       : await lookupModelDescriptor(providerId, modelId);
     const imageLimits =
-      imageCount > 0
+      imageCount > 0 || cfg.wireApi === 'openai-responses'
         ? imageTokenLimits(providerId, modelId)
         : undefined;
     if (
@@ -1265,6 +1271,7 @@ async function tryUpstreamProviders(
             imageCount,
             completionCount,
             imageLimits,
+            cfg.wireApi === 'openai-responses',
           );
     const candidateCredits =
       candidateCostUsd == null ? undefined : usdToCredits(candidateCostUsd);
@@ -1366,6 +1373,7 @@ async function tryUpstreamProviders(
       cfg.upstreamAuthHeaderName,
       cfg.formatUpstreamAuthValue(upstreamCfg.apiKey),
     );
+    if (cfg.wireApi === 'openai-responses') headers.delete('openai-beta');
 
     let resp;
     creditFailure = null;
@@ -1478,6 +1486,10 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 
   let routing = await resolveRouting(cfg.request, cfg.authHeaderName);
   if (routing instanceof Response) return withRequestId(routing, requestId);
+  const resolvedApi = selectApiForModel(routing.provider, routing.activeModelId);
+  if (cfg.wireApi && cfg.wireApi !== resolvedApi && (cfg.wireApi === 'openai-responses' || resolvedApi === 'openai-responses')) {
+    return withRequestId(Response.json({ error: { type: 'model_route_changed', message: 'The model route changed. Refresh the model and try again.' } }, { status: 409 }), requestId);
+  }
   const routingFinishedAt = Date.now();
 
   const idempotencyKey = cfg.idempotencyKey;
@@ -1536,6 +1548,14 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         bodyIsJson = true;
       } catch {
         bodyIsJson = false;
+      }
+      const validationError = cfg.validateRequestBody?.(parsedBody);
+      if (validationError) {
+        await markDedupFailed(dedupClaim);
+        return withRequestId(
+          Response.json({ error: { type: 'unsupported_request_shape', message: validationError } }, { status: 400 }),
+          requestId,
+        );
       }
       const inspectedBody = bodyIsJson
         ? withoutSchemaDefinitions(parsedBody)
@@ -1684,7 +1704,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
       maxOutputTokens = initialAdmission.maxOutputTokens;
       reservationInputTokenCeiling = initialAdmission.inputTokensForReservation;
       const initialImageLimits =
-        imageCount > 0
+        imageCount > 0 || cfg.wireApi === 'openai-responses'
           ? imageTokenLimits(routing.provider, routing.activeModelId)
           : undefined;
       if (
@@ -1737,6 +1757,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         imageCount,
         completionCount,
         initialImageLimits,
+        cfg.wireApi === 'openai-responses',
       );
       const estimatedProviderCostUsd = requestReservationCostUsd(
         routing.costRow,
@@ -1745,6 +1766,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         imageCount,
         completionCount,
         initialImageLimits,
+        cfg.wireApi === 'openai-responses',
       );
       let reservation = await reserveCredits({
         requestId,
@@ -1797,12 +1819,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               freeMaxOutputTokens,
               imageCount,
               completionCount,
-              freeImageRouteSupported && imageCount > 0
+              freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                 ? imageTokenLimits(
                     freeRouting.provider,
                     freeRouting.activeModelId,
                   )
                 : undefined,
+              cfg.wireApi === 'openai-responses',
             );
             const freeReservation = await reserveCredits({
               requestId,
@@ -1816,12 +1839,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 freeMaxOutputTokens,
                 imageCount,
                 completionCount,
-                freeImageRouteSupported && imageCount > 0
+                freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                   ? imageTokenLimits(
                       freeRouting.provider,
                       freeRouting.activeModelId,
                     )
                   : undefined,
+                cfg.wireApi === 'openai-responses',
               ),
               estimateCostSource: 'catalog_estimate',
             });
@@ -2144,7 +2168,7 @@ function teeStreamAndBill(
         ? acc.outputTokens
         : Math.max(0, Math.ceil((acc.observedOutputCharacters ?? 0) / 4));
     const streamTokens =
-      naturalCompletion || observedOutput
+      (naturalCompletion && !acc.failed) || observedOutput
         ? resolveBillableTokens(
             billCtx,
             {
@@ -2169,9 +2193,9 @@ function teeStreamAndBill(
       await recordUsage(
         billCtx,
         streamTokens,
-        observedOutput || naturalCompletion ? status : 499,
+        observedOutput || (naturalCompletion && !acc.failed) ? status : 499,
         Date.now() - startedAt,
-        naturalCompletion
+        naturalCompletion && !acc.failed
           ? { status: 'completed', upstreamStatus: status }
           : { status: 'failed', upstreamStatus: status },
         firstTokenLatencyMs,

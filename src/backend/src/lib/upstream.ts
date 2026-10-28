@@ -1,14 +1,20 @@
 import { env } from './env';
 
-export type UpstreamApi = 'openai-completions' | 'anthropic-messages' | 'google-generative-ai';
+export type UpstreamApi = 'openai-completions' | 'openai-responses' | 'anthropic-messages' | 'google-generative-ai';
 
 export class UpstreamConfigError extends Error {}
 
 export function selectApiForModel(provider: string, modelId: string): UpstreamApi {
+  if ((provider === 'opencode_zen' || provider === 'openai') && modelId === 'gpt-6.1-sol') return 'openai-responses';
+  if (provider === 'openrouter' && modelId === 'openai/gpt-6.1-sol') return 'openai-responses';
   if (provider === 'openrouter') return 'openai-completions';
   if (modelId.startsWith('gemini-')) return 'google-generative-ai';
   if (modelId.startsWith('claude-')) return 'anthropic-messages';
   return 'openai-completions';
+}
+
+export function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): UpstreamApi {
+  return selectApiForModel(primary?.modelId === modelId ? primary.provider : 'configured', modelId);
 }
 
 type ProviderConfig = {
@@ -23,13 +29,13 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     apiKeyEnv: 'OPENCODE_API_KEY',
     baseUrlEnv: 'OPENCODE_BASE_URL',
     defaultBaseUrl: 'https://opencode.ai/zen/v1',
-    apiFormats: ['openai-completions', 'anthropic-messages', 'google-generative-ai'],
+    apiFormats: ['openai-completions', 'openai-responses', 'anthropic-messages', 'google-generative-ai'],
   },
   openrouter: {
     apiKeyEnv: 'OPENROUTER_API_KEY',
     baseUrlEnv: 'OPENROUTER_BASE_URL',
     defaultBaseUrl: 'https://openrouter.ai/api/v1',
-    apiFormats: ['openai-completions'],
+    apiFormats: ['openai-completions', 'openai-responses'],
   },
   anthropic: {
     apiKeyEnv: 'ANTHROPIC_API_KEY',
@@ -41,7 +47,7 @@ const PROVIDER_CONFIGS: Record<string, ProviderConfig> = {
     apiKeyEnv: 'OPENAI_API_KEY',
     baseUrlEnv: 'OPENAI_BASE_URL',
     defaultBaseUrl: 'https://api.openai.com/v1',
-    apiFormats: ['openai-completions'],
+    apiFormats: ['openai-completions', 'openai-responses'],
   },
   google: {
     apiKeyEnv: 'GOOGLE_API_KEY',

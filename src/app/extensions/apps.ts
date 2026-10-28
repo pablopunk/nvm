@@ -15,10 +15,16 @@ function uninstallResult(ctx: any, result: any) {
   }
   const details =
     result.untouched.length > 0
-      ? result.untouched.map((item: any) => ({
-          title: item.path,
-          subtitle: item.message,
-        }))
+      ? [
+          ...result.untouched.map((item: any) => ({
+            title: ctx.desktop.files.displayPath(item.path),
+            subtitle: item.message,
+          })),
+          ...result.moved.map((path: string) => ({
+            title: ctx.desktop.files.displayPath(path),
+            subtitle: 'Moved to Trash',
+          })),
+        ]
       : result.notes.map((note: any) => ({ title: note.message }));
   return feedbackView({
     id: 'uninstall-result',
@@ -50,8 +56,9 @@ function uninstallCandidateItem(
   selectedIds: Set<string>,
 ) {
   const selected = selectedIds.has(candidate.id);
+  const displayPath = ctx.desktop.files.displayPath(candidate.path);
   const toggle = ctx.actions.run(
-    `${selected ? 'Deselect' : 'Select'} ${candidate.path}`,
+    `${selected ? 'Deselect' : 'Select'} ${displayPath}`,
     () => {
       if (selectedIds.has(candidate.id)) {
         selectedIds.delete(candidate.id);
@@ -67,11 +74,8 @@ function uninstallCandidateItem(
   );
   return ctx.ui.item({
     id: candidate.id,
-    title: candidate.path,
-    subtitle:
-      candidate.kind === 'app'
-        ? 'Application bundle'
-        : 'Conventional associated data',
+    title: displayPath,
+    subtitle: candidate.reason,
     icon: candidate.kind === 'app' ? 'app-window' : 'folder',
     accessories: [
       {
@@ -88,7 +92,7 @@ function uninstallCandidateItem(
 function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
   const selectedIds = new Set<string>(
     discovery.candidates
-      .filter((candidate: any) => candidate.kind === 'app')
+      .filter((candidate: any) => candidate.selectedByDefault)
       .map((candidate: any) => candidate.id),
   );
   const review = ctx.actions.run('Review selected items', () => {
@@ -106,22 +110,30 @@ function uninstallCandidateChooser(ctx: any, item: any, discovery: any) {
       );
       return;
     }
-    const selectedPaths = selection.map((candidate: any) => candidate.path);
+    const selectedPaths = selection.map((candidate: any) =>
+      ctx.desktop.files.displayPath(candidate.path),
+    );
+    const quitsApp = selection.some(
+      (candidate: any) => candidate.kind === 'app',
+    );
     return ctx.ui.confirm({
       title: `Move ${selectedPaths.length} item${selectedPaths.length === 1 ? '' : 's'} to Trash`,
-      message: selectedPaths.join('\n'),
+      message: [
+        ...selectedPaths,
+        ...(quitsApp
+          ? ['If running, the application will be asked to quit first.']
+          : []),
+      ].join('\n'),
       confirmLabel: 'Move to Trash',
       cancelLabel: 'Cancel',
       destructive: true,
-      onConfirm: ctx.actions.run('Move to Trash', async () =>
-        uninstallResult(
-          ctx,
-          await extensionContext.appUninstallService.trash(
-            discovery.snapshot,
-            values,
-          ),
-        ),
-      ),
+      onConfirm: ctx.actions.run('Move to Trash', async () => {
+        const result = await extensionContext.appUninstallService.trash(
+          discovery.snapshot,
+          values,
+        );
+        return uninstallResult(ctx, result);
+      }),
     });
   });
   const notes = discovery.notes.map((note: any) => note.message).join(' ');
@@ -236,7 +248,7 @@ export function createAppsExtension() {
   return {
     id: 'nevermind.apps',
     title: 'Applications',
-    capabilities: ['desktop.apps'] as const,
+    capabilities: ['desktop.apps', 'desktop.files'] as const,
     commands: [
       {
         id: 'force-quit-apps',

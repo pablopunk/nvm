@@ -1,3 +1,4 @@
+import { recordForPrivateState } from './portable-config-projection';
 import { createUserStateSaveScheduler, writeUserStateFile } from './user-state';
 import type { UserStateRecord } from './user-state-store';
 
@@ -33,7 +34,10 @@ function createUserStatePersistence(deps: UserStatePersistenceDeps) {
 
   async function writeCurrentUserState() {
     deps.beforeWrite();
-    await writeUserStateFile(deps.getStatePath(), deps.getUserState());
+    await writeUserStateFile(
+      deps.getStatePath(),
+      recordForPrivateState(deps.getUserState()),
+    );
   }
 
   return {

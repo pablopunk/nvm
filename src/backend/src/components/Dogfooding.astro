@@ -1,0 +1,61 @@
+---
+import { Sparkles } from '@lucide/astro';
+---
+
+<section class="dogfooding landing-feature" aria-labelledby="dogfooding-title">
+  <div class="dogfooding__copy">
+    <h2 id="dogfooding-title">Almighty.<br /><span class="dogfooding__highlight">The power of dogfooding.</span></h2>
+    <p><strong>Whatever Nevermind can do, your extension can.</strong></p>
+    <p>We use the same Extension API to build features in Nevermind. Add items to the main screen, create search results, <strong>use AI in your extensions.</strong> It’s all there.</p>
+  </div>
+  <div class="dogfooding__visual" aria-label="Example of an extension asking Nevermind AI to summarize a note">
+    <div class="dogfooding__window-bar">
+      <span class="dogfooding__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      <span>your-extension.ts</span>
+      <span class="dogfooding__window-label">Extension API</span>
+    </div>
+    <div class="dogfooding__example">
+      <div class="dogfooding__code-label">YOUR EXTENSION</div>
+      <pre><code><span>const</span> summary = <span>await</span> ctx.ai.ask(
+  <em>"Summarize this note: "</em> + note
+);</code></pre>
+      <div class="dogfooding__connector" aria-hidden="true"><span></span><Sparkles size={16} /><span></span></div>
+      <div class="dogfooding__result">
+        <div class="dogfooding__result-label"><Sparkles size={15} aria-hidden="true" /> Nevermind AI</div>
+        <p>Here’s a quick summary of your note.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  .dogfooding { padding-block: 48px 112px; }
+  h2 { margin: 0 0 20px; font-size: clamp(28px, 3vw, 36px); line-height: 1.2; letter-spacing: -0.03em; }
+  .dogfooding__highlight { color: var(--landing-gold); }
+  .dogfooding__copy p { max-width: 420px; margin: 0; color: var(--muted); font-size: 17px; line-height: 1.7; }
+  .dogfooding__copy p + p { margin-top: 20px; }
+  strong { color: var(--text); font-weight: 600; }
+  .dogfooding__visual { min-width: 0; width: 100%; border: 1px solid var(--border); border-radius: var(--radius-lg); background: color-mix(in srgb, var(--surface) 45%, var(--bg)); overflow: hidden; }
+  .dogfooding__window-bar { display: flex; align-items: center; gap: 16px; padding: 16px 20px; border-bottom: 1px solid var(--border); color: var(--muted); font-family: var(--mono); font-size: 12px; }
+  .dogfooding__dots { display: flex; gap: 5px; }
+  .dogfooding__dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); opacity: 0.5; }
+  .dogfooding__window-label { margin-left: auto; font-family: var(--font); }
+  .dogfooding__example { padding: 32px; }
+  .dogfooding__code-label { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.08em; }
+  pre { margin: 16px 0 0; padding: 0; border: 0; background: transparent; overflow-x: auto; font-size: clamp(12px, 1.25vw, 14px); line-height: 1.8; }
+  code { padding: 0; border: 0; background: transparent; color: var(--text); }
+  code span { color: var(--landing-gold); }
+  code em { color: var(--muted); font-style: normal; }
+  .dogfooding__connector { display: flex; align-items: center; gap: 12px; margin: 24px 0; color: var(--landing-gold); }
+  .dogfooding__connector span { height: 1px; flex: 1; background: var(--border); }
+  .dogfooding__result { padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); }
+  .dogfooding__result-label { display: flex; align-items: center; gap: 8px; color: var(--landing-gold); font-size: 13px; font-weight: 600; }
+  .dogfooding__result p { margin: 10px 0 0; color: var(--text); font-size: 14px; line-height: 1.5; }
+  @media (forced-colors: active) { .dogfooding__highlight { background: none; color: CanvasText; } }
+  @media (max-width: 860px) {
+    .dogfooding { padding-block: 32px 80px; }
+    .dogfooding__copy { text-align: center; }
+    .dogfooding__copy p { margin-inline: auto; }
+    .dogfooding__example { padding: 24px; }
+  }
+</style>

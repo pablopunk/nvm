@@ -606,6 +606,25 @@ test('shows global shortcut keys on every root shortcut row', () => {
   assert.doesNotMatch(html, /keyHints selectedOnlyEnter/);
 });
 
+test('root-style extension lists only show their own empty-state subtitle', () => {
+  const view: CommandView = {
+    type: 'list',
+    presentation: 'root',
+    title: 'Settings',
+    items: [],
+  };
+  const empty = renderExtensionView(view);
+  const custom = renderExtensionView({
+    ...view,
+    emptyView: { title: 'Nothing here', subtitle: 'Try another search' },
+  });
+
+  assert.match(empty, /No items/);
+  assert.doesNotMatch(empty, /AI planning comes next/);
+  assert.match(custom, /Nothing here/);
+  assert.match(custom, /Try another search/);
+});
+
 test('renders a native glyph as a grid tile visual', () => {
   const html = renderExtensionView({
     type: 'grid',

@@ -7,8 +7,9 @@ export type ShortcutCatalogDeps = {
   userStateStore: Pick<UserStateStore, 'get'>;
   visibleExtensionActionEntries: () => any[];
   extensionActionFromContribution: (entry: any) => any;
-  currentActionForStoredShortcut: (action: any) => any;
+  resolveStoredShortcutAction: (actionId: string) => any;
   patchOpenView: (viewId: string, patch: any) => void;
+  activationFailure: (key: string) => string | null;
 };
 
 export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
@@ -16,9 +17,15 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
     userStateStore,
     visibleExtensionActionEntries,
     extensionActionFromContribution,
-    currentActionForStoredShortcut,
+    resolveStoredShortcutAction,
     patchOpenView,
+    activationFailure,
   } = deps;
+
+  function inactiveSubtitle(item) {
+    const failure = activationFailure(`shortcut:${item.actionId}`);
+    return failure ? `Not active: ${failure}` : item.action.subtitle;
+  }
 
   function declaredGlobalShortcuts() {
     return visibleExtensionActionEntries()
@@ -46,16 +53,14 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
         accelerator: String(accelerator),
         scope: 'global',
         source: 'user' as const,
-        action: currentActionForStoredShortcut(
-          userStateStore.get().shortcutActions[actionId],
-        ),
+        action: resolveStoredShortcutAction(actionId),
       }))
       .filter((item) => item.action);
     const declared = declaredGlobalShortcuts()
       .filter(
         (item) =>
           !(
-            userStateStore.get().shortcuts[item.actionId] ||
+            item.actionId in userStateStore.get().shortcuts ||
             userStateStore.get().removedShortcuts?.[item.actionId]
           ),
       )
@@ -74,7 +79,7 @@ export function createShortcutCatalog(deps: ShortcutCatalogDeps) {
     return getShortcuts().map((item) => ({
       actionId: item.actionId,
       title: item.action.title,
-      subtitle: item.action.subtitle,
+      subtitle: inactiveSubtitle(item),
       accelerator: item.accelerator,
       scope: 'global' as const,
       source: item.source,
