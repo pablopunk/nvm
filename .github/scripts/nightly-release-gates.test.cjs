@@ -1,6 +1,10 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const test = require('node:test');
 const {
   evaluateCiGate,
@@ -11,6 +15,7 @@ const {
   madridHour,
 } = require('./nightly-release-gates.cjs');
 
+const CLI = path.join(__dirname, 'nightly-release-cli.cjs');
 const SOURCE = 'a'.repeat(40);
 const PRODUCTION = 'b'.repeat(40);
 
@@ -98,10 +103,38 @@ function healthy(overrides = {}) {
     ok: true,
     db: true,
     upstream: true,
+    upstreamReady: true,
     version: 'bbbbbbb',
     commit: PRODUCTION,
     ...overrides,
   };
+}
+
+// Bodies /api/health reports for an upstream /models probe that returns a non-2xx
+// status or a non-catalog 200. The released `upstream` flag stays true for these
+// (status < 500), so only `upstreamReady` may keep the gate closed.
+const UPSTREAM_NOT_READY_HEALTH = [
+  ['401 unauthorized', healthy({ upstreamReady: false })],
+  ['403 forbidden', healthy({ upstreamReady: false })],
+  ['404 missing catalog path', healthy({ upstreamReady: false })],
+  ['429 rate limited', healthy({ upstreamReady: false })],
+  ['200 without a model catalog', healthy({ upstreamReady: false })],
+];
+
+function withoutUpstreamReady(health) {
+  const legacy = { ...health };
+  delete legacy.upstreamReady;
+  return legacy;
+}
+
+function runIdentityCli(healthPath) {
+  return JSON.parse(
+    execFileSync(
+      process.execPath,
+      [CLI, 'identity', '--sha', SOURCE, '--health', healthPath],
+      { encoding: 'utf8' },
+    ),
+  );
 }
 
 function ciRun(overrides = {}) {
@@ -264,6 +297,69 @@ test('production identity fails closed when health, commit identity, or health c
     }).status,
     'rejected',
   );
+});
+
+for (const [label, health] of UPSTREAM_NOT_READY_HEALTH) {
+  test(`production identity rejects an upstream ${label} even though health is up`, () => {
+    const verdict = evaluateProductionIdentity({ sha: SOURCE, health });
+    assert.equal(verdict.status, 'rejected');
+    assert.match(verdict.reason, /did not return a successful model catalog/);
+  });
+}
+
+test('production identity rejects a 5xx or timed-out upstream whether health answered 503 or not at all', () => {
+  // The workflow's curl -f drops the body on a 503, so the gate sees no health file.
+  assert.equal(
+    evaluateProductionIdentity({ sha: SOURCE, health: null }).status,
+    'rejected',
+  );
+  const unreachable = healthy({
+    ok: false,
+    upstream: false,
+    upstreamReady: false,
+  });
+  assert.equal(
+    evaluateProductionIdentity({ sha: SOURCE, health: unreachable }).status,
+    'rejected',
+  );
+});
+
+test('production identity rejects a deployment that does not report upstreamReady', () => {
+  // A backend deployed before this contract only reports the legacy flags.
+  const legacy = evaluateProductionIdentity({
+    sha: SOURCE,
+    health: withoutUpstreamReady(healthy()),
+  });
+  assert.equal(legacy.status, 'rejected');
+  assert.match(legacy.reason, /does not report upstream readiness/);
+  const malformed = evaluateProductionIdentity({
+    sha: SOURCE,
+    health: healthy({ upstreamReady: 'true' }),
+  });
+  assert.equal(malformed.status, 'rejected');
+  assert.match(malformed.reason, /does not report upstream readiness/);
+});
+
+test('identity CLI rejects unready, legacy, and missing production health from real files', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'nightly-identity-'));
+  try {
+    for (const [label, health] of [
+      ...UPSTREAM_NOT_READY_HEALTH,
+      ['legacy backend', withoutUpstreamReady(healthy())],
+    ]) {
+      const healthPath = path.join(
+        directory,
+        `${label.replace(/\W+/g, '-')}.json`,
+      );
+      fs.writeFileSync(healthPath, JSON.stringify(health));
+      assert.equal(runIdentityCli(healthPath).status, 'rejected', label);
+    }
+    const missing = runIdentityCli(path.join(directory, 'missing.json'));
+    assert.equal(missing.status, 'rejected');
+    assert.match(missing.reason, /health is unavailable/);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test('production identity verifies an exact match without ancestry', () => {

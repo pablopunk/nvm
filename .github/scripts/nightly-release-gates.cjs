@@ -119,9 +119,10 @@ function evaluateDeploymentGate({ commit, runs, jobs }) {
   };
 }
 
-// Fail closed: production must be healthy and must report a full 40-hex commit
-// (the additive `commit` field of /api/health). Only an exact match or a verified
-// descendant of the selected commit that is on main may publish.
+// Fail closed: production must be healthy, its upstream must return a successful
+// model catalog (the additive `upstreamReady` field of /api/health), and
+// it must report a full 40-hex commit (the additive `commit` field). Only an exact
+// match or a verified descendant of the selected commit that is on main may publish.
 function evaluateProductionIdentity({
   sha,
   health,
@@ -132,6 +133,14 @@ function evaluateProductionIdentity({
     return reject('production health is unavailable');
   if (health.ok !== true || health.db !== true || health.upstream !== true)
     return reject('production health is not fully healthy');
+  if (typeof health.upstreamReady !== 'boolean')
+    return reject(
+      'production does not report upstream readiness (deployment predates the upstreamReady contract)',
+    );
+  if (health.upstreamReady !== true)
+    return reject(
+      'production upstream did not return a successful model catalog',
+    );
   if (!FULL_COMMIT_SHA_PATTERN.test(health.commit ?? ''))
     return reject(
       `production does not report a full commit identity (version=${health.version ?? 'missing'})`,

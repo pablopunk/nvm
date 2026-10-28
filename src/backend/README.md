@@ -56,6 +56,7 @@ Each deploy passes the checked-out full commit SHA to the Vercel CLI as
 `--build-env NVM_BUILD_COMMIT_SHA=<sha>`. The build bakes it into the server bundle, and
 `/api/health` and `/api/health/deployment` report it as `commit` next to the short
 `version`. The nightly release gate requires a valid deployed identity and checks the public alias before publication.
+`upstream` only reports that the active provider is reachable; `upstreamReady` is true solely for a 2xx `/models` response with a `data` array, and the nightly gate requires it.
 
 Use expand-and-contract migrations: apply a backward-compatible schema change,
 deploy compatible code only after migration succeeds, migrate data if needed,

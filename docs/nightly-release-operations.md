@@ -3,10 +3,14 @@
 The nightly release workflow runs at 04:00 Europe/Madrid, including daylight
 saving time. It publishes a GitHub prerelease only when the app has changed since
 the last nightly (or the latest stable release when there is no nightly), CI has
-passed for the selected commit, and production is healthy and serving that commit
-or a verified newer commit on main. The production deployment workflow must also
-have completed its production deployment successfully. A failed or unverified
-backend deployment prevents publication.
+passed for the selected commit, and production is healthy, its upstream returns a
+successful model catalog (`upstreamReady` in `/api/health`), and it is
+serving that commit or a verified newer commit on main. A deployment that does not
+report `upstreamReady` yet fails closed until the new backend is deployed. The
+production deployment workflow must also have completed its production deployment
+successfully. A failed or unverified backend deployment prevents publication.
+Some providers expose their catalog anonymously, so readiness does not prove an
+API key is valid or that an authenticated model request will succeed.
 
 The workflow summary records why a run built or skipped. When a nightly is
 missing, inspect the **Nightly release** run and its plan summary first, then the
