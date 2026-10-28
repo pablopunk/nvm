@@ -459,6 +459,56 @@ describe('containsUnpricedProviderTool', () => {
       false,
     );
   });
+
+  test('rejects Anthropic and OpenAI provider-hosted tool types', () => {
+    for (const tool of [
+      { type: 'web_search_20250305', name: 'web_search' },
+      { type: 'web_fetch_20250910', name: 'web_fetch' },
+      { type: 'code_execution_20250522', name: 'code_execution' },
+      { type: 'web_search_preview' },
+      { type: 'file_search' },
+    ])
+      assert.equal(containsUnpricedProviderTool({ tools: [tool] }), true);
+  });
+
+  test('rejects Gemini provider-hosted tool objects', () => {
+    for (const tool of [
+      { googleSearch: {} },
+      { codeExecution: {} },
+      { urlContext: {} },
+    ])
+      assert.equal(containsUnpricedProviderTool({ tools: [tool] }), true);
+  });
+
+  test('rejects top-level MCP server connectors', () => {
+    assert.equal(
+      containsUnpricedProviderTool({
+        mcp_servers: [{ type: 'url', url: 'https://mcp.example/sse' }],
+      }),
+      true,
+    );
+  });
+
+  test('allows client-executed OpenAI, Anthropic, and Gemini tool shapes', () => {
+    assert.equal(
+      containsUnpricedProviderTool({
+        tools: [
+          { type: 'function', function: { name: 'lookup_weather' } },
+          {
+            name: 'lookup_weather',
+            description: 'Look up weather',
+            input_schema: { type: 'object' },
+          },
+          {
+            functionDeclarations: [
+              { name: 'lookup_weather', parameters: { type: 'object' } },
+            ],
+          },
+        ],
+      }),
+      false,
+    );
+  });
 });
 
 describe('estimatePromptCredits', () => {

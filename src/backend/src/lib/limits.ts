@@ -26,7 +26,9 @@ const MULTIMODAL_KEY_PATTERN = new RegExp(
   `^(?:${MULTIMODAL_FIELD_NAMES})$`,
   'i',
 );
-const UNPRICED_TOOL_TYPES = new Set(['openrouter:web_search']);
+const PRICED_TOOL_TYPES = new Set(['function', 'custom']);
+const CLIENT_TOOL_DEFINITION_KEYS = ['type', 'name', 'input_schema', 'function'];
+const GEMINI_FUNCTION_DECLARATIONS_KEY = 'functionDeclarations';
 const MULTIMODAL_TYPE_PATTERN =
   /(?:^|[_-])(?:image|audio|video|pdf|document|file)(?:$|[_-])/i;
 const MULTIMODAL_MIME_PATTERN = /^(?:image|audio|video)\//i;
@@ -64,21 +66,26 @@ export function containsImagePayload(value: unknown): boolean {
   );
 }
 
-/** OpenRouter search is separately billed per use, outside token pricing. */
+/** Provider-hosted tools bill outside token pricing; only client-executed tools pass. */
 export function containsUnpricedProviderTool(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const node = value as Record<string, unknown>;
-  if (
+  if (Object.hasOwn(node, 'mcp_servers')) return true;
+  return (
     Array.isArray(node.tools) &&
-    node.tools.some((tool) => {
-      if (!tool || typeof tool !== 'object' || Array.isArray(tool))
-        return false;
-      const type = (tool as Record<string, unknown>).type;
-      return typeof type === 'string' && UNPRICED_TOOL_TYPES.has(type);
-    })
-  )
-    return true;
-  return false;
+    node.tools.some(isUnpricedProviderToolEntry)
+  );
+}
+
+function isUnpricedProviderToolEntry(tool: unknown): boolean {
+  if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return false;
+  const entry = tool as Record<string, unknown>;
+  if (typeof entry.type === 'string') return !PRICED_TOOL_TYPES.has(entry.type);
+  if (CLIENT_TOOL_DEFINITION_KEYS.some((key) => Object.hasOwn(entry, key)))
+    return false;
+  return Object.keys(entry).some(
+    (key) => key !== GEMINI_FUNCTION_DECLARATIONS_KEY,
+  );
 }
 
 const SCHEMA_DEFINITION_FIELDS = [
