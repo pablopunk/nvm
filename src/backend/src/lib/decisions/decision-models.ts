@@ -71,6 +71,14 @@ function isZeroPrice(value: unknown): boolean {
   );
 }
 
+/** New routes must support images and have the billing bounds used by execution. */
+export function isSelectableDecisionModel(model: DecisionModel): boolean {
+  return Boolean(
+    model.acceptsImages && model.contextLength && model.imageTokenPriced &&
+    model.cost && model.cost.outputUsdPerMtok === 0,
+  );
+}
+
 function decisionCatalogCost(model: OpenRouterModel): ModelCost | null {
   const input = model.pricing?.prompt;
   const output = model.pricing?.completion;
