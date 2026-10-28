@@ -68,12 +68,12 @@ test('a version-only root package.json change is the mechanical stable bump and 
   assert.equal(isVersionOnlyPackageJsonChange(null, bumped), false);
 });
 
-test('backend and workflow changes plus a version-only bump do not require an app build', () => {
+test('backend and unrelated workflow changes plus a version-only bump do not require an app build', () => {
   const calls = [];
   const result = classifyNightlyAppChanges(
     [
       'src/backend/src/lib/compatibility.ts',
-      '.github/workflows/ci.yml',
+      '.github/workflows/deployed-smoke.yml',
       'package.json',
     ],
     {
