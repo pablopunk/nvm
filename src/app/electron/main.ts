@@ -2075,6 +2075,7 @@ app.whenReady().then(async () => {
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
+    portableConfigService.startPollingPortableConfig();
     await loadExtensions();
     registerTestModeIpcHandlers();
     paletteWindow.createWindow();

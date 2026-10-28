@@ -253,7 +253,11 @@ export function createPortableConfigStore(deps: PortableConfigStoreDeps) {
       if (signature === lastSignature) return { adopted: null, blockedReason };
       lastSignature = signature;
       const reading = await readPortableConfigFile(filePath, deps.settingKinds);
-      if (reading.kind === 'valid' && reading.text === lastSeenText)
+      if (
+        reading.kind === 'valid' &&
+        reading.text === lastSeenText &&
+        !blockedReason
+      )
         return { adopted: null, blockedReason };
       const previous = effective;
       adoptReading(reading);

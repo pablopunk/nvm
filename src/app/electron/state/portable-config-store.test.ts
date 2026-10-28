@@ -150,6 +150,21 @@ test('a valid external edit after a block is adopted and unblocks writes', async
   });
 });
 
+test('restoring the last valid contents after an invalid edit unblocks writes', async () => {
+  await withConfigFile(async (filePath) => {
+    await fs.writeFile(filePath, VALID_TEXT);
+    const { store } = createTestStore(filePath);
+    await store.load();
+    await fs.writeFile(filePath, '{invalid');
+    await store.pollForExternalChange();
+    assert.equal(store.snapshot().writable, false);
+    await fs.writeFile(filePath, VALID_TEXT);
+    await store.pollForExternalChange();
+    assert.equal(store.snapshot().writable, true);
+    assert.equal((await store.persist(withHotkey('Command+Alt+J'))).ok, true);
+  });
+});
+
 test('writes through a symlink update the target and keep the link and file mode', async () => {
   await withConfigFile(async (filePath, directory) => {
     const realPath = path.join(directory, 'dotfiles-config.json');
