@@ -45,7 +45,7 @@ export function createAppUninstallService(deps: AppUninstallDependencies) {
   const randomId = deps.randomId || randomUUID;
   const inspector = createPathInspector(deps);
   const guards = createAppGuards(deps, inspector);
-  const discover = createDiscovery({
+  const { discover } = createDiscovery({
     deps,
     randomId,
     inspector,
