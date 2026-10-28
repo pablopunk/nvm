@@ -118,6 +118,7 @@ export type StreamUsageAccumulator = {
   providerCostUsd?: number;
   observedOutputCharacters?: number;
   finalized: boolean;
+  failed?: boolean;
   pendingText?: string;
   reportMalformedFrame?: (error: unknown) => void;
 };
@@ -540,8 +541,8 @@ function aiRequestShape(value: unknown) {
       : {};
   const tools = Array.isArray(body.tools) ? body.tools : [];
   return {
-    message_bytes: serializedByteLength(body.messages ?? body.contents),
-    system_bytes: serializedByteLength(body.system ?? body.system_instruction),
+    message_bytes: serializedByteLength(body.messages ?? body.contents ?? body.input),
+    system_bytes: serializedByteLength(body.system ?? body.system_instruction ?? body.instructions),
     tool_bytes: serializedByteLength(tools),
     tool_count: tools.length,
   };
@@ -2159,7 +2160,7 @@ function teeStreamAndBill(
         ? acc.outputTokens
         : Math.max(0, Math.ceil((acc.observedOutputCharacters ?? 0) / 4));
     const streamTokens =
-      naturalCompletion || observedOutput
+      (naturalCompletion && !acc.failed) || observedOutput
         ? resolveBillableTokens(
             billCtx,
             {
@@ -2184,9 +2185,9 @@ function teeStreamAndBill(
       await recordUsage(
         billCtx,
         streamTokens,
-        observedOutput || naturalCompletion ? status : 499,
+        observedOutput || (naturalCompletion && !acc.failed) ? status : 499,
         Date.now() - startedAt,
-        naturalCompletion
+        naturalCompletion && !acc.failed
           ? { status: 'completed', upstreamStatus: status }
           : { status: 'failed', upstreamStatus: status },
         firstTokenLatencyMs,

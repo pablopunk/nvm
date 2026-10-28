@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test, describe, afterEach } from 'node:test';
-import { getUpstreamConfig, selectApiForModel, providerSupportsFormat, UpstreamConfigError } from './upstream';
+import { getUpstreamConfig, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
 
 afterEach(() => {
   delete process.env.OPENCODE_API_KEY;
@@ -15,6 +15,11 @@ describe('selectApiForModel', () => {
     assert.equal(selectApiForModel('openai', 'gpt-6.1-sol'), 'openai-responses');
     assert.equal(selectApiForModel('opencode_zen', 'gpt-6.1-sol'), 'openai-responses');
     assert.equal(selectApiForModel('openrouter', 'openai/gpt-6.1-sol'), 'openai-responses');
+  });
+
+  test('fallback chain uses the actual primary route API without changing unconfigured routes', () => {
+    assert.equal(selectApiForModelChain({ provider: 'openrouter', modelId: 'openai/gpt-6.1-sol' }, 'openai/gpt-6.1-sol'), 'openai-responses');
+    assert.equal(selectApiForModelChain(null, 'gemini-3-flash'), 'google-generative-ai');
   });
   test('openrouter provider → openai-completions', () => {
     assert.strictEqual(selectApiForModel('openrouter', 'any-model'), 'openai-completions');

@@ -36,11 +36,14 @@ function parseResponsesStream(
     const payload = trimmed.slice(5).trim();
     if (!payload || payload === '[DONE]') continue;
     const event = parseStreamUsageJson(payload, acc);
+    if (event?.type === 'response.failed' || event?.type === 'error') acc.failed = true;
     if (
       [
         'response.output_text.delta',
         'response.function_call_arguments.delta',
         'response.reasoning_summary_text.delta',
+        'response.reasoning_text.delta',
+        'response.refusal.delta',
       ].includes(event?.type) &&
       typeof event.delta === 'string'
     )

@@ -4085,3 +4085,34 @@ test('a stale chat-completions route fails before credit reservation when the mo
   assert.equal((await response.json() as any).error.type, 'model_route_changed');
   assert.equal(db.insertedValues.length, 0);
 });
+
+test('Responses failed stream without output releases its reservation', async () => {
+  process.env.OPENCODE_API_KEY = 'upstream-key';
+  process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
+  const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
+    return new Response('data: {"type":"response.failed","response":{"status":"failed"}}\n\n', { headers: { 'content-type': 'text/event-stream' } });
+  };
+  const response = await postResponses(routeContext(authorizedChatRequest({ input: 'hello', stream: true })));
+  await response.text();
+  await waitForBackgroundTasks();
+  assert.equal(countTerminalUpdates(db, 'released'), 1);
+  assert.equal(countTerminalUpdates(db, 'settled'), 0);
+  assert.equal((db.insertedValues.at(-1) as any).costCredits, 0);
+});
+
+test('active model describes the Responses route to a released desktop request', async () => {
+  installModelsDevFetch();
+  installDb(createFakeDb({ selects: proxySelects({ model: 'gpt-6.1-sol', routeProvider: 'opencode_zen' }) }));
+  const request = new Request('https://api.nvm.fyi/api/v1/active-model', {
+    headers: { authorization: 'Bearer nvm_pat_test', 'x-nevermind-client': 'desktop', 'x-nevermind-client-version': '0.16.0', 'x-nevermind-api-version': '1' },
+  });
+  const response = await getActiveModel(routeContext(request));
+  const body = await response.json() as any;
+  assert.equal(response.status, 200);
+  assert.equal(body.api, 'openai-responses');
+  assert.equal(body.id, 'gpt-6.1-sol');
+  assert.match(body.baseUrl, /\/api\/v1$/);
+});

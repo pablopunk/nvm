@@ -18,6 +18,7 @@ import {
   getConfiguredModelProviderRoutes,
   getModelRoute,
   listAllProviders,
+  ModelNotConfiguredError,
   type ModelRouteSlot,
   parseModelRouteSlot,
   setModelProviderChain,
@@ -25,6 +26,7 @@ import {
 import {
   providerSupportsFormat,
   selectApiForModel,
+  selectApiForModelChain,
 } from '../../../lib/upstream';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -74,7 +76,7 @@ export const GET: APIRoute = async ({ request, url }) => {
     listAllProviders(),
     getModelRoute(slot),
   ]);
-  const format = selectApiForModel('configured', modelId);
+  const format = selectApiForModelChain(primaryRoute, modelId);
   const providerOptions = await Promise.all(
     providers.map(async (provider) => {
       const compatibleModels = providerSupportsFormat(provider.id, format)
@@ -180,7 +182,11 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
   }
-  const format = selectApiForModel('configured', body.modelId);
+  const primaryRoute = await getModelRoute(slot).catch((error) => {
+    if (error instanceof ModelNotConfiguredError) return null;
+    throw error;
+  });
+  const format = selectApiForModelChain(primaryRoute, body.modelId);
   if (
     routes.some(
       (route) =>

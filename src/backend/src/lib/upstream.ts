@@ -13,6 +13,10 @@ export function selectApiForModel(provider: string, modelId: string): UpstreamAp
   return 'openai-completions';
 }
 
+export function selectApiForModelChain(primary: { provider: string; modelId: string } | null, modelId: string): UpstreamApi {
+  return selectApiForModel(primary?.modelId === modelId ? primary.provider : 'configured', modelId);
+}
+
 type ProviderConfig = {
   apiKeyEnv: string;
   baseUrlEnv?: string;
