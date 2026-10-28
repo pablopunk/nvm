@@ -9,6 +9,10 @@ export type MarkdownRemoteImages = 'render' | 'links';
 
 export type MarkdownOptions = { remoteImages?: 'links' };
 
+export const AI_CHAT_MARKDOWN_OPTIONS: MarkdownOptions = {
+  remoteImages: 'links',
+};
+
 export interface MarkdownContentProps {
   content: string;
   remoteImages?: MarkdownRemoteImages;

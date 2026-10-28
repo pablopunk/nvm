@@ -50,6 +50,7 @@ import {
   EXTENSION_WEBVIEW_SANDBOX,
   extensionWebviewAllow,
 } from './extension-webview-permissions';
+import { AI_CHAT_MARKDOWN_OPTIONS } from '../markdown-content';
 import { formApplyRowId } from './form-fields';
 import type { usePaletteForm } from './palette-form';
 
@@ -1015,12 +1016,13 @@ function ChatExtensionView({
       }
       if (sourceMessages[index]?.role === 'user') break;
     }
+  const markdownOptions = view.aiChat ? AI_CHAT_MARKDOWN_OPTIONS : undefined;
   const messages = sourceMessages.map((message, index) => ({
     ...message,
     content:
       index === streamingAssistantIndex
         ? message.content
-        : renderMarkdown(message.content, { remoteImages: 'links' }),
+        : renderMarkdown(message.content, markdownOptions),
     streaming: index === streamingAssistantIndex,
   }));
   const chatInputRef = useRef<HTMLTextAreaElement>(null);

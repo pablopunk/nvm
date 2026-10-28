@@ -737,6 +737,28 @@ test('AI chat messages render markdown with remote images as links', () => {
   assert.deepEqual(optionsSeen, [{ remoteImages: 'links' }]);
 });
 
+test('extension chat messages keep inline markdown images', () => {
+  const optionsSeen: unknown[] = [];
+  renderExtensionView(
+    {
+      type: 'chat',
+      title: 'Chat',
+      messages: [
+        { role: 'assistant', content: '![x](https://example.com/a.png)' },
+      ],
+    },
+    undefined,
+    {
+      renderMarkdown: (content, options) => {
+        optionsSeen.push(options);
+        return <MarkdownContent content={content} />;
+      },
+    },
+  );
+
+  assert.deepEqual(optionsSeen, [undefined]);
+});
+
 test('nested navigation preserves the parent view when pushing a child', () => {
   const root: CommandView = {
     id: 'ai-chats',
