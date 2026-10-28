@@ -31,12 +31,12 @@ const REFUSALS = {
   associatedFailed: {
     code: 'associated-failed',
     message:
-      'Kept the application because a selected item was not moved. Fix that item and try again.',
+      'Kept for retry. Deselect the unavailable item to uninstall the app.',
   },
   trashFailed: {
     code: 'trash-failed',
     message:
-      'macOS could not move this item to Trash. Check its permissions and try again.',
+      'Could not move to Trash. Deselect to continue or check permissions.',
   },
   zeroSelection: {
     code: 'zero-selection',

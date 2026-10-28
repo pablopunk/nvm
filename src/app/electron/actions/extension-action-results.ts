@@ -201,6 +201,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
           {
             ...returnedAction,
             title: returnedAction.confirmLabel || returnedAction.title,
+            requiresConfirmation: false,
           },
           { type: 'popView', title: returnedAction.cancelLabel || 'Cancel' },
         ],

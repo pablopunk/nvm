@@ -1,5 +1,6 @@
 import { requestMacAppQuit, runningMacAppForUninstall } from '../os/app-quit';
 import { findMacAppsWithBundleId } from '../os/app-uninstall-search';
+import { warn } from '../platform/logger';
 import {
   createProductionAppUninstallService,
   NEVERMIND_BUNDLE_ID,
@@ -13,7 +14,18 @@ export function createHostAppUninstallService(input: {
   trashItem: (itemPath: string) => Promise<void>;
 }) {
   return createProductionAppUninstallService({
-    trashItem: input.trashItem,
+    trashItem: async (itemPath) => {
+      try {
+        await input.trashItem(itemPath);
+      } catch (error) {
+        const code =
+          error && typeof error === 'object' && 'code' in error
+            ? String(error.code)
+            : 'unknown';
+        warn('app-uninstall.trash-failed', { code });
+        throw error;
+      }
+    },
     requestQuit: requestMacAppQuit,
     findMatchingApps: findMacAppsWithBundleId,
     runningAppPaths: runningMacAppForUninstall,

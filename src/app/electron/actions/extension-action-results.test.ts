@@ -1,6 +1,13 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { createExtensionActionResults } from './extension-action-results';
+import test, { mock } from 'node:test';
+
+mock.module('electron', {
+  namedExports: { app: { isPackaged: false, getPath: () => '/tmp' } },
+});
+
+const { createExtensionActionResults } = await import(
+  './extension-action-results'
+);
 
 test('a returned action requiring confirmation is presented without executing it', async () => {
   let executions = 0;
@@ -32,7 +39,7 @@ test('a returned action requiring confirmation is presented without executing it
     assert.equal(response.navigation, 'push');
     assert.equal(
       response.view.items[1].primaryAction.requiresConfirmation,
-      true,
+      false,
     );
     assert.equal(response.view.items[1].title, 'Move to Trash');
   }
