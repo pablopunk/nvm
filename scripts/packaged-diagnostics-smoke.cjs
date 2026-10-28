@@ -594,6 +594,17 @@ async function packagedDiagnosticsSmoke(
     await cleanUpStage('Pi provider', async function closePiFixture() {
       await piFixture?.close();
     });
+    if (smokeFailed)
+      await cleanUpStage('host log', async function saveHostLog() {
+        try {
+          await fs.copyFile(
+            path.join(temporary, 'logs', 'nevermind.log'),
+            path.join(artifacts, 'nevermind.log'),
+          );
+        } catch (error) {
+          if (error?.code !== 'ENOENT') throw error;
+        }
+      });
     await cleanUpStage('temporary profile', function removeProfile() {
       return fs.rm(temporary, { recursive: true, force: true });
     });
