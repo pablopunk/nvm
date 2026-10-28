@@ -702,6 +702,104 @@ test('saves a shortcut from the recorder with Enter', async () => {
   }
 });
 
+test('restores a portable shortcut after startup and restart', async () => {
+  const profile = path.join(userDataDir, 'portable-shortcut-restart');
+  const actionId = 'extension:nevermind.system:builtin:settings';
+  const accelerator =
+    process.platform === 'darwin'
+      ? 'Command+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+  await fs.mkdir(profile, { recursive: true });
+  await fs.writeFile(
+    path.join(profile, 'config.json'),
+    JSON.stringify({ version: 1, shortcuts: { [actionId]: accelerator } }),
+  );
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const launched = await launchTestApplication(profile);
+    try {
+      await expect
+        .poll(() =>
+          launched.page.evaluate(
+            (shortcut) => window.nvm.testIsActionShortcutRegistered(shortcut),
+            accelerator,
+          ),
+        )
+        .toEqual({ registered: true });
+    } finally {
+      await closeTestApplication(launched.app, launched.trackedPids);
+    }
+  }
+});
+
+test('reloads portable shortcut edits and preserves the last valid file state', async () => {
+  test.setTimeout(40_000);
+  const profile = path.join(userDataDir, 'portable-shortcut-live');
+  const configPath = path.join(profile, 'config.json');
+  const title =
+    process.platform === 'darwin' ? 'Open System Settings' : 'Open Settings';
+  const firstKey =
+    process.platform === 'darwin'
+      ? 'Meta+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+  const firstAccelerator =
+    process.platform === 'darwin'
+      ? 'Command+Control+Alt+X'
+      : 'Control+Alt+Shift+X';
+  const secondAccelerator =
+    process.platform === 'darwin'
+      ? 'Command+Control+Alt+Y'
+      : 'Control+Alt+Shift+Y';
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  try {
+    launched = await launchTestApplication(profile);
+    const page = launched.page;
+    const input = page.locator('input[placeholder]').first();
+    await input.fill(title);
+    await expect(
+      page.locator('[cmdk-item][data-selected="true"]'),
+    ).toContainText(title);
+    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
+    await page.getByText('Set keyboard shortcut', { exact: true }).click();
+    const recorder = page.locator(
+      'input[placeholder="Press a keyboard shortcut"]',
+    );
+    await expect(recorder).toBeVisible();
+    await page.keyboard.press(firstKey);
+    await page.keyboard.press('Enter');
+    await expect(recorder).toHaveCount(0);
+    const saved = JSON.parse(await fs.readFile(configPath, 'utf8'));
+    const actionId = Object.keys(saved.shortcuts).find(
+      (id) => saved.shortcuts[id] === firstAccelerator,
+    );
+    expect(actionId).toBeTruthy();
+    saved.shortcuts[actionId!] = secondAccelerator;
+    await fs.writeFile(configPath, `${JSON.stringify(saved, null, 2)}\n`);
+    await expect
+      .poll(
+        async () =>
+          (await page.evaluate(() => window.nvm.getShortcuts())).find(
+            (record) => record.actionId === actionId,
+          )?.accelerator,
+      )
+      .toBe(secondAccelerator);
+    await fs.writeFile(configPath, '{invalid');
+    await page.waitForTimeout(1500);
+    expect(
+      (await page.evaluate(() => window.nvm.getShortcuts())).find(
+        (record) => record.actionId === actionId,
+      )?.accelerator,
+    ).toBe(secondAccelerator);
+    expect(await fs.readFile(configPath, 'utf8')).toBe('{invalid');
+    await fs.writeFile(configPath, `${JSON.stringify(saved, null, 2)}\n`);
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
 test('Floating Notes runs Cmd+O from and after dismissing its action panel', async () => {
   test.setTimeout(40_000);
   const floatingNotesUserDataDir = path.join(userDataDir, 'floating-notes');
@@ -956,13 +1054,13 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
     expect(survivors).toEqual([]);
     firstLaunchExited = true;
 
-    const persistedState = JSON.parse(
+    const persistedConfig = JSON.parse(
       await fs.readFile(
-        path.join(stateSafetyUserDataDir, 'state.json'),
+        path.join(stateSafetyUserDataDir, 'config.json'),
         'utf8',
       ),
     );
-    expect(persistedState.shortcuts[scheduledShortcut.actionId]).toBe(
+    expect(persistedConfig.shortcuts[scheduledShortcut.actionId]).toBe(
       scheduledShortcut.accelerator,
     );
 

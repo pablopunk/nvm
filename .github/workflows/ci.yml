@@ -171,6 +171,33 @@ jobs:
           path: test-results/electron
           if-no-files-found: warn
 
+  macos-electron-smoke:
+    name: macOS Electron smoke
+    if: >-
+      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
+      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true')
+    needs: [check, pi-change-classification]
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Build
+        run: mise exec -- pnpm build
+      - name: Electron smoke
+        run: mise exec -- pnpm test:electron
+      - name: Upload Electron failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-electron-smoke-artifacts
+          path: test-results/electron
+          if-no-files-found: warn
+
   pi-integration-tests:
     name: Pi adapter integration tests
     if: >-
