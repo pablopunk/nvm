@@ -6,6 +6,7 @@ mock.module('electron', {
   namedExports: {
     app: { isPackaged: false, getPath: () => '/tmp/nvm-registration-test' },
     shell: {},
+    systemPreferences: { isTrustedAccessibilityClient: () => false },
   },
 });
 

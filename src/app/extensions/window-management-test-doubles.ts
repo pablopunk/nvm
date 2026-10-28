@@ -128,7 +128,7 @@ export function fakeWindowManagementContext(
         logs.push({ level: 'error', message, data }),
       info: () => undefined,
     },
-    ...fakeWindowUi(indicators),
+    ui: fakeWindowUi(indicators),
     ...fakeWindowActions(
       invalidations,
       contributionRefreshCalls,

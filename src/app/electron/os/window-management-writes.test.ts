@@ -188,7 +188,9 @@ test('serializes applies for the same pid so the second never reads before the f
 
 test('lets applies for different pids overlap', async () => {
   const gate = createGate();
+  let paletteTarget = FINDER;
   const { service, calls } = createHarness({
+    paletteTarget: () => paletteTarget,
     focusedRead: async (pid) => {
       if (pid === FINDER.pid) {
         await gate.promise;
@@ -202,6 +204,7 @@ test('lets applies for different pids overlap', async () => {
   });
   const blocked = service.apply(LEFT_HALF, NO_OPTIONS, paletteInvocation());
   await flushPendingWork();
+  paletteTarget = OTHER_APP;
   const overlapping = service.apply(
     LEFT_HALF,
     NO_OPTIONS,
