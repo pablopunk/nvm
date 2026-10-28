@@ -4,6 +4,11 @@ import {
 } from '../extension-host/window-invocation-scope';
 import { macosWindowManager } from '../os/macos-window-manager';
 import { hasCapability } from '../os/os';
+import {
+  adjacentDisplay,
+  cycleSequence,
+  moveFrameToDisplay,
+} from '../os/window-display-geometry';
 import { computeTargetFrame, pickDisplayForFrame } from '../os/window-layouts';
 import { createWindowManagementService } from '../os/window-management';
 import type {
@@ -50,7 +55,14 @@ export function createWindowManagementComposition(
   const service = createWindowManagementService({
     manager: macosWindowManager,
     ports,
-    engine: { computeTargetFrame, pickDisplayForFrame },
+    engine: {
+      computeTargetFrame,
+      pickDisplayForFrame,
+      moveFrameToDisplay,
+      cycleSequence,
+      adjacentDisplay: (displays, from, direction) =>
+        adjacentDisplay({ displays, currentDisplayId: from.id, direction }),
+    },
     supported: () => hasCapability('window-management'),
     selfPid: process.pid,
   });
