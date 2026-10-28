@@ -2550,6 +2550,55 @@ test('proxy rejects separately billed OpenRouter web search before reservation',
   assert.equal(db.insertedValues.length, 0);
 });
 
+test('proxy rejects OpenAI-hosted web search tools before reservation', async () => {
+  resetPricingCacheForTests();
+  process.env.OPENROUTER_API_KEY = 'openrouter-key';
+  process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
+  const db = installDb(
+    createFakeDb({
+      selects: proxySelects({
+        free: 1_000,
+        model: 'google/gemini-2.5-flash',
+        routeProvider: 'openrouter',
+      }),
+    }),
+  );
+  let upstreamCalls = 0;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json')
+      return Response.json({
+        openrouter: {
+          models: {
+            'google/gemini-2.5-flash': {
+              id: 'google/gemini-2.5-flash',
+              cost: { input: 0.3, output: 2.5 },
+            },
+          },
+        },
+      });
+    upstreamCalls += 1;
+    throw new Error(`Unexpected upstream request: ${url}`);
+  };
+
+  const response = await postChatCompletion(
+    routeContext(
+      authorizedChatRequest({
+        messages: [{ role: 'user', content: 'Search for this.' }],
+        tools: [{ type: 'web_search_preview' }],
+      }),
+    ),
+  );
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(
+    await response.json(),
+    fixture('unpriced-provider-tool-error'),
+  );
+  assert.equal(upstreamCalls, 0);
+  assert.equal(db.insertedValues.length, 0);
+});
+
 test('OpenRouter proxy reserves prompt context from the requested output limit', async () => {
   process.env.OPENROUTER_API_KEY = 'openrouter-key';
   process.env.OPENROUTER_BASE_URL = 'https://openrouter.example/api/v1';
