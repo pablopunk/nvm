@@ -97,10 +97,20 @@ export type ExtensionWindowDimension = {
 };
 
 export type ExtensionWindowManagementOptions = {
-  /** Whole pixels between windows and display edges, 0..100. Default 0. */
-  gap?: number;
+  /** Whole pixels (0..40) kept free between windows and the display edges, per edge. Default 8 on every edge. */
+  outerGap?: { top?: number; right?: number; bottom?: number; left?: number };
+  /** Whole pixels (0..40) of total space between two adjacent tiles; each tile gives up half. Default 4. */
+  innerGap?: number;
+  /** Apply the outer gap to full-size Maximize. Default true. */
+  applyGapToMaximize?: boolean;
   /** Cycle repeated half commands. Default true. */
   cycle?: boolean;
+  /** Order repeated half commands cycle through. Default `half-two-thirds-third`. */
+  cycleOrder?: 'half-two-thirds-third' | 'half-third-two-thirds';
+  /** Order Next/Previous Display walk through displays. Default `left-to-right`. */
+  displayOrder?: 'left-to-right' | 'top-to-bottom';
+  /** Scale the window to the new display (`proportional`) or keep its size (`keep-size`). Default `proportional`. */
+  displayMoveSizing?: 'proportional' | 'keep-size';
 };
 
 export type ExtensionWindowApplyResult =

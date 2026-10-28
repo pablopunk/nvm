@@ -111,21 +111,54 @@ export type WindowLayoutSpec =
       height?: WindowDimension;
     };
 
-export type WindowManagementOptions = {
-  gap: number;
+export interface WindowEdgeGaps {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+export type WindowCycleOrder =
+  | 'half-two-thirds-third'
+  | 'half-third-two-thirds';
+
+export type WindowDisplayOrder = 'left-to-right' | 'top-to-bottom';
+
+export type WindowDisplayMoveSizing = 'proportional' | 'keep-size';
+
+export interface WindowManagementOptions {
+  outerGap: WindowEdgeGaps;
+  innerGap: number;
+  applyGapToMaximize: boolean;
   cycle: boolean;
-};
+  cycleOrder: WindowCycleOrder;
+  displayOrder: WindowDisplayOrder;
+  displayMoveSizing: WindowDisplayMoveSizing;
+}
+
+export const MAX_WINDOW_GAP_POINTS = 40;
 
 export const DEFAULT_WINDOW_MANAGEMENT_OPTIONS: WindowManagementOptions = {
-  gap: 0,
+  outerGap: { top: 8, right: 8, bottom: 8, left: 8 },
+  innerGap: 4,
+  applyGapToMaximize: true,
   cycle: true,
+  cycleOrder: 'half-two-thirds-third',
+  displayOrder: 'left-to-right',
+  displayMoveSizing: 'proportional',
 };
+
+export interface WindowGaps {
+  outer: WindowEdgeGaps;
+  inner: number;
+  applyToMaximize: boolean;
+}
 
 export interface EngineInput {
   spec: WindowLayoutSpec;
   workArea: Frame;
   currentFrame: Frame;
-  gap: number;
+  gaps: WindowGaps;
 }
 
 export type ComputeTargetFrame = (input: EngineInput) => Frame;

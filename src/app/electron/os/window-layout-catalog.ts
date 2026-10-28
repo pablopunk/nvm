@@ -61,10 +61,8 @@ export const WINDOW_LAYOUT_SPECS = {
   },
   'reasonable-size': {
     kind: 'scaled-center',
-    widthFraction: 0.6,
-    heightFraction: 0.6,
-    maxWidth: 1025,
-    maxHeight: 900,
+    widthFraction: 0.7,
+    heightFraction: 0.7,
   },
   'move-left': { kind: 'edge', edge: 'left' },
   'move-right': { kind: 'edge', edge: 'right' },
