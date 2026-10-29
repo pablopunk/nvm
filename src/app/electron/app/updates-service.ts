@@ -50,16 +50,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
   }
 
   function updateStatusView(_options: any = {}) {
-    const downloadedInfo = isNewerVersion(
-      updateManager.state.downloadedInfo?.version,
-    )
-      ? updateManager.state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(
-      updateManager.state.availableInfo?.version,
-    )
-      ? updateManager.state.availableInfo
-      : null;
+    const downloadedInfo = updateManager.state.downloadedInfo;
+    const availableInfo = updateManager.state.availableInfo;
     const version = downloadedInfo?.version || availableInfo?.version;
     const unsupported =
       updateManager.state.status === 'unsupported' ||
@@ -151,12 +143,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
 
   function updatesStateSnapshot() {
     const state = updateManager.state;
-    const downloadedInfo = isNewerVersion(state.downloadedInfo?.version)
-      ? state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(state.availableInfo?.version)
-      ? state.availableInfo
-      : null;
+    const downloadedInfo = state.downloadedInfo;
+    const availableInfo = state.availableInfo;
     return {
       currentVersion: getAppVersion(),
       channel: getUpdateChannel(),
@@ -265,16 +253,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
   }
 
   function updatePromptAction() {
-    const downloadedInfo = isNewerVersion(
-      updateManager.state.downloadedInfo?.version,
-    )
-      ? updateManager.state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(
-      updateManager.state.availableInfo?.version,
-    )
-      ? updateManager.state.availableInfo
-      : null;
+    const downloadedInfo = updateManager.state.downloadedInfo;
+    const availableInfo = updateManager.state.availableInfo;
     const version = downloadedInfo?.version || availableInfo?.version;
     if (
       updateManager.state.installInFlight ||

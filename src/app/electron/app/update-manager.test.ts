@@ -20,12 +20,38 @@ mock.module('electron-log/main', {
 });
 
 const { createUpdateManager } = await import('./update-manager');
+const { createUpdatesService } = await import('./updates-service');
 const { isStateSafeForInstall } = await import('./state-update-safety');
 const { advanceStateCompatibility } = await import(
   '../state/state-compatibility'
 );
 
 type FakeCancellationToken = { cancelled: boolean; cancel: () => void };
+
+test('a selected older channel build is visible without treating it as a backend compatibility update', () => {
+  const manager = createUpdateManager(createAutoUpdater([]));
+  manager.state.availableInfo = {
+    version: '2026.1029.4',
+    updateChannel: 'stable',
+  };
+  const service = createUpdatesService({
+    updateManager: manager,
+    getAppVersion: () => '2026.1030.5',
+    autoUpdatesUnavailableMessage: () => '',
+    getActiveNevermindBaseUrl: () => null,
+    getUpdateChannel: () => 'stable',
+    markAppQuitting: () => {},
+    requestQuit: async () => {},
+    quitApp: () => {},
+    patchOpenView: () => {},
+  });
+  assert.equal(service.updatesStateSnapshot().availableVersion, '2026.1029.4');
+  assert.equal(service.updatePromptAction()?.id, 'updates:download');
+  assert.notEqual(
+    service.updateActionForCompatibilityPrompt()?.type,
+    'downloadUpdate',
+  );
+});
 
 test('installation rechecks both state roots and target epoch after download', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-install-guard-'));
