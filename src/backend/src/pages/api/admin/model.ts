@@ -14,6 +14,7 @@ import {
   modelFitsRouteKind,
   routeKindForSlot,
 } from '../../../lib/pricing';
+import { refreshRoutePricing } from '../../../lib/pricing-refresh';
 import {
   DEFAULT_THINKING_LEVEL,
   getModelRoute,
@@ -118,6 +119,9 @@ export const PUT: APIRoute = async ({ request }) => {
       { status: 400 },
     );
 
+  // Admin-selected routes validate their price here, the one place a route's
+  // catalog or endpoint is fetched outside the scheduled refresh.
+  await refreshRoutePricing(route.provider, route.modelId);
   const kind = routeKindForSlot(slot);
   if (!(await modelFitsRouteKind(route.provider, route.modelId, kind)))
     return Response.json(

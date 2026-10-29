@@ -1,179 +1,146 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import { afterEach, beforeEach, test } from 'node:test';
+import { expirePricingCacheForTests, resetPricingCacheForTests } from './pricing';
+import { setStaleAdmissionsHaltedForTests } from './pricing-overrun-cap';
 import {
-  isCompatibleTranscriptionModel,
+  SNAPSHOT_CURRENT_MAX_AGE_MS,
+  SNAPSHOT_MAX_AGE_MS,
+} from './pricing-snapshot-store';
+import {
   listTranscriptionModels,
   lookupTranscriptionDurationPricing,
-  resetTranscriptionModelCacheForTests,
-  TRANSCRIPTION_CATALOG_TTL_MS,
+  refreshTranscriptionCatalog,
 } from './transcription-models';
 
-test('lists only OpenRouter audio-to-transcription models without an API key', async () => {
-  const originalFetch = globalThis.fetch;
-  const originalKey = process.env.OPENROUTER_API_KEY;
-  delete process.env.OPENROUTER_API_KEY;
-  globalThis.fetch = async (input, init) => {
-    assert.match(String(input), /output_modalities=transcription/);
-    assert.equal(
-      new Headers(init?.headers).get('authorization'),
-      null,
-    );
-    return Response.json({
-      data: [
-        {
-          id: 'nvidia/parakeet',
-          name: 'Parakeet',
-          architecture: {
-            input_modalities: ['audio'],
-            output_modalities: ['transcription'],
-          },
-        },
-        {
-          id: 'text-only',
-          architecture: {
-            input_modalities: ['text'],
-            output_modalities: ['text'],
-          },
-        },
-      ],
+const PARAKEET = 'nvidia/parakeet-tdt-0.6b-v3';
+const PARAKEET_CATALOG = {
+  data: [
+    {
+      id: PARAKEET,
+      name: 'Parakeet',
+      pricing: { prompt: '0.000025', completion: '0' },
+      architecture: { input_modalities: ['audio'], output_modalities: ['transcription'] },
+    },
+    {
+      id: 'text-only',
+      architecture: { input_modalities: ['text'], output_modalities: ['text'] },
+    },
+  ],
+};
+const PARAKEET_PRICING = {
+  unit: 'second',
+  usdPerSecond: 0.000025,
+  source: 'openrouter_transcription_catalog',
+};
+
+let originalFetch: typeof globalThis.fetch;
+let requests: Array<{ url: string; authorization: string | null }>;
+
+function answerCatalogWith(body: unknown, status = 200) {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    requests.push({
+      url: String(input instanceof Request ? input.url : input),
+      authorization: new Headers(init?.headers).get('authorization'),
     });
-  };
-  resetTranscriptionModelCacheForTests();
-  try {
-    assert.deepEqual(await listTranscriptionModels(), [
-      {
-        provider: 'openrouter',
-        modelId: 'nvidia/parakeet',
-        name: 'Parakeet',
-      },
-    ]);
-    assert.equal(
-      await isCompatibleTranscriptionModel('openrouter', 'nvidia/parakeet'),
-      true,
-    );
-    assert.equal(
-      await isCompatibleTranscriptionModel('openrouter', 'text-only'),
-      false,
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-    if (originalKey === undefined) delete process.env.OPENROUTER_API_KEY;
-    else process.env.OPENROUTER_API_KEY = originalKey;
-    resetTranscriptionModelCacheForTests();
-  }
+    return Response.json(body, { status });
+  }) as unknown as typeof globalThis.fetch;
+}
+
+beforeEach(() => {
+  originalFetch = globalThis.fetch;
+  requests = [];
+  resetPricingCacheForTests();
 });
 
-test('audio admission resolves verified duration pricing without a text catalog', async () => {
-  const originalFetch = globalThis.fetch;
-  const originalKey = process.env.OPENROUTER_API_KEY;
-  process.env.OPENROUTER_API_KEY = 'test-key';
-  const modelId = 'nvidia/parakeet-tdt-0.6b-v3';
-  let pricing: { prompt: string; completion: string } = {
-    prompt: '0.000025',
-    completion: '0',
-  };
-  let failure = false;
-  let removed = false;
-  let requests = 0;
-  const originalNow = Date.now;
-  let now = originalNow();
-  Date.now = function mockedNow() {
-    return now;
-  };
-  globalThis.fetch = async (input) => {
-    requests += 1;
-    assert.match(
-      String(input),
-      /input_modalities=audio&output_modalities=transcription/,
-    );
-    if (failure) throw new Error('Catalog unavailable');
-    return Response.json({
-      data: removed
-        ? []
-        : [
-            {
-              id: modelId,
-              architecture: {
-                input_modalities: ['audio'],
-                output_modalities: ['transcription'],
-              },
-              pricing,
-            },
-          ],
-    });
-  };
-  resetTranscriptionModelCacheForTests();
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
+test('a refresh publishes the audio-to-transcription catalog and lists only its models, without a key', async () => {
+  answerCatalogWith(PARAKEET_CATALOG);
+  await refreshTranscriptionCatalog();
+
+  assert.deepEqual(await listTranscriptionModels(), [
+    {
+      provider: 'openrouter',
+      modelId: PARAKEET,
+      name: 'Parakeet',
+      durationPricing: PARAKEET_PRICING,
+    },
+  ]);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /\/models\?input_modalities=audio&output_modalities=transcription$/);
+  assert.equal(requests[0].authorization, null);
+});
+
+test('lookups read the validated catalog and never reach the network', async () => {
+  answerCatalogWith(PARAKEET_CATALOG);
+  await refreshTranscriptionCatalog();
+  const requestsBeforeLookups = requests.length;
+
+  assert.deepEqual(
+    await lookupTranscriptionDurationPricing('openrouter', PARAKEET),
+    PARAKEET_PRICING,
+  );
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', 'text-only'), null);
+  assert.equal(await lookupTranscriptionDurationPricing('openai', PARAKEET), null);
+  assert.equal(requests.length, requestsBeforeLookups);
+});
+
+test('an unvalidated catalog lists and prices nothing, and a lookup never fetches it', async () => {
+  answerCatalogWith(PARAKEET_CATALOG);
+
+  assert.deepEqual(await listTranscriptionModels(), []);
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', PARAKEET), null);
+  assert.equal(requests.length, 0);
+});
+
+test('the overrun cap refuses a stale audio price only while it is reached, and listing is never refused', async () => {
+  answerCatalogWith(PARAKEET_CATALOG);
+  await refreshTranscriptionCatalog();
   try {
+    setStaleAdmissionsHaltedForTests(true);
     assert.deepEqual(
-      await lookupTranscriptionDurationPricing('openrouter', modelId),
-      {
-        unit: 'second',
-        usdPerSecond: 0.000025,
-        source: 'openrouter_transcription_catalog',
-      },
+      await lookupTranscriptionDurationPricing('openrouter', PARAKEET),
+      PARAKEET_PRICING,
+      'a current price admits under the cap',
     );
-    assert.equal(
-      await lookupTranscriptionDurationPricing('openai', modelId),
-      null,
-    );
-    assert.equal(requests, 1);
-    assert.equal(
-      (await lookupTranscriptionDurationPricing('openrouter', modelId))
-        ?.usdPerSecond,
-      0.000025,
-    );
-    assert.equal(
-      requests,
-      1,
-      'fresh pricing metadata is shared within its TTL',
-    );
-    now += TRANSCRIPTION_CATALOG_TTL_MS + 1;
-    failure = true;
-    await assert.rejects(
-      lookupTranscriptionDurationPricing('openrouter', modelId),
-      /Catalog unavailable/,
-    );
-    failure = false;
-    removed = true;
-    assert.equal(
-      await lookupTranscriptionDurationPricing('openrouter', modelId),
-      null,
-    );
-    assert.equal(requests, 3);
-    for (const invalidRate of [
-      '',
-      '-1',
-      'NaN',
-      'Infinity',
-      '1e999',
-      ' 0.000025 ',
-    ]) {
-      resetTranscriptionModelCacheForTests();
-      removed = false;
-      pricing = { prompt: invalidRate, completion: '0' };
-      assert.equal(
-        await lookupTranscriptionDurationPricing('openrouter', modelId),
-        null,
-      );
-    }
-    resetTranscriptionModelCacheForTests();
-    pricing = { prompt: '0.000025', completion: '0.1' };
-    assert.equal(
-      await lookupTranscriptionDurationPricing('openrouter', modelId),
-      null,
-    );
-    resetTranscriptionModelCacheForTests();
-    pricing = { prompt: '0', completion: '0' };
-    assert.equal(
-      (await lookupTranscriptionDurationPricing('openrouter', modelId))
-        ?.usdPerSecond,
-      0,
-    );
+
+    expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+    assert.equal(await lookupTranscriptionDurationPricing('openrouter', PARAKEET), null);
+    assert.equal((await listTranscriptionModels()).length, 1, 'the catalog still lists the model; only admission is refused');
+
+    setStaleAdmissionsHaltedForTests(false);
+    assert.deepEqual(await lookupTranscriptionDurationPricing('openrouter', PARAKEET), {
+      ...PARAKEET_PRICING,
+      stale: true,
+    });
   } finally {
-    globalThis.fetch = originalFetch;
-    Date.now = originalNow;
-    if (originalKey === undefined) delete process.env.OPENROUTER_API_KEY;
-    else process.env.OPENROUTER_API_KEY = originalKey;
-    resetTranscriptionModelCacheForTests();
+    setStaleAdmissionsHaltedForTests(null);
   }
+  assert.equal(requests.length, 1, 'lookups never reach the network');
+});
+
+test('a failed refresh keeps the last validated catalog until the hard bound, and never prices past it', async () => {
+  answerCatalogWith(PARAKEET_CATALOG);
+  await refreshTranscriptionCatalog();
+
+  answerCatalogWith({}, 503);
+  await assert.rejects(refreshTranscriptionCatalog());
+  assert.deepEqual(
+    await lookupTranscriptionDurationPricing('openrouter', PARAKEET),
+    PARAKEET_PRICING,
+  );
+
+  expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+  assert.deepEqual(
+    await lookupTranscriptionDurationPricing('openrouter', PARAKEET),
+    { ...PARAKEET_PRICING, stale: true },
+  );
+  assert.equal((await listTranscriptionModels()).length, 1);
+
+  expirePricingCacheForTests(SNAPSHOT_MAX_AGE_MS + 1);
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', PARAKEET), null);
+  assert.deepEqual(await listTranscriptionModels(), []);
+  assert.equal(requests.length, 2, 'only the two refresh attempts may reach the network');
 });

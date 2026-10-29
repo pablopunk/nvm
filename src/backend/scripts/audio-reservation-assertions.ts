@@ -112,7 +112,7 @@ export async function runAudioReservationAssertions(suffix: string) {
     expectedUserId: user.id,
     outcome: 'settle' as const,
     model: 'audio-test',
-    provider: 'test',
+    provider: 'openrouter',
     modality: 'audio' as const,
     providerCostUsd: estimate * 2,
     tokens: { inputTokens: 0, outputTokens: 0 },

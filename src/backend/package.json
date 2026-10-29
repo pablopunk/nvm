@@ -16,6 +16,7 @@
     "astro": "astro",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
+    "db:seed-pricing": "tsx scripts/seed-pricing.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio"
   },

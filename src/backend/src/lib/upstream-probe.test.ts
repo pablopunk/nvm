@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 test('openrouter is ready only when its catalog and its authenticated key check both answer 2xx', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, body: CATALOG_BODY },
     [OPENROUTER_KEY_URL]: { status: 200, body: KEY_BODY },
   });
@@ -41,7 +41,7 @@ test('openrouter is ready only when its catalog and its authenticated key check 
 });
 
 test('an anonymous openrouter catalog does not prove the key: a rejected key stays reachable but not ready', async () => {
-  const requested = installUpstreamStub({
+  const requested = await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, body: CATALOG_BODY },
     [OPENROUTER_KEY_URL]: { status: 401, body: '{"error":"invalid"}' },
   });
@@ -54,7 +54,7 @@ test('an anonymous openrouter catalog does not prove the key: a rejected key sta
 });
 
 test('a 5xx from the openrouter key check is unreachable, so liveness fails closed', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, body: CATALOG_BODY },
     [OPENROUTER_KEY_URL]: { status: 503, body: '{}' },
   });
@@ -66,7 +66,7 @@ test('a 5xx from the openrouter key check is unreachable, so liveness fails clos
 });
 
 test('a timed-out key check is unreachable and not ready', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, body: CATALOG_BODY },
     [OPENROUTER_KEY_URL]: 'timeout',
   });
@@ -79,7 +79,7 @@ test('a timed-out key check is unreachable and not ready', async () => {
 
 for (const status of [401, 403, 404, 429]) {
   test(`released liveness holds for an anthropic catalog answering ${status}, which is never ready`, async () => {
-    installUpstreamStub({ [ANTHROPIC_MODELS_URL]: { status, body: '{"error":"rejected"}' } });
+    await installUpstreamStub({ [ANTHROPIC_MODELS_URL]: { status, body: '{"error":"rejected"}' } });
     assert.deepEqual(await probeProviderReadiness('anthropic'), {
       provider: 'anthropic',
       reachable: true,
@@ -89,7 +89,7 @@ for (const status of [401, 403, 404, 429]) {
 }
 
 test('a 2xx catalog without a data array is reachable but not ready', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, body: '{"models":[]}' },
     [OPENROUTER_KEY_URL]: { status: 200, body: KEY_BODY },
   });
@@ -101,7 +101,7 @@ test('a 2xx catalog without a data array is reachable but not ready', async () =
 });
 
 test('a 2xx html page is reachable but not a model catalog', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: { status: 200, contentType: 'text/html', body: '<!doctype html><html></html>' },
     [OPENROUTER_KEY_URL]: { status: 200, body: KEY_BODY },
   });
@@ -109,7 +109,7 @@ test('a 2xx html page is reachable but not a model catalog', async () => {
 });
 
 test('google is ready from its models list, which is not a data array', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [GOOGLE_MODELS_URL]: { status: 200, body: JSON.stringify({ models: [{ name: 'models/example' }] }) },
   });
   assert.deepEqual(await probeProviderReadiness('google'), {
@@ -120,7 +120,7 @@ test('google is ready from its models list, which is not a data array', async ()
 });
 
 test('google with only a data array is not a Google catalog and is not ready', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [GOOGLE_MODELS_URL]: { status: 200, body: JSON.stringify({ data: [{ id: 'model-a' }] }) },
   });
   assert.equal((await probeProviderReadiness('google')).ready, false);
@@ -128,7 +128,7 @@ test('google with only a data array is not a Google catalog and is not ready', a
 
 test('opencode is ready on a 2xx catalog because the configured key was sent and invalid keys get 401', async () => {
   process.env.OPENCODE_API_KEY = 'test-opencode-key';
-  const requested = installUpstreamStub({ [OPENCODE_MODELS_URL]: { status: 200, body: CATALOG_BODY } });
+  const requested = await installUpstreamStub({ [OPENCODE_MODELS_URL]: { status: 200, body: CATALOG_BODY } });
   assert.deepEqual(await probeProviderReadiness('opencode_zen'), {
     provider: 'opencode_zen',
     reachable: true,
@@ -138,7 +138,7 @@ test('opencode is ready on a 2xx catalog because the configured key was sent and
 });
 
 test('a catalog larger than the byte bound is treated as not a catalog rather than read in full', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     [OPENROUTER_MODELS_URL]: {
       status: 200,
       body: JSON.stringify({ data: ['x'.repeat(PROVIDER_CATALOG_MAX_BYTES)] }),
@@ -154,7 +154,7 @@ test('a catalog larger than the byte bound is treated as not a catalog rather th
 
 test('a provider without a configured key is unreachable and never probed', async () => {
   delete process.env.OPENCODE_API_KEY;
-  const requested = installUpstreamStub({});
+  const requested = await installUpstreamStub({});
   assert.deepEqual(await probeProviderReadiness('opencode_zen'), {
     provider: 'opencode_zen',
     reachable: false,

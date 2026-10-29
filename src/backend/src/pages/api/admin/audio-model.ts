@@ -17,6 +17,7 @@ import {
 import {
   listTranscriptionModels,
   lookupTranscriptionDurationPricing,
+  refreshTranscriptionCatalog,
 } from '../../../lib/transcription-models';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -54,10 +55,11 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response(`Provider ${route.provider} is disabled`, {
       status: 400,
     });
+  // Admin-selected routes validate their catalog here, the one fetch outside the scheduled refresh.
+  await refreshTranscriptionCatalog().catch(() => undefined);
   const pricing = await lookupTranscriptionDurationPricing(
     route.provider,
     route.modelId,
-    { fresh: true },
   ).catch(() => null);
   if (!pricing)
     return new Response(

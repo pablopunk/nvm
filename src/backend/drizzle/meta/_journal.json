@@ -183,6 +183,13 @@
       "when": 1793121740372,
       "tag": "0025_legacy_free_spend_attribution",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1793287958888,
+      "tag": "0026_magenta_monster_badoon",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,8 @@
-import { getUpstreamBaseUrl } from './upstream';
-
-export const TRANSCRIPTION_CATALOG_TTL_MS = 15 * 60 * 1000;
-const STALE_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+import {
+  durableOpenRouterCatalog,
+  openRouterCatalogData,
+} from './openrouter-catalog-snapshots';
+import { staleAdmissionsHalted } from './pricing-overrun-cap';
 
 export type TranscriptionModel = {
   provider: 'openrouter';
@@ -14,6 +15,8 @@ export type TranscriptionDurationPricing = {
   unit: 'second';
   usdPerSecond: number;
   source: 'openrouter_transcription_catalog';
+  /** Present only when the validated catalog is past the current window. */
+  stale?: true;
 };
 
 type OpenRouterModel = {
@@ -25,9 +28,6 @@ type OpenRouterModel = {
     output_modalities?: unknown;
   };
 };
-
-let cache: { models: TranscriptionModel[]; fetchedAt: number } | undefined;
-let inflight: Promise<TranscriptionModel[]> | undefined;
 
 function hasModality(value: unknown, modality: string) {
   return Array.isArray(value) && value.includes(modality);
@@ -71,91 +71,59 @@ function transcriptionModel(model: OpenRouterModel): TranscriptionModel | null {
   };
 }
 
-async function fetchOpenRouterTranscriptionModels() {
-  const baseUrl = getUpstreamBaseUrl('openrouter');
-  const response = await fetch(
-    `${baseUrl}/models?input_modalities=audio&output_modalities=transcription`,
-    {
-      signal: AbortSignal.timeout(8_000),
-    },
-  );
-  if (!response.ok)
-    throw new Error(
-      `OpenRouter transcription catalog returned ${response.status}`,
-    );
-  const body = (await response.json()) as { data?: OpenRouterModel[] };
-  if (!Array.isArray(body?.data))
-    throw new Error('OpenRouter transcription catalog is malformed');
-  return body.data
+function parseTranscriptionCatalog(body: unknown): TranscriptionModel[] | null {
+  const data = openRouterCatalogData(body);
+  if (!data) return null;
+  return (data as OpenRouterModel[])
     .map(transcriptionModel)
     .filter((model): model is TranscriptionModel => Boolean(model))
     .sort((left, right) => left.name.localeCompare(right.name));
 }
 
-function refreshTranscriptionModels(): Promise<TranscriptionModel[]> {
-  if (!inflight) {
-    inflight = fetchOpenRouterTranscriptionModels()
-      .then((models) => {
-        cache = { models, fetchedAt: Date.now() };
-        return models;
-      })
-      .finally(() => {
-        inflight = undefined;
-      });
-  }
-  return inflight;
+function isTranscriptionModelList(payload: unknown): payload is TranscriptionModel[] {
+  return (
+    Array.isArray(payload) &&
+    payload.every(
+      (model) =>
+        typeof model === 'object' &&
+        model !== null &&
+        typeof (model as TranscriptionModel).modelId === 'string' &&
+        typeof (model as TranscriptionModel).name === 'string',
+    )
+  );
 }
 
-export async function listTranscriptionModels(
-  options: { fresh?: boolean } = {},
-) {
-  const now = Date.now();
-  if (
-    !options.fresh &&
-    cache &&
-    now - cache.fetchedAt < TRANSCRIPTION_CATALOG_TTL_MS
-  )
-    return cache.models;
-  try {
-    return await refreshTranscriptionModels();
-  } catch (error) {
-    if (!options.fresh && cache && now - cache.fetchedAt < STALE_CATALOG_TTL_MS)
-      return cache.models;
-    throw error;
-  }
+const transcriptionCatalog = durableOpenRouterCatalog<TranscriptionModel>({
+  snapshotKey: 'openrouter_transcription_models',
+  path: '/models?input_modalities=audio&output_modalities=transcription',
+  parseResponse: parseTranscriptionCatalog,
+  isPayload: isTranscriptionModelList,
+});
+
+/** Validates the transcription catalog. Only the scheduled refresh and admin saves fetch it. */
+export function refreshTranscriptionCatalog(): Promise<void> {
+  return transcriptionCatalog.refresh();
 }
 
+/** Listed models come from the admissible catalog: stale still lists, unvalidated or expired lists nothing. */
+export async function listTranscriptionModels(): Promise<TranscriptionModel[]> {
+  return (await transcriptionCatalog.admissible())?.value ?? [];
+}
+
+/** Duration pricing for a model, marked stale past the current window. Never fetches. */
 export async function lookupTranscriptionDurationPricing(
   provider: string,
   modelId: string,
-  options: { fresh?: boolean } = {},
 ): Promise<TranscriptionDurationPricing | null> {
   if (provider !== 'openrouter') return null;
-  const now = Date.now();
-  const models =
-    !options.fresh &&
-    cache &&
-    now - cache.fetchedAt < TRANSCRIPTION_CATALOG_TTL_MS
-      ? cache.models
-      : await refreshTranscriptionModels();
-  return (
-    models.find((model) => model.modelId === modelId)?.durationPricing ?? null
-  );
-}
-
-export async function isCompatibleTranscriptionModel(
-  provider: string,
-  modelId: string,
-  options: { fresh?: boolean } = {},
-) {
-  if (provider !== 'openrouter') return false;
-  const models = await listTranscriptionModels(options);
-  return models.some(
-    (model) => model.provider === provider && model.modelId === modelId,
-  );
+  const catalog = await transcriptionCatalog.admissible();
+  const pricing = catalog?.value.find((model) => model.modelId === modelId)
+    ?.durationPricing;
+  if (!pricing) return null;
+  if (catalog?.validity !== 'stale') return pricing;
+  return (await staleAdmissionsHalted()) ? null : { ...pricing, stale: true };
 }
 
 export function resetTranscriptionModelCacheForTests() {
-  cache = undefined;
-  inflight = undefined;
+  transcriptionCatalog.reset();
 }

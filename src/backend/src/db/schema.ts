@@ -790,3 +790,10 @@ export const authIntents = pgTable('auth_intents', {
     .notNull()
     .defaultNow(),
 });
+
+/** Last validated provider price snapshots, restored on cold start. */
+export const pricingSnapshots = pgTable('pricing_snapshots', {
+  key: text('key').primaryKey(),
+  validatedAt: bigint('validated_at', { mode: 'number' }).notNull(),
+  payload: jsonb('payload').notNull(),
+});

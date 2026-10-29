@@ -142,7 +142,6 @@ import {
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
-
 type ActionKind =
   | 'open-url'
   | 'web-search'

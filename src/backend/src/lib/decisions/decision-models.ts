@@ -1,8 +1,9 @@
 import type { ModelCost } from '../cost';
-import { getUpstreamBaseUrl } from '../upstream';
-
-export const DECISION_CATALOG_TTL_MS = 15 * 60 * 1000;
-const STALE_CATALOG_TTL_MS = 24 * 60 * 60 * 1000;
+import {
+  durableOpenRouterCatalog,
+  openRouterCatalogData,
+} from '../openrouter-catalog-snapshots';
+import { staleAdmissionsHalted } from '../pricing-overrun-cap';
 
 export type DecisionModel = {
   provider: 'openrouter';
@@ -29,9 +30,6 @@ type OpenRouterModel = {
     output_modalities?: unknown;
   };
 };
-
-let cache: { models: DecisionModel[]; fetchedAt: number } | undefined;
-let inflight: Promise<DecisionModel[]> | undefined;
 
 function hasModality(value: unknown, modality: string): boolean {
   return Array.isArray(value) && value.includes(modality);
@@ -110,6 +108,61 @@ function decisionCatalogCost(model: OpenRouterModel): ModelCost | null {
   };
 }
 
+function parseDecisionCatalog(body: unknown): DecisionModel[] | null {
+  const data = openRouterCatalogData(body);
+  if (!data) return null;
+  return (data as OpenRouterModel[])
+    .map(decisionModelFromCatalog)
+    .filter((model): model is DecisionModel => Boolean(model))
+    .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function isDecisionModelList(payload: unknown): payload is DecisionModel[] {
+  return (
+    Array.isArray(payload) &&
+    payload.every(
+      (model) =>
+        typeof model === 'object' &&
+        model !== null &&
+        typeof (model as DecisionModel).modelId === 'string' &&
+        typeof (model as DecisionModel).acceptsImages === 'boolean',
+    )
+  );
+}
+
+const decisionCatalog = durableOpenRouterCatalog<DecisionModel>({
+  snapshotKey: 'openrouter_decision_models',
+  path: '/models?output_modalities=decisions',
+  parseResponse: parseDecisionCatalog,
+  isPayload: isDecisionModelList,
+});
+
+/** Validates the decision catalog. Only the scheduled refresh and admin saves fetch it. */
+export function refreshDecisionCatalog(): Promise<void> {
+  return decisionCatalog.refresh();
+}
+
+/** Listed models come from the admissible catalog: stale still lists, unvalidated or expired lists nothing. */
+export async function listDecisionModels(): Promise<DecisionModel[]> {
+  return (await decisionCatalog.admissible())?.value ?? [];
+}
+
+/** The eligible model, its cost marked stale past the current window. Never fetches. */
+export async function findEligibleDecisionModel(
+  provider: string,
+  modelId: string,
+): Promise<DecisionModel | null> {
+  if (provider !== 'openrouter') return null;
+  const catalog = await decisionCatalog.admissible();
+  const model = catalog?.value.find(
+    (candidate) => candidate.provider === provider && candidate.modelId === modelId,
+  );
+  if (!model) return null;
+  if (catalog?.validity !== 'stale' || !model.cost) return model;
+  if (await staleAdmissionsHalted()) return null;
+  return { ...model, cost: { ...model.cost, stale: true } };
+}
+
 export async function lookupDecisionModelCost(
   provider: string,
   modelId: string,
@@ -117,73 +170,6 @@ export async function lookupDecisionModelCost(
   return (await findEligibleDecisionModel(provider, modelId))?.cost ?? null;
 }
 
-async function fetchOpenRouterDecisionModels(): Promise<DecisionModel[]> {
-  const baseUrl = getUpstreamBaseUrl('openrouter');
-  const response = await fetch(
-    `${baseUrl}/models?output_modalities=decisions`,
-    {
-      signal: AbortSignal.timeout(8000),
-    },
-  );
-  if (!response.ok)
-    throw new Error(`OpenRouter decision catalog returned ${response.status}`);
-  const body = (await response.json()) as { data?: OpenRouterModel[] };
-  if (!Array.isArray(body?.data))
-    throw new Error('OpenRouter decision catalog is malformed');
-  return body.data
-    .map(decisionModelFromCatalog)
-    .filter((model): model is DecisionModel => Boolean(model))
-    .sort((left, right) => left.name.localeCompare(right.name));
-}
-
-function refreshDecisionModels(): Promise<DecisionModel[]> {
-  if (!inflight) {
-    inflight = fetchOpenRouterDecisionModels()
-      .then((models) => {
-        cache = { models, fetchedAt: Date.now() };
-        return models;
-      })
-      .finally(() => {
-        inflight = undefined;
-      });
-  }
-  return inflight;
-}
-
-export async function listDecisionModels(
-  options: { fresh?: boolean } = {},
-): Promise<DecisionModel[]> {
-  const now = Date.now();
-  if (
-    !options.fresh &&
-    cache &&
-    now - cache.fetchedAt < DECISION_CATALOG_TTL_MS
-  )
-    return cache.models;
-  try {
-    return await refreshDecisionModels();
-  } catch (error) {
-    if (!options.fresh && cache && now - cache.fetchedAt < STALE_CATALOG_TTL_MS)
-      return cache.models;
-    throw error;
-  }
-}
-
-export async function findEligibleDecisionModel(
-  provider: string,
-  modelId: string,
-  options: { fresh?: boolean } = {},
-): Promise<DecisionModel | null> {
-  if (provider !== 'openrouter') return null;
-  const models = await listDecisionModels(options);
-  return (
-    models.find(
-      (model) => model.provider === provider && model.modelId === modelId,
-    ) ?? null
-  );
-}
-
 export function resetDecisionModelCacheForTests() {
-  cache = undefined;
-  inflight = undefined;
+  decisionCatalog.reset();
 }

@@ -70,6 +70,17 @@ jobs:
           NVM_PRODUCTION_MIGRATION_APPROVED: ${{ github.event_name == 'workflow_run' && 'true' || inputs.approve_production }}
         run: mise exec -- pnpm -C src/backend db:migrate
 
+      # Priced routes admit only from durable snapshots, so a deploy must not take traffic
+      # until every configured route has a current price. A failure stops here, and the
+      # previous deployment keeps serving with its own pricing.
+      - name: Seed and verify pricing snapshots
+        if: github.event_name == 'workflow_run' || inputs.target != 'development'
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          NVM_ENV: ${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
+          NVM_DATABASE_ENV: ${{ github.event_name == 'workflow_run' && 'production' || inputs.target }}
+        run: mise exec -- pnpm -C src/backend db:seed-pricing
+
       - name: Deploy Preview
         if: github.event_name == 'workflow_dispatch' && inputs.target == 'preview'
         env:

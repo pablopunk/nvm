@@ -32,6 +32,7 @@ import {
   tooManyRequests,
 } from '../../../../lib/ratelimit';
 import { isRouteTripped } from '../../../../lib/route-breakers';
+import { reservationMarginFor } from '../../../../lib/pricing';
 import {
   getAudioModelRoute,
   isProviderEnabled,
@@ -457,7 +458,9 @@ export const POST: APIRoute = async ({ request }) => {
       );
     }
     const estimatedProviderCostUsd =
-      normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond;
+      normalizedAudio.estimatedBillableSeconds *
+      pricing.usdPerSecond *
+      reservationMarginFor(pricing);
     if (usdToCredits(estimatedProviderCostUsd) > RESERVATION_CREDITS) {
       await failClaim();
       return responseWithRequestId(

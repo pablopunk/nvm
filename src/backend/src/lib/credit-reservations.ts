@@ -26,6 +26,11 @@ import {
   utcMonthKey,
 } from './free-spend-cap';
 import { log } from './log';
+import {
+  absorbedSettlementCredits,
+  recordAbsorbedOverrunCredits,
+} from './pricing-overrun-cap';
+import { trustedReportedCostUsd } from './provider-pricing-contract';
 
 export const CREDIT_GRACE_THRESHOLD = 0;
 const RESERVATION_TTL_MS = Math.max(
@@ -663,7 +668,13 @@ export type ReservationFinalization = {
     reasoningTokens?: number;
   };
   costRow?: ModelCost;
+  /** Upstream-reported cost; settles only when the provider contract trusts it. */
   providerCostUsd?: number;
+  /**
+   * Catalog-derived cost chosen by the caller, such as a reservation ceiling kept
+   * when usage is missing. It is never labelled as provider-reported.
+   */
+  catalogCostUsd?: number;
   modality?: 'text' | 'audio';
   audioDurationMs?: number;
   audioTokenCountsAvailable?: boolean;
@@ -1321,21 +1332,25 @@ async function finalizeReservationInternal(
       !input.model ||
       !input.provider ||
       !input.tokens ||
-      (input.costRow == null && input.providerCostUsd == null) ||
+      (input.costRow == null &&
+        input.providerCostUsd == null &&
+        input.catalogCostUsd == null) ||
       input.status == null ||
       input.latencyMs == null
     ) {
       throw new Error('Settlement requires usage details');
     }
-    const providerCostUsd = input.providerCostUsd;
-    const hasProviderCost =
-      providerCostUsd != null &&
-      Number.isFinite(providerCostUsd) &&
-      providerCostUsd >= 0;
+    const reportedCostUsd = trustedReportedCostUsd(
+      input.provider,
+      input.providerCostUsd,
+    );
+    const hasProviderCost = reportedCostUsd !== undefined;
     const costRow = input.costRow;
     let costUsd: number;
-    if (hasProviderCost && providerCostUsd != null) {
-      costUsd = providerCostUsd;
+    if (reportedCostUsd !== undefined) {
+      costUsd = reportedCostUsd;
+    } else if (input.catalogCostUsd !== undefined) {
+      costUsd = input.catalogCostUsd;
     } else if (costRow) {
       costUsd = computeUsdCost(
         costRow,
@@ -1398,8 +1413,8 @@ async function finalizeReservationInternal(
     const actualFreeCostMicrocents = reservation.admissionMonth
       ? microcentsForFreePool({
           totalCostMicrocents: microcents,
-          freeCredits: actualFree,
-          totalCredits: actualTotalCredits,
+          freeCredits: reservedFree,
+          totalCredits: reservedFree + reservedPaid,
         })
       : null;
     if (actualFree > 0)
@@ -1424,6 +1439,20 @@ async function finalizeReservationInternal(
           refId: `${reservation.requestId}:paid`,
         })
         .onConflictDoNothing();
+    if (actualTotalCredits < credits)
+      log.warn('credit_settlement_debit_limited', {
+        request_id: reservation.requestId,
+        user_id: reservation.userId,
+        credits,
+        actual_credits: actualTotalCredits,
+        free_balance: Math.max(0, balances?.free ?? 0),
+        paid_balance: Math.max(0, balances?.paid ?? 0),
+      });
+    await recordAbsorbedOverrunCredits(
+      tx,
+      absorbedSettlementCredits(calculatedCredits, actualTotalCredits),
+      now,
+    );
     await tx.insert(usage).values({
       userId: reservation.userId,
       model: input.model,

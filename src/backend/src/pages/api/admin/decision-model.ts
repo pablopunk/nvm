@@ -12,6 +12,7 @@ import {
   findEligibleDecisionModel,
   isSelectableDecisionModel,
   listDecisionModels,
+  refreshDecisionCatalog,
 } from '../../../lib/decisions/decision-models';
 import {
   getDecisionModelRoute,
@@ -39,9 +40,7 @@ export const GET: APIRoute = async ({ request }) => {
     return new Response('Forbidden', { status: 403 });
   return Response.json({
     current: await currentDecisionModel(),
-    models: (await listDecisionModels().catch(() => [])).filter(
-      isSelectableDecisionModel,
-    ),
+    models: (await listDecisionModels()).filter(isSelectableDecisionModel),
   });
 };
 
@@ -57,12 +56,11 @@ export const PUT: APIRoute = async ({ request }) => {
     return new Response(`Provider ${route.provider} is disabled`, {
       status: 400,
     });
+  // Admin-selected routes validate their catalog here, the one fetch outside the scheduled refresh.
+  await refreshDecisionCatalog().catch(() => undefined);
   const eligible = await findEligibleDecisionModel(
     route.provider,
     route.modelId,
-    {
-      fresh: true,
-    },
   ).catch(() => null);
   if (!eligible)
     return new Response('Model is not an eligible decision model', {

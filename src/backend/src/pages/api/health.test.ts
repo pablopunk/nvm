@@ -5,7 +5,6 @@ import {
   installUpstreamStub,
   OPENCODE_MODELS_URL,
   OPENROUTER_ACCEPTED_REPLIES,
-  OPENROUTER_DECISION_URL,
   OPENROUTER_KEY_URL,
   OPENROUTER_MODELS_URL,
   OPENROUTER_TRANSCRIPTION_URL,
@@ -17,7 +16,7 @@ process.env.DATABASE_URL ??= 'postgres://health-test.invalid/nvm';
 
 const OPENROUTER_MODEL = 'deepseek/deepseek-v4-flash-0731';
 const OPENCODE_MODEL = 'gpt-5.6-luna';
-const LIVE_PROBES = [OPENROUTER_DECISION_URL, OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL, OPENROUTER_TRANSCRIPTION_URL].sort();
+const LIVE_PROBES = [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL].sort();
 
 let restoreEnv: () => void;
 
@@ -45,7 +44,7 @@ const OPENROUTER_LIVE_SETTINGS = {
 
 async function healthFor(fixture: RouteFixture, replies: UpstreamReplies = OPENROUTER_ACCEPTED_REPLIES) {
   const [{ GET }, { withTestDb }] = await Promise.all([import('./health'), import('../../db/client')]);
-  const requested = installUpstreamStub(replies);
+  const requested = await installUpstreamStub(replies);
   const response = await withTestDb(fakeRouteDb(fixture), () => GET({} as Parameters<typeof GET>[0]));
   const body = (await response.json()) as Record<string, unknown>;
   return { status: response.status, body, requested: [...requested].sort() };
@@ -198,7 +197,7 @@ test('the ai_proxy kill switch removes the AI routes, leaving audio probed and r
   assert.deepEqual(readinessOf(response.body), { ok: true, db: true, upstream: true, upstreamReady: true });
   assert.deepEqual(
     response.requested,
-    [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL, OPENROUTER_TRANSCRIPTION_URL].sort(),
+    [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL].sort(),
   );
 });
 

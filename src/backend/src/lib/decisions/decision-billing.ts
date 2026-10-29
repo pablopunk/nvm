@@ -1,4 +1,5 @@
 import { computeUsdCost, type ModelCost, usdToCredits } from '../cost';
+import { reservationMarginFor } from '../pricing';
 import { estimateInputTokensFromValue } from '../limits';
 import { IMAGE_INPUT_TOKENS_ESTIMATE_PER_IMAGE } from '../image-cost-bound';
 import type { DecisionUsage } from './decision-contract';
@@ -36,14 +37,18 @@ export function decisionOutputTokenCeiling(request: DecisionRequest): number {
   );
 }
 
+/** A stale catalog price holds the stale margin, so the reservation covers a rate that moved. */
 export function decisionReservationCostUsd(
   costRow: ModelCost,
   request: DecisionRequest,
 ): number {
-  return computeUsdCost(
-    costRow,
-    decisionInputTokenCeiling(request),
-    decisionOutputTokenCeiling(request),
+  return (
+    reservationMarginFor(costRow) *
+    computeUsdCost(
+      costRow,
+      decisionInputTokenCeiling(request),
+      decisionOutputTokenCeiling(request),
+    )
   );
 }
 

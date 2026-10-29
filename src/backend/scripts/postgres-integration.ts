@@ -52,6 +52,7 @@ import { runAudioReservationAssertions } from './audio-reservation-assertions';
 import { runAudioJourneyAssertions } from './audio-journey-assertions';
 import { runModelPerformanceAssertions } from './model-performance-assertions';
 import { runFreeSpendAttributionAssertions } from './free-spend-attribution-assertions';
+import { runPricingOverrunCapAssertions } from './pricing-overrun-cap-assertions';
 
 if (process.env.NVM_DB_DRIVER !== 'postgres')
   throw new Error('Postgres integration requires NVM_DB_DRIVER=postgres');
@@ -148,6 +149,7 @@ async function runAssertions() {
       assert.ok(user);
       await runModelPerformanceAssertions(user.id);
       await runFreeSpendAttributionAssertions();
+      await runPricingOverrunCapAssertions(databaseName);
 
       // Admission is serialized on the user row with no overdraft grace.
       await db.insert(creditLedger).values({
@@ -426,7 +428,7 @@ async function runAssertions() {
         requestId: exactRequestId,
         outcome: 'settle',
         model: 'reported-cost-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'reported-cost',
         tokens: { inputTokens: 1, outputTokens: 1 },
         providerCostUsd: CREDIT_USD / MARKUP / 2,
@@ -503,7 +505,7 @@ async function runAssertions() {
         requestId: providerOverrunId,
         outcome: 'settle',
         model: 'provider-overrun-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'provider-overrun',
         tokens: { inputTokens: 10, outputTokens: 10 },
         providerCostUsd: 1,
@@ -513,7 +515,7 @@ async function runAssertions() {
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         true,
@@ -537,7 +539,7 @@ async function runAssertions() {
         requestId: dispatchedBeforeTripId,
         outcome: 'settle',
         model: 'provider-overrun-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'provider-overrun',
         tokens: { inputTokens: 1, outputTokens: 1 },
         providerCostUsd: CREDIT_USD / MARKUP / 2,
@@ -608,7 +610,7 @@ async function runAssertions() {
         reenableRouteBreaker({
           actorUserId: '22222222-2222-2222-2222-222222222222',
           routeSlot: 'provider-overrun',
-          provider: 'integration',
+          provider: 'openrouter',
           modelId: 'provider-overrun-model',
         }),
         'audit insert failure must abort breaker re-enable',
@@ -616,7 +618,7 @@ async function runAssertions() {
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         true,
@@ -625,13 +627,13 @@ async function runAssertions() {
       await reenableRouteBreaker({
         actorUserId: billingUser.id,
         routeSlot: 'provider-overrun',
-        provider: 'integration',
+        provider: 'openrouter',
         modelId: 'provider-overrun-model',
       });
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         false,
@@ -1685,7 +1687,7 @@ async function runAssertions() {
             requestId: winnerRequestId,
             outcome: 'settle',
             model: 'free-cap-overrun-model',
-            provider: 'integration',
+            provider: 'openrouter',
             tokens: { inputTokens: 1, outputTokens: 1 },
             providerCostUsd: 0.000001,
             status: 200,

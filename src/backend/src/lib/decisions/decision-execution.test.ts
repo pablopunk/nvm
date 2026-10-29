@@ -309,11 +309,11 @@ test('uses catalog token pricing when a valid answer omits the upstream cost', a
     deps,
   });
   const settlement = calls.finalize[0] as {
-    providerCostUsd: number;
+    catalogCostUsd: number;
     costSource: string;
   };
   assert.equal(settlement.costSource, 'catalog_estimate');
-  assert.equal(settlement.providerCostUsd, computeUsdCost(COST, 100, 5));
+  assert.equal(settlement.catalogCostUsd, computeUsdCost(COST, 100, 5));
 });
 
 test('releases the user reservation when a call times out', async () => {

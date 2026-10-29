@@ -1,9 +1,85 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { expirePricingCacheForTests, resetPricingCacheForTests } from '../pricing';
+import { setStaleAdmissionsHaltedForTests } from '../pricing-overrun-cap';
+import {
+  SNAPSHOT_CURRENT_MAX_AGE_MS,
+  SNAPSHOT_MAX_AGE_MS,
+} from '../pricing-snapshot-store';
 import {
   decisionModelFromCatalog,
   isSelectableDecisionModel,
+  listDecisionModels,
+  lookupDecisionModelCost,
+  refreshDecisionCatalog,
 } from './decision-models';
+
+const JEV_CATALOG = {
+  data: [
+    {
+      id: 'typesafe/jev-1.14',
+      name: 'Jev',
+      context_length: 262144,
+      pricing: { prompt: '0.000000042', completion: '0', image: '0', request: '0' },
+      architecture: { input_modalities: ['text', 'image'], output_modalities: ['decisions'] },
+    },
+  ],
+};
+
+test('a decision catalog refresh publishes a durable copy that lookups price without fetching', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    requests.push(String(input instanceof Request ? input.url : input));
+    return Response.json(JEV_CATALOG);
+  }) as unknown as typeof globalThis.fetch;
+  resetPricingCacheForTests();
+  try {
+    assert.deepEqual(await listDecisionModels(), []);
+    assert.equal(requests.length, 0, 'an unvalidated catalog is never fetched on read');
+
+    await refreshDecisionCatalog();
+    assert.equal(requests.length, 1);
+    assert.match(requests[0], /\/models\?output_modalities=decisions$/);
+    assert.equal((await listDecisionModels()).length, 1);
+
+    const cost = await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14');
+    assert.equal(cost?.modelId, 'typesafe/jev-1.14');
+    assert.equal(cost?.stale, undefined);
+    assert.equal(requests.length, 1, 'lookups read the durable copy only');
+
+    expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+    assert.equal((await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14'))?.stale, true);
+
+    expirePricingCacheForTests(SNAPSHOT_MAX_AGE_MS + 1);
+    assert.equal(await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14'), null);
+    assert.equal(requests.length, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+    resetPricingCacheForTests();
+  }
+});
+
+test('the overrun cap refuses a stale decision price only while it is reached', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => Response.json(JEV_CATALOG)) as unknown as typeof globalThis.fetch;
+  resetPricingCacheForTests();
+  try {
+    await refreshDecisionCatalog();
+    setStaleAdmissionsHaltedForTests(true);
+    assert.equal((await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14'))?.stale, undefined, 'current is never refused');
+
+    expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+    assert.equal(await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14'), null);
+
+    setStaleAdmissionsHaltedForTests(false);
+    assert.equal((await lookupDecisionModelCost('openrouter', 'typesafe/jev-1.14'))?.stale, true);
+  } finally {
+    setStaleAdmissionsHaltedForTests(null);
+    globalThis.fetch = originalFetch;
+    resetPricingCacheForTests();
+  }
+});
 
 test('uses decision catalog token prices and records image billing bounds', () => {
   const model = decisionModelFromCatalog({

@@ -1,7 +1,13 @@
 import { resetDecisionModelCacheForTests } from '../lib/decisions/decision-models';
+import { bundledModelsFor, ownBundledModel } from '../lib/pricing-bundled';
 import { resetPricingCacheForTests } from '../lib/pricing';
+import { refreshPricingSnapshots } from '../lib/pricing-refresh';
 import { resetTranscriptionModelCacheForTests } from '../lib/transcription-models';
 import { resetUpstreamReadinessCacheForTests } from '../lib/upstream-readiness';
+import {
+  openRouterEndpointsBodyFromCost,
+  openRouterEndpointsModelId,
+} from './openrouter-endpoints';
 
 export const OPENROUTER_BASE_URL = 'https://openrouter.test/api/v1';
 export const OPENCODE_BASE_URL = 'https://opencode.test/zen/v1';
@@ -49,15 +55,49 @@ export const OPENROUTER_ACCEPTED_REPLIES: UpstreamReplies = {
 
 const originalFetch = globalThis.fetch;
 
+// OpenRouter endpoint pricing answers as a listing whose one endpoint charges the test's
+// models.dev cost, or the shipped bundled cost for that model. A model neither source
+// prices answers 404, as OpenRouter does for an unknown model.
+function openRouterEndpointsReply(
+  modelId: string,
+  catalogReply: UpstreamReply | undefined,
+): UpstreamReply {
+  const catalog =
+    catalogReply && catalogReply !== 'timeout'
+      ? JSON.parse(catalogReply.body ?? '{}')
+      : {};
+  const cost =
+    catalog.openrouter?.models?.[modelId]?.cost ??
+    ownBundledModel('openrouter', modelId)?.cost;
+  if (!cost) return { status: 404, body: '{}' };
+  return {
+    status: 200,
+    body: JSON.stringify(openRouterEndpointsBodyFromCost(modelId, cost)),
+  };
+}
+
 // Answers pricing with an empty models.dev catalog unless a test supplies one. Pricing
 // fetches are left out of the returned request list so probe assertions stay focused.
-export function installUpstreamStub(replies: UpstreamReplies): string[] {
+// The install then publishes prices and the audio and decision catalogs the way the
+// scheduled refresh does, because the request path never fetches them. By default
+// that is every bundled OpenRouter model. Install-time fetches are not recorded.
+export async function installUpstreamStub(
+  replies: UpstreamReplies,
+  pricedOpenRouterModels: readonly string[] = Object.keys(bundledModelsFor('openrouter')),
+): Promise<string[]> {
   const requested: string[] = [];
+  let recording = false;
   const answers: UpstreamReplies = { [MODELS_DEV_URL]: { status: 200, body: '{}' }, ...replies };
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    if (url !== MODELS_DEV_URL) requested.push(url);
-    const reply = answers[url] ?? { status: 500, body: '{}' };
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    const isPricingFetch = url === MODELS_DEV_URL || endpointsModelId !== null;
+    if (recording && !isPricingFetch) requested.push(url);
+    const reply =
+      answers[url] ??
+      (endpointsModelId === null
+        ? { status: 500, body: '{}' }
+        : openRouterEndpointsReply(endpointsModelId, answers[MODELS_DEV_URL]));
     if (reply === 'timeout')
       return new Promise<Response>((_resolve, reject) =>
         init?.signal?.addEventListener('abort', () =>
@@ -69,6 +109,8 @@ export function installUpstreamStub(replies: UpstreamReplies): string[] {
       headers: { 'content-type': reply.contentType ?? 'application/json' },
     });
   }) as typeof fetch;
+  await refreshPricingSnapshots(pricedOpenRouterModels);
+  recording = true;
   return requested;
 }
 

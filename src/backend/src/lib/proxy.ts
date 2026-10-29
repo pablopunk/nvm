@@ -47,7 +47,14 @@ import {
   withoutSchemaDefinitions,
 } from './limits';
 import { log } from './log';
-import { lookupModelDescriptor, type ModelDescriptor } from './pricing';
+import {
+  lookupModelDescriptor,
+  type ModelDescriptor,
+  reservationMarginFor,
+  resolveModelCost,
+} from './pricing';
+import { pricingUnavailableBody } from './pricing-unavailable';
+import { trustedReportedCostUsd } from './provider-pricing-contract';
 import { rateLimitChat, tooManyRequests } from './ratelimit';
 import { healthyRouteCandidates } from './route-breakers';
 import {
@@ -167,44 +174,50 @@ type BillContext = {
   dedupRequestHash?: string;
 };
 
+/**
+ * Admission always reserves at the maximum rate across cache-read, cache-write,
+ * and tier prices. Settlement can charge any of those rates, and a reservation
+ * priced at the regular input rate could settle above its hold.
+ */
+/**
+ * A reservation at a stale price holds the stale margin, so a rate that moved while
+ * the snapshot aged cannot settle above its hold. Settlement itself is not scaled.
+ */
 function requestReservationCostUsd(
   costRow: ModelCost,
   inputTokens: number,
   outputTokens: number,
-  imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
-  conservative = false,
 ) {
-  const totalOutputTokens = outputTokens * completionCount;
-  return imageCount > 0 || conservative
-    ? computeMaximumTokenPricedCost(
-        costRow,
-        inputTokens,
-        totalOutputTokens,
-        imageLimits?.maximumCost,
-      )
-    : computeUsdCost(costRow, inputTokens, totalOutputTokens);
+  const margin = reservationMarginFor({
+    stale: costRow.stale === true || imageLimits?.maximumCost.stale === true,
+  });
+  return (
+    margin *
+    computeMaximumTokenPricedCost(
+      costRow,
+      inputTokens,
+      outputTokens * completionCount,
+      imageLimits?.maximumCost,
+    )
+  );
 }
 
 function requestReservationCredits(
   costRow: ModelCost,
   inputTokens: number,
   outputTokens: number,
-  imageCount: number,
   completionCount: number,
   imageLimits?: ImageTokenLimits,
-  conservative = false,
 ) {
   return usdToCredits(
     requestReservationCostUsd(
       costRow,
       inputTokens,
       outputTokens,
-      imageCount,
       completionCount,
       imageLimits,
-      conservative,
     ),
   );
 }
@@ -297,13 +310,10 @@ async function recordUsage(
   ttftMs?: number,
 ) {
   const billable = tokens.outputTokens > 0 && status >= 200 && status < 300;
-  const providerCostUsd =
-    ctx.provider === 'openrouter' &&
-    tokens.providerCostUsd != null &&
-    Number.isFinite(tokens.providerCostUsd) &&
-    tokens.providerCostUsd >= 0
-      ? tokens.providerCostUsd
-      : undefined;
+  const providerCostUsd = trustedReportedCostUsd(
+    ctx.provider,
+    tokens.providerCostUsd,
+  );
   const costUsd =
     providerCostUsd ??
     computeUsdCost(
@@ -453,6 +463,7 @@ export function decideProxyModel(input: {
 
 async function resolveModelRouting(
   slot: ModelRouteSlot,
+  creditKind: 'free' | 'paid',
 ): Promise<Response | ModelRouting> {
   let provider: string;
   let activeModelId: string;
@@ -477,19 +488,25 @@ async function resolveModelRouting(
     throw err;
   }
 
-  const costRow = await lookupModelCost(provider, activeModelId);
-  if (!costRow) {
-    log.error('pricing_unavailable', { provider, model: activeModelId });
-    return Response.json(
-      {
-        error: {
-          type: 'pricing_unavailable',
-          message: 'No pricing configured for active model',
-        },
-      },
-      { status: 503 },
-    );
+  const costResolution = await resolveModelCost(provider, activeModelId);
+  if (!costResolution.ok) {
+    log.error('pricing_unavailable', {
+      provider,
+      model: activeModelId,
+      reason: costResolution.reason,
+    });
+    return Response.json(pricingUnavailableBody(costResolution.reason), {
+      status: 503,
+    });
   }
+  const costRow = costResolution.cost;
+  // A stale price admits at the stale margin inside the free-spend cap, so this stays observable per credit kind.
+  if (costRow.stale)
+    log.info('pricing_stale_admitted', {
+      provider,
+      model: activeModelId,
+      credit_kind: creditKind,
+    });
 
   try {
     const upstream = getUpstreamConfig(provider);
@@ -902,7 +919,7 @@ async function resolveRouting(
     headers: request.headers,
   });
   const { routeSlot, creditKind: kind, tier } = decision;
-  const modelRouting = await resolveModelRouting(routeSlot);
+  const modelRouting = await resolveModelRouting(routeSlot, kind);
   if (modelRouting instanceof Response) return modelRouting;
 
   return {
@@ -1069,6 +1086,8 @@ async function hasConfiguredImageRoute(
       candidate.modelId === routing.activeModelId
         ? primaryDescriptor
         : await lookupModelDescriptor(candidate.providerId, candidate.modelId);
+    // Image bounds read the loaded price synchronously, so the candidate is priced first.
+    await resolveModelCost(candidate.providerId, candidate.modelId);
     const imageLimits = imageTokenLimits(
       candidate.providerId,
       candidate.modelId,
@@ -1274,10 +1293,8 @@ async function tryUpstreamProviders(
             costRow,
             candidateInputTokenCeiling,
             candidateMaxOutputTokens,
-            imageCount,
             completionCount,
             imageLimits,
-            cfg.wireApi === 'openai-responses',
           );
     const candidateCredits =
       candidateCostUsd == null ? undefined : usdToCredits(candidateCostUsd);
@@ -1763,19 +1780,15 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
         routing.costRow,
         reservationInputTokenCeiling,
         maxOutputTokens,
-        imageCount,
         completionCount,
         initialImageLimits,
-        cfg.wireApi === 'openai-responses',
       );
       const estimatedProviderCostUsd = requestReservationCostUsd(
         routing.costRow,
         reservationInputTokenCeiling,
         maxOutputTokens,
-        imageCount,
         completionCount,
         initialImageLimits,
-        cfg.wireApi === 'openai-responses',
       );
       let reservation = await reserveCredits({
         requestId,
@@ -1801,7 +1814,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
           role: requestedModel,
           forceFree: true,
         });
-        const freeRouting = await resolveModelRouting(freeDecision.routeSlot);
+        const freeRouting = await resolveModelRouting(freeDecision.routeSlot, 'free');
         if (freeRouting instanceof Response) {
           await markDedupFailed(dedupClaim);
           return withRequestId(freeRouting, requestId);
@@ -1826,7 +1839,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
               freeRouting.costRow,
               freeAdmission?.inputTokensForReservation ?? estimatedInputTokens,
               freeMaxOutputTokens,
-              imageCount,
               completionCount,
               freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                 ? imageTokenLimits(
@@ -1834,7 +1846,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                     freeRouting.activeModelId,
                   )
                 : undefined,
-              cfg.wireApi === 'openai-responses',
             );
             const freeReservation = await reserveCredits({
               requestId,
@@ -1846,7 +1857,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                 freeAdmission?.inputTokensForReservation ??
                   estimatedInputTokens,
                 freeMaxOutputTokens,
-                imageCount,
                 completionCount,
                 freeImageRouteSupported && (imageCount > 0 || cfg.wireApi === 'openai-responses')
                   ? imageTokenLimits(
@@ -1854,7 +1864,6 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
                       freeRouting.activeModelId,
                     )
                   : undefined,
-                cfg.wireApi === 'openai-responses',
               ),
               estimateCostSource: 'catalog_estimate',
             });

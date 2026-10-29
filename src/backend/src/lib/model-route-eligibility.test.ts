@@ -5,15 +5,18 @@ import {
   modelFitsRouteKind,
   resetPricingCacheForTests,
 } from './pricing';
+import { refreshPricingSnapshots } from './pricing-refresh';
 import { selectApiForModel } from './upstream';
 
 let originalFetch: typeof globalThis.fetch;
 
-function mockCatalog(json: unknown) {
+/** Publishes `json` as the models.dev catalog, as the scheduled refresh does. */
+async function mockCatalog(json: unknown) {
   globalThis.fetch = (async () => ({
     ok: true,
     json: async () => json,
   })) as unknown as typeof globalThis.fetch;
+  assert.equal((await refreshPricingSnapshots([])).catalog, 'refreshed');
 }
 
 const toolAndImageModel = {
@@ -36,7 +39,7 @@ after(() => {
 });
 
 test('any catalog model with the tier capabilities is selectable without a code change', async () => {
-  mockCatalog({
+  await mockCatalog({
     openrouter: {
       models: {
         'vendor/brand-new-reasoner': { id: 'vendor/brand-new-reasoner', reasoning: true, ...toolAndImageModel },
@@ -57,7 +60,7 @@ test('any catalog model with the tier capabilities is selectable without a code 
 });
 
 test('models missing a capability every tier uses are not selectable', async () => {
-  mockCatalog({
+  await mockCatalog({
     openrouter: {
       models: {
         'vendor/no-tools': { id: 'vendor/no-tools', reasoning: true, ...toolAndImageModel, tool_call: false },
@@ -75,7 +78,7 @@ test('models missing a capability every tier uses are not selectable', async () 
 });
 
 test('the upstream API follows the SDK the catalog declares for each model', async () => {
-  mockCatalog({
+  await mockCatalog({
     opencode: {
       npm: '@ai-sdk/openai-compatible',
       models: {

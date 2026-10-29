@@ -16,6 +16,12 @@ import {
   MAX_PROXY_REQUEST_BODY_BYTES,
 } from '../../lib/limits';
 import { resetPricingCacheForTests } from '../../lib/pricing';
+import { refreshModelsDevCatalog } from '../../lib/pricing-catalog';
+import { refreshOpenRouterEndpointPrice } from '../../lib/pricing-openrouter';
+import {
+  openRouterEndpointsBodyFromCost,
+  openRouterEndpointsModelId,
+} from '../../test-support/openrouter-endpoints';
 import {
   resetRateLimitOverridesForTests,
   setRateLimitOverridesForTests,
@@ -81,6 +87,7 @@ function createChain(
       return chain;
     },
     onConflictDoNothing: () => chain,
+    onConflictDoUpdate: () => chain,
     returning: () => promise(),
     then: (
       resolve: Parameters<Promise<unknown>['then']>[0],
@@ -201,11 +208,7 @@ function installDb(db: FakeDb) {
   return db;
 }
 
-function installModelsDevFetch() {
-  globalThis.fetch = async (input: string | URL | Request) => {
-    const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') {
-      return Response.json({
+const MODELS_DEV_CATALOG = {
         opencode: {
           models: {
             'gpt-6.1-sol': {
@@ -240,14 +243,38 @@ function installModelsDevFetch() {
               reasoning: true,
               cost: { input: 0.3, output: 2.5 },
               limit: { context: 1_048_576, output: 65_535 },
-              modalities: { input: ['text', 'image', 'pdf'] },
+              modalities: { input: ['text', 'image', 'audio', 'video', 'pdf'] },
             },
           },
         },
-      });
-    }
+      };
+
+/**
+ * Publishes the models.dev catalog and its OpenRouter endpoint prices before the request, as the
+ * scheduled refresh does. Requests never fetch prices themselves.
+ */
+async function installModelsDevFetch() {
+  const openRouterModels: Record<string, { cost: { input: number; output: number } }> =
+    MODELS_DEV_CATALOG.openrouter.models;
+  globalThis.fetch = async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (url === 'https://models.dev/api.json') return Response.json(MODELS_DEV_CATALOG);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    const model = endpointsModelId === null ? undefined : openRouterModels[endpointsModelId];
+    if (endpointsModelId !== null && model)
+      return Response.json(openRouterEndpointsBodyFromCost(endpointsModelId, model.cost));
     throw new Error(`Unexpected fetch: ${url}`);
   };
+  await publishPrices(Object.keys(openRouterModels));
+}
+
+/**
+ * Publishes the models.dev catalog and the named OpenRouter endpoint prices from the current
+ * fetch stub, as the scheduled refresh does before traffic. Requests never fetch prices.
+ */
+async function publishPrices(openRouterModelIds: readonly string[] = []) {
+  await refreshModelsDevCatalog();
+  for (const modelId of openRouterModelIds) await refreshOpenRouterEndpointPrice(modelId);
 }
 
 function proxySelects(
@@ -431,7 +458,7 @@ async function waitForBackgroundTasks() {
   await new Promise<void>((resolve) => setImmediate(resolve));
 }
 
-function installOpenAiFetch(upstreamResponse: () => Response) {
+async function installOpenAiFetch(upstreamResponse: () => Response) {
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
     if (url === 'https://models.dev/api.json') {
@@ -451,6 +478,7 @@ function installOpenAiFetch(upstreamResponse: () => Response) {
     assert.equal(url, 'https://upstream.example/v1/chat/completions');
     return upstreamResponse();
   };
+  await publishPrices();
 }
 
 function countTerminalUpdates(db: FakeDb, status: 'settled' | 'released') {
@@ -480,6 +508,18 @@ test('credit reservation reconciliation has an automatic daily schedule', () => 
       (cron: { path: string }) => cron.path === '/api/cron/credit-reservations',
     ),
     { path: '/api/cron/credit-reservations', schedule: '15 6 * * *' },
+  );
+});
+
+test('pricing refresh runs daily as the only scheduled path that fetches upstream prices', () => {
+  const vercelConfig = JSON.parse(
+    readFileSync(new URL('../../../vercel.json', import.meta.url), 'utf8'),
+  );
+  assert.deepEqual(
+    vercelConfig.crons.find(
+      (cron: { path: string }) => cron.path === '/api/cron/pricing-refresh',
+    ),
+    { path: '/api/cron/pricing-refresh', schedule: '30 5 * * *' },
   );
 });
 
@@ -1149,7 +1189,7 @@ test('approved device auth exchange consumes the code and returns a scoped token
 });
 
 test('active-model route returns descriptor contract with compatibility headers', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects() }));
   const response = await getActiveModel(
     routeContext(
@@ -1180,7 +1220,7 @@ test('active-model route returns descriptor contract with compatibility headers'
 });
 
 test('active-model does not block paid-funded requests when free spend is capped', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: [
@@ -1228,7 +1268,7 @@ test('active-model does not block paid-funded requests when free spend is capped
 });
 
 test('active-model blocks when remaining free-spend capacity cannot fund the request', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: [
@@ -1282,7 +1322,7 @@ test('active-model blocks when remaining free-spend capacity cannot fund the req
 });
 
 test('active-model blocks unsafe token estimates without throwing', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: proxySelects({ free: 500, paid: 1 }),
@@ -1306,7 +1346,7 @@ test('Local active-model routes completions through the local backend', async ()
   const previousEnvironment = process.env.VERCEL_ENV;
   process.env.VERCEL_ENV = 'development';
   try {
-    installModelsDevFetch();
+    await installModelsDevFetch();
     installDb(createFakeDb({ selects: proxySelects() }));
     const response = await getActiveModel(
       routeContext(
@@ -1326,7 +1366,7 @@ test('Local active-model routes completions through the local backend', async ()
 });
 
 test('active-model returns the configured thinking level for a route', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ thinkingLevel: 'high' }) }));
   const response = await getActiveModel(
     routeContext(
@@ -1342,7 +1382,7 @@ test('active-model returns the configured thinking level for a route', async () 
 });
 
 test('active-model preserves OpenRouter model ids and proxy format', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: proxySelects({
@@ -1372,7 +1412,7 @@ test('active-model preserves OpenRouter model ids and proxy format', async () =>
 });
 
 test('active-model route resolves admin-defined extension model roles', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({ selects: proxySelects({ model: 'gemini-3-fast' }) }),
   );
@@ -1396,7 +1436,7 @@ test('active-model route resolves admin-defined extension model roles', async ()
 });
 
 test('active-model route selects all four subscription and model-role combinations', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const cases = [
     {
       plan: 'pro',
@@ -1453,7 +1493,7 @@ test('active-model route selects all four subscription and model-role combinatio
 });
 
 test('active-model ignores a claimed Pro tier for a Free account', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: proxySelects({
@@ -1481,7 +1521,7 @@ test('active-model ignores a claimed Pro tier for a Free account', async () => {
 });
 
 test('active-model keeps the Plan 002 Free route for Pro accounts with zero paid credits', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: proxySelects({
@@ -1569,7 +1609,7 @@ test('active-model funding decision table keeps tier separate from combined-pool
 });
 
 test('active-model preflight keeps Pro when the combined pools cover the request', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: [
@@ -1628,7 +1668,7 @@ test('active-model preflight keeps Pro when the combined pools cover the request
 });
 
 test('active-model uses an affordable same-format Free fallback when Pro cost exceeds combined funds', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: [
@@ -1684,7 +1724,7 @@ test('active-model uses an affordable same-format Free fallback when Pro cost ex
 });
 
 test('active-model notice accounts for pending split allocations like proxy admission', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(
     createFakeDb({
       selects: [
@@ -1786,6 +1826,7 @@ test('active-model blocks requested-size estimates without validated pricing but
         ],
       }),
     );
+    await publishPrices();
     const response = await getActiveModel(
       routeContext(
         new Request(`https://api.nvm.fyi/api/v1/active-model${sizeQuery}`, {
@@ -1812,7 +1853,7 @@ test('Preview active-model advertises the exact deployment origin', async () => 
   process.env.VERCEL_URL =
     'nvm-feature-pablo-varelas-projects-4f86af8b.vercel.app';
   try {
-    installModelsDevFetch();
+    await installModelsDevFetch();
     installDb(createFakeDb({ selects: proxySelects() }));
     const response = await getActiveModel(
       routeContext(
@@ -1977,7 +2018,7 @@ test('proxy route returns stable auth, credits, model config, and prompt-size er
     },
   });
 
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   installDb(createFakeDb({ selects: proxySelects({ free: 1000000 }) }));
   const promptSizeLogs: Record<string, unknown>[] = [];
@@ -2079,6 +2120,24 @@ test('proxy forwards a bounded image through a catalog image-capable route', asy
           },
         },
       });
+    if (openRouterEndpointsModelId(url))
+      return Response.json(
+        openRouterEndpointsBodyFromCost('openai/gpt-6-sol', {
+          input: 2,
+          output: 10,
+          cache_read: 0.1,
+          cache_write: 2.5,
+          tiers: [
+            {
+              input: 4,
+              output: 15,
+              cache_read: 0.2,
+              cache_write: 5,
+              tier: { size: 272_000 },
+            },
+          ],
+        }),
+      );
     assert.equal(url, 'https://openrouter.example/api/v1/chat/completions');
     upstreamCalls += 1;
     forwardedBody = JSON.parse(String(init?.body));
@@ -2104,6 +2163,7 @@ test('proxy forwards a bounded image through a catalog image-capable route', asy
       },
     ],
   };
+  await publishPrices(['openai/gpt-6-sol']);
   const response = await postChatCompletion(
     routeContext(authorizedChatRequest(requestBody)),
   );
@@ -2164,10 +2224,18 @@ test('proxy rejects image billing when the configured model catalog omits its mo
           },
         },
       });
+    if (openRouterEndpointsModelId(url))
+      return Response.json(
+        openRouterEndpointsBodyFromCost('openai/gpt-6-sol', {
+          input: 2,
+          output: 10,
+        }),
+      );
     upstreamCalls += 1;
     throw new Error(`Unexpected upstream request: ${url}`);
   };
 
+  await publishPrices(['openai/gpt-6-sol']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2250,6 +2318,7 @@ test('image routes fail closed when the catalog has no context limit', async () 
     throw new Error(`Unexpected upstream request: ${url}`);
   };
 
+  await publishPrices();
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2277,7 +2346,7 @@ test('image routes fail closed when the catalog has no context limit', async () 
 });
 
 test('proxy rejects malformed images with an actionable contract error', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
@@ -2311,7 +2380,7 @@ test('proxy rejects malformed images with an actionable contract error', async (
 });
 
 test('proxy route honors extension smart/fast model selection headers', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
@@ -2345,6 +2414,7 @@ test('proxy route honors extension smart/fast model selection headers', async ()
     return Response.json({ usage: { prompt_tokens: 2, completion_tokens: 3 } });
   };
 
+  await publishPrices();
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest(undefined, { 'x-nevermind-ai-model': 'fast' }),
@@ -2391,6 +2461,13 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
         },
       });
     }
+    if (openRouterEndpointsModelId(url))
+      return Response.json(
+        openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', {
+          input: 0.3,
+          output: 2.5,
+        }),
+      );
     assert.equal(url, 'https://openrouter.example/api/v1/chat/completions');
     assert.equal(
       new Headers(init?.headers).get('authorization'),
@@ -2409,6 +2486,7 @@ test('OpenRouter proxy enforces model, reasoning, and safe routing controls', as
     });
   };
 
+  await publishPrices(['google/gemini-2.5-flash']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest(
@@ -2486,6 +2564,7 @@ test('OpenAI-compatible proxy caps conflicting output-limit fields', async () =>
     });
   };
 
+  await publishPrices();
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2517,6 +2596,9 @@ test('proxy rejects separately billed OpenRouter web search before reservation',
   let upstreamCalls = 0;
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    if (endpointsModelId === 'google/gemini-2.5-flash')
+      return Response.json(openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', { input: 0.3, output: 2.5 }));
     if (url === 'https://models.dev/api.json')
       return Response.json({
         openrouter: {
@@ -2532,6 +2614,7 @@ test('proxy rejects separately billed OpenRouter web search before reservation',
     throw new Error(`Unexpected upstream request: ${url}`);
   };
 
+  await publishPrices(['google/gemini-2.5-flash']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2566,6 +2649,9 @@ test('proxy rejects OpenAI-hosted web search tools before reservation', async ()
   let upstreamCalls = 0;
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    if (endpointsModelId === 'google/gemini-2.5-flash')
+      return Response.json(openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', { input: 0.3, output: 2.5 }));
     if (url === 'https://models.dev/api.json')
       return Response.json({
         openrouter: {
@@ -2581,6 +2667,7 @@ test('proxy rejects OpenAI-hosted web search tools before reservation', async ()
     throw new Error(`Unexpected upstream request: ${url}`);
   };
 
+  await publishPrices(['google/gemini-2.5-flash']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2622,6 +2709,9 @@ test('OpenRouter proxy reserves prompt context from the requested output limit',
     init?: RequestInit,
   ) => {
     const url = String(input instanceof Request ? input.url : input);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    if (endpointsModelId === 'provider/context-bound-model')
+      return Response.json(openRouterEndpointsBodyFromCost('provider/context-bound-model', { input: 0.1, output: 0.1 }));
     if (url === 'https://models.dev/api.json') {
       return Response.json({
         openrouter: {
@@ -2643,6 +2733,7 @@ test('OpenRouter proxy reserves prompt context from the requested output limit',
     });
   };
 
+  await publishPrices(['provider/context-bound-model']);
   const response = await postChatCompletion(
     routeContext(authorizedChatRequest(body)),
   );
@@ -2674,6 +2765,9 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
     init?: RequestInit,
   ) => {
     const url = String(input instanceof Request ? input.url : input);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    if (endpointsModelId === 'google/gemini-2.5-flash')
+      return Response.json(openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', { input: 0.3, output: 2.5 }));
     if (url === 'https://models.dev/api.json') {
       return Response.json({
         openrouter: {
@@ -2696,6 +2790,7 @@ test('OpenRouter streaming requests require usage and settle provider-reported c
     );
   };
 
+  await publishPrices(['google/gemini-2.5-flash']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest(
@@ -2733,6 +2828,9 @@ test('stream usage fallback counts every requested completion choice', async () 
   );
   globalThis.fetch = async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
+    const endpointsModelId = openRouterEndpointsModelId(url);
+    if (endpointsModelId === 'google/gemini-2.5-flash')
+      return Response.json(openRouterEndpointsBodyFromCost('google/gemini-2.5-flash', { input: 0.3, output: 2.5 }));
     if (url === 'https://models.dev/api.json')
       return Response.json({
         openrouter: {
@@ -2753,6 +2851,7 @@ test('stream usage fallback counts every requested completion choice', async () 
     );
   };
 
+  await publishPrices(['google/gemini-2.5-flash']);
   const response = await postChatCompletion(
     routeContext(
       authorizedChatRequest({
@@ -2769,7 +2868,7 @@ test('stream usage fallback counts every requested completion choice', async () 
 });
 
 test('proxy spends free credits first without granting a Free user Pro model entitlement', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
@@ -2817,7 +2916,7 @@ test('proxy spends free credits first without granting a Free user Pro model ent
 });
 
 test('proxy preserves structured tool calls and debits the successful request', async function proxiesAndBillsToolCall() {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
@@ -2903,7 +3002,7 @@ test('proxy preserves structured tool calls and debits the successful request', 
 });
 
 test('proxy route returns the rate-limit contract', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   setRateLimitOverridesForTests({
     chat: async () => ({
@@ -2999,6 +3098,7 @@ test('proxy rejects unsupported non-image multimodal payloads before reservation
     const db = installDb(
       createFakeDb({ selects: proxySelects({ free: 1000 }) }),
     );
+    await publishPrices();
     const response = await postChatCompletion(
       routeContext(
         authorizedChatRequest({
@@ -3022,7 +3122,7 @@ test('proxy rejects unsupported non-image multimodal payloads before reservation
 });
 
 test('proxy route preserves streaming responses and records stream usage', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
@@ -3080,7 +3180,7 @@ test('proxy route preserves streaming responses and records stream usage', async
 });
 
 test('proxy releases a committed reservation when request rewriting throws', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const selects = proxySelects({ free: 1000 });
@@ -3102,7 +3202,7 @@ test('proxy releases a committed reservation when buffered upstream reading fail
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response(
         new ReadableStream<Uint8Array>({
@@ -3134,7 +3234,7 @@ test('proxy retries release when settlement throws after reservation', async () 
     ...reservationFinalizationSelects({ free: 1000, paid: 0 }).slice(0, 3),
   );
   const db = installDb(createFakeDb({ selects, failInsertAt: 2 }));
-  installOpenAiFetch(() =>
+  await installOpenAiFetch(() =>
     Response.json({
       choices: [{ message: { content: 'hello' } }],
       usage: { prompt_tokens: 5, completion_tokens: 2 },
@@ -3155,7 +3255,7 @@ test('stream cancellation before output releases exactly once and records a fail
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
   let upstreamCancelCount = 0;
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response(
         new ReadableStream<Uint8Array>({
@@ -3193,7 +3293,7 @@ test('stream cancellation after a delivered chunk settles conservative usage exa
     'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n',
   );
   let emitted = false;
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response(
         new ReadableStream<Uint8Array>({
@@ -3234,7 +3334,7 @@ test('stream cancellation after observed usage settles exactly one charge and us
     'data: {"usage":{"prompt_tokens":7,"completion_tokens":3}}\n\n',
   );
   let emitted = false;
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response(
         new ReadableStream<Uint8Array>({
@@ -3271,7 +3371,7 @@ test('stream reader failure releases exactly once when no output was observed', 
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response(
         new ReadableStream<Uint8Array>({
@@ -3302,7 +3402,7 @@ test('malformed stream usage reaches one conservative settlement on natural comp
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
-  installOpenAiFetch(
+  await installOpenAiFetch(
     () =>
       new Response('data: {not-json}\n\ndata: [DONE]\n\n', {
         headers: { 'content-type': 'text/event-stream' },
@@ -3327,7 +3427,7 @@ test('malformed stream usage reaches one conservative settlement on natural comp
 });
 
 test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
@@ -3381,7 +3481,7 @@ test('openai proxy records usage across hostile UTF-8 and CRLF frame splits', as
 });
 
 test('anthropic proxy records usage from a split final frame without a newline', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1000 }) }));
@@ -3429,7 +3529,7 @@ const splitGoogleUsageStream = [
 ];
 
 test('google proxy records split streaming usage metadata', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
   const db = installDb(
@@ -3491,7 +3591,7 @@ test('google proxy records split streaming usage metadata', async () => {
 });
 
 test('google proxy records usage from a non-streamed JSON array of chunks', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const modelsDevFetch = globalThis.fetch;
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
@@ -3533,7 +3633,7 @@ test('google proxy records usage from a non-streamed JSON array of chunks', asyn
 test('google proxy rejects generation_config before reserving credits or calling upstream', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const modelsDevFetch = globalThis.fetch;
   const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
   const fetchedUrls: string[] = [];
@@ -3562,7 +3662,7 @@ test('google proxy rejects generation_config before reserving credits or calling
 
 test('google proxy clamps an existing generationConfig.maxOutputTokens to the server maximum', async () => {
   resetPricingCacheForTests();
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const modelsDevFetch = globalThis.fetch;
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
@@ -3598,7 +3698,7 @@ test('google proxy clamps an existing generationConfig.maxOutputTokens to the se
 
 test('google proxy sets maxOutputTokens when omitted and drops the snake_case alias', async () => {
   resetPricingCacheForTests();
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const modelsDevFetch = globalThis.fetch;
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
@@ -3636,7 +3736,7 @@ test('google proxy sets maxOutputTokens when omitted and drops the snake_case al
 test('google proxy rejects unsupported operation paths before reserving credits or calling upstream', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const modelsDevFetch = globalThis.fetch;
   const db = installDb(createFakeDb({ selects: proxySelects({ paid: 1000, free: 500 }) }));
   const fetchedUrls: string[] = [];
@@ -3693,6 +3793,7 @@ test('google proxy forwards only an allowlisted alt query parameter upstream', a
   const requestUrl = new URL(
     'https://api.nvm.fyi/api/v1/models/placeholder:streamGenerateContent?key=evil&alt=sse',
   );
+  await publishPrices();
   const response = await postGoogleModel({
     ...routeContext(authorizedGoogleRequest(), requestUrl),
     params: { path: 'placeholder:streamGenerateContent' },
@@ -3709,7 +3810,7 @@ test('google proxy forwards only an allowlisted alt query parameter upstream', a
 test('google proxy returns model_route_changed when the route resolves to a non-Google API', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
   const response = await postGoogleModel({
     ...routeContext(authorizedGoogleRequest()),
@@ -3815,6 +3916,7 @@ test('proxy failover: primary 5xx falls back to next provider in chain', async (
   };
 
   const request = authorizedGoogleRequest();
+  await publishPrices();
   const response = await postGoogleModel({
     ...routeContext(request),
     params: { path: 'placeholder:streamGenerateContent' },
@@ -3923,6 +4025,7 @@ test('proxy breaker skips a tripped primary and dispatches only to its configure
     throw new Error(`Unexpected fetch: ${url}`);
   };
 
+  await publishPrices();
   const response = await postGoogleModel({
     ...routeContext(authorizedGoogleRequest()),
     params: { path: 'placeholder:streamGenerateContent' },
@@ -4001,6 +4104,7 @@ test('proxy failover: when all providers fail, last error passes through', async
     );
   };
 
+  await publishPrices();
   const response = await postChatCompletion(
     routeContext(authorizedChatRequest()),
   );
@@ -4013,7 +4117,7 @@ test('proxy failover: when all providers fail, last error passes through', async
 
 test('proxy failover: 4xx errors do not trigger failover', async () => {
   resetPricingCacheForTests();
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'primary-key';
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.GOOGLE_API_KEY = 'fallback-key';
@@ -4095,7 +4199,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
 test('proxy failover: ai_failover kill switch disables failover', async () => {
   process.env.NEVERMIND_KILL_SWITCHES = 'ai_failover';
   resetPricingCacheForTests();
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'primary-key';
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   const modelRoute = [
@@ -4160,7 +4264,7 @@ test('proxy failover: ai_failover kill switch disables failover', async () => {
 
 test('proxy failover: format-incompatible provider is skipped', async () => {
   resetPricingCacheForTests();
-  installModelsDevFetch();
+  await installModelsDevFetch();
   process.env.OPENCODE_API_KEY = 'primary-key';
   process.env.OPENCODE_BASE_URL = 'https://primary.example/v1';
   process.env.OPENAI_API_KEY = 'openai-key';
@@ -4232,6 +4336,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
     return Response.json({}, { status: 200 });
   };
 
+  await refreshModelsDevCatalog();
   const response = await postMessages(
     routeContext(authorizedMessagesRequest()),
   );
@@ -4323,6 +4428,7 @@ test('proxy failover: chain exhaustion when all providers are skipped returns up
     return Response.json({}, { status: 200 });
   };
 
+  await publishPrices();
   const response = await postChatCompletion(
     routeContext(authorizedChatRequest()),
   );
@@ -4353,6 +4459,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
     ]), { headers: { 'content-type': 'text/event-stream' } });
   };
   const body = { model: 'other', input: [{ role: 'user', content: 'hello' }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], reasoning: { effort: 'none' }, max_output_tokens: 64, store: true, service_tier: 'priority', stream: true };
+  await publishPrices();
   const response = await postResponses(routeContext(authorizedChatRequest(body)));
   const streamed = await response.text();
   await waitForBackgroundTasks();
@@ -4372,7 +4479,7 @@ test('Responses proxies function calls with server-owned limits and settles stre
 test('Responses rejects hosted tools before reserving credits', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
   const response = await postResponses(routeContext(authorizedChatRequest({ input: 'hello', tools: [{ type: 'web_search' }] })));
   assert.equal(response.status, 400);
@@ -4383,7 +4490,7 @@ test('Responses rejects hosted tools before reserving credits', async () => {
 test('a stale chat-completions route fails before credit reservation when the catalog routes the model to Responses', async () => {
   process.env.OPENCODE_API_KEY = 'upstream-key';
   process.env.OPENCODE_BASE_URL = 'https://upstream.example/v1';
-  installModelsDevFetch();
+  await installModelsDevFetch();
   const db = installDb(createFakeDb({ selects: proxySelects({ free: 1_000_000, model: 'gpt-6.1-sol' }) }));
   const response = await postChatCompletion(routeContext(authorizedChatRequest()));
   assert.equal(response.status, 409);
@@ -4400,6 +4507,7 @@ test('Responses failed stream without output releases its reservation', async ()
     if (url === 'https://models.dev/api.json') return Response.json({ opencode: { models: { 'gpt-6.1-sol': { id: 'gpt-6.1-sol', provider: { npm: '@ai-sdk/openai' }, cost: { input: 1, output: 2 }, limit: { context: 100000, output: 1000 } } } } });
     return new Response('data: {"type":"response.failed","response":{"status":"failed"}}\n\n', { headers: { 'content-type': 'text/event-stream' } });
   };
+  await publishPrices();
   const response = await postResponses(routeContext(authorizedChatRequest({ input: 'hello', stream: true })));
   await response.text();
   await waitForBackgroundTasks();
@@ -4409,7 +4517,7 @@ test('Responses failed stream without output releases its reservation', async ()
 });
 
 test('active model describes the Responses route to a released desktop request', async () => {
-  installModelsDevFetch();
+  await installModelsDevFetch();
   installDb(createFakeDb({ selects: proxySelects({ model: 'gpt-6.1-sol', routeProvider: 'opencode_zen' }) }));
   const request = new Request('https://api.nvm.fyi/api/v1/active-model', {
     headers: { authorization: 'Bearer nvm_pat_test', 'x-nevermind-client': 'desktop', 'x-nevermind-client-version': '0.16.0', 'x-nevermind-api-version': '1' },
@@ -4434,6 +4542,7 @@ test('Responses accepts bounded inline images alongside function tools', async (
     forwarded = JSON.parse(String(init?.body));
     return Response.json({ status: 'completed', output: [], usage: { input_tokens: 100, output_tokens: 10 } });
   };
+  await publishPrices();
   const response = await postResponses(routeContext(authorizedChatRequest({ input: [{ role: 'user', content: [{ type: 'input_text', text: 'Describe this' }, { type: 'input_image', image_url: inlinePngDataUrl() }] }], tools: [{ type: 'function', name: 'lookup', parameters: { type: 'object', properties: {} } }], max_output_tokens: 64 })));
   await response.text();
   assert.equal(response.status, 200);
