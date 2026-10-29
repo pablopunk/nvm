@@ -7,12 +7,26 @@ export type SharedStateLease = {
   release: () => Promise<void>;
 };
 
+async function processNamespace(): Promise<string | null> {
+  try {
+    const [boot, namespace] = await Promise.all([
+      fs.readFile('/proc/sys/kernel/random/boot_id', 'utf8'),
+      fs.readlink('/proc/self/ns/pid'),
+    ]);
+    const bootId = boot.trim();
+    return bootId && namespace ? `${bootId}:${namespace}` : null;
+  } catch {
+    return null;
+  }
+}
+
 async function recoverDeadLease(lockDirectory: string): Promise<boolean> {
   const claim = path.join(lockDirectory, 'recovery.claim');
   try {
     const file = await fs.open(claim, 'wx', 0o600);
     await file.close();
   } catch (error) {
+    const namespace = await processNamespace();
     if (
       ['EEXIST', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '')
     )
@@ -27,7 +41,9 @@ async function recoverDeadLease(lockDirectory: string): Promise<boolean> {
     if (
       !Number.isSafeInteger(owner?.pid) ||
       owner.pid < 1 ||
-      typeof owner.token !== 'string'
+      typeof owner.token !== 'string' ||
+      namespace === null ||
+      owner.namespace !== namespace
     )
       return false;
     try {
@@ -82,10 +98,18 @@ export async function acquireSharedStateLease(
     await fs.mkdir(lockDirectory, { mode: 0o700 });
   }
   try {
-    await fs.writeFile(ownerFile, JSON.stringify({ token, pid: process.pid }), {
-      flag: 'wx',
-      mode: 0o600,
-    });
+    await fs.writeFile(
+      ownerFile,
+      JSON.stringify({
+        token,
+        pid: process.pid,
+        namespace: await processNamespace(),
+      }),
+      {
+        flag: 'wx',
+        mode: 0o600,
+      },
+    );
   } catch (error) {
     await fs.rmdir(lockDirectory).catch(() => {});
     throw error;
