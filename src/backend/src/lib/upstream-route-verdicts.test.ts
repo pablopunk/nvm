@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { withTestDb } from '../db/client';
+import { expirePricingCacheForTests, resetPricingCacheForTests } from './pricing';
+import { absorbedOverrunSettingKey } from './pricing-overrun-cap';
+import {
+  SNAPSHOT_CURRENT_MAX_AGE_MS,
+  SNAPSHOT_MAX_AGE_MS,
+} from './pricing-snapshot-store';
 import { fakeRouteDb, type RouteFixture } from '../test-support/route-db';
 import {
   installUpstreamStub,
@@ -25,9 +31,9 @@ const OPENROUTER_CANDIDATE = { provider: 'openrouter', modelId: OPENROUTER_MODEL
 
 let restoreEnv: () => void;
 
-beforeEach(() => {
+beforeEach(async () => {
   restoreEnv = useUpstreamTestEnv();
-  installUpstreamStub(OPENROUTER_ACCEPTED_REPLIES);
+  await installUpstreamStub(OPENROUTER_ACCEPTED_REPLIES);
 });
 
 afterEach(() => {
@@ -107,7 +113,7 @@ test('a keyed failover link the proxy would try becomes a candidate after the pr
 test('a failover link the proxy skips for an unpriced model or an incompatible wire format is excluded', async () => {
   process.env.OPENCODE_API_KEY = 'test-opencode-key';
   process.env.ANTHROPIC_API_KEY = 'test-anthropic-key';
-  installUpstreamStub({
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [MODELS_DEV_URL]: {
       status: 200,
@@ -216,6 +222,32 @@ test('a primary without a key refuses the route before any failover, as the prox
   assert.deepEqual(proFast.candidates, []);
 });
 
+test('a stale price keeps every tier serviceable, free routes included, inside the hard bound', async () => {
+  expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+  const verdicts = await resolveWith({ settings: OPENROUTER_LIVE_SETTINGS });
+  for (const slot of TIERED) assert.equal(verdictFor(verdicts, slot).unserviceable, null, slot);
+  assert.deepEqual(verdictFor(verdicts, 'free-smart').candidates, [OPENROUTER_CANDIDATE]);
+});
+
+test('a price past the hard bound refuses every tier, as the request path does', async () => {
+  expirePricingCacheForTests(SNAPSHOT_MAX_AGE_MS + 1);
+  const verdicts = await resolveWith({ settings: OPENROUTER_LIVE_SETTINGS });
+  for (const slot of TIERED) assert.equal(verdictFor(verdicts, slot).unserviceable, 'model_unavailable', slot);
+});
+
+test('a reached overrun cap leaves current routes live and reports every stale route unserviceable', async () => {
+  const capReached = { ...OPENROUTER_LIVE_SETTINGS, [absorbedOverrunSettingKey(new Date())]: '500' };
+  const current = await resolveWith({ settings: capReached });
+  for (const slot of [...TIERED, AUDIO, DECISION]) assert.equal(verdictFor(current, slot).unserviceable, null, slot);
+
+  expirePricingCacheForTests(SNAPSHOT_CURRENT_MAX_AGE_MS + 1);
+  const stale = await resolveWith({ settings: capReached });
+  for (const slot of [...TIERED, AUDIO, DECISION]) {
+    assert.equal(verdictFor(stale, slot).unserviceable, 'model_unavailable', slot);
+    assert.deepEqual(verdictFor(stale, slot).candidates, [], slot);
+  }
+});
+
 test('a primary without pricing refuses the route as unavailable', async () => {
   const verdicts = await resolveWith({
     settings: { ...OPENROUTER_LIVE_SETTINGS, pro_fast_model_route: route('openrouter', 'unpriced-model') },
@@ -226,7 +258,7 @@ test('a primary without pricing refuses the route as unavailable', async () => {
 
 test('a primary whose wire format the provider lacks falls through to a failover that speaks that format', async () => {
   process.env.OPENCODE_API_KEY = 'test-opencode-key';
-  installUpstreamStub({
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [MODELS_DEV_URL]: {
       status: 200,
@@ -256,7 +288,7 @@ test('a primary whose wire format the provider lacks falls through to a failover
 });
 
 test('a primary whose format no candidate supports is unserviceable, not silently live', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [MODELS_DEV_URL]: {
       status: 200,
@@ -349,7 +381,7 @@ test('an audio route without an OpenRouter key is refused with the key reason', 
 });
 
 test('an audio model missing from the transcription catalog is unavailable', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [OPENROUTER_TRANSCRIPTION_URL]: { status: 200, body: '{"data":[]}' },
   });
@@ -357,16 +389,14 @@ test('an audio model missing from the transcription catalog is unavailable', asy
   assert.equal(verdictFor(verdicts, AUDIO).unserviceable, 'model_unavailable');
 });
 
-test('a transcription catalog failure leaves audio live and unverified, never unserviceable', async () => {
-  installUpstreamStub({
+test('an audio catalog that was never validated refuses the audio route, as the request path does', async () => {
+  resetPricingCacheForTests();
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [OPENROUTER_TRANSCRIPTION_URL]: { status: 503, body: '{}' },
   });
   const verdicts = await resolveWith({ settings: OPENROUTER_LIVE_SETTINGS });
-  const audio = verdictFor(verdicts, AUDIO);
-  assert.equal(audio.unserviceable, null);
-  assert.equal(audio.unverified, true);
-  assert.deepEqual(audio.candidates, [{ provider: 'openrouter', modelId: 'nvidia/parakeet-tdt-0.6b-v3' }]);
+  assert.equal(verdictFor(verdicts, AUDIO).unserviceable, 'model_unavailable');
 });
 
 test('a decision route on a provider without an adapter is unsupported', async () => {
@@ -386,7 +416,7 @@ test('the ai_proxy kill switch removes every tiered and decision route and keeps
 });
 
 test('a decision model missing from the decision catalog is unavailable', async () => {
-  installUpstreamStub({
+  await installUpstreamStub({
     ...OPENROUTER_ACCEPTED_REPLIES,
     [OPENROUTER_DECISION_URL]: { status: 200, body: '{"data":[]}' },
   });
@@ -411,7 +441,7 @@ test('a decision model with a charged output has no bounded cost and is unavaila
       }),
     },
   };
-  installUpstreamStub(charged);
+  await installUpstreamStub(charged);
   const verdicts = await resolveWith({ settings: OPENROUTER_LIVE_SETTINGS });
   assert.equal(verdictFor(verdicts, DECISION).unserviceable, 'model_unavailable');
 });

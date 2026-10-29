@@ -45,7 +45,7 @@ const OPENROUTER_LIVE_SETTINGS = {
 
 async function healthFor(fixture: RouteFixture, replies: UpstreamReplies = OPENROUTER_ACCEPTED_REPLIES) {
   const [{ GET }, { withTestDb }] = await Promise.all([import('./health'), import('../../db/client')]);
-  const requested = installUpstreamStub(replies);
+  const requested = await installUpstreamStub(replies);
   const response = await withTestDb(fakeRouteDb(fixture), () => GET({} as Parameters<typeof GET>[0]));
   const body = (await response.json()) as Record<string, unknown>;
   return { status: response.status, body, requested: [...requested].sort() };

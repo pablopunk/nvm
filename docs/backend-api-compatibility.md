@@ -45,6 +45,14 @@ Ship features directly with additive contracts or compatibility shims. Nevermind
 
 Server-side kill switches should exist for risky behavior such as model provider changes, streaming transformations, billing enforcement changes, and auth flow changes. `NEVERMIND_KILL_SWITCHES` supports comma-list or JSON boolean switches for `ai_proxy`, `ai_streaming`, `audio_transcription`, and `auth_device`.
 
+## Pricing admission prerequisite
+
+Priced routes admit only from durable pricing snapshots that the scheduled refresh validated, and audio and decision catalogs are read the same way. The `Database migration` workflow seeds and verifies those snapshots (`pnpm -C src/backend db:seed-pricing`) after migrations and before any deploy takes traffic. The gate requires every configured route to admit a current price. If it fails, the previous deployment keeps serving, so a deploy never reaches clients unpriced.
+
+Released desktop clients keep the `pricing_unavailable` error type and the existing `unverified` reason. The `reason: stale` appears past the hard bound, and for a stale price once the day's overrun cap (`PRICING_OVERRUN_DAILY_CAP_CREDITS`) is reached. Stale prices now admit for every tier below that cap, so a free route is serviceable inside the bound and under the cap. `active-model` now includes a free route's estimate when its price is stale, at the same margin its reservation holds. Each of these is additive, so no desktop release is required.
+
+Two changes to which prices admit are not additive. A bundled price stops admitting past its verification window, and an OpenRouter route is priced from its live endpoints rather than its model-level price. The gate refuses a route that has no price under the new rules, so it blocks such a deploy instead of letting clients see the refusal. It does not prove that every such route is still the one clients expect. Compatibility is therefore not established by this document alone: the outstanding production prerequisites in `src/backend/README.md` (CRON_SECRET, cron cadence, and a first gated deploy that logged `"ready": true`) must be confirmed before this change is treated as released-client safe.
+
 ## API-major breaking-change criteria
 
 Create a new API major, such as `/api/v2`, only when a backend change cannot be safely represented as an additive field, compatibility shim, or explicit unsupported-client block inside the current major.

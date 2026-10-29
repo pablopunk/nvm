@@ -68,6 +68,45 @@ and remove old schema in a later release. If a deployment fails after migration,
 back without rolling schema back; fix forward unless a separately reviewed
 backward migration is safe for all released desktop clients.
 
+## Pricing snapshots
+
+Admission prices come only from durable snapshots that the scheduled refresh validated. The request path never fetches models.dev, OpenRouter endpoints, or the OpenRouter audio and decision catalogs. It restores the last validated copy from `pricing_snapshots` and answers from that.
+
+- `/api/cron/pricing-refresh` runs daily at 05:30 UTC (`vercel.json`). It refreshes the models.dev sections, the endpoint price of every live OpenRouter route model (each model isolated from the others), and the OpenRouter audio and decision catalogs. It requires `CRON_SECRET` in production and fails closed without it. It returns 503 with a per-catalog report when anything failed, and reports the failure to Sentry.
+- A validation inside 36 hours is current. A validation between 36 hours and 7 days is stale: every tier admits it, and each reservation holds twice its estimate, so a rate that moved while the snapshot aged cannot settle above its hold. Free spend is held the same way inside the monthly free-spend cap. Settlement always uses the actual cost. Past 7 days a price is refused for every tier with `pricing_unavailable`, `reason: stale`.
+- A route whose price has never been validated refuses with `pricing_unavailable`, `reason: unverified`. Audio and decision routes with no validated catalog refuse as unavailable models.
+- Saving an admin route refreshes that route's price first, so a new model is priced when it is chosen.
+
+### Deploy gate
+
+Bootstrap is automatic. The `Database migration` workflow runs `pnpm -C src/backend db:seed-pricing` after migrations and before any Vercel deploy. The script refreshes the snapshots, then requires every configured route to admit a current price from them: the primary and each enabled failover link of the free and pro smart and fast slots, the audio route, and the decision route. Kill switches remove a route the same way requests lose it. A failed gate stops the deploy, and the previous deployment keeps serving with its own pricing.
+
+The gate proves prices and route configuration. It does not prove provider keys or upstream answers; `upstreamReady` on `/api/health` does that after the deploy. A failed refresh is reported but does not fail the gate while the snapshots it kept are still current, so an upstream outage cannot block a deploy whose prices are already verified.
+
+To seed a fresh database by hand, run `pnpm db:migrate` and then the same command with that environment's `DATABASE_URL`, `NVM_ENV`, and `NVM_DATABASE_ENV`. The output lists each route's refusal, and the command exits non-zero until every route is priced.
+
+### Bundled prices
+
+The bundled entries in `src/backend/src/lib/pricing-bundled.ts` share one verification date, `BUNDLED_CATALOG_VERIFIED_AT`. A bundled entry ages on the same windows as a snapshot validated that day: current, then stale, then refused past the hard bound for every model. Nothing refreshes the bundle. Re-reconcile its entries against models.dev and move the date in a reviewed change when a bundled model must keep admitting; never add per-model expiry rules.
+
+### Settlement overruns
+
+A settlement whose cost exceeds its hold trips that route's breaker (`settlement_overrun`). Breakers stay tripped until an admin re-enables them. A debit the balance cannot cover trips no breaker: that is a balance problem, not a price problem.
+
+Overrun also has an aggregate bound across routes. Each settlement adds the list-cost credits it does not collect to one durable counter per UTC day. That is the cost above its hold, plus any part the debit could not take because the user's balance or held pool ran short when it settled (logged as `credit_settlement_debit_limited`). The difference is added once, so an overrun that is also short of balance is not counted twice. A release adds nothing, because it settles no cost. Once that counter reaches `PRICING_OVERRUN_DAILY_CAP_CREDITS` (default 500 credits, about $5 of list charge or $1 of provider cost at the default markup), stale-priced admissions are refused on chat, audio, and decision routes until the next UTC day. Credits, not dollars: changing `CREDIT_USD` or `CREDIT_MARKUP` changes what the same cap is worth. Current prices are never refused by the cap.
+
+The cap is read at admission and written at settlement, so it is not a hard ceiling. A hold admitted before the counter reached the cap still settles, and its uncollected cost can carry the counter past the cap; the stale margin bounds each such hold. A counter that cannot be read refuses stale admissions.
+
+The cap does not hide an outage. A reached cap leaves each stale route refused, so `upstreamReady` reports it unserviceable and the deploy gate fails. The gate refreshes prices first, so the cap only holds it back when that refresh fails and the kept snapshots are stale.
+
+### Outstanding production prerequisites
+
+These cannot be verified from code, and they must hold before relying on this deploy path:
+
+- `CRON_SECRET` must be set in the Vercel production environment. Vercel cron sends it as the bearer token. Without it the daily refresh returns 401, the snapshots age, and the deploy gate would not notice until the prices refuse.
+- One missed daily run leaves prices stale on the second day, when they are held at twice the estimate. They are refused after a week of missed runs. Confirm the first refresh after deploy succeeds and that its Sentry alert channel is watched.
+- Confirm the first production deploy of this change logged `"ready": true` from the seed step before any traffic reached it.
+
 ## Deploy
 
 Push to GitHub, import in Vercel, set env vars, and point `www.nvm.fyi` + `api.nvm.fyi` at it. `WORKOS_REDIRECT_URI` is the non-redirecting production callback (`https://www.nvm.fyi/api/auth/callback`). Release v2 uses disjoint, one-use `v:2` production and Preview-gateway states; legacy state, grants, sealed sessions, and `nvm_session` material are rejected immediately.

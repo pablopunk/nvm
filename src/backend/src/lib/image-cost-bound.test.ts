@@ -8,7 +8,12 @@ import {
   conservativeImageRequestInputTokenCeiling,
   supportsBoundedImageInput,
 } from './limits';
-import { listModelsForProvider, resetPricingCacheForTests } from './pricing';
+import { resetPricingCacheForTests } from './pricing';
+import { refreshPricingSnapshots } from './pricing-refresh';
+import {
+  openRouterEndpointsBodyFromCost,
+  openRouterEndpointsModelId,
+} from '../test-support/openrouter-endpoints';
 
 const originalFetch = globalThis.fetch;
 
@@ -49,9 +54,8 @@ test('bounds image billing by the route model input limit', () => {
   );
 });
 
-test('image billing limits come from the loaded catalog', async () => {
-  globalThis.fetch = (async () =>
-    Response.json({
+test('image billing limits come from the loaded catalog and endpoint price', async () => {
+  const catalog = {
       openrouter: {
         models: {
           'vendor/image-model': {
@@ -78,8 +82,24 @@ test('image billing limits come from the loaded catalog', async () => {
           },
         },
       },
-    })) as typeof globalThis.fetch;
-  await listModelsForProvider('openrouter');
+  };
+  globalThis.fetch = (async (input: string | URL | Request) => {
+    const url = String(input instanceof Request ? input.url : input);
+    const endpointsModel = openRouterEndpointsModelId(url);
+    if (endpointsModel) {
+      const models: Record<string, { cost: Parameters<typeof openRouterEndpointsBodyFromCost>[1] }> =
+        catalog.openrouter.models;
+      const model = Object.hasOwn(models, endpointsModel) ? models[endpointsModel] : undefined;
+      return model
+        ? Response.json(openRouterEndpointsBodyFromCost(endpointsModel, model.cost))
+        : new Response('{}', { status: 404 });
+    }
+    return Response.json(catalog);
+  }) as typeof globalThis.fetch;
+  // Image bounds read the published endpoint price synchronously, so the refresh runs first.
+  const report = await refreshPricingSnapshots(['vendor/image-model']);
+  assert.equal(report.catalog, 'refreshed');
+  assert.deepEqual(report.openRouter.failed, []);
 
   assert.deepEqual(imageTokenLimits('openrouter', 'vendor/image-model'), {
     contextWindow: 1_050_000,
@@ -89,7 +109,17 @@ test('image billing limits come from the loaded catalog', async () => {
       inputUsdPerMtok: 2,
       outputUsdPerMtok: 10,
       cacheReadUsdPerMtok: 0.1,
-      tiers: [{ thresholdTokens: 272_000, inputUsdPerMtok: 4, outputUsdPerMtok: 15 }],
+      // Endpoint cache writes the catalog omits bill as ordinary input, so they inherit the prompt rate.
+      cacheWriteUsdPerMtok: 2,
+      tiers: [
+        {
+          thresholdTokens: 272_000,
+          inputUsdPerMtok: 4,
+          outputUsdPerMtok: 15,
+          cacheReadUsdPerMtok: 0.1,
+          cacheWriteUsdPerMtok: 4,
+        },
+      ],
     },
   });
   assert.equal(imageTokenLimits('openrouter', 'vendor/text-model'), undefined);

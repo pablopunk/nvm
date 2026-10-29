@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import { test, describe, afterEach } from 'node:test';
 import { resetPricingCacheForTests } from './pricing';
+import { refreshPricingSnapshots } from './pricing-refresh';
 import { getUpstreamConfig, getUpstreamProbeSpec, selectApiForModel, selectApiForModelChain, providerSupportsFormat, UpstreamConfigError } from './upstream';
 
 const originalFetch = globalThis.fetch;
 
-function mockCatalog(json: unknown) {
+/** Publishes `json` as the models.dev catalog, as the scheduled refresh does. */
+async function mockCatalog(json: unknown) {
   globalThis.fetch = (async () => Response.json(json)) as typeof globalThis.fetch;
+  assert.equal((await refreshPricingSnapshots([])).catalog, 'refreshed');
 }
 
 afterEach(() => {
@@ -21,18 +24,18 @@ afterEach(() => {
 
 describe('selectApiForModel', () => {
   test('reports the catalog API even when the provider cannot serve it, so failover skips it', async () => {
-    mockCatalog({ openrouter: { models: { 'vendor/model': { id: 'vendor/model', provider: { npm: '@ai-sdk/anthropic' } } } } });
+    await mockCatalog({ openrouter: { models: { 'vendor/model': { id: 'vendor/model', provider: { npm: '@ai-sdk/anthropic' } } } } });
     assert.equal(await selectApiForModel('openrouter', 'vendor/model'), 'anthropic-messages');
     assert.equal(providerSupportsFormat('openrouter', 'anthropic-messages'), false);
   });
 
   test('unknown models default to Chat Completions', async () => {
-    mockCatalog({});
+    await mockCatalog({});
     assert.equal(await selectApiForModel('opencode_zen', 'some-unknown-model'), 'openai-completions');
   });
 
   test('fallback chains use the primary route API only for the primary model', async () => {
-    mockCatalog({ openai: { npm: '@ai-sdk/openai', models: { model: { id: 'model' } } } });
+    await mockCatalog({ openai: { npm: '@ai-sdk/openai', models: { model: { id: 'model' } } } });
     assert.equal(await selectApiForModelChain({ provider: 'openai', modelId: 'model' }, 'model'), 'openai-responses');
     assert.equal(await selectApiForModelChain(null, 'model'), 'openai-completions');
   });

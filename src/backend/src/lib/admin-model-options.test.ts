@@ -3,6 +3,7 @@ import { afterEach, test } from 'node:test';
 import { resetDbForTests, setDbForTests } from '../db/client';
 import { listAdminModelRefs } from './admin-model-options';
 import { resetPricingCacheForTests } from './pricing';
+import { refreshPricingSnapshots } from './pricing-refresh';
 
 test('model options include only enabled providers with configured keys', async () => {
   const originalFetch = globalThis.fetch;
@@ -27,6 +28,7 @@ test('model options include only enabled providers with configured keys', async 
     }),
   })) as unknown as typeof fetch;
   try {
+    assert.equal((await refreshPricingSnapshots([])).catalog, 'refreshed');
     const refs = await listAdminModelRefs('fast');
     assert.ok(refs.includes('openrouter/google/gemini-2.5-flash'));
     assert.ok(refs.every((ref) => !ref.startsWith('opencode_zen/')));

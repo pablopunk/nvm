@@ -2,6 +2,8 @@ import { computeMaximumTokenPricedCost, type ModelCost } from '../cost';
 import { finalizeReservation, reserveCredits } from '../credit-reservations';
 import { freeSpendCapErrorBody } from '../free-spend-cap';
 import { log } from '../log';
+import { reservationMarginFor } from '../pricing';
+import { trustedReportedCostUsd } from '../provider-pricing-contract';
 import { getUpstreamConfig, UpstreamConfigError } from '../upstream';
 import { imageDimensions } from '../../../../app/shared/ai-image-dimensions';
 import type { DecisionAccount } from './decision-account';
@@ -112,7 +114,10 @@ async function settleSuccess(input: {
     costRow: input.costRow,
     reservedCostUsd: input.reservedCostUsd,
     usage: input.parsed?.usage,
-    providerCostUsd: input.parsed?.providerCostUsd,
+    providerCostUsd: trustedReportedCostUsd(
+      input.route.provider,
+      input.parsed?.providerCostUsd,
+    ),
   });
   if (settlement.providerCostUsd > input.reservedCostUsd)
     log.warn('decision_cost_exceeded_reservation', {
@@ -129,7 +134,14 @@ async function settleSuccess(input: {
     provider: input.route.provider,
     tokens: settlement.tokens,
     costRow: input.costRow,
-    providerCostUsd: settlement.providerCostUsd,
+    providerCostUsd:
+      settlement.costSource === 'provider_reported'
+        ? settlement.providerCostUsd
+        : undefined,
+    catalogCostUsd:
+      settlement.costSource === 'catalog_estimate'
+        ? settlement.providerCostUsd
+        : undefined,
     costSource: settlement.costSource,
     modality: 'text',
     status: 200,
@@ -296,7 +308,8 @@ export async function runDecision(input: {
   const reservedCostUsd =
     imageInputLimit === undefined
       ? decisionReservationCostUsd(costRow, request)
-      : computeMaximumTokenPricedCost(
+      : reservationMarginFor(costRow) *
+        computeMaximumTokenPricedCost(
           costRow,
           imageInputLimit,
           decisionOutputTokenCeiling(request),

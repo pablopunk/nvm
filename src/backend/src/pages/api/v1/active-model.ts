@@ -8,7 +8,7 @@ import {
   compatibilityHeaders,
   requestIdFromHeaders,
 } from '../../../lib/compatibility';
-import { computeUsdCost, usdToMicrocents } from '../../../lib/cost';
+import { computeUsdCost, usdToCredits, usdToMicrocents } from '../../../lib/cost';
 import { getPendingCreditReservations } from '../../../lib/credit-reservations';
 import { env } from '../../../lib/env';
 import {
@@ -16,10 +16,15 @@ import {
   getCurrentFreeSpendBudget,
   microcentsForFreePool,
 } from '../../../lib/free-spend-cap';
-import { estimateRequestCredits, MAX_INPUT_TOKENS } from '../../../lib/limits';
+import { MAX_INPUT_TOKENS } from '../../../lib/limits';
 import { localDevelopmentOrigin } from '../../../lib/local-development-origin';
 import { previewTargetFromEnvironment } from '../../../lib/preview-auth';
-import { lookupModelCost, lookupModelDescriptor } from '../../../lib/pricing';
+import {
+  lookupModelCost,
+  lookupModelDescriptor,
+  type ModelCost,
+  reservationMarginFor,
+} from '../../../lib/pricing';
 import {
   decideAccountModel,
   getModelRoute,
@@ -31,6 +36,21 @@ import { selectApiForModel } from '../../../lib/upstream';
 import { ensureMonthlyFreeCredits, getBalances } from '../../../lib/users';
 
 const NEVERMIND_PROVIDER_ID = 'nevermind';
+
+/**
+ * A stale price estimates at the margin its reservation holds, so the funding choice
+ * never sees a smaller cost than the hold the request will reserve.
+ */
+function requestEstimateFor(
+  inputTokens: number,
+  maxOutputTokens: number,
+  cost: ModelCost,
+): { credits: number; costUsd: number } {
+  const costUsd =
+    reservationMarginFor(cost) *
+    computeUsdCost(cost, inputTokens, maxOutputTokens);
+  return { credits: usdToCredits(costUsd), costUsd };
+}
 
 export const GET: APIRoute = async ({ request }) => {
   const requestOrigin = new URL(request.url).origin;
@@ -131,12 +151,9 @@ export const GET: APIRoute = async ({ request }) => {
       const costRow = await lookupModelCost(route.provider, route.modelId);
       if (costRow) {
         const maxOutputTokens = descriptor.maxTokens ?? 32_000;
-        costEstimate = estimateRequestCredits(tokens, maxOutputTokens, costRow);
-        estimatedProviderCostUsd = computeUsdCost(
-          costRow,
-          tokens,
-          maxOutputTokens,
-        );
+        const estimate = requestEstimateFor(tokens, maxOutputTokens, costRow);
+        costEstimate = estimate.credits;
+        estimatedProviderCostUsd = estimate.costUsd;
         if (decision.tier === 'pro' && costEstimate > availableBalances.total) {
           const freeDecision = decideAccountModel({
             plan: user.plan,
@@ -157,18 +174,14 @@ export const GET: APIRoute = async ({ request }) => {
           const freeMaxOutputTokens = freeDescriptor?.maxTokens ?? 32_000;
           const freeEstimate =
             freeDescriptor && freeCostRow
-              ? estimateRequestCredits(tokens, freeMaxOutputTokens, freeCostRow)
-              : undefined;
-          const freeProviderCostUsd =
-            freeDescriptor && freeCostRow
-              ? computeUsdCost(freeCostRow, tokens, freeMaxOutputTokens)
+              ? requestEstimateFor(tokens, freeMaxOutputTokens, freeCostRow)
               : undefined;
           const fundingChoice = chooseFundedAccountRoute({
             tier: decision.tier,
             freeCredits: availableBalances.free,
             paidCredits: availableBalances.paid,
             routeCredits: costEstimate,
-            freeRouteCredits: freeEstimate,
+            freeRouteCredits: freeEstimate?.credits,
             freeFallbackAllowed:
               (await selectApiForModel(freeRoute.provider, freeRoute.modelId)) ===
               (await selectApiForModel(route.provider, route.modelId)),
@@ -179,8 +192,8 @@ export const GET: APIRoute = async ({ request }) => {
             creditKind = decision.creditKind;
             route = freeRoute;
             descriptor = freeDescriptor;
-            costEstimate = freeEstimate;
-            estimatedProviderCostUsd = freeProviderCostUsd;
+            costEstimate = freeEstimate?.credits;
+            estimatedProviderCostUsd = freeEstimate?.costUsd;
           }
         }
       }
