@@ -2030,7 +2030,7 @@ const { pickFormFieldPaths } = createFormFieldPathPicker({
   dialog,
   paletteWindow,
 });
-app.whenReady().then(async () => {
+const startup = app.whenReady().then(async () => {
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
@@ -2163,7 +2163,6 @@ app.whenReady().then(async () => {
       extensionPrSubmitter?.probe() ??
       Promise.resolve({ installed: false, authed: false }),
   });
-
   paletteWindow.createWindow();
   const paletteHotkeyStatus = paletteWindow.registerHotkey();
   activationStatus.set(
@@ -2174,7 +2173,6 @@ app.whenReady().then(async () => {
   );
   if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
     paletteWindow.showPaletteWhenReady();
-
   registerDictationIpc({
     ipcMain,
     systemPreferences,
@@ -2182,7 +2180,6 @@ app.whenReady().then(async () => {
     extensionWindowManager,
     dictationService,
   });
-
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
     performanceTraces.run('view.loader.retry', { viewId }, async () => {
       if (!viewLoaderRegistry.has(viewId)) return;
@@ -2190,7 +2187,10 @@ app.whenReady().then(async () => {
     }),
   );
 });
-
+startup.catch((error) => {
+  logError('app.start.failed', error, { source: 'host', scope: 'app' });
+  app.exit(1);
+});
 app.on('activate', () => paletteWindow.showPaletteWhenReady());
 app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;

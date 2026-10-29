@@ -11,6 +11,7 @@ import { isNvmTestMode } from '../platform/test-mode';
 import { LocalLearningStore } from './learning-store';
 import {
   advanceStateCompatibility,
+  beginStateCompatibilitySession,
   STATE_COMPATIBILITY_EPOCH,
 } from './state-compatibility';
 import { readUserStateFile } from './user-state';
@@ -107,13 +108,17 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
   }
 
   async function loadUserState() {
-    await advanceStateCompatibility(
-      userDataPath(),
-      STATE_COMPATIBILITY_EPOCH,
-      isNvmTestMode
-        ? userDataPath()
-        : path.join(os.homedir(), '.config', 'nevermind'),
-    );
+    if (isNvmTestMode)
+      await advanceStateCompatibility(
+        userDataPath(),
+        STATE_COMPATIBILITY_EPOCH,
+      );
+    else
+      await beginStateCompatibilitySession(
+        userDataPath(),
+        STATE_COMPATIBILITY_EPOCH,
+        path.join(os.homedir(), '.config', 'nevermind'),
+      );
     const cacheRoot = osCacheRoot();
     await ensureLocalFileUrlSecret();
     const paths = resolveRuntimePaths(cacheRoot);

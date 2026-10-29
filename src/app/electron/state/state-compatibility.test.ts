@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -180,4 +181,49 @@ test('pending transaction cannot overwrite a newer marker', async (t) => {
     ),
     newer,
   );
+});
+
+test('a participating process holds the shared lease for its state session', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-session-lease-'));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  const moduleUrl = new URL('./state-compatibility.ts', import.meta.url).href;
+  const script =
+    'const [privateRoot, sharedRoot, moduleUrl] = process.argv.slice(1); import(moduleUrl).then(async m => { await m.beginStateCompatibilitySession(privateRoot, 1, sharedRoot); console.log("ready"); process.stdin.resume(); }).catch(e => { console.error(e); process.exit(1); });';
+  const child = spawn(
+    process.execPath,
+    ['--import', 'tsx', '-e', script, privateRoot, sharedRoot, moduleUrl],
+    { stdio: ['pipe', 'pipe', 'pipe'] },
+  );
+  t.after(async () => {
+    if (child.exitCode === null) child.kill();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+  const ready = await new Promise<string>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error('State session child timed out')),
+      10000,
+    );
+    child.stdout.once('data', (data) => {
+      clearTimeout(timer);
+      resolve(String(data));
+    });
+    child.once('error', (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`State session child exited: ${code}`));
+    });
+  });
+  assert.match(ready, /ready/);
+  await assert.rejects(acquireSharedStateLease(sharedRoot), /already in use/);
+  const exited = new Promise<void>((resolve) =>
+    child.once('exit', () => resolve()),
+  );
+  child.stdin.end();
+  await exited;
+  const lease = await acquireSharedStateLease(sharedRoot);
+  await lease.release();
 });

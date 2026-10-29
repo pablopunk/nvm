@@ -2,12 +2,16 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import compatibility from '../../resources/state-compatibility.json';
 import { atomicallyReplaceFile } from '../platform/atomic-file';
-import { acquireSharedStateLease } from '../platform/shared-state-lease';
+import {
+  acquireSharedStateLease,
+  type SharedStateLease,
+} from '../platform/shared-state-lease';
 
 // Increment before a host-owned persisted format becomes unreadable by earlier builds.
 export const STATE_COMPATIBILITY_EPOCH = compatibility.epoch;
 const MARKER_NAME = 'state-compatibility.json';
 const PENDING_NAME = 'state-compatibility.pending.json';
+let activeSession: { roots: string[]; lease: SharedStateLease } | null = null;
 
 export type StateCompatibilityMarker = {
   version: 1;
@@ -43,6 +47,26 @@ export async function advanceStateCompatibility(
     );
   } finally {
     await lease.release();
+  }
+}
+
+export async function beginStateCompatibilitySession(
+  directory: string,
+  epoch: number,
+  sharedDirectory: string,
+): Promise<void> {
+  if (activeSession)
+    throw new Error('State compatibility session already started');
+  const lease = await acquireSharedStateLease(sharedDirectory);
+  try {
+    await advanceMarkers(directory, epoch, sharedDirectory, lease.assertHeld);
+    activeSession = {
+      roots: [directory, sharedDirectory].map((root) => path.resolve(root)),
+      lease,
+    };
+  } catch (error) {
+    await lease.release();
+    throw error;
   }
 }
 
@@ -165,9 +189,18 @@ export async function stateRootsSupportDowngrade(
   ];
   if (roots.length !== 2) return false;
   let lease: Awaited<ReturnType<typeof acquireSharedStateLease>> | undefined;
+  let temporaryLease = false;
   let supported = false;
   try {
-    lease = await acquireSharedStateLease(roots[1]);
+    if (
+      activeSession &&
+      JSON.stringify(activeSession.roots) === JSON.stringify(roots)
+    ) {
+      lease = activeSession.lease;
+    } else {
+      lease = await acquireSharedStateLease(roots[1]);
+      temporaryLease = true;
+    }
     await Promise.all(
       roots.map(async (root) => {
         try {
@@ -192,7 +225,7 @@ export async function stateRootsSupportDowngrade(
   } catch {
     supported = false;
   } finally {
-    if (lease) {
+    if (lease && temporaryLease) {
       try {
         await lease.release();
       } catch {
