@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { createQuitLifecycle } from './quit-lifecycle';
+import test, { mock } from 'node:test';
+
+mock.module('../platform/logger', { namedExports: { info: () => {} } });
+const { createQuitLifecycle } = await import('./quit-lifecycle');
 
 function lifecycle(held: boolean) {
   const calls: string[] = [];
