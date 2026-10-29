@@ -179,6 +179,7 @@ import {
 } from './app/emoji-symbol-catalog';
 import { createExtensionRootItems } from './app/extension-root-items';
 import { createFormFieldPathPicker } from './app/form-field-paths';
+import { registerInstanceEvents } from './app/instance-events';
 import { createPaletteSearch } from './app/palette-search';
 import {
   createPaletteWindowController,
@@ -287,6 +288,7 @@ import {
   watchApps,
 } from './os/os';
 import { createSelectedTextReader } from './os/selected-text';
+import { acquireDefaultSharedStateInstance } from './os/shared-state-instance';
 import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
@@ -2022,13 +2024,18 @@ const { loadUserState } = createUserStateLoader({
 function captureRuntimeStateIntoUserState() {
   userStateStore.get().clipboardHistory = clipboardHistory;
 }
-
 const { pickFormFieldPaths } = createFormFieldPathPicker({
   BrowserWindow,
   dialog,
   paletteWindow,
 });
 const startup = app.whenReady().then(async () => {
+  if (!(await acquireDefaultSharedStateInstance(app, isNvmTestMode))) {
+    app.exit(0);
+    return;
+  }
+  if (!isDev && !isNvmTestMode)
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
@@ -2191,7 +2198,9 @@ startup.catch((error) => {
   logError('app.start.failed', error, { source: 'host', scope: 'app' });
   app.exit(1);
 });
-app.on('activate', () => paletteWindow.showPaletteWhenReady());
+app.on('activate', () => {
+  if (appReady) paletteWindow.showPaletteWhenReady();
+});
 app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;
   void dictationService.dispose();
@@ -2201,21 +2210,12 @@ app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
   stateSafeQuit.handleWillQuit();
 });
-if (!isDev && !isNvmTestMode) {
-  const gotLock = app.requestSingleInstanceLock();
-  if (gotLock) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
-    app.on('second-instance', (_event, argv) => {
-      paletteWindow.showPaletteWhenReady();
-      const deepLinkArg = argv?.find((arg: string) =>
-        arg.startsWith(`${DEEP_LINK_SCHEME}://`),
-      );
-      if (deepLinkArg && appReady) processBufferedDeepLink(deepLinkArg);
-      else if (deepLinkArg) bufferedDeepLinks.push(deepLinkArg);
-    });
-  } else app.quit();
-}
-app.on('open-url', (_event, url) => {
-  if (appReady) processBufferedDeepLink(url);
-  else bufferedDeepLinks.push(url);
+registerInstanceEvents({
+  app,
+  scheme: DEEP_LINK_SCHEME,
+  testMode: isNvmTestMode,
+  isReady: () => appReady,
+  showPalette: () => paletteWindow.showPaletteWhenReady(),
+  processLink: processBufferedDeepLink,
+  bufferedLinks: bufferedDeepLinks,
 });

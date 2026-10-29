@@ -1,6 +1,7 @@
 // biome-ignore-all lint: End-to-end Electron harness intentionally uses dynamic page payloads, polling, process cleanup primitives, injected environment names, and bounded process control.
 import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -310,7 +311,10 @@ async function renderLifecycleDirectAction(page: any, version: string) {
   }, action);
 }
 
-async function launchTestApplication(testUserDataDir: string) {
+async function launchTestApplication(
+  testUserDataDir: string,
+  testSharedRoot?: string,
+) {
   const app = await electron.launch({
     executablePath: require('electron') as string,
     args: [
@@ -321,6 +325,7 @@ async function launchTestApplication(testUserDataDir: string) {
       ...process.env,
       NVM_TEST_MODE: '1',
       NVM_TEST_USER_DATA_DIR: testUserDataDir,
+      ...(testSharedRoot ? { NVM_TEST_SHARED_STATE_ROOT: testSharedRoot } : {}),
     },
     timeout: 20_000,
   });
@@ -346,6 +351,50 @@ async function closeTestApplication(
     terminateTrackedProcesses(survivors, 'SIGKILL');
   }
 }
+
+test('shared state has one live app writer and can reopen after a crash', async () => {
+  test.setTimeout(60_000);
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'nvm-singleton-smoke-'),
+  );
+  const profile = path.join(directory, 'profile-one');
+  const otherProfile = path.join(directory, 'profile-two');
+  const shared = path.join(directory, 'shared');
+  await Promise.all([fs.mkdir(profile), fs.mkdir(otherProfile)]);
+  let first: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  let reopened: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  try {
+    first = await launchTestApplication(profile, shared);
+    await execFile(
+      require('electron') as string,
+      [path.join(root, 'dist/main/main.js'), `--user-data-dir=${otherProfile}`],
+      {
+        env: {
+          ...process.env,
+          NVM_TEST_MODE: '1',
+          NVM_TEST_USER_DATA_DIR: otherProfile,
+          NVM_TEST_SHARED_STATE_ROOT: shared,
+        },
+        timeout: 15_000,
+      },
+    );
+    expect(first.app.process().exitCode).toBeNull();
+    const exited = new Promise<void>((resolve) =>
+      first!.app.process().once('exit', () => resolve()),
+    );
+    first.app.process().kill('SIGKILL');
+    await exited;
+    await closeTestApplication(first.app, first.trackedPids);
+    first = undefined;
+    reopened = await launchTestApplication(otherProfile, shared);
+    expect(reopened.app.process().exitCode).toBeNull();
+  } finally {
+    if (first) await closeTestApplication(first.app, first.trackedPids);
+    if (reopened)
+      await closeTestApplication(reopened.app, reopened.trackedPids);
+    await fs.rm(directory, { recursive: true, force: true });
+  }
+});
 
 test('keeps OS permission guidance readable at desktop and narrow sizes', async () => {
   test.setTimeout(40_000);

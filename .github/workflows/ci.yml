@@ -504,6 +504,15 @@ jobs:
         shell: pwsh
         run: '& $env:PNPM_STANDALONE_PATH verify'
 
+      - name: Verify shared-state instance exclusion
+        shell: pwsh
+        run: |
+          $env:NVM_TEST_ARTIFACT_DIR = Join-Path $env:RUNNER_TEMP 'state-lock-artifacts'
+          $env:NVM_TEST_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'state-lock-profile'
+          New-Item -ItemType Directory -Force $env:NVM_TEST_ARTIFACT_DIR, $env:NVM_TEST_USER_DATA_DIR | Out-Null
+          & $env:PNPM_STANDALONE_PATH exec playwright test tests/electron/palette.smoke.spec.ts --grep 'shared state has one live app writer'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build unsigned Windows x64 NSIS and portable packages
         shell: pwsh
         env:
