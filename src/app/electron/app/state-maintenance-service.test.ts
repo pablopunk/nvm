@@ -218,3 +218,27 @@ test('quitting waits until a transaction holding the lease releases it', async (
   await quit;
   assert.equal(quitReady, true);
 });
+
+test('scheduled writers are frozen only while the backup is read, even when it fails', async (t) => {
+  const { events, create } = await fixture(t);
+  const freezeStateWrites = () => {
+    events.push('freeze');
+    return () => void events.push('thaw');
+  };
+  await create({ freezeStateWrites }).verifyAndTrust();
+  assert.deepEqual(events, [
+    'pause:activity',
+    'pause:jobs',
+    'flush',
+    'freeze',
+    'thaw',
+    'resume:jobs',
+    'resume:activity',
+  ]);
+  events.length = 0;
+  await create({
+    freezeStateWrites,
+    ownsSingleInstance: () => false,
+  }).verifyAndTrust();
+  assert.deepEqual(events.slice(3, 5), ['freeze', 'thaw']);
+});

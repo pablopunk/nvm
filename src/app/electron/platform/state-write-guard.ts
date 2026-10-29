@@ -16,3 +16,26 @@ export async function guardStateWrite<T>(
 ): Promise<T> {
   return installedGuard(write);
 }
+
+let frozenWrites: Promise<void> | null = null;
+
+/**
+ * Holds debounced writers that start outside any interactive request, such as
+ * scheduled state saves, until the returned release function is called.
+ */
+export function freezeStateWrites() {
+  if (frozenWrites) throw new Error('State writes are already frozen');
+  let release!: () => void;
+  const frozen = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  frozenWrites = frozen;
+  return () => {
+    if (frozenWrites === frozen) frozenWrites = null;
+    release();
+  };
+}
+
+export async function untilStateWritesThaw() {
+  while (frozenWrites) await frozenWrites;
+}

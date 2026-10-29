@@ -2,7 +2,10 @@ import path from 'node:path';
 import { app } from 'electron';
 import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import { defaultSharedStateRoot } from '../platform/shared-state-root';
-import { installStateWriteGuard } from '../platform/state-write-guard';
+import {
+  freezeStateWrites,
+  installStateWriteGuard,
+} from '../platform/state-write-guard';
 import { STATE_COMPATIBILITY_EPOCH } from '../state/state-compatibility';
 import {
   createStateMaintenanceService,
@@ -26,6 +29,7 @@ export function createAppStateMaintenance(input: AppStateMaintenanceInput) {
   return createStateMaintenanceService({
     writers: [input.activity, ...input.writers],
     flushPendingState: input.flushPendingState,
+    freezeStateWrites,
     isUpdateInstalling: () => input.updateManager.state.installInFlight,
     epoch: STATE_COMPATIBILITY_EPOCH,
     ownsSingleInstance: () => app.hasSingleInstanceLock(),

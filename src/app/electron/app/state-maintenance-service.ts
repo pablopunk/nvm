@@ -30,6 +30,8 @@ export type StateMaintenanceDeps = {
   /** Interactive and background writers, ordered from outermost to innermost. */
   writers: readonly PausableWriter[];
   flushPendingState: () => Promise<void>;
+  /** Holds scheduled writers while the backup is read; returns the release. */
+  freezeStateWrites?: () => () => void;
   roots: () => StateMaintenanceRoots | null;
   epoch: number;
   ownsSingleInstance: () => boolean;
@@ -108,23 +110,35 @@ export function createStateMaintenanceService(deps: StateMaintenanceDeps) {
     }
   }
 
+  async function backupAndTrust(
+    roots: StateMaintenanceRoots,
+    lease: SharedStateLease,
+  ) {
+    const thaw = deps.freezeStateWrites?.();
+    try {
+      const { backupPath } = await backupAndTrustState({
+        ...roots,
+        epoch: deps.epoch,
+        lease,
+        legacyInstancesClosed: true,
+        verifyNoUncoordinatedWriters: async () =>
+          deps.ownsSingleInstance() && !deps.isUpdateInstalling(),
+      });
+      return backupPath;
+    } finally {
+      thaw?.();
+    }
+  }
+
   async function verifyWithWritersPaused(roots: StateMaintenanceRoots) {
     const paused: PausableWriter[] = [];
     try {
       await pauseWriters(paused);
       await deps.flushPendingState();
       await fs.mkdir(roots.backupParent, { recursive: true, mode: 0o700 });
-      return await withLease(roots.sharedRoot, async (lease) => {
-        const { backupPath } = await backupAndTrustState({
-          ...roots,
-          epoch: deps.epoch,
-          lease,
-          legacyInstancesClosed: true,
-          verifyNoUncoordinatedWriters: async () =>
-            deps.ownsSingleInstance() && !deps.isUpdateInstalling(),
-        });
-        return backupPath;
-      });
+      return await withLease(roots.sharedRoot, (lease) =>
+        backupAndTrust(roots, lease),
+      );
     } finally {
       resumeWriters(paused);
     }
