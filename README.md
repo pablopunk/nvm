@@ -13,7 +13,7 @@
 
 
 <p align="center">
-  <video autoplay loop controls preload src="src/backend/public/videos/nevermind-demo-v2.mp4" />
+  <img src="src/backend/public/videos/nevermind-demo-v2.gif" alt="Nevermind command palette demo" width="640" />
   <br /><br />
   <i>An AI-native desktop command palette that extends itself.</i>
   <br /><br />
