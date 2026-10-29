@@ -22,7 +22,12 @@ test('nightly schedule registers both UTC hours and defers the Madrid 04:00 choi
   assert.match(promotion, /- cron: '0 2 \* \* \*'/);
   assert.match(promotion, /- cron: '0 3 \* \* \*'/);
   assert.match(promotion, /schedule-gate/);
-  assert.match(workflow, /Europe\/Madrid/);
+  const gates = fs.readFileSync(
+    '.github/scripts/nightly-release-gates.cjs',
+    'utf8',
+  );
+  assert.match(gates, /Europe\/Madrid/);
+  assert.match(gates, /SCHEDULED_MADRID_HOUR = 4/);
   assert.doesNotMatch(
     workflow,
     /workflow_run:/,
