@@ -25,11 +25,11 @@ async function listProcessParents() {
       '-NoProfile',
       '-NonInteractive',
       '-Command',
-      "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.ParentProcessId.ToString() }",
+      "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.ParentProcessId.ToString() + ' ' + $_.Name }",
     ]);
     return stdout;
   }
-  const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=']);
+  const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=,comm=']);
   return stdout;
 }
 
@@ -382,6 +382,36 @@ async function closeTestApplication(
   }
 }
 
+// Chromium owns the single-instance lock file: it holds the file open while the
+// owning browser process lives and the OS removes it when that process's handles close,
+// which can lag the process-exit event on Windows. Cleanup waits for that release
+// instead of deleting a file the OS still considers in use.
+async function waitForSingletonLockRelease(
+  lockFile: string,
+  timeoutMs: number,
+) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await (await fs.open(lockFile, 'r+')).close();
+      return;
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') return;
+      if (!['EBUSY', 'EPERM', 'EACCES'].includes(error?.code)) throw error;
+      if (Date.now() >= deadline) {
+        const electronProcesses = (await listProcessParents())
+          .split('\n')
+          .filter((line) => /electron|nevermind/i.test(line))
+          .map((line) => line.trim());
+        throw new Error(
+          `Single-instance lock ${lockFile} is still held (${error.code}); electron processes: ${electronProcesses.join('; ') || 'none'}`,
+        );
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
 test('shared state has one live app writer and can reopen after a crash', async () => {
   test.setTimeout(60_000);
   const directory = await fs.mkdtemp(
@@ -432,7 +462,16 @@ test('shared state has one live app writer and can reopen after a crash', async 
         closeTestApplication(app, trackedPids),
       ),
     );
-    await fs.rm(directory, { recursive: true, force: true });
+    await waitForSingletonLockRelease(
+      path.join(directory, '.shared-instance', 'lockfile'),
+      10_000,
+    );
+    await fs.rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
   }
 });
 
