@@ -310,6 +310,21 @@ function commandSetPackageVersion(options) {
   return { version };
 }
 
+function commandSetDevPackageVersion(options) {
+  const version = requireOption(options, 'version');
+  const parts = version.split('.');
+  if (
+    parts.length !== 3 ||
+    parts.some((part) => !/^(0|[1-9]\d*)$/.test(part) || Number(part) > 65535)
+  )
+    throw new Error(`Invalid dev package version: ${version}`);
+  const manifestPath = path.join(process.cwd(), 'package.json');
+  const manifest = readJsonFile(manifestPath);
+  manifest.version = version;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { version };
+}
+
 function commandRetention(options) {
   return selectNightlyRetention({
     releases: readJsonFile(requireOption(options, 'releases')),
@@ -325,6 +340,7 @@ const commands = {
   'publish-guard': commandPublishGuard,
   'validate-assets': commandValidateAssets,
   'set-package-version': commandSetPackageVersion,
+  'set-dev-package-version': commandSetDevPackageVersion,
   retention: commandRetention,
 };
 
