@@ -349,6 +349,10 @@ async function closeTestApplication(
   const survivors = await waitForProcessesToExit(trackedPids, 500);
   if (survivors.length > 0) {
     terminateTrackedProcesses(survivors, 'SIGKILL');
+    const stuck = await waitForProcessesToExit(survivors, 10_000);
+    if (stuck.length > 0) {
+      throw new Error(`Electron processes did not exit: ${stuck.join(', ')}`);
+    }
   }
 }
 
@@ -393,9 +397,14 @@ test('shared state has one live app writer and can reopen after a crash', async 
     reopened = await launchTestApplication(otherProfile, shared);
     expect(reopened.app.process().exitCode).toBeNull();
   } finally {
-    if (first) await closeTestApplication(first.app, first.trackedPids);
-    if (reopened)
-      await closeTestApplication(reopened.app, reopened.trackedPids);
+    const launched = [first, reopened].filter(
+      (application) => application !== undefined,
+    );
+    await Promise.all(
+      launched.map(({ app, trackedPids }) =>
+        closeTestApplication(app, trackedPids),
+      ),
+    );
     await fs.rm(directory, { recursive: true, force: true });
   }
 });

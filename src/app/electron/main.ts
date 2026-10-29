@@ -531,7 +531,7 @@ const jobRegistry = new JobRegistry({
       { freshJourney: true },
     ),
 });
-const maintenanceActivity = createMaintenanceActivity();
+const activity = createMaintenanceActivity();
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 let activeAiChatId: string | undefined;
@@ -560,11 +560,10 @@ const viewLoaderRegistry = createViewLoaderRegistry({
     await mutateExtensionCache(extension, update);
   },
 });
-
 const spawnPendingViewLoaders = createPendingViewLoaderSpawner({
   registry: viewLoaderRegistry,
   trace: performanceTraces,
-  activity: maintenanceActivity,
+  activity,
 });
 const userStateStore = createUserStateStore(createDefaultUserState());
 const userStatePersistence = createUserStatePersistence({
@@ -988,7 +987,7 @@ const {
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
-  activity: maintenanceActivity,
+  activity,
   paletteWindow,
   captureFrontmostTarget: frontmostAppFocusTarget,
   paneInvocations,
@@ -1153,7 +1152,7 @@ const {
   normalizeViewItems,
 });
 const { executeAction } = createRootActionExecutor({
-  activity: maintenanceActivity,
+  activity,
   paletteWindow,
   recordRecent: (action) => recordRecent(action),
   currentActionForStoredShortcut,
@@ -1162,7 +1161,11 @@ const { executeAction } = createRootActionExecutor({
   presentActionResultFeedback,
 });
 const { executeViewAction } = createViewActionExecutor({
-  ...createNativeActionHandlers({ viewLoaderRegistry, executeAction }),
+  ...createNativeActionHandlers({
+    viewLoaderRegistry,
+    executeAction,
+    activity,
+  }),
   ...createFileActionHandlers({ shell }),
   ...createClipboardActionHandlers({
     clipboardApi,
@@ -1709,7 +1712,7 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
       measure: measureDebugPerformance,
       summarize: summarizeDebugValue,
       trace: performanceTraces,
-      activity: maintenanceActivity,
+      activity,
     }),
   globalShortcut,
   paletteWindow,
@@ -1730,7 +1733,6 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
   initializeAi: () => initNevermindAi(),
   getAi: () => nevermindAi,
 });
-
 function setActiveAiChatId(chatId: string | undefined) {
   activeAiChatId = chatId;
 }
@@ -1851,7 +1853,6 @@ const { noteAiChatExited, disposeAiSessions } = createAiChatSessionTeardown({
   abortAiChat,
   recordLearningReview,
 });
-
 function setActiveNevermindBaseUrlState(baseUrl: string | null) {
   activeNevermindBaseUrl = baseUrl;
 }
@@ -1890,6 +1891,7 @@ const {
 });
 const { processBufferedDeepLink, flushBufferedDeepLinks } =
   createNevermindDeepLinks({
+    activity,
     parseAuthDeepLink,
     bufferedDeepLinks,
     getActiveBaseUrl: () => activeNevermindBaseUrl,
@@ -1897,7 +1899,6 @@ const { processBufferedDeepLink, flushBufferedDeepLinks } =
     invalidateExtensionRootItems,
     broadcastAuthChanged,
   });
-
 function initExtensionRuntimeContext() {
   initExtensionContext({
     diagnostics: {
@@ -1989,7 +1990,6 @@ const { migrateAiChats } = createAiChatMigration({
   userStateStore,
   getExtensionsDir: () => extensionsDir,
 });
-
 const { loadUserState } = createUserStateLoader({
   osCacheRoot,
   ensureLocalFileUrlSecret,
@@ -2095,7 +2095,7 @@ const startup = app.whenReady().then(async () => {
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
   registerAppIpcHandlers({
-    activity: maintenanceActivity,
+    activity,
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
@@ -2186,7 +2186,7 @@ const startup = app.whenReady().then(async () => {
     dictationService,
   });
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
-    maintenanceActivity.run(() =>
+    activity.run(() =>
       performanceTraces.run('view.loader.retry', { viewId }, async () => {
         if (!viewLoaderRegistry.has(viewId)) return;
         await viewLoaderRegistry.retry(viewId);

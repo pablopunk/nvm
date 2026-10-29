@@ -7,6 +7,7 @@ import {
   setActiveNevermindAuthBaseUrl,
 } from './nevermind-auth';
 import { warmNevermindCompatibilityCache } from './nevermind-compatibility';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import {
   error as logError,
   info as logInfo,
@@ -20,6 +21,7 @@ export type ParsedAuthDeepLink = {
 };
 
 export type NevermindDeepLinksDeps = {
+  activity?: Pick<MaintenanceActivity, 'run'>;
   parseAuthDeepLink: (
     url: string,
     activeBaseUrl: string,
@@ -96,12 +98,19 @@ export function createNevermindDeepLinks(deps: NevermindDeepLinksDeps) {
     const baseUrl = getActiveBaseUrl() || getDefaultNevermindBaseUrl();
     const parsed = parseAuthDeepLink(rawUrl, baseUrl);
     if (!parsed) return;
-    void handleAuthDeepLink(parsed);
+    const execute = () => handleAuthDeepLink(parsed);
+    return deps.activity ? deps.activity.run(execute) : execute();
   }
 
   function flushBufferedDeepLinks() {
     const links = bufferedDeepLinks.splice(0);
-    for (const link of links) processBufferedDeepLink(link);
+    for (const link of links) {
+      try {
+        void processBufferedDeepLink(link);
+      } catch {
+        bufferedDeepLinks.push(link);
+      }
+    }
   }
 
   return {
