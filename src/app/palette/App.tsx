@@ -85,6 +85,7 @@ import {
   filterCommandSections,
   valuesMatch,
 } from './filtering';
+import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import {
   actionDefinition,
   actionDescription,
@@ -139,7 +140,6 @@ import {
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
-import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
 
@@ -3955,8 +3955,9 @@ export function App() {
         targetAction,
         accelerator,
       })) as any;
-      const message = result?.toast?.message || 'Could not save shortcut';
-      showFeedbackIndicator(message, result?.ok ? 'default' : 'error');
+      const message = result?.ok ? 'Shortcut saved' : 'Could not save shortcut';
+      if (typeof result?.ok !== 'boolean')
+        showFeedbackIndicator(message, 'error');
       void window.nvm.log(
         result?.ok ? 'debug' : 'warn',
         result?.ok
