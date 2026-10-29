@@ -6,18 +6,16 @@ import {
 import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider.js';
 import {
   parseUpdateInfo,
+  resolveFiles,
   type ProviderRuntimeOptions,
 } from 'electron-updater/out/providers/Provider.js';
 import {
   channelMetadataNameFor,
-  releaseTagsFromAtomFeed,
   releasesNewestFirst,
   type UpdateChannel,
 } from './update-channel';
 
 const MAX_METADATA_CANDIDATES = 3;
-const RELEASES_FEED_ACCEPT =
-  'application/xml, application/atom+xml, text/xml, */*';
 
 type GitHubFeedOptions = ConstructorParameters<typeof GitHubProvider>[0];
 
@@ -56,6 +54,7 @@ export class NevermindChannelProvider extends GitHubProvider {
         tag,
         version,
         cancellationToken,
+        channel,
       );
       if (info) return { ...info, tag, updateChannel: channel };
     }
@@ -65,7 +64,7 @@ export class NevermindChannelProvider extends GitHubProvider {
     );
   }
 
-  private releasesPath() {
+  private releasesPath(_channel?: UpdateChannel) {
     return `/${this.options.owner}/${this.options.repo}/releases`;
   }
 
@@ -73,16 +72,34 @@ export class NevermindChannelProvider extends GitHubProvider {
     channel: UpdateChannel,
     cancellationToken: CancellationToken,
   ) {
+    if (channel === 'dev' || channel === 'nightly') {
+      const stable =
+        channel === 'nightly'
+          ? await this.fetchLatestStableTag(cancellationToken)
+          : null;
+      const url = new URL(
+        `https://raw.githubusercontent.com/${this.options.owner}/${this.options.repo}/release-pointers/.channels/${channel}.json`,
+      );
+      url.searchParams.set('check', String(Date.now()));
+      const data = await this.httpRequest(
+        url,
+        { 'Cache-Control': 'no-cache' },
+        cancellationToken,
+      );
+      const pointer = JSON.parse(data ?? 'null');
+      if (
+        pointer?.kind !== 'nevermind-channel-pointer' ||
+        pointer.channel !== channel ||
+        !Array.isArray(pointer.tags) ||
+        pointer.tags.length > 20 ||
+        pointer.tags.some((tag: unknown) => typeof tag !== 'string')
+      )
+        throw new Error('Invalid channel pointer');
+      return stable ? [...pointer.tags, stable] : pointer.tags;
+    }
     const latestStableTag = await this.fetchLatestStableTag(cancellationToken);
     const latestTags = latestStableTag ? [latestStableTag] : [];
-    if (channel === 'stable') return latestTags;
-    // The feed lists only the ten newest releases, so it cannot find stable tags on its own.
-    const feed = await this.httpRequest(
-      new URL(`${this.releasesPath()}.atom`, this.baseUrl),
-      { accept: RELEASES_FEED_ACCEPT },
-      cancellationToken,
-    );
-    return [...latestTags, ...releaseTagsFromAtomFeed(feed ?? '')];
+    return latestTags;
   }
 
   private async fetchLatestStableTag(cancellationToken: CancellationToken) {
@@ -98,10 +115,11 @@ export class NevermindChannelProvider extends GitHubProvider {
     tag: string,
     version: string,
     cancellationToken: CancellationToken,
+    channel: UpdateChannel,
   ): Promise<UpdateInfo | null> {
-    const channelFile = `${this.getCustomChannelName(channelMetadataNameFor(version))}.yml`;
+    const channelFile = `${this.getCustomChannelName(channel === 'dev' || tag.endsWith('-nightly') ? 'nightly' : channelMetadataNameFor(version))}.yml`;
     const channelFileUrl = new URL(
-      `${this.releasesPath()}/download/${tag}/${channelFile}`,
+      `${this.releasesPath(channel)}/download/${tag}/${channelFile}`,
       this.baseUrl,
     );
     try {
@@ -122,5 +140,14 @@ export class NevermindChannelProvider extends GitHubProvider {
       if ((error as { statusCode?: number }).statusCode === 404) return null;
       throw error;
     }
+  }
+
+  resolveFiles(updateInfo: ChannelUpdateInfo) {
+    return resolveFiles(
+      updateInfo,
+      this.baseUrl,
+      (file) =>
+        `${this.releasesPath(updateInfo.updateChannel)}/download/${updateInfo.tag}/${file.replace(/ /g, '-')}`,
+    );
   }
 }

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { guardStateWrite } from '../platform/state-write-guard';
 
 export type SavedDictation = {
   id: string;
@@ -15,7 +16,7 @@ export function createDictationRecordings(directory: string) {
     return path.join(directory, id);
   }
 
-  async function save(id: string, segments: Uint8Array[]) {
+  async function saveNow(id: string, segments: Uint8Array[]) {
     const location = recordingPath(id);
     await fs.mkdir(location, { recursive: true, mode: 0o700 });
     for (const [index, audio] of segments.entries())
@@ -33,7 +34,7 @@ export function createDictationRecordings(directory: string) {
     );
     const recordings = await list();
     for (const expired of recordings.slice(MAX_SAVED_RECORDINGS))
-      await remove(expired.id);
+      await removeNow(expired.id);
   }
 
   async function list(): Promise<SavedDictation[]> {
@@ -73,9 +74,15 @@ export function createDictationRecordings(directory: string) {
     );
   }
 
-  async function remove(id: string) {
+  async function removeNow(id: string) {
     await fs.rm(recordingPath(id), { recursive: true, force: true });
   }
 
-  return { save, list, load, remove };
+  return {
+    save: (id: string, segments: Uint8Array[]) =>
+      guardStateWrite(() => saveNow(id, segments)),
+    list,
+    load,
+    remove: (id: string) => guardStateWrite(() => removeNow(id)),
+  };
 }

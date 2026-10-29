@@ -3,6 +3,8 @@ interface QuitEvent {
 }
 
 interface StateSafeQuitDeps {
+  /** Runs before the bounded flush; a stuck dependency is the user's to force-quit. */
+  beforeFlush?: () => Promise<void>;
   flushPendingSave: () => Promise<void>;
   quit: () => void;
   cleanup: () => void;
@@ -71,11 +73,15 @@ function createStateSafeQuit(deps: StateSafeQuitDeps) {
     if (quitRequest) {
       return quitRequest;
     }
-    quitRequest = flushWithinTimeout(deps, reason).then(() => {
-      quitAfterStateFlush = true;
-      scheduleFallbackExit(reason);
-      quit();
-    });
+    quitRequest = Promise.resolve()
+      .then(deps.beforeFlush)
+      .catch((error) => deps.onFlushError?.(error, reason))
+      .then(() => flushWithinTimeout(deps, reason))
+      .then(() => {
+        quitAfterStateFlush = true;
+        scheduleFallbackExit(reason);
+        quit();
+      });
     return quitRequest;
   }
 

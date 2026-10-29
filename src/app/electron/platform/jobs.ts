@@ -1,4 +1,9 @@
-import { backoffDelay, mergeEventPayloads, timeout } from './job-helpers';
+import {
+  backoffDelay,
+  JobWorkBarrier,
+  mergeEventPayloads,
+  timeout,
+} from './job-helpers';
 
 export type JobOwner = 'host' | 'extension';
 export type JobStatus =
@@ -103,6 +108,7 @@ export class JobRegistry {
   private listeners = new Set<() => void>();
   private enabledOverrides: EnabledOverrides = {};
   private performanceTrace?: JobPerformanceRunner;
+  private work = new JobWorkBarrier();
 
   constructor(options: { performanceTrace?: JobPerformanceRunner } = {}) {
     this.performanceTrace = options.performanceTrace;
@@ -117,6 +123,8 @@ export class JobRegistry {
   }
 
   register(definition: JobDefinition, options: { skipStartup?: boolean } = {}) {
+    if (this.work.paused)
+      throw new Error('Background jobs are paused for maintenance');
     const existing = this.records.get(definition.id);
     if (existing) this.clearTimers(existing);
     const override = this.enabledOverrides[definition.id];
@@ -178,6 +186,7 @@ export class JobRegistry {
     reason = 'manual',
     eventPayload?: { event?: string; payload?: unknown },
   ) {
+    if (this.work.paused) return null;
     const record = this.records.get(id);
     if (!record) throw new Error(`Unknown background job: ${id}`);
     if (!record.enabled) return null;
@@ -213,7 +222,7 @@ export class JobRegistry {
           startedAt: record.lastStartedAt,
         });
       const runWithTimeout = () => {
-        const promise = Promise.resolve(run());
+        const promise = this.work.track(Promise.resolve(run()));
         return record.definition.timeoutMs
           ? timeout(
               promise,
@@ -222,18 +231,20 @@ export class JobRegistry {
             )
           : promise;
       };
-      const result = await Promise.resolve(
-        this.performanceTrace
-          ? this.performanceTrace(
-              'job.run',
-              {
-                jobId: id,
-                jobOwner: record.definition.owner || 'host',
-                reason,
-              },
-              runWithTimeout,
-            )
-          : runWithTimeout(),
+      const result = await this.work.track(
+        Promise.resolve(
+          this.performanceTrace
+            ? this.performanceTrace(
+                'job.run',
+                {
+                  jobId: id,
+                  jobOwner: record.definition.owner || 'host',
+                  reason,
+                },
+                runWithTimeout,
+              )
+            : runWithTimeout(),
+        ),
       );
       record.status = 'succeeded';
       record.runCount += 1;
@@ -268,6 +279,7 @@ export class JobRegistry {
     delayMs = 0,
     eventPayload?: { event?: string; payload?: unknown },
   ) {
+    if (this.work.paused) return;
     const record = this.records.get(id);
     if (!record || !record.enabled) return;
     const previous = record.scheduledTimers.get(reason);
@@ -395,6 +407,24 @@ export class JobRegistry {
     this.notify();
   }
 
+  async quiesce() {
+    const draining = this.work.drain();
+    for (const record of this.records.values()) {
+      this.clearTimers(record);
+      record.pendingReason = null;
+    }
+    await draining;
+  }
+
+  resume() {
+    if (!this.work.paused) return;
+    if (this.work.draining)
+      throw new Error('Background jobs are still draining');
+    this.work.paused = false;
+    for (const record of this.records.values())
+      this.installTriggers(record, { skipStartup: true });
+  }
+
   private rememberHistory(record: JobRecord) {
     if (
       !record.lastStartedAt ||
@@ -422,7 +452,7 @@ export class JobRegistry {
     record: JobRecord,
     options: { skipStartup?: boolean } = {},
   ) {
-    if (!record.enabled) return;
+    if (!record.enabled || this.work.paused) return;
     for (const trigger of record.definition.triggers || []) {
       if (trigger.type === 'startup' && !options.skipStartup)
         this.schedule(record.definition.id, 'startup', trigger.delayMs || 0, {

@@ -61,7 +61,7 @@ function parseUpdaterMetadata(text) {
   const metadata = { version: null, path: null, sha512: null, files: [] };
   let current = null;
   for (const line of text.split(/\r?\n/)) {
-    const top = /^([a-zA-Z]+):\s*(.*)$/.exec(line);
+    const top = /^([a-zA-Z0-9]+):\s*(.*)$/.exec(line);
     if (top) {
       current = null;
       if (top[1] === 'version') metadata.version = yamlScalar(top[2]);
@@ -82,8 +82,16 @@ function parseUpdaterMetadata(text) {
 }
 
 // `sha512Of(name)` returns the base64 SHA-512 of a staged asset, or null when the
-// asset is absent. Every referenced file must exist with a matching digest.
-function verifyUpdaterMetadata({ name, text, version, sha512Of, assetNames }) {
+// asset is absent. Every referenced file must exist with a matching digest and,
+// when `sizeOf` is supplied, a matching byte size.
+function verifyUpdaterMetadata({
+  name,
+  text,
+  version,
+  sha512Of,
+  sizeOf,
+  assetNames,
+}) {
   const metadata = parseUpdaterMetadata(text);
   if (metadata.version !== version)
     throw new Error(
@@ -103,7 +111,14 @@ function verifyUpdaterMetadata({ name, text, version, sha512Of, assetNames }) {
       throw new Error(
         `${name} sha512 for ${file.url} does not match the staged file`,
       );
+    if (sizeOf && Number(file.size) !== sizeOf(file.url))
+      throw new Error(
+        `${name} size for ${file.url} does not match the staged file`,
+      );
   }
+  const primary = metadata.files.find((file) => file.url === metadata.path);
+  if (metadata.sha512 && metadata.sha512 !== primary.sha512)
+    throw new Error(`${name} top-level sha512 does not match ${metadata.path}`);
   return metadata;
 }
 

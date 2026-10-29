@@ -1,7 +1,9 @@
 // biome-ignore-all lint: Update views and prompt actions are dynamic view payloads moved verbatim from main.ts.
+import { randomUUID } from 'node:crypto';
 import { currentNevermindCompatibilityManifest } from '../backend/nevermind-compatibility';
 import { isNewerVersion as isVersionNewerThan } from '../platform/version-utils';
 import { type UpdateChannel, updateChannelLabel } from './update-channel';
+import type { StateMaintenanceService } from './state-maintenance-service';
 import type { createUpdateManager } from './update-manager';
 
 export type UpdatesServiceDeps = {
@@ -14,6 +16,10 @@ export type UpdatesServiceDeps = {
   requestQuit: (reason: string, quit: () => void) => Promise<void>;
   quitApp: () => void;
   patchOpenView: (viewId: string, patch: any) => void;
+  stateMaintenance: Pick<
+    StateMaintenanceService,
+    'status' | 'refresh' | 'verifyAndTrust' | 'onChange'
+  >;
 };
 
 export function safeExternalUpdateUrl(raw?: string) {
@@ -39,7 +45,11 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     requestQuit,
     quitApp,
     patchOpenView,
+    stateMaintenance,
   } = deps;
+
+  // Only the host-rendered Updates view may attest that older instances are closed.
+  const stateConfirmation = randomUUID();
 
   function isNewerVersion(version) {
     return isVersionNewerThan(version, getAppVersion());
@@ -50,16 +60,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
   }
 
   function updateStatusView(_options: any = {}) {
-    const downloadedInfo = isNewerVersion(
-      updateManager.state.downloadedInfo?.version,
-    )
-      ? updateManager.state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(
-      updateManager.state.availableInfo?.version,
-    )
-      ? updateManager.state.availableInfo
-      : null;
+    const downloadedInfo = updateManager.state.downloadedInfo;
+    const availableInfo = updateManager.state.availableInfo;
     const version = downloadedInfo?.version || availableInfo?.version;
     const unsupported =
       updateManager.state.status === 'unsupported' ||
@@ -84,6 +86,9 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
                 ? 'Checking...'
                 : 'Check Again',
             };
+    const blockedVersion = updateManager.state.blockedDowngradeVersion;
+    const olderBuild = Boolean(version) && !isNewerVersion(version);
+    const olderSuffix = olderBuild ? ' (older build)' : '';
     const channelName = updateChannelLabel(getUpdateChannel());
     const currentVersionLine = `Current version: ${getAppVersion()} · ${channelName} channel`;
     const aheadOfLatest =
@@ -96,16 +101,18 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
       : installing
         ? `Installing Nevermind ${version || ''}`.trim()
         : downloadedInfo
-          ? `Nevermind ${version} is ready`
+          ? `Nevermind ${version} is ready${olderSuffix}`
           : availableInfo
-            ? `Nevermind ${version} is available`
-            : updateManager.state.checkInFlight
-              ? 'Checking for updates...'
-              : updateManager.state.status === 'error'
-                ? 'Update check failed'
-                : aheadOfLatest
-                  ? `Nevermind ${getAppVersion()} is ahead of the latest ${channelName} release`
-                  : 'No versions available';
+            ? `Nevermind ${version} is available${olderSuffix}`
+            : blockedVersion
+              ? `Nevermind ${blockedVersion} needs a verified state backup`
+              : updateManager.state.checkInFlight
+                ? 'Checking for updates...'
+                : updateManager.state.status === 'error'
+                  ? 'Update check failed'
+                  : aheadOfLatest
+                    ? `Nevermind ${getAppVersion()} is ahead of the latest ${channelName} release`
+                    : 'No versions available';
     const subtitle = unsupported
       ? autoUpdatesUnavailableMessage()
       : installing
@@ -113,14 +120,19 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
         : downloadedInfo
           ? 'Install the downloaded update and restart Nevermind'
           : availableInfo
-            ? 'Download the update before installing it'
-            : updateManager.state.checkInFlight
-              ? currentVersionLine
-              : updateManager.state.status === 'error'
-                ? updateManager.state.errorMessage
-                : aheadOfLatest
-                  ? `Nevermind won't downgrade automatically. ${channelName} updates resume with the next newer ${channelName.toLowerCase()} release.`
-                  : currentVersionLine;
+            ? olderBuild
+              ? 'This older build keeps your current data format. Download it before installing'
+              : 'Download the update before installing it'
+            : blockedVersion
+              ? 'Run Prepare State for Channel Switching, then check again to allow older builds'
+              : updateManager.state.checkInFlight
+                ? currentVersionLine
+                : updateManager.state.status === 'error'
+                  ? updateManager.state.errorMessage
+                  : aheadOfLatest
+                    ? `Nevermind won't downgrade automatically. ${channelName} updates resume with the next newer ${channelName.toLowerCase()} release.`
+                    : currentVersionLine;
+    const stateItem = stateVerificationItem();
     return {
       type: 'list',
       id: 'app-updates',
@@ -131,7 +143,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
       isLoading:
         updateManager.state.checkInFlight ||
         updateManager.state.downloadInFlight ||
-        updateManager.state.installInFlight,
+        updateManager.state.installInFlight ||
+        stateMaintenance.status().phase === 'running',
       items: [
         {
           id: 'update-status',
@@ -145,18 +158,78 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
               ? undefined
               : { sections: [{ actions: [primaryAction] }] },
         },
+        ...(stateItem ? [stateItem] : []),
       ],
     };
   }
 
+  function stateVerificationItem() {
+    const status = stateMaintenance.status();
+    if (status.phase === 'unsupported') return null;
+    const backUp = {
+      type: 'nativeAction',
+      title: 'Back Up and Verify State',
+      nativeAction: {
+        kind: 'state-verification',
+        confirmation: stateConfirmation,
+      },
+    };
+    const presentation =
+      status.phase === 'running'
+        ? {
+            title: 'Backing up and verifying state...',
+            subtitle: 'Nevermind is paused briefly while your data is copied',
+            action: undefined,
+          }
+        : status.phase === 'complete'
+          ? {
+              title: 'State backed up and verified',
+              subtitle: `Backup saved to ${status.backupPath}`,
+              action: undefined,
+            }
+          : status.phase === 'failed'
+            ? {
+                title: 'State backup failed',
+                subtitle: status.message,
+                action: backUp,
+              }
+            : status.trusted
+              ? {
+                  title: 'Older builds can be installed',
+                  subtitle:
+                    'Your data is verified for builds with the same data format',
+                  action: backUp,
+                }
+              : {
+                  title: 'Allow switching to older builds',
+                  subtitle:
+                    'Quit other Nevermind windows and older versions first, then back up and verify your data',
+                  action: backUp,
+                };
+    return {
+      id: 'update-state-verification',
+      title: presentation.title,
+      subtitle: presentation.subtitle,
+      icon: 'restart',
+      primaryAction: presentation.action,
+      actionPanel: presentation.action
+        ? { sections: [{ actions: [presentation.action] }] }
+        : undefined,
+    };
+  }
+
+  function verifyStateView(nativeAction?: { confirmation?: unknown }) {
+    if (nativeAction?.confirmation === stateConfirmation)
+      void stateMaintenance.verifyAndTrust();
+    return { view: updateStatusView(), navigation: 'replace' };
+  }
+
+  stateMaintenance.onChange(patchUpdatesView);
+
   function updatesStateSnapshot() {
     const state = updateManager.state;
-    const downloadedInfo = isNewerVersion(state.downloadedInfo?.version)
-      ? state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(state.availableInfo?.version)
-      ? state.availableInfo
-      : null;
+    const downloadedInfo = state.downloadedInfo;
+    const availableInfo = state.availableInfo;
     return {
       currentVersion: getAppVersion(),
       channel: getUpdateChannel(),
@@ -175,6 +248,7 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
   }
 
   function checkForUpdatesView() {
+    void stateMaintenance.refresh().catch(() => {});
     updateManager.checkForUpdates('manual', { download: true }).catch(() => {});
     return { view: updateStatusView(), navigation: 'replace' };
   }
@@ -184,8 +258,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     return { view: updateStatusView(), navigation: 'replace' };
   }
 
-  function installDownloadedUpdate() {
-    if (!updateManager.prepareInstall())
+  async function installDownloadedUpdate() {
+    if (!(await updateManager.prepareInstall()))
       return { view: updateStatusView(), navigation: 'replace' };
     markAppQuitting();
     void requestQuit('updater', () => {
@@ -202,7 +276,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
       isLoading:
         updateManager.state.checkInFlight ||
         updateManager.state.downloadInFlight ||
-        updateManager.state.installInFlight,
+        updateManager.state.installInFlight ||
+        stateMaintenance.status().phase === 'running',
     });
   }
 
@@ -265,16 +340,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
   }
 
   function updatePromptAction() {
-    const downloadedInfo = isNewerVersion(
-      updateManager.state.downloadedInfo?.version,
-    )
-      ? updateManager.state.downloadedInfo
-      : null;
-    const availableInfo = isNewerVersion(
-      updateManager.state.availableInfo?.version,
-    )
-      ? updateManager.state.availableInfo
-      : null;
+    const downloadedInfo = updateManager.state.downloadedInfo;
+    const availableInfo = updateManager.state.availableInfo;
     const version = downloadedInfo?.version || availableInfo?.version;
     if (
       updateManager.state.installInFlight ||
@@ -326,6 +393,7 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     updatesStateSnapshot,
     checkForUpdatesView,
     downloadUpdateView,
+    verifyStateView,
     installDownloadedUpdate,
     patchUpdatesView,
     updateActionForCompatibilityPrompt,

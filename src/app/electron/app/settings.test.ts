@@ -33,10 +33,11 @@ test('update channel defaults to stable and keeps a stored nightly preference', 
   );
 });
 
-test('update channel toggles between stable and nightly and normalizes unknown values', () => {
+test('update channel cycles through stable, nightly and dev and normalizes unknown values', () => {
   const definition = settingDefinition('updateChannel');
   assert.ok(definition);
   assert.equal(toggledSettingValue(definition, 'stable'), 'nightly');
-  assert.equal(toggledSettingValue(definition, 'nightly'), 'stable');
+  assert.equal(toggledSettingValue(definition, 'nightly'), 'dev');
+  assert.equal(toggledSettingValue(definition, 'dev'), 'stable');
   assert.equal(toggledSettingValue(definition, 'beta'), 'nightly');
 });

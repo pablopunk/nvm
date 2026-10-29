@@ -15,10 +15,19 @@ const windowsVerifier = fs.readFileSync(
 );
 
 test('nightly schedule registers both UTC hours and defers the Madrid 04:00 choice to the gate', () => {
-  assert.match(workflow, /- cron: '0 2 \* \* \*'/);
-  assert.match(workflow, /- cron: '0 3 \* \* \*'/);
-  assert.match(workflow, /schedule-gate/);
-  assert.match(workflow, /Europe\/Madrid/);
+  const promotion = fs.readFileSync(
+    '.github/workflows/promote-nightly.yml',
+    'utf8',
+  );
+  assert.match(promotion, /- cron: '0 2 \* \* \*'/);
+  assert.match(promotion, /- cron: '0 3 \* \* \*'/);
+  assert.match(promotion, /schedule-gate/);
+  const gates = fs.readFileSync(
+    '.github/scripts/nightly-release-gates.cjs',
+    'utf8',
+  );
+  assert.match(gates, /Europe\/Madrid/);
+  assert.match(gates, /SCHEDULED_MADRID_HOUR = 4/);
   assert.doesNotMatch(
     workflow,
     /workflow_run:/,
@@ -44,10 +53,25 @@ test('manual trigger defaults to a dry run that never publishes', () => {
   assert.match(workflow, /  validate-assets:/);
 });
 
+test('every tag-driven stable release job refuses a tag older than the latest stable', () => {
+  assert.equal(
+    ci.match(/mise exec -- node \.github\/scripts\/release-tag-guard\.cjs/g)
+      ?.length,
+    3,
+  );
+});
+
+test('manual runs cannot publish legacy nightlies outside promotion', () => {
+  assert.match(
+    workflow,
+    /Refuse legacy publication\n        if: \$\{\{ !inputs\.dry_run \}\}[\s\S]*?promote-nightly\.yml[\s\S]*?exit 1/,
+  );
+});
+
 test('runs are serialized and never cancel an in-flight publication', () => {
   assert.match(
     workflow,
-    /concurrency:\n  group: nightly-release\n  cancel-in-progress: false/,
+    /concurrency:\n  group: channel-promotion\n  queue: max/,
   );
 });
 

@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { guardStateWrite } from './state-write-guard';
 
 type PrivateFileSystem = Pick<typeof fs, 'writeFile' | 'chmod'>;
 const PRIVATE_FILE_MODE = 0o600;
@@ -22,8 +23,10 @@ export async function writePrivateFile(
 ) {
   const fileSystem = dependencies.fileSystem || fs;
   const processPlatform = dependencies.processPlatform || process.platform;
-  await fileSystem.writeFile(filePath, contents, { mode: PRIVATE_FILE_MODE });
-  if (processPlatform !== 'win32') {
-    await fileSystem.chmod(filePath, PRIVATE_FILE_MODE);
-  }
+  await guardStateWrite(async () => {
+    await fileSystem.writeFile(filePath, contents, { mode: PRIVATE_FILE_MODE });
+    if (processPlatform !== 'win32') {
+      await fileSystem.chmod(filePath, PRIVATE_FILE_MODE);
+    }
+  });
 }

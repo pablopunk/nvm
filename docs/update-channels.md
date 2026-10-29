@@ -8,8 +8,10 @@ and applies to startup, periodic, and manual checks.
 ## Rules
 
 - Nevermind never downgrades automatically. When the selected channel's newest
-  release is older than the installed build, updates pause and the Updates view
-  says the build is ahead of the latest release on that channel.
+  release is older than the installed build, the Updates view offers it as an
+  older build only after the host has verified that the build can read the
+  current data; otherwise it explains that a verified state backup is needed.
+  An older build is downloaded and installed only on explicit request.
 - Switching channels discards any available or downloaded update from the
   previous channel and cancels its in-flight download. Results stamped for
   another channel are ignored.
@@ -21,9 +23,8 @@ and applies to startup, periodic, and manual checks.
   releases publish `nightly*.yml` metadata (Windows `nightly.yml`, macOS
   `nightly-mac.yml`, Linux `nightly-linux[-arm64].yml`).
 
-## Not yet supported
+## Switching to an older build
 
-Immediately reinstalling the stable build after leaving nightly. Stable is
-offered again once a stable release newer than the installed build ships. An
-immediate downgrade needs a data-compatibility plan for forward-only state
-migrations before it can be offered safely.
+Run Back Up and Verify State in the Updates view, then check for updates. The
+offer requires the target's advertised state epoch to match the epoch recorded
+for the user's data. See `docs/release-promotion.md` for the contract.

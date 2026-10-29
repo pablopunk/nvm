@@ -1,6 +1,7 @@
 // biome-ignore-all lint: End-to-end Electron harness intentionally uses dynamic page payloads, polling, process cleanup primitives, injected environment names, and bounded process control.
 import { execFile as execFileCallback } from 'node:child_process';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { promisify } from 'node:util';
@@ -18,11 +19,22 @@ if (!(artifactDir && userDataDir)) {
 }
 const execFile = promisify(execFileCallback);
 
-async function processTree(rootPid: number) {
+async function listProcessParents() {
   if (process.platform === 'win32') {
-    return [rootPid];
+    const { stdout } = await execFile('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.ParentProcessId.ToString() + ' ' + $_.Name }",
+    ]);
+    return stdout;
   }
-  const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=']);
+  const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=,comm=']);
+  return stdout;
+}
+
+async function processTree(rootPid: number) {
+  const stdout = await listProcessParents();
   const children = new Map<number, number[]>();
   for (const line of stdout.split('\n')) {
     const [pidText, parentText] = line.trim().split(/\s+/);
@@ -310,7 +322,23 @@ async function renderLifecycleDirectAction(page: any, version: string) {
   }, action);
 }
 
-async function launchTestApplication(testUserDataDir: string) {
+async function trackLiveProcessTree(
+  app: ElectronApplication,
+  trackedPids: number[],
+) {
+  const launched = app.process();
+  if (launched.exitCode !== null || launched.signalCode !== null) return;
+  try {
+    for (const pid of await processTree(launched.pid!)) {
+      if (!trackedPids.includes(pid)) trackedPids.push(pid);
+    }
+  } catch {}
+}
+
+async function launchTestApplication(
+  testUserDataDir: string,
+  testSharedRoot?: string,
+) {
   const app = await electron.launch({
     executablePath: require('electron') as string,
     args: [
@@ -321,6 +349,7 @@ async function launchTestApplication(testUserDataDir: string) {
       ...process.env,
       NVM_TEST_MODE: '1',
       NVM_TEST_USER_DATA_DIR: testUserDataDir,
+      ...(testSharedRoot ? { NVM_TEST_SHARED_STATE_ROOT: testSharedRoot } : {}),
     },
     timeout: 20_000,
   });
@@ -329,6 +358,7 @@ async function launchTestApplication(testUserDataDir: string) {
   await expect(page.locator('input[placeholder]').first()).toBeVisible({
     timeout: 10_000,
   });
+  await trackLiveProcessTree(app, trackedPids);
   return { app, page, trackedPids };
 }
 
@@ -336,6 +366,7 @@ async function closeTestApplication(
   app: ElectronApplication,
   trackedPids: number[],
 ) {
+  await trackLiveProcessTree(app, trackedPids);
   const closePromise = app.close().catch(() => {});
   await Promise.race([
     closePromise,
@@ -344,8 +375,105 @@ async function closeTestApplication(
   const survivors = await waitForProcessesToExit(trackedPids, 500);
   if (survivors.length > 0) {
     terminateTrackedProcesses(survivors, 'SIGKILL');
+    const stuck = await waitForProcessesToExit(survivors, 10_000);
+    if (stuck.length > 0) {
+      throw new Error(`Electron processes did not exit: ${stuck.join(', ')}`);
+    }
   }
 }
+
+// Chromium owns the single-instance lock file: it holds the file open while the
+// owning browser process lives and the OS removes it when that process's handles close,
+// which can lag the process-exit event on Windows. Cleanup waits for that release
+// instead of deleting a file the OS still considers in use.
+async function waitForSingletonLockRelease(
+  lockFile: string,
+  timeoutMs: number,
+) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    try {
+      await (await fs.open(lockFile, 'r+')).close();
+      return;
+    } catch (error: any) {
+      if (error?.code === 'ENOENT') return;
+      if (!['EBUSY', 'EPERM', 'EACCES'].includes(error?.code)) throw error;
+      if (Date.now() >= deadline) {
+        const electronProcesses = (await listProcessParents())
+          .split('\n')
+          .filter((line) => /electron|nevermind/i.test(line))
+          .map((line) => line.trim());
+        throw new Error(
+          `Single-instance lock ${lockFile} is still held (${error.code}); electron processes: ${electronProcesses.join('; ') || 'none'}`,
+        );
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+}
+
+test('shared state has one live app writer and can reopen after a crash', async () => {
+  test.setTimeout(60_000);
+  const directory = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'nvm-singleton-smoke-'),
+  );
+  const profile = path.join(directory, 'profile-one');
+  const otherProfile = path.join(directory, 'profile-two');
+  const shared = path.join(directory, 'shared');
+  await Promise.all([fs.mkdir(profile), fs.mkdir(otherProfile)]);
+  let first: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  let reopened: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+  try {
+    first = await launchTestApplication(profile, shared);
+    await execFile(
+      require('electron') as string,
+      [
+        ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
+        path.join(root, 'dist/main/main.js'),
+        `--user-data-dir=${otherProfile}`,
+      ],
+      {
+        env: {
+          ...process.env,
+          NVM_TEST_MODE: '1',
+          NVM_TEST_USER_DATA_DIR: otherProfile,
+          NVM_TEST_SHARED_STATE_ROOT: shared,
+        },
+        timeout: 15_000,
+      },
+    );
+    expect(first.app.process().exitCode).toBeNull();
+    const exited = new Promise<void>((resolve) =>
+      first!.app.process().once('exit', () => resolve()),
+    );
+    await trackLiveProcessTree(first.app, first.trackedPids);
+    first.app.process().kill('SIGKILL');
+    await exited;
+    await closeTestApplication(first.app, first.trackedPids);
+    first = undefined;
+    reopened = await launchTestApplication(otherProfile, shared);
+    expect(reopened.app.process().exitCode).toBeNull();
+  } finally {
+    const launched = [first, reopened].filter(
+      (application) => application !== undefined,
+    );
+    await Promise.all(
+      launched.map(({ app, trackedPids }) =>
+        closeTestApplication(app, trackedPids),
+      ),
+    );
+    await waitForSingletonLockRelease(
+      path.join(directory, '.shared-instance', 'lockfile'),
+      10_000,
+    );
+    await fs.rm(directory, {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 200,
+    });
+  }
+});
 
 test('keeps OS permission guidance readable at desktop and narrow sizes', async () => {
   test.setTimeout(40_000);

@@ -12,7 +12,7 @@ const OWNER = 'pablopunk';
 const REPO = 'nvm';
 const RELEASES_PATH = `/${OWNER}/${REPO}/releases`;
 const LATEST_PATH = `${RELEASES_PATH}/latest`;
-const FEED_PATH = `/${OWNER}/${REPO}/releases.atom`;
+const FEED_PATH = `/${OWNER}/${REPO}/release-pointers/.channels/nightly.json`;
 
 const STABLE_TAG = 'v0.17.0';
 const NIGHTLY_NEWEST_TAG = 'v0.17.1-nightly.20261028.13';
@@ -26,9 +26,18 @@ type FakeRouteResponse =
   | Error
   | ((token: CancellationToken) => string);
 
-type FakeRequestOptions = { protocol: string; hostname: string; path: string };
+type FakeRequestOptions = {
+  protocol: string;
+  hostname: string;
+  path: string;
+  headers?: Record<string, string>;
+};
 
-type FakeRequest = { url: string; token: CancellationToken };
+type FakeRequest = {
+  url: string;
+  token: CancellationToken;
+  headers?: Record<string, string>;
+};
 
 type FakeGitHub = ReturnType<typeof createFakeGitHub>;
 
@@ -53,7 +62,7 @@ function createFakeGitHub(routes: Record<string, FakeRouteResponse>) {
     const url = new URL(
       `${options.protocol}//${options.hostname}${options.path}`,
     );
-    requests.push({ url: url.href, token });
+    requests.push({ url: url.href, token, headers: options.headers });
     if (token.cancelled) throw cancelledError();
     const route: FakeRouteResponse | undefined = routes[url.pathname];
     if (route === undefined) throw httpError(404);
@@ -97,11 +106,11 @@ function latestRelease(tag: string | null): Record<string, FakeRouteResponse> {
 }
 
 function feedBody(tags: string[]) {
-  const entries = tags.map(
-    (tag) =>
-      `<entry><link href="https://github.com${RELEASES_PATH}/tag/${tag}"/></entry>`,
-  );
-  return `<feed>${entries.join('')}</feed>`;
+  return JSON.stringify({
+    kind: 'nevermind-channel-pointer',
+    channel: 'nightly',
+    tags,
+  });
 }
 
 function releaseFeed(tags: string[]): Record<string, FakeRouteResponse> {
@@ -135,6 +144,91 @@ function createProvider(
     } as unknown as ProviderRuntimeOptions,
   );
 }
+
+test('dev updates use dev prereleases for metadata and payloads', async () => {
+  const tag = 'v2026.1029.901-dev';
+  const path = RELEASES_PATH;
+  const github = createFakeGitHub({
+    '/pablopunk/nvm/release-pointers/.channels/dev.json': JSON.stringify({
+      kind: 'nevermind-channel-pointer',
+      channel: 'dev',
+      tags: [tag],
+    }),
+    [`${path}/download/${tag}/nightly.yml`]: metadataYaml('2026.1029.901'),
+  });
+  const provider = createProvider('dev', github, 'win32');
+  const info = await provider.getLatestVersion();
+  assert.equal(info.version, '2026.1029.901');
+  assert.equal(info.updateChannel, 'dev');
+  assert.match(
+    provider.resolveFiles(info)[0].url.href,
+    /\/nvm\/releases\/download\//,
+  );
+});
+
+test('dev discovery makes one public pointer request regardless of release history', async () => {
+  const newest = 'v2026.1029.1000-dev';
+  const path = '/pablopunk/nvm/release-pointers/.channels/dev.json';
+  const github = createFakeGitHub({
+    [path]: JSON.stringify({
+      kind: 'nevermind-channel-pointer',
+      channel: 'dev',
+      tags: ['v2026.1029.9-dev', newest, 'v2026.1029.11-nightly'],
+    }),
+    [metadataPath(newest, 'nightly.yml')]: metadataYaml('2026.1029.1000'),
+  });
+  const info = await createProvider('dev', github).getLatestVersion();
+  assert.equal(info.tag, newest);
+  assert.equal(github.requests.length, 2);
+  assert.equal(
+    new URL(github.requests[0].url).hostname,
+    'raw.githubusercontent.com',
+  );
+  assert.ok(new URL(github.requests[0].url).searchParams.has('check'));
+  assert.equal(github.requests[0].headers?.Authorization, undefined);
+});
+
+test('pointer failures do not fall back to an unbounded release list', async () => {
+  const path = '/pablopunk/nvm/release-pointers/.channels/dev.json';
+  const github = createFakeGitHub({ [path]: httpError(429) });
+  await assert.rejects(createProvider('dev', github).getLatestVersion(), {
+    statusCode: 429,
+  });
+  assert.deepEqual(requestedPaths(github), [path]);
+});
+
+test('dev pointer falls back to the previous verified target when metadata is temporarily unavailable', async () => {
+  const newer = 'v2026.1029.10-dev';
+  const previous = 'v2026.1029.9-dev';
+  const pointerPath = '/pablopunk/nvm/release-pointers/.channels/dev.json';
+  const github = createFakeGitHub({
+    [pointerPath]: JSON.stringify({
+      kind: 'nevermind-channel-pointer',
+      channel: 'dev',
+      tags: [newer, previous],
+    }),
+    [metadataPath(previous, 'nightly.yml')]: metadataYaml('2026.1029.9'),
+  });
+  const info = await createProvider('dev', github).getLatestVersion();
+  assert.equal(info.tag, previous);
+  assert.deepEqual(requestedPaths(github), [
+    pointerPath,
+    metadataPath(newer, 'nightly.yml'),
+    metadataPath(previous, 'nightly.yml'),
+  ]);
+});
+
+test('nightly channel resolves promoted numeric builds with nightly metadata', async () => {
+  const tag = 'v2026.1029.901-nightly';
+  const github = createFakeGitHub({
+    ...latestRelease(STABLE_TAG),
+    ...releaseFeed([tag]),
+    [metadataPath(tag, 'nightly.yml')]: metadataYaml('2026.1029.901'),
+  });
+  const info = await createProvider('nightly', github).getLatestVersion();
+  assert.equal(info.tag, tag);
+  assert.equal(info.version, '2026.1029.901');
+});
 
 async function withUpdaterArch<T>(arch: string, run: () => Promise<T>) {
   const previous = process.env.TEST_UPDATER_ARCH;

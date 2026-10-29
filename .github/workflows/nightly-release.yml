@@ -1,11 +1,6 @@
 name: Nightly release
 
 on:
-  schedule:
-    # GitHub cron is UTC-only. 02:00 UTC is 04:00 Europe/Madrid in CEST and 03:00 UTC is
-    # 04:00 in CET; the plan job selects the matching schedule and allows delayed starts.
-    - cron: '0 2 * * *'
-    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       dry_run:
@@ -17,8 +12,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: nightly-release
-  cancel-in-progress: false
+  group: channel-promotion
+  queue: max
 
 env:
   PRODUCTION_API_ORIGIN: https://api.nvm.fyi
@@ -42,6 +37,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Refuse legacy publication
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "Nightly publication moved to promote-nightly.yml, which promotes a retained dev build with its state epoch and channel pointer." >&2
+          exit 1
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:

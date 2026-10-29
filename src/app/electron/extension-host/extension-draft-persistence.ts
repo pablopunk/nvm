@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { warn as logWarn } from '../platform/logger';
 import { isNvmTestMode } from '../platform/test-mode';
+import { createUserStateSaveScheduler } from '../state/user-state';
 import type { createExtensionDraftStore } from './extension-draft-store';
 import type { createExtensionJsonStore } from './extension-json-store';
 
@@ -36,7 +37,17 @@ export function createExtensionDraftPersistence(
   } = deps;
 
   let extensionDraftsHydrated = false;
-  let extensionDraftPersistTimer: NodeJS.Timeout | null = null;
+  const draftSaveScheduler = createUserStateSaveScheduler({
+    debounceMs: 250,
+    save: () =>
+      extensionJsonStore.replace(extensionEditorDraftsFile(), {
+        drafts: extensionDraftStore.list() as never,
+      }),
+    onSaveError: (error) =>
+      logWarn('extension.draft.persist.failed', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
+  });
 
   function extensionEditorDraftsFile() {
     return path.join(userDataPath(), 'extension-editor-drafts.json');
@@ -57,27 +68,9 @@ export function createExtensionDraftPersistence(
     }
   }
 
-  function persistExtensionDraftsNow() {
-    if (isNvmTestMode) return;
-    void extensionJsonStore
-      .replace(extensionEditorDraftsFile(), {
-        drafts: extensionDraftStore.list() as never,
-      })
-      .catch((error) =>
-        logWarn('extension.draft.persist.failed', {
-          error: error instanceof Error ? error.message : String(error),
-        }),
-      );
-  }
-
   function schedulePersistExtensionDrafts() {
     if (isNvmTestMode) return;
-    if (extensionDraftPersistTimer) clearTimeout(extensionDraftPersistTimer);
-    extensionDraftPersistTimer = setTimeout(() => {
-      extensionDraftPersistTimer = null;
-      persistExtensionDraftsNow();
-    }, 250);
-    extensionDraftPersistTimer.unref?.();
+    draftSaveScheduler.schedule();
   }
 
   async function saveExtensionDraftForIpc(input: any = {}) {
@@ -140,6 +133,7 @@ export function createExtensionDraftPersistence(
   return {
     hydrateExtensionDrafts,
     schedulePersistExtensionDrafts,
+    flushPendingDrafts: () => draftSaveScheduler.flushPendingSave(),
     saveExtensionDraftForIpc,
     commitExtensionDraft,
     discardExtensionDraft,

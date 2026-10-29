@@ -7,6 +7,7 @@ function desktopBuildIdentity(root = path.resolve(__dirname, '..')) {
     fs.readFileSync(path.join(root, 'package.json'), 'utf8'),
   );
   const commit =
+    process.env.NEVERMIND_SOURCE_COMMIT ||
     process.env.GITHUB_SHA ||
     execFileSync('git', ['rev-parse', 'HEAD'], {
       cwd: root,

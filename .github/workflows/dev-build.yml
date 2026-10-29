@@ -1,0 +1,419 @@
+name: Dev build
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-build
+  queue: max
+
+env:
+  NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.version.outputs.build }}
+      source_sha: ${{ steps.version.outputs.sha }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - name: Allocate version for source commit
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          version="$(mise exec -- node .github/scripts/dev-version.cjs "$sha")"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v${version}-dev" --json isDraft,isPrerelease --jq '(.isDraft | not) and .isPrerelease' | grep -qx true; then
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          fi
+
+  build-windows:
+    name: Build Windows nightly
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      NEVERMIND_RELEASE_BUILD: '1'
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
+    steps:
+      - name: Checkout source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Stamp nightly package version
+        shell: bash
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build unsigned Windows x64 NSIS and portable packages
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: mise exec -- pnpm run dist:win:x64 '-c.publish.channel=nightly'
+
+      - name: Verify unsigned Windows nightly packages
+        shell: pwsh
+        run: |
+          $asar = (Resolve-Path 'node_modules/.bin/asar.CMD').Path
+          & .github/scripts/verify-windows-package.ps1 `
+            -PackageRoot (Resolve-Path release).Path `
+            -ExpectedVersion $env:NIGHTLY_VERSION `
+            -ExpectedArch x64 `
+            -AsarExecutable $asar `
+            -UpdaterMetadataPolicy Nsis `
+            -UpdaterMetadataName nightly.yml
+
+      - name: Collect Windows nightly artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-windows
+          cp "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe" \
+            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-portable.exe" \
+            release/nightly.yml nightly-windows/
+          for staged in nightly-windows/*; do
+            [ -s "$staged" ] || { echo "Staged file is empty: $staged" >&2; exit 1; }
+          done
+
+      - name: Stamp Windows compatibility metadata
+        shell: bash
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-windows/nightly.yml
+
+      - name: Upload Windows nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows
+          path: nightly-windows/*
+          if-no-files-found: error
+          retention-days: 30
+
+  build-mac:
+    name: Build macOS nightly
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: macos-26
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      NEVERMIND_RELEASE_BUILD: '1'
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
+    steps:
+      - name: Checkout source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Stamp nightly package version
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Import Apple signing certificate
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/cert.p12"
+
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$CERT_PATH" -P "$MACOS_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH" >/dev/null
+
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          rm -f "$CERT_PATH"
+
+      - name: Build signed and notarized macOS nightly
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
+        run: mise exec -- pnpm run dist:mac:all '-c.publish.channel=nightly'
+
+      - name: Collect macOS nightly artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-mac
+          cp "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip.blockmap" \
+            release/nightly-mac.yml nightly-mac/
+
+      - name: Stamp macOS compatibility metadata
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-mac/nightly-mac.yml
+
+      - name: Upload macOS nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-mac
+          path: nightly-mac/*
+          if-no-files-found: error
+          retention-days: 30
+
+  build-linux:
+    name: Build Linux nightly (${{ matrix.arch }})
+    needs: plan
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      NEVERMIND_RELEASE_BUILD: '1'
+      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            appimage-arch: x86_64
+            deb-arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            appimage-arch: arm64
+            deb-arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - name: Checkout source commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+
+      - name: Setup mise
+        uses: jdx/mise-action@v2
+
+      - name: Install Linux packaging dependencies
+        run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb
+
+      - name: Stamp nightly package version
+        run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
+
+      - name: Install dependencies
+        run: mise exec -- pnpm install --frozen-lockfile
+
+      - name: Build Linux nightly
+        run: xvfb-run -a mise exec -- pnpm run dist:linux:${{ matrix.arch }} '-c.publish.channel=nightly'
+
+      - name: Generate Linux AppImage blockmap
+        run: |
+          set -euo pipefail
+          mapfile -t appimages < <(find release -maxdepth 1 -type f -name "Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage" -print)
+          if (( ${#appimages[@]} != 1 )); then
+            printf 'Expected one AppImage, found %s\n' "${#appimages[@]}" >&2
+            find release -maxdepth 1 -type f -print >&2
+            exit 1
+          fi
+          mise exec -- node scripts/generate-linux-appimage-blockmap.cjs "${appimages[0]}"
+
+      - name: Collect Linux nightly artifacts
+        run: |
+          set -euo pipefail
+          mkdir -p nightly-linux
+          cp "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage" \
+            "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.appimage-arch }}.AppImage.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-linux-${{ matrix.deb-arch }}.deb" \
+            nightly-linux/
+          if [[ "${{ matrix.arch }}" == "x64" ]]; then
+            cp release/nightly-linux.yml nightly-linux/nightly-linux.yml
+          elif [[ -f release/nightly-linux-arm64.yml ]]; then
+            cp release/nightly-linux-arm64.yml nightly-linux/nightly-linux-arm64.yml
+          else
+            cp release/nightly-linux.yml nightly-linux/nightly-linux-arm64.yml
+          fi
+
+      - name: Validate Linux updater metadata
+        run: >-
+          mise exec -- node scripts/validate-linux-updater-metadata.cjs
+          nightly-linux/nightly-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+          nightly-linux
+
+      - name: Stamp Linux compatibility metadata
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-linux/nightly-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+
+      - name: Upload Linux nightly artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-linux-${{ matrix.arch }}
+          path: nightly-linux/*
+          if-no-files-found: error
+          retention-days: 30
+
+  validate-assets:
+    name: Validate assembled nightly artifacts
+    needs: [plan, build-windows, build-mac, build-linux]
+    if: needs.plan.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+      - uses: jdx/mise-action@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          merge-multiple: true
+          path: dist-nightly
+      - name: Validate every asset and updater checksum
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
+
+      - name: Create integrity manifest
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+        run: mise exec -- node .github/scripts/promotion-manifest.cjs create dist-nightly manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev-manifest
+          path: manifest.json
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-dev:
+    name: Publish dev prerelease
+    needs: [plan, validate-assets]
+    runs-on: ubuntu-latest
+    concurrency:
+      group: channel-promotion
+      queue: max
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          merge-multiple: true
+          path: dist-nightly
+      - uses: actions/download-artifact@v4
+        with:
+          name: dev-manifest
+          path: manifest
+      - name: Verify staged assets and destination
+        run: |
+          set -euo pipefail
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify dist-nightly manifest/manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
+      - name: Create draft prerelease
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}-dev"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
+            resolved="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
+            [[ "$resolved" == "$SOURCE_SHA" ]] || { echo 'Draft tag points to another commit' >&2; exit 1; }
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]] || { echo "Tag points to another commit" >&2; exit 1; }
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+          fi
+          previous="$(git tag --merged "$SOURCE_SHA" --list 'v*-dev' --sort=-version:refname | head -n 1)"
+          if [[ -n "$previous" ]]; then
+            printf 'Changes since %s:\n\n' "$previous" > release-notes.md
+            git log --format='- %s (%h)' "$previous..$SOURCE_SHA" >> release-notes.md
+          else
+            printf 'First dev build from %s.\n' "$SOURCE_SHA" > release-notes.md
+          fi
+          printf '\nSource: %s\nWorkflow run: %s\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" >> release-notes.md
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --latest=false \
+            --title "Nevermind $VERSION (dev)" --notes-file release-notes.md \
+            dist-nightly/* manifest/manifest.json
+      - name: Verify remote bytes and publish
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}-dev"
+          mkdir downloaded
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          mv downloaded/manifest.json remote-manifest.json
+          cmp manifest/manifest.json remote-manifest.json
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify downloaded remote-manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          mise exec -- node .github/scripts/channel-pointer.cjs dev "$tag" "$SOURCE_SHA"
+
+  repair-dev-pointer:
+    needs: plan
+    if: needs.plan.outputs.build == 'false'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: channel-promotion
+      queue: max
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+      - uses: jdx/mise-action@v2
+      - name: Repair pointer after an interrupted publication
+        run: mise exec -- node .github/scripts/channel-pointer.cjs dev "v${VERSION}-dev" "$SOURCE_SHA"
