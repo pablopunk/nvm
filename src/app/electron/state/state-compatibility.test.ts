@@ -16,8 +16,8 @@ test('persists a high-water mark and refuses an older writer', async (t) => {
   );
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const first = await advanceStateCompatibility(directory, 1);
-  assert.equal(first.trusted, true);
-  assert.equal(supportsStateDowngrade(first, 1), true);
+  assert.equal(first.trusted, false);
+  assert.equal(supportsStateDowngrade(first, 1), false);
   await advanceStateCompatibility(directory, 2);
   await assert.rejects(
     advanceStateCompatibility(directory, 1),
@@ -44,16 +44,16 @@ test('corrupt marker fails closed without replacing its contents', async (t) => 
   assert.equal(await fs.readFile(file, 'utf8'), '{broken');
 });
 
-test('shared and private markers establish trust only for empty state roots', async (t) => {
+test('shared and private markers remain untrusted without migration proof', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-state-roots-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const privateRoot = path.join(root, 'private');
   const sharedRoot = path.join(root, 'shared');
   const marker = await advanceStateCompatibility(privateRoot, 1, sharedRoot);
-  assert.equal(marker.trusted, true);
+  assert.equal(marker.trusted, false);
   assert.equal(
     (await advanceStateCompatibility(privateRoot, 1, sharedRoot)).trusted,
-    true,
+    false,
   );
   await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
   await assert.rejects(
@@ -85,7 +85,7 @@ test('marker advancement cannot write while another participant holds the shared
   await lease.release();
   assert.equal(
     (await advanceStateCompatibility(privateRoot, 1, sharedRoot)).trusted,
-    true,
+    false,
   );
 });
 
@@ -97,6 +97,11 @@ test('downgrade authorization re-reads both roots and fails closed on missing or
   const privateRoot = path.join(root, 'private');
   const sharedRoot = path.join(root, 'shared');
   await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  for (const directory of [privateRoot, sharedRoot])
+    await fs.writeFile(
+      path.join(directory, 'state-compatibility.json'),
+      JSON.stringify({ version: 1, highestEpoch: 1, trusted: true }),
+    );
   assert.equal(
     await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
     true,

@@ -59,6 +59,11 @@ test('installation rechecks both state roots and target epoch after download', a
   const privateRoot = path.join(root, 'private');
   const sharedRoot = path.join(root, 'shared');
   await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  for (const directory of [privateRoot, sharedRoot])
+    await fs.writeFile(
+      path.join(directory, 'state-compatibility.json'),
+      JSON.stringify({ version: 1, highestEpoch: 1, trusted: true }),
+    );
   const manager = createUpdateManager(createAutoUpdater([]), undefined, {
     getUpdateChannel: () => 'stable',
     canInstallUpdate: (info) =>

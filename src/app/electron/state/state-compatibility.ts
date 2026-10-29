@@ -113,20 +113,7 @@ async function advanceMarkers(
     markers.some((marker) => marker !== null)
   )
     throw new Error('A state compatibility marker is missing');
-  let trusted = markers.every((marker) => marker?.trusted === true);
-  if (markers.every((marker) => marker === null)) {
-    const entries = await Promise.all(
-      directories.map(async (root) => {
-        try {
-          return await fs.readdir(root);
-        } catch (error) {
-          if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
-          throw error;
-        }
-      }),
-    );
-    trusted = entries.every((items) => items.length === 0);
-  }
+  const trusted = markers.every((marker) => marker?.trusted === true);
   const next: StateCompatibilityMarker = { version: 1, highestEpoch, trusted };
   await assertHeld();
   await atomicallyReplaceFile(

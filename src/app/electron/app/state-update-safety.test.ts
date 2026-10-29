@@ -16,6 +16,11 @@ test('release metadata and both durable roots gate an older target', async (t) =
   const sharedRoot = path.join(root, 'shared');
   const roots = [privateRoot, sharedRoot];
   await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  for (const directory of roots)
+    await fs.writeFile(
+      path.join(directory, 'state-compatibility.json'),
+      JSON.stringify({ version: 1, highestEpoch: 1, trusted: true }),
+    );
   const url = new URL('https://github.com/example/releases/latest.yml');
   const info = parseUpdateInfo(
     'version: 2026.1029.1\nnevermindStateEpoch: 1\n',
