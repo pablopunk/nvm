@@ -16,7 +16,12 @@ export function createNevermindAuthBroadcast(deps: NevermindAuthBroadcastDeps) {
     getExtensionWindowStateForSender,
   } = deps;
 
-  function broadcastAuthChanged(status: { authed: boolean; email?: string }) {
+  function broadcastAuthChanged(status: {
+    authed: boolean;
+    userId?: string;
+    email?: string;
+    role?: string;
+  }) {
     sendToPalette('nevermind:auth-changed', status);
     broadcastToExtensionWindows('nevermind:auth-changed', status);
   }

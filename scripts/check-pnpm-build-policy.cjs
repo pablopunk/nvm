@@ -18,6 +18,7 @@ function configuredBuildDependencies(directory, key) {
   return entries
     .split('\n')
     .filter(Boolean)
+    .filter((line) => !(key === 'allowBuilds' && /: false$/.test(line)))
     .map((line) => {
       const match = line.match(
         key === 'allowBuilds' ? /^\s+('?[^':]+'?): true$/ : /^\s+-\s+(.+)$/,
@@ -84,7 +85,6 @@ if (typeof backendRepair.ensureBackendAvailable !== 'function') {
 
 const rootDependencies = [
   '@google/genai',
-  '@sentry/cli',
   'electron',
   'electron-winstaller',
   'esbuild',
@@ -92,9 +92,9 @@ const rootDependencies = [
   'sharp',
 ];
 const rootLegacyDependencies = rootDependencies.filter(
-  (dependency) => dependency !== '@sentry/cli' && dependency !== 'sharp',
+  (dependency) => dependency !== 'sharp',
 );
-const backendDependencies = ['@sentry/cli', 'esbuild', 'sharp'];
+const backendDependencies = ['esbuild', 'sharp'];
 
 assertDependencies(root, 'allowBuilds', rootDependencies);
 assertDependencies(root, 'onlyBuiltDependencies', rootLegacyDependencies);

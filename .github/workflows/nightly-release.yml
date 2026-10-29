@@ -152,9 +152,10 @@ jobs:
       contents: read
     env:
       NEVERMIND_RELEASE_BUILD: '1'
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+      POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+      VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+      VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - name: Checkout source commit
@@ -220,9 +221,10 @@ jobs:
       contents: read
     env:
       NEVERMIND_RELEASE_BUILD: '1'
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+      POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+      VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+      VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - name: Checkout source commit
@@ -301,9 +303,10 @@ jobs:
       contents: read
     env:
       NEVERMIND_RELEASE_BUILD: '1'
-      SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-      SENTRY_ORG: ${{ vars.SENTRY_ORG }}
-      SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
+      POSTHOG_CLI_API_KEY: ${{ secrets.POSTHOG_CLI_API_KEY }}
+      POSTHOG_CLI_PROJECT_ID: ${{ vars.POSTHOG_PROJECT_ID }}
+      VITE_POSTHOG_KEY: ${{ vars.POSTHOG_KEY }}
+      VITE_POSTHOG_HOST: ${{ vars.POSTHOG_HOST }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
     strategy:
       fail-fast: false

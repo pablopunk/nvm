@@ -1,10 +1,12 @@
 const http = require('node:http');
 const zlib = require('node:zlib');
 
+// Loopback stand-in for the PostHog ingestion host. posthog-node posts
+// `{ api_key, batch: [{ event, distinct_id, properties }] }` to `/batch/`.
 async function createDiagnosticSmokeCollector() {
   const events = [];
   const failures = [];
-  const server = http.createServer(function receiveEnvelope(request, response) {
+  const server = http.createServer(function receiveBatch(request, response) {
     const chunks = [];
     let size = 0;
     request.on('data', function collectChunk(chunk) {
@@ -12,7 +14,7 @@ async function createDiagnosticSmokeCollector() {
       if (size > 1024 * 1024) request.destroy();
       else chunks.push(chunk);
     });
-    request.on('end', function readEnvelope() {
+    request.on('end', function readBatch() {
       try {
         const data = Buffer.concat(chunks);
         const text = (
@@ -20,22 +22,18 @@ async function createDiagnosticSmokeCollector() {
             ? zlib.gunzipSync(data)
             : data
         ).toString();
-        if (text.includes('PRIVATE_'))
-          throw new Error(
-            'Private fixture content reached the diagnostic transport',
-          );
-        const lines = text.trim().split('\n');
-        for (let index = 1; index < lines.length; index += 2) {
-          const header = JSON.parse(lines[index]);
-          if (!['event', 'transaction'].includes(header.type))
-            throw new Error(`Unexpected diagnostic item: ${header.type}`);
+        const body = JSON.parse(text);
+        for (const item of body.batch ?? [body]) {
+          if (typeof item.event !== 'string')
+            throw new Error('Unexpected diagnostic payload');
           events.push({
-            type: header.type,
-            event: JSON.parse(lines[index + 1]),
+            event: item.event,
+            distinctId: item.distinct_id,
+            properties: item.properties ?? {},
           });
         }
         response.writeHead(200, { 'Content-Type': 'application/json' });
-        response.end('{}');
+        response.end('{"status":1}');
       } catch (error) {
         failures.push(String(error));
         response.writeHead(400);
@@ -49,7 +47,7 @@ async function createDiagnosticSmokeCollector() {
   return {
     events,
     failures,
-    dsn: `http://qa@127.0.0.1:${server.address().port}/1`,
+    host: `http://127.0.0.1:${server.address().port}`,
     close: function closeCollector() {
       return new Promise(function close(resolve) {
         server.close(resolve);

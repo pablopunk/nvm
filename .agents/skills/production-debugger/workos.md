@@ -10,7 +10,7 @@ The WorkOS skill explicitly warns against fabricating CLI commands or dashboard 
 
 ## Operational flow
 
-1. Start from Sentry/Axiom evidence: callback status, redirect error, WorkOS exception, cookie/session failure, or device-auth exchange failure.
+1. Start from PostHog/Axiom evidence: callback status, redirect error, WorkOS exception, cookie/session failure, or device-auth exchange failure.
 2. Inspect the actual redirect `Location` for `redirect_uri`, host, scheme, `%0A`, `%20`, and state/return target issues without leaking cookies.
 3. Confirm WorkOS allowed callback URLs in the dashboard/API only through verified WorkOS guidance.
 4. For desktop auth, correlate initiate/approve/exchange statuses with Axiom logs and desktop `nevermind.log`.

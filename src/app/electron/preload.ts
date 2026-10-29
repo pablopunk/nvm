@@ -203,10 +203,22 @@ const api: NevermindApi = {
     return () =>
       ipcRenderer.removeListener('nevermind:device-sign-in-changed', listener);
   },
+  onDiagnosticReportingChanged: (callback) => {
+    const listener = (_event: IpcRendererEvent, enabled: boolean) =>
+      callback(enabled);
+    ipcRenderer.on('diagnostics:reporting-changed', listener);
+    return () =>
+      ipcRenderer.removeListener('diagnostics:reporting-changed', listener);
+  },
   onNevermindAuthChanged: (callback) => {
     const listener = (
       _event: IpcRendererEvent,
-      status: { authed: boolean; email?: string },
+      status: {
+        authed: boolean;
+        userId?: string;
+        email?: string;
+        role?: string;
+      },
     ) => callback(status);
     ipcRenderer.on('nevermind:auth-changed', listener);
     return () => ipcRenderer.removeListener('nevermind:auth-changed', listener);

@@ -1,7 +1,7 @@
 import { neonConfig, Pool } from '@neondatabase/serverless';
-import * as Sentry from '@sentry/astro';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from 'ws';
+import { captureBackendException } from '../lib/error-tracking';
 import { log } from '../lib/log';
 import * as schema from './schema';
 
@@ -24,7 +24,7 @@ export function createNeonDb(connectionString?: string) {
       return;
     }
     log.error('neon_pool_error', { error });
-    Sentry.captureException(error);
+    captureBackendException(error, { source: 'neon_pool' });
   });
   return { db: drizzle(pool, { schema }), pool };
 }

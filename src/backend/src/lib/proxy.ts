@@ -1,5 +1,4 @@
 import { createHash, randomUUID } from 'node:crypto';
-import * as Sentry from '@sentry/astro';
 import { waitUntil } from '@vercel/functions';
 import { and, eq, sql } from 'drizzle-orm';
 import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
@@ -26,6 +25,7 @@ import {
   resizeReservation,
 } from './credit-reservations';
 import { captureStreamFailure } from './diagnostics';
+import { captureBackendAlert, setRequestContext } from './error-tracking';
 import { freeSpendCapErrorBody } from './free-spend-cap';
 import {
   type ImageTokenLimits,
@@ -1493,14 +1493,13 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     return requestTooLargeResponse(requestId);
   const startedAt = Date.now();
   const client = desktopClientFromRequest(cfg.request);
-  Sentry.getCurrentScope().setTag('request_id', requestId);
-  if (client.version)
-    Sentry.getCurrentScope().setTag('client_version', client.version);
-  if (client.apiVersion)
-    Sentry.getCurrentScope().setTag(
-      'client_api_version',
-      String(client.apiVersion),
-    );
+  setRequestContext({
+    request_id: requestId,
+    client_version: client.version || undefined,
+    client_api_version: client.apiVersion
+      ? String(client.apiVersion)
+      : undefined,
+  });
   const requestBodyBytes = await readRequestBodyWithinLimit(cfg.request);
   if (!requestBodyBytes) return requestTooLargeResponse(requestId);
   const requestBodyText = new TextDecoder().decode(requestBodyBytes);
@@ -1979,7 +1978,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
     );
     if ('failure' in result) {
       if (result.status >= 500)
-        Sentry.captureMessage('ai_chain_exhausted', 'error');
+        captureBackendAlert('ai_chain_exhausted');
       await recordUsage(
         {
           user: routing.user,

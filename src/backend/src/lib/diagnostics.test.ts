@@ -1,31 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { Event } from '@sentry/astro';
-import { correlateBackendResponse, safeDiagnosticId, safeRequestId, sanitizeBackendEvent } from './diagnostics';
-
-test('backend diagnostics strips prompts, request data and user identity', () => {
-  const event = sanitizeBackendEvent<Event>({
-    user: { email: 'PRIVATE_EMAIL', id: 'PRIVATE_ACCOUNT' }, extra: { prompt: 'PRIVATE_PROMPT' },
-    tags: { request_id: 'server-request', desktop_action_id: 'a'.repeat(32), private: 'PRIVATE_LABEL' },
-    request: { url: 'https://api.nvm.fyi/api?secret=PRIVATE_CODE', data: 'PRIVATE_BODY', headers: { Authorization: 'PRIVATE_TOKEN' } },
-    exception: { values: [{ type: 'Error', value: 'PRIVATE_MESSAGE', stacktrace: { frames: [{ filename: '/var/task/dist/server/entry.mjs', lineno: 3, vars: { key: 'PRIVATE_VARIABLE' } }, { filename: '/Users/PRIVATE_USER/code.ts' }] } }] },
-  });
-  assert.ok(!JSON.stringify(event).includes('PRIVATE_'));
-  assert.equal(event.tags?.request_id, 'server-request');
-  assert.equal(event.tags?.desktop_action_id, 'a'.repeat(32));
-  assert.equal(event.contexts?.diagnostic?.desktop_action_id, 'a'.repeat(32));
-  assert.equal(event.exception?.values?.[0]?.stacktrace?.frames?.length, 1);
-});
-
-test('successful backend traces retain desktop journey correlation without request content', () => {
-  const event = sanitizeBackendEvent<Event>({ type: 'transaction', transaction: 'PRIVATE_ROUTE', tags: {
-    desktop_journey_id: 'a'.repeat(32), desktop_action_id: 'b'.repeat(32), request_id: 'server-request',
-  }, request: { data: 'PRIVATE_BODY' }, extra: { prompt: 'PRIVATE_PROMPT' } });
-  assert.equal(event.type, 'transaction');
-  assert.equal(event.tags?.desktop_journey_id, 'a'.repeat(32));
-  assert.equal(event.tags?.desktop_action_id, 'b'.repeat(32));
-  assert.ok(!JSON.stringify(event).includes('PRIVATE_'));
-});
+import { correlateBackendResponse, safeDiagnosticId, safeRequestId } from './diagnostics';
 
 test('correlation headers are bounded and never authentication', () => {
   assert.equal(safeDiagnosticId('a'.repeat(32)), 'a'.repeat(32));
