@@ -17,7 +17,10 @@ test('guarded writes are drained by maintenance and rejected while paused', asyn
   });
   await new Promise<void>((resolve) => setImmediate(resolve));
   assert.equal(drained, false);
-  assert.throws(() => guardStateWrite(async () => {}), /state backup/);
+  await assert.rejects(
+    guardStateWrite(async () => {}),
+    /state backup/,
+  );
   finish();
   await write;
   await maintenance;

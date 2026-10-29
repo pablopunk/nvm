@@ -10,6 +10,9 @@ export function installStateWriteGuard(guard: StateWriteGuard) {
   installedGuard = guard;
 }
 
-export function guardStateWrite<T>(write: () => T): T {
+/** Persisted writes are asynchronous, so a paused guard rejects instead of throwing. */
+export async function guardStateWrite<T>(
+  write: () => Promise<T> | T,
+): Promise<T> {
   return installedGuard(write);
 }
