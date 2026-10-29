@@ -7,6 +7,7 @@ import { acquireSharedStateLease } from '../platform/shared-state-lease';
 // Increment before a host-owned persisted format becomes unreadable by earlier builds.
 export const STATE_COMPATIBILITY_EPOCH = compatibility.epoch;
 const MARKER_NAME = 'state-compatibility.json';
+const PENDING_NAME = 'state-compatibility.pending.json';
 
 export type StateCompatibilityMarker = {
   version: 1;
@@ -56,7 +57,7 @@ async function advanceMarkers(
   const directories = [
     ...new Set([directory, sharedDirectory].map((item) => path.resolve(item))),
   ];
-  const markers = await Promise.all(
+  let markers = await Promise.all(
     directories.map(async (root) => {
       try {
         const marker = parseMarker(
@@ -70,6 +71,37 @@ async function advanceMarkers(
       }
     }),
   );
+  const pendingPath = path.join(path.resolve(sharedDirectory), PENDING_NAME);
+  let pending: { roots: string[]; marker: StateCompatibilityMarker } | null =
+    null;
+  try {
+    const raw = JSON.parse(await fs.readFile(pendingPath, 'utf8'));
+    const marker = parseMarker(raw?.marker);
+    if (!marker || JSON.stringify(raw?.roots) !== JSON.stringify(directories))
+      throw new Error('Invalid pending state compatibility update');
+    pending = { roots: directories, marker };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  if (pending) {
+    if (
+      pending.marker.highestEpoch > epoch ||
+      markers.some(
+        (marker) => (marker?.highestEpoch ?? 0) > pending!.marker.highestEpoch,
+      )
+    )
+      throw new Error('Pending update conflicts with newer persisted state');
+    const recovered = { ...pending.marker, trusted: false };
+    for (const root of directories) {
+      await assertHeld();
+      await atomicallyReplaceFile(
+        path.join(root, MARKER_NAME),
+        `${JSON.stringify(recovered)}\n`,
+      );
+    }
+    await fs.unlink(pendingPath);
+    markers = directories.map(() => recovered);
+  }
   const highestEpoch = Math.max(
     epoch,
     ...markers.map((marker) => marker?.highestEpoch ?? epoch),
@@ -96,6 +128,11 @@ async function advanceMarkers(
     trusted = entries.every((items) => items.length === 0);
   }
   const next: StateCompatibilityMarker = { version: 1, highestEpoch, trusted };
+  await assertHeld();
+  await atomicallyReplaceFile(
+    pendingPath,
+    `${JSON.stringify({ roots: directories, marker: next })}\n`,
+  );
   for (const root of directories) {
     await assertHeld();
     await atomicallyReplaceFile(
@@ -103,6 +140,8 @@ async function advanceMarkers(
       `${JSON.stringify(next)}\n`,
     );
   }
+  await assertHeld();
+  await fs.unlink(pendingPath);
   return next;
 }
 
@@ -124,8 +163,21 @@ export async function stateRootsSupportDowngrade(
   const roots = [
     ...new Set(directories.map((directory) => path.resolve(directory))),
   ];
-  if (roots.length < 2) return false;
+  if (roots.length !== 2) return false;
+  let lease: Awaited<ReturnType<typeof acquireSharedStateLease>> | undefined;
+  let supported = false;
   try {
+    lease = await acquireSharedStateLease(roots[1]);
+    await Promise.all(
+      roots.map(async (root) => {
+        try {
+          await fs.access(path.join(root, PENDING_NAME));
+          throw new Error('State compatibility update is pending');
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        }
+      }),
+    );
     const markers = await Promise.all(
       roots.map(async (root) =>
         parseMarker(
@@ -133,10 +185,20 @@ export async function stateRootsSupportDowngrade(
         ),
       ),
     );
-    return markers.every((marker) =>
+    await lease.assertHeld();
+    supported = markers.every((marker) =>
       supportsStateDowngrade(marker, targetEpoch),
     );
   } catch {
-    return false;
+    supported = false;
+  } finally {
+    if (lease) {
+      try {
+        await lease.release();
+      } catch {
+        supported = false;
+      }
+    }
   }
+  return supported;
 }

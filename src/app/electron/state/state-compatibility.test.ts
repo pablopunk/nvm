@@ -116,3 +116,68 @@ test('downgrade authorization re-reads both roots and fails closed on missing or
     false,
   );
 });
+
+test('an interrupted two-root update recovers without granting trust', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-state-recovery-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  await fs.mkdir(privateRoot);
+  await fs.mkdir(sharedRoot);
+  const marker = { version: 1, highestEpoch: 1, trusted: true };
+  await fs.writeFile(
+    path.join(privateRoot, 'state-compatibility.json'),
+    JSON.stringify(marker),
+  );
+  await fs.writeFile(
+    path.join(sharedRoot, 'state-compatibility.pending.json'),
+    JSON.stringify({ roots: [privateRoot, sharedRoot], marker }),
+  );
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    false,
+  );
+  const recovered = await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  assert.equal(recovered.trusted, false);
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    false,
+  );
+  await assert.rejects(
+    fs.access(path.join(sharedRoot, 'state-compatibility.pending.json')),
+  );
+});
+
+test('pending transaction cannot overwrite a newer marker', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-state-recovery-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  await fs.mkdir(privateRoot);
+  await fs.mkdir(sharedRoot);
+  const newer = { version: 1, highestEpoch: 2, trusted: true };
+  await fs.writeFile(
+    path.join(privateRoot, 'state-compatibility.json'),
+    JSON.stringify(newer),
+  );
+  await fs.writeFile(
+    path.join(sharedRoot, 'state-compatibility.pending.json'),
+    JSON.stringify({
+      roots: [privateRoot, sharedRoot],
+      marker: { ...newer, highestEpoch: 1 },
+    }),
+  );
+  await assert.rejects(
+    advanceStateCompatibility(privateRoot, 2, sharedRoot),
+    /conflicts/,
+  );
+  assert.deepEqual(
+    JSON.parse(
+      await fs.readFile(
+        path.join(privateRoot, 'state-compatibility.json'),
+        'utf8',
+      ),
+    ),
+    newer,
+  );
+});
