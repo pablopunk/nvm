@@ -795,10 +795,16 @@ export type ExtensionView = {
   image?: ExtensionImage;
   video?: string;
   videoUrl?: string;
+  /** Camera views only: explicit device id. It wins over the saved selection and is never replaced by a fallback device. */
   deviceId?: string;
+  /** Camera views only: show the switch-camera button when more than one camera is available. Defaults to `true`. */
   showDeviceSwitcher?: boolean;
   muted?: boolean;
   controls?: boolean;
+  /** Camera views only: mirror the live preview horizontally. Defaults to `false`; the device stream itself is unchanged. */
+  mirrored?: boolean;
+  /** Camera views only: `cover` fills the frame and may crop; `contain` shows the whole feed with letterboxing. Defaults to `cover`. */
+  framing?: 'cover' | 'contain';
   /** View items or a lazy loader handle from `ctx.data.loader()` or `ctx.data.staleWhileRevalidate()`. When a loader handle is used, the host owns the loading lifecycle and `emptyView` is required. */
   items?: ExtensionItem[] | ExtensionDataLoaderHandle;
   sections?: ExtensionItemSection[];
@@ -1634,7 +1640,7 @@ export type ExtensionContext = {
     };
     /** Sandboxed HTML/JS iframe with no Node access. Use only when host-owned primitives do not fit. */
     webview(view: ExtensionView): ExtensionView;
-    /** Host-owned live camera view. Declare `camera`; use `ctx.actions.camera.*` for switching/mute controls. */
+    /** Host-owned live camera view. Declare `camera`; use `ctx.actions.camera.*` for switching/mute controls. Capture runs only while the view is active and visible, and stops when it is hidden, closed, or its device changes. */
     camera(view?: ExtensionView): ExtensionView;
     item<T extends ExtensionItem>(item: T): T;
     actions<T extends ExtensionAction[]>(actions: T): T;

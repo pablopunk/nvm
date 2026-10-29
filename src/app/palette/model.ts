@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { AiChatMessage } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
+import type { CameraViewFields } from './camera-view-fields';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -576,7 +577,7 @@ export interface CommandViewPatch {
   selectedItemId?: string;
 }
 
-export interface CommandView {
+export interface CommandView extends CameraViewFields {
   id?: string;
   type:
     | 'list'
@@ -594,10 +595,6 @@ export interface CommandView {
   image?: CommandImage;
   video?: string;
   videoUrl?: string;
-  deviceId?: string;
-  showDeviceSwitcher?: boolean;
-  muted?: boolean;
-  controls?: boolean;
   aiChat?: boolean;
   chatId?: string;
   aiModel?: AiChatModel;

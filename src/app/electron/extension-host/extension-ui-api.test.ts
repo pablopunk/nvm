@@ -63,6 +63,17 @@ test('extension ui api keeps utility helpers stable', () => {
     muted: false,
     type: 'camera',
   });
+  assert.deepEqual(
+    ui.camera({ title: 'Mirror', mirrored: true, framing: 'contain' }),
+    {
+      title: 'Mirror',
+      size: 'large',
+      muted: true,
+      mirrored: true,
+      framing: 'contain',
+      type: 'camera',
+    },
+  );
   assert.deepEqual(ui.empty('Empty', 'Try again'), {
     type: 'preview',
     title: 'Empty',

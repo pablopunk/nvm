@@ -44,7 +44,7 @@ test('platform inventory covers every planned category and non-os platform seam'
     'src/app/electron/app/running-app-status.ts',
     'src/app/electron/ipc/app-ipc-handlers.ts',
     'src/app/extensions/system.ts',
-    'src/app/palette/extension-view/extension-view.tsx',
+    'src/app/palette/extension-view/camera-view.tsx',
   ]) {
     assert.equal(files.has(expected), true, expected);
   }

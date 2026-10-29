@@ -14,6 +14,7 @@ import {
   type ViewRefreshRecord,
   withoutExecutionId,
 } from './action-execution-records';
+import { normalizeCameraViewOptions } from './camera-view-options';
 import { normalizeItemAppearance } from './item-appearance';
 
 export interface ViewNormalizerDeps {
@@ -226,6 +227,7 @@ export function createViewNormalizer(deps: ViewNormalizerDeps) {
     return {
       ...view,
       id: viewId,
+      ...(view.type === 'camera' ? normalizeCameraViewOptions(view) : {}),
       ...(webviewPermissions === undefined ? {} : { webviewPermissions }),
       ...(preparedDraft
         ? {

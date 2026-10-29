@@ -45,6 +45,7 @@ import {
   ProgressView,
 } from '../ui';
 import { ChatInputForm } from './chat-input-form';
+import { CameraView } from './camera-view';
 import { titleFromFirstContentLine } from './editor-title';
 import {
   EXTENSION_WEBVIEW_SANDBOX,
@@ -624,196 +625,6 @@ function EditorSurface({
   );
 }
 
-function CameraView({
-  view,
-  actions,
-}: {
-  view: CommandView;
-  actions: ReactNode;
-}) {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const storageKey = `camera-device:${view.id || view.title}`;
-  const [selectedDeviceId, setSelectedDeviceId] = useState(
-    () => view.deviceId || localStorage.getItem(storageKey) || '',
-  );
-  const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
-  const [activeDeviceLabel, setActiveDeviceLabel] = useState('');
-  const [muted, setMuted] = useState(view.muted !== false);
-  const [controls, setControls] = useState(Boolean(view.controls));
-  const [status, setStatus] = useState('Initializing…');
-  const [error, setError] = useState('');
-
-  useEffect(
-    () =>
-      setSelectedDeviceId(
-        view.deviceId || localStorage.getItem(storageKey) || '',
-      ),
-    [storageKey, view.deviceId],
-  );
-  useEffect(() => setMuted(view.muted !== false), [view.muted]);
-  useEffect(() => setControls(Boolean(view.controls)), [view.controls]);
-
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    let cancelled = false;
-
-    async function start() {
-      setStatus('Requesting camera…');
-      setError('');
-      try {
-        const access = await window.nvm.requestCameraAccess();
-        if (
-          access.status === 'denied' ||
-          access.status === 'restricted' ||
-          access.status === 'unsupported'
-        )
-          throw new Error(
-            access.status === 'denied'
-              ? 'Camera access is denied in system privacy settings.'
-              : `Camera access is ${access.status}.`,
-          );
-        const constraints: MediaTrackConstraints = selectedDeviceId
-          ? {
-              deviceId: { exact: selectedDeviceId },
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            }
-          : { width: { ideal: 1280 }, height: { ideal: 720 } };
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: constraints,
-          audio: false,
-        });
-        if (cancelled) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        const videoElement = videoRef.current;
-        if (!videoElement) throw new Error('Camera view is unavailable.');
-        streamRef.current?.getTracks().forEach((track) => track.stop());
-        streamRef.current = stream;
-        setActiveDeviceLabel(stream.getVideoTracks()[0]?.label || '');
-        setDevices(
-          (await navigator.mediaDevices.enumerateDevices()).filter(
-            (device) => device.kind === 'videoinput',
-          ),
-        );
-        setStatus('Stream acquired…');
-        videoElement.srcObject = stream;
-        videoElement.onloadedmetadata = () =>
-          videoElement.play().catch(() => {});
-        videoElement.onplaying = () => setStatus('Live');
-        window.setTimeout(() => {
-          if (
-            !cancelled &&
-            streamRef.current === stream &&
-            videoElement.readyState > 0
-          )
-            setStatus('Live');
-        }, 1000);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        setStatus('Camera unavailable');
-        const hint = /not found|not available|not read|device/i.test(message)
-          ? ' Check your system privacy settings for camera access.'
-          : '';
-        setError(message + hint);
-      }
-    }
-
-    start();
-    return () => {
-      cancelled = true;
-      if (streamRef.current === stream) {
-        streamRef.current = null;
-        if (videoRef.current?.srcObject === stream)
-          videoRef.current.srcObject = null;
-      }
-      stream?.getTracks().forEach((track) => track.stop());
-    };
-  }, [selectedDeviceId, storageKey]);
-
-  function switchDevice(direction: 'next' | 'previous' = 'next') {
-    if (devices.length < 2) return;
-    const activeIndex = activeDeviceLabel
-      ? devices.findIndex((device) => device.label === activeDeviceLabel)
-      : -1;
-    const selectedIndex = devices.findIndex(
-      (device) => device.deviceId === selectedDeviceId,
-    );
-    const currentIndex =
-      activeIndex >= 0 ? activeIndex : selectedIndex >= 0 ? selectedIndex : 0;
-    const offset = direction === 'previous' ? -1 : 1;
-    const next =
-      devices[(currentIndex + offset + devices.length) % devices.length];
-    localStorage.setItem(storageKey, next.deviceId);
-    setSelectedDeviceId(next.deviceId);
-  }
-
-  useEffect(() => {
-    function handleCameraAction(event: Event) {
-      const detail = (
-        event as CustomEvent<{ kind?: string; direction?: 'next' | 'previous' }>
-      ).detail;
-      if (
-        detail?.kind === 'camera.switchDevice' ||
-        detail?.kind === 'camera.nextDevice'
-      )
-        switchDevice('next');
-      else if (detail?.kind === 'camera.previousDevice')
-        switchDevice('previous');
-      else if (detail?.kind === 'camera.toggleMuted')
-        setMuted((value) => !value);
-      else if (detail?.kind === 'camera.toggleControls')
-        setControls((value) => !value);
-    }
-    window.addEventListener('nvm:camera-action', handleCameraAction);
-    return () =>
-      window.removeEventListener('nvm:camera-action', handleCameraAction);
-  });
-
-  const currentDevice =
-    devices.find((device) => device.deviceId === selectedDeviceId) ||
-    devices.find((device) => device.label === activeDeviceLabel) ||
-    devices[0];
-  const switcher =
-    view.showDeviceSwitcher === false || devices.length < 2 ? null : (
-      <button
-        className="cameraSwitchButton"
-        type="button"
-        onClick={() => switchDevice()}
-      >
-        Switch Camera{currentDevice?.label ? ` · ${currentDevice.label}` : ''}
-      </button>
-    );
-
-  return (
-    <div
-      className={`cameraSurface ${view.size === 'large' || view.presentation === 'preview' ? 'cameraLarge' : ''}`}
-    >
-      <div className="cameraFrame">
-        <video
-          ref={videoRef}
-          className="cameraVideo"
-          autoPlay={true}
-          playsInline={true}
-          muted={muted}
-          controls={controls}
-        />
-        {switcher}
-        {error ? (
-          <div className="cameraError">
-            <strong>Camera Issue</strong>
-            <span>{error}</span>
-          </div>
-        ) : null}
-        <div className="cameraStatus">{status}</div>
-      </div>
-      {actions}
-    </div>
-  );
-}
-
 type ExtensionViewSurfaceProps = ExtensionViewRendererProps & {
   renderEmpty: NonNullable<ExtensionViewRendererProps['renderEmpty']>;
 };
@@ -1240,6 +1051,7 @@ function WebExtensionView({
 
 function CameraExtensionView({
   view,
+  active,
   renderActionPanel,
   actionPanelRows,
 }: ExtensionViewSurfaceProps) {
@@ -1255,7 +1067,9 @@ function CameraExtensionView({
   const cameraActions = cameraActionRows.length
     ? renderActionPanel(cameraActionRows)
     : null;
-  return <CameraView view={view} actions={cameraActions} />;
+  return (
+    <CameraView view={view} actions={cameraActions} active={active !== false} />
+  );
 }
 
 function PreviewExtensionView({
