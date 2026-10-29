@@ -75,10 +75,15 @@ jobs:
           set -euo pipefail
           tag="v$VERSION"
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo 'Stable tag already exists' >&2; exit 1
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]] || { echo 'Stable tag points to another commit' >&2; exit 1; }
+            if gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
+              gh release view "$tag" --json body --jq '.body' | grep -Fx "Promoted from $DEV_TAG; source $SOURCE_SHA." >/dev/null || { echo 'Draft is not owned by this promotion' >&2; exit 1; }
+              gh release delete "$tag" --yes
+            fi
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+            echo 'created_tag=true' >> "$GITHUB_OUTPUT"
           fi
-          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
-          echo 'created_tag=true' >> "$GITHUB_OUTPUT"
           gh release create "$tag" --draft --latest=false --title "Nevermind $VERSION" --notes-file notes.md dev/*
           mkdir remote
           gh release download "$tag" --dir remote

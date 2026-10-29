@@ -359,8 +359,9 @@ jobs:
             gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
           fi
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo "Refusing to reuse existing tag $tag" >&2
-            exit 1
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]] || { echo "Tag points to another commit" >&2; exit 1; }
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
           fi
           previous="$(git tag --merged "$SOURCE_SHA" --list 'v*-dev' --sort=-version:refname | head -n 1)"
           if [[ -n "$previous" ]]; then
@@ -370,7 +371,6 @@ jobs:
             printf 'First dev build from %s.\n' "$SOURCE_SHA" > release-notes.md
           fi
           printf '\nSource: %s\nWorkflow run: %s\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" >> release-notes.md
-          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
           gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --latest=false \
             --title "Nevermind $VERSION (dev)" --notes-file release-notes.md \
             dist-nightly/* manifest/manifest.json

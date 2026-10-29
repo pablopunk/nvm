@@ -14,6 +14,8 @@ test('promotion verifies retained and uploaded bytes and never packages again', 
     assert.match(workflow, /validate-assets/);
     assert.match(workflow, /diff -u expected-sha256\.txt remote-sha256\.txt/);
     assert.match(workflow, /identity --sha/);
+    assert.match(workflow, /Draft is not owned by this promotion/);
+    assert.match(workflow, /points to another commit/);
     assert.doesNotMatch(workflow, /pnpm (?:run )?dist:/);
     assert.match(workflow, /group: channel-promotion/);
   }
