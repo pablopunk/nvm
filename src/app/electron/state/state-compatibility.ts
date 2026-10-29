@@ -2,7 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import compatibility from '../../resources/state-compatibility.json';
 import { atomicallyReplaceFile } from '../platform/atomic-file';
-import { acquireSharedStateLease } from '../platform/shared-state-lease';
+import {
+  acquireSharedStateLease,
+  type SharedStateLease,
+} from '../platform/shared-state-lease';
+import { createVerifiedStateBackup } from './state-migration-backup';
 
 // Increment before a host-owned persisted format becomes unreadable by earlier builds.
 export const STATE_COMPATIBILITY_EPOCH = compatibility.epoch;
@@ -51,6 +55,7 @@ async function advanceMarkers(
   epoch: number,
   sharedDirectory: string,
   assertHeld: () => Promise<void>,
+  establishTrust = false,
 ): Promise<StateCompatibilityMarker> {
   if (!Number.isSafeInteger(epoch) || epoch < 1)
     throw new Error('Invalid state compatibility epoch');
@@ -113,7 +118,8 @@ async function advanceMarkers(
     markers.some((marker) => marker !== null)
   )
     throw new Error('A state compatibility marker is missing');
-  const trusted = markers.every((marker) => marker?.trusted === true);
+  const trusted =
+    establishTrust || markers.every((marker) => marker?.trusted === true);
   const next: StateCompatibilityMarker = { version: 1, highestEpoch, trusted };
   await assertHeld();
   await atomicallyReplaceFile(
@@ -130,6 +136,39 @@ async function advanceMarkers(
   await assertHeld();
   await fs.unlink(pendingPath);
   return next;
+}
+
+export async function backupAndTrustState(input: {
+  privateRoot: string;
+  sharedRoot: string;
+  backupParent: string;
+  epoch: number;
+  lease: SharedStateLease;
+  legacyInstancesClosed: boolean;
+  verifyNoUncoordinatedWriters: () => Promise<boolean>;
+}) {
+  if (!input.legacyInstancesClosed)
+    throw new Error('Close older Nevermind instances before migrating state');
+  const backupPath = await createVerifiedStateBackup({
+    roots: [
+      { name: 'private', path: input.privateRoot },
+      { name: 'shared', path: input.sharedRoot },
+    ],
+    backupParent: input.backupParent,
+    lease: input.lease,
+    verifyNoUncoordinatedWriters: input.verifyNoUncoordinatedWriters,
+  });
+  await input.lease.assertHeld();
+  if (!(await input.verifyNoUncoordinatedWriters()))
+    throw new Error('Cannot rule out other state writers');
+  const marker = await advanceMarkers(
+    input.privateRoot,
+    input.epoch,
+    input.sharedRoot,
+    input.lease.assertHeld,
+    true,
+  );
+  return { backupPath, marker };
 }
 
 export function supportsStateDowngrade(

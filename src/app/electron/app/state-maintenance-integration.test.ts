@@ -7,7 +7,11 @@ import { createExtensionJsonStore } from '../extension-host/extension-json-store
 import { JobRegistry } from '../platform/jobs';
 import { acquireSharedStateLease } from '../platform/shared-state-lease';
 import { LocalLearningStore } from '../state/learning-store';
-import { createVerifiedStateBackup } from '../state/state-migration-backup';
+import {
+  backupAndTrustState,
+  stateRootsSupportDowngrade,
+} from '../state/state-compatibility';
+import { isStateSafeForInstall } from './state-update-safety';
 
 test('drained timed-out job and extension storage are included in a verified backup', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-maintenance-'));
@@ -56,13 +60,13 @@ test('drained timed-out job and extension storage are included in a verified bac
   await draining;
   await storage.quiesce();
   await learning.flushPendingSave();
-  const backup = await createVerifiedStateBackup({
-    roots: [
-      { name: 'private', path: privateRoot },
-      { name: 'shared', path: sharedRoot },
-    ],
+  const { backupPath: backup } = await backupAndTrustState({
+    privateRoot,
+    sharedRoot,
     backupParent,
+    epoch: 1,
     lease,
+    legacyInstancesClosed: true,
     // This isolated fixture has no other writers; production must independently establish that condition.
     verifyNoUncoordinatedWriters: async () => true,
   });
@@ -83,4 +87,29 @@ test('drained timed-out job and extension storage are included in a verified bac
   storage.resume();
   jobs.resume();
   jobs.clear();
+  await lease.release();
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    true,
+  );
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 2),
+    false,
+  );
+  assert.equal(
+    await isStateSafeForInstall(
+      '2026.1030.2',
+      { version: '2026.1029.1', nevermindStateEpoch: 1 },
+      [privateRoot, sharedRoot],
+    ),
+    true,
+  );
+  assert.equal(
+    await isStateSafeForInstall(
+      '2026.1030.2',
+      { version: '2026.1029.1', nevermindStateEpoch: 2 },
+      [privateRoot, sharedRoot],
+    ),
+    false,
+  );
 });

@@ -6,9 +6,83 @@ import test from 'node:test';
 import { acquireSharedStateLease } from '../platform/shared-state-lease';
 import {
   advanceStateCompatibility,
+  backupAndTrustState,
   supportsStateDowngrade,
   stateRootsSupportDowngrade,
 } from './state-compatibility';
+
+test('verified backup and explicit acknowledgement establish matching trust across both roots', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-trust-migration-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  const backupParent = path.join(root, 'backups');
+  await fs.mkdir(backupParent);
+  await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  await fs.writeFile(path.join(privateRoot, 'state.json'), '{"data":"kept"}');
+  const lease = await acquireSharedStateLease(sharedRoot);
+  const input = {
+    privateRoot,
+    sharedRoot,
+    backupParent,
+    epoch: 1,
+    lease,
+    legacyInstancesClosed: true,
+    verifyNoUncoordinatedWriters: async () => true,
+  };
+  await assert.rejects(
+    backupAndTrustState({ ...input, legacyInstancesClosed: false }),
+    /Close older/,
+  );
+  await assert.rejects(
+    backupAndTrustState({
+      ...input,
+      verifyNoUncoordinatedWriters: async () => false,
+    }),
+    /Cannot rule out/,
+  );
+  let probes = 0;
+  await assert.rejects(
+    backupAndTrustState({
+      ...input,
+      verifyNoUncoordinatedWriters: async () => ++probes < 3,
+    }),
+    /Cannot rule out/,
+  );
+  assert.equal(
+    JSON.parse(
+      await fs.readFile(
+        path.join(privateRoot, 'state-compatibility.json'),
+        'utf8',
+      ),
+    ).trusted,
+    false,
+  );
+  assert.equal(
+    JSON.parse(
+      await fs.readFile(
+        path.join(sharedRoot, 'state-compatibility.json'),
+        'utf8',
+      ),
+    ).trusted,
+    false,
+  );
+  const { marker, backupPath } = await backupAndTrustState(input);
+  assert.equal(marker.trusted, true);
+  assert.equal(
+    await fs.readFile(path.join(backupPath, 'private', 'state.json'), 'utf8'),
+    '{"data":"kept"}',
+  );
+  await lease.release();
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    true,
+  );
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 2),
+    false,
+  );
+});
 
 test('persists a high-water mark and refuses an older writer', async (t) => {
   const directory = await fs.mkdtemp(
