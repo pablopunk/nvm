@@ -38,7 +38,11 @@ jobs:
           set -euo pipefail
           mise exec -- node "$NIGHTLY_CLI" schedule-gate --event "$EVENT_NAME" --cron "$SCHEDULED_CRON" --now "$(date -u +%FT%TZ)" | jq -e '.run == true' >/dev/null || { echo 'run=false' >> "$GITHUB_OUTPUT"; exit 0; }
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
-          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json > selection.json
+          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --candidates > selection.json
+          if [[ "$(jq -r '.selected.tag // ""' selection.json)" != '' ]]; then
+            curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+            mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --verify production-health.json > selection.json
+          fi
           tag="$(jq -r '.selected.tag // ""' selection.json)"
           if [[ -z "$tag" ]]; then
             current="$(jq -r '.currentTag // ""' selection.json)"
@@ -107,9 +111,9 @@ jobs:
         run: |
           set -euo pipefail
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
-          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json > selection.json
-          [[ "$(jq -r '.selected.tag // ""' selection.json)" == "$DEV_TAG" ]]
           curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --verify production-health.json > selection.json
+          [[ "$(jq -r '.selected.tag // ""' selection.json)" == "$DEV_TAG" ]]
           mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
           gh release edit "v${VERSION}-nightly" --draft=false --prerelease --latest=false
           mise exec -- node .github/scripts/channel-pointer.cjs nightly "v${VERSION}-nightly" "$SOURCE_SHA"
