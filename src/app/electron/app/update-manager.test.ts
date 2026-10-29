@@ -490,6 +490,7 @@ function unsupportedStateMaintenance() {
   return {
     status: () => ({ phase: 'unsupported' as const }),
     refresh: async () => {},
+    onChange: () => () => true,
     verifyAndTrust: async () => ({ phase: 'unsupported' as const }),
   };
 }
@@ -512,6 +513,7 @@ function updatesServiceWithState(
     stateMaintenance: {
       status: () => status,
       refresh: async () => {},
+      onChange: () => () => true,
       verifyAndTrust: async () => {
         verified.push('verified');
         return status;

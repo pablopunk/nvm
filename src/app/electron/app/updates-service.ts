@@ -16,7 +16,10 @@ export type UpdatesServiceDeps = {
   requestQuit: (reason: string, quit: () => void) => Promise<void>;
   quitApp: () => void;
   patchOpenView: (viewId: string, patch: any) => void;
-  stateMaintenance: StateMaintenanceService;
+  stateMaintenance: Pick<
+    StateMaintenanceService,
+    'status' | 'refresh' | 'verifyAndTrust' | 'onChange'
+  >;
 };
 
 export function safeExternalUpdateUrl(raw?: string) {
