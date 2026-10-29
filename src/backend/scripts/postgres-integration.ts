@@ -610,7 +610,7 @@ async function runAssertions() {
         reenableRouteBreaker({
           actorUserId: '22222222-2222-2222-2222-222222222222',
           routeSlot: 'provider-overrun',
-          provider: 'integration',
+          provider: 'openrouter',
           modelId: 'provider-overrun-model',
         }),
         'audit insert failure must abort breaker re-enable',
@@ -627,7 +627,7 @@ async function runAssertions() {
       await reenableRouteBreaker({
         actorUserId: billingUser.id,
         routeSlot: 'provider-overrun',
-        provider: 'integration',
+        provider: 'openrouter',
         modelId: 'provider-overrun-model',
       });
       assert.equal(
