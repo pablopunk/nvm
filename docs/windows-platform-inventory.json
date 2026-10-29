@@ -1354,7 +1354,7 @@
     },
     {
       "key": "renderer-camera-label",
-      "file": "src/app/palette/extension-view/extension-view.tsx",
+      "file": "src/app/palette/extension-view/camera-view.tsx",
       "disposition": "platform-neutral-copy",
       "evidencePattern": "system privacy settings"
     }

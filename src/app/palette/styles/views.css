@@ -1771,6 +1771,14 @@
   backface-visibility: hidden;
 }
 
+.cameraVideoMirrored {
+  transform: translateZ(0) scaleX(-1);
+}
+
+.cameraVideoContain {
+  object-fit: contain;
+}
+
 .cameraStatus {
   position: absolute;
   right: 16px;

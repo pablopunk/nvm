@@ -11,8 +11,8 @@
   "extensions/account.ts": 612,
   "extensions/dictation.ts": 810,
   "palette/App.tsx": 5982,
-  "palette/extension-view.tsx": 1344,
-  "palette/model.ts": 750,
+  "palette/extension-view.tsx": 1158,
+  "palette/model.ts": 747,
   "palette/ui.tsx": 947,
   "palette/use-ai-chat.ts": 873
 }

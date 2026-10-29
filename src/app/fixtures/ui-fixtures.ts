@@ -31,6 +31,7 @@ import {
 } from './ui/rendering-fixtures.ts';
 import {
   cameraView,
+  mirroredCameraView,
   progressView,
   webviewView,
 } from './ui/simple-view-fixtures.ts';
@@ -230,6 +231,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Camera',
       icon: 'camera',
       run: (ctx) => cameraView(ctx),
+    },
+    {
+      id: 'camera-mirrored',
+      title: 'Dev UI: Mirrored Camera',
+      icon: 'camera',
+      run: (ctx) => mirroredCameraView(ctx),
     },
   ],
 };
