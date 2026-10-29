@@ -1413,8 +1413,8 @@ async function finalizeReservationInternal(
     const actualFreeCostMicrocents = reservation.admissionMonth
       ? microcentsForFreePool({
           totalCostMicrocents: microcents,
-          freeCredits: actualFree,
-          totalCredits: actualTotalCredits,
+          freeCredits: reservedFree,
+          totalCredits: reservedFree + reservedPaid,
         })
       : null;
     if (actualFree > 0)
