@@ -51,7 +51,7 @@ const OPENROUTER_LIVE_SETTINGS = {
   decision_model_route: route('openrouter', 'typesafe/jev-1.14'),
 };
 
-function verifyWith(fixture: RouteFixture): Promise<PricingReadinessReport> {
+async function verifyWith(fixture: RouteFixture): Promise<PricingReadinessReport> {
   return withTestDb(fakeRouteDb(fixture), () => verifyLivePricingReadiness());
 }
 
