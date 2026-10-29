@@ -42,3 +42,18 @@ function expiredDevTags(releases, now, protectedTags = []) {
 }
 
 module.exports = { selectNewestDev, expiredDevTags };
+
+if (require.main === module) {
+  try {
+    const [command, file, argument] = process.argv.slice(2);
+    const releases = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
+    if (command === 'select') {
+      console.log(JSON.stringify(selectNewestDev(releases, argument || null)));
+    } else {
+      throw new Error(`Unknown command: ${command}`);
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
+}

@@ -12,7 +12,7 @@ const OWNER = 'pablopunk';
 const REPO = 'nvm';
 const RELEASES_PATH = `/${OWNER}/${REPO}/releases`;
 const LATEST_PATH = `${RELEASES_PATH}/latest`;
-const FEED_PATH = `/${OWNER}/${REPO}/releases.atom`;
+const FEED_PATH = `/repos/${OWNER}/${REPO}/releases`;
 
 const STABLE_TAG = 'v0.17.0';
 const NIGHTLY_NEWEST_TAG = 'v0.17.1-nightly.20261028.13';
@@ -97,11 +97,9 @@ function latestRelease(tag: string | null): Record<string, FakeRouteResponse> {
 }
 
 function feedBody(tags: string[]) {
-  const entries = tags.map(
-    (tag) =>
-      `<entry><link href="https://github.com${RELEASES_PATH}/tag/${tag}"/></entry>`,
+  return JSON.stringify(
+    tags.map((tag_name) => ({ tag_name, draft: false, prerelease: true })),
   );
-  return `<feed>${entries.join('')}</feed>`;
 }
 
 function releaseFeed(tags: string[]): Record<string, FakeRouteResponse> {
@@ -153,6 +151,18 @@ test('dev updates use dev prereleases for metadata and payloads', async () => {
     provider.resolveFiles(info)[0].url.href,
     /\/nvm\/releases\/download\//,
   );
+});
+
+test('nightly channel resolves promoted numeric builds with nightly metadata', async () => {
+  const tag = 'v2026.1029.901-nightly';
+  const github = createFakeGitHub({
+    ...latestRelease(STABLE_TAG),
+    ...releaseFeed([tag]),
+    [metadataPath(tag, 'nightly.yml')]: metadataYaml('2026.1029.901'),
+  });
+  const info = await createProvider('nightly', github).getLatestVersion();
+  assert.equal(info.tag, tag);
+  assert.equal(info.version, '2026.1029.901');
 });
 
 async function withUpdaterArch<T>(arch: string, run: () => Promise<T>) {

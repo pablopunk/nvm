@@ -11,14 +11,11 @@ import {
 } from 'electron-updater/out/providers/Provider.js';
 import {
   channelMetadataNameFor,
-  releaseTagsFromAtomFeed,
   releasesNewestFirst,
   type UpdateChannel,
 } from './update-channel';
 
 const MAX_METADATA_CANDIDATES = 3;
-const RELEASES_FEED_ACCEPT =
-  'application/xml, application/atom+xml, text/xml, */*';
 
 type GitHubFeedOptions = ConstructorParameters<typeof GitHubProvider>[0];
 
@@ -75,7 +72,11 @@ export class NevermindChannelProvider extends GitHubProvider {
     channel: UpdateChannel,
     cancellationToken: CancellationToken,
   ) {
-    if (channel === 'dev') {
+    if (channel === 'dev' || channel === 'nightly') {
+      const stable =
+        channel === 'nightly'
+          ? await this.fetchLatestStableTag(cancellationToken)
+          : null;
       this.releasesPath(channel);
       const tags: string[] = [];
       for (let page = 1; page <= 10; page += 1) {
@@ -100,20 +101,13 @@ export class NevermindChannelProvider extends GitHubProvider {
           )
             tags.push(release.tag_name);
         }
-        if (releases.length < 100) return tags;
+        if (releases.length < 100) return stable ? [...tags, stable] : tags;
       }
       throw new Error('Dev release list exceeds pagination limit');
     }
     const latestStableTag = await this.fetchLatestStableTag(cancellationToken);
     const latestTags = latestStableTag ? [latestStableTag] : [];
-    if (channel === 'stable') return latestTags;
-    // The feed lists only the ten newest releases, so it cannot find stable tags on its own.
-    const feed = await this.httpRequest(
-      new URL(`${this.releasesPath()}.atom`, this.baseUrl),
-      { accept: RELEASES_FEED_ACCEPT },
-      cancellationToken,
-    );
-    return [...latestTags, ...releaseTagsFromAtomFeed(feed ?? '')];
+    return latestTags;
   }
 
   private async fetchLatestStableTag(cancellationToken: CancellationToken) {
