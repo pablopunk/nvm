@@ -35,9 +35,15 @@ function createManifest({ directory, version, sourceSha, runId }) {
   };
 }
 
-function verifyManifest({ directory, manifest }) {
+function verifyManifest({ directory, manifest, version, sourceSha, runId }) {
   if (!manifest || manifest.schema !== 1 || !Array.isArray(manifest.files))
     throw new Error('Invalid manifest');
+  if (
+    manifest.version !== version ||
+    manifest.sourceSha !== sourceSha ||
+    manifest.runId !== String(runId)
+  )
+    throw new Error('Artifact provenance mismatch');
   const actual = createManifest({ directory, ...manifest });
   if (JSON.stringify(actual) !== JSON.stringify(manifest))
     throw new Error('Artifact manifest mismatch');

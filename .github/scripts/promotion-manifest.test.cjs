@@ -11,17 +11,27 @@ test('manifest binds provenance and every artifact byte', (t) => {
   const directory = mkdtempSync(path.join(os.tmpdir(), 'promotion-'));
   t.after(() => rmSync(directory, { recursive: true, force: true }));
   writeFileSync(path.join(directory, 'package.zip'), 'signed bytes');
-  const manifest = createManifest({
-    directory,
+  const provenance = {
     version: '2026.1029.1',
     sourceSha: 'a'.repeat(40),
     runId: '123',
-  });
-  verifyManifest({ directory, manifest });
+  };
+  const manifest = createManifest({ directory, ...provenance });
+  verifyManifest({ directory, manifest, ...provenance });
+  assert.throws(
+    () => verifyManifest({ directory, manifest, ...provenance, runId: '124' }),
+    /provenance mismatch/,
+  );
   writeFileSync(path.join(directory, 'package.zip'), 'changed bytes');
-  assert.throws(() => verifyManifest({ directory, manifest }), /mismatch/);
+  assert.throws(
+    () => verifyManifest({ directory, manifest, ...provenance }),
+    /mismatch/,
+  );
   writeFileSync(path.join(directory, 'extra'), 'unexpected');
-  assert.throws(() => verifyManifest({ directory, manifest }), /mismatch/);
+  assert.throws(
+    () => verifyManifest({ directory, manifest, ...provenance }),
+    /mismatch/,
+  );
 });
 
 test('rejects symlinks and invalid provenance', (t) => {
