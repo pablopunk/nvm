@@ -4,11 +4,19 @@ const { test } = require('node:test');
 const {
   selectNewestDev,
   expiredDevTags,
+  referencedDevTags,
 } = require('./promotion-selection.cjs');
 
 function release(tag_name, published_at = '2026-01-01T00:00:00Z') {
   return { tag_name, published_at, draft: false, prerelease: true };
 }
+
+test('preserves dev releases referenced by other releases', () => {
+  assert.deepEqual(
+    referencedDevTags([{ body: 'Promoted from v2026.101.1-dev.' }]),
+    ['v2026.101.1-dev'],
+  );
+});
 
 test('selection uses version order rather than completion order and skips unchanged', () => {
   const releases = [release('v2026.1029.9-dev'), release('v2026.1029.10-dev')];

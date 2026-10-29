@@ -1,11 +1,6 @@
 name: Nightly release
 
 on:
-  schedule:
-    # GitHub cron is UTC-only. 02:00 UTC is 04:00 Europe/Madrid in CEST and 03:00 UTC is
-    # 04:00 in CET; the plan job selects the matching schedule and allows delayed starts.
-    - cron: '0 2 * * *'
-    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       dry_run:

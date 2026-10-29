@@ -31,6 +31,7 @@ function expiredDevTags(releases, now, protectedTags = []) {
       !/^v\d+\.\d+\.\d+-dev$/.test(release?.tag_name ?? '') ||
       release.draft !== false ||
       release.prerelease !== true ||
+      /(?:^|\n)Nevermind-Preserve: true(?:\r?\n|$)/.test(release.body ?? '') ||
       protectedSet.has(release.tag_name)
     )
       return [];
@@ -41,7 +42,19 @@ function expiredDevTags(releases, now, protectedTags = []) {
   });
 }
 
-module.exports = { selectNewestDev, expiredDevTags };
+function referencedDevTags(releases) {
+  if (!Array.isArray(releases)) throw new Error('Release list is unavailable');
+  const referenced = new Set();
+  for (const release of releases) {
+    if (/^v\d+\.\d+\.\d+-dev$/.test(release?.tag_name ?? '')) continue;
+    if (typeof release?.body !== 'string') continue;
+    for (const match of release.body.matchAll(/\bv\d+\.\d+\.\d+-dev\b/g))
+      referenced.add(match[0]);
+  }
+  return [...referenced];
+}
+
+module.exports = { selectNewestDev, expiredDevTags, referencedDevTags };
 
 if (require.main === module) {
   try {
@@ -49,6 +62,16 @@ if (require.main === module) {
     const releases = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
     if (command === 'select') {
       console.log(JSON.stringify(selectNewestDev(releases, argument || null)));
+    } else if (command === 'retention') {
+      console.log(
+        JSON.stringify(
+          expiredDevTags(
+            releases,
+            new Date(argument),
+            referencedDevTags(releases),
+          ),
+        ),
+      );
     } else {
       throw new Error(`Unknown command: ${command}`);
     }

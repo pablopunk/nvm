@@ -1,0 +1,35 @@
+name: Retain dev releases
+
+on:
+  schedule:
+    - cron: '43 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-promotion
+  queue: max
+
+jobs:
+  retain:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: jdx/mise-action@v2
+      - name: Delete expired unreferenced dev releases
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
+          mise exec -- node .github/scripts/promotion-selection.cjs retention releases.json "$(date -u +%FT%TZ)" > expired.json
+          jq -r '.[]' expired.json | while read -r tag; do
+            [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev$ ]]
+            gh release delete "$tag" --cleanup-tag --yes
+          done

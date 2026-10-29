@@ -15,9 +15,13 @@ const windowsVerifier = fs.readFileSync(
 );
 
 test('nightly schedule registers both UTC hours and defers the Madrid 04:00 choice to the gate', () => {
-  assert.match(workflow, /- cron: '0 2 \* \* \*'/);
-  assert.match(workflow, /- cron: '0 3 \* \* \*'/);
-  assert.match(workflow, /schedule-gate/);
+  const promotion = fs.readFileSync(
+    '.github/workflows/promote-nightly.yml',
+    'utf8',
+  );
+  assert.match(promotion, /- cron: '0 2 \* \* \*'/);
+  assert.match(promotion, /- cron: '0 3 \* \* \*'/);
+  assert.match(promotion, /schedule-gate/);
   assert.match(workflow, /Europe\/Madrid/);
   assert.doesNotMatch(
     workflow,
