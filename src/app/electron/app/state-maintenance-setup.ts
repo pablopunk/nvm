@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { app } from 'electron';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import { defaultSharedStateRoot } from '../platform/shared-state-root';
+import { installStateWriteGuard } from '../platform/state-write-guard';
 import { STATE_COMPATIBILITY_EPOCH } from '../state/state-compatibility';
 import {
   createStateMaintenanceService,
@@ -9,16 +11,22 @@ import {
 
 type AppStateMaintenanceInput = Pick<
   StateMaintenanceDeps,
-  'writers' | 'flushPendingState' | 'isUpdateInstalling' | 'onChange'
-> & { isTestMode: boolean };
+  'flushPendingState'
+> & {
+  isTestMode: boolean;
+  /** Pauses interactive work and guards persisted writes that start elsewhere. */
+  activity: MaintenanceActivity;
+  writers: StateMaintenanceDeps['writers'];
+  updateManager: { state: { installInFlight: boolean } };
+};
 
 export function createAppStateMaintenance(input: AppStateMaintenanceInput) {
   const sharedRoot = defaultSharedStateRoot();
+  installStateWriteGuard(input.activity.run);
   return createStateMaintenanceService({
-    writers: input.writers,
+    writers: [input.activity, ...input.writers],
     flushPendingState: input.flushPendingState,
-    isUpdateInstalling: input.isUpdateInstalling,
-    onChange: input.onChange,
+    isUpdateInstalling: () => input.updateManager.state.installInFlight,
     epoch: STATE_COMPATIBILITY_EPOCH,
     ownsSingleInstance: () => app.hasSingleInstanceLock(),
     roots: () =>

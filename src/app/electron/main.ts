@@ -292,7 +292,6 @@ import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
 import { createMaintenanceActivity } from './platform/maintenance-activity';
-import { installStateWriteGuard } from './platform/state-write-guard';
 import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
@@ -533,7 +532,6 @@ const jobRegistry = new JobRegistry({
     ),
 });
 const activity = createMaintenanceActivity();
-installStateWriteGuard(activity.run);
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 let activeAiChatId: string | undefined;
@@ -617,6 +615,7 @@ async function flushPendingState() {
   await flushPendingDrafts();
 }
 const stateSafeQuit = createStateSafeQuit({
+  beforeFlush: () => stateMaintenance.prepareForQuit(),
   flushPendingSave: async () => {
     await flushPendingState();
     await flushDiagnosticRecords();
@@ -1433,6 +1432,13 @@ function sendToPaletteWindow(channel: string, payload: unknown) {
   paletteWindow.win?.webContents.send(channel, payload);
 }
 
+const stateMaintenance = createAppStateMaintenance({
+  isTestMode: isNvmTestMode,
+  activity,
+  writers: [jobRegistry, extensionJsonStore, portableConfigService],
+  flushPendingState,
+  updateManager,
+});
 const {
   updatesStateSnapshot,
   checkForUpdatesView,
@@ -1452,13 +1458,7 @@ const {
   requestQuit: stateSafeQuit.requestQuit,
   quitApp: () => app.quit(),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
-  stateMaintenance: createAppStateMaintenance({
-    isTestMode: isNvmTestMode,
-    writers: [activity, jobRegistry, extensionJsonStore, portableConfigService],
-    flushPendingState,
-    isUpdateInstalling: () => updateManager.state.installInFlight,
-    onChange: () => patchUpdatesView(),
-  }),
+  stateMaintenance,
 });
 
 const createExtensionContext = createExtensionContextFactory({

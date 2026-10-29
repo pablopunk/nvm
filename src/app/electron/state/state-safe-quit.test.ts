@@ -166,3 +166,40 @@ test('multiple quit callers share one in-flight flush and quit action', async ()
   assert.equal(flushes, 1);
   assert.equal(quits, 1);
 });
+
+test('waits for the pre-flush dependency before flushing and quitting', async () => {
+  const release = deferred();
+  const calls: string[] = [];
+  const lifecycle = createStateSafeQuit({
+    beforeFlush: async () => {
+      calls.push('before');
+      await release.promise;
+    },
+    flushPendingSave: async () => void calls.push('flush'),
+    quit: () => calls.push('quit'),
+    cleanup: noOp,
+    exit: noOp,
+  });
+  const request = lifecycle.requestQuit('menu');
+  await Promise.resolve();
+  assert.deepEqual(calls, ['before']);
+  release.resolve();
+  await request;
+  assert.deepEqual(calls, ['before', 'flush', 'quit']);
+});
+
+test('still flushes and quits when the pre-flush dependency fails', async () => {
+  const calls: string[] = [];
+  const lifecycle = createStateSafeQuit({
+    beforeFlush: async () => {
+      throw new Error('maintenance failed');
+    },
+    flushPendingSave: async () => void calls.push('flush'),
+    quit: () => calls.push('quit'),
+    cleanup: noOp,
+    exit: noOp,
+    onFlushError: () => calls.push('error'),
+  });
+  await lifecycle.requestQuit('menu');
+  assert.deepEqual(calls, ['error', 'flush', 'quit']);
+});

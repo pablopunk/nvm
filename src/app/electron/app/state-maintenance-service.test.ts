@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { acquireSharedStateLease } from '../platform/shared-state-lease';
 import { stateRootsSupportDowngrade } from '../state/state-compatibility';
 import {
   createStateMaintenanceService,
@@ -141,4 +142,79 @@ test('refresh reports whether the roots are already trusted', async (t) => {
   const service = create();
   await service.refresh();
   assert.deepEqual(service.status(), { phase: 'idle', trusted: false });
+});
+
+test('a transaction that has not taken the lease refuses to start once quitting', async (t) => {
+  const { create } = await fixture(t);
+  let proceed!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    proceed = resolve;
+  });
+  const service = create({
+    flushPendingState: async () => {
+      await blocked;
+    },
+  });
+  const running = service.verifyAndTrust();
+  let quitReady = false;
+  const quit = service.prepareForQuit().then(() => {
+    quitReady = true;
+  });
+  proceed();
+  const result = await running;
+  await quit;
+  assert.equal(quitReady, true);
+  assert.equal(result.phase, 'failed');
+  assert.match((result as { message: string }).message, /quitting/);
+  assert.equal((await service.verifyAndTrust()).phase, 'failed');
+});
+
+test('notifies listeners of status changes until they unsubscribe', async (t) => {
+  const { create } = await fixture(t);
+  const service = create();
+  const phases: string[] = [];
+  const unsubscribe = service.onChange(() =>
+    phases.push(service.status().phase),
+  );
+  await service.verifyAndTrust();
+  unsubscribe();
+  await service.refresh();
+  assert.deepEqual(phases, ['running', 'complete']);
+});
+
+test('quitting waits until a transaction holding the lease releases it', async (t) => {
+  const { create } = await fixture(t);
+  let proceed!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    proceed = resolve;
+  });
+  let held!: () => void;
+  const lockTaken = new Promise<void>((resolve) => {
+    held = resolve;
+  });
+  const service = create({
+    acquireLease: async (sharedRoot) => {
+      const lease = await acquireSharedStateLease(sharedRoot);
+      return {
+        release: lease.release,
+        assertHeld: async () => {
+          held();
+          await gate;
+          await lease.assertHeld();
+        },
+      };
+    },
+  });
+  const running = service.verifyAndTrust();
+  await lockTaken;
+  let quitReady = false;
+  const quit = service.prepareForQuit().then(() => {
+    quitReady = true;
+  });
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  assert.equal(quitReady, false);
+  proceed();
+  assert.equal((await running).phase, 'complete');
+  await quit;
+  assert.equal(quitReady, true);
 });

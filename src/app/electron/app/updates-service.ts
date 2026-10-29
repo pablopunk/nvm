@@ -221,6 +221,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     return { view: updateStatusView(), navigation: 'replace' };
   }
 
+  stateMaintenance.onChange(patchUpdatesView);
+
   function updatesStateSnapshot() {
     const state = updateManager.state;
     const downloadedInfo = state.downloadedInfo;

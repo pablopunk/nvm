@@ -35,7 +35,6 @@ export type StateMaintenanceDeps = {
   ownsSingleInstance: () => boolean;
   isUpdateInstalling: () => boolean;
   acquireLease?: (sharedRoot: string) => Promise<SharedStateLease>;
-  onChange?: () => void;
 };
 
 export function createStateMaintenanceService(deps: StateMaintenanceDeps) {
@@ -44,10 +43,13 @@ export function createStateMaintenanceService(deps: StateMaintenanceDeps) {
     ? { phase: 'idle', trusted: false }
     : { phase: 'unsupported' };
   let running: Promise<StateVerificationStatus> | null = null;
+  let leaseHeld: Promise<void> = Promise.resolve();
+  let quitting = false;
+  const listeners = new Set<() => void>();
 
   function publish(next: StateVerificationStatus) {
     status = next;
-    deps.onChange?.();
+    for (const listener of listeners) listener();
   }
 
   async function currentTrust(roots: StateMaintenanceRoots) {
@@ -83,29 +85,48 @@ export function createStateMaintenanceService(deps: StateMaintenanceDeps) {
     if (failures.length) throw failures[0];
   }
 
-  async function verifyWithWritersPaused(roots: StateMaintenanceRoots) {
-    const paused: PausableWriter[] = [];
+  async function withLease<T>(
+    sharedRoot: string,
+    use: (lease: SharedStateLease) => Promise<T>,
+  ) {
+    let markReleased!: () => void;
+    leaseHeld = new Promise<void>((resolve) => {
+      markReleased = resolve;
+    });
     let lease: SharedStateLease | undefined;
     try {
-      await pauseWriters(paused);
-      await deps.flushPendingState();
-      await fs.mkdir(roots.backupParent, { recursive: true, mode: 0o700 });
-      lease = await acquireLease(roots.sharedRoot);
-      const { backupPath } = await backupAndTrustState({
-        ...roots,
-        epoch: deps.epoch,
-        lease,
-        legacyInstancesClosed: true,
-        verifyNoUncoordinatedWriters: async () =>
-          deps.ownsSingleInstance() && !deps.isUpdateInstalling(),
-      });
-      return backupPath;
+      if (quitting) throw new Error('Nevermind is quitting');
+      lease = await acquireLease(sharedRoot);
+      if (quitting) throw new Error('Nevermind is quitting');
+      return await use(lease);
     } finally {
       try {
         await lease?.release();
       } finally {
-        resumeWriters(paused);
+        markReleased();
       }
+    }
+  }
+
+  async function verifyWithWritersPaused(roots: StateMaintenanceRoots) {
+    const paused: PausableWriter[] = [];
+    try {
+      await pauseWriters(paused);
+      await deps.flushPendingState();
+      await fs.mkdir(roots.backupParent, { recursive: true, mode: 0o700 });
+      return await withLease(roots.sharedRoot, async (lease) => {
+        const { backupPath } = await backupAndTrustState({
+          ...roots,
+          epoch: deps.epoch,
+          lease,
+          legacyInstancesClosed: true,
+          verifyNoUncoordinatedWriters: async () =>
+            deps.ownsSingleInstance() && !deps.isUpdateInstalling(),
+        });
+        return backupPath;
+      });
+    } finally {
+      resumeWriters(paused);
     }
   }
 
@@ -139,7 +160,23 @@ export function createStateMaintenanceService(deps: StateMaintenanceDeps) {
     return running;
   }
 
-  return { status: () => status, refresh, verifyAndTrust };
+  return {
+    status: () => status,
+    refresh,
+    verifyAndTrust,
+    /**
+     * Stops new transactions from taking the shared-state lease and resolves
+     * once any transaction already holding it has released it.
+     */
+    prepareForQuit() {
+      quitting = true;
+      return leaseHeld;
+    },
+    onChange(listener: () => void) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
 }
 
 export type StateMaintenanceService = ReturnType<
