@@ -1,6 +1,5 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +8,6 @@ import { PaneInvocations } from './app/pane-invocations';
 
 const paneInvocations = new PaneInvocations();
 const paneInvocationWindows = new WeakSet<object>();
-
 // Global safety net: unhandled rejections and uncaught exceptions must never
 // crash the app. An extension action or shell call that throws unexpectedly
 // should be logged and contained, not silently kill the entire process.
@@ -108,9 +106,9 @@ import {
   reportDiagnosticProblem,
   setDiagnosticReporting,
 } from './diagnostics/sentry';
+import { createLocalFileUrlSecretLoader } from './files/local-file-url-secret';
 import { resolveExtensionPaths } from './extension-host/extension-paths';
 import {
-  configureLocalFileUrlSecret,
   expandUserPath,
   extensionForPath,
   fileUrlForPath,
@@ -133,7 +131,6 @@ import {
 configureNvmTestMode();
 if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
-
 import {
   INTERNAL_EXTENSION_FACTORIES,
   INTERNAL_EXTENSION_SOURCE_FILES,
@@ -179,6 +176,7 @@ import {
 } from './app/emoji-symbol-catalog';
 import { createExtensionRootItems } from './app/extension-root-items';
 import { createFormFieldPathPicker } from './app/form-field-paths';
+import { registerInstanceEvents } from './app/instance-events';
 import { createPaletteSearch } from './app/palette-search';
 import {
   createPaletteWindowController,
@@ -187,6 +185,7 @@ import {
 import { createPortableConfigLive } from './app/portable-config-live';
 import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
+import { createPendingViewLoaderSpawner } from './app/pending-view-loader';
 import { createRunningAppStatusService } from './app/running-app-status';
 import {
   SETTING_DEFINITIONS,
@@ -196,6 +195,7 @@ import {
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
+import { createAppStateMaintenance } from './app/state-maintenance-setup';
 import { createAppUpdateManager } from './app/update-manager-setup';
 import { createUpdatesService } from './app/updates-service';
 import {
@@ -286,10 +286,12 @@ import {
   watchApps,
 } from './os/os';
 import { createSelectedTextReader } from './os/selected-text';
+import { acquireDefaultSharedStateInstance } from './os/shared-state-instance';
 import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
+import { createMaintenanceActivity } from './platform/maintenance-activity';
 import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
@@ -529,6 +531,7 @@ const jobRegistry = new JobRegistry({
       { freshJourney: true },
     ),
 });
+const activity = createMaintenanceActivity();
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 let activeAiChatId: string | undefined;
@@ -557,21 +560,12 @@ const viewLoaderRegistry = createViewLoaderRegistry({
     await mutateExtensionCache(extension, update);
   },
 });
-
-function spawnPendingViewLoaders(result: any, traceId?: string) {
-  const viewId = result?.view?.id;
-  if (viewId && viewLoaderRegistry.has(viewId))
-    void Promise.resolve(
-      performanceTraces.run(
-        'view.loader.spawn',
-        { viewId },
-        () => viewLoaderRegistry.spawn(viewId),
-        traceId ? { traceId } : undefined,
-      ),
-    ).catch(() => {});
-}
+const spawnPendingViewLoaders = createPendingViewLoaderSpawner({
+  registry: viewLoaderRegistry,
+  trace: performanceTraces,
+  activity,
+});
 const userStateStore = createUserStateStore(createDefaultUserState());
-
 const userStatePersistence = createUserStatePersistence({
   getUserState: () => userStateStore.get(),
   getStatePath: () => statePath,
@@ -615,9 +609,15 @@ function registerActionShortcuts() {
   void portableConfigService.refreshShortcutBindings();
 }
 
+async function flushPendingState() {
+  await userStatePersistence.flushPendingSave();
+  await learningStore?.flushPendingSave();
+  await flushPendingDrafts();
+}
 const stateSafeQuit = createStateSafeQuit({
+  beforeFlush: () => stateMaintenance.prepareForQuit(),
   flushPendingSave: async () => {
-    await userStatePersistence.flushPendingSave();
+    await flushPendingState();
     await flushDiagnosticRecords();
   },
   quit: () => app.quit(),
@@ -672,7 +672,6 @@ const {
   },
   canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
-
 const linuxX11Clipboard = createLinuxX11Clipboard();
 const clipboardApi = createElectronClipboardApi({
   clipboard,
@@ -905,6 +904,7 @@ const extensionDraftRefs = new Map<
 >();
 const {
   hydrateExtensionDrafts,
+  flushPendingDrafts,
   schedulePersistExtensionDrafts,
   saveExtensionDraftForIpc,
   commitExtensionDraft,
@@ -991,6 +991,7 @@ const {
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
+  activity,
   paletteWindow,
   captureFrontmostTarget: frontmostAppFocusTarget,
   paneInvocations,
@@ -1155,6 +1156,7 @@ const {
   normalizeViewItems,
 });
 const { executeAction } = createRootActionExecutor({
+  activity,
   paletteWindow,
   recordRecent: (action) => recordRecent(action),
   currentActionForStoredShortcut,
@@ -1163,7 +1165,12 @@ const { executeAction } = createRootActionExecutor({
   presentActionResultFeedback,
 });
 const { executeViewAction } = createViewActionExecutor({
-  ...createNativeActionHandlers({ viewLoaderRegistry, executeAction }),
+  ...createNativeActionHandlers({
+    viewLoaderRegistry,
+    executeAction,
+    activity,
+    verifyStateView: (nativeAction) => verifyStateView(nativeAction),
+  }),
   ...createFileActionHandlers({ shell }),
   ...createClipboardActionHandlers({
     clipboardApi,
@@ -1425,6 +1432,13 @@ function sendToPaletteWindow(channel: string, payload: unknown) {
   paletteWindow.win?.webContents.send(channel, payload);
 }
 
+const stateMaintenance = createAppStateMaintenance({
+  isTestMode: isNvmTestMode,
+  activity,
+  writers: [jobRegistry, extensionJsonStore, portableConfigService],
+  flushPendingState,
+  updateManager,
+});
 const {
   updatesStateSnapshot,
   checkForUpdatesView,
@@ -1433,6 +1447,7 @@ const {
   compatibilityPromptAction,
   updatePromptAction,
   patchUpdatesView,
+  verifyStateView,
 } = createUpdatesService({
   updateManager,
   getAppVersion: () => app.getVersion(),
@@ -1443,6 +1458,7 @@ const {
   requestQuit: stateSafeQuit.requestQuit,
   quitApp: () => app.quit(),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
+  stateMaintenance,
 });
 
 const createExtensionContext = createExtensionContextFactory({
@@ -1710,6 +1726,7 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
       measure: measureDebugPerformance,
       summarize: summarizeDebugValue,
       trace: performanceTraces,
+      activity,
     }),
   globalShortcut,
   paletteWindow,
@@ -1730,7 +1747,6 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
   initializeAi: () => initNevermindAi(),
   getAi: () => nevermindAi,
 });
-
 function setActiveAiChatId(chatId: string | undefined) {
   activeAiChatId = chatId;
 }
@@ -1851,7 +1867,6 @@ const { noteAiChatExited, disposeAiSessions } = createAiChatSessionTeardown({
   abortAiChat,
   recordLearningReview,
 });
-
 function setActiveNevermindBaseUrlState(baseUrl: string | null) {
   activeNevermindBaseUrl = baseUrl;
 }
@@ -1897,7 +1912,6 @@ const { processBufferedDeepLink, flushBufferedDeepLinks } =
     invalidateExtensionRootItems,
     broadcastAuthChanged,
   });
-
 function initExtensionRuntimeContext() {
   initExtensionContext({
     diagnostics: {
@@ -1970,29 +1984,15 @@ function initExtensionRuntimeContext() {
   });
 }
 
-async function ensureLocalFileUrlSecret() {
-  const secretPath = path.join(
-    app.getPath('userData'),
-    'local-file-url-secret',
-  );
-  const existing = await fs.readFile(secretPath, 'utf8').catch(() => '');
-  const secret =
-    existing.trim() || crypto.randomBytes(32).toString('base64url');
-  if (!existing.trim()) {
-    await fs.mkdir(path.dirname(secretPath), { recursive: true });
-    await fs.writeFile(secretPath, secret, { mode: 0o600 });
-  }
-  configureLocalFileUrlSecret(secret);
-}
-
 const { migrateAiChats } = createAiChatMigration({
   userStateStore,
   getExtensionsDir: () => extensionsDir,
 });
-
 const { loadUserState } = createUserStateLoader({
   osCacheRoot,
-  ensureLocalFileUrlSecret,
+  ensureLocalFileUrlSecret: createLocalFileUrlSecretLoader({
+    userDataPath: () => app.getPath('userData'),
+  }),
   userDataPath: () => app.getPath('userData'),
   resolveExtensionPaths,
   assignRuntimePaths: (paths) => {
@@ -2024,17 +2024,22 @@ const { loadUserState } = createUserStateLoader({
 function captureRuntimeStateIntoUserState() {
   userStateStore.get().clipboardHistory = clipboardHistory;
 }
-
 const { pickFormFieldPaths } = createFormFieldPathPicker({
   BrowserWindow,
   dialog,
   paletteWindow,
 });
-app.whenReady().then(async () => {
-  appReady = true;
+const startup = app.whenReady().then(async () => {
+  if (!(await acquireDefaultSharedStateInstance(app, isNvmTestMode))) {
+    app.exit(0);
+    return;
+  }
+  if (!isDev && !isNvmTestMode)
+    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
+    appReady = true;
     portableConfigService.startPollingPortableConfig();
     await loadExtensions();
     registerActionShortcuts();
@@ -2052,7 +2057,6 @@ app.whenReady().then(async () => {
     invalidateExtensionRootItems();
   });
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
-
   await loadUserState();
   portableConfigService.startPollingPortableConfig();
   await appIndexService.startWatcher();
@@ -2077,6 +2081,7 @@ app.whenReady().then(async () => {
   await initNevermindAi();
   initExtensionContext({ nevermindAi });
   void restorePersistentExtensionWindows();
+  appReady = true;
   flushBufferedDeepLinks();
   registerActionShortcuts();
   try {
@@ -2089,8 +2094,8 @@ app.whenReady().then(async () => {
   }
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
-
   registerAppIpcHandlers({
+    activity,
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
@@ -2163,7 +2168,6 @@ app.whenReady().then(async () => {
       extensionPrSubmitter?.probe() ??
       Promise.resolve({ installed: false, authed: false }),
   });
-
   paletteWindow.createWindow();
   const paletteHotkeyStatus = paletteWindow.registerHotkey();
   activationStatus.set(
@@ -2174,7 +2178,6 @@ app.whenReady().then(async () => {
   );
   if (paletteHotkeyStatus.registered || !paletteHotkeyStatus.configured)
     paletteWindow.showPaletteWhenReady();
-
   registerDictationIpc({
     ipcMain,
     systemPreferences,
@@ -2182,16 +2185,22 @@ app.whenReady().then(async () => {
     extensionWindowManager,
     dictationService,
   });
-
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
-    performanceTraces.run('view.loader.retry', { viewId }, async () => {
-      if (!viewLoaderRegistry.has(viewId)) return;
-      await viewLoaderRegistry.retry(viewId);
-    }),
+    activity.run(() =>
+      performanceTraces.run('view.loader.retry', { viewId }, async () => {
+        if (!viewLoaderRegistry.has(viewId)) return;
+        await viewLoaderRegistry.retry(viewId);
+      }),
+    ),
   );
 });
-
-app.on('activate', () => paletteWindow.showPaletteWhenReady());
+startup.catch((error) => {
+  logError('app.start.failed', error, { source: 'host', scope: 'app' });
+  app.exit(1);
+});
+app.on('activate', () => {
+  if (appReady) paletteWindow.showPaletteWhenReady();
+});
 app.on('before-quit', (event) => {
   nevermindApp.isQuiting = true;
   void dictationService.dispose();
@@ -2201,21 +2210,12 @@ app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
   stateSafeQuit.handleWillQuit();
 });
-
-if (!isDev && !isNvmTestMode) {
-  const gotLock = app.requestSingleInstanceLock();
-  if (gotLock) {
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
-    app.on('second-instance', (_event, argv) => {
-      paletteWindow.showPaletteWhenReady();
-      const deepLinkArg = argv?.find((arg: string) =>
-        arg.startsWith(`${DEEP_LINK_SCHEME}://`),
-      );
-      if (deepLinkArg && appReady) processBufferedDeepLink(deepLinkArg);
-    });
-  } else app.quit();
-}
-app.on('open-url', (_event, url) => {
-  if (appReady) processBufferedDeepLink(url);
-  else bufferedDeepLinks.push(url);
+registerInstanceEvents({
+  app,
+  scheme: DEEP_LINK_SCHEME,
+  testMode: isNvmTestMode,
+  isReady: () => appReady,
+  showPalette: () => paletteWindow.showPaletteWhenReady(),
+  processLink: processBufferedDeepLink,
+  bufferedLinks: bufferedDeepLinks,
 });

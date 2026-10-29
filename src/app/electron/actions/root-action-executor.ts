@@ -1,7 +1,9 @@
 import { isNvmTestMode } from '../platform/test-mode';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import { runInBackground } from './run-in-background';
 
 export type RootActionExecutorDeps = {
+  activity?: Pick<MaintenanceActivity, 'run'>;
   paletteWindow: { hidePalette: () => Promise<void> | void };
   recordRecent: (action: any) => void;
   currentActionForStoredShortcut: (action: any) => any;
@@ -57,10 +59,12 @@ export function createRootActionExecutor(deps: RootActionExecutorDeps) {
   }
 
   async function executeAction(action, options: any = {}) {
-    return presentActionResultFeedback(
-      await executeActionWithoutFeedback(action, options),
-      action,
-    );
+    const execute = async () =>
+      presentActionResultFeedback(
+        await executeActionWithoutFeedback(action, options),
+        action,
+      );
+    return deps.activity ? deps.activity.run(execute) : execute();
   }
 
   return { executeAction };

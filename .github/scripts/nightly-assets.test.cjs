@@ -128,3 +128,28 @@ test('updater metadata must reference only release assets', () => {
     /is not a release asset/,
   );
 });
+
+test('updater metadata size and top-level digest must match the staged primary file', () => {
+  const assetNames = expectedNightlyAssetNames(VERSION);
+  const digests = { [SETUP]: 'AAAA', [`${SETUP}.blockmap`]: 'BBBB' };
+  const sizes = { [SETUP]: 10, [`${SETUP}.blockmap`]: 5 };
+  const verify = (text, overrides = {}) =>
+    verifyUpdaterMetadata({
+      name: 'nightly.yml',
+      text,
+      version: VERSION,
+      assetNames,
+      sha512Of: (name) => digests[name] ?? null,
+      sizeOf: (name) => sizes[name],
+      ...overrides,
+    });
+  assert.equal(verify(windowsMetadata()).version, VERSION);
+  assert.throws(
+    () => verify(windowsMetadata(), { sizeOf: () => 11 }),
+    /size for .* does not match/,
+  );
+  assert.throws(
+    () => verify(windowsMetadata().replace(/^sha512: AAAA$/m, 'sha512: CCCC')),
+    /top-level sha512 does not match/,
+  );
+});

@@ -11,71 +11,21 @@ import {
 import {
   DEFAULT_UPDATE_CHANNEL,
   isUpdateInfoForChannel,
-  type UpdateChannel,
 } from './update-channel';
 
-type UpdateInfo = { version?: string; updateChannel?: UpdateChannel };
-type UpdateCheckResult = {
-  isUpdateAvailable: boolean;
-  updateInfo?: UpdateInfo;
-};
-type CancellationTokenLike = {
-  readonly cancelled: boolean;
-  cancel: () => void;
-};
-type AutoUpdaterLike = {
-  autoDownload: boolean;
-  autoInstallOnAppQuit: boolean;
-  allowDowngrade: boolean;
-  checkForUpdates: () => Promise<UpdateCheckResult | null | undefined>;
-  downloadUpdate: (
-    cancellationToken?: CancellationTokenLike,
-  ) => Promise<unknown>;
-  quitAndInstall: () => void;
-  on: (event: string, listener: (...args: any[]) => void) => void;
-};
-
-type UpdateStatus =
-  | 'idle'
-  | 'unsupported'
-  | 'checking'
-  | 'available'
-  | 'downloading'
-  | 'downloaded'
-  | 'installing'
-  | 'error';
-
-type UpdateState = {
-  checkInFlight: boolean;
-  downloadInFlight: boolean;
-  installInFlight: boolean;
-  status: UpdateStatus;
-  availableInfo: UpdateInfo | null;
-  downloadedInfo: UpdateInfo | null;
-  latestVersion: string | null;
-  errorMessage: string;
-};
-
-export type UpdateManagerOptions = {
-  getUpdateChannel?: () => UpdateChannel;
-  prepareUpdateFeed?: () => Promise<unknown>;
-  createCancellationToken?: () => CancellationTokenLike;
-};
+import { createDowngradeGate } from './update-downgrade';
+import {
+  createLocalCancellationToken,
+  type AutoUpdaterLike,
+  type CancellationTokenLike,
+  type UpdateInfo,
+  type UpdateManagerOptions,
+  type UpdateState,
+} from './update-manager-types';
+export type { UpdateManagerOptions } from './update-manager-types';
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
 const AUTO_UPDATE_POLL_INTERVAL_MS = 4 * 60 * 60 * 1000;
-
-function createLocalCancellationToken(): CancellationTokenLike {
-  let cancelled = false;
-  return {
-    get cancelled() {
-      return cancelled;
-    },
-    cancel() {
-      cancelled = true;
-    },
-  };
-}
 
 export function createUpdateManager(
   autoUpdater: AutoUpdaterLike,
@@ -113,8 +63,16 @@ export function createUpdateManager(
     availableInfo: null,
     downloadedInfo: null,
     latestVersion: null,
+    blockedDowngradeVersion: null,
     errorMessage: '',
   };
+
+  const {
+    isDowngradeCandidate,
+    isInstallPermitted,
+    blockDowngrade,
+    adoptDowngradeCandidate,
+  } = createDowngradeGate({ state, managerOptions, isCurrentChannelInfo });
 
   function canUseAutoUpdates() {
     return app.isPackaged && supportsAutoUpdates();
@@ -180,6 +138,7 @@ export function createUpdateManager(
     state.checkInFlight = true;
     state.status = 'checking';
     state.errorMessage = '';
+    state.blockedDowngradeVersion = null;
     notifyStateChanged();
     const capture = bindOperation((error: unknown) => {
       recordOperationFailure(error, 'request');
@@ -195,15 +154,25 @@ export function createUpdateManager(
       );
       await channelFeedReady;
       const result = await autoUpdater.checkForUpdates();
+      const candidate = result?.updateInfo;
+      if (
+        result?.isUpdateAvailable &&
+        candidate &&
+        isCurrentChannelInfo(candidate) &&
+        isDowngradeCandidate(candidate)
+      ) {
+        await adoptDowngradeCandidate(candidate);
+        return candidate;
+      }
       if (
         options.download &&
         result?.isUpdateAvailable &&
-        result.updateInfo &&
-        isCurrentChannelInfo(result.updateInfo) &&
+        candidate &&
+        isCurrentChannelInfo(candidate) &&
         !state.downloadedInfo
       )
-        await downloadAvailableUpdate(result.updateInfo);
-      return result?.updateInfo || null;
+        await downloadAvailableUpdate(candidate);
+      return candidate || null;
     } catch (error) {
       recordOperationFailure(error, 'request');
       state.status = 'error';
@@ -254,6 +223,10 @@ export function createUpdateManager(
     captureActiveFailure = capture;
     operationStage('save');
     try {
+      if (isDowngradeCandidate(availableInfo)) {
+        if (!(await isInstallPermitted(availableInfo)))
+          return blockDowngrade(availableInfo);
+      }
       await autoUpdater.downloadUpdate(cancellation);
     } catch (error) {
       if (cancellation.cancelled) {
@@ -305,6 +278,7 @@ export function createUpdateManager(
     state.availableInfo = null;
     state.downloadedInfo = null;
     state.latestVersion = null;
+    state.blockedDowngradeVersion = null;
     state.errorMessage = '';
     if (
       state.status === 'available' ||
@@ -338,7 +312,7 @@ export function createUpdateManager(
 
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = false;
-    autoUpdater.allowDowngrade = false;
+    autoUpdater.allowDowngrade = true;
     channelFeedReady = prepareUpdateFeed();
 
     autoUpdater.on('checking-for-update', () => {
@@ -355,6 +329,7 @@ export function createUpdateManager(
         logIgnoredChannelResult('update-available', info);
         return;
       }
+      if (isDowngradeCandidate(info)) return;
       state.availableInfo = info;
       state.latestVersion = info.version ?? null;
       state.status = 'available';
@@ -422,17 +397,19 @@ export function createUpdateManager(
 
     startupTimer = setTimeout(() => {
       startupTimer = null;
-      void checkForUpdates('startup');
+      void checkForUpdates('startup', {
+        download: getUpdateChannel() === 'dev',
+      });
     }, AUTO_UPDATE_STARTUP_DELAY_MS);
     startupTimer.unref?.();
 
     pollTimer = setInterval(() => {
-      void checkForUpdates('poll');
+      void checkForUpdates('poll', { download: getUpdateChannel() === 'dev' });
     }, AUTO_UPDATE_POLL_INTERVAL_MS);
     pollTimer.unref?.();
   }
 
-  function prepareInstall() {
+  async function prepareInstall() {
     if (
       !state.downloadedInfo ||
       state.installInFlight ||
@@ -440,6 +417,17 @@ export function createUpdateManager(
     )
       return false;
     state.installInFlight = true;
+    const candidate = state.downloadedInfo;
+    const permitted = await isInstallPermitted(candidate);
+    if (
+      !permitted ||
+      state.downloadedInfo !== candidate ||
+      !isCurrentChannelInfo(candidate)
+    ) {
+      state.installInFlight = false;
+      notifyStateChanged();
+      return false;
+    }
     onInstallRequested?.(state.downloadedInfo.version);
     state.status = 'installing';
     state.errorMessage = '';
@@ -459,7 +447,7 @@ export function createUpdateManager(
 
   function installUpdate() {
     if (!state.downloadedInfo || installStarted) return false;
-    if (!state.installInFlight && !prepareInstall()) return false;
+    if (!state.installInFlight) return false;
     installStarted = true;
     operationStage('install');
     try {

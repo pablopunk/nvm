@@ -2,7 +2,11 @@
 import { info as logInfo } from '../platform/logger';
 
 export type QuitLifecycleDeps = {
-  app: { isReady: () => boolean };
+  app: {
+    isReady: () => boolean;
+    hasSingleInstanceLock: () => boolean;
+    releaseSingleInstanceLock: () => void;
+  };
   globalShortcut: { unregisterAll: () => void };
   progressiveSearchCoordinator: { dispose: () => void };
   updateManager: { clearTimers: () => void };
@@ -43,6 +47,9 @@ export function createQuitLifecycle(deps: QuitLifecycleDeps) {
     appIndexService.closeWatchers();
     for (const watcher of extensionRuntimeState.extensionFileWatchers)
       watcher.close();
+    // State is flushed by now. Release the lock explicitly so a relaunch, such as
+    // after an update, never loses it to a process the OS has not finished tearing down.
+    if (app.hasSingleInstanceLock()) app.releaseSingleInstanceLock();
   }
 
   function requestQuitApp(reason = 'action') {

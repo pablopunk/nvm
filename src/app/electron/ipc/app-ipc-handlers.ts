@@ -4,8 +4,10 @@ import {
 } from './ipc-registration';
 import type { PaletteHotkeyStatus } from '../../palette/preload-api';
 import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 
 export interface AppIpcHandlersDeps {
+  activity?: Pick<MaintenanceActivity, 'run'>;
   ipcMain: IpcMainLike & {
     // biome-ignore lint/suspicious/noExplicitAny: deps-object pattern uses any for maximum caller flexibility
     on(channel: string, handler: (...args: any[]) => unknown): void;
@@ -128,6 +130,7 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     measure: deps.measureDebugPerformance,
     summarize: deps.summarizeDebugValue,
     trace: deps.performanceTrace,
+    activity: deps.activity,
   });
   if (deps.performanceTrace)
     deps.ipcMain.on('performance:trace', (_event, event) =>

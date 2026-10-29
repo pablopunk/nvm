@@ -6,9 +6,11 @@ import { runOperation } from '../diagnostics/observability';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import type { WindowFocusTarget } from '../os/window-management-types';
 import { error as logError } from '../platform/logger';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import { shortcutActionRunsWithoutView } from './shortcut-lifecycle';
 
 export type ShortcutRunnerDeps = {
+  activity?: Pick<MaintenanceActivity, 'run'>;
   captureFrontmostTarget: () => Promise<WindowFocusTarget | null>;
   paletteWindow: {
     readonly win: BrowserWindow | null;
@@ -51,9 +53,16 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
   } = deps;
 
   function executeShortcutAction(action) {
-    return runOperation('command.execute', () => runShortcutAction(action), {
-      freshJourney: true,
-    });
+    const execute = () =>
+      runOperation('command.execute', () => runShortcutAction(action), {
+        freshJourney: true,
+      });
+    try {
+      return deps.activity ? deps.activity.run(execute) : execute();
+    } catch (error) {
+      presentActionErrorFeedback(error, action);
+      return Promise.resolve();
+    }
   }
 
   async function runShortcutAction(action) {

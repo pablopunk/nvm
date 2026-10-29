@@ -1,3 +1,4 @@
+import { untilStateWritesThaw } from '../platform/state-write-guard';
 import { recordForPrivateState } from './portable-config-projection';
 import { createUserStateSaveScheduler, writeUserStateFile } from './user-state';
 import type { UserStateRecord } from './user-state-store';
@@ -33,6 +34,7 @@ function createUserStatePersistence(deps: UserStatePersistenceDeps) {
   }
 
   async function writeCurrentUserState() {
+    await untilStateWritesThaw();
     deps.beforeWrite();
     await writeUserStateFile(
       deps.getStatePath(),

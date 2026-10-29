@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { createUserStateSaveScheduler } from './user-state';
 
 export type LearningMessageRole = 'user' | 'assistant' | 'system';
 export type LearningKind = 'environment' | 'workflow' | 'preference';
@@ -155,7 +156,9 @@ function deepClone<T>(value: T): T {
 export class LocalLearningStore {
   private state: LearningStoreState = { version: 1, traces: [], learnings: [] };
   private loaded = false;
-  private saveTimer: NodeJS.Timeout | null = null;
+  private saveScheduler = createUserStateSaveScheduler({
+    save: () => this.save(),
+  });
   private openToolCallIds = new Map<string, string[]>();
 
   constructor(private readonly paths: LocalLearningStorePaths) {}
@@ -198,7 +201,7 @@ export class LocalLearningStore {
 
   upsertTraceMetadata(chatId: string, metadata: TraceMetadata = {}) {
     this.ensureTrace(chatId, metadata);
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   appendMessage(
@@ -213,7 +216,7 @@ export class LocalLearningStore {
     trace.messages.push({ role, content: text, createdAt: Date.now() });
     trace.messages = trace.messages.slice(-MAX_TRACE_MESSAGES);
     trace.updatedAt = Date.now();
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   appendAssistantDelta(
@@ -235,7 +238,7 @@ export class LocalLearningStore {
       });
     trace.messages = trace.messages.slice(-MAX_TRACE_MESSAGES);
     trace.updatedAt = Date.now();
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   recordToolStart(
@@ -257,7 +260,7 @@ export class LocalLearningStore {
     trace.toolCalls = trace.toolCalls.slice(-MAX_TRACE_TOOL_CALLS);
     trace.updatedAt = Date.now();
     this.trackOpenToolCall(trace.id, name, toolCallId);
-    this.scheduleSave();
+    this.saveScheduler.schedule();
     return toolCallId;
   }
 
@@ -286,7 +289,7 @@ export class LocalLearningStore {
       : undefined;
     trace.updatedAt = Date.now();
     this.finishOpenToolCall(trace.id, name, toolCall.id);
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   recordExtensionEvent(
@@ -308,7 +311,7 @@ export class LocalLearningStore {
       -MAX_TRACE_EXTENSION_EVENTS,
     );
     trace.updatedAt = Date.now();
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   recordStatus(
@@ -325,7 +328,7 @@ export class LocalLearningStore {
     });
     trace.statusEvents = trace.statusEvents.slice(-MAX_TRACE_STATUSES);
     trace.updatedAt = Date.now();
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   shouldReview(chatId: string) {
@@ -344,7 +347,7 @@ export class LocalLearningStore {
     if (!trace) return;
     trace.reviewedAt = Date.now();
     trace.updatedAt = Date.now();
-    this.scheduleSave();
+    this.saveScheduler.schedule();
   }
 
   replaceLearningsFromReview(
@@ -409,7 +412,7 @@ export class LocalLearningStore {
       .sort((left, right) => right.updatedAt - left.updatedAt)
       .slice(0, MAX_LEARNING_COUNT);
     this.markReviewed(chatId);
-    this.scheduleSave();
+    this.saveScheduler.schedule();
     return this.state.learnings.map((learning) => deepClone(learning));
   }
 
@@ -657,13 +660,8 @@ export class LocalLearningStore {
     else this.openToolCallIds.delete(key);
   }
 
-  private scheduleSave() {
-    if (this.saveTimer) clearTimeout(this.saveTimer);
-    this.saveTimer = setTimeout(() => {
-      this.saveTimer = null;
-      void this.save().catch(() => {});
-    }, 200);
-    this.saveTimer.unref?.();
+  flushPendingSave() {
+    return this.saveScheduler.flushPendingSave();
   }
 
   private async save() {

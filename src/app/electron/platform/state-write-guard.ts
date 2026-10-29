@@ -1,0 +1,41 @@
+type StateWriteGuard = <T>(write: () => T) => T;
+
+let installedGuard: StateWriteGuard = (write) => write();
+
+/**
+ * Installs the gate that state maintenance uses to pause persisted writes that
+ * start outside an interactive request, such as sign-in polling or transcription.
+ */
+export function installStateWriteGuard(guard: StateWriteGuard) {
+  installedGuard = guard;
+}
+
+/** Persisted writes are asynchronous, so a paused guard rejects instead of throwing. */
+export async function guardStateWrite<T>(
+  write: () => Promise<T> | T,
+): Promise<T> {
+  return installedGuard(write);
+}
+
+let frozenWrites: Promise<void> | null = null;
+
+/**
+ * Holds debounced writers that start outside any interactive request, such as
+ * scheduled state saves, until the returned release function is called.
+ */
+export function freezeStateWrites() {
+  if (frozenWrites) throw new Error('State writes are already frozen');
+  let release!: () => void;
+  const frozen = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  frozenWrites = frozen;
+  return () => {
+    if (frozenWrites === frozen) frozenWrites = null;
+    release();
+  };
+}
+
+export async function untilStateWritesThaw() {
+  while (frozenWrites) await frozenWrites;
+}

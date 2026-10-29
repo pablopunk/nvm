@@ -128,12 +128,14 @@ function createUserStateSaveScheduler(deps: UserStateSaveSchedulerDeps) {
     const savingVersion = requestedVersion;
     const save = Promise.resolve()
       .then(deps.save)
+      .then(() => {
+        completedVersion = Math.max(completedVersion, savingVersion);
+      })
       .catch((error) => {
         deps.onSaveError?.(error);
         throw error;
       })
       .finally(() => {
-        completedVersion = Math.max(completedVersion, savingVersion);
         activeSave = null;
       });
     activeSave = save;

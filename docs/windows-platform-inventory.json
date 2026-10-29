@@ -286,7 +286,7 @@
       "key": "main-direct-platform-16cd1ce3c7a8",
       "file": "src/app/electron/main.ts",
       "category": "direct-platform",
-      "selector": "property:processPlatform::direct-platform::processPlatform: process.platform::initializer",
+      "selector": "variable:startup/property:processPlatform::direct-platform::processPlatform: process.platform::initializer",
       "disposition": "runtime-startup-adapter",
       "surface": "camera"
     },

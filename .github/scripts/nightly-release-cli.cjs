@@ -294,7 +294,16 @@ function commandValidateAssets(options) {
       version,
       assetNames: names,
       sha512Of: (assetName) => sha512Base64(path.join(directory, assetName)),
+      sizeOf: (assetName) => fs.statSync(path.join(directory, assetName)).size,
     });
+    if (options['state-epoch']) {
+      const text = fs.readFileSync(path.join(directory, metadataName), 'utf8');
+      const epochs = [...text.matchAll(/^nevermindStateEpoch:\s*(\d+)\s*$/gm)];
+      if (epochs.length !== 1 || epochs[0][1] !== options['state-epoch'])
+        throw new Error(
+          `${metadataName} has an invalid state compatibility epoch`,
+        );
+    }
   }
   return { valid: true, assetCount: names.length, version };
 }
@@ -303,6 +312,21 @@ function commandSetPackageVersion(options) {
   const version = requireOption(options, 'version');
   if (!parseVersion(version)?.nightly)
     throw new Error(`Refusing non-nightly package version: ${version}`);
+  const manifestPath = path.join(process.cwd(), 'package.json');
+  const manifest = readJsonFile(manifestPath);
+  manifest.version = version;
+  fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  return { version };
+}
+
+function commandSetDevPackageVersion(options) {
+  const version = requireOption(options, 'version');
+  const parts = version.split('.');
+  if (
+    parts.length !== 3 ||
+    parts.some((part) => !/^(0|[1-9]\d*)$/.test(part) || Number(part) > 65535)
+  )
+    throw new Error(`Invalid dev package version: ${version}`);
   const manifestPath = path.join(process.cwd(), 'package.json');
   const manifest = readJsonFile(manifestPath);
   manifest.version = version;
@@ -325,6 +349,7 @@ const commands = {
   'publish-guard': commandPublishGuard,
   'validate-assets': commandValidateAssets,
   'set-package-version': commandSetPackageVersion,
+  'set-dev-package-version': commandSetDevPackageVersion,
   retention: commandRetention,
 };
 

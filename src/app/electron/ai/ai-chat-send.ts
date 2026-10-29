@@ -180,14 +180,14 @@ export function createAiChatSend(deps: AiChatSendDeps) {
           }
           pending.started = true;
           if (conversation)
-            return sendConversationMessage(
+            return await sendConversationMessage(
               prompt,
               targetChatId,
               requestTraceId,
               modelImages,
             );
           activeBuilderSessionIds.add(targetChatId);
-          return getNevermindAi().send(
+          return await getNevermindAi().send(
             prompt,
             targetChatId,
             requestTraceId,

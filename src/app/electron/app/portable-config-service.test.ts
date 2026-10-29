@@ -72,6 +72,40 @@ function serviceFor(
   return { service, saveCount: () => saves };
 }
 
+test('maintenance drains accepted config changes and rejects new changes until resumed', async () => {
+  await withConfigFile(async (filePath) => {
+    const record = emptyRecord();
+    const { live } = recordingLive();
+    const { service } = serviceFor(filePath, record, live);
+    await service.loadPortableConfig();
+    service.startPollingPortableConfig();
+    const commit = service.commit({
+      label: 'maintenance-test',
+      mutate: (draft) => {
+        draft.aliases['default:test'] = ['saved'];
+      },
+    });
+    const draining = service.quiesce();
+    assert.throws(() => service.resume(), /still draining/);
+    await assert.rejects(
+      service.commit({ label: 'blocked', mutate: () => {} }),
+      /paused/,
+    );
+    assert.deepEqual(await commit, { ok: true });
+    await draining;
+    assert.deepEqual(
+      JSON.parse(await fs.readFile(filePath, 'utf8')).aliases['default:test'],
+      ['saved'],
+    );
+    service.resume();
+    assert.deepEqual(
+      await service.commit({ label: 'after', mutate: () => {} }),
+      { ok: true },
+    );
+    service.stopPollingPortableConfig();
+  });
+});
+
 test('shortcut preparation is available during live apply and rolled back on failure', async () => {
   await withConfigFile(async (filePath) => {
     const record = emptyRecord();

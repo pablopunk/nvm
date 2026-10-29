@@ -6,6 +6,7 @@ import {
 export const UPDATE_CHANNEL_OPTIONS = [
   { value: 'stable', label: 'Stable' },
   { value: 'nightly', label: 'Nightly' },
+  { value: 'dev', label: 'Dev' },
 ] as const;
 
 export type UpdateChannel = (typeof UPDATE_CHANNEL_OPTIONS)[number]['value'];
@@ -67,7 +68,14 @@ export function releasesNewestFirst(
   const seenVersions = new Set<string>();
   const releases: ChannelRelease[] = [];
   for (const tag of tags) {
-    const version = releaseVersionFromTag(tag);
+    const devMatch = /^v(\d+\.\d+\.\d+)-dev$/.exec(tag);
+    const promotedNightly = /^v(\d+\.\d+\.\d+)-nightly$/.exec(tag);
+    const version =
+      channel === 'dev'
+        ? (devMatch?.[1] ?? null)
+        : channel === 'nightly' && promotedNightly
+          ? promotedNightly[1]
+          : releaseVersionFromTag(tag);
     if (
       !version ||
       seenVersions.has(version) ||

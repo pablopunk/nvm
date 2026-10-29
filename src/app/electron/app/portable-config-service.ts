@@ -85,6 +85,10 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
   const { userStateStore, settingKinds, live } = deps;
   let queue: Promise<unknown> = Promise.resolve();
   let pollTimer: ReturnType<typeof setInterval> | undefined;
+  const inFlight = new Set<Promise<unknown>>();
+  let paused = false;
+  let draining = false;
+  let resumePolling = false;
 
   const store = createPortableConfigStore({
     filePath: deps.filePath,
@@ -96,8 +100,15 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
   });
 
   function enqueue<T>(task: () => Promise<T>): Promise<T> {
+    if (paused)
+      return Promise.reject(
+        new Error('Portable config is paused for maintenance'),
+      );
     const run = queue.then(task);
     queue = run.catch(() => undefined);
+    inFlight.add(run);
+    const remove = () => inFlight.delete(run);
+    void run.then(remove, remove);
     return run;
   }
 
@@ -212,7 +223,7 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
   }
 
   function startPollingPortableConfig() {
-    if (pollTimer) return;
+    if (pollTimer || paused) return;
     pollTimer = setInterval(() => {
       enqueue(pollNow).catch((error) =>
         logError('config.poll.failed', { error: String(error) }, LOG_META),
@@ -227,11 +238,35 @@ export function createPortableConfigService(deps: PortableConfigServiceDeps) {
     pollTimer = undefined;
   }
 
+  async function quiesce() {
+    if (paused) throw new Error('Portable config is already paused');
+    paused = true;
+    draining = true;
+    resumePolling = Boolean(pollTimer);
+    stopPollingPortableConfig();
+    try {
+      const results = await Promise.allSettled([...inFlight]);
+      const failure = results.find((result) => result.status === 'rejected');
+      if (failure?.status === 'rejected') throw failure.reason;
+    } finally {
+      draining = false;
+    }
+  }
+
+  function resume() {
+    if (draining) throw new Error('Portable config is still draining');
+    paused = false;
+    if (resumePolling) startPollingPortableConfig();
+    resumePolling = false;
+  }
+
   return {
     commit: (input: PortableCommitInput) => enqueue(() => commitNow(input)),
     loadPortableConfig: () => enqueue(loadNow),
     refreshShortcutBindings,
     startPollingPortableConfig,
     stopPollingPortableConfig,
+    quiesce,
+    resume,
   };
 }

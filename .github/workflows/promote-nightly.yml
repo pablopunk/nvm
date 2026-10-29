@@ -1,0 +1,131 @@
+name: Promote dev to nightly
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-promotion
+  queue: max
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
+      PRODUCTION_API_ORIGIN: https://api.nvm.fyi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - name: Select latest dev newer than nightly
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCHEDULED_CRON: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          mise exec -- node "$NIGHTLY_CLI" schedule-gate --event "$EVENT_NAME" --cron "$SCHEDULED_CRON" --now "$(date -u +%FT%TZ)" | jq -e '.run == true' >/dev/null || { echo 'run=false' >> "$GITHUB_OUTPUT"; exit 0; }
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
+          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --candidates > selection.json
+          if [[ "$(jq -r '.selected.tag // ""' selection.json)" != '' ]]; then
+            curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+            mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --verify production-health.json > selection.json
+          fi
+          tag="$(jq -r '.selected.tag // ""' selection.json)"
+          if [[ -z "$tag" ]]; then
+            current="$(jq -r '.currentTag // ""' selection.json)"
+            if [[ "$current" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly$ ]]; then
+              sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$current" --jq '.sha')"
+              mise exec -- node .github/scripts/channel-pointer.cjs nightly "$current" "$sha"
+            fi
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "DEV_TAG=$tag" >> "$GITHUB_ENV"
+          echo 'run=true' >> "$GITHUB_OUTPUT"
+      - name: Download and verify retained dev build
+        if: steps.select.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          [[ "$DEV_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]] || { echo 'Invalid dev tag' >&2; exit 1; }
+          version="${BASH_REMATCH[1]}"
+          gh release view "$DEV_TAG" --json isDraft,isPrerelease --jq '(.isDraft | not) and .isPrerelease' | grep -qx true
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEV_TAG" --jq '.sha')"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          gh release download "$DEV_TAG" --dir dev
+          mv dev/manifest.json manifest.json
+          run_id="$(jq -er '.runId | strings' manifest.json)"
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify dev manifest.json "$version" "$sha" "$run_id"
+          epoch="$(git show "$sha:src/app/resources/state-compatibility.json" | jq -er '.epoch | numbers')"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version" --state-epoch "$epoch"
+          printf 'VERSION=%s\nSOURCE_SHA=%s\n' "$version" "$sha" >> "$GITHUB_ENV"
+      - name: Check CI, production identity and stable ordering
+        if: steps.select.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=50" --jq '.workflow_runs' > ci-runs.json
+          mise exec -- node "$NIGHTLY_CLI" ci-gate --sha "$SOURCE_SHA" --runs ci-runs.json | jq -e '.ok == true'
+          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+      - name: Stage stable metadata and notes
+        if: steps.select.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          printf 'Promoted from %s; source %s.\n' "$DEV_TAG" "$SOURCE_SHA" > notes.md
+          (cd dev && sha256sum * | sort) > expected-sha256.txt
+      - name: Create and verify draft
+        if: steps.select.outputs.run == 'true'
+        id: draft
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}-nightly"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]] || { echo 'Nightly tag points to another commit' >&2; exit 1; }
+            if gh release view "$tag" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
+              gh release view "$tag" --json body --jq '.body' | grep -Fx "Promoted from $DEV_TAG; source $SOURCE_SHA." >/dev/null || { echo 'Draft is not owned by this promotion' >&2; exit 1; }
+              gh release delete "$tag" --yes
+            fi
+          else
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+            echo 'created_tag=true' >> "$GITHUB_OUTPUT"
+          fi
+          gh release create "$tag" --draft --prerelease --latest=false --title "Nevermind $VERSION (nightly)" --notes-file notes.md dev/*
+          mkdir remote
+          gh release download "$tag" --dir remote
+          (cd remote && sha256sum * | sort) > remote-sha256.txt
+          diff -u expected-sha256.txt remote-sha256.txt
+      - name: Recheck ordering and production, then publish
+        if: steps.select.outputs.run == 'true'
+        run: |
+          set -euo pipefail
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
+          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+          mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json --verify production-health.json > selection.json
+          [[ "$(jq -r '.selected.tag // ""' selection.json)" == "$DEV_TAG" ]]
+          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+          gh release edit "v${VERSION}-nightly" --draft=false --prerelease --latest=false
+          mise exec -- node .github/scripts/channel-pointer.cjs nightly "v${VERSION}-nightly" "$SOURCE_SHA"
+      - name: Clean up failed draft
+        if: failure() && steps.draft.outputs.created_tag == 'true'
+        run: |
+          set -euo pipefail
+          tag="v${VERSION}-nightly"
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]]
+          if gh release view "$tag" --json isDraft --jq '.isDraft' | grep -qx true; then
+            gh release delete "$tag" --cleanup-tag --yes
+          else
+            echo 'Draft unavailable or already published; leaving tag untouched' >&2
+            exit 1
+          fi

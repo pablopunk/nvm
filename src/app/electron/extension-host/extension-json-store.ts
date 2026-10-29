@@ -37,7 +37,10 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     };
   const canonicalPathResolutions = new Map<string, Promise<string>>();
   const pendingOperations = new Map<string, Promise<void>>();
+  const inFlightOperations = new Set<Promise<unknown>>();
   let operationRegistrationTail: Promise<void> = Promise.resolve();
+  let paused = false;
+  let draining = false;
 
   async function canonicalPath(filePath: string) {
     const absolutePath = path.resolve(filePath);
@@ -95,10 +98,14 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     return resolution;
   }
 
-  async function enqueue<T>(
+  function enqueue<T>(
     filePath: string,
     operation: (canonicalFilePath: string) => Promise<T>,
   ): Promise<T> {
+    if (paused)
+      return Promise.reject(
+        new Error('Extension storage is paused for maintenance'),
+      );
     // Resolve eagerly, but register in call order so aliases cannot enter the
     // same canonical queue in resolution order.
     const canonicalPathResolution = resolveCanonicalPath(filePath);
@@ -124,8 +131,13 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
       () => undefined,
       () => undefined,
     );
-    const { operationPromise } = await registration;
-    return operationPromise;
+    const result = registration.then(
+      ({ operationPromise }) => operationPromise,
+    );
+    inFlightOperations.add(result);
+    const remove = () => inFlightOperations.delete(result);
+    void result.then(remove, remove);
+    return result;
   }
 
   return {
@@ -158,6 +170,22 @@ function createExtensionJsonStore(deps: ExtensionJsonStoreDeps = {}) {
     },
     pendingOperationCount() {
       return pendingOperations.size;
+    },
+    async quiesce() {
+      if (paused) throw new Error('Extension storage is already paused');
+      paused = true;
+      draining = true;
+      try {
+        const results = await Promise.allSettled([...inFlightOperations]);
+        const failed = results.find((result) => result.status === 'rejected');
+        if (failed?.status === 'rejected') throw failed.reason;
+      } finally {
+        draining = false;
+      }
+    },
+    resume() {
+      if (draining) throw new Error('Extension storage is still draining');
+      paused = false;
     },
   };
 }

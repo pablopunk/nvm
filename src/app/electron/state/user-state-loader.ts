@@ -7,8 +7,13 @@ import {
   normalizeClipboardHistory,
 } from '../clipboard/clipboard-utils';
 import { error as logError, warn as logWarn } from '../platform/logger';
+import { defaultSharedStateRoot } from '../platform/shared-state-root';
 import { isNvmTestMode } from '../platform/test-mode';
 import { LocalLearningStore } from './learning-store';
+import {
+  advanceStateCompatibility,
+  STATE_COMPATIBILITY_EPOCH,
+} from './state-compatibility';
 import { readUserStateFile } from './user-state';
 import { userStateFromLoadedFile } from './user-state-shape';
 import type { UserStateStore } from './user-state-store';
@@ -103,6 +108,11 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
   }
 
   async function loadUserState() {
+    await advanceStateCompatibility(
+      userDataPath(),
+      STATE_COMPATIBILITY_EPOCH,
+      isNvmTestMode ? userDataPath() : defaultSharedStateRoot(),
+    );
     const cacheRoot = osCacheRoot();
     await ensureLocalFileUrlSecret();
     const paths = resolveRuntimePaths(cacheRoot);

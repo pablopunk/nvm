@@ -504,6 +504,15 @@ jobs:
         shell: pwsh
         run: '& $env:PNPM_STANDALONE_PATH verify'
 
+      - name: Verify shared-state instance exclusion
+        shell: pwsh
+        run: |
+          $env:NVM_TEST_ARTIFACT_DIR = Join-Path $env:RUNNER_TEMP 'state-lock-artifacts'
+          $env:NVM_TEST_USER_DATA_DIR = Join-Path $env:RUNNER_TEMP 'state-lock-profile'
+          New-Item -ItemType Directory -Force $env:NVM_TEST_ARTIFACT_DIR, $env:NVM_TEST_USER_DATA_DIR | Out-Null
+          & $env:PNPM_STANDALONE_PATH exec playwright test tests/electron/palette.smoke.spec.ts --grep 'shared state has one live app writer'
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build unsigned Windows x64 NSIS and portable packages
         shell: pwsh
         env:
@@ -640,6 +649,16 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
+      - name: Refuse a tag older than the latest stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          mise exec -- node .github/scripts/release-tag-guard.cjs "$GITHUB_REF_NAME" "$latest"
+
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
@@ -718,6 +737,16 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
+
+      - name: Refuse a tag older than the latest stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          mise exec -- node .github/scripts/release-tag-guard.cjs "$GITHUB_REF_NAME" "$latest"
 
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
@@ -822,6 +851,16 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
+
+      - name: Refuse a tag older than the latest stable release
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          mise exec -- node .github/scripts/release-tag-guard.cjs "$GITHUB_REF_NAME" "$latest"
 
       - name: Install Linux packaging dependencies
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb

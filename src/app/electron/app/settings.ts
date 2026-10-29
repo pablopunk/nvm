@@ -96,7 +96,7 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     id: 'updateChannel',
     title: 'Update Channel',
     description:
-      'Stable installs released versions. Nightly also installs the newest nightly build.',
+      'Choose stable releases, nightly builds, or frequent dev builds.',
     icon: 'restart',
     type: 'choice',
     default: DEFAULT_UPDATE_CHANNEL,
