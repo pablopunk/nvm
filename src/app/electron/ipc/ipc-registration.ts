@@ -1,5 +1,6 @@
 import type { DiagnosticOperation } from '../../shared/diagnostics';
 import { runOperation } from '../diagnostics/observability';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 
 const IPC_OPERATIONS: Record<string, DiagnosticOperation> = {
   'actions:execute': 'command.execute',
@@ -30,6 +31,7 @@ export type MeasuredIpcRegistrarDeps = {
     fn: () => T | Promise<T>,
   ) => T | Promise<T>;
   summarize: (value: unknown) => unknown;
+  activity?: Pick<MaintenanceActivity, 'run'>;
   trace?: {
     run<T>(
       operation: string,
@@ -58,6 +60,7 @@ export function createMeasuredIpcRegistrar({
   measure,
   summarize,
   trace,
+  activity,
 }: MeasuredIpcRegistrarDeps) {
   return function ipcHandleMeasured(
     channel: string,
@@ -82,12 +85,16 @@ export function createMeasuredIpcRegistrar({
           : invoke();
       const operation = IPC_OPERATIONS[channel];
       const sender = (event as { sender?: { id?: number } })?.sender;
-      return operation
-        ? runOperation(operation, measured, {
-            windowId: Number.isSafeInteger(sender?.id) ? sender?.id : undefined,
-            freshJourney: true,
-          })
-        : measured();
+      const execute = () =>
+        operation
+          ? runOperation(operation, measured, {
+              windowId: Number.isSafeInteger(sender?.id)
+                ? sender?.id
+                : undefined,
+              freshJourney: true,
+            })
+          : measured();
+      return activity ? activity.run(execute) : execute();
     });
   };
 }

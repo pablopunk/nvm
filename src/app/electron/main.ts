@@ -187,6 +187,7 @@ import {
 import { createPortableConfigLive } from './app/portable-config-live';
 import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
+import { createPendingViewLoaderSpawner } from './app/pending-view-loader';
 import { createRunningAppStatusService } from './app/running-app-status';
 import {
   SETTING_DEFINITIONS,
@@ -290,6 +291,7 @@ import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
+import { createMaintenanceActivity } from './platform/maintenance-activity';
 import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
@@ -529,6 +531,7 @@ const jobRegistry = new JobRegistry({
       { freshJourney: true },
     ),
 });
+const maintenanceActivity = createMaintenanceActivity();
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 let activeAiChatId: string | undefined;
@@ -558,20 +561,12 @@ const viewLoaderRegistry = createViewLoaderRegistry({
   },
 });
 
-function spawnPendingViewLoaders(result: any, traceId?: string) {
-  const viewId = result?.view?.id;
-  if (viewId && viewLoaderRegistry.has(viewId))
-    void Promise.resolve(
-      performanceTraces.run(
-        'view.loader.spawn',
-        { viewId },
-        () => viewLoaderRegistry.spawn(viewId),
-        traceId ? { traceId } : undefined,
-      ),
-    ).catch(() => {});
-}
+const spawnPendingViewLoaders = createPendingViewLoaderSpawner({
+  registry: viewLoaderRegistry,
+  trace: performanceTraces,
+  activity: maintenanceActivity,
+});
 const userStateStore = createUserStateStore(createDefaultUserState());
-
 const userStatePersistence = createUserStatePersistence({
   getUserState: () => userStateStore.get(),
   getStatePath: () => statePath,
@@ -991,6 +986,7 @@ const {
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
 });
 const { executeShortcutAction } = createShortcutRunner({
+  activity: maintenanceActivity,
   paletteWindow,
   captureFrontmostTarget: frontmostAppFocusTarget,
   paneInvocations,
@@ -1155,6 +1151,7 @@ const {
   normalizeViewItems,
 });
 const { executeAction } = createRootActionExecutor({
+  activity: maintenanceActivity,
   paletteWindow,
   recordRecent: (action) => recordRecent(action),
   currentActionForStoredShortcut,
@@ -1710,6 +1707,7 @@ const { registerTestModeIpcHandlers } = createTestModeIpc({
       measure: measureDebugPerformance,
       summarize: summarizeDebugValue,
       trace: performanceTraces,
+      activity: maintenanceActivity,
     }),
   globalShortcut,
   paletteWindow,
@@ -2089,8 +2087,8 @@ const startup = app.whenReady().then(async () => {
   }
   powerMonitor.on('resume', () => jobRegistry.emit('wake'));
   jobRegistry.emit('login');
-
   registerAppIpcHandlers({
+    activity: maintenanceActivity,
     ipcMain,
     measureDebugPerformance,
     summarizeDebugValue,
@@ -2181,10 +2179,12 @@ const startup = app.whenReady().then(async () => {
     dictationService,
   });
   ipcMain.handle('view:hydrate:retry', async (_event, viewId: string) =>
-    performanceTraces.run('view.loader.retry', { viewId }, async () => {
-      if (!viewLoaderRegistry.has(viewId)) return;
-      await viewLoaderRegistry.retry(viewId);
-    }),
+    maintenanceActivity.run(() =>
+      performanceTraces.run('view.loader.retry', { viewId }, async () => {
+        if (!viewLoaderRegistry.has(viewId)) return;
+        await viewLoaderRegistry.retry(viewId);
+      }),
+    ),
   );
 });
 startup.catch((error) => {
