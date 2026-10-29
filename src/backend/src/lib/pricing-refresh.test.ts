@@ -22,7 +22,7 @@ afterEach(() => {
 function endpointsFetch(priced: Record<string, { input: number; output: number }>) {
   return (async (input: string | URL | Request) => {
     const url = String(input instanceof Request ? input.url : input);
-    if (url === 'https://models.dev/api.json') return Response.json({});
+    if (url === 'https://models.dev/api.json') return Response.json({ openrouter: { models: Object.fromEntries(Object.keys(priced).map((id) => [id, { id }])) } });
     const modelId = openRouterEndpointsModelId(url);
     const cost = modelId ? priced[modelId] : undefined;
     if (!modelId || !cost) return new Response('{}', { status: 404 });

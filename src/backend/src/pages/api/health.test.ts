@@ -5,7 +5,6 @@ import {
   installUpstreamStub,
   OPENCODE_MODELS_URL,
   OPENROUTER_ACCEPTED_REPLIES,
-  OPENROUTER_DECISION_URL,
   OPENROUTER_KEY_URL,
   OPENROUTER_MODELS_URL,
   OPENROUTER_TRANSCRIPTION_URL,
@@ -17,7 +16,7 @@ process.env.DATABASE_URL ??= 'postgres://health-test.invalid/nvm';
 
 const OPENROUTER_MODEL = 'deepseek/deepseek-v4-flash-0731';
 const OPENCODE_MODEL = 'gpt-5.6-luna';
-const LIVE_PROBES = [OPENROUTER_DECISION_URL, OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL, OPENROUTER_TRANSCRIPTION_URL].sort();
+const LIVE_PROBES = [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL].sort();
 
 let restoreEnv: () => void;
 
@@ -198,7 +197,7 @@ test('the ai_proxy kill switch removes the AI routes, leaving audio probed and r
   assert.deepEqual(readinessOf(response.body), { ok: true, db: true, upstream: true, upstreamReady: true });
   assert.deepEqual(
     response.requested,
-    [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL, OPENROUTER_TRANSCRIPTION_URL].sort(),
+    [OPENROUTER_KEY_URL, OPENROUTER_MODELS_URL].sort(),
   );
 });
 

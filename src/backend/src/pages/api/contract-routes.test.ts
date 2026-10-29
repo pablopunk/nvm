@@ -87,6 +87,7 @@ function createChain(
       return chain;
     },
     onConflictDoNothing: () => chain,
+    onConflictDoUpdate: () => chain,
     returning: () => promise(),
     then: (
       resolve: Parameters<Promise<unknown>['then']>[0],
@@ -242,7 +243,7 @@ const MODELS_DEV_CATALOG = {
               reasoning: true,
               cost: { input: 0.3, output: 2.5 },
               limit: { context: 1_048_576, output: 65_535 },
-              modalities: { input: ['text', 'image', 'pdf'] },
+              modalities: { input: ['text', 'image', 'audio', 'video', 'pdf'] },
             },
           },
         },
@@ -4335,6 +4336,7 @@ test('proxy failover: format-incompatible provider is skipped', async () => {
     return Response.json({}, { status: 200 });
   };
 
+  await refreshModelsDevCatalog();
   const response = await postMessages(
     routeContext(authorizedMessagesRequest()),
   );
