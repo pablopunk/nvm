@@ -131,7 +131,7 @@ export class NevermindChannelProvider extends GitHubProvider {
     cancellationToken: CancellationToken,
     channel: UpdateChannel,
   ): Promise<UpdateInfo | null> {
-    const channelFile = `${this.getCustomChannelName(channel === 'dev' ? 'nightly' : channelMetadataNameFor(version))}.yml`;
+    const channelFile = `${this.getCustomChannelName(channel === 'dev' || tag.endsWith('-nightly') ? 'nightly' : channelMetadataNameFor(version))}.yml`;
     const channelFileUrl = new URL(
       `${this.releasesPath(channel)}/download/${tag}/${channelFile}`,
       this.baseUrl,

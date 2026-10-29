@@ -70,6 +70,7 @@ jobs:
           printf '\nPromoted from %s; source %s.\n' "$DEV_TAG" "$SOURCE_SHA" >> notes.md
           (cd dev && sha256sum * | sort) > expected-sha256.txt
       - name: Create and verify draft
+        id: draft
         run: |
           set -euo pipefail
           tag="v$VERSION"
@@ -77,6 +78,7 @@ jobs:
             echo 'Stable tag already exists' >&2; exit 1
           fi
           gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+          echo 'created_tag=true' >> "$GITHUB_OUTPUT"
           gh release create "$tag" --draft --latest=false --title "Nevermind $VERSION" --notes-file notes.md dev/*
           mkdir remote
           gh release download "$tag" --dir remote
@@ -89,3 +91,15 @@ jobs:
           curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
           mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
           gh release edit "v$VERSION" --draft=false --latest
+      - name: Clean up failed draft
+        if: failure() && steps.draft.outputs.created_tag == 'true'
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')" == "$SOURCE_SHA" ]]
+          if gh release view "$tag" --json isDraft --jq '.isDraft' | grep -qx true; then
+            gh release delete "$tag" --cleanup-tag --yes
+          else
+            echo 'Draft unavailable or already published; leaving tag untouched' >&2
+            exit 1
+          fi
