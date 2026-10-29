@@ -6,6 +6,7 @@ import test from 'node:test';
 import { createExtensionJsonStore } from '../extension-host/extension-json-store';
 import { JobRegistry } from '../platform/jobs';
 import { acquireSharedStateLease } from '../platform/shared-state-lease';
+import { LocalLearningStore } from '../state/learning-store';
 import { createVerifiedStateBackup } from '../state/state-migration-backup';
 
 test('drained timed-out job and extension storage are included in a verified backup', async (t) => {
@@ -25,6 +26,12 @@ test('drained timed-out job and extension storage are included in a verified bac
   });
   const storage = createExtensionJsonStore();
   const jobs = new JobRegistry();
+  const learning = new LocalLearningStore({
+    tracesPath: path.join(privateRoot, 'traces.json'),
+    learningsPath: path.join(privateRoot, 'learnings.md'),
+  });
+  await learning.load();
+  learning.appendMessage('conversation', 'user', 'Remember this');
   let proceed!: () => void;
   const blocked = new Promise<void>((resolve) => {
     proceed = resolve;
@@ -48,6 +55,7 @@ test('drained timed-out job and extension storage are included in a verified bac
   proceed();
   await draining;
   await storage.quiesce();
+  await learning.flushPendingSave();
   const backup = await createVerifiedStateBackup({
     roots: [
       { name: 'private', path: privateRoot },
@@ -64,6 +72,10 @@ test('drained timed-out job and extension storage are included in a verified bac
     ),
     { saved: true },
   );
+  const traces = JSON.parse(
+    await fs.readFile(path.join(backup, 'private', 'traces.json'), 'utf8'),
+  );
+  assert.equal(traces.traces[0].messages[0].content, 'Remember this');
   await assert.rejects(
     storage.replace(path.join(privateRoot, 'extension.json'), {}),
     /paused/,

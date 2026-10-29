@@ -296,3 +296,19 @@ test('save failures are reported and a later save can recover', async () => {
   assert.equal(errors.length, 1);
   assert.match(String(errors[0]), SAVE_FAILURE_PATTERN);
 });
+
+test('a failed write remains pending for a later flush without a new mutation', async () => {
+  let attempts = 0;
+  const scheduler = createUserStateSaveScheduler({
+    save: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('injected save failure');
+    },
+  });
+  scheduler.schedule();
+  await assert.rejects(scheduler.flushPendingSave(), SAVE_FAILURE_PATTERN);
+  assert.equal(scheduler.hasPendingSave(), true);
+  await scheduler.flushPendingSave();
+  assert.equal(attempts, 2);
+  assert.equal(scheduler.hasPendingSave(), false);
+});

@@ -618,6 +618,7 @@ function registerActionShortcuts() {
 const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
     await userStatePersistence.flushPendingSave();
+    await learningStore?.flushPendingSave();
     await flushDiagnosticRecords();
   },
   quit: () => app.quit(),
@@ -672,7 +673,6 @@ const {
   },
   canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
-
 const linuxX11Clipboard = createLinuxX11Clipboard();
 const clipboardApi = createElectronClipboardApi({
   clipboard,
