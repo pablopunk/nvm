@@ -5,7 +5,7 @@ description: Promote a retained Nevermind dev build to stable, inspect dev or ni
 
 # Release
 
-Stable publication promotes a retained signed dev build through the `Promote dev to stable` GitHub Actions workflow. It does not rebuild or re-sign packages. Dev builds run hourly when `main` has changed; nightly promotes a newer eligible dev build at 04:00 Europe/Madrid. See `docs/release-promotion.md` for contracts, recovery, and verification.
+Stable publication promotes a retained signed dev build through the `Promote dev to stable` GitHub Actions workflow. It does not rebuild or re-sign packages. Dev builds run hourly when `main` has changed; nightly promotes a newer eligible dev build at 04:00 Europe/Madrid. See `docs/release-promotion.md` for contracts, recovery, and verification. A release that changes how host-owned persisted data is read or written must increment the state epoch in `src/app/resources/state-compatibility.json` first; otherwise channel switching can offer an older build that cannot read the new data.
 
 A release is a live external change. A direct instruction to promote a specific dev tag authorizes that promotion; do not publish another build without the user's approval. Do not run local tests, builds, typechecks, or the app: repository policy assigns runtime verification to CI.
 
