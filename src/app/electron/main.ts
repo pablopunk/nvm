@@ -9,7 +9,6 @@ import { PaneInvocations } from './app/pane-invocations';
 
 const paneInvocations = new PaneInvocations();
 const paneInvocationWindows = new WeakSet<object>();
-
 // Global safety net: unhandled rejections and uncaught exceptions must never
 // crash the app. An extension action or shell call that throws unexpectedly
 // should be logged and contained, not silently kill the entire process.
@@ -133,7 +132,6 @@ import {
 configureNvmTestMode();
 if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
-
 import {
   INTERNAL_EXTENSION_FACTORIES,
   INTERNAL_EXTENSION_SOURCE_FILES,
@@ -616,6 +614,7 @@ const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
     await userStatePersistence.flushPendingSave();
     await learningStore?.flushPendingSave();
+    await flushPendingDrafts();
     await flushDiagnosticRecords();
   },
   quit: () => app.quit(),
@@ -902,6 +901,7 @@ const extensionDraftRefs = new Map<
 >();
 const {
   hydrateExtensionDrafts,
+  flushPendingDrafts,
   schedulePersistExtensionDrafts,
   saveExtensionDraftForIpc,
   commitExtensionDraft,

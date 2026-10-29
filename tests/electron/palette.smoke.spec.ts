@@ -367,7 +367,11 @@ test('shared state has one live app writer and can reopen after a crash', async 
     first = await launchTestApplication(profile, shared);
     await execFile(
       require('electron') as string,
-      [path.join(root, 'dist/main/main.js'), `--user-data-dir=${otherProfile}`],
+      [
+        ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
+        path.join(root, 'dist/main/main.js'),
+        `--user-data-dir=${otherProfile}`,
+      ],
       {
         env: {
           ...process.env,
