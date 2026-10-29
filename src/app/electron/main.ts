@@ -2031,10 +2031,10 @@ const { pickFormFieldPaths } = createFormFieldPathPicker({
   paletteWindow,
 });
 app.whenReady().then(async () => {
-  appReady = true;
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();
+    appReady = true;
     portableConfigService.startPollingPortableConfig();
     await loadExtensions();
     registerActionShortcuts();
@@ -2052,7 +2052,6 @@ app.whenReady().then(async () => {
     invalidateExtensionRootItems();
   });
   onNevermindCompatibilityChanged(() => invalidateExtensionRootItems());
-
   await loadUserState();
   portableConfigService.startPollingPortableConfig();
   await appIndexService.startWatcher();
@@ -2077,6 +2076,7 @@ app.whenReady().then(async () => {
   await initNevermindAi();
   initExtensionContext({ nevermindAi });
   void restorePersistentExtensionWindows();
+  appReady = true;
   flushBufferedDeepLinks();
   registerActionShortcuts();
   try {
@@ -2201,7 +2201,6 @@ app.on('will-quit', () => {
   nevermindApp.isQuiting = true;
   stateSafeQuit.handleWillQuit();
 });
-
 if (!isDev && !isNvmTestMode) {
   const gotLock = app.requestSingleInstanceLock();
   if (gotLock) {
@@ -2212,6 +2211,7 @@ if (!isDev && !isNvmTestMode) {
         arg.startsWith(`${DEEP_LINK_SCHEME}://`),
       );
       if (deepLinkArg && appReady) processBufferedDeepLink(deepLinkArg);
+      else if (deepLinkArg) bufferedDeepLinks.push(deepLinkArg);
     });
   } else app.quit();
 }
