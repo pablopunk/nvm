@@ -184,8 +184,8 @@ export function createUpdatesService(deps: UpdatesServiceDeps) {
     return { view: updateStatusView(), navigation: 'replace' };
   }
 
-  function installDownloadedUpdate() {
-    if (!updateManager.prepareInstall())
+  async function installDownloadedUpdate() {
+    if (!(await updateManager.prepareInstall()))
       return { view: updateStatusView(), navigation: 'replace' };
     markAppQuitting();
     void requestQuit('updater', () => {

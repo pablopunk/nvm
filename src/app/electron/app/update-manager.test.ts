@@ -44,8 +44,40 @@ test('installation rechecks both state roots and target epoch after download', a
     nevermindStateEpoch: 1,
   };
   await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
-  assert.equal(manager.prepareInstall(), false);
+  assert.equal(await manager.prepareInstall(), false);
   assert.equal(manager.state.installInFlight, false);
+});
+
+test('asynchronous install check cannot authorize a stale channel', async () => {
+  let channel: 'stable' | 'nightly' = 'stable';
+  let finishCheck: (value: boolean) => void = () => {};
+  const manager = createUpdateManager(createAutoUpdater([]), undefined, {
+    getUpdateChannel: () => channel,
+    canInstallUpdate: () =>
+      new Promise<boolean>((resolve) => {
+        finishCheck = resolve;
+      }),
+  });
+  manager.state.downloadedInfo = { version: '0.16.6', updateChannel: 'stable' };
+  const pending = manager.prepareInstall();
+  channel = 'nightly';
+  finishCheck(true);
+  assert.equal(await pending, false);
+  assert.equal(manager.state.installInFlight, false);
+});
+
+test('a failed asynchronous state check blocks installation without requesting quit', async () => {
+  const calls: string[] = [];
+  const manager = createUpdateManager(createAutoUpdater(calls), undefined, {
+    canInstallUpdate: async () => {
+      throw new Error('state unavailable');
+    },
+  });
+  manager.state.downloadedInfo = { version: '0.16.6', updateChannel: 'stable' };
+  assert.equal(await manager.prepareInstall(), false);
+  assert.equal(manager.state.installInFlight, false);
+  assert.equal(manager.quitAndInstall(), false);
+  assert.deepEqual(calls, []);
 });
 
 function createFakeCancellationToken(): FakeCancellationToken {
@@ -130,12 +162,12 @@ test('keeps genuine update check failures as errors', async () => {
   assert.equal(manager.state.checkInFlight, false);
 });
 
-test('exposes installing state before the deferred updater restart', () => {
+test('exposes installing state before the deferred updater restart', async () => {
   const calls: string[] = [];
   const manager = createUpdateManager(createAutoUpdater(calls));
   manager.state.downloadedInfo = { version: '0.16.6', updateChannel: 'stable' };
 
-  assert.equal(manager.prepareInstall(), true);
+  assert.equal(await manager.prepareInstall(), true);
   assert.equal(manager.state.status, 'installing');
   assert.equal(manager.state.installInFlight, true);
 
@@ -231,7 +263,7 @@ test('does not download a check result stamped for another channel', async () =>
   assert.deepEqual(calls, ['check']);
 });
 
-test('refuses to install a downloaded build from another channel', () => {
+test('refuses to install a downloaded build from another channel', async () => {
   const calls: string[] = [];
   const manager = createUpdateManager(createAutoUpdater(calls), undefined, {
     getUpdateChannel: () => 'stable',
@@ -241,7 +273,7 @@ test('refuses to install a downloaded build from another channel', () => {
     updateChannel: 'nightly',
   };
 
-  assert.equal(manager.prepareInstall(), false);
+  assert.equal(await manager.prepareInstall(), false);
   assert.equal(manager.state.installInFlight, false);
 });
 

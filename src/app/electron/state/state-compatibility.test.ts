@@ -76,13 +76,22 @@ test('downgrade authorization re-reads both roots and fails closed on missing or
   const privateRoot = path.join(root, 'private');
   const sharedRoot = path.join(root, 'shared');
   await advanceStateCompatibility(privateRoot, 1, sharedRoot);
-  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 1), true);
   assert.equal(
-    stateRootsSupportDowngrade([privateRoot, sharedRoot], undefined),
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    true,
+  );
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], undefined),
     false,
   );
   await advanceStateCompatibility(privateRoot, 2, sharedRoot);
-  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 1), false);
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 1),
+    false,
+  );
   await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
-  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 2), false);
+  assert.equal(
+    await stateRootsSupportDowngrade([privateRoot, sharedRoot], 2),
+    false,
+  );
 });

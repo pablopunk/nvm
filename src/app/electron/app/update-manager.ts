@@ -64,7 +64,7 @@ export type UpdateManagerOptions = {
   getUpdateChannel?: () => UpdateChannel;
   prepareUpdateFeed?: () => Promise<unknown>;
   createCancellationToken?: () => CancellationTokenLike;
-  canInstallUpdate?: (info: UpdateInfo) => boolean;
+  canInstallUpdate?: (info: UpdateInfo) => boolean | Promise<boolean>;
 };
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
@@ -439,15 +439,34 @@ export function createUpdateManager(
     pollTimer.unref?.();
   }
 
-  function prepareInstall() {
+  async function prepareInstall() {
     if (
       !state.downloadedInfo ||
       state.installInFlight ||
-      !isCurrentChannelInfo(state.downloadedInfo) ||
-      managerOptions.canInstallUpdate?.(state.downloadedInfo) === false
+      !isCurrentChannelInfo(state.downloadedInfo)
     )
       return false;
     state.installInFlight = true;
+    const candidate = state.downloadedInfo;
+    let permitted = false;
+    try {
+      permitted =
+        (await managerOptions.canInstallUpdate?.(candidate)) !== false;
+    } catch (error) {
+      logger.error('updater.install.compatibility.failed', error, {
+        source: 'host',
+        scope: 'updater',
+      });
+    }
+    if (
+      !permitted ||
+      state.downloadedInfo !== candidate ||
+      !isCurrentChannelInfo(candidate)
+    ) {
+      state.installInFlight = false;
+      notifyStateChanged();
+      return false;
+    }
     onInstallRequested?.(state.downloadedInfo.version);
     state.status = 'installing';
     state.errorMessage = '';
@@ -467,7 +486,7 @@ export function createUpdateManager(
 
   function installUpdate() {
     if (!state.downloadedInfo || installStarted) return false;
-    if (!state.installInFlight && !prepareInstall()) return false;
+    if (!state.installInFlight) return false;
     installStarted = true;
     operationStage('install');
     try {
