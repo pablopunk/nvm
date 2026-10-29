@@ -48,7 +48,7 @@ function settleOverrun(requestId: string) {
     requestId,
     outcome: 'settle',
     model: 'overrun-cap-model',
-    provider: 'integration',
+    provider: 'openrouter',
     tokens: { inputTokens: 1, outputTokens: 1 },
     providerCostUsd: PROVIDER_COST_USD,
     status: 200,
