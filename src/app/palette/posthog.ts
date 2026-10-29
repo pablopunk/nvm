@@ -2,12 +2,12 @@
 // biome-ignore-all lint/complexity/noVoid: Fire-and-forget loads must not block the renderer.
 import posthog from 'posthog-js/dist/module.full.no-external';
 
-const posthogKey = import.meta.env.VITE_POSTHOG_KEY;
-const posthogHost = import.meta.env.VITE_POSTHOG_HOST;
+// Unit tests import this module under plain Node, where Vite's env is absent.
+const env = import.meta.env as ImportMetaEnv | undefined;
+const posthogKey = env?.VITE_POSTHOG_KEY;
+const posthogHost = env?.VITE_POSTHOG_HOST;
 // Development builds stay local, matching the host process.
-const posthogConfigured = Boolean(
-  import.meta.env.PROD && posthogKey && posthogHost,
-);
+const posthogConfigured = Boolean(env?.PROD && posthogKey && posthogHost);
 let consentEnabled = false;
 let consentGeneration = 0;
 let consentBroadcastVersion = 0;
