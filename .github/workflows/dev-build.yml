@@ -58,6 +58,7 @@ jobs:
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
     steps:
       - name: Checkout source commit
         uses: actions/checkout@v4
@@ -126,6 +127,7 @@ jobs:
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
     steps:
       - name: Checkout source commit
         uses: actions/checkout@v4
@@ -207,6 +209,7 @@ jobs:
       SENTRY_ORG: ${{ vars.SENTRY_ORG }}
       SENTRY_PROJECT_DESKTOP: ${{ vars.SENTRY_PROJECT_DESKTOP }}
       NIGHTLY_VERSION: ${{ needs.plan.outputs.version }}
+      NEVERMIND_SOURCE_COMMIT: ${{ needs.plan.outputs.source_sha }}
     strategy:
       fail-fast: false
       matrix:
@@ -317,6 +320,9 @@ jobs:
     name: Publish dev prerelease
     needs: [plan, validate-assets]
     runs-on: ubuntu-latest
+    concurrency:
+      group: channel-promotion
+      queue: max
     permissions:
       contents: write
     env:

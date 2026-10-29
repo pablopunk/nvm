@@ -56,7 +56,7 @@ test('manual trigger defaults to a dry run that never publishes', () => {
 test('runs are serialized and never cancel an in-flight publication', () => {
   assert.match(
     workflow,
-    /concurrency:\n  group: nightly-release\n  cancel-in-progress: false/,
+    /concurrency:\n  group: channel-promotion\n  queue: max/,
   );
 });
 
