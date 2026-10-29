@@ -1,0 +1,91 @@
+name: Promote dev to stable
+
+on:
+  workflow_dispatch:
+    inputs:
+      dev_tag:
+        description: Retained dev tag to promote (vVERSION-dev)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: channel-promotion
+  queue: max
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEV_TAG: ${{ inputs.dev_tag }}
+      NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
+      PRODUCTION_API_ORIGIN: https://api.nvm.fyi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - name: Download and verify retained dev build
+        run: |
+          set -euo pipefail
+          [[ "$DEV_TAG" =~ ^v([0-9]+\.[0-9]+\.[0-9]+)-dev$ ]] || { echo 'Invalid dev tag' >&2; exit 1; }
+          version="${BASH_REMATCH[1]}"
+          gh release view "$DEV_TAG" --json isDraft,isPrerelease --jq '(.isDraft | not) and .isPrerelease' | grep -qx true
+          sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$DEV_TAG" --jq '.sha')"
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+          gh release download "$DEV_TAG" --dir dev
+          mv dev/manifest.json manifest.json
+          run_id="$(jq -er '.runId | strings' manifest.json)"
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify dev manifest.json "$version" "$sha" "$run_id"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version"
+          printf 'VERSION=%s\nSOURCE_SHA=%s\n' "$version" "$sha" >> "$GITHUB_ENV"
+      - name: Check CI, production identity and stable ordering
+        run: |
+          set -euo pipefail
+          stable="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')"
+          [[ "$stable" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          STABLE="$stable" mise exec -- node -e 'const { compareVersions } = require("./.github/scripts/nightly-versioning.cjs"); if (compareVersions(process.env.VERSION, process.env.STABLE.slice(1)) <= 0) throw Error("Selected build is not newer than stable")'
+          git merge-base --is-ancestor "$stable" "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=50" --jq '.workflow_runs' > ci-runs.json
+          mise exec -- node "$NIGHTLY_CLI" ci-gate --sha "$SOURCE_SHA" --runs ci-runs.json | jq -e '.ok == true'
+          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+          echo "STABLE_TAG=$stable" >> "$GITHUB_ENV"
+      - name: Stage stable metadata and notes
+        run: |
+          set -euo pipefail
+          cp dev/nightly.yml dev/latest.yml
+          cp dev/nightly-mac.yml dev/latest-mac.yml
+          cp dev/nightly-linux.yml dev/latest-linux.yml
+          cp dev/nightly-linux-arm64.yml dev/latest-linux-arm64.yml
+          printf 'Changes since %s:\n\n' "$STABLE_TAG" > notes.md
+          git log --format='- %s (%h)' "$STABLE_TAG..$SOURCE_SHA" >> notes.md
+          printf '\nPromoted from %s; source %s.\n' "$DEV_TAG" "$SOURCE_SHA" >> notes.md
+          (cd dev && sha256sum * | sort) > expected-sha256.txt
+      - name: Create and verify draft
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo 'Stable tag already exists' >&2; exit 1
+          fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+          gh release create "$tag" --draft --latest=false --title "Nevermind $VERSION" --notes-file notes.md dev/*
+          mkdir remote
+          gh release download "$tag" --dir remote
+          (cd remote && sha256sum * | sort) > remote-sha256.txt
+          diff -u expected-sha256.txt remote-sha256.txt
+      - name: Recheck ordering and production, then publish
+        run: |
+          set -euo pipefail
+          [[ "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq '.tag_name')" == "$STABLE_TAG" ]]
+          curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
+          mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
+          gh release edit "v$VERSION" --draft=false --latest
