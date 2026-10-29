@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import compatibility from '../../resources/state-compatibility.json';
 import { atomicallyReplaceFile } from '../platform/atomic-file';
+import { acquireSharedStateLease } from '../platform/shared-state-lease';
 
 // Increment before a host-owned persisted format becomes unreadable by earlier builds.
 export const STATE_COMPATIBILITY_EPOCH = compatibility.epoch;
@@ -30,6 +31,25 @@ export async function advanceStateCompatibility(
   directory: string,
   epoch: number,
   sharedDirectory = directory,
+): Promise<StateCompatibilityMarker> {
+  const lease = await acquireSharedStateLease(sharedDirectory);
+  try {
+    return await advanceMarkers(
+      directory,
+      epoch,
+      sharedDirectory,
+      lease.assertHeld,
+    );
+  } finally {
+    await lease.release();
+  }
+}
+
+async function advanceMarkers(
+  directory: string,
+  epoch: number,
+  sharedDirectory: string,
+  assertHeld: () => Promise<void>,
 ): Promise<StateCompatibilityMarker> {
   if (!Number.isSafeInteger(epoch) || epoch < 1)
     throw new Error('Invalid state compatibility epoch');
@@ -76,11 +96,13 @@ export async function advanceStateCompatibility(
     trusted = entries.every((items) => items.length === 0);
   }
   const next: StateCompatibilityMarker = { version: 1, highestEpoch, trusted };
-  for (const root of directories)
+  for (const root of directories) {
+    await assertHeld();
     await atomicallyReplaceFile(
       path.join(root, MARKER_NAME),
       `${JSON.stringify(next)}\n`,
     );
+  }
   return next;
 }
 

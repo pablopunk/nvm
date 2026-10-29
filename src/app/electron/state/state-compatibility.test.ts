@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { acquireSharedStateLease } from '../platform/shared-state-lease';
 import {
   advanceStateCompatibility,
   supportsStateDowngrade,
@@ -66,6 +67,26 @@ test('existing unmarked data stays untrusted', async (t) => {
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   await fs.writeFile(path.join(root, 'state.json'), '{}');
   assert.equal((await advanceStateCompatibility(root, 1)).trusted, false);
+});
+
+test('marker advancement cannot write while another participant holds the shared lease', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-state-lease-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  const lease = await acquireSharedStateLease(sharedRoot);
+  await assert.rejects(
+    advanceStateCompatibility(privateRoot, 1, sharedRoot),
+    /already in use/,
+  );
+  await assert.rejects(
+    fs.access(path.join(privateRoot, 'state-compatibility.json')),
+  );
+  await lease.release();
+  assert.equal(
+    (await advanceStateCompatibility(privateRoot, 1, sharedRoot)).trusted,
+    true,
+  );
 });
 
 test('downgrade authorization re-reads both roots and fails closed on missing or changed state', async (t) => {
