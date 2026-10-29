@@ -25,7 +25,7 @@ import {
   utcMonthKey,
 } from '../src/lib/free-spend-cap';
 import { createApiToken } from '../src/lib/tokens';
-import { resetTranscriptionModelCacheForTests } from '../src/lib/transcription-models';
+import { refreshTranscriptionCatalog, resetTranscriptionModelCacheForTests } from '../src/lib/transcription-models';
 import {
   ensureMonthlyFreeCredits,
   MONTHLY_FREE_CREDITS,
@@ -237,6 +237,7 @@ export async function runAudioJourneyAssertions(
     process.env.OPENROUTER_BASE_URL = `http://127.0.0.1:${address.port}/api/v1`;
     process.env.OPENROUTER_API_KEY = 'integration-test-key';
     resetTranscriptionModelCacheForTests();
+    await refreshTranscriptionCatalog();
     await database
       .insert(appSettings)
       .values({
@@ -465,7 +466,7 @@ export async function runAudioJourneyAssertions(
     assert.equal(
       catalogCalls,
       1,
-      'fresh pricing metadata is cached per instance',
+      'the seeded snapshot serves the journey without request-time catalog fetches',
     );
     const grants = await database
       .select()
