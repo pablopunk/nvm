@@ -428,7 +428,7 @@ async function runAssertions() {
         requestId: exactRequestId,
         outcome: 'settle',
         model: 'reported-cost-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'reported-cost',
         tokens: { inputTokens: 1, outputTokens: 1 },
         providerCostUsd: CREDIT_USD / MARKUP / 2,
@@ -505,7 +505,7 @@ async function runAssertions() {
         requestId: providerOverrunId,
         outcome: 'settle',
         model: 'provider-overrun-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'provider-overrun',
         tokens: { inputTokens: 10, outputTokens: 10 },
         providerCostUsd: 1,
@@ -515,7 +515,7 @@ async function runAssertions() {
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         true,
@@ -539,7 +539,7 @@ async function runAssertions() {
         requestId: dispatchedBeforeTripId,
         outcome: 'settle',
         model: 'provider-overrun-model',
-        provider: 'integration',
+        provider: 'openrouter',
         routeSlot: 'provider-overrun',
         tokens: { inputTokens: 1, outputTokens: 1 },
         providerCostUsd: CREDIT_USD / MARKUP / 2,
@@ -618,7 +618,7 @@ async function runAssertions() {
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         true,
@@ -633,7 +633,7 @@ async function runAssertions() {
       assert.equal(
         await isRouteTripped(
           'provider-overrun',
-          'integration',
+          'openrouter',
           'provider-overrun-model',
         ),
         false,
@@ -1687,7 +1687,7 @@ async function runAssertions() {
             requestId: winnerRequestId,
             outcome: 'settle',
             model: 'free-cap-overrun-model',
-            provider: 'integration',
+            provider: 'openrouter',
             tokens: { inputTokens: 1, outputTokens: 1 },
             providerCostUsd: 0.000001,
             status: 200,
