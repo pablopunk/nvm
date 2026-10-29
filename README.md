@@ -1,20 +1,21 @@
-# Nevermind
+<p align="center">
+  <img src="src/backend/public/icon.png" height="100" />
+</p>
 
-> [!IMPORTANT]  
-> This app is not even in Alpha, expect bugs.
+<h1 align="center">Nevermind</h1>
 
 <p align="center">
-  <img src="https://github.com/pablopunk/nvm/blob/main/build/screenshot.jpg?raw=true"  />
+  <i align="center">The command palette that extends itself</i>
+</p>
+
+> [!IMPORTANT]
+> This app is in Alpha. Expect bugs.
+
+
+<p align="center">
+  <video autoplay loop controls preload src="src/backend/public/videos/nevermind-demo-v2.mp4" />
   <br /><br />
   <i>An AI-native desktop command palette that extends itself.</i>
   <br /><br />
   <span><img src="https://cdn-icons-png.flaticon.com/512/9205/9205302.png" width="12" /> <a href="https://github.com/pablopunk/nvm/releases">Get the latest release</a></span>
 </p>
-
-_*In the screenshot above, Screenshots and Open Camera were extensions done by our AI. Not builtin. That's all you need to know._
-
-## Development
-
-Trust the checked-out `mise.toml`, then install dependencies with `mise exec -- pnpm install --frozen-lockfile`. Installation configures the tracked pre-commit and pre-push hooks in `.githooks`.
-
-Use `mise exec -- pnpm format:staged` to format staged frontend files, re-stage them, and commit. The pre-commit hook runs `mise exec -- pnpm check:staged`, and the pre-push hook runs `mise exec -- pnpm check:changed` from the target remote's main branch.
