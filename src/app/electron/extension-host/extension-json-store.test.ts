@@ -9,6 +9,69 @@ const INJECTED_UPDATE_FAILURE_PATTERN = /injected update failure/;
 const PRIVATE_FILE_MODE = 0o600;
 const PERMISSION_BITS_MODULUS = 0o1000;
 
+test('maintenance waits for queued writes and prevents new operations until resumed', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const file = path.join(directory, 'storage.json');
+    const store = createExtensionJsonStore();
+    let finish!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const first = store.mutate(file, async () => {
+      started();
+      await blocked;
+      return { first: true };
+    });
+    await entered;
+    const second = store.mutate(file, (value) => ({ ...value, second: true }));
+    let drained = false;
+    const maintenance = store.quiesce().then(() => {
+      drained = true;
+    });
+    await assert.rejects(store.replace(file, {}), /paused/);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(drained, false);
+    assert.throws(() => store.resume(), /still draining/);
+    finish();
+    await Promise.all([first, second, maintenance]);
+    store.resume();
+    assert.deepEqual(await store.read(file), { first: true, second: true });
+  });
+});
+
+test('maintenance reports a failing in-flight mutation and remains paused', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const store = createExtensionJsonStore();
+    let fail!: () => void;
+    let started!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      fail = resolve;
+    });
+    const entered = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const write = store.mutate(path.join(directory, 'state.json'), async () => {
+      started();
+      await blocked;
+      throw new Error('write failed');
+    });
+    const rejection = assert.rejects(write, /write failed/);
+    await entered;
+    const maintenance = assert.rejects(store.quiesce(), /write failed/);
+    fail();
+    await Promise.all([rejection, maintenance]);
+    await assert.rejects(
+      store.read(path.join(directory, 'state.json')),
+      /paused/,
+    );
+    store.resume();
+  });
+});
+
 async function withTemporaryDirectory(
   callback: (directory: string) => Promise<void>,
 ) {

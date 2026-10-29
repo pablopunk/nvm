@@ -3,6 +3,30 @@ import type { JobDefinition } from './jobs';
 const DEFAULT_EXTENSION_BACKOFF_MS = 30_000;
 const DEFAULT_EXTENSION_MAX_BACKOFF_MS = 15 * 60_000;
 
+export class JobWorkBarrier {
+  private active = new Set<Promise<unknown>>();
+  paused = false;
+  draining = false;
+
+  track<T>(work: Promise<T>): Promise<T> {
+    this.active.add(work);
+    const remove = () => this.active.delete(work);
+    void work.then(remove, remove);
+    return work;
+  }
+
+  async drain() {
+    if (this.paused) throw new Error('Background jobs are already paused');
+    this.paused = true;
+    this.draining = true;
+    try {
+      while (this.active.size) await Promise.allSettled([...this.active]);
+    } finally {
+      this.draining = false;
+    }
+  }
+}
+
 type BackoffRecord = { definition: JobDefinition; consecutiveFailures: number };
 
 export function timeout<T>(
