@@ -6,7 +6,7 @@ import test from 'node:test';
 import { createExtensionJsonStore } from '../extension-host/extension-json-store';
 import { JobRegistry } from '../platform/jobs';
 import { acquireSharedStateLease } from '../platform/shared-state-lease';
-import { createVerifiedStateBackup } from './state-migration-backup';
+import { createVerifiedStateBackup } from '../state/state-migration-backup';
 
 test('drained timed-out job and extension storage are included in a verified backup', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-maintenance-'));
