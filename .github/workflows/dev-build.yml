@@ -43,6 +43,18 @@ jobs:
           else
             echo 'build=true' >> "$GITHUB_OUTPUT"
           fi
+      - name: Record source for failure diagnosis
+        if: steps.version.outputs.build == 'true'
+        env:
+          SOURCE_SHA: ${{ steps.version.outputs.sha }}
+        run: printf '%s\n' "$SOURCE_SHA" > dev-build-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: steps.version.outputs.build == 'true'
+        with:
+          name: dev-build-source-sha
+          path: dev-build-source-sha.txt
+          if-no-files-found: error
+          retention-days: 30
 
   build-windows:
     name: Build Windows nightly

@@ -620,16 +620,6 @@ jobs:
           NVM_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/postgres
         run: mise exec -- pnpm -C src/backend test:postgres-integration
 
-  nightly-package-verify:
-    name: Nightly package verification
-    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-    uses: ./.github/workflows/nightly-package-verify.yml
-    with:
-      base_sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
-      head_sha: ${{ github.event.pull_request.head.sha || github.event.merge_group.head_sha }}
-    permissions:
-      contents: read
-
   release-windows:
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') && !contains(github.ref_name, '-'))
     runs-on: windows-latest
