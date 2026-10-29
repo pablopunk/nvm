@@ -105,6 +105,10 @@ jobs:
             [ -s "$staged" ] || { echo "Staged file is empty: $staged" >&2; exit 1; }
           done
 
+      - name: Stamp Windows compatibility metadata
+        shell: bash
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-windows/nightly.yml
+
       - name: Upload Windows nightly artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -186,6 +190,9 @@ jobs:
             "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip" \
             "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip.blockmap" \
             release/nightly-mac.yml nightly-mac/
+
+      - name: Stamp macOS compatibility metadata
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-mac/nightly-mac.yml
 
       - name: Upload macOS nightly artifacts
         uses: actions/upload-artifact@v4
@@ -276,6 +283,9 @@ jobs:
           nightly-linux/nightly-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
           nightly-linux
 
+      - name: Stamp Linux compatibility metadata
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-linux/nightly-linux${{ matrix.arch == 'arm64' && '-arm64' || '' }}.yml
+
       - name: Upload Linux nightly artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -302,7 +312,7 @@ jobs:
       - name: Validate every asset and updater checksum
         env:
           VERSION: ${{ needs.plan.outputs.version }}
-        run: mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION"
+        run: mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
 
       - name: Create integrity manifest
         env:
@@ -348,7 +358,7 @@ jobs:
         run: |
           set -euo pipefail
           mise exec -- node .github/scripts/promotion-manifest.cjs verify dist-nightly manifest/manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
-          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
       - name: Create draft prerelease
         run: |
           set -euo pipefail
@@ -383,5 +393,5 @@ jobs:
           mv downloaded/manifest.json remote-manifest.json
           cmp manifest/manifest.json remote-manifest.json
           mise exec -- node .github/scripts/promotion-manifest.cjs verify downloaded remote-manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
-          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false

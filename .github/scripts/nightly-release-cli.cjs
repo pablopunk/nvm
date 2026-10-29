@@ -295,6 +295,14 @@ function commandValidateAssets(options) {
       assetNames: names,
       sha512Of: (assetName) => sha512Base64(path.join(directory, assetName)),
     });
+    if (options['state-epoch']) {
+      const text = fs.readFileSync(path.join(directory, metadataName), 'utf8');
+      const epochs = [...text.matchAll(/^nevermindStateEpoch:\s*(\d+)\s*$/gm)];
+      if (epochs.length !== 1 || epochs[0][1] !== options['state-epoch'])
+        throw new Error(
+          `${metadataName} has an invalid state compatibility epoch`,
+        );
+    }
   }
   return { valid: true, assetCount: names.length, version };
 }

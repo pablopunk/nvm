@@ -44,7 +44,8 @@ jobs:
           mv dev/manifest.json manifest.json
           run_id="$(jq -er '.runId | strings' manifest.json)"
           mise exec -- node .github/scripts/promotion-manifest.cjs verify dev manifest.json "$version" "$sha" "$run_id"
-          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version"
+          epoch="$(git show "$sha:src/app/resources/state-compatibility.json" | jq -er '.epoch | numbers')"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dev --version "$version" --state-epoch "$epoch"
           printf 'VERSION=%s\nSOURCE_SHA=%s\n' "$version" "$sha" >> "$GITHUB_ENV"
       - name: Check CI, production identity and stable ordering
         run: |

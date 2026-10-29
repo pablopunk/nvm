@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import compatibility from '../../resources/state-compatibility.json';
 import { atomicallyReplaceFile } from '../platform/atomic-file';
 
 // Increment before a host-owned persisted format becomes unreadable by earlier builds.
-export const STATE_COMPATIBILITY_EPOCH = 1;
+export const STATE_COMPATIBILITY_EPOCH = compatibility.epoch;
 const MARKER_NAME = 'state-compatibility.json';
 
 export type StateCompatibilityMarker = {
