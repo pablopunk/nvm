@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createMaintenanceActivity } from './maintenance-activity';
 import { writePrivateFile } from './private-file';
+import { installStateWriteGuard } from './state-write-guard';
 
 const PRIVATE_FILE_MODE = 0o600;
 
@@ -53,4 +55,18 @@ test('POSIX private files enforce mode after writing', async () => {
     '/tmp/never mind/auth.json',
     PRIVATE_FILE_MODE,
   ]);
+});
+
+test('private files are not written while state maintenance has writes paused', async (t) => {
+  const activity = createMaintenanceActivity();
+  installStateWriteGuard(activity.run);
+  t.after(() => installStateWriteGuard((write) => write()));
+  await activity.quiesce();
+  const { calls, fileSystem } = recordingFileSystem();
+  await assert.rejects(
+    writePrivateFile('/tmp/secret', 'token', { fileSystem }),
+    /state backup/,
+  );
+  assert.deepEqual(calls, []);
+  activity.resume();
 });

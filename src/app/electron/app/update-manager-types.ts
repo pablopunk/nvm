@@ -43,6 +43,7 @@ type UpdateState = {
   availableInfo: UpdateInfo | null;
   downloadedInfo: UpdateInfo | null;
   latestVersion: string | null;
+  blockedDowngradeVersion: string | null;
   errorMessage: string;
 };
 
@@ -50,6 +51,7 @@ type UpdateManagerOptions = {
   getUpdateChannel?: () => UpdateChannel;
   prepareUpdateFeed?: () => Promise<unknown>;
   createCancellationToken?: () => CancellationTokenLike;
+  getCurrentVersion?: () => string;
   canInstallUpdate?: (info: UpdateInfo) => boolean | Promise<boolean>;
 };
 

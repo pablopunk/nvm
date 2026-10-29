@@ -1,7 +1,6 @@
 import electronUpdater from 'electron-updater';
 import { app } from 'electron';
-import os from 'node:os';
-import path from 'node:path';
+import { defaultSharedStateRoot } from '../platform/shared-state-root';
 import type { UpdateChannel } from './update-channel';
 import { installNevermindChannelFeed } from './update-channel-feed';
 import { createUpdateManager } from './update-manager';
@@ -29,10 +28,11 @@ export function createAppUpdateManager(input: {
   const { autoUpdater } = electronUpdater;
   return createUpdateManager(autoUpdater as any, input.recordInstallAttempt, {
     getUpdateChannel: input.getUpdateChannel,
+    getCurrentVersion: () => app.getVersion(),
     canInstallUpdate: (info) =>
       isStateSafeForInstall(app.getVersion(), info, [
         app.getPath('userData'),
-        path.join(os.homedir(), '.config', 'nevermind'),
+        defaultSharedStateRoot(),
       ]),
     prepareUpdateFeed: () =>
       installNevermindChannelFeed(autoUpdater as any, input.getUpdateChannel),

@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { defaultSharedStateRoot } from '../platform/shared-state-root';
 
 type InstanceApp = {
   getPath: (name: 'userData') => string;
@@ -21,7 +22,7 @@ export async function acquireDefaultSharedStateInstance(
   let root = testMode
     ? (testSharedRoot ??
       path.join(app.getPath('userData'), 'test-instance-state'))
-    : path.join(os.homedir(), '.config', 'nevermind');
+    : defaultSharedStateRoot();
   if (testMode && testSharedRoot) {
     const parent = await fs.realpath(
       path.dirname(path.resolve(testSharedRoot)),

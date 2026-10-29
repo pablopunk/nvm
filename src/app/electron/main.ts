@@ -1,6 +1,5 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -107,9 +106,9 @@ import {
   reportDiagnosticProblem,
   setDiagnosticReporting,
 } from './diagnostics/sentry';
+import { createLocalFileUrlSecretLoader } from './files/local-file-url-secret';
 import { resolveExtensionPaths } from './extension-host/extension-paths';
 import {
-  configureLocalFileUrlSecret,
   expandUserPath,
   extensionForPath,
   fileUrlForPath,
@@ -196,6 +195,7 @@ import {
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
 import { createTestModeIpc } from './app/test-mode-ipc';
+import { createAppStateMaintenance } from './app/state-maintenance-setup';
 import { createAppUpdateManager } from './app/update-manager-setup';
 import { createUpdatesService } from './app/updates-service';
 import {
@@ -292,6 +292,7 @@ import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
 import { createMaintenanceActivity } from './platform/maintenance-activity';
+import { installStateWriteGuard } from './platform/state-write-guard';
 import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
@@ -532,6 +533,7 @@ const jobRegistry = new JobRegistry({
     ),
 });
 const activity = createMaintenanceActivity();
+installStateWriteGuard(activity.run);
 let nevermindAi: any;
 let learningStore: LocalLearningStore | null = null;
 let activeAiChatId: string | undefined;
@@ -609,11 +611,14 @@ function registerActionShortcuts() {
   void portableConfigService.refreshShortcutBindings();
 }
 
+async function flushPendingState() {
+  await userStatePersistence.flushPendingSave();
+  await learningStore?.flushPendingSave();
+  await flushPendingDrafts();
+}
 const stateSafeQuit = createStateSafeQuit({
   flushPendingSave: async () => {
-    await userStatePersistence.flushPendingSave();
-    await learningStore?.flushPendingSave();
-    await flushPendingDrafts();
+    await flushPendingState();
     await flushDiagnosticRecords();
   },
   quit: () => app.quit(),
@@ -1165,6 +1170,7 @@ const { executeViewAction } = createViewActionExecutor({
     viewLoaderRegistry,
     executeAction,
     activity,
+    verifyStateView: (nativeAction) => verifyStateView(nativeAction),
   }),
   ...createFileActionHandlers({ shell }),
   ...createClipboardActionHandlers({
@@ -1435,6 +1441,7 @@ const {
   compatibilityPromptAction,
   updatePromptAction,
   patchUpdatesView,
+  verifyStateView,
 } = createUpdatesService({
   updateManager,
   getAppVersion: () => app.getVersion(),
@@ -1445,6 +1452,13 @@ const {
   requestQuit: stateSafeQuit.requestQuit,
   quitApp: () => app.quit(),
   patchOpenView: (viewId, patch) => patchOpenView(viewId, patch),
+  stateMaintenance: createAppStateMaintenance({
+    isTestMode: isNvmTestMode,
+    writers: [activity, jobRegistry, extensionJsonStore, portableConfigService],
+    flushPendingState,
+    isUpdateInstalling: () => updateManager.state.installInFlight,
+    onChange: () => patchUpdatesView(),
+  }),
 });
 
 const createExtensionContext = createExtensionContextFactory({
@@ -1891,7 +1905,6 @@ const {
 });
 const { processBufferedDeepLink, flushBufferedDeepLinks } =
   createNevermindDeepLinks({
-    activity,
     parseAuthDeepLink,
     bufferedDeepLinks,
     getActiveBaseUrl: () => activeNevermindBaseUrl,
@@ -1971,28 +1984,15 @@ function initExtensionRuntimeContext() {
   });
 }
 
-async function ensureLocalFileUrlSecret() {
-  const secretPath = path.join(
-    app.getPath('userData'),
-    'local-file-url-secret',
-  );
-  const existing = await fs.readFile(secretPath, 'utf8').catch(() => '');
-  const secret =
-    existing.trim() || crypto.randomBytes(32).toString('base64url');
-  if (!existing.trim()) {
-    await fs.mkdir(path.dirname(secretPath), { recursive: true });
-    await fs.writeFile(secretPath, secret, { mode: 0o600 });
-  }
-  configureLocalFileUrlSecret(secret);
-}
-
 const { migrateAiChats } = createAiChatMigration({
   userStateStore,
   getExtensionsDir: () => extensionsDir,
 });
 const { loadUserState } = createUserStateLoader({
   osCacheRoot,
-  ensureLocalFileUrlSecret,
+  ensureLocalFileUrlSecret: createLocalFileUrlSecretLoader({
+    userDataPath: () => app.getPath('userData'),
+  }),
   userDataPath: () => app.getPath('userData'),
   resolveExtensionPaths,
   assignRuntimePaths: (paths) => {

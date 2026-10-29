@@ -21,6 +21,7 @@ test('maintenance waits for a detached view retry before proceeding', async () =
     activity,
     viewLoaderRegistry: { has: () => true, retry: () => retry },
     executeAction: async () => {},
+    verifyStateView: () => ({}),
   });
   handler.handleNativeAction({
     nativeAction: { kind: 'view-hydrate-retry', viewId: 'view' },
@@ -34,4 +35,26 @@ test('maintenance waits for a detached view retry before proceeding', async () =
   finish();
   await maintenance;
   activity.resume();
+});
+
+test('state verification is routed to the host view without executing a root action', () => {
+  const executed: unknown[] = [];
+  const requested: unknown[] = [];
+  const handler = createNativeActionHandlers({
+    activity: createMaintenanceActivity(),
+    viewLoaderRegistry: { has: () => false, retry: async () => ({}) as never },
+    executeAction: async (action) => void executed.push(action),
+    verifyStateView: (nativeAction) => {
+      requested.push(nativeAction);
+      return { view: 'updates' };
+    },
+  });
+  const result = handler.handleNativeAction({
+    nativeAction: { kind: 'state-verification', confirmation: 'token' },
+  });
+  assert.deepEqual(result, { view: 'updates' });
+  assert.deepEqual(requested, [
+    { kind: 'state-verification', confirmation: 'token' },
+  ]);
+  assert.deepEqual(executed, []);
 });

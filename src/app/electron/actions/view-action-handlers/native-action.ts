@@ -9,6 +9,7 @@ export type NativeActionHandlerDeps = {
   >;
   executeAction: (action: any, options?: any) => Promise<any>;
   activity: Pick<MaintenanceActivity, 'run'>;
+  verifyStateView: (nativeAction: { confirmation?: unknown }) => unknown;
 };
 
 export function createNativeActionHandlers(deps: NativeActionHandlerDeps) {
@@ -16,8 +17,10 @@ export function createNativeActionHandlers(deps: NativeActionHandlerDeps) {
 
   function handleNativeAction(action) {
     const native = action.nativeAction as
-      | { kind?: string; viewId?: string }
+      | { kind?: string; viewId?: string; confirmation?: unknown }
       | undefined;
+    if (native?.kind === 'state-verification')
+      return deps.verifyStateView(native);
     if (native?.kind === 'view-hydrate-retry' && native.viewId) {
       if (viewLoaderRegistry.has(native.viewId))
         void deps.activity

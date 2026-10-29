@@ -4,6 +4,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { createMaintenanceActivity } from '../platform/maintenance-activity';
+import { installStateWriteGuard } from '../platform/state-write-guard';
 import { createDictationRecordings } from './dictation-recordings';
 
 test('persists failed audio segments for retry and removes only the selected recording', async () => {
@@ -27,4 +29,22 @@ test('persists failed audio segments for retry and removes only the selected rec
   } finally {
     await fs.rm(directory, { recursive: true, force: true });
   }
+});
+
+test('does not persist a recording while state maintenance has writes paused', async (t) => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-dictation-'));
+  t.after(async () => {
+    installStateWriteGuard((write) => write());
+    await fs.rm(directory, { recursive: true, force: true });
+  });
+  const activity = createMaintenanceActivity();
+  installStateWriteGuard(activity.run);
+  await activity.quiesce();
+  const recordings = createDictationRecordings(directory);
+  await assert.rejects(
+    recordings.save(`dictation-${randomUUID()}`, [new Uint8Array([1])]),
+    /state backup/,
+  );
+  assert.deepEqual(await recordings.list(), []);
+  activity.resume();
 });

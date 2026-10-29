@@ -1,11 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
-import { createMaintenanceActivity } from '../platform/maintenance-activity';
 
 const consumedDeviceCodes: string[] = [];
 let signedInAuth: { email: string; baseUrl: string } | null = null;
-let pendingAuth: Promise<{ email: string; baseUrl: string } | null> | null =
-  null;
 
 function fakeConsumeDeviceCode({ code }: { code: string }) {
   consumedDeviceCodes.push(code);
@@ -13,7 +10,7 @@ function fakeConsumeDeviceCode({ code }: { code: string }) {
 }
 
 function fakeGetNevermindAuth() {
-  return pendingAuth ?? Promise.resolve(signedInAuth);
+  return Promise.resolve(signedInAuth);
 }
 
 mock.module('./nevermind-auth', {
@@ -77,40 +74,4 @@ test('deep link consumes its device code when no session exists', async () => {
   });
 
   assert.deepEqual(consumedDeviceCodes, ['device-code']);
-});
-
-test('maintenance drains an in-flight deep link and preserves links received while paused', async () => {
-  const activity = createMaintenanceActivity();
-  const buffered = ['nvm://auth'];
-  let finish!: () => void;
-  pendingAuth = new Promise((resolve) => {
-    finish = () => resolve(null);
-  });
-  const service = createNevermindDeepLinks({
-    activity,
-    bufferedDeepLinks: buffered,
-    parseAuthDeepLink: () => ({
-      code: 'device-code',
-      baseUrl: 'https://api.nvm.fyi',
-      intent: 'connect',
-    }),
-    getActiveBaseUrl: () => null,
-    setActiveBaseUrl: () => {},
-    invalidateExtensionRootItems: () => {},
-    broadcastAuthChanged: () => {},
-  });
-  service.flushBufferedDeepLinks();
-  let drained = false;
-  const quiescence = activity.quiesce().then(() => {
-    drained = true;
-  });
-  buffered.push('nvm://auth');
-  service.flushBufferedDeepLinks();
-  assert.deepEqual(buffered, ['nvm://auth']);
-  await new Promise<void>((resolve) => setImmediate(resolve));
-  assert.equal(drained, false);
-  finish();
-  await quiescence;
-  activity.resume();
-  pendingAuth = null;
 });

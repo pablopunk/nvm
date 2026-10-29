@@ -3,6 +3,7 @@ import test, { mock } from 'node:test';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import type { StateVerificationStatus } from './state-maintenance-service';
 
 mock.module('electron', {
   namedExports: {
@@ -44,6 +45,7 @@ test('a selected older channel build is visible without treating it as a backend
     requestQuit: async () => {},
     quitApp: () => {},
     patchOpenView: () => {},
+    stateMaintenance: unsupportedStateMaintenance(),
   });
   assert.equal(service.updatesStateSnapshot().availableVersion, '2026.1029.4');
   assert.equal(service.updatePromptAction()?.id, 'updates:download');
@@ -206,7 +208,7 @@ test('exposes installing state before the deferred updater restart', async () =>
   assert.deepEqual(calls, ['install']);
 });
 
-test('configuring the updater disables downgrades and installs the channel feed before checking', async () => {
+test('configuring the updater lets the host evaluate older builds and installs the channel feed before checking', async () => {
   const calls: string[] = [];
   const updater = createEventedAutoUpdater(calls);
   const manager = createUpdateManager(updater, undefined, {
@@ -216,7 +218,7 @@ test('configuring the updater disables downgrades and installs the channel feed 
   });
 
   manager.configure();
-  assert.equal(updater.allowDowngrade, false);
+  assert.equal(updater.allowDowngrade, true);
   await manager.checkForUpdates();
 
   assert.deepEqual(calls, ['feed', 'check']);
@@ -350,4 +352,244 @@ test('changing channel cancels an in-flight download without reporting an error'
   assert.notEqual(manager.state.status, 'error');
   assert.equal(calls[0], 'download');
   manager.clearTimers();
+});
+
+function createDowngradeFixture(options: {
+  permitted: () => boolean | Promise<boolean>;
+  channel?: 'stable' | 'nightly';
+}) {
+  const calls: string[] = [];
+  const updateInfo = {
+    version: '2026.1029.4',
+    updateChannel: options.channel ?? ('stable' as const),
+    nevermindStateEpoch: 1,
+  };
+  const updater = {
+    ...createEventedAutoUpdater(calls),
+    checkForUpdates: async () => {
+      calls.push('check');
+      updater.emit('update-available', updateInfo);
+      return { isUpdateAvailable: true, updateInfo };
+    },
+    downloadUpdate: async () => {
+      calls.push('download');
+      updater.emit('update-downloaded', updateInfo);
+    },
+  };
+  const manager = createUpdateManager(updater, undefined, {
+    getUpdateChannel: () => options.channel ?? 'stable',
+    getCurrentVersion: () => '2026.1030.5',
+    canInstallUpdate: async () => options.permitted(),
+  });
+  manager.configure();
+  manager.clearTimers();
+  return { calls, manager, updateInfo };
+}
+
+test('an older build is withheld until the host authorizes its state format', async () => {
+  let permitted = false;
+  const { calls, manager, updateInfo } = createDowngradeFixture({
+    permitted: () => permitted,
+  });
+
+  await manager.checkForUpdates('manual', { download: true });
+  assert.equal(manager.state.availableInfo, null);
+  assert.equal(manager.state.blockedDowngradeVersion, updateInfo.version);
+  assert.equal(manager.state.status, 'idle');
+  await manager.downloadAvailableUpdate();
+  assert.deepEqual(calls, ['check']);
+
+  permitted = true;
+  await manager.checkForUpdates('manual', { download: true });
+  assert.equal(manager.state.blockedDowngradeVersion, null);
+  assert.equal(manager.state.availableInfo, updateInfo);
+  assert.equal(manager.state.status, 'available');
+  assert.deepEqual(calls, ['check', 'check']);
+});
+
+test('an authorized older build is never downloaded automatically', async () => {
+  const { calls, manager } = createDowngradeFixture({ permitted: () => true });
+  await manager.checkForUpdates('poll', { download: true });
+  assert.deepEqual(calls, ['check']);
+  assert.equal(manager.state.downloadedInfo, null);
+});
+
+test('an explicit older-build download rechecks authorization and can be revoked', async () => {
+  let permitted = true;
+  const { calls, manager, updateInfo } = createDowngradeFixture({
+    permitted: () => permitted,
+  });
+  await manager.checkForUpdates();
+  permitted = false;
+  await manager.downloadAvailableUpdate();
+  assert.deepEqual(calls, ['check']);
+  assert.equal(manager.state.availableInfo, null);
+  assert.equal(manager.state.blockedDowngradeVersion, updateInfo.version);
+  assert.equal(manager.state.downloadInFlight, false);
+});
+
+test('an older build downloads and installs only while authorization holds at each step', async () => {
+  let permitted = true;
+  const { calls, manager } = createDowngradeFixture({
+    permitted: () => permitted,
+  });
+  await manager.checkForUpdates();
+  await manager.downloadAvailableUpdate();
+  assert.equal(manager.state.status, 'downloaded');
+  permitted = false;
+  assert.equal(await manager.prepareInstall(), false);
+  assert.deepEqual(calls, ['check', 'download']);
+  permitted = true;
+  assert.equal(await manager.prepareInstall(), true);
+});
+
+test('a failed authorization check blocks an older build', async () => {
+  const { manager, updateInfo } = createDowngradeFixture({
+    permitted: async () => {
+      throw new Error('unreadable markers');
+    },
+  });
+  await manager.checkForUpdates();
+  assert.equal(manager.state.availableInfo, null);
+  assert.equal(manager.state.blockedDowngradeVersion, updateInfo.version);
+});
+
+test('an authorization that resolves after a channel change is discarded', async () => {
+  let channel: 'stable' | 'nightly' = 'stable';
+  let finish: (value: boolean) => void = () => {};
+  const calls: string[] = [];
+  const updateInfo = {
+    version: '2026.1029.4',
+    updateChannel: 'stable' as const,
+    nevermindStateEpoch: 1,
+  };
+  const manager = createUpdateManager(
+    {
+      ...createEventedAutoUpdater(calls),
+      checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo }),
+    },
+    undefined,
+    {
+      getUpdateChannel: () => channel,
+      getCurrentVersion: () => '2026.1030.5',
+      canInstallUpdate: () =>
+        new Promise<boolean>((resolve) => (finish = resolve)),
+    },
+  );
+  manager.configure();
+  manager.clearTimers();
+  const checking = manager.checkForUpdates();
+  await new Promise<void>((resolve) => setImmediate(resolve));
+  channel = 'nightly';
+  finish(true);
+  await checking;
+  assert.equal(manager.state.availableInfo, null);
+});
+
+function unsupportedStateMaintenance() {
+  return {
+    status: () => ({ phase: 'unsupported' as const }),
+    refresh: async () => {},
+    verifyAndTrust: async () => ({ phase: 'unsupported' as const }),
+  };
+}
+
+function updatesServiceWithState(
+  status: StateVerificationStatus,
+  verified: string[] = [],
+) {
+  const manager = createUpdateManager(createAutoUpdater([]));
+  return createUpdatesService({
+    updateManager: manager,
+    getAppVersion: () => '2026.1030.5',
+    autoUpdatesUnavailableMessage: () => '',
+    getActiveNevermindBaseUrl: () => null,
+    getUpdateChannel: () => 'stable',
+    markAppQuitting: () => {},
+    requestQuit: async () => {},
+    quitApp: () => {},
+    patchOpenView: () => {},
+    stateMaintenance: {
+      status: () => status,
+      refresh: async () => {},
+      verifyAndTrust: async () => {
+        verified.push('verified');
+        return status;
+      },
+    },
+  });
+}
+
+test('the updates view offers a host-confirmed state backup only when supported', () => {
+  assert.equal(
+    updatesServiceWithState({ phase: 'unsupported' }).updateStatusView().items
+      .length,
+    1,
+  );
+  const view = updatesServiceWithState({
+    phase: 'idle',
+    trusted: false,
+  }).updateStatusView();
+  const item = view.items[1];
+  assert.equal(item.id, 'update-state-verification');
+  assert.equal(item.primaryAction?.type, 'nativeAction');
+  assert.equal(item.primaryAction?.nativeAction.kind, 'state-verification');
+});
+
+test('state backup starts only for the confirmation the host rendered', () => {
+  const verified: string[] = [];
+  const service = updatesServiceWithState(
+    { phase: 'idle', trusted: false },
+    verified,
+  );
+  const action = service.updateStatusView().items[1].primaryAction;
+  service.verifyStateView({ confirmation: 'forged' });
+  service.verifyStateView({});
+  service.verifyStateView(undefined);
+  assert.deepEqual(verified, []);
+  service.verifyStateView(action?.nativeAction);
+  assert.deepEqual(verified, ['verified']);
+});
+
+test('the updates view reports running, completed, and failed state backups', () => {
+  const titles = [
+    [{ phase: 'running' }, 'Backing up and verifying state...'],
+    [{ phase: 'complete', backupPath: '/b' }, 'State backed up and verified'],
+    [
+      { phase: 'failed', message: 'boom', trusted: false },
+      'State backup failed',
+    ],
+    [{ phase: 'idle', trusted: true }, 'Older builds can be installed'],
+  ] as const;
+  for (const [status, title] of titles) {
+    const view = updatesServiceWithState(status).updateStatusView();
+    assert.equal(view.items[1].title, title);
+    assert.equal(
+      Boolean(view.items[1].primaryAction),
+      status.phase !== 'running' && status.phase !== 'complete',
+    );
+  }
+});
+
+test('the updates view explains a withheld older build', () => {
+  const manager = createUpdateManager(createAutoUpdater([]));
+  manager.canUseAutoUpdates = () => true;
+  manager.state.blockedDowngradeVersion = '2026.1029.4';
+  const service = createUpdatesService({
+    updateManager: manager,
+    getAppVersion: () => '2026.1030.5',
+    autoUpdatesUnavailableMessage: () => '',
+    getActiveNevermindBaseUrl: () => null,
+    getUpdateChannel: () => 'stable',
+    markAppQuitting: () => {},
+    requestQuit: async () => {},
+    quitApp: () => {},
+    patchOpenView: () => {},
+    stateMaintenance: unsupportedStateMaintenance(),
+  });
+  const [status] = service.updateStatusView().items;
+  assert.equal(
+    status.title,
+    'Nevermind 2026.1029.4 needs a verified state backup',
+  );
 });
