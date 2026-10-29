@@ -1,7 +1,12 @@
 'use strict';
 
 const { createHash } = require('node:crypto');
-const { readFileSync, readdirSync, lstatSync } = require('node:fs');
+const {
+  readFileSync,
+  readdirSync,
+  lstatSync,
+  writeFileSync,
+} = require('node:fs');
 const path = require('node:path');
 
 function digest(file) {
@@ -47,6 +52,36 @@ function verifyManifest({ directory, manifest, version, sourceSha, runId }) {
   const actual = createManifest({ directory, ...manifest });
   if (JSON.stringify(actual) !== JSON.stringify(manifest))
     throw new Error('Artifact manifest mismatch');
+}
+
+function main(args) {
+  const [command, directory, manifestPath, version, sourceSha, runId] = args;
+  if (!directory || !manifestPath || !version || !sourceSha || !runId)
+    throw new Error(
+      'Expected: create|verify directory manifest version source-sha run-id',
+    );
+  if (path.dirname(path.resolve(manifestPath)) === path.resolve(directory))
+    throw new Error('Manifest must be stored outside the artifact directory');
+  if (command === 'create') {
+    const manifest = createManifest({ directory, version, sourceSha, runId });
+    writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, {
+      flag: 'wx',
+    });
+  } else if (command === 'verify') {
+    const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    verifyManifest({ directory, manifest, version, sourceSha, runId });
+  } else {
+    throw new Error(`Unknown command: ${command}`);
+  }
+}
+
+if (require.main === module) {
+  try {
+    main(process.argv.slice(2));
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+  }
 }
 
 module.exports = { createManifest, verifyManifest };
