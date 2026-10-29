@@ -31,3 +31,13 @@ export function cameraView(ctx: ExtensionContext) {
     controls: true,
   });
 }
+
+export function mirroredCameraView(ctx: ExtensionContext) {
+  return ctx.ui.camera({
+    id: 'dev-ui-camera-mirrored',
+    title: 'Dev UI · Mirrored Camera',
+    mirrored: true,
+    framing: 'contain',
+    showDeviceSwitcher: true,
+  });
+}

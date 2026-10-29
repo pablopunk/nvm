@@ -6,6 +6,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackView } from '../feedback';
 import type { CommandAction, CommandFormField, CommandView } from '../model';
 import { MarkdownContent } from '../markdown-content';
+import { initialCameraSelection } from './camera-view';
 import {
   ExtensionViewRenderer,
   type ExtensionViewRendererProps,
@@ -905,4 +906,31 @@ test('a root-presentation list with sections renders its section items', () => {
 
   assert.match(html, /First section/);
   assert.match(html, /First item/);
+});
+
+test('camera views mirror and contain only the host video when requested', () => {
+  const plain = renderExtensionView({ type: 'camera', title: 'Desk' });
+  assert.match(plain, /class="cameraVideo"/);
+  assert.doesNotMatch(plain, /cameraVideoMirrored|cameraVideoContain/);
+
+  const mirrored = renderExtensionView({
+    type: 'camera',
+    title: 'Desk',
+    mirrored: true,
+    framing: 'contain',
+  });
+  assert.match(
+    mirrored,
+    /class="cameraVideo cameraVideoMirrored cameraVideoContain"/,
+  );
+});
+
+test('an explicit camera device id wins over the saved selection', () => {
+  assert.deepEqual(initialCameraSelection('pinned', 'camera-device:desk'), {
+    deviceId: 'pinned',
+    source: 'explicit',
+  });
+  assert.deepEqual(initialCameraSelection(undefined, 'camera-device:desk'), {
+    source: 'default',
+  });
 });
