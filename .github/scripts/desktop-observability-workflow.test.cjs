@@ -1,3 +1,4 @@
+'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,9 +31,12 @@ test('release packaging uploads the final generated maps before packaging withou
     'utf8',
   );
   for (const job of ['release-mac', 'release-windows', 'release-linux']) {
-    const definition = workflow.split(`  ${job}:`)[1].split(/\n  [a-z-]+:/)[0];
+    const definition = workflow
+      .split(`  ${job}:`)[1]
+      .split(/\n {2}[a-z-]+:/)[0];
     assert.match(definition, /NEVERMIND_RELEASE_BUILD: '1'/);
-    assert.match(definition, /SENTRY_PROJECT_DESKTOP:/);
+    assert.match(definition, /POSTHOG_CLI_PROJECT_ID:/);
+    assert.match(definition, /VITE_POSTHOG_KEY:/);
   }
   assert.match(
     fs.readFileSync(path.join(root, 'electron-builder.yml'), 'utf8'),
@@ -47,32 +51,32 @@ test('maps are hidden for all processes and upload credentials are not build def
   );
   assert.equal((config.match(/sourcemap: 'hidden'/g) || []).length, 3);
   assert.match(config, /__NEVERMIND_BUILD__/);
-  assert.ok(!config.includes('SENTRY_AUTH_TOKEN'));
+  assert.ok(!config.includes('POSTHOG_CLI_API_KEY'));
   const upload = fs.readFileSync(
     path.join(root, 'scripts/upload-desktop-source-maps.cjs'),
     'utf8',
   );
-  assert.match(upload, /'--validate',\s*'--strict',\s*'--wait'/);
-  assert.match(upload, /'app:\/\/\/dist'/);
+  assert.match(upload, /'sourcemap',\s*'process'/);
+  assert.match(upload, /'--release-version'/);
 });
 
 test('desktop and backend capture all instrumented journeys and initialize diagnostics after logging', () => {
-  for (const file of [
-    electronSourcePath('sentry.ts'),
-    path.join(root, 'src/backend/src/sentry.server.config.ts'),
-  ]) {
-    assert.match(fs.readFileSync(file, 'utf8'), /tracesSampleRate: 1,/);
-  }
+  assert.match(
+    fs.readFileSync(electronSourcePath('diagnostic-reporting.ts'), 'utf8'),
+    /captureDesktopEvent\('operation_completed'/,
+  );
+  assert.match(
+    fs.readFileSync(path.join(root, 'src/backend/src/middleware.ts'), 'utf8'),
+    /captureBackendRequest\(/,
+  );
   const main = fs.readFileSync(
     path.join(root, 'src/app/electron/main.ts'),
     'utf8',
   );
   const loggerIndex = main.indexOf('configureLogger(isDev);');
-  const sentryIndex = main.indexOf(
-    'if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();',
-  );
-  assert.ok(loggerIndex >= 0 && sentryIndex >= 0);
-  assert.ok(loggerIndex < sentryIndex);
+  const diagnosticsIndex = main.indexOf('initDiagnostics({');
+  assert.ok(loggerIndex >= 0 && diagnosticsIndex >= 0);
+  assert.ok(loggerIndex < diagnosticsIndex);
 });
 
 test('packaging gates publication on the final dependency graph and native SDK capture', () => {

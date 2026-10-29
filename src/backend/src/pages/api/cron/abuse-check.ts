@@ -1,8 +1,8 @@
 import type { APIRoute } from 'astro';
 import { sql } from 'drizzle-orm';
-import * as Sentry from '@sentry/astro';
 import { db } from '../../../db/client';
 import { isAuthorizedCron } from '../../../lib/cron-auth';
+import { captureBackendAlert } from '../../../lib/error-tracking';
 import { log } from '../../../lib/log';
 
 const SPIKE_MULTIPLIER = 5;
@@ -57,10 +57,12 @@ export const GET: APIRoute = async ({ request }) => {
   log.info('abuse_check_complete', { flagged_count: flagged.length });
 
   for (const f of flagged) {
-    Sentry.captureMessage('abuse_credit_spike', {
-      level: 'warning',
-      tags: { kind: 'abuse_check', user_email: f.email },
-      extra: { user_id: f.userId, spend_24h: f.spend24h, median_30d: f.median30d, multiplier: SPIKE_MULTIPLIER },
+    captureBackendAlert('abuse_credit_spike', {
+      kind: 'abuse_check',
+      user_id: f.userId,
+      spend_24h: f.spend24h,
+      median_30d: f.median30d,
+      multiplier: SPIKE_MULTIPLIER,
     });
   }
 

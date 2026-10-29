@@ -1,17 +1,17 @@
-export function diagnosticTestCollectorOrigin(dsn: string | undefined) {
-  const url = dsn ? new URL(dsn) : undefined;
+export function diagnosticTestCollectorOrigin(host: string | undefined) {
+  const url = host ? new URL(host) : undefined;
   if (
-    !url ||
-    url.protocol !== 'http:' ||
+    url?.protocol !== 'http:' ||
     url.hostname !== '127.0.0.1' ||
     !url.port ||
-    url.pathname !== '/1' ||
-    url.username !== 'qa' ||
+    url.pathname !== '/' ||
+    url.username ||
     url.password ||
     url.search ||
     url.hash
-  )
-    throw new Error('Diagnostic tests require a loopback-only collector DSN');
+  ) {
+    throw new Error('Diagnostic tests require a loopback-only collector host');
+  }
   return url.origin;
 }
 
@@ -19,7 +19,8 @@ export function isDiagnosticTestCollectorRequest(
   value: string,
   origin: string | undefined,
 ) {
-  if (!origin) return false;
-  const url = new URL(value);
-  return url.origin === origin && url.pathname === '/api/1/envelope/';
+  if (!origin) {
+    return false;
+  }
+  return new URL(value).origin === origin;
 }

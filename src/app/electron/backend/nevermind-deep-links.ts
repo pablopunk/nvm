@@ -1,4 +1,10 @@
 // biome-ignore-all lint: Moved verbatim from main.ts; keeps its established host-side conventions.
+
+import {
+  error as logError,
+  info as logInfo,
+  warn as logWarn,
+} from '../platform/logger';
 import {
   consumeDeviceCode,
   getDefaultNevermindBaseUrl,
@@ -7,11 +13,6 @@ import {
   setActiveNevermindAuthBaseUrl,
 } from './nevermind-auth';
 import { warmNevermindCompatibilityCache } from './nevermind-compatibility';
-import {
-  error as logError,
-  info as logInfo,
-  warn as logWarn,
-} from '../platform/logger';
 
 export type ParsedAuthDeepLink = {
   code: string;
@@ -71,7 +72,12 @@ export function createNevermindDeepLinks(deps: NevermindDeepLinksDeps) {
         setActiveNevermindAuthBaseUrl(result.auth.baseUrl);
         warmNevermindCompatibilityCache(result.auth.baseUrl);
         invalidateExtensionRootItems();
-        broadcastAuthChanged({ authed: true, email: result.auth.email });
+        broadcastAuthChanged({
+          authed: true,
+          userId: result.auth.userId,
+          email: result.auth.email,
+          role: result.auth.role,
+        });
         logInfo(
           'deep_link.auth_success',
           { email: result.auth.email },

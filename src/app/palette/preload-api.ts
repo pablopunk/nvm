@@ -1,14 +1,15 @@
 // biome-ignore-all lint/style/useConsistentTypeDefinitions: Public preload contracts retain the established object type-alias style.
+
+import type { AiChatImageInput } from '../shared/ai-chat-images';
+import type { AiChatModel } from '../shared/ai-chat-model';
+import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
+import type { ShortcutPlatform } from '../shared/shortcut-utils';
 import type {
   CommandAction,
   CommandItemAppearance,
   CommandView,
   CommandViewPatch,
 } from './model';
-import type { AiChatImageInput } from '../shared/ai-chat-images';
-import type { AiChatModel } from '../shared/ai-chat-model';
-import type { ShortcutPlatform } from '../shared/shortcut-utils';
-import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 
 export type RootAction = {
   id: string;
@@ -282,7 +283,12 @@ export type NevermindApi = {
   performanceTrace: (
     event: Record<string, unknown> | Array<Record<string, unknown>>,
   ) => void;
-  getNevermindAuthStatus: () => Promise<{ authed: boolean; email?: string }>;
+  getNevermindAuthStatus: () => Promise<{
+    authed: boolean;
+    userId?: string;
+    email?: string;
+    role?: string;
+  }>;
   getNevermindDebugStatus: () => Promise<{
     client: { environment: string; baseUrl: string };
     active: { environment: string; baseUrl: string };
@@ -292,6 +298,7 @@ export type NevermindApi = {
   getGhStatus: () => Promise<{ installed: boolean; authed: boolean }>;
   signInToNevermind: () => Promise<{
     ok: boolean;
+    userId?: string;
     email?: string;
     error?: string;
   }>;
@@ -300,8 +307,16 @@ export type NevermindApi = {
   onNevermindDeviceSignInChanged: (
     callback: (status: NevermindDeviceSignInStatus | null) => void,
   ) => () => void;
+  onDiagnosticReportingChanged: (
+    callback: (enabled: boolean) => void,
+  ) => () => void;
   onNevermindAuthChanged: (
-    callback: (status: { authed: boolean; email?: string }) => void,
+    callback: (status: {
+      authed: boolean;
+      userId?: string;
+      email?: string;
+      role?: string;
+    }) => void,
   ) => () => void;
   onShown: (callback: () => void) => () => void;
   onShortcutShown: (callback: () => void) => () => void;

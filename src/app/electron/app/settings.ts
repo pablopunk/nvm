@@ -46,7 +46,7 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     id: 'errorReporting',
     title: 'Send Technical Diagnostics',
     description:
-      'Send safe errors and journey timing, without prompts, clipboard content, or account details',
+      'Send errors, usage and performance data to PostHog, without prompts or clipboard content',
     icon: 'shield-check',
     type: 'boolean',
     default: true,
@@ -113,7 +113,7 @@ export function settingValue(
   id: SettingId,
 ) {
   const definition = settingDefinition(id);
-  if (!definition) return undefined;
+  if (!definition) return;
   const stored = settings?.[id];
   return stored === undefined ? definition.default : stored;
 }

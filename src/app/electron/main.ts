@@ -8,17 +8,7 @@ import { PaneInvocations } from './app/pane-invocations';
 
 const paneInvocations = new PaneInvocations();
 const paneInvocationWindows = new WeakSet<object>();
-// Global safety net: unhandled rejections and uncaught exceptions must never
-// crash the app. An extension action or shell call that throws unexpectedly
-// should be logged and contained, not silently kill the entire process.
-process.on('unhandledRejection', (reason) => {
-  console.error('FATAL: unhandled rejection (would crash Electron):', reason);
-  if (!app.isPackaged) recordOperationFailure(reason);
-});
-process.on('uncaughtException', (error) => {
-  console.error('FATAL: uncaught exception (would crash Electron):', error);
-  if (!app.isPackaged) recordOperationFailure(error);
-});
+installProcessErrorSafetyNet();
 
 import {
   app,
@@ -73,6 +63,7 @@ import {
 import { getByoKey } from './backend/byo-key';
 import {
   cancelNevermindDeviceSignIn,
+  getCachedNevermindAuth,
   getNevermindAuth,
   getNevermindDashboardUrl,
   getNevermindDeviceSignInState,
@@ -94,19 +85,19 @@ import { isClipboardHistoryAction } from './clipboard/clipboard-utils';
 import { createClipboardWatcher } from './clipboard/clipboard-watcher';
 import { createDesktopSelection } from './clipboard/desktop-selection';
 import {
-  recordOperationFailure,
-  runOperation,
-} from './diagnostics/observability';
-import {
   flushDiagnosticRecords,
-  initSentry,
+  initDiagnostics,
+  installProcessErrorSafetyNet,
   recentDiagnosticRecords,
   recordUpdateInstallAttempt,
   rendererFailureHandle,
   reportDiagnosticProblem,
   setDiagnosticReporting,
-} from './diagnostics/sentry';
-import { createLocalFileUrlSecretLoader } from './files/local-file-url-secret';
+} from './diagnostics/diagnostic-reporting';
+import {
+  recordOperationFailure,
+  runOperation,
+} from './diagnostics/observability';
 import { resolveExtensionPaths } from './extension-host/extension-paths';
 import {
   expandUserPath,
@@ -118,6 +109,7 @@ import {
   LOCAL_THUMB_PROTOCOL,
   thumbnailUrlForPath,
 } from './files/file-utils';
+import { createLocalFileUrlSecretLoader } from './files/local-file-url-secret';
 import { createElectronClipboardApi } from './os/electron-clipboard';
 import { createLinuxX11Clipboard } from './os/linux-x11-clipboard';
 import {
@@ -131,6 +123,7 @@ import {
 configureNvmTestMode();
 if (isNvmTestMode && process.env.NVM_TEST_USER_DATA_DIR)
   app.setPath('userData', path.resolve(process.env.NVM_TEST_USER_DATA_DIR));
+
 import {
   INTERNAL_EXTENSION_FACTORIES,
   INTERNAL_EXTENSION_SOURCE_FILES,
@@ -182,10 +175,10 @@ import {
   createPaletteWindowController,
   installPermissionHandlers,
 } from './app/palette-window';
+import { createPendingViewLoaderSpawner } from './app/pending-view-loader';
 import { createPortableConfigLive } from './app/portable-config-live';
 import { createPortableConfigService } from './app/portable-config-service';
 import { createQuitLifecycle } from './app/quit-lifecycle';
-import { createPendingViewLoaderSpawner } from './app/pending-view-loader';
 import { createRunningAppStatusService } from './app/running-app-status';
 import {
   SETTING_DEFINITIONS,
@@ -194,10 +187,11 @@ import {
   toggledSettingValue,
 } from './app/settings';
 import { createSettingsService } from './app/settings-service';
-import { createTestModeIpc } from './app/test-mode-ipc';
 import { createAppStateMaintenance } from './app/state-maintenance-setup';
+import { createTestModeIpc } from './app/test-mode-ipc';
 import { createAppUpdateManager } from './app/update-manager-setup';
 import { createUpdatesService } from './app/updates-service';
+import { createWindowManagementComposition } from './app/window-management-composition';
 import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
@@ -227,10 +221,6 @@ import {
   commandFromItem,
 } from './extension-host/extension-action-builders';
 import { createExtensionContextFactory } from './extension-host/extension-context';
-import {
-  checkAiRateLimit,
-  checkRefreshBurst,
-} from './extension-host/extension-rate-limits';
 import { createExtensionDevFixtures } from './extension-host/extension-dev-fixtures';
 import { createDiagnosticExtensionTargets } from './extension-host/extension-diagnostic-target';
 import { createExtensionDraftPersistence } from './extension-host/extension-draft-persistence';
@@ -241,6 +231,10 @@ import { createExtensionManager } from './extension-host/extension-manager';
 import { createExtensionMemoryCache } from './extension-host/extension-memory-cache';
 import { createExtensionPrSubmitter } from './extension-host/extension-pr-submitter';
 import { createExtensionProposals } from './extension-host/extension-proposals';
+import {
+  checkAiRateLimit,
+  checkRefreshBurst,
+} from './extension-host/extension-rate-limits';
 import { createExtensionRegistration } from './extension-host/extension-registration';
 import { createExtensionRuntimeState } from './extension-host/extension-runtime-state';
 import { createExtensionRuntimeTransaction } from './extension-host/extension-runtime-transaction';
@@ -291,8 +285,6 @@ import { createSystemAudioMuteCapability } from './os/system-audio';
 import { createActivationStatus } from './platform/activation-status';
 import { bundledResourcePath } from './platform/bundled-resource-path';
 import { JobRegistry, type JobSnapshot } from './platform/jobs';
-import { createMaintenanceActivity } from './platform/maintenance-activity';
-import { resolveRendererUrl } from './platform/renderer-url';
 import {
   configureLogger,
   error as logError,
@@ -300,6 +292,8 @@ import {
   info as logInfo,
   warn as logWarn,
 } from './platform/logger';
+import { createMaintenanceActivity } from './platform/maintenance-activity';
+import { resolveRendererUrl } from './platform/renderer-url';
 import { createActionRanker } from './search/action-ranker';
 import {
   calculateDetailed,
@@ -316,7 +310,6 @@ import { createShortcutCatalog } from './shortcuts/shortcut-catalog';
 import { createShortcutHints } from './shortcuts/shortcut-hints';
 import { withInheritedShortcutLifecycle } from './shortcuts/shortcut-lifecycle';
 import { createShortcutRunner } from './shortcuts/shortcut-runner';
-import { createWindowManagementComposition } from './app/window-management-composition';
 import { createViewLoaderRegistry } from './state/data-loader';
 import { LocalLearningStore } from './state/learning-store';
 import { resolvePortableConfigPath } from './state/portable-config-file';
@@ -329,7 +322,8 @@ import { createUserStateStore } from './state/user-state-store';
 const rendererUrl = resolveRendererUrl(process.env, app.isPackaged);
 const isDev = Boolean(rendererUrl);
 configureLogger(isDev);
-if (!isNvmTestMode || isNvmDiagnosticTestMode) initSentry();
+if (!isNvmTestMode || isNvmDiagnosticTestMode)
+  initDiagnostics({ currentUserId: () => getCachedNevermindAuth()?.userId });
 setDeepLinkLogger({ warn: logWarn });
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';
 if (process.platform === 'linux') {

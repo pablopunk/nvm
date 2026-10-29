@@ -1,11 +1,11 @@
 ---
 name: production-debugger
-description: Use for Nevermind production incidents, external configuration, or deployed-flow verification — Sentry alerts, Vercel/Axiom logs, backend 5xx, auth failures, Neon/Upstash incidents, upstream AI provider failures, GitHub release failures, desktop prod logs, or any "check prod" request. This is an index skill for vendor-specific operational connectors.
+description: Use for Nevermind production incidents, external configuration, or deployed-flow verification — PostHog error alerts, Vercel/Axiom logs, backend 5xx, auth failures, Neon/Upstash incidents, upstream AI provider failures, GitHub release failures, desktop prod logs, or any "check prod" request. This is an index skill for vendor-specific operational connectors.
 ---
 
 # Production Debugger
 
-This is the production operations router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: Sentry, Axiom, Vercel, Neon, WorkOS, Upstash, Stripe, GitHub, OpenRouter, and OpenCode.
+This is the production operations router. It keeps app-specific stack knowledge here, then sends the agent to vendor-specific playbooks that act like MCP connectors: PostHog, Axiom, Vercel, Neon, WorkOS, Upstash, Stripe, GitHub, OpenRouter, and OpenCode.
 
 Do not start by reading code. Start from the alert/log source, collect production evidence, and only inspect code after a vendor signal points to a code path.
 
@@ -25,7 +25,7 @@ that are genuinely dashboard or human only.
 - Public hosts: `nvm.fyi`, `www.nvm.fyi`, `api.nvm.fyi`, plus Vercel deployment URLs.
 - API configuration is origin-only: use `https://api.nvm.fyi` and append one `/api/...`; never configure `https://api.nvm.fyi/api`. Dashboard/auth uses the non-redirecting `https://www.nvm.fyi` origin.
 - Runtime logs: Vercel drains to Axiom; Axiom is the primary log backend.
-- Error tracking: Sentry for backend and desktop.
+- Error tracking and product analytics: PostHog for backend and desktop.
 - Database: Neon serverless Postgres with Drizzle migrations.
 - Auth: WorkOS AuthKit plus desktop device auth.
 - Billing: Stripe Checkout, Billing Portal, subscriptions, top-ups, and webhooks.
@@ -36,7 +36,7 @@ that are genuinely dashboard or human only.
 
 ## Vendor playbooks
 
-- `./sentry.md` — fetch Sentry issue/event details, tags, release, request context, and pivot keys.
+- `./posthog.md` — PostHog error issues, events, releases, request context, and pivot keys.
 - `./axiom.md` — query Axiom datasets for Vercel runtime logs by time, route, request id, deployment, error text.
 - `./vercel.md` — deployment/build/domain/env/redeploy checks and Vercel API fallback.
 - `./neon.md` — Neon project/branch/connection/operation and safe database incident checks.
@@ -49,14 +49,14 @@ that are genuinely dashboard or human only.
 
 ## Incident routing
 
-- Sentry alert? Read `sentry.md`, then usually `axiom.md`.
-- 5xx or route failure without Sentry? Read `axiom.md`, then `vercel.md` if deployment/env/domain may be involved.
+- Error alert? Read `posthog.md`, then usually `axiom.md`.
+- 5xx or route failure without a PostHog error? Read `axiom.md`, then `vercel.md` if deployment/env/domain may be involved.
 - Auth/OAuth/device login failure? Read `workos.md`, then `axiom.md`.
 - DB/health/migration/balance issue? Read `neon.md`, then `axiom.md`.
 - Rate-limit/cache issue? Read `upstash.md`, then `axiom.md`.
 - Billing/checkout/subscription/top-up/webhook issue? Read `stripe.md`, then `axiom.md` and `vercel.md` as needed.
 - AI proxy/upstream issue? Read `axiom.md`, then `opencode.md` or `openrouter.md` based on active provider.
-- Release/update/install issue? Read `github.md`; use Sentry/desktop logs only if the installed app is crashing.
+- Release/update/install issue? Read `github.md`; use PostHog/desktop logs only if the installed app is crashing.
 
 ## Minimum incident context
 
@@ -66,7 +66,7 @@ Capture this inline; do not keep a separate generic checklist file:
 - Environment and host.
 - Route/transaction/status/error message.
 - Deployment id, release, or git SHA if present.
-- Correlation id such as `request_id`, Sentry event id, Vercel deployment id, or Axiom row timestamp.
+- Correlation id such as `request_id`, PostHog `support_ref`, Vercel deployment id, or Axiom row timestamp.
 - Affected scope: one user, many users, one route, one provider, or all prod.
 
 ## Output format

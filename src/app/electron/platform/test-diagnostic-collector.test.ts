@@ -7,39 +7,36 @@ import {
 
 test('diagnostic tests accept only a dedicated loopback collector', function loopbackCollector() {
   assert.equal(
-    diagnosticTestCollectorOrigin('http://qa@127.0.0.1:54321/1'),
+    diagnosticTestCollectorOrigin('http://127.0.0.1:54321'),
     'http://127.0.0.1:54321',
   );
-  for (const dsn of [
+  for (const host of [
     undefined,
-    'https://qa@example.com/1',
-    'http://qa@localhost:54321/1',
-    'http://qa:secret@127.0.0.1:54321/1',
-    'http://qa@127.0.0.1:54321/2',
+    'https://eu.i.posthog.com',
+    'http://localhost:54321',
+    'http://qa:secret@127.0.0.1:54321',
+    'http://127.0.0.1:54321/path',
+    'http://127.0.0.1',
   ])
     assert.throws(function rejectCollector() {
-      diagnosticTestCollectorOrigin(dsn);
+      diagnosticTestCollectorOrigin(host);
     });
 });
 
 test('test network policy does not allow unrelated URLs or origins', function collectorRequests() {
   const origin = 'http://127.0.0.1:54321';
   assert.equal(
-    isDiagnosticTestCollectorRequest(
-      `${origin}/api/1/envelope/?sentry_key=qa`,
-      origin,
-    ),
+    isDiagnosticTestCollectorRequest(`${origin}/batch/`, origin),
     true,
   );
   for (const url of [
-    'https://sentry.io/api/1/envelope/',
-    `${origin}/api/auth`,
-    'http://127.0.0.1:54322/api/1/envelope/',
-    `${origin}@example.com/api/1/envelope/`,
+    'https://eu.i.posthog.com/batch/',
+    'http://127.0.0.1:54322/batch/',
+    `${origin}@example.com/batch/`,
   ])
     assert.equal(isDiagnosticTestCollectorRequest(url, origin), false);
   assert.equal(
-    isDiagnosticTestCollectorRequest(`${origin}/api/1/envelope/`, undefined),
+    isDiagnosticTestCollectorRequest(`${origin}/batch/`, undefined),
     false,
   );
 });

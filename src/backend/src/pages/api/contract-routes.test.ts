@@ -1183,7 +1183,11 @@ test('approved device auth exchange consumes the code and returns a scoped token
   assert.equal(response.status, 200);
   assert.equal(body.status, 'ok');
   assert.match(body.token, /^nvm_pat_/);
-  assert.deepEqual(body.user, { email: 'pablo@example.com', role: 'user' });
+  assert.deepEqual(body.user, {
+    id: 'user_1',
+    email: 'pablo@example.com',
+    role: 'user',
+  });
   assert.equal((db.insertedValues[0] as any).name, 'Pablo Mac');
   assert.notEqual((db.insertedValues[0] as any).tokenHash, body.token);
 });

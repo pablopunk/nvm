@@ -1,6 +1,6 @@
 allowBuilds:
   '@google/genai': true
-  '@sentry/cli': true
+  core-js: false
   electron: true
   electron-winstaller: true
   esbuild: true

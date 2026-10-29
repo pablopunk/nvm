@@ -11,7 +11,7 @@ export type DeviceExchangeResult =
   | {
       status: 'ok';
       token: string;
-      user: { email: string; role: string };
+      user: { id: string; email: string; role: string };
     };
 
 type DeviceAuthTransaction = Parameters<
@@ -80,7 +80,7 @@ export async function exchangeApprovedDeviceCode(
     return {
       status: 'ok',
       token: created.token,
-      user: { email: user.email, role: user.role },
+      user: { id: user.id, email: user.email, role: user.role },
     };
   });
 }

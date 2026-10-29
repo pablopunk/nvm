@@ -10,7 +10,7 @@ The Neon skill says to verify claims against current Neon docs. Neon docs can be
 
 ## Operational flow
 
-1. Start from vendor evidence: Sentry DB exception, Axiom `health_db_failed`, Vercel build/migration failure, or a user/request id needing DB correlation.
+1. Start from vendor evidence: PostHog DB exception, Axiom `health_db_failed`, Vercel build/migration failure, or a user/request id needing DB correlation.
 2. Confirm the issue type: connection/auth, branch/project availability, migration, data shape, query latency, or app logic.
 3. Use Neon-specific tooling/docs before generic Postgres advice.
 4. For SQL, use read-only queries first and redact data.
@@ -20,6 +20,6 @@ The Neon skill says to verify claims against current Neon docs. Neon docs can be
 - AI proxy issues correlate through `request_id` in usage records.
 - Credit/balance issues correlate through ledger rows.
 - Migration failures should show in Vercel build events because migrations run during backend build.
-- Sentry error `terminating connection due to administrator command` from `@neondatabase/serverless` means Postgres/Neon closed the connection server-side. Treat it as a Neon connection/admin event until Axiom/Sentry evidence shows an app regression; verify current `/api/health`, search Sentry for repeated events, and check whether the correlated `usage` row already recorded a successful status before changing code. The app now installs a `pool.on('error')` listener in the DB client, logs this known idle/admin termination as `neon_idle_connection_terminated`, and avoids reporting it as a fatal uncaught exception.
+- PostHog error `terminating connection due to administrator command` from `@neondatabase/serverless` means Postgres/Neon closed the connection server-side. Treat it as a Neon connection/admin event until Axiom/PostHog evidence shows an app regression; verify current `/api/health`, search PostHog for repeated `$exception` events, and check whether the correlated `usage` row already recorded a successful status before changing code. The app now installs a `pool.on('error')` listener in the DB client, logs this known idle/admin termination as `neon_idle_connection_terminated`, and avoids reporting it as a fatal uncaught exception.
 
 Confirm before prod DB writes, migrations, admin grants, credit edits, branch changes, or destructive SQL.

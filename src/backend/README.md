@@ -72,7 +72,7 @@ backward migration is safe for all released desktop clients.
 
 Admission prices come only from durable snapshots that the scheduled refresh validated. The request path never fetches models.dev, OpenRouter endpoints, or the OpenRouter audio and decision catalogs. It restores the last validated copy from `pricing_snapshots` and answers from that.
 
-- `/api/cron/pricing-refresh` runs daily at 05:30 UTC (`vercel.json`). It refreshes the models.dev sections, the endpoint price of every live OpenRouter route model (each model isolated from the others), and the OpenRouter audio and decision catalogs. It requires `CRON_SECRET` in production and fails closed without it. It returns 503 with a per-catalog report when anything failed, and reports the failure to Sentry.
+- `/api/cron/pricing-refresh` runs daily at 05:30 UTC (`vercel.json`). It refreshes the models.dev sections, the endpoint price of every live OpenRouter route model (each model isolated from the others), and the OpenRouter audio and decision catalogs. It requires `CRON_SECRET` in production and fails closed without it. It returns 503 with a per-catalog report when anything failed, and reports the failure to PostHog as a `backend_alert` event.
 - A validation inside 36 hours is current. A validation between 36 hours and 7 days is stale: every tier admits it, and each reservation holds twice its estimate, so a rate that moved while the snapshot aged cannot settle above its hold. Free spend is held the same way inside the monthly free-spend cap. Settlement always uses the actual cost. Past 7 days a price is refused for every tier with `pricing_unavailable`, `reason: stale`.
 - A route whose price has never been validated refuses with `pricing_unavailable`, `reason: unverified`. Audio and decision routes with no validated catalog refuse as unavailable models.
 - Saving an admin route refreshes that route's price first, so a new model is priced when it is chosen.
@@ -104,7 +104,7 @@ The cap does not hide an outage. A reached cap leaves each stale route refused, 
 These cannot be verified from code, and they must hold before relying on this deploy path:
 
 - `CRON_SECRET` must be set in the Vercel production environment. Vercel cron sends it as the bearer token. Without it the daily refresh returns 401, the snapshots age, and the deploy gate would not notice until the prices refuse.
-- One missed daily run leaves prices stale on the second day, when they are held at twice the estimate. They are refused after a week of missed runs. Confirm the first refresh after deploy succeeds and that its Sentry alert channel is watched.
+- One missed daily run leaves prices stale on the second day, when they are held at twice the estimate. They are refused after a week of missed runs. Confirm the first refresh after deploy succeeds and that its PostHog alert channel is watched.
 - Confirm the first production deploy of this change logged `"ready": true` from the seed step before any traffic reached it.
 
 ## Deploy
