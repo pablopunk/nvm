@@ -21,11 +21,12 @@ test('camera view options accept only the documented values', () => {
 });
 
 test('normalized camera options stay clone-safe', () => {
-  const options = normalizeCameraViewOptions({
+  const input = {
     mirrored: true,
     framing: 'contain',
     run: () => undefined,
-  });
+  };
+  const options = normalizeCameraViewOptions(input);
   assert.doesNotThrow(() => structuredClone(options));
   assert.equal('run' in options, false);
 });
