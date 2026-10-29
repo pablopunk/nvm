@@ -520,6 +520,14 @@ function updatesServiceWithState(
   });
 }
 
+function stateVerificationNativeAction(
+  action: { type: string } | undefined,
+): { kind: string; confirmation?: unknown } | undefined {
+  return action && 'nativeAction' in action
+    ? (action.nativeAction as { kind: string; confirmation?: unknown })
+    : undefined;
+}
+
 test('the updates view offers a host-confirmed state backup only when supported', () => {
   assert.equal(
     updatesServiceWithState({ phase: 'unsupported' }).updateStatusView().items
@@ -533,7 +541,10 @@ test('the updates view offers a host-confirmed state backup only when supported'
   const item = view.items[1];
   assert.equal(item.id, 'update-state-verification');
   assert.equal(item.primaryAction?.type, 'nativeAction');
-  assert.equal(item.primaryAction?.nativeAction.kind, 'state-verification');
+  assert.equal(
+    stateVerificationNativeAction(item.primaryAction)?.kind,
+    'state-verification',
+  );
 });
 
 test('state backup starts only for the confirmation the host rendered', () => {
@@ -547,7 +558,7 @@ test('state backup starts only for the confirmation the host rendered', () => {
   service.verifyStateView({});
   service.verifyStateView(undefined);
   assert.deepEqual(verified, []);
-  service.verifyStateView(action?.nativeAction);
+  service.verifyStateView(stateVerificationNativeAction(action));
   assert.deepEqual(verified, ['verified']);
 });
 
