@@ -10,6 +10,7 @@ permissions:
 
 env:
   NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
+  NEVERMIND_DEV_RELEASE_REPOSITORY: ${{ vars.DEV_RELEASE_REPOSITORY }}
 
 jobs:
   plan:

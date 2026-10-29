@@ -119,6 +119,7 @@ function createProvider(
   channel: UpdateChannel,
   github: FakeGitHub,
   platform: ProviderPlatform = 'win32',
+  devRepository = '',
 ) {
   return new NevermindChannelProvider(
     {
@@ -126,6 +127,7 @@ function createProvider(
       owner: OWNER,
       repo: REPO,
       resolveChannel: () => channel,
+      devRepository,
     },
     {} as AppUpdater,
     {
@@ -135,6 +137,23 @@ function createProvider(
     } as unknown as ProviderRuntimeOptions,
   );
 }
+
+test('dev updates use the isolated prerelease repository for metadata and payloads', async () => {
+  const tag = 'v2026.1029.901';
+  const path = '/pablopunk/nvm-dev/releases';
+  const github = createFakeGitHub({
+    [`${path}.atom`]: `<feed><entry><link href="https://github.com${path}/tag/${tag}"/></entry></feed>`,
+    [`${path}/download/${tag}/nightly.yml`]: metadataYaml(tag.slice(1)),
+  });
+  const provider = createProvider('dev', github, 'win32', 'pablopunk/nvm-dev');
+  const info = await provider.getLatestVersion();
+  assert.equal(info.version, tag.slice(1));
+  assert.equal(info.updateChannel, 'dev');
+  assert.match(
+    provider.resolveFiles(info)[0].url.href,
+    /\/nvm-dev\/releases\/download\//,
+  );
+});
 
 async function withUpdaterArch<T>(arch: string, run: () => Promise<T>) {
   const previous = process.env.TEST_UPDATER_ARCH;

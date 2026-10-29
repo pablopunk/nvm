@@ -6,6 +6,7 @@ import {
 import { GitHubProvider } from 'electron-updater/out/providers/GitHubProvider.js';
 import {
   parseUpdateInfo,
+  resolveFiles,
   type ProviderRuntimeOptions,
 } from 'electron-updater/out/providers/Provider.js';
 import {
@@ -23,6 +24,7 @@ type GitHubFeedOptions = ConstructorParameters<typeof GitHubProvider>[0];
 
 export type ChannelFeedOptions = GitHubFeedOptions & {
   resolveChannel: () => UpdateChannel;
+  devRepository?: string;
 };
 
 export type ChannelUpdateInfo = UpdateInfo & {
@@ -33,6 +35,7 @@ export type ChannelUpdateInfo = UpdateInfo & {
 // Stock GitHubProvider only understands channel-named prereleases; this provider picks the newest eligible release by semver across stable and nightly tags.
 export class NevermindChannelProvider extends GitHubProvider {
   private readonly resolveChannel: () => UpdateChannel;
+  private readonly devRepository: string;
 
   constructor(
     options: ChannelFeedOptions,
@@ -41,6 +44,7 @@ export class NevermindChannelProvider extends GitHubProvider {
   ) {
     super(options, updater, runtimeOptions);
     this.resolveChannel = options.resolveChannel;
+    this.devRepository = options.devRepository ?? '';
   }
 
   async getLatestVersion(): Promise<ChannelUpdateInfo> {
@@ -56,6 +60,7 @@ export class NevermindChannelProvider extends GitHubProvider {
         tag,
         version,
         cancellationToken,
+        channel,
       );
       if (info) return { ...info, tag, updateChannel: channel };
     }
@@ -65,7 +70,15 @@ export class NevermindChannelProvider extends GitHubProvider {
     );
   }
 
-  private releasesPath() {
+  private releasesPath(channel?: UpdateChannel) {
+    if (channel === 'dev') {
+      if (
+        !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(this.devRepository) ||
+        this.devRepository === `${this.options.owner}/${this.options.repo}`
+      )
+        throw new Error('Dev release repository is not configured');
+      return `/${this.devRepository}/releases`;
+    }
     return `/${this.options.owner}/${this.options.repo}/releases`;
   }
 
@@ -73,6 +86,14 @@ export class NevermindChannelProvider extends GitHubProvider {
     channel: UpdateChannel,
     cancellationToken: CancellationToken,
   ) {
+    if (channel === 'dev') {
+      const feed = await this.httpRequest(
+        new URL(`${this.releasesPath(channel)}.atom`, this.baseUrl),
+        { accept: RELEASES_FEED_ACCEPT },
+        cancellationToken,
+      );
+      return releaseTagsFromAtomFeed(feed ?? '');
+    }
     const latestStableTag = await this.fetchLatestStableTag(cancellationToken);
     const latestTags = latestStableTag ? [latestStableTag] : [];
     if (channel === 'stable') return latestTags;
@@ -98,10 +119,11 @@ export class NevermindChannelProvider extends GitHubProvider {
     tag: string,
     version: string,
     cancellationToken: CancellationToken,
+    channel: UpdateChannel,
   ): Promise<UpdateInfo | null> {
-    const channelFile = `${this.getCustomChannelName(channelMetadataNameFor(version))}.yml`;
+    const channelFile = `${this.getCustomChannelName(channel === 'dev' ? 'nightly' : channelMetadataNameFor(version))}.yml`;
     const channelFileUrl = new URL(
-      `${this.releasesPath()}/download/${tag}/${channelFile}`,
+      `${this.releasesPath(channel)}/download/${tag}/${channelFile}`,
       this.baseUrl,
     );
     try {
@@ -122,5 +144,14 @@ export class NevermindChannelProvider extends GitHubProvider {
       if ((error as { statusCode?: number }).statusCode === 404) return null;
       throw error;
     }
+  }
+
+  resolveFiles(updateInfo: ChannelUpdateInfo) {
+    return resolveFiles(
+      updateInfo,
+      this.baseUrl,
+      (file) =>
+        `${this.releasesPath(updateInfo.updateChannel)}/download/${updateInfo.tag}/${file.replace(/ /g, '-')}`,
+    );
   }
 }

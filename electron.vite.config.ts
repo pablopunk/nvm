@@ -8,6 +8,9 @@ const { desktopBuildIdentity } = createRequire(import.meta.url)(
 
 const buildDefinitions = {
   __NEVERMIND_BUILD__: JSON.stringify(desktopBuildIdentity()),
+  __NVM_DEV_RELEASE_REPOSITORY__: JSON.stringify(
+    process.env.NEVERMIND_DEV_RELEASE_REPOSITORY ?? '',
+  ),
   __NVM_TEST_PI_PACKAGED_BUILD__: JSON.stringify(
     process.env.NVM_TEST_PI_PACKAGED_BUILD === '1',
   ),

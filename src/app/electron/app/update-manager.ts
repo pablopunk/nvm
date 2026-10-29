@@ -422,12 +422,14 @@ export function createUpdateManager(
 
     startupTimer = setTimeout(() => {
       startupTimer = null;
-      void checkForUpdates('startup');
+      void checkForUpdates('startup', {
+        download: getUpdateChannel() === 'dev',
+      });
     }, AUTO_UPDATE_STARTUP_DELAY_MS);
     startupTimer.unref?.();
 
     pollTimer = setInterval(() => {
-      void checkForUpdates('poll');
+      void checkForUpdates('poll', { download: getUpdateChannel() === 'dev' });
     }, AUTO_UPDATE_POLL_INTERVAL_MS);
     pollTimer.unref?.();
   }

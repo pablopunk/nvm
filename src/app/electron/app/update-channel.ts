@@ -6,6 +6,7 @@ import {
 export const UPDATE_CHANNEL_OPTIONS = [
   { value: 'stable', label: 'Stable' },
   { value: 'nightly', label: 'Nightly' },
+  { value: 'dev', label: 'Dev' },
 ] as const;
 
 export type UpdateChannel = (typeof UPDATE_CHANNEL_OPTIONS)[number]['value'];
