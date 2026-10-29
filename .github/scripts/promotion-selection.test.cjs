@@ -4,6 +4,7 @@ const { test } = require('node:test');
 const {
   selectNewestDev,
   expiredDevTags,
+  expiredPromotedNightlyTags,
   referencedDevTags,
 } = require('./promotion-selection.cjs');
 
@@ -39,5 +40,40 @@ test('retention preserves protected and newest builds and unknown timestamps', (
       'v2026.101.1-dev',
     ]),
     ['v2026.102.2-dev'],
+  );
+});
+
+test('promoted nightlies do not keep their source dev build alive', () => {
+  assert.deepEqual(
+    referencedDevTags([
+      {
+        tag_name: 'v2026.1029.5-nightly',
+        body: 'Promoted from v2026.1029.4-dev.',
+      },
+      { tag_name: 'v2026.1029.5', body: 'Promoted from v2026.1029.3-dev.' },
+    ]),
+    ['v2026.1029.3-dev'],
+  );
+});
+
+test('promoted nightly retention keeps the newest, pointer targets, and preserved builds', () => {
+  const releases = [
+    release('v2026.101.1-nightly'),
+    release('v2026.102.2-nightly'),
+    { ...release('v2026.103.3-nightly'), body: 'Nevermind-Preserve: true' },
+    release('v2026.104.4-nightly', 'invalid'),
+    release('v2026.105.5-nightly'),
+    release('v2026.105.5-dev'),
+    { ...release('v2026.106.6-nightly'), draft: true },
+  ];
+  assert.deepEqual(
+    expiredPromotedNightlyTags(releases, new Date('2026-10-29T00:00:00Z'), [
+      'v2026.102.2-nightly',
+    ]),
+    ['v2026.101.1-nightly'],
+  );
+  assert.throws(
+    () => expiredPromotedNightlyTags(releases, new Date('invalid')),
+    /Invalid retention input/,
   );
 });

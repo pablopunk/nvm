@@ -294,6 +294,7 @@ function commandValidateAssets(options) {
       version,
       assetNames: names,
       sha512Of: (assetName) => sha512Base64(path.join(directory, assetName)),
+      sizeOf: (assetName) => fs.statSync(path.join(directory, assetName)).size,
     });
     if (options['state-epoch']) {
       const text = fs.readFileSync(path.join(directory, metadataName), 'utf8');

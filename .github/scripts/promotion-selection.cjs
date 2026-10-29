@@ -42,11 +42,44 @@ function expiredDevTags(releases, now, protectedTags = []) {
   });
 }
 
+const PROMOTED_NIGHTLY_TAG = /^v(\d+\.\d+\.\d+)-nightly$/;
+
+// Promoted nightlies hold independent asset copies, so only the newest build and the
+// pointer's targets outlive the retention window.
+function expiredPromotedNightlyTags(releases, now, protectedTags = []) {
+  if (!Array.isArray(releases) || !Number.isFinite(now.getTime()))
+    throw new Error('Invalid retention input');
+  const published = releases.flatMap((release) => {
+    const match = PROMOTED_NIGHTLY_TAG.exec(release?.tag_name ?? '');
+    return match && release.draft === false && release.prerelease === true
+      ? [{ release, version: match[1] }]
+      : [];
+  });
+  published.sort((a, b) => compareVersions(b.version, a.version));
+  const protectedSet = new Set([
+    ...protectedTags,
+    published[0]?.release.tag_name,
+  ]);
+  const cutoff = now.getTime() - 30 * 86400000;
+  return published.flatMap(({ release }) => {
+    if (
+      /(?:^|\n)Nevermind-Preserve: true(?:\r?\n|$)/.test(release.body ?? '') ||
+      protectedSet.has(release.tag_name)
+    )
+      return [];
+    const publishedAt = Date.parse(release.published_at ?? '');
+    return Number.isFinite(publishedAt) && publishedAt < cutoff
+      ? [release.tag_name]
+      : [];
+  });
+}
+
 function referencedDevTags(releases) {
   if (!Array.isArray(releases)) throw new Error('Release list is unavailable');
   const referenced = new Set();
   for (const release of releases) {
     if (/^v\d+\.\d+\.\d+-dev$/.test(release?.tag_name ?? '')) continue;
+    if (PROMOTED_NIGHTLY_TAG.test(release?.tag_name ?? '')) continue;
     if (typeof release?.body !== 'string') continue;
     for (const match of release.body.matchAll(/\bv\d+\.\d+\.\d+-dev\b/g))
       referenced.add(match[0]);
@@ -54,7 +87,12 @@ function referencedDevTags(releases) {
   return [...referenced];
 }
 
-module.exports = { selectNewestDev, expiredDevTags, referencedDevTags };
+module.exports = {
+  selectNewestDev,
+  expiredDevTags,
+  expiredPromotedNightlyTags,
+  referencedDevTags,
+};
 
 if (require.main === module) {
   try {
@@ -62,29 +100,35 @@ if (require.main === module) {
     const releases = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
     if (command === 'select') {
       console.log(JSON.stringify(selectNewestDev(releases, argument || null)));
-    } else if (command === 'retention') {
+    } else if (command === 'retention' || command === 'nightly-retention') {
+      const channel = command === 'retention' ? 'dev' : 'nightly';
       if (!pointerFile)
-        throw new Error('Dev pointer is required for retention');
+        throw new Error(`The ${channel} pointer is required for retention`);
       const pointer = JSON.parse(
         require('node:fs').readFileSync(pointerFile, 'utf8'),
       );
       if (
         pointer?.kind !== 'nevermind-channel-pointer' ||
-        pointer.channel !== 'dev' ||
+        pointer.channel !== channel ||
         !Array.isArray(pointer.tags) ||
         pointer.tags.length < 1 ||
         pointer.tags.length > 2 ||
         pointer.tags.some(
-          (tag) => typeof tag !== 'string' || !/^v\d+\.\d+\.\d+-dev$/.test(tag),
+          (tag) =>
+            typeof tag !== 'string' ||
+            !new RegExp(`^v\\d+\\.\\d+\\.\\d+-${channel}$`).test(tag),
         )
       )
-        throw new Error('Invalid dev pointer');
+        throw new Error(`Invalid ${channel} pointer`);
+      const now = new Date(argument);
       console.log(
         JSON.stringify(
-          expiredDevTags(releases, new Date(argument), [
-            ...referencedDevTags(releases),
-            ...pointer.tags,
-          ]),
+          channel === 'dev'
+            ? expiredDevTags(releases, now, [
+                ...referencedDevTags(releases),
+                ...pointer.tags,
+              ])
+            : expiredPromotedNightlyTags(releases, now, pointer.tags),
         ),
       );
     } else {

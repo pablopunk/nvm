@@ -34,3 +34,15 @@ jobs:
             [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev$ ]]
             gh release delete "$tag" --cleanup-tag --yes
           done
+      - name: Delete expired promoted nightly releases
+        run: |
+          set -euo pipefail
+          if ! jq -e 'any(.[]; (.tag_name // "") | test("^v[0-9]+\\.[0-9]+\\.[0-9]+-nightly$"))' releases.json >/dev/null; then
+            exit 0
+          fi
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/release-pointers/.channels/nightly.json?check=$(date +%s)" -o nightly-pointer.json
+          mise exec -- node .github/scripts/promotion-selection.cjs nightly-retention releases.json "$(date -u +%FT%TZ)" nightly-pointer.json > expired-nightly.json
+          jq -r '.[]' expired-nightly.json | while read -r tag; do
+            [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly$ ]]
+            gh release delete "$tag" --cleanup-tag --yes
+          done

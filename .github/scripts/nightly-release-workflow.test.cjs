@@ -53,6 +53,21 @@ test('manual trigger defaults to a dry run that never publishes', () => {
   assert.match(workflow, /  validate-assets:/);
 });
 
+test('every tag-driven stable release job refuses a tag older than the latest stable', () => {
+  assert.equal(
+    ci.match(/mise exec -- node \.github\/scripts\/release-tag-guard\.cjs/g)
+      ?.length,
+    3,
+  );
+});
+
+test('manual runs cannot publish legacy nightlies outside promotion', () => {
+  assert.match(
+    workflow,
+    /Refuse legacy publication\n        if: \$\{\{ !inputs\.dry_run \}\}[\s\S]*?promote-nightly\.yml[\s\S]*?exit 1/,
+  );
+});
+
 test('runs are serialized and never cancel an in-flight publication', () => {
   assert.match(
     workflow,

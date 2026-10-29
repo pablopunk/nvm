@@ -37,6 +37,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
+      - name: Refuse legacy publication
+        if: ${{ !inputs.dry_run }}
+        run: |
+          echo "Nightly publication moved to promote-nightly.yml, which promotes a retained dev build with its state epoch and channel pointer." >&2
+          exit 1
+
       - name: Checkout source
         uses: actions/checkout@v4
         with:
