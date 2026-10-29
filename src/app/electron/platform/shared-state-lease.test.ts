@@ -22,6 +22,18 @@ function attemptMkdirInChild(lockDirectory: string): Promise<number | null> {
   });
 }
 
+function leaveLeaseInChild(lockDirectory: string): Promise<number | null> {
+  return new Promise((resolve, reject) => {
+    const script =
+      'const fs=require("node:fs"); fs.mkdirSync(process.argv[1]); fs.writeFileSync(process.argv[1]+"/owner.json", JSON.stringify({token:"abandoned",pid:process.pid}));';
+    const child = spawn(process.execPath, ['-e', script, lockDirectory], {
+      stdio: 'ignore',
+    });
+    child.once('error', reject);
+    child.once('exit', resolve);
+  });
+}
+
 test('separate process cannot acquire a shared lease until it is released', async (t) => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-shared-lease-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
@@ -62,4 +74,23 @@ test('aliases to the same state root share a lease', async (t) => {
   const lease = await acquireSharedStateLease(shared);
   await assert.rejects(acquireSharedStateLease(alias), /already in use/);
   await lease.release();
+});
+
+test('recovers a lease only after its owning process has exited', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-shared-lease-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const shared = path.join(root, 'shared');
+  assert.equal(await leaveLeaseInChild(`${shared}.writer-lock`), 0);
+  const lease = await acquireSharedStateLease(shared);
+  await lease.assertHeld();
+  await lease.release();
+});
+
+test('an unidentifiable abandoned lease remains locked', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-shared-lease-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const shared = path.join(root, 'shared');
+  await fs.mkdir(`${shared}.writer-lock`);
+  await assert.rejects(acquireSharedStateLease(shared), /needs lock recovery/);
+  assert.equal((await fs.stat(`${shared}.writer-lock`)).isDirectory(), true);
 });

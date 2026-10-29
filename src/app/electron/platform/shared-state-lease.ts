@@ -7,6 +7,47 @@ export type SharedStateLease = {
   release: () => Promise<void>;
 };
 
+async function recoverDeadLease(lockDirectory: string): Promise<boolean> {
+  const claim = path.join(lockDirectory, 'recovery.claim');
+  try {
+    const file = await fs.open(claim, 'wx', 0o600);
+    await file.close();
+  } catch (error) {
+    if (
+      ['EEXIST', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '')
+    )
+      return false;
+    throw error;
+  }
+  let moved = false;
+  try {
+    const owner = JSON.parse(
+      await fs.readFile(path.join(lockDirectory, 'owner.json'), 'utf8'),
+    );
+    if (
+      !Number.isSafeInteger(owner?.pid) ||
+      owner.pid < 1 ||
+      typeof owner.token !== 'string'
+    )
+      return false;
+    try {
+      process.kill(owner.pid, 0);
+      return false;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ESRCH') return false;
+    }
+    const quarantine = `${lockDirectory}.recovered-${crypto.randomUUID()}`;
+    await fs.rename(lockDirectory, quarantine);
+    moved = true;
+    await fs.rm(quarantine, { recursive: true, force: true });
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (!moved) await fs.unlink(claim).catch(() => {});
+  }
+}
+
 // No age-based takeover: a suspended writer must never be mistaken for a dead one.
 export async function acquireSharedStateLease(
   sharedStateRoot: string,
@@ -35,9 +76,10 @@ export async function acquireSharedStateLease(
   try {
     await fs.mkdir(lockDirectory, { mode: 0o700 });
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'EEXIST')
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+    if (!(await recoverDeadLease(lockDirectory)))
       throw new Error('Shared state is already in use or needs lock recovery');
-    throw error;
+    await fs.mkdir(lockDirectory, { mode: 0o700 });
   }
   try {
     await fs.writeFile(ownerFile, JSON.stringify({ token, pid: process.pid }), {
