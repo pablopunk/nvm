@@ -332,7 +332,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$DEV_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
-          [[ "$DEV_REPOSITORY" != "$GITHUB_REPOSITORY" && -n "$GH_TOKEN" ]]
+          [[ "${DEV_REPOSITORY,,}" != "${GITHUB_REPOSITORY,,}" && -n "$GH_TOKEN" ]]
           [[ "$(gh api "repos/$DEV_REPOSITORY" --jq '.private')" == false ]]
           mise exec -- node .github/scripts/promotion-manifest.cjs verify dist-nightly manifest/manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
           mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION"

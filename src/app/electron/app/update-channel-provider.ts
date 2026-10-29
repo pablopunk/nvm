@@ -74,7 +74,8 @@ export class NevermindChannelProvider extends GitHubProvider {
     if (channel === 'dev') {
       if (
         !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(this.devRepository) ||
-        this.devRepository === `${this.options.owner}/${this.options.repo}`
+        this.devRepository.toLowerCase() ===
+          `${this.options.owner}/${this.options.repo}`.toLowerCase()
       )
         throw new Error('Dev release repository is not configured');
       return `/${this.devRepository}/releases`;
@@ -87,12 +88,33 @@ export class NevermindChannelProvider extends GitHubProvider {
     cancellationToken: CancellationToken,
   ) {
     if (channel === 'dev') {
-      const feed = await this.httpRequest(
-        new URL(`${this.releasesPath(channel)}.atom`, this.baseUrl),
-        { accept: RELEASES_FEED_ACCEPT },
-        cancellationToken,
-      );
-      return releaseTagsFromAtomFeed(feed ?? '');
+      this.releasesPath(channel);
+      const tags: string[] = [];
+      for (let page = 1; page <= 10; page += 1) {
+        const url = new URL(
+          `https://api.github.com/repos/${this.devRepository}/releases`,
+        );
+        url.searchParams.set('per_page', '100');
+        url.searchParams.set('page', String(page));
+        const data = await this.httpRequest(
+          url,
+          { Accept: 'application/vnd.github+json' },
+          cancellationToken,
+        );
+        const releases: unknown = JSON.parse(data ?? 'null');
+        if (!Array.isArray(releases))
+          throw new Error('Invalid dev release list');
+        for (const release of releases) {
+          if (
+            release?.draft === false &&
+            release?.prerelease === true &&
+            typeof release?.tag_name === 'string'
+          )
+            tags.push(release.tag_name);
+        }
+        if (releases.length < 100) return tags;
+      }
+      throw new Error('Dev release list exceeds pagination limit');
     }
     const latestStableTag = await this.fetchLatestStableTag(cancellationToken);
     const latestTags = latestStableTag ? [latestStableTag] : [];

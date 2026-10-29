@@ -142,7 +142,9 @@ test('dev updates use the isolated prerelease repository for metadata and payloa
   const tag = 'v2026.1029.901';
   const path = '/pablopunk/nvm-dev/releases';
   const github = createFakeGitHub({
-    [`${path}.atom`]: `<feed><entry><link href="https://github.com${path}/tag/${tag}"/></entry></feed>`,
+    '/repos/pablopunk/nvm-dev/releases': JSON.stringify([
+      { tag_name: tag, draft: false, prerelease: true },
+    ]),
     [`${path}/download/${tag}/nightly.yml`]: metadataYaml(tag.slice(1)),
   });
   const provider = createProvider('dev', github, 'win32', 'pablopunk/nvm-dev');
