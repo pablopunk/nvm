@@ -314,7 +314,6 @@ const HYPER_KEY_PSEUDO_ACTION: Action = {
   icon: 'keyboard',
   score: 0,
 };
-
 const SEARCH_PLACEHOLDERS = [
   'Watcha gonna do?',
   'I cannot do that... Oh, nevermind.',

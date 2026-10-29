@@ -2,7 +2,7 @@ name: OpenCode CI fix
 
 on:
   workflow_run:
-    workflows: [CI]
+    workflows: [CI, Dev build]
     types: [completed]
     branches: [main]
 
@@ -19,17 +19,43 @@ jobs:
   fix:
     if: >
       github.event.workflow_run.conclusion == 'failure' &&
-      github.event.workflow_run.event == 'push'
+      ((github.event.workflow_run.name == 'CI' && github.event.workflow_run.event == 'push') ||
+       (github.event.workflow_run.name == 'Dev build' && (github.event.workflow_run.event == 'schedule' || github.event.workflow_run.event == 'workflow_dispatch')))
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - name: Checkout failed commit
+      - name: Checkout main
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
           token: ${{ secrets.GH_PAT }}
           fetch-depth: 0
+
+      - name: Resolve failed source commit
+        id: source
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$WORKFLOW_NAME" == 'Dev build' ]]; then
+            gh run download "$RUN_ID" --name dev-build-source-sha --dir "$RUNNER_TEMP/dev-source"
+            sha="$(cat "$RUNNER_TEMP/dev-source/dev-build-source-sha.txt")"
+          else
+            sha="$CI_SHA"
+          fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid or missing build source SHA' >&2; exit 1; }
+          git fetch origin main
+          if [[ "$sha" != "$(git rev-parse origin/main)" ]]; then
+            echo "Failed source $sha is no longer main; refusing to repair stale code" >&2
+            exit 1
+          fi
+          git checkout --detach "$sha"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "message=$(git log -1 --format=%s)" >> "$GITHUB_OUTPUT"
 
       - name: Setup mise
         uses: jdx/mise-action@v2
@@ -38,7 +64,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GH_PAT }}
           RUN_ID: ${{ github.event.workflow_run.id }}
-        run: gh run view "$RUN_ID" --log-failed > /tmp/opencode-ci-failure.log || true
+        run: |
+          set -euo pipefail
+          gh run view "$RUN_ID" --log-failed > /tmp/opencode-ci-failure.log
+          test -s /tmp/opencode-ci-failure.log || { echo 'Failed job logs are unavailable' >&2; exit 1; }
 
       - name: Install OpenCode
         run: |
@@ -48,7 +77,7 @@ jobs:
       - name: Ask OpenCode to fix CI
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          PREVIOUS_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          PREVIOUS_MESSAGE: ${{ steps.source.outputs.message }}
         run: |
           attempt=1
           if [[ "$PREVIOUS_MESSAGE" =~ attempt-([0-9]+) ]]; then
@@ -65,7 +94,7 @@ jobs:
             "Fix the CI failure described in /tmp/opencode-ci-failure.log.
 
             Inspect the repository and reproduce the failure where possible.
-            Make the smallest correct code change.
+            Make the smallest correct code change. If the failure is due to credentials, an external service, or runner infrastructure, leave the code unchanged and explain why.
             Follow the repository instructions and run the exact CI verification command: mise exec -- pnpm verify.
             Also run the most relevant targeted test or check.
             Do not claim verification passed unless the command exits successfully.
@@ -75,11 +104,11 @@ jobs:
       - name: Commit and push repair to main
         id: commit
         env:
-          PREVIOUS_MESSAGE: ${{ github.event.workflow_run.head_commit.message }}
+          PREVIOUS_MESSAGE: ${{ steps.source.outputs.message }}
         run: |
           if [ -z "$(git status --porcelain)" ]; then
             echo "OpenCode made no changes"
-            exit 0
+            exit 1
           fi
 
           attempt=1
