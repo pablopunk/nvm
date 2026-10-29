@@ -85,7 +85,7 @@ export function createCameraCapture(deps: CameraCaptureDeps) {
     deps.onState({ status: 'error', message });
   }
 
-  async function openStream(selection: CameraSelection) {
+  async function openStream(selection: CameraSelection, token: number) {
     try {
       return await deps.getUserMedia({
         audio: false,
@@ -94,6 +94,7 @@ export function createCameraCapture(deps: CameraCaptureDeps) {
     } catch (error) {
       if (selection.source !== 'saved' || !isStaleCameraDeviceError(error))
         throw error;
+      if (token !== generation) throw error;
       deps.forgetSavedDevice();
       return deps.getUserMedia({
         audio: false,
@@ -123,7 +124,8 @@ export function createCameraCapture(deps: CameraCaptureDeps) {
     deps.onState({ status: 'starting' });
     try {
       await deps.requestAccess();
-      const stream = await openStream(selection);
+      if (token !== generation) return;
+      const stream = await openStream(selection, token);
       if (token !== generation) {
         stopStreamTracks(stream);
         return;

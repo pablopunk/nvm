@@ -81,6 +81,7 @@ test('stopping while a request is pending discards the stream that resolves late
   const { capture, states } = harness({ getUserMedia: () => pending.promise });
 
   const started = capture.start({ deviceId: 'a', source: 'explicit' });
+  await Promise.resolve();
   capture.stop();
   pending.resolve(stream);
   await started;
@@ -90,6 +91,23 @@ test('stopping while a request is pending discards the stream that resolves late
     states.map((state) => state.status),
     ['starting', 'idle'],
   );
+});
+
+test('stopping during permission prevents a later camera request', async () => {
+  const permission = deferred<void>();
+  let requested = false;
+  const { capture } = harness({
+    requestAccess: () => permission.promise,
+    getUserMedia: async () => {
+      requested = true;
+      return fakeStream('a').stream;
+    },
+  });
+  const started = capture.start({ source: 'default' });
+  capture.stop();
+  permission.resolve();
+  await started;
+  assert.equal(requested, false);
 });
 
 test('restarting releases the previous stream before the next one goes live', async () => {
