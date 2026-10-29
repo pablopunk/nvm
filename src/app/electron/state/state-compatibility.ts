@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import compatibility from '../../resources/state-compatibility.json';
 import { atomicallyReplaceFile } from '../platform/atomic-file';
@@ -93,4 +94,26 @@ export function supportsStateDowngrade(
     Number.isSafeInteger(targetEpoch) &&
     targetEpoch === marker.highestEpoch
   );
+}
+
+export function stateRootsSupportDowngrade(
+  directories: readonly string[],
+  targetEpoch: unknown,
+): boolean {
+  const roots = [
+    ...new Set(directories.map((directory) => path.resolve(directory))),
+  ];
+  if (roots.length < 2) return false;
+  try {
+    const markers = roots.map((root) =>
+      parseMarker(
+        JSON.parse(readFileSync(path.join(root, MARKER_NAME), 'utf8')),
+      ),
+    );
+    return markers.every((marker) =>
+      supportsStateDowngrade(marker, targetEpoch),
+    );
+  } catch {
+    return false;
+  }
 }

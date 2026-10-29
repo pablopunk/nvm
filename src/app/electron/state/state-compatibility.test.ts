@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   advanceStateCompatibility,
   supportsStateDowngrade,
+  stateRootsSupportDowngrade,
 } from './state-compatibility';
 
 test('persists a high-water mark and refuses an older writer', async (t) => {
@@ -65,4 +66,23 @@ test('existing unmarked data stays untrusted', async (t) => {
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   await fs.writeFile(path.join(root, 'state.json'), '{}');
   assert.equal((await advanceStateCompatibility(root, 1)).trusted, false);
+});
+
+test('downgrade authorization re-reads both roots and fails closed on missing or changed state', async (t) => {
+  const root = await fs.mkdtemp(
+    path.join(os.tmpdir(), 'nvm-state-authorization-'),
+  );
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 1), true);
+  assert.equal(
+    stateRootsSupportDowngrade([privateRoot, sharedRoot], undefined),
+    false,
+  );
+  await advanceStateCompatibility(privateRoot, 2, sharedRoot);
+  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 1), false);
+  await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
+  assert.equal(stateRootsSupportDowngrade([privateRoot, sharedRoot], 2), false);
 });

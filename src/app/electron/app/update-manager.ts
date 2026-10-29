@@ -14,7 +14,11 @@ import {
   type UpdateChannel,
 } from './update-channel';
 
-type UpdateInfo = { version?: string; updateChannel?: UpdateChannel };
+type UpdateInfo = {
+  version?: string;
+  updateChannel?: UpdateChannel;
+  nevermindStateEpoch?: unknown;
+};
 type UpdateCheckResult = {
   isUpdateAvailable: boolean;
   updateInfo?: UpdateInfo;
@@ -60,6 +64,7 @@ export type UpdateManagerOptions = {
   getUpdateChannel?: () => UpdateChannel;
   prepareUpdateFeed?: () => Promise<unknown>;
   createCancellationToken?: () => CancellationTokenLike;
+  canInstallUpdate?: (info: UpdateInfo) => boolean;
 };
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
@@ -438,7 +443,8 @@ export function createUpdateManager(
     if (
       !state.downloadedInfo ||
       state.installInFlight ||
-      !isCurrentChannelInfo(state.downloadedInfo)
+      !isCurrentChannelInfo(state.downloadedInfo) ||
+      managerOptions.canInstallUpdate?.(state.downloadedInfo) === false
     )
       return false;
     state.installInFlight = true;

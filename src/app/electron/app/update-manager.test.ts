@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 mock.module('electron', {
   namedExports: {
@@ -17,8 +20,33 @@ mock.module('electron-log/main', {
 });
 
 const { createUpdateManager } = await import('./update-manager');
+const { isStateSafeForInstall } = await import('./state-update-safety');
+const { advanceStateCompatibility } = await import(
+  '../state/state-compatibility'
+);
 
 type FakeCancellationToken = { cancelled: boolean; cancel: () => void };
+
+test('installation rechecks both state roots and target epoch after download', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-install-guard-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  const manager = createUpdateManager(createAutoUpdater([]), undefined, {
+    getUpdateChannel: () => 'stable',
+    canInstallUpdate: (info) =>
+      isStateSafeForInstall('2026.1030.5', info, [privateRoot, sharedRoot]),
+  });
+  manager.state.downloadedInfo = {
+    version: '2026.1029.4',
+    updateChannel: 'stable',
+    nevermindStateEpoch: 1,
+  };
+  await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
+  assert.equal(manager.prepareInstall(), false);
+  assert.equal(manager.state.installInFlight, false);
+});
 
 function createFakeCancellationToken(): FakeCancellationToken {
   return {
