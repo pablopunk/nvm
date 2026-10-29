@@ -1,37 +1,48 @@
 name: Dev build
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '17 * * * *'
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: dev-build
+  queue: max
+
 env:
   NIGHTLY_CLI: .github/scripts/nightly-release-cli.cjs
-  NEVERMIND_DEV_RELEASE_REPOSITORY: ${{ vars.DEV_RELEASE_REPOSITORY }}
 
 jobs:
   plan:
     runs-on: ubuntu-latest
     outputs:
-      build: 'true'
+      build: ${{ steps.version.outputs.build }}
       source_sha: ${{ steps.version.outputs.sha }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - uses: jdx/mise-action@v2
       - name: Allocate version for source commit
         id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           sha="$(git rev-parse HEAD)"
           version="$(mise exec -- node .github/scripts/dev-version.cjs "$sha")"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v${version}-dev" --json isDraft,isPrerelease --jq '(.isDraft | not) and .isPrerelease' | grep -qx true; then
+            echo 'build=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'build=true' >> "$GITHUB_OUTPUT"
+          fi
 
   build-windows:
     name: Build Windows nightly
@@ -307,10 +318,9 @@ jobs:
     needs: [plan, validate-assets]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     env:
-      GH_TOKEN: ${{ secrets.DEV_RELEASE_TOKEN }}
-      DEV_REPOSITORY: ${{ vars.DEV_RELEASE_REPOSITORY }}
+      GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
@@ -331,34 +341,41 @@ jobs:
       - name: Verify staged assets and destination
         run: |
           set -euo pipefail
-          [[ "$DEV_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
-          [[ "${DEV_REPOSITORY,,}" != "${GITHUB_REPOSITORY,,}" && -n "$GH_TOKEN" ]]
-          [[ "$(gh api "repos/$DEV_REPOSITORY" --jq '.private')" == false ]]
           mise exec -- node .github/scripts/promotion-manifest.cjs verify dist-nightly manifest/manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
           mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION"
       - name: Create draft prerelease
         run: |
           set -euo pipefail
-          tag="v$VERSION"
-          if gh api "repos/$DEV_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+          tag="v${VERSION}-dev"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft --jq '.isDraft' 2>/dev/null | grep -qx true; then
+            resolved="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq '.sha')"
+            [[ "$resolved" == "$SOURCE_SHA" ]] || { echo 'Draft tag points to another commit' >&2; exit 1; }
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          fi
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
             echo "Refusing to reuse existing tag $tag" >&2
             exit 1
           fi
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
-          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
-          git push "https://github.com/$DEV_REPOSITORY.git" "$SOURCE_SHA:refs/tags/$tag"
-          gh release create "$tag" --repo "$DEV_REPOSITORY" --draft --prerelease --latest=false \
-            --title "Nevermind $VERSION (dev)" --notes "Dev build of $SOURCE_SHA from workflow run $GITHUB_RUN_ID." \
+          previous="$(git tag --merged "$SOURCE_SHA" --list 'v*-dev' --sort=-version:refname | head -n 1)"
+          if [[ -n "$previous" ]]; then
+            printf 'Changes since %s:\n\n' "$previous" > release-notes.md
+            git log --format='- %s (%h)' "$previous..$SOURCE_SHA" >> release-notes.md
+          else
+            printf 'First dev build from %s.\n' "$SOURCE_SHA" > release-notes.md
+          fi
+          printf '\nSource: %s\nWorkflow run: %s\n' "$SOURCE_SHA" "$GITHUB_RUN_ID" >> release-notes.md
+          gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --draft --prerelease --latest=false \
+            --title "Nevermind $VERSION (dev)" --notes-file release-notes.md \
             dist-nightly/* manifest/manifest.json
       - name: Verify remote bytes and publish
         run: |
           set -euo pipefail
-          tag="v$VERSION"
+          tag="v${VERSION}-dev"
           mkdir downloaded
-          gh release download "$tag" --repo "$DEV_REPOSITORY" --dir downloaded
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir downloaded
           mv downloaded/manifest.json remote-manifest.json
           cmp manifest/manifest.json remote-manifest.json
           mise exec -- node .github/scripts/promotion-manifest.cjs verify downloaded remote-manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
           mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION"
-          gh release edit "$tag" --repo "$DEV_REPOSITORY" --draft=false --prerelease --latest=false
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false

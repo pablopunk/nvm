@@ -24,7 +24,6 @@ type GitHubFeedOptions = ConstructorParameters<typeof GitHubProvider>[0];
 
 export type ChannelFeedOptions = GitHubFeedOptions & {
   resolveChannel: () => UpdateChannel;
-  devRepository?: string;
 };
 
 export type ChannelUpdateInfo = UpdateInfo & {
@@ -35,7 +34,6 @@ export type ChannelUpdateInfo = UpdateInfo & {
 // Stock GitHubProvider only understands channel-named prereleases; this provider picks the newest eligible release by semver across stable and nightly tags.
 export class NevermindChannelProvider extends GitHubProvider {
   private readonly resolveChannel: () => UpdateChannel;
-  private readonly devRepository: string;
 
   constructor(
     options: ChannelFeedOptions,
@@ -44,7 +42,6 @@ export class NevermindChannelProvider extends GitHubProvider {
   ) {
     super(options, updater, runtimeOptions);
     this.resolveChannel = options.resolveChannel;
-    this.devRepository = options.devRepository ?? '';
   }
 
   async getLatestVersion(): Promise<ChannelUpdateInfo> {
@@ -70,16 +67,7 @@ export class NevermindChannelProvider extends GitHubProvider {
     );
   }
 
-  private releasesPath(channel?: UpdateChannel) {
-    if (channel === 'dev') {
-      if (
-        !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(this.devRepository) ||
-        this.devRepository.toLowerCase() ===
-          `${this.options.owner}/${this.options.repo}`.toLowerCase()
-      )
-        throw new Error('Dev release repository is not configured');
-      return `/${this.devRepository}/releases`;
-    }
+  private releasesPath(_channel?: UpdateChannel) {
     return `/${this.options.owner}/${this.options.repo}/releases`;
   }
 
@@ -92,7 +80,7 @@ export class NevermindChannelProvider extends GitHubProvider {
       const tags: string[] = [];
       for (let page = 1; page <= 10; page += 1) {
         const url = new URL(
-          `https://api.github.com/repos/${this.devRepository}/releases`,
+          `https://api.github.com/repos/${this.options.owner}/${this.options.repo}/releases`,
         );
         url.searchParams.set('per_page', '100');
         url.searchParams.set('page', String(page));

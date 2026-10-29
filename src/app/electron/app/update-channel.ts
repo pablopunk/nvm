@@ -68,7 +68,9 @@ export function releasesNewestFirst(
   const seenVersions = new Set<string>();
   const releases: ChannelRelease[] = [];
   for (const tag of tags) {
-    const version = releaseVersionFromTag(tag);
+    const devMatch = /^v(\d+\.\d+\.\d+)-dev$/.exec(tag);
+    const version =
+      channel === 'dev' ? (devMatch?.[1] ?? null) : releaseVersionFromTag(tag);
     if (
       !version ||
       seenVersions.has(version) ||
