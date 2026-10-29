@@ -29,7 +29,12 @@ export type NevermindDeepLinksDeps = {
   getActiveBaseUrl: () => string | null;
   setActiveBaseUrl: (baseUrl: string | null) => void;
   invalidateExtensionRootItems: () => void;
-  broadcastAuthChanged: (status: { authed: boolean; email?: string }) => void;
+  broadcastAuthChanged: (status: {
+    authed: boolean;
+    userId?: string;
+    email?: string;
+    role?: string;
+  }) => void;
 };
 
 export function createNevermindDeepLinks(deps: NevermindDeepLinksDeps) {

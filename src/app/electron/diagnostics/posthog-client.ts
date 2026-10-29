@@ -18,7 +18,7 @@ const WITHDRAWN_RESPONSE = {
 let client: PostHog | null | undefined;
 let currentUserId: () => string | undefined = () => undefined;
 // Provisional until the persisted identifier loads; both are random UUIDs.
-let installId = randomUUID();
+let installId: string = randomUUID();
 let consentGranted = false;
 
 export function configurePosthogIdentity(provider: () => string | undefined) {
