@@ -300,3 +300,64 @@ jobs:
           path: manifest.json
           if-no-files-found: error
           retention-days: 30
+
+  publish-dev:
+    name: Publish dev prerelease
+    needs: [plan, validate-assets]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.DEV_RELEASE_TOKEN }}
+      DEV_REPOSITORY: ${{ vars.DEV_RELEASE_REPOSITORY }}
+      SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+          fetch-depth: 0
+      - uses: jdx/mise-action@v2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          merge-multiple: true
+          path: dist-nightly
+      - uses: actions/download-artifact@v4
+        with:
+          name: dev-manifest
+          path: manifest
+      - name: Verify staged assets and destination
+        run: |
+          set -euo pipefail
+          [[ "$DEV_REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]
+          [[ "$DEV_REPOSITORY" != "$GITHUB_REPOSITORY" && -n "$GH_TOKEN" ]]
+          [[ "$(gh api "repos/$DEV_REPOSITORY" --jq '.private')" == false ]]
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify dist-nightly manifest/manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir dist-nightly --version "$VERSION"
+      - name: Create draft prerelease
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          if gh api "repos/$DEV_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "Refusing to reuse existing tag $tag" >&2
+            exit 1
+          fi
+          export GIT_CONFIG_COUNT=1
+          export GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          export GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')"
+          git push "https://github.com/$DEV_REPOSITORY.git" "$SOURCE_SHA:refs/tags/$tag"
+          gh release create "$tag" --repo "$DEV_REPOSITORY" --draft --prerelease --latest=false \
+            --title "Nevermind $VERSION (dev)" --notes "Dev build of $SOURCE_SHA from workflow run $GITHUB_RUN_ID." \
+            dist-nightly/* manifest/manifest.json
+      - name: Verify remote bytes and publish
+        run: |
+          set -euo pipefail
+          tag="v$VERSION"
+          mkdir downloaded
+          gh release download "$tag" --repo "$DEV_REPOSITORY" --dir downloaded
+          mv downloaded/manifest.json remote-manifest.json
+          cmp manifest/manifest.json remote-manifest.json
+          mise exec -- node .github/scripts/promotion-manifest.cjs verify downloaded remote-manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
+          mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION"
+          gh release edit "$tag" --repo "$DEV_REPOSITORY" --draft=false --prerelease --latest=false
