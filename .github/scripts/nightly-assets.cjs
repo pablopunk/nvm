@@ -61,7 +61,7 @@ function parseUpdaterMetadata(text) {
   const metadata = { version: null, path: null, sha512: null, files: [] };
   let current = null;
   for (const line of text.split(/\r?\n/)) {
-    const top = /^([a-zA-Z]+):\s*(.*)$/.exec(line);
+    const top = /^([a-zA-Z0-9]+):\s*(.*)$/.exec(line);
     if (top) {
       current = null;
       if (top[1] === 'version') metadata.version = yamlScalar(top[2]);

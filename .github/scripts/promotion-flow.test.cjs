@@ -33,7 +33,7 @@ test('dev assets retain verified metadata and bytes through stable promotion', (
     .createHash('sha512')
     .update(fs.readFileSync(path.join(dev, binary)))
     .digest('base64');
-  const metadata = `version: ${version}\nfiles:\n  - url: ${binary}\n    sha512: ${digest}\n    size: 1\npath: ${binary}\nsha512: ${digest}\n`;
+  const metadata = `version: ${version}\nfiles:\n  - url: ${binary}\n    sha512: ${digest}\n    size: ${fs.statSync(path.join(dev, binary)).size}\npath: ${binary}\nsha512: ${digest}\n`;
   for (const name of NIGHTLY_UPDATER_METADATA) {
     const file = path.join(dev, name);
     fs.writeFileSync(file, metadata);
