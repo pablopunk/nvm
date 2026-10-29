@@ -26,7 +26,6 @@ async function recoverDeadLease(lockDirectory: string): Promise<boolean> {
     const file = await fs.open(claim, 'wx', 0o600);
     await file.close();
   } catch (error) {
-    const namespace = await processNamespace();
     if (
       ['EEXIST', 'ENOENT'].includes((error as NodeJS.ErrnoException).code ?? '')
     )
@@ -35,6 +34,7 @@ async function recoverDeadLease(lockDirectory: string): Promise<boolean> {
   }
   let moved = false;
   try {
+    const namespace = await processNamespace();
     const owner = JSON.parse(
       await fs.readFile(path.join(lockDirectory, 'owner.json'), 'utf8'),
     );
