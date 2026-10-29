@@ -14,8 +14,8 @@ test('persists a high-water mark and refuses an older writer', async (t) => {
   );
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const first = await advanceStateCompatibility(directory, 1);
-  assert.equal(first.trusted, false);
-  assert.equal(supportsStateDowngrade(first, 1), false);
+  assert.equal(first.trusted, true);
+  assert.equal(supportsStateDowngrade(first, 1), true);
   await advanceStateCompatibility(directory, 2);
   await assert.rejects(
     advanceStateCompatibility(directory, 1),
@@ -40,4 +40,29 @@ test('corrupt marker fails closed without replacing its contents', async (t) => 
   await fs.writeFile(file, '{broken');
   await assert.rejects(advanceStateCompatibility(directory, 1));
   assert.equal(await fs.readFile(file, 'utf8'), '{broken');
+});
+
+test('shared and private markers establish trust only for empty state roots', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-state-roots-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const privateRoot = path.join(root, 'private');
+  const sharedRoot = path.join(root, 'shared');
+  const marker = await advanceStateCompatibility(privateRoot, 1, sharedRoot);
+  assert.equal(marker.trusted, true);
+  assert.equal(
+    (await advanceStateCompatibility(privateRoot, 1, sharedRoot)).trusted,
+    true,
+  );
+  await fs.rm(path.join(sharedRoot, 'state-compatibility.json'));
+  await assert.rejects(
+    advanceStateCompatibility(privateRoot, 1, sharedRoot),
+    /marker is missing/,
+  );
+});
+
+test('existing unmarked data stays untrusted', async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-existing-state-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  await fs.writeFile(path.join(root, 'state.json'), '{}');
+  assert.equal((await advanceStateCompatibility(root, 1)).trusted, false);
 });

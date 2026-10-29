@@ -107,7 +107,13 @@ export function createUserStateLoader(deps: UserStateLoaderDeps) {
   }
 
   async function loadUserState() {
-    await advanceStateCompatibility(userDataPath(), STATE_COMPATIBILITY_EPOCH);
+    await advanceStateCompatibility(
+      userDataPath(),
+      STATE_COMPATIBILITY_EPOCH,
+      isNvmTestMode
+        ? userDataPath()
+        : path.join(os.homedir(), '.config', 'nevermind'),
+    );
     const cacheRoot = osCacheRoot();
     await ensureLocalFileUrlSecret();
     const paths = resolveRuntimePaths(cacheRoot);

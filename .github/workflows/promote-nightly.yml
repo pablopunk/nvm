@@ -40,7 +40,15 @@ jobs:
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
           mise exec -- node .github/scripts/nightly-promotion-plan.cjs releases.json > selection.json
           tag="$(jq -r '.selected.tag // ""' selection.json)"
-          if [[ -z "$tag" ]]; then echo 'run=false' >> "$GITHUB_OUTPUT"; exit 0; fi
+          if [[ -z "$tag" ]]; then
+            current="$(jq -r '.currentTag // ""' selection.json)"
+            if [[ "$current" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-nightly$ ]]; then
+              sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$current" --jq '.sha')"
+              mise exec -- node .github/scripts/channel-pointer.cjs nightly "$current" "$sha"
+            fi
+            echo 'run=false' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "DEV_TAG=$tag" >> "$GITHUB_ENV"
           echo 'run=true' >> "$GITHUB_OUTPUT"
       - name: Download and verify retained dev build
@@ -104,6 +112,7 @@ jobs:
           curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
           mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
           gh release edit "v${VERSION}-nightly" --draft=false --prerelease --latest=false
+          mise exec -- node .github/scripts/channel-pointer.cjs nightly "v${VERSION}-nightly" "$SOURCE_SHA"
       - name: Clean up failed draft
         if: failure() && steps.draft.outputs.created_tag == 'true'
         run: |

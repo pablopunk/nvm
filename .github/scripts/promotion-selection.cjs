@@ -58,18 +58,33 @@ module.exports = { selectNewestDev, expiredDevTags, referencedDevTags };
 
 if (require.main === module) {
   try {
-    const [command, file, argument] = process.argv.slice(2);
+    const [command, file, argument, pointerFile] = process.argv.slice(2);
     const releases = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
     if (command === 'select') {
       console.log(JSON.stringify(selectNewestDev(releases, argument || null)));
     } else if (command === 'retention') {
+      if (!pointerFile)
+        throw new Error('Dev pointer is required for retention');
+      const pointer = JSON.parse(
+        require('node:fs').readFileSync(pointerFile, 'utf8'),
+      );
+      if (
+        pointer?.kind !== 'nevermind-channel-pointer' ||
+        pointer.channel !== 'dev' ||
+        !Array.isArray(pointer.tags) ||
+        pointer.tags.length < 1 ||
+        pointer.tags.length > 2 ||
+        pointer.tags.some(
+          (tag) => typeof tag !== 'string' || !/^v\d+\.\d+\.\d+-dev$/.test(tag),
+        )
+      )
+        throw new Error('Invalid dev pointer');
       console.log(
         JSON.stringify(
-          expiredDevTags(
-            releases,
-            new Date(argument),
-            referencedDevTags(releases),
-          ),
+          expiredDevTags(releases, new Date(argument), [
+            ...referencedDevTags(releases),
+            ...pointer.tags,
+          ]),
         ),
       );
     } else {

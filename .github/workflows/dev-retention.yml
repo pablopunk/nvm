@@ -27,8 +27,9 @@ jobs:
       - name: Delete expired unreferenced dev releases
         run: |
           set -euo pipefail
+          curl -fsS --max-time 20 -H 'Cache-Control: no-cache' "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/release-pointers/.channels/dev.json?check=$(date +%s)" -o dev-pointer.json
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[]' | jq -s '.' > releases.json
-          mise exec -- node .github/scripts/promotion-selection.cjs retention releases.json "$(date -u +%FT%TZ)" > expired.json
+          mise exec -- node .github/scripts/promotion-selection.cjs retention releases.json "$(date -u +%FT%TZ)" dev-pointer.json > expired.json
           jq -r '.[]' expired.json | while read -r tag; do
             [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-dev$ ]]
             gh release delete "$tag" --cleanup-tag --yes

@@ -77,33 +77,25 @@ export class NevermindChannelProvider extends GitHubProvider {
         channel === 'nightly'
           ? await this.fetchLatestStableTag(cancellationToken)
           : null;
-      this.releasesPath(channel);
-      const tags: string[] = [];
-      for (let page = 1; page <= 10; page += 1) {
-        const url = new URL(
-          `https://api.github.com/repos/${this.options.owner}/${this.options.repo}/releases`,
-        );
-        url.searchParams.set('per_page', '100');
-        url.searchParams.set('page', String(page));
-        const data = await this.httpRequest(
-          url,
-          { Accept: 'application/vnd.github+json' },
-          cancellationToken,
-        );
-        const releases: unknown = JSON.parse(data ?? 'null');
-        if (!Array.isArray(releases))
-          throw new Error('Invalid dev release list');
-        for (const release of releases) {
-          if (
-            release?.draft === false &&
-            release?.prerelease === true &&
-            typeof release?.tag_name === 'string'
-          )
-            tags.push(release.tag_name);
-        }
-        if (releases.length < 100) return stable ? [...tags, stable] : tags;
-      }
-      throw new Error('Dev release list exceeds pagination limit');
+      const url = new URL(
+        `https://raw.githubusercontent.com/${this.options.owner}/${this.options.repo}/release-pointers/.channels/${channel}.json`,
+      );
+      url.searchParams.set('check', String(Date.now()));
+      const data = await this.httpRequest(
+        url,
+        { 'Cache-Control': 'no-cache' },
+        cancellationToken,
+      );
+      const pointer = JSON.parse(data ?? 'null');
+      if (
+        pointer?.kind !== 'nevermind-channel-pointer' ||
+        pointer.channel !== channel ||
+        !Array.isArray(pointer.tags) ||
+        pointer.tags.length > 20 ||
+        pointer.tags.some((tag: unknown) => typeof tag !== 'string')
+      )
+        throw new Error('Invalid channel pointer');
+      return stable ? [...pointer.tags, stable] : pointer.tags;
     }
     const latestStableTag = await this.fetchLatestStableTag(cancellationToken);
     const latestTags = latestStableTag ? [latestStableTag] : [];

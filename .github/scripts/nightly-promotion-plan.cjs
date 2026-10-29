@@ -6,6 +6,7 @@ const { selectNewestDev } = require('./promotion-selection.cjs');
 function planNightlyPromotion(releases) {
   if (!Array.isArray(releases)) throw new Error('Release list is unavailable');
   let current = null;
+  let currentTag = null;
   for (const release of releases) {
     if (release?.draft !== false || release.prerelease !== true) continue;
     const tag = release.tag_name ?? '';
@@ -13,10 +14,12 @@ function planNightlyPromotion(releases) {
     const legacy = tag.startsWith('v') ? tag.slice(1) : '';
     const version =
       promoted?.[1] ?? (parseVersion(legacy)?.nightly ? legacy : null);
-    if (version && (!current || compareVersions(version, current) > 0))
+    if (version && (!current || compareVersions(version, current) > 0)) {
       current = version;
+      currentTag = tag;
+    }
   }
-  return { current, selected: selectNewestDev(releases, current) };
+  return { current, currentTag, selected: selectNewestDev(releases, current) };
 }
 
 if (require.main === module) {

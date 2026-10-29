@@ -395,3 +395,25 @@ jobs:
           mise exec -- node .github/scripts/promotion-manifest.cjs verify downloaded remote-manifest.json "$VERSION" "$SOURCE_SHA" "$GITHUB_RUN_ID"
           mise exec -- node "$NIGHTLY_CLI" validate-assets --dir downloaded --version "$VERSION" --state-epoch "$(mise exec -- node -p 'require("./src/app/resources/state-compatibility.json").epoch')"
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+          mise exec -- node .github/scripts/channel-pointer.cjs dev "$tag" "$SOURCE_SHA"
+
+  repair-dev-pointer:
+    needs: plan
+    if: needs.plan.outputs.build == 'false'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: channel-promotion
+      queue: max
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.plan.outputs.source_sha }}
+      - uses: jdx/mise-action@v2
+      - name: Repair pointer after an interrupted publication
+        run: mise exec -- node .github/scripts/channel-pointer.cjs dev "v${VERSION}-dev" "$SOURCE_SHA"
