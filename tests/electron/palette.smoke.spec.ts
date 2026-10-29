@@ -19,11 +19,22 @@ if (!(artifactDir && userDataDir)) {
 }
 const execFile = promisify(execFileCallback);
 
-async function processTree(rootPid: number) {
+async function listProcessParents() {
   if (process.platform === 'win32') {
-    return [rootPid];
+    const { stdout } = await execFile('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + ' ' + $_.ParentProcessId.ToString() }",
+    ]);
+    return stdout;
   }
   const { stdout } = await execFile('ps', ['-axo', 'pid=,ppid=']);
+  return stdout;
+}
+
+async function processTree(rootPid: number) {
+  const stdout = await listProcessParents();
   const children = new Map<number, number[]>();
   for (const line of stdout.split('\n')) {
     const [pidText, parentText] = line.trim().split(/\s+/);
@@ -311,6 +322,19 @@ async function renderLifecycleDirectAction(page: any, version: string) {
   }, action);
 }
 
+async function trackLiveProcessTree(
+  app: ElectronApplication,
+  trackedPids: number[],
+) {
+  const launched = app.process();
+  if (launched.exitCode !== null || launched.signalCode !== null) return;
+  try {
+    for (const pid of await processTree(launched.pid!)) {
+      if (!trackedPids.includes(pid)) trackedPids.push(pid);
+    }
+  } catch {}
+}
+
 async function launchTestApplication(
   testUserDataDir: string,
   testSharedRoot?: string,
@@ -334,6 +358,7 @@ async function launchTestApplication(
   await expect(page.locator('input[placeholder]').first()).toBeVisible({
     timeout: 10_000,
   });
+  await trackLiveProcessTree(app, trackedPids);
   return { app, page, trackedPids };
 }
 
@@ -341,6 +366,7 @@ async function closeTestApplication(
   app: ElectronApplication,
   trackedPids: number[],
 ) {
+  await trackLiveProcessTree(app, trackedPids);
   const closePromise = app.close().catch(() => {});
   await Promise.race([
     closePromise,
@@ -390,6 +416,7 @@ test('shared state has one live app writer and can reopen after a crash', async 
     const exited = new Promise<void>((resolve) =>
       first!.app.process().once('exit', () => resolve()),
     );
+    await trackLiveProcessTree(first.app, first.trackedPids);
     first.app.process().kill('SIGKILL');
     await exited;
     await closeTestApplication(first.app, first.trackedPids);
