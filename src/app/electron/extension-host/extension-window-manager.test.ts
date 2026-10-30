@@ -338,6 +338,39 @@ test('indicators show without focus and ignore mouse events', () => {
   assert.equal(win.visible, false);
 });
 
+test('long indicator errors grow into a bounded wrapped window and stay readable', () => {
+  const scheduled: number[] = [];
+  const { manager } = createManager([], undefined, {
+    schedule(_callback, delayMs) {
+      scheduled.push(delayMs);
+      return delayMs;
+    },
+    cancel: () => {},
+  });
+  const longError =
+    'Could not reach the decision model because the network request timed out after thirty seconds. Check your connection and try again.';
+  manager.showIndicator(
+    {
+      id: 'feedback',
+      title: 'Nevermind',
+      subtitle: longError,
+      status: 'error',
+      durationMs: 4000,
+    },
+    'nevermind.host',
+  );
+  const win = FakeBrowserWindow.instances[0];
+  win.handlers.get('once:ready-to-show')?.();
+
+  const state = manager.getState('indicator:nevermind.host:feedback');
+  assert.equal((state?.view as any).label, longError);
+  assert.equal(win.bounds.width, 500);
+  assert.equal(win.bounds.height, 140);
+  assert.ok(scheduled[0] > 4000);
+  assert.equal(win.focusCount, 0);
+  assert.deepEqual(win.ignoredMouseEvents, [true]);
+});
+
 test('indicator levels reach only the matching indicator window', () => {
   const { manager } = createManager();
   manager.showIndicator(

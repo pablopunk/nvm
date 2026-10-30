@@ -1,9 +1,9 @@
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 import type {
   ExtensionContext,
   ExtensionIndicatorInput,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const INDICATOR_ID = 'dev-ui-indicator';
 
@@ -33,6 +33,15 @@ const TRIAGE_ERROR_INDICATOR: ExtensionIndicatorInput = {
   title: 'Triage Selected Text with AI',
   subtitle: 'The decision model is unavailable. Try again shortly.',
   status: 'error',
+};
+
+const LONG_ERROR_INDICATOR: ExtensionIndicatorInput = {
+  id: INDICATOR_ID,
+  title: 'Triage Selected Text with AI',
+  subtitle:
+    'The decision model returned an unexpected response after the provider timed out twice. Check your connection, then run Triage Selected Text with AI again.',
+  status: 'error',
+  durationMs: 4000,
 };
 
 const TRANSCRIBING_INDICATOR: ExtensionIndicatorInput = {
@@ -80,6 +89,11 @@ function indicatorView(ctx: ExtensionContext) {
     TRIAGE_ERROR_INDICATOR,
     true,
   )(ctx);
+  const longError = indicatorAction(
+    'Show Long Error',
+    LONG_ERROR_INDICATOR,
+    true,
+  )(ctx);
   const hide = ctx.actions.background('Hide Indicator', (innerCtx) => {
     innerCtx.ui.indicator.hide(INDICATOR_ID);
     showExtensionFeedback(innerCtx, 'Indicator Fixture', 'Indicator hidden');
@@ -124,6 +138,13 @@ function indicatorView(ctx: ExtensionContext) {
         subtitle: 'Error state with a decision failure message',
         icon: 'triangle-alert',
         primaryAction: triageError,
+      },
+      {
+        id: 'long-error',
+        title: 'Show Long Error',
+        subtitle: 'Timed error that wraps to bounded lines and stays readable',
+        icon: 'triangle-alert',
+        primaryAction: longError,
       },
       {
         id: 'hide',
