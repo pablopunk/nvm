@@ -1,0 +1,102 @@
+---
+import { Card } from '../ui/card';
+import { ConsoleSelect } from '../ConsoleSelect';
+import { ConsoleCombobox } from '../ConsoleCombobox';
+import { getCurrentUser, isAdmin } from '../../lib/admin';
+import {
+  DEFAULT_THINKING_LEVEL,
+  getAudioModelRoute,
+  getDecisionModelRoute,
+  getModelRoute,
+  modelRouteToRef,
+  ModelNotConfiguredError,
+  THINKING_LEVELS,
+  type ModelRouteConfig,
+  type ModelRouteSlot,
+} from '../../lib/settings';
+import { routeKindForSlot } from '../../lib/pricing';
+import { listAdminModelRefs } from '../../lib/admin-model-options';
+import { listTranscriptionModels } from '../../lib/transcription-models';
+import { isSelectableDecisionModel, listDecisionModels } from '../../lib/decisions/decision-models';
+
+import { dashboardRead } from '../../lib/dashboard-read';
+let modelRows: Array<{ slot: ModelRouteSlot; title: string; route: (ModelRouteConfig & { ref: string }) | null; kind: ReturnType<typeof routeKindForSlot>; options: string[] }> = [];
+let audioRouteRef: string | null = null;
+let audioModelRefs: string[] = [];
+let decisionRouteRef: string | null = null;
+let decisionModels: Awaited<ReturnType<typeof listDecisionModels>> = [];
+let decisionModelRefs: string[] = [];
+let available = false;
+try {
+  const user = await getCurrentUser(Astro.request);
+  if (!isAdmin(user)) throw new Error('Unauthorized');
+async function safeModelRoute(
+  slot: ModelRouteSlot,
+): Promise<(ModelRouteConfig & { ref: string }) | null> {
+  try {
+    const route = await getModelRoute(slot);
+    return { ...route, ref: modelRouteToRef(route) };
+  } catch (err) {
+    if (err instanceof ModelNotConfiguredError) return null;
+    throw err;
+  }
+}
+const modelRoutes = await dashboardRead(() => Promise.all(
+  (
+    [
+      ['pro-smart', 'Pro smart'],
+      ['pro-fast', 'Pro fast'],
+      ['free-smart', 'Free smart'],
+      ['free-fast', 'Free fast'],
+    ] as const
+  ).map(async ([slot, title]) => ({ slot, title, route: await safeModelRoute(slot) })),
+));
+const [smartModelRefs, fastModelRefs] = await dashboardRead(() => Promise.all([
+  listAdminModelRefs('smart'),
+  listAdminModelRefs('fast'),
+]));
+modelRows = modelRoutes.map((row) => {
+  const kind = routeKindForSlot(row.slot);
+  return { ...row, kind, options: kind === 'smart' ? smartModelRefs : fastModelRefs };
+});
+const audioRoute = await dashboardRead(() => getAudioModelRoute().catch((error) => { if (error instanceof ModelNotConfiguredError) return null; throw error; }));
+audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
+audioModelRefs = (await dashboardRead(() => listTranscriptionModels())).map(
+  (model) => modelRouteToRef(model),
+);
+const decisionRoute = await dashboardRead(() => getDecisionModelRoute().catch((error) => { if (error instanceof ModelNotConfiguredError) return null; throw error; }));
+decisionRouteRef = decisionRoute ? modelRouteToRef(decisionRoute) : null;
+decisionModels = (await dashboardRead(() => listDecisionModels())).filter(
+  isSelectableDecisionModel,
+);
+decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
+  available = true;
+} catch (error) { console.error('Admin models unavailable', error); }
+---
+{available ? (
+    <Card className="section admin-panel admin-model-config"><section>
+      <h2>Models</h2>
+      <p class="muted">From the models.dev catalog: priced models with image input and function tools. Smart also needs reasoning; Fast runs with thinking off. Dictation uses audio transcription.</p>
+      <div class="model-routes">
+        {modelRows.map(({ slot, title, route, kind, options }) => (
+          <section class="model-route-row" data-model-route={slot}>
+            <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
+            <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
+            {kind === 'smart'
+              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
+              : <span class="muted model-route-row__thinking">Thinking off</span>}
+            <div class="route-details muted" data-pricing></div>
+          </section>
+        ))}
+        <section class="model-route-row" data-audio-model-route>
+          <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
+          <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? undefined} options={[...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (catalog unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
+        </section>
+        <section class="model-route-row" data-decision-model-route>
+          <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status></span></header>
+          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: `${modelRouteToRef(model)} · images` }))]} /></label>
+          <p class="muted">Only models that support images can be selected.</p>
+        </section>
+      </div>
+    </section></Card>
+) : <Card className="section admin-panel admin-model-config"><p role="alert">Could not load model configuration. <a href="/admin">Retry</a></p></Card>}

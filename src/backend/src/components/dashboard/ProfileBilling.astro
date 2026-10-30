@@ -1,0 +1,29 @@
+---
+import { eq } from 'drizzle-orm';
+import { ProfileBillingContent } from './ProfileBillingContent';
+import { Card } from '../ui/card';
+import { db } from '../../db/client';
+import { subscriptions } from '../../db/schema';
+import { getCurrentUser } from '../../lib/admin';
+import { billingCatalog } from '../../lib/billing';
+import { dashboardRead } from '../../lib/dashboard-read';
+const { billingState } = Astro.props;
+let user = null;
+let subscription = null;
+let catalog = null;
+try {
+  user = await getCurrentUser(Astro.request);
+  if (user) {
+    const userId = user.id;
+    const [row] = await dashboardRead(() => db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1));
+    subscription = row ?? null;
+    catalog = billingCatalog();
+  }
+} catch (error) {
+  console.error('Profile billing unavailable', error);
+}
+
+---
+<Card className="section profile-panel profile-billing">
+  {catalog && user ? <ProfileBillingContent client:load initial={{ subscription: subscription ? { status: subscription.status, currentPeriodEnd: new Date(subscription.currentPeriodEnd).toISOString() } : null, hasCustomer: Boolean(user.stripeCustomerId), catalog }} billingState={billingState ?? null} /> : <p role="alert">Could not load billing. <a href="/profile">Retry</a></p>}
+</Card>

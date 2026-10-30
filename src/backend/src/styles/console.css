@@ -297,3 +297,24 @@
     }
   }
 }
+
+.profile-balance-container { height: 7rem; overflow: auto; }
+.profile-token-list { height: 10rem; overflow: auto; }
+.profile-billing { height: 14rem; overflow: auto; }
+.dashboard-skeleton { display: block; min-height: 1rem; border-radius: var(--radius); background: var(--border-light); }
+.dashboard-skeleton + .dashboard-skeleton { margin-top: .75rem; }
+.dashboard-table { height: 15rem; overflow: auto; }
+.dashboard-summary-status { height: 3rem; overflow: auto; }
+
+
+.profile-stats .stat, #headline .stat { height: 5.5rem; overflow: auto; }
+.admin-alerts { height: 4rem; overflow: auto; }
+.admin-model-config { height: 30rem; overflow: auto; }
+.dashboard-table:has(tbody:empty)::after {
+  content: '';
+  display: block;
+  height: 6rem;
+  margin: 1rem .5rem;
+  background: repeating-linear-gradient(to bottom, var(--border-light) 0 1rem, transparent 1rem 2rem);
+  border-radius: var(--radius);
+}

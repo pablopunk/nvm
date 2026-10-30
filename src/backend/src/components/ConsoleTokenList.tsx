@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { dashboardFetch } from '../lib/dashboard-fetch';
+import { watchDashboard } from '../lib/dashboard-refresh';
 import { Button } from './ui/button';
 import {
   AlertDialog,
@@ -20,11 +22,31 @@ type Token = {
 };
 
 export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
+  const [currentTokens, setCurrentTokens] = useState(tokens);
+  const [refreshFailed, setRefreshFailed] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [removed, setRemoved] = useState<string[]>([]);
   const [openToken, setOpenToken] = useState<string | null>(null);
-  const remaining = tokens.filter((token) => !removed.includes(token.id));
+  const remaining = currentTokens.filter((token) => !removed.includes(token.id));
+
+  useEffect(function watchTokens() {
+    let active = true;
+    const stop = watchDashboard(async () => {
+      if (openToken) return;
+      try {
+        const result = await dashboardFetch<{ tokens: Array<{ id: string; prefix: string; name: string; createdAt: string; lastUsedAt: string | null }> }>('/api/tokens');
+        if (!active) return;
+        setCurrentTokens(result.tokens.map((token) => ({
+          id: token.id, prefix: token.prefix, name: token.name,
+          created: new Date(token.createdAt).toLocaleString(),
+          lastUsed: token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used',
+        })));
+        setRefreshFailed(false);
+      } catch { if (active) setRefreshFailed(true); }
+    });
+    return () => { active = false; stop(); };
+  }, [openToken]);
 
   useEffect(
     function restoreFocusAfterRevocation() {
@@ -54,6 +76,7 @@ export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
 
   return (
     <>
+      {refreshFailed && <p className="status status--err" role="status">Could not refresh tokens; showing the last list.</p>}
       <ul className="token-list">
         {remaining.map(function renderToken(token) {
           return (

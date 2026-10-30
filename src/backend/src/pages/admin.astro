@@ -6,73 +6,19 @@ import { Card } from '../components/ui/card';
 import { ConsoleSelect } from '../components/ConsoleSelect';
 import { ConsoleTable } from '../components/ConsoleTable';
 import { ConsoleNavigation } from '../components/ConsoleNavigation';
-import { ConsoleCombobox } from '../components/ConsoleCombobox';
 import { getCurrentUser, isAdmin } from '../lib/admin';
-import {
-  DEFAULT_THINKING_LEVEL,
-  getAudioModelRoute,
-  getDecisionModelRoute,
-  getModelRoute,
-  modelRouteToRef,
-  ModelNotConfiguredError,
-  THINKING_LEVELS,
-  type ModelRouteConfig,
-  type ModelRouteSlot,
-} from '../lib/settings';
-import { routeKindForSlot } from '../lib/pricing';
-import { listAdminModelRefs } from '../lib/admin-model-options';
-import { listTranscriptionModels } from '../lib/transcription-models';
-import { isSelectableDecisionModel, listDecisionModels } from '../lib/decisions/decision-models';
+import AdminModels from '../components/dashboard/AdminModels.astro';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
 if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
-async function safeModelRoute(
-  slot: ModelRouteSlot,
-): Promise<(ModelRouteConfig & { ref: string }) | null> {
-  try {
-    const route = await getModelRoute(slot);
-    return { ...route, ref: modelRouteToRef(route) };
-  } catch (err) {
-    if (err instanceof ModelNotConfiguredError) return null;
-    throw err;
-  }
-}
-const modelRoutes = await Promise.all(
-  (
-    [
-      ['pro-smart', 'Pro smart'],
-      ['pro-fast', 'Pro fast'],
-      ['free-smart', 'Free smart'],
-      ['free-fast', 'Free fast'],
-    ] as const
-  ).map(async ([slot, title]) => ({ slot, title, route: await safeModelRoute(slot) })),
-);
-const [smartModelRefs, fastModelRefs] = await Promise.all([
-  listAdminModelRefs('smart'),
-  listAdminModelRefs('fast'),
-]);
-const modelRows = modelRoutes.map((row) => {
-  const kind = routeKindForSlot(row.slot);
-  return { ...row, kind, options: kind === 'smart' ? smartModelRefs : fastModelRefs };
-});
-const audioRoute = await getAudioModelRoute().catch(() => null);
-const audioRouteRef = audioRoute ? modelRouteToRef(audioRoute) : null;
-const audioModelRefs = (await listTranscriptionModels().catch(() => [])).map(
-  (model) => modelRouteToRef(model),
-);
-const decisionRoute = await getDecisionModelRoute().catch(() => null);
-const decisionRouteRef = decisionRoute ? modelRouteToRef(decisionRoute) : null;
-const decisionModels = (await listDecisionModels().catch(() => [])).filter(
-  isSelectableDecisionModel,
-);
-const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
+
 ---
 <Layout title="Nevermind · Admin" width="wide">
   <ConsoleNavigation email={user.email} admin={true} current="admin" />
 
-  <div class="admin-console">
+  <div class="admin-console" id="admin-console" data-action-class={buttonVariants({ variant: "outline", size: "sm" })} data-email-class={buttonVariants({ variant: "ghost", size: "sm" })}>
     <header class="admin-header">
       <div>
         <h1>Am I making money?</h1>
@@ -81,25 +27,28 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
       <label class="field">Month<Input id="month" type="month" /></label>
     </header>
 
-    <div class="admin-alerts" id="problems" aria-live="polite"></div>
+    <div class="admin-alerts" aria-live="polite"><div id="problems"></div><span id="alerts-status"></span> <button type="button" id="alerts-retry" hidden>Retry alerts</button></div>
 
     <Card className="section admin-panel"><section>
-      <div class="stat-grid" id="headline"><div class="stat"><div class="v">…</div><div class="l">Loading</div></div></div>
-      <div class="table-scroll admin-subpanel">
+      <p class="dashboard-summary-status" aria-live="polite"><span id="overview-status"></span> <button type="button" data-retry-section="overview" hidden>Retry</button></p>
+      <div class="stat-grid" id="headline" aria-label="Loading summary"><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div></div>
+      <div class="table-scroll admin-subpanel dashboard-table">
         <ConsoleTable id="segments" columns={['', 'Users', 'Active', 'Requests', 'Provider cost', 'Revenue', 'Net', 'Cost / active user']} />
       </div>
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Pricing</h2>
+      <p class="dashboard-summary-status" aria-live="polite"><span id="pricing-status"></span> <button type="button" data-retry-section="pricing" hidden>Retry</button></p>
       <p class="muted">Set in Vercel env (<code>CREDIT_MARKUP</code>, <code>CREDIT_USD</code>, <code>MONTHLY_FREE_CREDITS</code>, <code>STRIPE_SUBSCRIPTION_TIERS</code>, <code>STRIPE_TOP_UP_PACKS</code>). Worst case means the user spends every credit they get.</p>
-      <div class="table-scroll"><ConsoleTable id="knobs" columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} /></div>
+      <div class="table-scroll dashboard-table"><ConsoleTable id="knobs" columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} /></div>
       <p class="muted" id="knobs-note"></p>
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Top users by cost</h2>
-      <div class="table-scroll"><ConsoleTable id="top-users" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} /></div>
+      <p class="dashboard-summary-status" aria-live="polite"><span id="users-status"></span> <button type="button" data-retry-section="users" hidden>Retry</button></p>
+      <div class="table-scroll dashboard-table"><ConsoleTable id="top-users" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} /></div>
       <div class="admin-subpanel">
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
@@ -115,40 +64,20 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
 
     <Card className="section admin-panel"><section>
       <h2>Cost by model</h2>
-      <div class="table-scroll"><ConsoleTable id="models" columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} /></div>
+      <p class="dashboard-summary-status" aria-live="polite"><span id="models-status"></span> <button type="button" data-retry-section="models" hidden>Retry</button></p>
+      <div class="table-scroll dashboard-table"><ConsoleTable id="models" columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} /></div>
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Model performance</h2>
+      <p class="dashboard-summary-status" aria-live="polite"><span id="performance-status"></span> <button type="button" data-retry-section="performance" hidden>Retry</button></p>
       <p class="muted">Successful HTTP requests this month, measured at the backend rather than the desktop. TTFT starts at request admission and ends at the first parsed text, reasoning or tool output, ignoring keepalives. Turn time ends when the response finishes. Tokens/s is the mean per-request output rate after TTFT, estimated when provider token counts are missing; partial streams may contribute. Sample counts appear below each mean; historical requests have no TTFT.</p>
-      <div class="table-scroll"><ConsoleTable id="performance" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} /></div>
+      <div class="table-scroll dashboard-table"><ConsoleTable id="performance" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} /></div>
     </section></Card>
 
-    <Card className="section admin-panel"><section>
-      <h2>Models</h2>
-      <p class="muted">From the models.dev catalog: priced models with image input and function tools. Smart also needs reasoning; Fast runs with thinking off. Dictation uses audio transcription.</p>
-      <div class="model-routes">
-        {modelRows.map(({ slot, title, route, kind, options }) => (
-          <section class="model-route-row" data-model-route={slot}>
-            <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status></span></header>
-            <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
-            {kind === 'smart'
-              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
-              : <span class="muted model-route-row__thinking">Thinking off</span>}
-            <div class="route-details muted" data-pricing></div>
-          </section>
-        ))}
-        <section class="model-route-row" data-audio-model-route>
-          <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? undefined} options={[...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (catalog unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
-        </section>
-        <section class="model-route-row" data-decision-model-route>
-          <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: `${modelRouteToRef(model)} · images` }))]} /></label>
-          <p class="muted">Only models that support images can be selected.</p>
-        </section>
-      </div>
-    </section></Card>
+    <AdminModels server:defer>
+      <Card slot="fallback" className="section admin-panel admin-model-config" aria-busy="true" aria-label="Loading model configuration"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></Card>
+    </AdminModels>
 
     <Card className="section admin-panel"><section>
       <h2>Free usage cap</h2>
@@ -163,7 +92,15 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
     </section></Card>
   </div>
 
-  <script is:inline define:vars={{ actionButtonClass: buttonVariants({ variant: "outline", size: "sm" }), emailButtonClass: buttonVariants({ variant: "ghost", size: "sm" }) }}>
+  <script>
+    // @ts-nocheck
+    import { dashboardFetch } from '../lib/dashboard-fetch';
+    import { watchDashboard } from '../lib/dashboard-refresh';
+    import { createDashboardTableUpdates } from '../lib/dashboard-table-updates';
+    import { TextMorph } from 'torph';
+    const adminConsole = document.getElementById('admin-console');
+    const actionButtonClass = adminConsole.dataset.actionClass;
+    const emailButtonClass = adminConsole.dataset.emailClass;
     const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const integer = new Intl.NumberFormat('en-US');
     const monthInput = document.getElementById('month');
@@ -186,9 +123,7 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
       try { return (await response.json()).error?.message || response.statusText; } catch { return response.statusText; }
     }
     async function getJson(path) {
-      const response = await fetch(path);
-      if (!response.ok) throw new Error(await errorMessage(response));
-      return response.json();
+      return dashboardFetch(path);
     }
     async function adminMutation(path, method, payload) {
       const response = await fetch(path, {
@@ -199,20 +134,51 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
       if (!response.ok) throw new Error(await errorMessage(response));
       return response.json();
     }
-    function fillRows(tableId, rows, columns) {
-      document.querySelector(`#${tableId} tbody`).innerHTML = rows.length
+    const tableUpdates = createDashboardTableUpdates();
+    function fillRows(tableId, rows, columns, onApplied = () => {}) {
+      const body = document.querySelector(`#${tableId} tbody`);
+      const html = rows.length
         ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
         : `<tr><td colspan="${columns}" class="muted">Nothing this month.</td></tr>`;
+      if (body.innerHTML === html) { tableUpdates.cancel(body); onApplied(); return true; }
+      return tableUpdates.update(body, body.contains(document.activeElement), () => {
+        body.innerHTML = html;
+        onApplied();
+      });
     }
 
-    function renderSummary(summary) {
+    document.getElementById('admin-console').addEventListener('focusout', (event) => {
+      const body = event.target.closest('tbody');
+      if (!body) return;
+      queueMicrotask(() => tableUpdates.flush(body, body.contains(document.activeElement)));
+    });
+
+    const headlineMorphs = new Map();
+    function renderHeadline(total) {
+      const headline = document.getElementById('headline');
+      const values = [
+        ['Revenue', total.revenueUsd], ['Provider cost', total.costUsd],
+        ['Stripe fees (est.)', total.feesUsd], ['Net', total.netUsd],
+      ];
+      if (!headlineMorphs.size) {
+        headline.removeAttribute('aria-label');
+        headline.innerHTML = values.map(([label]) => `<div class="stat"><div class="v"></div><div class="l">${label}</div></div>`).join('');
+        headline.querySelectorAll('.v').forEach((element, index) => {
+          headlineMorphs.set(values[index][0], new TextMorph({ element, duration: 180, scale: false, respectReducedMotion: true }));
+        });
+      }
+      values.forEach(([label, value]) => {
+        const morph = headlineMorphs.get(label);
+        const element = headline.querySelectorAll('.v')[values.findIndex(([name]) => name === label)];
+        if (label === 'Net') element.className = `v ${value < 0 ? 'status--err' : 'status--ok'}`;
+        morph.update(money(value));
+      });
+    }
+
+    function renderSummary(summary, section, onApplied) {
+      if (section === 'overview') {
       const { total, paying, free } = summary;
-      document.getElementById('headline').innerHTML = [
-        ['Revenue', money(total.revenueUsd)],
-        ['Provider cost', money(total.costUsd)],
-        ['Stripe fees (est.)', money(total.feesUsd)],
-        ['Net', signedMoney(total.netUsd)],
-      ].map(([label, value]) => `<div class="stat"><div class="v">${value}</div><div class="l">${label}</div></div>`).join('');
+      renderHeadline(total);
       fillRows('segments', [['Paying', paying], ['Free', free]].map(([label, segment]) => [
         `<strong>${label}</strong>`,
         integer.format(segment.users),
@@ -223,13 +189,17 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         signedMoney(segment.netUsd),
         segment.activeUsers ? money(segment.costUsd / segment.activeUsers) : '—',
       ]), 8);
-      renderKnobs(summary.knobs);
+      }
+      if (section === 'pricing') renderKnobs(summary.knobs);
+      if (section === 'performance') {
       fillRows('performance', summary.performance.map((row) => [
         `<code>${esc(row.model)}</code>`, esc(row.provider ?? '—'), integer.format(row.requests),
         performanceMean(row.meanTtftMs, row.ttftSamples, 's'),
         performanceMean(row.meanTurnMs, row.timedRequests, 's'),
         performanceMean(row.meanTokensPerSecond, row.throughputSamples, 'tok/s'),
       ]), 6);
+      }
+      if (section === 'users') {
       fillRows('top-users', summary.topUsers.map((row) => [
         `<button type="button" class="${emailButtonClass}" data-pick-email="${esc(row.email)}">${esc(row.email)}</button>`,
         row.paying ? 'Paying' : 'Free',
@@ -237,10 +207,10 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         money(row.costUsd),
         money(row.revenueUsd),
         signedMoney(row.netUsd),
-      ]), 6);
-      document.querySelectorAll('[data-pick-email]').forEach((button) => button.addEventListener('click', () => {
-        document.getElementById('grant-email').value = button.dataset.pickEmail;
-      }));
+      ]), 6, onApplied);
+      return;
+      }
+      if (section === 'models') {
       fillRows('models', summary.models.map((row) => [
         `<code>${esc(row.model)}</code>`,
         esc(row.provider ?? '—'),
@@ -248,6 +218,8 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         integer.format(row.requests),
         money(row.costUsd),
       ]), 5);
+      }
+      onApplied();
     }
 
     function renderKnobs(knobs) {
@@ -265,15 +237,18 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
       note.textContent = `1 credit = ${money(knobs.creditUsd)} retail at ${knobs.markup}× markup over provider cost.`;
     }
 
-    async function loadProblems() {
+    async function loadProblems(generation) {
       const problems = [];
       const [{ breakers }, cap] = await Promise.all([getJson('/api/admin/route-breakers'), getJson('/api/admin/free-spend-cap')]);
       if (cap.current?.halted) problems.push('<div class="admin-notice admin-notice--warning">Free usage cap reached — free users are blocked until next month or a higher cap.</div>');
       for (const breaker of breakers) {
         problems.push(`<div class="admin-notice admin-notice--warning">Route <code>${esc(breaker.routeSlot)}</code> (${esc(breaker.provider)}/${esc(breaker.modelId)}) is off: ${esc(breaker.reason)}. <button type="button" class="${actionButtonClass}" data-breaker='${esc(JSON.stringify({ routeSlot: breaker.routeSlot, provider: breaker.provider, modelId: breaker.modelId }))}'>Turn back on</button></div>`);
       }
+      if (generation !== alertsGeneration) return;
       const container = document.getElementById('problems');
-      container.innerHTML = problems.join('');
+      const html = problems.join('');
+      if (container.innerHTML === html || container.contains(document.activeElement)) { renderCap(cap); return; }
+      container.innerHTML = html;
       container.querySelectorAll('[data-breaker]').forEach((button) => button.addEventListener('click', async () => {
         button.disabled = true;
         try { await adminMutation('/api/admin/route-breakers', 'POST', JSON.parse(button.dataset.breaker)); await refresh(); }
@@ -292,16 +267,60 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         : `Spent ${money(spent)} of ${money(capUsd)} this month${budget.halted ? ' — free usage is blocked' : ''}. Next month's cap: ${next}.`;
     }
 
-    async function refresh() {
+    const summarySections = ['overview', 'pricing', 'users', 'models', 'performance'];
+    const generations = {};
+    const displayedMonths = {};
+    async function refreshSection(section) {
+      const generation = generations[section] = (generations[section] || 0) + 1;
       const month = monthInput.value;
-      history.replaceState(null, '', `?month=${month}`);
+      const status = document.getElementById(`${section}-status`);
+      const retry = document.querySelector(`[data-retry-section="${section}"]`);
+      const previous = displayedMonths[section];
+      if (section === 'users') tableUpdates.cancel(document.querySelector('#top-users tbody'));
+      retry.hidden = true;
+      status.textContent = previous === month ? `Showing ${previous}.` : previous ? `Showing ${previous}; loading ${month}…` : `Loading ${month}…`;
       try {
-        renderSummary(await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}`));
-        await loadProblems();
+        const summary = await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}&section=${section}`);
+        if (generation !== generations[section]) return;
+        renderSummary(summary, section, () => {
+          if (generation !== generations[section]) return;
+          displayedMonths[section] = month;
+          status.textContent = `Showing ${month}.`;
+        });
       } catch (error) {
-        document.getElementById('problems').innerHTML = `<div class="admin-notice admin-notice--warning">Could not load: ${esc(error.message)}</div>`;
+        if (generation !== generations[section]) return;
+        status.textContent = `${previous ? `Showing ${previous}. ` : ''}Could not load ${month}: ${error.message}`;
+        retry.hidden = false;
       }
     }
+    async function refreshSummary() {
+      await Promise.all(summarySections.map(refreshSection));
+    }
+    let alertsGeneration = 0;
+    async function refreshAlerts() {
+      const generation = ++alertsGeneration;
+      const status = document.getElementById('alerts-status');
+      const retry = document.getElementById('alerts-retry');
+      retry.hidden = true;
+      try {
+        await loadProblems(generation);
+        if (generation === alertsGeneration) status.textContent = '';
+      } catch (error) {
+        if (generation !== alertsGeneration) return;
+        status.textContent = `Could not refresh alerts: ${error.message}`;
+        retry.hidden = false;
+      }
+    }
+    async function refresh() {
+      history.replaceState(null, '', `?month=${encodeURIComponent(monthInput.value)}`);
+      await Promise.all([refreshSummary(), refreshAlerts()]);
+    }
+    document.getElementById('top-users').addEventListener('click', (event) => {
+      const button = event.target.closest('[data-pick-email]');
+      if (button) document.getElementById('grant-email').value = button.dataset.pickEmail;
+    });
+    document.querySelectorAll('[data-retry-section]').forEach((button) => button.addEventListener('click', () => refreshSection(button.dataset.retrySection)));
+    document.getElementById('alerts-retry').addEventListener('click', refreshAlerts);
 
     document.getElementById('grant').addEventListener('click', async () => {
       const status = document.getElementById('grant-status');
@@ -356,23 +375,35 @@ const decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
       try { await adminMutation(path, 'PUT', payload); setStatus(status, 'Saved', 'ok'); }
       catch (error) { setStatus(status, error.message, 'err'); }
     }
-    document.querySelectorAll('[data-model-route]').forEach((row) => {
-      loadRoutePricing(row);
-      row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
-        await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select')?.value ?? 'off' });
+    function initializeModelRoutes() {
+      document.querySelectorAll('[data-model-route]:not([data-initialized])').forEach((row) => {
+        row.dataset.initialized = 'true';
         loadRoutePricing(row);
-      }));
-    });
-    document.querySelectorAll('[data-audio-model-route]').forEach((row) => {
-      row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/audio-model', splitRef(event.currentTarget.value)));
-    });
-    document.querySelectorAll('[data-decision-model-route]').forEach((row) => {
-      row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/decision-model', splitRef(event.currentTarget.value)));
-    });
+        row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
+          await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select')?.value ?? 'off' });
+          loadRoutePricing(row);
+        }));
+      });
+      document.querySelectorAll('[data-audio-model-route]:not([data-initialized])').forEach((row) => {
+        row.dataset.initialized = 'true';
+        row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/audio-model', splitRef(event.currentTarget.value)));
+      });
+      document.querySelectorAll('[data-decision-model-route]:not([data-initialized])').forEach((row) => {
+        row.dataset.initialized = 'true';
+        row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/decision-model', splitRef(event.currentTarget.value)));
+      });
+    }
+    initializeModelRoutes();
+    new MutationObserver(initializeModelRoutes).observe(document.getElementById('admin-console'), { childList: true, subtree: true });
 
     const now = new Date();
     monthInput.value = new URLSearchParams(location.search).get('month') || `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}`;
     monthInput.addEventListener('change', refresh);
     refresh();
+    watchDashboard(() => Promise.all([
+      ...summarySections.filter((section) => section !== 'pricing').map(refreshSection),
+      refreshAlerts(),
+    ]));
+    watchDashboard(() => refreshSection('pricing'), 300_000);
   </script>
 </Layout>

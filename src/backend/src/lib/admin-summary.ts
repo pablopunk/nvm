@@ -230,13 +230,16 @@ function userEconomicsQuery(month: SummaryMonth): SQL {
     )`;
 }
 
+export type AdminSummarySection = 'overview' | 'users' | 'models' | 'pricing' | 'performance';
+
 export async function loadAdminSummary(
   month: SummaryMonth,
+  section?: AdminSummarySection,
 ): Promise<AdminSummary> {
   const economics = userEconomicsQuery(month);
   const [segmentResult, topUserResult, modelResult, knobs, performance] =
     await Promise.all([
-      db.execute(sql`${economics}
+      (!section || section === 'overview') ? db.execute(sql`${economics}
         select paying,
           count(*)::int as users,
           count(*) filter (where requests > 0)::int as "activeUsers",
@@ -244,8 +247,8 @@ export async function loadAdminSummary(
           coalesce(sum(cost_microcents), 0)::float8 as "costMicrocents",
           coalesce(sum(revenue_cents), 0)::float8 as "revenueCents",
           coalesce(sum(payments), 0)::int as payments
-        from economics group by paying`),
-      db.execute(sql`${economics}
+        from economics group by paying`) : Promise.resolve([]),
+      (!section || section === 'users') ? db.execute(sql`${economics}
         select email, paying, requests,
           cost_microcents::float8 as "costMicrocents",
           revenue_cents::float8 as "revenueCents",
@@ -253,17 +256,17 @@ export async function loadAdminSummary(
         from economics
         where requests > 0 or revenue_cents > 0
         order by cost_microcents desc, revenue_cents desc
-        limit ${TOP_USERS_LIMIT}`),
-      db.execute(sql`${economics}
+        limit ${TOP_USERS_LIMIT}`) : Promise.resolve([]),
+      (!section || section === 'models') ? db.execute(sql`${economics}
         select u.model, u.provider, e.paying,
           count(*)::int as requests,
           coalesce(sum(u.upstream_cost_microcents), 0)::float8 as "costMicrocents"
         from usage u join economics e on e.id = u.user_id
         where u.created_at >= ${month.from} and u.created_at < ${month.to}
         group by u.model, u.provider, e.paying
-        order by 5 desc`),
-      loadPricingKnobs(),
-      loadModelPerformance(month),
+        order by 5 desc`) : Promise.resolve([]),
+      (!section || section === 'pricing') ? loadPricingKnobs(section === 'pricing') : Promise.resolve(null),
+      (!section || section === 'performance') ? loadModelPerformance(month) : Promise.resolve([]),
     ]);
 
   const segments = rowsOf<SegmentRow>(segmentResult);
@@ -314,7 +317,7 @@ export async function loadAdminSummary(
 }
 
 /** USD-only; non-USD or unreadable prices show as unknown. */
-async function loadPricingKnobs(): Promise<PricingKnobs | null> {
+async function loadPricingKnobs(strict = false): Promise<PricingKnobs | null> {
   try {
     const catalog = billingCatalog();
     const items = [...catalog.subscriptions, ...catalog.topUps];
@@ -332,7 +335,8 @@ async function loadPricingKnobs(): Promise<PricingKnobs | null> {
     const pricesUsd = new Map<string, number>();
     for (const [priceId, usd] of prices) if (usd != null) pricesUsd.set(priceId, usd);
     return pricingKnobs(catalog, pricesUsd);
-  } catch {
+  } catch (error) {
+    if (strict) throw error;
     return null;
   }
 }
