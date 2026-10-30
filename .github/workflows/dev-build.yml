@@ -129,18 +129,10 @@ jobs:
           retention-days: 30
 
   build-mac:
-    name: Build macOS nightly (${{ matrix.arch }})
+    name: Build macOS nightly
     needs: plan
     if: needs.plan.outputs.build == 'true'
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - arch: arm64
-            runner: macos-26
-          - arch: x64
-            runner: macos-15-intel
+    runs-on: macos-26
     timeout-minutes: 60
     permissions:
       contents: read
@@ -199,44 +191,23 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
-        run: mise exec -- pnpm run dist:mac:${{ matrix.arch }} '-c.publish.channel=nightly'
+        run: mise exec -- pnpm run dist:mac:all '-c.publish.channel=nightly'
 
       - name: Collect macOS nightly artifacts
         run: |
           set -euo pipefail
           mkdir -p nightly-mac
-          cp "release/Nevermind-${NIGHTLY_VERSION}-mac-${{ matrix.arch }}.zip" \
-            "release/Nevermind-${NIGHTLY_VERSION}-mac-${{ matrix.arch }}.zip.blockmap" \
+          cp "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip.blockmap" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip" \
+            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip.blockmap" \
             release/nightly-mac.yml nightly-mac/
 
-      - name: Upload macOS architecture artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: mac-build-${{ matrix.arch }}
-          path: nightly-mac/*
-          if-no-files-found: error
-          retention-days: 30
+      - name: Stamp macOS compatibility metadata
+        run: mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-mac/nightly-mac.yml
 
-  assemble-mac:
-    name: Assemble macOS updater metadata
-    needs: [plan, build-mac]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.plan.outputs.source_sha }}
-      - uses: jdx/mise-action@v2
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: mac-build-*
-          path: mac-builds
-      - name: Assemble and validate macOS artifacts
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        run: |
-          mise exec -- node .github/scripts/assemble-mac-artifacts.cjs mac-builds nightly-mac "$VERSION"
-          mise exec -- node .github/scripts/stamp-state-compatibility.cjs nightly-mac/nightly-mac.yml
-      - uses: actions/upload-artifact@v4
+      - name: Upload macOS nightly artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: nightly-mac
           path: nightly-mac/*
@@ -338,7 +309,7 @@ jobs:
 
   validate-assets:
     name: Validate assembled nightly artifacts
-    needs: [plan, build-windows, assemble-mac, build-linux]
+    needs: [plan, build-windows, build-mac, build-linux]
     if: needs.plan.outputs.build == 'true'
     runs-on: ubuntu-latest
     steps:
