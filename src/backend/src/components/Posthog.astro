@@ -1,0 +1,12 @@
+---
+interface Props {
+  autocapture?: boolean;
+}
+const { autocapture = false } = Astro.props;
+const key = process.env.POSTHOG_KEY;
+const config = key ? JSON.stringify({ key, autocapture }) : undefined;
+---
+{config && <script id="posthog-config" type="application/json" set:html={config} is:inline />}
+<script>
+  import '../scripts/posthog';
+</script>

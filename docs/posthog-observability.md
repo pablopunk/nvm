@@ -14,6 +14,10 @@ The `Send Technical Diagnostics` setting is the single switch. It gates the host
 
 The host client drops queued batches at send time once the setting turns off. The renderer SDK stops capturing at once and clears its identity, but a request already queued by posthog-js (a few seconds of events at most) can still be delivered. The renderer SDK is not even loaded until the host setting reads true, so browser-stored consent from an earlier launch can never act on its own. Errors raised before that moment are not reported. Autocapture, pageviews, replay, surveys and flags are disabled: only exceptions and identity leave the renderer.
 
+## Website analytics
+
+The public pages (`Layout.astro`: landing, pricing, legal) load `posthog-js` through `src/components/Posthog.astro` for page views, page leaves, web vitals, exceptions, and autocapture. It runs in cookieless mode (`cookieless_mode: 'always'`, project setting `cookieless_server_hash_mode: 2`), so it sets no cookies and stores nothing in the browser, and requests go through the same-origin `/ingest` rewrites in `vercel.json`. The signed-in console (`ConsoleLayout.astro`, profile and admin) and `/invite` are not instrumented. With no `POSTHOG_KEY` (previews, local development) nothing loads.
+
 ## Where it lives
 
 - `src/app/electron/diagnostics/posthog-client.ts` owns the host client, identity, and consent.
