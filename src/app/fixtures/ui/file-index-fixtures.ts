@@ -8,7 +8,7 @@ export function fileIndexControlsAction(ctx: ExtensionContext) {
   return ctx.actions.run('Show File Index Snapshot', async (innerCtx) => {
     const files = innerCtx.desktop.files;
     if (!files)
-      return innerCtx.ui.preview({
+      return innerCtx.ui.previewView({
         title: 'File Index Unavailable',
         content: 'The `desktop.files` host API is not available.',
       });
@@ -19,7 +19,7 @@ export function fileIndexControlsAction(ctx: ExtensionContext) {
       limit: 8,
       ignore: ['*.tmp'],
     });
-    return innerCtx.ui.preview({
+    return innerCtx.ui.previewView({
       title: 'File Index Snapshot',
       content: [
         '# File Index Snapshot',
@@ -39,7 +39,7 @@ export function reindexDownloadsAction(ctx: ExtensionContext) {
   return ctx.actions.run('Reindex Downloads Media', async (innerCtx) => {
     const files = innerCtx.desktop.files;
     if (!files)
-      return innerCtx.ui.preview({
+      return innerCtx.ui.previewView({
         title: 'File Index Unavailable',
         content: 'The `desktop.files` host API is not available.',
       });
@@ -50,7 +50,7 @@ export function reindexDownloadsAction(ctx: ExtensionContext) {
       limit: 500,
       ignore: ['*.tmp'],
     });
-    return innerCtx.ui.preview({
+    return innerCtx.ui.previewView({
       title: 'Reindex Complete',
       content: `# Reindex Complete\n\nIndexed ${result.count} files from ${result.roots.join(', ')}.`,
     });

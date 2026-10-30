@@ -1,26 +1,18 @@
 // biome-ignore-all lint: Host-side extension payload boundary keeps dynamic view shapes by design.
 import { feedbackView } from '../../palette/feedback';
 import { extensionLoadingView } from '../../palette/model';
+import {
+  createExtensionUiPreview,
+  type ExtensionUiPreviewDeps,
+} from './extension-ui-preview';
 
-export type ExtensionUiApiDeps = {
-  buildPreviewItemAction: (item: unknown) => unknown;
+export type ExtensionUiApiDeps = ExtensionUiPreviewDeps & {
   progressView: (input?: unknown) => unknown;
   buildConfirmAction: (input?: unknown) => unknown;
   showIndicator?: (input: unknown) => void;
   updateIndicator?: (input: unknown) => void;
   hideIndicator?: (id?: string) => void;
 };
-
-function isPreviewableItem(value: any) {
-  return (
-    value?.kind &&
-    ['clipboard', 'image', 'video', 'file', 'text'].includes(value.kind)
-  );
-}
-
-function isFilePreviewInput(value: any) {
-  return value?.path || value?.fileUrl;
-}
 
 const RESERVED_ITEM_ID_PREFIX = '__nvm:';
 
@@ -70,12 +62,15 @@ function collectionCreateItem(add: any) {
 
 export function createExtensionUiApi({
   buildPreviewItemAction,
+  readTextFilePreview,
   progressView,
   buildConfirmAction,
   showIndicator = () => {},
   updateIndicator = () => {},
   hideIndicator = () => {},
 }: ExtensionUiApiDeps) {
+  const { previewView, previewFile, previewAction, legacyPreview } =
+    createExtensionUiPreview({ buildPreviewItemAction, readTextFilePreview });
   return {
     list: (view: any) => ({ ...view, type: 'list' }),
     collection: (input: any = {}) => {
@@ -97,24 +92,10 @@ export function createExtensionUiApi({
       };
     },
     grid: (view: any) => ({ ...view, type: 'grid' }),
-    preview: (fileOrView: any, view: any = {}) => {
-      if (isFilePreviewInput(fileOrView)) {
-        const file = fileOrView;
-        return {
-          ...view,
-          type: 'preview',
-          presentation: view.presentation || 'preview',
-          title: view.title || file.name || 'Preview',
-          subtitle: view.subtitle || file.displayPath,
-          content: view.content || file.displayPath || '',
-          image: file.thumbnailUrl || file.url,
-          video: file.videoUrl || undefined,
-        };
-      }
-      if (isPreviewableItem(fileOrView))
-        return buildPreviewItemAction(fileOrView);
-      return { ...fileOrView, type: 'preview' };
-    },
+    preview: legacyPreview,
+    previewView,
+    previewFile,
+    previewAction,
     chat: (view: any) => ({ ...view, type: 'chat' }),
     form: (view: any) => ({ ...view, type: 'form' }),
     editor: (view: any) => ({ ...view, type: 'editor' }),

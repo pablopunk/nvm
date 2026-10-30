@@ -76,6 +76,10 @@ ui.preview({ name: 'Report', displayPath: '~/Report.pdf', fileUrl: 'file://repor
 ui.preview({ title: 'Plain', content: 'Markdown' })
 ```
 
+## Follow-up: explicit primitives
+
+The overload is now split into `ctx.ui.previewView(view)`, `ctx.ui.previewFile(file, view?)`, and `ctx.ui.previewAction(input)` in `extension-ui-preview.ts`. Each primitive declares its return kind, so new extensions never rely on shape routing. `ctx.ui.preview` stays as a deprecated compatibility shim that keeps the routing order above (`path`/`fileUrl` first, then preview-item `kind`, then plain view).
+
 ## Notes for future searches
 
-Keywords: extension preview blank, preview images not showing, screenshots preview broken, isPreviewableItem, isFilePreviewInput, buildPreviewItemAction, kind field collision, ExtensionFileKind, ui.preview routing, ctx.ui.preview file object, extension-ui-api.ts preview function.
+Keywords: extension preview blank, preview images not showing, screenshots preview broken, isPreviewableItem, isFilePreviewInput, buildPreviewItemAction, kind field collision, ExtensionFileKind, ui.preview routing, ctx.ui.preview file object, extension-ui-api.ts preview function, previewView, previewFile, previewAction, extension-ui-preview.ts.

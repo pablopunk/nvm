@@ -60,13 +60,22 @@ export async function gridView(ctx: ExtensionContext) {
             accessories: [{ text: file.extension || file.kind || 'file' }],
             primaryAction: ctx.actions.push(
               'Show Metadata',
-              ctx.ui.preview({
+              ctx.ui.previewView({
                 title: file.name,
                 content: fileMetadataMarkdown(file),
                 image: file.thumbnailUrl || file.url,
               }),
             ),
             actions: [
+              ctx.ui.previewAction(file, { title: 'Quick Preview' }),
+              ctx.actions.run(
+                'Open Full Preview',
+                function openFullPreview(innerCtx) {
+                  return innerCtx.ui.previewFile(file, {
+                    content: fileMetadataMarkdown(file),
+                  });
+                },
+              ),
               ctx.actions.revealPath(file.path, 'Reveal File'),
               ctx.actions.copyText(file.path, 'Copy Path'),
             ],

@@ -80,7 +80,7 @@ export async function folderWatchView(ctx: ExtensionContext) {
       );
     },
   );
-  return ctx.ui.preview({
+  return ctx.ui.previewView({
     id: 'dev-ui-folder-watch',
     title: 'Dev UI · Folder Watch',
     subtitle: WATCH_FIXTURE_ROOT,

@@ -886,6 +886,20 @@ export type ExtensionFormField = {
 
 export type ExtensionFileKind = 'image' | 'video' | 'file' | string;
 
+/** Inline preview payload for `ctx.ui.previewAction`. Distinct from `ExtensionFile`: it never carries `path` or `fileUrl`. */
+export type ExtensionPreviewItemDescriptor = {
+  kind?: 'clipboard' | 'image' | 'video' | 'file' | 'text';
+  title?: string;
+  text?: string;
+  imageDataUrl?: string;
+  imagePath?: string;
+  videoUrl?: string;
+  filePath?: string;
+  thumbnailUrl?: string;
+  clipboardType?: string;
+  shortcut?: string;
+};
+
 /** File object returned by `ctx.desktop.files.*` helpers. */
 export type ExtensionFile = {
   path: string;
@@ -1550,6 +1564,7 @@ export type ExtensionSystem = {
   capabilities: { has(id: ExtensionWindowCapability | string): boolean };
   labels: {
     revealInFileManager: string;
+    /** Label for the OS file previewer opened by `ctx.desktop.files.preview` (e.g. `Quick Look`). */
     previewFile: string;
     openSystemSettings: string;
     keyboardSettings: string;
@@ -1597,23 +1612,32 @@ export type ExtensionContext = {
     /** A generic list/search surface that consistently wires supplied add, preview, edit, and remove actions. */
     collection(input: ExtensionCrudCollection): ExtensionView;
     grid(view: ExtensionView): ExtensionView;
-    /** Full preview view for markdown/text/media. */
+    /** Full-screen preview view for Markdown/text/media content you already have. */
+    previewView(view: ExtensionView): ExtensionView;
+    /**
+     * Full-screen preview of a file from `ctx.desktop.files.*` (use `metadata(path)` for a path string).
+     * Images and videos render as media. Other files show their leading text (bounded to 64 KB, binary files are
+     * detected and summarized) unless you pass `view.content`. Resolves asynchronously because it reads the file.
+     */
+    previewFile(
+      file: ExtensionFile,
+      view?: Partial<ExtensionView>,
+    ): Promise<ExtensionView>;
+    /**
+     * Inline preview action for an item row (Command+Y by default, local to the selected item). Shows the item's
+     * text, image, or video in the palette without navigating. Pass an `ExtensionFile` or a preview descriptor.
+     * For non-media files prefer `ctx.actions.run(title, (c) => c.ui.previewFile(file))` so users see the contents.
+     */
+    previewAction(
+      input: ExtensionFile | ExtensionPreviewItemDescriptor,
+      options?: { title?: string; shortcut?: string },
+    ): ExtensionAction;
+    /** @deprecated Use `previewView(view)`. */
     preview(view: ExtensionView): ExtensionView;
-    /** Large media preview from a file helper result. */
+    /** @deprecated Use `previewFile(file, view)`, which also previews text file contents. This overload stays synchronous and only shows media or the path. */
     preview(file: ExtensionFile, view?: Partial<ExtensionView>): ExtensionView;
-    /** Inline preview action, commonly for clipboard/file items. Its shortcut is local to the selected item. */
-    preview(input: {
-      kind?: 'clipboard' | 'image' | 'video' | 'file' | 'text';
-      title?: string;
-      text?: string;
-      imageDataUrl?: string;
-      imagePath?: string;
-      videoUrl?: string;
-      filePath?: string;
-      thumbnailUrl?: string;
-      clipboardType?: string;
-      shortcut?: string;
-    }): ExtensionAction;
+    /** @deprecated Use `previewAction(input)`. Routing by `kind` alone is ambiguous with `ExtensionFile.kind`. */
+    preview(input: ExtensionPreviewItemDescriptor): ExtensionAction;
     chat(view: ExtensionView): ExtensionView;
     /** Structured settings form shown as searchable palette rows. Enter edits the selected field through the palette input, choice rows, an editor, or a native picker; Escape returns to the form without discarding other draft values. Select the submit row or press Command+Enter to save. Prefer `ctx.input.prompt` for lightweight arguments. */
     form(view: ExtensionView): ExtensionView;
@@ -2089,6 +2113,7 @@ export type ExtensionContext = {
       openWithApps(filePath: string): Promise<ExtensionOpenWithApp[]>;
       open(filePath: string): unknown;
       reveal(filePath: string): unknown;
+      /** Opens the OS file previewer (Quick Look on macOS) outside Nevermind. Only available when `ctx.system.capabilities.has('quick-look')`; label it with `ctx.system.labels.previewFile`. For an in-palette preview use `ctx.ui.previewFile`. */
       preview(filePath: string): unknown;
       readText(filePath: string): Promise<string>;
       /** Format a path for display, replacing the current user's home directory with `~`. Does not change the path used for file operations. */

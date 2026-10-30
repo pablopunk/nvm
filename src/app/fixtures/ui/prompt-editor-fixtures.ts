@@ -33,7 +33,7 @@ export function promptView(ctx: ExtensionContext) {
         'Open {argument:site} for {argument:query}{cursor}',
         { variables: action.formValues, returnCursor: true },
       );
-      return _ctx.ui.preview({
+      return _ctx.ui.previewView({
         title: 'Prompt Result',
         content: `# Prompt Result\n\n- Query: ${query || '_empty_'}\n- Site: ${site || '_empty_'}\n- URL: ${url}\n\nTemplate result:\n\n\`\`\`json\n${JSON.stringify(template, null, 2)}\n\`\`\``,
       });
@@ -73,7 +73,7 @@ export function editorView(ctx: ExtensionContext) {
       autosave: { debounceMs: 500 },
     },
     submitAction: ctx.actions.run('Preview Draft', (_ctx, action) =>
-      ctx.ui.preview({
+      ctx.ui.previewView({
         title: 'Submitted Editor Content',
         content: `# Submitted Editor Content\n\n${action.editorContent || '_Empty draft_'}`,
       }),
