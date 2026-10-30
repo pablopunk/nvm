@@ -6,11 +6,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
 import { PostHog } from 'posthog-node';
+import {
+  joinPublicApiUrl,
+  PRODUCTION_API_ORIGIN,
+} from '../../shared/public-origin';
 import { isNvmDiagnosticTestMode } from '../platform/test-mode-flags';
 import { buildChannel, hashOwnerId } from './feature-usage';
 
 const INSTALL_ID_FILE = 'analytics-id';
-const TEST_PROJECT_KEY = 'phc_diagnostic_test';
+// posthog-node requires a key; the ingest route replaces it with the real one.
+const INGEST_PLACEHOLDER_KEY = 'nevermind-desktop';
 const WITHDRAWN_RESPONSE = {
   status: 200,
   text: () => Promise.resolve('{}'),
@@ -36,6 +41,8 @@ export function whenInstallIdReady() {
   return installIdReady;
 }
 
+// The project key lives on the server. The app only knows the first-party
+// route, which filters, rate-limits and forwards events to PostHog.
 function posthogConfig() {
   if (!(app.isPackaged || isNvmDiagnosticTestMode)) {
     return null;
@@ -43,11 +50,8 @@ function posthogConfig() {
   const host = isNvmDiagnosticTestMode
     ? // biome-ignore lint/style/noProcessEnv: The loopback collector is only configurable at runtime in diagnostic test mode.
       process.env.POSTHOG_HOST_DESKTOP
-    : import.meta.env.VITE_POSTHOG_HOST;
-  const key = isNvmDiagnosticTestMode
-    ? TEST_PROJECT_KEY
-    : import.meta.env.VITE_POSTHOG_KEY;
-  return key && host ? { key, host } : null;
+    : joinPublicApiUrl(PRODUCTION_API_ORIGIN, '/api/ingest');
+  return host ? { key: INGEST_PLACEHOLDER_KEY, host } : null;
 }
 
 // Mirrors the "Send Technical Diagnostics" setting for every capture path.

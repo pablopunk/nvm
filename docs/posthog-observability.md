@@ -15,6 +15,20 @@ The `Send Technical Diagnostics` setting is the single switch. It gates the host
 
 The host client drops queued batches at send time once the setting turns off. The renderer SDK stops capturing at once, but a request already queued by posthog-js (a few seconds of events at most) can still be delivered. The renderer SDK is not even loaded until the host setting reads true, so browser-stored consent from an earlier launch can never act on its own. Errors raised before that moment are not reported. Autocapture, pageviews, replay, surveys and flags are disabled: only anonymous exceptions leave the renderer; the host sends a `renderer_failure` event with the install id and the same `support_ref`, which is the join key.
 
+## First-party ingest route
+
+The desktop host process does not talk to PostHog directly. It posts PostHog-format batches to `https://api.nvm.fyi/api/ingest/batch/` (`src/backend/src/pages/api/ingest/batch.ts`), which:
+
+- keeps the project key server-side (the app ships only a placeholder key),
+- accepts a fixed set of event names from a real install id and drops everything else, rejects client-supplied person properties, location and ip, and forces every event anonymous,
+- rate-limits per IP, caps batch and event size, and accepts gzip,
+- forwards accepted events to PostHog and answers 503 on failure (or when the server key is missing) so the app retries a few times; after that it drops the batch, so a long PostHog outage loses events instead of queueing them,
+- trims oversized exceptions (message to 2,000 characters, stack to the 50 frames nearest the throw) instead of dropping them,
+- logs a per-batch summary (counts by event name) to Axiom,
+- stops everything with `TELEMETRY_INGEST_ENABLED=false` in the Vercel environment (it answers success so installed apps stop retrying).
+
+Renderer exceptions still go from `posthog-js` straight to PostHog because they need the build's source-map chunk ids. Backend events are sent from the server and do not pass through this route.
+
 ## Website analytics
 
 The public pages (`Layout.astro`: landing, pricing, legal) load `posthog-js` through `src/components/Posthog.astro` for page views, page leaves, web vitals, exceptions, and autocapture. It runs in cookieless mode (`cookieless_mode: 'always'`, project setting `cookieless_server_hash_mode: 2`), so it sets no cookies and stores nothing in the browser, and requests go through the same-origin `/ingest` rewrites in `vercel.json`. The signed-in console (`ConsoleLayout.astro`, profile and admin) and `/invite` are not instrumented. With no `POSTHOG_KEY` (previews, local development) nothing loads.
@@ -48,7 +62,7 @@ Release builds run `posthog-cli sourcemap process` (pinned in `scripts/upload-de
 
 Required configuration:
 
-- Build and runtime: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` (project token and ingestion host; both are public).
+- Renderer build: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` (project token and ingestion host; both are public). The host process needs neither.
 - Release upload only: `POSTHOG_CLI_API_KEY` (personal API key with error tracking write) and `POSTHOG_CLI_PROJECT_ID`. These come from CI secrets and variables and never from build definitions.
 - Backend: `POSTHOG_KEY` and `POSTHOG_HOST` in the Vercel environment.
 

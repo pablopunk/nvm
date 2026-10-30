@@ -39,12 +39,16 @@ export const onRequest = defineMiddleware(async (context, next) => {
       captureBackendException(error, { operation: 'backend.request' });
       throw error;
     } finally {
-      captureBackendRequest({
-        route: context.routePattern,
-        method: context.request.method,
-        status,
-        durationMs: Date.now() - startedAt,
-      });
+      // Telemetry batches are not product traffic: counting them would make the
+      // backend report on its own reporting.
+      if (!context.url.pathname.startsWith('/api/ingest')) {
+        captureBackendRequest({
+          route: context.routePattern,
+          method: context.request.method,
+          status,
+          durationMs: Date.now() - startedAt,
+        });
+      }
       flushTelemetryAfterResponse();
     }
   });
