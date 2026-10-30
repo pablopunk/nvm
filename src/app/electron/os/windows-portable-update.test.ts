@@ -16,7 +16,8 @@ const {
   consumePortableUpdateResult,
   PORTABLE_UPDATE_HEALTH_FILE_ENV,
   portableExecutableFromEnvironment,
-  portableUpdateHelperArguments,
+  portableUpdateHelperCommand,
+  portableUpdateHelperLaunchArguments,
   portableUpdateHelperEnvironment,
   preparePortableUpdateHelper,
 } = await import('./windows-portable-update');
@@ -52,18 +53,47 @@ test('reads the user launcher path, keeping the user-chosen filename', () => {
   );
 });
 
-test('helper arguments carry the target, checksum, version and both processes to await', () => {
-  const args = portableUpdateHelperArguments(
-    plan('C:\\work'),
-    'C:\\work\\h.ps1',
+test('helper command quotes every value as a PowerShell literal', () => {
+  const hostile = {
+    ...plan('C:\\work'),
+    target: {
+      executablePath: String.raw`D:\Tools\Bob's & "x" %PATH% ’ $(calc).exe`,
+      directory: String.raw`D:\Tools`,
+    },
+  };
+  const command = portableUpdateHelperCommand(hostile, 'C:\\work\\h.ps1');
+  assert.equal(command.startsWith("& 'C:\\work\\h.ps1' -TargetPath "), true);
+  assert.match(
+    command,
+    /-TargetPath 'D:\\Tools\\Bob''s & "x" %PATH% ’’ \$\(calc\)\.exe'/,
   );
-  const value = (name: string) => args[args.indexOf(name) + 1];
-  assert.equal(value('-File'), 'C:\\work\\h.ps1');
-  assert.equal(value('-TargetPath'), target.executablePath);
-  assert.equal(value('-ExpectedSha512'), 'c2hhNTEy+/=');
-  assert.equal(value('-ExpectedVersion'), '2026.1030.2');
-  assert.equal(value('-WaitProcessIds'), '41,40');
-  assert.equal(value('-ExecutionPolicy'), 'Bypass');
+  assert.match(command, /-ExpectedSha512 'c2hhNTEy\+\/=' /);
+  assert.match(command, /-WaitProcessIds '41,40'/);
+  assert.match(command, /; exit \$LASTEXITCODE$/);
+});
+
+test('cmd.exe starts PowerShell in its own console and never sees a path', () => {
+  const args = portableUpdateHelperLaunchArguments(
+    { ...plan('C:\\work'), sourcePath: 'D:\\a&b.exe' },
+    'C:\\work\\h.ps1',
+    { SystemRoot: 'C:\\Windows' },
+  );
+  assert.deepEqual(args.slice(0, 6), [
+    '/d',
+    '/c',
+    'start',
+    '""',
+    '/min',
+    '"C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"',
+  ]);
+  const encoded = args.at(-1) ?? '';
+  assert.equal(args.at(-2), '-EncodedCommand');
+  assert.match(encoded, /^[A-Za-z0-9+/=]+$/);
+  assert.match(
+    Buffer.from(encoded, 'base64').toString('utf16le'),
+    /-SourcePath 'D:\\a&b\.exe'/,
+  );
+  assert.equal(args.join(' ').includes('a&b'), false);
 });
 
 test('helper environment drops wrapper identity and one-shot update variables', () => {
@@ -151,7 +181,8 @@ test('the prepared launch spawns one detached hidden helper', async () => {
     assert.equal(calls.length, 0);
     launch();
     assert.equal(calls.length, 1);
-    assert.match(calls[0].command, /powershell\.exe$/);
+    assert.match(calls[0].command, /System32\\cmd\.exe$/);
+    assert.equal(calls[0].options.windowsVerbatimArguments, true);
     assert.equal(calls[0].options.detached, true);
     assert.equal(calls[0].options.windowsHide, true);
     assert.equal(

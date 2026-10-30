@@ -84,45 +84,72 @@ export function portableUpdateResultPath(workDirectory: string) {
   return path.join(workDirectory, RESULT_FILE_NAME);
 }
 
-function windowsPowerShellPath(environment: NodeJS.ProcessEnv) {
+function windowsSystemPath(environment: NodeJS.ProcessEnv, ...parts: string[]) {
   return path.win32.join(
     environment.SystemRoot || 'C:\\Windows',
     'System32',
-    'WindowsPowerShell',
-    'v1.0',
-    'powershell.exe',
+    ...parts,
   );
 }
 
-export function portableUpdateHelperArguments(
+function powerShellLiteral(value: string) {
+  return `'${value.replace(/['\u2018\u2019\u201A\u201B]/g, '$&$&')}'`;
+}
+
+/** The helper call as PowerShell source; every value is a single-quoted literal, so paths are never interpreted. */
+export function portableUpdateHelperCommand(
   plan: PortableUpdateHelperPlan,
   scriptPath: string,
 ) {
+  const parameters = {
+    TargetPath: plan.target.executablePath,
+    SourcePath: plan.sourcePath,
+    ExpectedSha512: plan.sha512,
+    ExpectedVersion: plan.version,
+    CurrentVersion: plan.currentVersion,
+    WorkDirectory: plan.workDirectory,
+    ResultPath: portableUpdateResultPath(plan.workDirectory),
+    WaitProcessIds: plan.waitProcessIds.join(','),
+  };
   return [
+    `& ${powerShellLiteral(scriptPath)}`,
+    ...Object.entries(parameters).map(
+      ([name, value]) => `-${name} ${powerShellLiteral(value)}`,
+    ),
+    '; exit $LASTEXITCODE',
+  ].join(' ');
+}
+
+/**
+ * Windows PowerShell exits without running anything when it starts without a
+ * console, which is how Node launches detached children. `start` gives it a
+ * console of its own that survives Nevermind exiting; the encoded command
+ * keeps every path out of cmd.exe's parser.
+ */
+export function portableUpdateHelperLaunchArguments(
+  plan: PortableUpdateHelperPlan,
+  scriptPath: string,
+  environment: NodeJS.ProcessEnv,
+) {
+  const encodedCommand = Buffer.from(
+    portableUpdateHelperCommand(plan, scriptPath),
+    'utf16le',
+  ).toString('base64');
+  return [
+    '/d',
+    '/c',
+    'start',
+    '""',
+    '/min',
+    `"${windowsSystemPath(environment, 'WindowsPowerShell', 'v1.0', 'powershell.exe')}"`,
     '-NoProfile',
     '-NonInteractive',
     '-ExecutionPolicy',
     'Bypass',
     '-WindowStyle',
     'Hidden',
-    '-File',
-    scriptPath,
-    '-TargetPath',
-    plan.target.executablePath,
-    '-SourcePath',
-    plan.sourcePath,
-    '-ExpectedSha512',
-    plan.sha512,
-    '-ExpectedVersion',
-    plan.version,
-    '-CurrentVersion',
-    plan.currentVersion,
-    '-WorkDirectory',
-    plan.workDirectory,
-    '-ResultPath',
-    portableUpdateResultPath(plan.workDirectory),
-    '-WaitProcessIds',
-    plan.waitProcessIds.join(','),
+    '-EncodedCommand',
+    encodedCommand,
   ];
 }
 
@@ -157,10 +184,15 @@ export async function preparePortableUpdateHelper(
   const environment = dependencies.environment ?? process.env;
   const fileSystem = dependencies.fileSystem ?? fs;
   const spawnProcess = dependencies.spawnProcess ?? spawn;
-  const powershell = windowsPowerShellPath(environment);
+  const commandProcessor = windowsSystemPath(environment, 'cmd.exe');
   await requireFile(
     fileSystem,
-    powershell,
+    windowsSystemPath(
+      environment,
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe',
+    ),
     'Windows PowerShell is unavailable, so Nevermind cannot install this update.',
   );
   await requireFile(
@@ -182,13 +214,14 @@ export async function preparePortableUpdateHelper(
   return function launchPortableUpdateHelper() {
     try {
       const helper = spawnProcess(
-        powershell,
-        portableUpdateHelperArguments(plan, scriptPath),
+        commandProcessor,
+        portableUpdateHelperLaunchArguments(plan, scriptPath, environment),
         {
           detached: true,
           env: portableUpdateHelperEnvironment(environment),
           stdio: ['ignore', output.fd, output.fd],
           windowsHide: true,
+          windowsVerbatimArguments: true,
         },
       );
       logger.info(
@@ -201,7 +234,7 @@ export async function preparePortableUpdateHelper(
       );
       helper.once('exit', (code) =>
         logger.warn(
-          'updater.portable.helper.exited',
+          'updater.portable.helperLauncher.exited',
           { code },
           HELPER_LOG_SCOPE,
         ),
