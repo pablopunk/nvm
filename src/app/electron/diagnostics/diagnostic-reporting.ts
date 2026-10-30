@@ -178,8 +178,16 @@ function captureFailure(error: unknown, record: DiagnosticRecord) {
   });
 }
 
+// Background jobs tick every second or so; only their failures are worth an event.
+function isRoutineBackgroundSuccess(context: OperationContext) {
+  return context.operation === 'job.run' && context.outcome === 'success';
+}
+
 function captureOperation(context: OperationContext, durationMs: number) {
   if (!(reportingEnabled && posthogClient())) {
+    return;
+  }
+  if (isRoutineBackgroundSuccess(context)) {
     return;
   }
   captureDesktopEvent('operation_completed', {
