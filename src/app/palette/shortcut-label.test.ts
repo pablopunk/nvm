@@ -13,3 +13,12 @@ test('shortcutLabel uses platform key names on Linux and Windows', () => {
   assert.equal(shortcutLabel('Control+Alt+K', 'linux'), 'Control+Alt+K');
   assert.equal(shortcutLabel('Control+Alt+K', 'win32'), 'Control+Alt+K');
 });
+
+test('shortcutLabel names the meta key for Linux and Windows instead of Command', () => {
+  assert.equal(shortcutLabel('Command+Y', 'linux'), 'Super+Y');
+  assert.equal(
+    shortcutLabel('Command+Shift+Enter', 'linux'),
+    'Super+Shift+Enter',
+  );
+  assert.equal(shortcutLabel('Command+Backspace', 'win32'), 'Win+Backspace');
+});

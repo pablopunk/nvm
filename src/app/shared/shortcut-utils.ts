@@ -17,6 +17,11 @@ const SHORTCUT_SYMBOLS: Record<string, string> = {
   Tab: 'Tab',
 };
 
+const META_KEY_NAME_BY_PLATFORM: Partial<Record<ShortcutPlatform, string>> = {
+  linux: 'Super',
+  win32: 'Win',
+};
+
 const SHORTCUT_ALIASES = new Map([
   ['cmd', 'Command'],
   ['command', 'Command'],
@@ -52,7 +57,10 @@ export function formatShortcut(
 ) {
   const parts = normalizeAccelerator(accelerator).split('+').filter(Boolean);
   if (processPlatform !== 'darwin') {
-    return parts.join('+');
+    const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatform] ?? 'Super';
+    return parts
+      .map((part) => (part === 'Command' ? metaKeyName : part))
+      .join('+');
   }
   return parts.map((part) => SHORTCUT_SYMBOLS[part] || part).join('');
 }

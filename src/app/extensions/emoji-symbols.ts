@@ -145,6 +145,12 @@ function characterItem(ctx: any, record: CharacterCatalogRecord) {
   });
 }
 
+function pickerSubtitle(ctx: any) {
+  return ctx.system.capabilities.has('frontmost-paste')
+    ? 'Enter to paste. Search to narrow the catalog.'
+    : 'Enter to copy. Search to narrow the catalog.';
+}
+
 async function pickerView(ctx: any, providedState?: CharacterPickerState) {
   const state = providedState || (await readPickerState(ctx));
   const items = orderedRecords(state).map((record) =>
@@ -153,8 +159,7 @@ async function pickerView(ctx: any, providedState?: CharacterPickerState) {
   return ctx.ui.grid({
     id: 'emoji-symbols',
     title: 'Emoji & Symbols',
-    subtitle:
-      'Enter to paste. Command+Enter to copy. Search to narrow the catalog.',
+    subtitle: pickerSubtitle(ctx),
     searchBarPlaceholder: 'Search emoji, symbols, or Unicode values',
     layout: 'compact',
     columns: 8,
