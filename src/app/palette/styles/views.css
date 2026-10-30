@@ -204,9 +204,6 @@
   display: grid;
   grid-template-columns: repeat(var(--grid-columns), minmax(0, 1fr));
   gap: 12px;
-  max-height: calc(100vh - var(--window-blur-margin) * 2 - 92px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
   padding: 4px;
   scroll-padding: 4px;
   -webkit-app-region: no-drag;
