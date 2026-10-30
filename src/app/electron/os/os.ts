@@ -144,7 +144,7 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
         {
           darwin: true,
           linux: true,
-          win32: !environment.PORTABLE_EXECUTABLE_FILE,
+          win32: Boolean(environment.PORTABLE_EXECUTABLE_FILE),
         },
         false,
       );
@@ -545,7 +545,7 @@ export function supportsAutoUpdates() {
 }
 
 export function autoUpdatesUnavailableMessage() {
-  return 'Updates are unavailable in development and portable builds';
+  return 'Updates are only available in packaged release builds';
 }
 
 export function appScanRoots() {

@@ -12,8 +12,6 @@ const NIGHTLY_UPDATER_METADATA = [
 
 function expectedNightlyAssetNames(version) {
   return [
-    `Nevermind-${version}-win-x64-setup.exe`,
-    `Nevermind-${version}-win-x64-setup.exe.blockmap`,
     `Nevermind-${version}-win-x64-portable.exe`,
     `Nevermind-${version}-mac-arm64.zip`,
     `Nevermind-${version}-mac-arm64.zip.blockmap`,

@@ -5,6 +5,17 @@ import type { UpdateChannel } from './update-channel';
 import { installNevermindChannelFeed } from './update-channel-feed';
 import { createUpdateManager } from './update-manager';
 import { isStateSafeForInstall } from './state-update-safety';
+import { portableExecutableFromEnvironment } from '../os/windows-portable-update';
+import { supportsAutoUpdates } from '../os/os';
+import { WindowsPortableUpdater } from './windows-portable-updater';
+import { reportPreviousPortableUpdate } from './portable-update-outcome';
+
+function createPlatformAutoUpdater() {
+  const portableExecutable = portableExecutableFromEnvironment();
+  return portableExecutable
+    ? new WindowsPortableUpdater(portableExecutable)
+    : electronUpdater.autoUpdater;
+}
 
 export function createAppUpdateManager(input: {
   isTestMode: boolean;
@@ -25,17 +36,25 @@ export function createAppUpdateManager(input: {
       handleUpdateChannelChanged: () => {},
     };
   }
-  const { autoUpdater } = electronUpdater;
-  return createUpdateManager(autoUpdater as any, input.recordInstallAttempt, {
-    getUpdateChannel: input.getUpdateChannel,
-    getCurrentVersion: () => app.getVersion(),
-    canInstallUpdate: (info) =>
-      isStateSafeForInstall(app.getVersion(), info, [
-        app.getPath('userData'),
-        defaultSharedStateRoot(),
-      ]),
-    prepareUpdateFeed: () =>
-      installNevermindChannelFeed(autoUpdater as any, input.getUpdateChannel),
-    createCancellationToken: () => new electronUpdater.CancellationToken(),
-  });
+  const autoUpdater = createPlatformAutoUpdater();
+  const manager = createUpdateManager(
+    autoUpdater as any,
+    input.recordInstallAttempt,
+    {
+      isUpdaterAvailable: supportsAutoUpdates,
+      getUpdateChannel: input.getUpdateChannel,
+      getCurrentVersion: () => app.getVersion(),
+      canInstallUpdate: (info) =>
+        isStateSafeForInstall(app.getVersion(), info, [
+          app.getPath('userData'),
+          defaultSharedStateRoot(),
+        ]),
+      prepareUpdateFeed: () =>
+        installNevermindChannelFeed(autoUpdater as any, input.getUpdateChannel),
+      createCancellationToken: () => new electronUpdater.CancellationToken(),
+    },
+  );
+  if (autoUpdater instanceof WindowsPortableUpdater)
+    void reportPreviousPortableUpdate(manager.state).catch(() => {});
+  return manager;
 }

@@ -190,6 +190,7 @@ import { createSettingsService } from './app/settings-service';
 import { createAppStateMaintenance } from './app/state-maintenance-setup';
 import { createTestModeIpc } from './app/test-mode-ipc';
 import { createAppUpdateManager } from './app/update-manager-setup';
+import { registerDeepLinkProtocol } from './os/deep-link-protocol';
 import { createUpdatesService } from './app/updates-service';
 import { createWindowManagementComposition } from './app/window-management-composition';
 import {
@@ -2028,8 +2029,7 @@ const startup = app.whenReady().then(async () => {
     app.exit(0);
     return;
   }
-  if (!isDev && !isNvmTestMode)
-    app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
+  if (!isDev && !isNvmTestMode) registerDeepLinkProtocol(DEEP_LINK_SCHEME);
   if (isNvmTestMode) {
     installTestNetworkPolicy();
     await loadUserState();

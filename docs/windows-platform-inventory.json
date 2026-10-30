@@ -718,7 +718,7 @@
       "key": "os-platform-selector-auto-updates-win32",
       "file": "src/app/electron/os/os.ts",
       "category": "platform-selector",
-      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::win32: !environment.PORTABLE_EXECUTABLE_FILE::self",
+      "selector": "function:createOsAdapter/function:hasCapabilityForPlatform/if:capability === 'auto-updates'/call:dependent(false)::platform-selector::win32: Boolean(environment.PORTABLE_EXECUTABLE_FILE)::self",
       "disposition": "capability-selector",
       "surface": "auto-updater"
     },
@@ -1476,16 +1476,16 @@
       "key": "auto-updater",
       "status": "implemented",
       "source": "src/app/electron/os/os.ts",
-      "automatedCheck": "installed versus portable capability tests and NSIS metadata validation",
-      "manualGate": "unsigned installed old-to-new update installation",
+      "automatedCheck": "portable capability tests, portable metadata validation, and packaged portable install, competing-handle, checksum and rollback smoke",
+      "manualGate": "unsigned portable old-to-new update from a published release feed",
       "owner": "release-engineering"
     },
     {
       "key": "installer-uninstaller",
       "status": "unverified",
       "source": "electron-builder.yml",
-      "automatedCheck": "NSIS artifact, blockmap, unsigned signature and manifest checks",
-      "manualGate": "per-user install, Start menu, uninstall cleanup and preserved user data",
+      "automatedCheck": "package verifier rejects any installer artifact; Windows ships only the portable executable",
+      "manualGate": "none while Windows is portable-only",
       "owner": "release-engineering"
     },
     {

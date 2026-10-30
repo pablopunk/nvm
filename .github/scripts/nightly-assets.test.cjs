@@ -10,20 +10,20 @@ const {
 } = require('./nightly-assets.cjs');
 
 const VERSION = '0.24.1-nightly.20261028.123';
-const SETUP = `Nevermind-${VERSION}-win-x64-setup.exe`;
+const PRIMARY = `Nevermind-${VERSION}-linux-x86_64.AppImage`;
 
-function windowsMetadata({
+function updaterMetadata({
   version = VERSION,
-  path = SETUP,
+  path = PRIMARY,
   sha512 = 'AAAA',
 } = {}) {
   return [
     `version: ${version}`,
     'files:',
-    `  - url: ${SETUP}`,
+    `  - url: ${PRIMARY}`,
     `    sha512: ${sha512}`,
     '    size: 10',
-    `  - url: ${SETUP}.blockmap`,
+    `  - url: ${PRIMARY}.blockmap`,
     '    sha512: BBBB',
     '    size: 5',
     `path: ${path}`,
@@ -35,7 +35,12 @@ function windowsMetadata({
 
 test('expected asset set mirrors stable packaging with channel-named updater metadata', () => {
   const names = expectedNightlyAssetNames(VERSION);
-  assert.equal(names.length, 15);
+  assert.equal(names.length, 13);
+  assert.equal(
+    names.filter((name) => name.includes('-win-')).join(),
+    `Nevermind-${VERSION}-win-x64-portable.exe`,
+    'Windows ships only the portable executable',
+  );
   for (const metadata of [
     'nightly.yml',
     'nightly-mac.yml',
@@ -69,18 +74,18 @@ test('publication requires the exact expected asset set', () => {
 });
 
 test('updater metadata parser reads the top-level path and every listed file', () => {
-  const metadata = parseUpdaterMetadata(windowsMetadata());
+  const metadata = parseUpdaterMetadata(updaterMetadata());
   assert.equal(metadata.version, VERSION);
-  assert.equal(metadata.path, SETUP);
+  assert.equal(metadata.path, PRIMARY);
   assert.deepEqual(
     metadata.files.map((file) => file.url),
-    [SETUP, `${SETUP}.blockmap`],
+    [PRIMARY, `${PRIMARY}.blockmap`],
   );
 });
 
 test('updater metadata verifies digests of staged files and rejects any mismatch', () => {
   const assetNames = expectedNightlyAssetNames(VERSION);
-  const digests = { [SETUP]: 'AAAA', [`${SETUP}.blockmap`]: 'BBBB' };
+  const digests = { [PRIMARY]: 'AAAA', [`${PRIMARY}.blockmap`]: 'BBBB' };
   const verify = (text, overrides = {}) =>
     verifyUpdaterMetadata({
       name: 'nightly.yml',
@@ -90,23 +95,23 @@ test('updater metadata verifies digests of staged files and rejects any mismatch
       sha512Of: (name) => digests[name] ?? null,
       ...overrides,
     });
-  assert.equal(verify(windowsMetadata()).version, VERSION);
+  assert.equal(verify(updaterMetadata()).version, VERSION);
   assert.throws(
-    () => verify(windowsMetadata({ version: '0.24.1-nightly.20261028.124' })),
+    () => verify(updaterMetadata({ version: '0.24.1-nightly.20261028.124' })),
     /does not match/,
   );
   assert.throws(
-    () => verify(windowsMetadata({ path: 'other.exe' })),
+    () => verify(updaterMetadata({ path: 'other.AppImage' })),
     /is not a listed file/,
   );
   assert.throws(
-    () => verify(windowsMetadata(), { sha512Of: () => 'ZZZZ' }),
+    () => verify(updaterMetadata(), { sha512Of: () => 'ZZZZ' }),
     /does not match the staged file/,
   );
   assert.throws(
     () =>
-      verify(windowsMetadata(), {
-        sha512Of: (name) => (name === SETUP ? 'AAAA' : null),
+      verify(updaterMetadata(), {
+        sha512Of: (name) => (name === PRIMARY ? 'AAAA' : null),
       }),
     /references missing/,
   );
@@ -114,13 +119,13 @@ test('updater metadata verifies digests of staged files and rejects any mismatch
 
 test('updater metadata must reference only release assets', () => {
   const assetNames = expectedNightlyAssetNames(VERSION).filter(
-    (name) => name !== `${SETUP}.blockmap`,
+    (name) => name !== `${PRIMARY}.blockmap`,
   );
   assert.throws(
     () =>
       verifyUpdaterMetadata({
         name: 'nightly.yml',
-        text: windowsMetadata(),
+        text: updaterMetadata(),
         version: VERSION,
         assetNames,
         sha512Of: () => 'AAAA',
@@ -131,8 +136,8 @@ test('updater metadata must reference only release assets', () => {
 
 test('updater metadata size and top-level digest must match the staged primary file', () => {
   const assetNames = expectedNightlyAssetNames(VERSION);
-  const digests = { [SETUP]: 'AAAA', [`${SETUP}.blockmap`]: 'BBBB' };
-  const sizes = { [SETUP]: 10, [`${SETUP}.blockmap`]: 5 };
+  const digests = { [PRIMARY]: 'AAAA', [`${PRIMARY}.blockmap`]: 'BBBB' };
+  const sizes = { [PRIMARY]: 10, [`${PRIMARY}.blockmap`]: 5 };
   const verify = (text, overrides = {}) =>
     verifyUpdaterMetadata({
       name: 'nightly.yml',
@@ -143,13 +148,13 @@ test('updater metadata size and top-level digest must match the staged primary f
       sizeOf: (name) => sizes[name],
       ...overrides,
     });
-  assert.equal(verify(windowsMetadata()).version, VERSION);
+  assert.equal(verify(updaterMetadata()).version, VERSION);
   assert.throws(
-    () => verify(windowsMetadata(), { sizeOf: () => 11 }),
+    () => verify(updaterMetadata(), { sizeOf: () => 11 }),
     /size for .* does not match/,
   );
   assert.throws(
-    () => verify(windowsMetadata().replace(/^sha512: AAAA$/m, 'sha512: CCCC')),
+    () => verify(updaterMetadata().replace(/^sha512: AAAA$/m, 'sha512: CCCC')),
     /top-level sha512 does not match/,
   );
 });

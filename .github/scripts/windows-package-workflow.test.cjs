@@ -23,10 +23,11 @@ test('builder config has deterministic unsigned-inspectable Windows targets', ()
     builder,
     /^win:\n\s+icon: build\/Icon\.icon\/Assets\/icon\.png$/m,
   );
-  assert.match(builder, /^\s+differentialPackage: true$/m);
+  assert.match(builder, /^ {2}target:\n {4}- portable\n/m);
+  assert.doesNotMatch(builder, /nsis/i);
   assert.match(builder, /Nevermind|\$\{productName\}/);
-  assert.match(builder, /-setup\.\$\{ext\}/);
   assert.match(builder, /-portable\.\$\{ext\}/);
+  assert.match(packageJson.scripts['dist:win:x64'], /--win portable --x64/);
   assert.equal(packageJson.devDependencies['@electron/asar'], '3.4.1');
   assert.match(packageJson.scripts['dist:win:x64'], /--publish never/);
 });
@@ -66,8 +67,10 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
     'updaterMetadata = $updaterMetadata',
     '([uint64]$bytes[$Offset] * 16777216)',
     'NativeResourceCounter',
-    'schemaVersion = 1',
-    'nsis = [ordered]@{',
+    'schemaVersion = 2',
+    "'Portable'",
+    'windows-portable-update.ps1',
+    'app-update.yml',
     'portable = [ordered]@{',
     'unpacked = [ordered]@{',
     'configured-source-and-PE-resource-presence-only',
@@ -120,9 +123,12 @@ test('Windows package smoke remains separate from first-run development smoke an
     '& $env:PNPM_STANDALONE_PATH verify',
     'CSC_IDENTITY_AUTO_DISCOVERY',
     '& $env:PNPM_STANDALONE_PATH run dist:win:x64',
-    "'-UpdaterMetadataPolicy', 'Nsis'",
-    '-UpdaterMetadataPolicy Nsis',
+    "'-UpdaterMetadataPolicy', 'Portable'",
+    '-UpdaterMetadataPolicy Portable',
+    'validate-windows-updater-metadata.cjs write',
     'Copy-Item release/latest.yml windows-artifacts/',
+    '-c.extraMetadata.version=$version-update-smoke',
+    'windows-portable-update-smoke.cjs',
     'windows-package-negative',
     'verify-windows-private-file-acl.ps1',
     'windows-portable-smoke.cjs',
@@ -161,9 +167,8 @@ test('Windows tag release publishes only verified unsigned x64 package artifacts
     "CSC_IDENTITY_AUTO_DISCOVERY: 'false'",
     'mise exec -- pnpm run dist:win:x64',
     'verify-windows-package.ps1',
-    '-UpdaterMetadataPolicy Nsis',
-    'Nevermind-$version-win-x64-setup.exe',
-    'Nevermind-$version-win-x64-setup.exe.blockmap',
+    '-UpdaterMetadataPolicy Portable',
+    'validate-windows-updater-metadata.cjs write',
     'Nevermind-$version-win-x64-portable.exe',
     "'release/latest.yml'",
     'gh release create $tag --title $tag --generate-notes',
@@ -171,7 +176,10 @@ test('Windows tag release publishes only verified unsigned x64 package artifacts
   ]) {
     assert.equal(release.includes(expected), true, expected);
   }
-  assert.equal(/workflow_dispatch|WIN_CSC|AZURE/.test(release), false);
+  assert.equal(
+    /workflow_dispatch|WIN_CSC|AZURE|setup\.exe/.test(release),
+    false,
+  );
   assert.deepEqual(
     [...release.matchAll(/secrets\.(\w+)/g)].map((match) => match[1]),
     ['POSTHOG_CLI_API_KEY'],
@@ -188,4 +196,22 @@ test('packaged checks accept an extracted package root', () => {
     fs.readFileSync('scripts/check-packaged-runtime-imports.cjs', 'utf8'),
     /process\.argv\[2\]/,
   );
+});
+
+test('portable update smoke covers install, competing handles, integrity, and rollback', () => {
+  const harness = fs.readFileSync(
+    'scripts/windows-portable-update-smoke.cjs',
+    'utf8',
+  );
+  for (const expected of [
+    "expectedOutcome: 'installed'",
+    'holdTarget: true',
+    'expectedReason: /^integrity:/',
+    "expectedOutcome: 'rolled-back'",
+    'NVM_PORTABLE_UPDATE_SMOKE_PACKAGE',
+    "userFileName = 'My Nevermind.exe'",
+    'fs.readdirSync(installDirectory)',
+  ]) {
+    assert.equal(harness.includes(expected), true, expected);
+  }
 });

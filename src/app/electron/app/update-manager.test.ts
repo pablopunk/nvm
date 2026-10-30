@@ -177,6 +177,19 @@ test('does not download when the update check reports no update', async () => {
   assert.equal(manager.state.errorMessage, '');
 });
 
+test('a build without an updater target never checks for updates', async () => {
+  const calls: string[] = [];
+  const manager = createUpdateManager(createAutoUpdater(calls), undefined, {
+    isUpdaterAvailable: () => false,
+  });
+
+  await manager.checkForUpdates('manual', { download: true });
+
+  assert.deepEqual(calls, []);
+  assert.equal(manager.canUseAutoUpdates(), false);
+  assert.equal(manager.state.status, 'unsupported');
+});
+
 test('keeps genuine update check failures as errors', async () => {
   const calls: string[] = [];
   const manager = createUpdateManager({

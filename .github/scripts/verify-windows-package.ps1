@@ -4,7 +4,7 @@ param(
   [Parameter(Mandatory = $true)][string]$ExpectedVersion,
   [Parameter(Mandatory = $true)][ValidateSet('x64')][string]$ExpectedArch,
   [Parameter(Mandatory = $true)][string]$AsarExecutable,
-  [Parameter(Mandatory = $true)][ValidateSet('Absent', 'Nsis')][string]$UpdaterMetadataPolicy,
+  [Parameter(Mandatory = $true)][ValidateSet('Absent', 'Portable')][string]$UpdaterMetadataPolicy,
   [ValidateSet('latest.yml', 'nightly.yml')][string]$UpdaterMetadataName = 'latest.yml'
 )
 
@@ -92,19 +92,19 @@ public static class NativeResourceCounter {
 }
 
 try {
-  $setupName = "Nevermind-$ExpectedVersion-win-$ExpectedArch-setup.exe"
   $portableName = "Nevermind-$ExpectedVersion-win-$ExpectedArch-portable.exe"
-  $setup = Resolve-UniqueArtifact 'Nevermind-*-win-*-setup.exe' $setupName
   $portable = Resolve-UniqueArtifact 'Nevermind-*-win-*-portable.exe' $portableName
-  $blockmap = Resolve-UniqueArtifact 'Nevermind-*-win-*-setup.exe.blockmap' "$setupName.blockmap"
+  $installers = @(Get-ChildItem -LiteralPath $ResolvedPackageRoot -File | Where-Object { $_.Name -like '*-setup.exe*' })
+  Assert-Condition ($installers.Count -eq 0) 'Windows ships only the portable executable; found an installer artifact.'
   $unpacked = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/Nevermind.exe')
   $asar = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/resources/app.asar')
   $desktopTextHelper = Get-Item -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/resources/windows-desktop-text.exe')
   Assert-Condition ($unpacked.Length -gt 0) 'win-unpacked/Nevermind.exe is empty.'
   Assert-Condition ($asar.Length -gt 0) 'win-unpacked/resources/app.asar is empty.'
   Assert-Condition ($desktopTextHelper.Length -gt 0) 'Windows desktop-text helper is empty.'
+  $updateConfig = Get-Content -LiteralPath (Join-Path $ResolvedPackageRoot 'win-unpacked/resources/app-update.yml') -Raw
+  Assert-Condition ($updateConfig -match '(?m)^provider: github$' -and $updateConfig -match '(?m)^updaterCacheDirName: \S+$') 'Portable update feed configuration is missing.'
 
-  $setupSignature = Assert-Unsigned $setup
   $portableSignature = Assert-Unsigned $portable
   $unpackedSignature = Assert-Unsigned $unpacked
 
@@ -115,7 +115,8 @@ try {
     'dist/main/main.js',
     'dist/preload/preload.cjs',
     'dist/renderer/index.html',
-    'src/app/resources/nevermind-extension-api.d.ts'
+    'src/app/resources/nevermind-extension-api.d.ts',
+    'src/app/resources/windows-portable-update.ps1'
   )) {
     Assert-Condition (Test-Path -LiteralPath (Join-Path $ExtractionRoot $requiredPath)) "Packaged ASAR is missing $requiredPath."
   }
@@ -133,8 +134,8 @@ try {
   if ($UpdaterMetadataPolicy -eq 'Absent') {
     Assert-Condition (-not (Test-Path -LiteralPath $latest)) "Unsigned smoke must not contain stale $UpdaterMetadataName updater metadata."
   } else {
-    Assert-Condition (Test-Path -LiteralPath $latest) "NSIS updater policy requires $UpdaterMetadataName."
-    & node (Join-Path $RepoRoot 'scripts/validate-windows-updater-metadata.cjs') $latest $ResolvedPackageRoot $ExpectedVersion $ExpectedArch
+    Assert-Condition (Test-Path -LiteralPath $latest) "Portable updater policy requires $UpdaterMetadataName."
+    & node (Join-Path $RepoRoot 'scripts/validate-windows-updater-metadata.cjs') validate $latest $ResolvedPackageRoot $ExpectedVersion $ExpectedArch
     Assert-Condition ($LASTEXITCODE -eq 0) 'Windows updater metadata check failed.'
     $updaterMetadata.file = $UpdaterMetadataName
     $updaterMetadata.sha256 = Get-Sha256Hex $latest
@@ -154,7 +155,7 @@ try {
   Assert-Condition ($portableGroupIcons -gt 0 -and $portableIcons -gt 0) 'Portable executable has no icon resources.'
 
   $manifest = [ordered]@{
-    schemaVersion = 1
+    schemaVersion = 2
     build = [ordered]@{
       version = $ExpectedVersion
       arch = $ExpectedArch
@@ -162,19 +163,12 @@ try {
       signing = 'unsigned'
     }
     artifacts = [ordered]@{
-      nsis = [ordered]@{
-        file = $setup.Name
-        size = $setup.Length
-        sha512 = Get-Sha512Base64 $setup.FullName
-        signatureStatus = $setupSignature
-        blockmap = [ordered]@{ file = $blockmap.Name; size = $blockmap.Length; sha512 = Get-Sha512Base64 $blockmap.FullName }
-        updaterMetadata = $updaterMetadata
-      }
       portable = [ordered]@{
         file = $portable.Name
         size = $portable.Length
         sha512 = Get-Sha512Base64 $portable.FullName
         signatureStatus = $portableSignature
+        updaterMetadata = $updaterMetadata
       }
       unpacked = [ordered]@{
         executable = 'win-unpacked/Nevermind.exe'

@@ -52,7 +52,7 @@ test('simulates Windows labels, capabilities, and exact platform paths off-host'
   assert.equal(adapter.hasCapability('open-with'), true);
   assert.equal(adapter.hasCapability('open-with-app-filtering'), false);
   assert.equal(adapter.hasCapability('launch-at-login'), true);
-  assert.equal(adapter.hasCapability('auto-updates'), true);
+  assert.equal(adapter.hasCapability('auto-updates'), false);
   assert.equal(
     adapter.appIdentityKey(String.raw`C:\Apps\Example.EXE`),
     String.raw`c:\apps\example.exe`,
@@ -265,15 +265,22 @@ test('force quit validates raw names before normalization and passes one argv el
   assert.equal(calls.length, 1);
 });
 
-test('disables auto-updates for Windows portable builds', () => {
+test('enables auto-updates only for the Windows portable executable', () => {
+  const environment = {
+    APPDATA: String.raw`C:\Users\Zoë\AppData\Roaming`,
+    ProgramData: String.raw`C:\ProgramData`,
+  };
   assert.equal(
     windowsAdapter({
       environment: {
-        APPDATA: String.raw`C:\Users\Zoë\AppData\Roaming`,
+        ...environment,
         PORTABLE_EXECUTABLE_FILE: String.raw`D:\Nevermind.exe`,
-        ProgramData: String.raw`C:\ProgramData`,
       },
     }).hasCapability('auto-updates'),
+    true,
+  );
+  assert.equal(
+    windowsAdapter({ environment }).hasCapability('auto-updates'),
     false,
   );
 });

@@ -86,10 +86,14 @@ jobs:
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
-      - name: Build unsigned Windows x64 NSIS and portable packages
+      - name: Build unsigned Windows x64 portable package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: mise exec -- pnpm run dist:win:x64 '-c.publish.channel=nightly'
+        run: mise exec -- pnpm run dist:win:x64
+
+      - name: Write portable nightly updater metadata
+        shell: bash
+        run: mise exec -- node scripts/validate-windows-updater-metadata.cjs write "release/Nevermind-${NIGHTLY_VERSION}-win-x64-portable.exe" release/nightly.yml "$NIGHTLY_VERSION"
 
       - name: Verify unsigned Windows nightly packages
         shell: pwsh
@@ -100,7 +104,7 @@ jobs:
             -ExpectedVersion $env:NIGHTLY_VERSION `
             -ExpectedArch x64 `
             -AsarExecutable $asar `
-            -UpdaterMetadataPolicy Nsis `
+            -UpdaterMetadataPolicy Portable `
             -UpdaterMetadataName nightly.yml
 
       - name: Collect Windows nightly artifacts
@@ -108,9 +112,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p nightly-windows
-          cp "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe" \
-            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-setup.exe.blockmap" \
-            "release/Nevermind-${NIGHTLY_VERSION}-win-x64-portable.exe" \
+          cp "release/Nevermind-${NIGHTLY_VERSION}-win-x64-portable.exe" \
             release/nightly.yml nightly-windows/
           for staged in nightly-windows/*; do
             [ -s "$staged" ] || { echo "Staged file is empty: $staged" >&2; exit 1; }

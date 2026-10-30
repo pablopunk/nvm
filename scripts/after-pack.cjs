@@ -1,8 +1,27 @@
+const fs = require('node:fs');
 const path = require('node:path');
 const {
   verifyPackagedDependencies,
 } = require('./verify-packaged-dependencies.cjs');
 const { stageTypeScriptNative } = require('./stage-typescript-native.cjs');
+
+// electron-builder only writes app-update.yml for NSIS; the portable updater
+// reads the same GitHub feed and cache settings.
+function writeWindowsPortableUpdateConfig(resources, packager) {
+  const [publish] = [].concat(packager.config.publish || []);
+  if (publish?.provider !== 'github' || !publish.owner || !publish.repo)
+    throw new Error('Windows portable updates require a GitHub publish target');
+  fs.writeFileSync(
+    path.join(resources, 'app-update.yml'),
+    [
+      `owner: ${publish.owner}`,
+      `repo: ${publish.repo}`,
+      'provider: github',
+      `updaterCacheDirName: ${packager.appInfo.updaterCacheDirName}`,
+      '',
+    ].join('\n'),
+  );
+}
 
 module.exports = async function verifyPackagedRuntime(context) {
   const resources =
@@ -15,6 +34,8 @@ module.exports = async function verifyPackagedRuntime(context) {
         )
       : path.join(context.appOutDir, 'resources');
   const archive = path.join(resources, 'app.asar');
+  if (context.electronPlatformName === 'win32')
+    writeWindowsPortableUpdateConfig(resources, context.packager);
   const stagedChecker = stageTypeScriptNative({
     resources,
     platform: context.electronPlatformName,
