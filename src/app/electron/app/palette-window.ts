@@ -20,9 +20,9 @@ import * as logger from '../platform/logger';
 import {
   isNvmHeadlessTestMode,
   isNvmTestMode,
-  recordPackagedStartupReady,
   recordTestWindowEvent,
 } from '../platform/test-mode';
+import { recordStartupReady } from './startup-ready';
 import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
@@ -202,7 +202,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         showPalette();
       }
     });
-    win.once('ready-to-show', recordPackagedStartupReady);
+    win.once('ready-to-show', recordStartupReady);
 
     if (options.isDev && options.rendererUrl) win.loadURL(options.rendererUrl);
     else win.loadFile(options.rendererIndexPath);

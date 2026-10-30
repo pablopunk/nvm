@@ -5,8 +5,22 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 
+// electron-builder writes no update metadata for its portable target, so
+// releases generate it here in the shape electron-updater parses.
+
 function fail(message) {
   throw new Error(`Windows updater metadata validation failed: ${message}`);
+}
+
+function portableArtifactName(version, arch) {
+  return `Nevermind-${version}-win-${arch}-portable.exe`;
+}
+
+function sha512Base64(filePath) {
+  return crypto
+    .createHash('sha512')
+    .update(fs.readFileSync(filePath))
+    .digest('base64');
 }
 
 function unquote(value) {
@@ -25,36 +39,53 @@ function parseMetadata(source) {
     const match = lines.find((line) => new RegExp(`^${key}:\\s*`).test(line));
     return match ? unquote(match.replace(new RegExp(`^${key}:\\s*`), '')) : '';
   };
+  const files = [];
+  let current = null;
   const filesStart = lines.findIndex((line) => /^files:\s*$/.test(line));
-  const fileLines = filesStart >= 0 ? lines.slice(filesStart + 1) : [];
-  const fileUrl = fileLines.find((line) => /^\s*-\s*url:\s*/.test(line));
-  const fileHash = fileLines.find((line) => /^\s+sha512:\s*/.test(line));
-  const fileSize = fileLines.find((line) => /^\s+size:\s*/.test(line));
-  const extraFileUrls = fileLines.filter((line) =>
-    /^\s*-\s*url:\s*/.test(line),
-  );
+  for (const line of filesStart >= 0 ? lines.slice(filesStart + 1) : []) {
+    if (/^\S/.test(line)) break;
+    const entry = /^\s*-\s*url:\s*(.+)$/.exec(line);
+    if (entry) {
+      current = { url: unquote(entry[1]), sha512: '', size: Number.NaN };
+      files.push(current);
+      continue;
+    }
+    const field = /^\s+(sha512|size):\s*(.+)$/.exec(line);
+    if (field && current)
+      current[field[1]] =
+        field[1] === 'size' ? Number(unquote(field[2])) : unquote(field[2]);
+  }
   return {
     version: scalar('version'),
     path: scalar('path'),
     sha512: scalar('sha512'),
-    files: fileUrl
-      ? [
-          {
-            url: unquote(fileUrl.replace(/^\s*-\s*url:\s*/, '')),
-            sha512: unquote((fileHash || '').replace(/^\s+sha512:\s*/, '')),
-            size: Number((fileSize || '').replace(/^\s+size:\s*/, '')),
-          },
-        ]
-      : [],
-    fileEntryCount: extraFileUrls.length,
+    files,
   };
 }
 
-function sha512Base64(filePath) {
-  return crypto
-    .createHash('sha512')
-    .update(fs.readFileSync(filePath))
-    .digest('base64');
+function writeWindowsPortableUpdaterMetadata(
+  portablePath,
+  metadataPath,
+  version,
+  releaseDate = new Date().toISOString(),
+) {
+  const name = path.basename(portablePath);
+  const sha512 = sha512Base64(portablePath);
+  const size = fs.statSync(portablePath).size;
+  fs.writeFileSync(
+    metadataPath,
+    [
+      `version: ${version}`,
+      'files:',
+      `  - url: ${name}`,
+      `    sha512: ${sha512}`,
+      `    size: ${size}`,
+      `path: ${name}`,
+      `sha512: ${sha512}`,
+      `releaseDate: '${releaseDate}'`,
+      '',
+    ].join('\n'),
+  );
 }
 
 function validateWindowsUpdaterMetadata(
@@ -63,59 +94,62 @@ function validateWindowsUpdaterMetadata(
   expectedVersion,
   expectedArch,
 ) {
-  const source = fs.readFileSync(metadataPath, 'utf8');
-  const metadata = parseMetadata(source);
+  const metadata = parseMetadata(fs.readFileSync(metadataPath, 'utf8'));
   if (metadata.version !== expectedVersion)
     fail(
       `expected version ${expectedVersion}, received ${metadata.version || '<missing>'}`,
     );
-  if (metadata.fileEntryCount !== 1 || metadata.files.length !== 1)
-    fail('metadata must contain exactly one NSIS file entry');
-  const expectedSetupName = `Nevermind-${expectedVersion}-win-${expectedArch}-setup.exe`;
-  const fileEntry = metadata.files[0];
-  if (
-    metadata.path !== expectedSetupName ||
-    fileEntry.url !== expectedSetupName
-  )
-    fail(`path and files[0].url must both name ${expectedSetupName}`);
-  if (!metadata.path.includes(`-${expectedArch}-`))
-    fail('artifact architecture is missing');
-  if (/portable/i.test(source))
-    fail('portable artifacts are not updater targets');
-
-  const setupPath = path.join(artifactDirectory, expectedSetupName);
-  const blockmapPath = `${setupPath}.blockmap`;
-  if (!(fs.existsSync(setupPath) && fs.statSync(setupPath).size > 0))
-    fail(`missing non-empty ${expectedSetupName}`);
-  if (!(fs.existsSync(blockmapPath) && fs.statSync(blockmapPath).size > 0))
-    fail(`missing non-empty ${path.basename(blockmapPath)}`);
-  const expectedHash = sha512Base64(setupPath);
+  if (metadata.files.length !== 1)
+    fail('metadata must contain exactly one portable file entry');
+  const expectedName = portableArtifactName(expectedVersion, expectedArch);
+  const [fileEntry] = metadata.files;
+  if (metadata.path !== expectedName || fileEntry.url !== expectedName)
+    fail(`path and files[0].url must both name ${expectedName}`);
+  const portablePath = path.join(artifactDirectory, expectedName);
+  if (!(fs.existsSync(portablePath) && fs.statSync(portablePath).size > 0))
+    fail(`missing non-empty ${expectedName}`);
+  const expectedHash = sha512Base64(portablePath);
   if (metadata.sha512 !== expectedHash || fileEntry.sha512 !== expectedHash)
-    fail('top-level and file-entry SHA-512 must match the setup executable');
-  if (fileEntry.size !== fs.statSync(setupPath).size)
-    fail('file-entry size must match the setup executable');
-  return { setupPath, blockmapPath, sha512: expectedHash };
+    fail('top-level and file-entry SHA-512 must match the portable executable');
+  if (fileEntry.size !== fs.statSync(portablePath).size)
+    fail('file-entry size must match the portable executable');
+  return { portablePath, sha512: expectedHash };
 }
 
 if (require.main === module) {
   try {
-    const [metadataPath, artifactDirectory, expectedVersion, expectedArch] =
-      process.argv.slice(2);
-    if (!(metadataPath && artifactDirectory && expectedVersion && expectedArch))
-      fail(
-        'usage: validate-windows-updater-metadata.cjs <latest.yml> <artifact-dir> <version> <arch>',
+    const [command, ...args] = process.argv.slice(2);
+    if (command === 'write' && args.length === 3) {
+      const [portablePath, metadataPath, version] = args;
+      writeWindowsPortableUpdaterMetadata(
+        path.resolve(portablePath),
+        path.resolve(metadataPath),
+        version,
       );
-    validateWindowsUpdaterMetadata(
-      path.resolve(metadataPath),
-      path.resolve(artifactDirectory),
-      expectedVersion,
-      expectedArch,
-    );
-    console.log('Windows updater metadata checks passed');
+      console.log(`Wrote ${metadataPath}`);
+    } else if (command === 'validate' && args.length === 4) {
+      const [metadataPath, artifactDirectory, version, arch] = args;
+      validateWindowsUpdaterMetadata(
+        path.resolve(metadataPath),
+        path.resolve(artifactDirectory),
+        version,
+        arch,
+      );
+      console.log('Windows updater metadata checks passed');
+    } else {
+      fail(
+        'usage: validate-windows-updater-metadata.cjs write <portable.exe> <metadata.yml> <version> | validate <metadata.yml> <artifact-dir> <version> <arch>',
+      );
+    }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
     process.exitCode = 1;
   }
 }
 
-module.exports = { parseMetadata, validateWindowsUpdaterMetadata };
+module.exports = {
+  parseMetadata,
+  portableArtifactName,
+  validateWindowsUpdaterMetadata,
+  writeWindowsPortableUpdaterMetadata,
+};

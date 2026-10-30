@@ -442,7 +442,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 75
 
     steps:
       - name: Checkout
@@ -492,11 +492,18 @@ jobs:
           & $env:PNPM_STANDALONE_PATH exec playwright test tests/electron/palette.smoke.spec.ts --grep 'shared state has one live app writer'
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build unsigned Windows x64 NSIS and portable packages
+      - name: Build unsigned Windows x64 portable package
         shell: pwsh
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: '& $env:PNPM_STANDALONE_PATH run dist:win:x64'
+
+      - name: Write portable updater metadata
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          node scripts/validate-windows-updater-metadata.cjs write "release/Nevermind-$version-win-x64-portable.exe" release/latest.yml $version
+          if ($LASTEXITCODE -ne 0) { throw 'Portable updater metadata generation failed.' }
 
       - name: Reject a package missing its ASAR, then verify the untouched build
         shell: pwsh
@@ -512,7 +519,7 @@ jobs:
             '-ExpectedVersion', $version,
             '-ExpectedArch', 'x64',
             '-AsarExecutable', $asar,
-            '-UpdaterMetadataPolicy', 'Nsis'
+            '-UpdaterMetadataPolicy', 'Portable'
           )
           if ($negative.ExitCode -eq 0) { throw 'Verifier accepted a package missing app.asar.' }
           Remove-Item -LiteralPath $negativeRoot -Recurse -Force
@@ -521,7 +528,7 @@ jobs:
             -ExpectedVersion $version `
             -ExpectedArch x64 `
             -AsarExecutable $asar `
-            -UpdaterMetadataPolicy Nsis
+            -UpdaterMetadataPolicy Portable
 
       - name: Verify inherited Windows ACL privacy for representative secrets
         shell: pwsh
@@ -540,8 +547,6 @@ jobs:
           $version = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Path windows-artifacts/startup-evidence -Force | Out-Null
           New-Item -ItemType File -Path windows-artifacts/startup-evidence/harness.log -Force | Out-Null
-          Copy-Item "release/Nevermind-$version-win-x64-setup.exe" windows-artifacts/
-          Copy-Item "release/Nevermind-$version-win-x64-setup.exe.blockmap" windows-artifacts/
           Copy-Item "release/Nevermind-$version-win-x64-portable.exe" windows-artifacts/
           Copy-Item release/latest.yml windows-artifacts/
           Copy-Item release/windows-smoke-manifest.json windows-artifacts/
@@ -555,6 +560,26 @@ jobs:
             windows-artifacts/windows-smoke-manifest.json `
             windows-artifacts 2>&1 | Tee-Object windows-artifacts/startup-evidence/harness.log
           if ($LASTEXITCODE -ne 0) { throw 'Packaged portable startup failed.' }
+
+      - name: Build the next portable version for the update smoke
+        shell: pwsh
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          $version = node -p "require('./package.json').version"
+          & $env:PNPM_STANDALONE_PATH exec electron-builder --config electron-builder.yml --win portable --x64 --publish never "-c.extraMetadata.version=$version-update-smoke" '-c.directories.output=release-next'
+          if ($LASTEXITCODE -ne 0) { throw 'Next portable build failed.' }
+
+      - name: Prove the packaged portable updater replaces, relaunches, and rolls back
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          $next = "$version-update-smoke"
+          node scripts/windows-portable-update-smoke.cjs `
+            "windows-artifacts/Nevermind-$version-win-x64-portable.exe" $version `
+            "release-next/Nevermind-$next-win-x64-portable.exe" $next `
+            windows-artifacts/update-evidence 2>&1 | Tee-Object windows-artifacts/update-evidence-harness.log
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged portable update smoke failed.' }
 
       - name: Upload deterministic Windows smoke artifacts and evidence
         if: always() && hashFiles('windows-artifacts/**') != ''
@@ -632,10 +657,17 @@ jobs:
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
-      - name: Build unsigned Windows x64 NSIS and portable packages
+      - name: Build unsigned Windows x64 portable package
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: mise exec -- pnpm run dist:win:x64
+
+      - name: Write portable updater metadata
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          mise exec -- node scripts/validate-windows-updater-metadata.cjs write "release/Nevermind-$version-win-x64-portable.exe" release/latest.yml $version
+          if ($LASTEXITCODE -ne 0) { throw 'Portable updater metadata generation failed.' }
 
       - name: Verify unsigned Windows release packages
         shell: pwsh
@@ -647,7 +679,7 @@ jobs:
             -ExpectedVersion $version `
             -ExpectedArch x64 `
             -AsarExecutable $asar `
-            -UpdaterMetadataPolicy Nsis
+            -UpdaterMetadataPolicy Portable
 
       - name: Collect Windows release artifacts
         shell: pwsh
@@ -655,8 +687,6 @@ jobs:
           $version = node -p "require('./package.json').version"
           New-Item -ItemType Directory -Path windows-release-artifacts -Force | Out-Null
           $artifacts = @(
-            "release/Nevermind-$version-win-x64-setup.exe",
-            "release/Nevermind-$version-win-x64-setup.exe.blockmap",
             "release/Nevermind-$version-win-x64-portable.exe",
             'release/latest.yml'
           )
