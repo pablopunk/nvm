@@ -273,8 +273,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       { options: showOptions },
       () => {
         if (!win) return;
-        const wasVisible = win.isVisible();
-        if (!wasVisible) {
+        const wasFocused = win.isVisible() && win.isFocused();
+        if (!wasFocused) {
           restoredFocusReturnTarget = null;
           focusReturnTarget = showOptions.focusReturnTarget ?? null;
           options.onOpen?.();
@@ -381,7 +381,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   async function togglePalette() {
-    if (win?.isVisible()) {
+    if (win?.isVisible() && win.isFocused()) {
       await hidePalette();
       return;
     }
