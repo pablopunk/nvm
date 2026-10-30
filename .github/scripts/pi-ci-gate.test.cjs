@@ -46,7 +46,6 @@ test('unrelated changes may omit Pi jobs only after successful false classificat
       successfulInput({
         relevant: 'false',
         'pi-integration-tests': 'skipped',
-        'electron-smoke': 'skipped',
         'packaged-dependency-contracts': 'skipped',
         'packaged-diagnostics': 'skipped',
         'pi-packaged-macos': 'skipped',

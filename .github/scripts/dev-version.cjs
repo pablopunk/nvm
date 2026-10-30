@@ -53,20 +53,21 @@ if (require.main === module) {
     const repository = process.env.GITHUB_REPOSITORY;
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository ?? ''))
       throw new Error('Invalid GitHub repository');
-    const pages = JSON.parse(
-      execFileSync(
-        'gh',
-        [
-          'api',
-          '--paginate',
-          '--slurp',
-          '--jq',
-          'map(.[] | {tag_name, draft, prerelease})',
-          `repos/${repository}/releases?per_page=100`,
-        ],
-        { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
-      ),
-    );
+    const pages = execFileSync(
+      'gh',
+      [
+        'api',
+        '--paginate',
+        '--jq',
+        '[.[] | {tag_name, draft, prerelease}]',
+        `repos/${repository}/releases?per_page=100`,
+      ],
+      { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+    )
+      .trim()
+      .split('\n')
+      .filter(Boolean)
+      .flatMap((page) => JSON.parse(page));
     const tags = execFileSync('git', ['tag', '--list'], { encoding: 'utf8' })
       .trim()
       .split('\n')

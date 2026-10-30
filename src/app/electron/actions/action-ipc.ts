@@ -3,11 +3,13 @@ import {
   performanceTraces,
   summarizeDebugValue,
 } from '../diagnostics/debug-performance';
+import { actionFeatureLabel } from '../diagnostics/feature-usage';
 import {
   operationLabel,
   operationStage,
   recordOperationFailure,
 } from '../diagnostics/observability';
+import { isInternalExtension } from '../extension-host/internal-extension';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import type { ViewRefreshRecord } from './action-execution-records';
@@ -83,13 +85,12 @@ export function createActionIpc(deps: ActionIpcDeps) {
             try {
               trustedAction = resolveRootActionForIpc(action);
               operationLabel(
-                [
-                  trustedAction?.kind,
-                  trustedAction?.extensionId,
-                  trustedAction?.commandId,
-                ]
-                  .filter(Boolean)
-                  .join(':'),
+                actionFeatureLabel(
+                  trustedAction,
+                  isInternalExtension(
+                    extensionEntryForAction(trustedAction)?.extension,
+                  ),
+                ),
               );
               operationStage('invoke');
               const result = presentActionResultFeedback(

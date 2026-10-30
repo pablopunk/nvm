@@ -6,10 +6,16 @@ import os from 'node:os';
 import path from 'node:path';
 import { app } from 'electron';
 import { PostHog } from 'posthog-node';
+import {
+  joinPublicApiUrl,
+  PRODUCTION_API_ORIGIN,
+} from '../../shared/public-origin';
 import { isNvmDiagnosticTestMode } from '../platform/test-mode-flags';
+import { buildChannel, hashOwnerId } from './feature-usage';
 
 const INSTALL_ID_FILE = 'analytics-id';
-const TEST_PROJECT_KEY = 'phc_diagnostic_test';
+// posthog-node requires a key; the ingest route replaces it with the real one.
+const INGEST_PLACEHOLDER_KEY = 'nevermind-desktop';
 const WITHDRAWN_RESPONSE = {
   status: 200,
   text: () => Promise.resolve('{}'),
@@ -17,15 +23,26 @@ const WITHDRAWN_RESPONSE = {
 };
 let client: PostHog | null | undefined;
 let currentUserId: () => string | undefined = () => undefined;
+const reportedOwners = new Set<string>();
 // Provisional until the persisted identifier loads; both are random UUIDs.
 let installId: string = randomUUID();
 let consentGranted = false;
+let installIdReady: Promise<void> = Promise.resolve();
+let installIdLoaded = false;
 
 export function configurePosthogIdentity(provider: () => string | undefined) {
   currentUserId = provider;
-  loadInstallId();
+  installIdReady = loadInstallId().finally(function markInstallIdLoaded() {
+    installIdLoaded = true;
+  });
 }
 
+export function whenInstallIdReady() {
+  return installIdReady;
+}
+
+// The project key lives on the server. The app only knows the first-party
+// route, which filters, rate-limits and forwards events to PostHog.
 function posthogConfig() {
   if (!(app.isPackaged || isNvmDiagnosticTestMode)) {
     return null;
@@ -33,11 +50,8 @@ function posthogConfig() {
   const host = isNvmDiagnosticTestMode
     ? // biome-ignore lint/style/noProcessEnv: The loopback collector is only configurable at runtime in diagnostic test mode.
       process.env.POSTHOG_HOST_DESKTOP
-    : import.meta.env.VITE_POSTHOG_HOST;
-  const key = isNvmDiagnosticTestMode
-    ? TEST_PROJECT_KEY
-    : import.meta.env.VITE_POSTHOG_KEY;
-  return key && host ? { key, host } : null;
+    : joinPublicApiUrl(PRODUCTION_API_ORIGIN, '/api/ingest');
+  return host ? { key: INGEST_PLACEHOLDER_KEY, host } : null;
 }
 
 // Mirrors the "Send Technical Diagnostics" setting for every capture path.
@@ -46,7 +60,9 @@ export function setPosthogConsent(granted: boolean) {
 }
 
 export function posthogClient() {
-  return consentGranted ? configuredClient() : null;
+  // Nothing is sent until the persisted install id is known, so one install
+  // never reports under two ids.
+  return consentGranted && installIdLoaded ? configuredClient() : null;
 }
 
 export async function flushPosthog() {
@@ -63,6 +79,12 @@ function configuredClient() {
         host: config.host,
         flushAt: 10,
         flushInterval: 10_000,
+        // Bounded memory and bounded waiting: an unreachable endpoint must never
+        // pile events up or hold the quit flush.
+        maxQueueSize: 1_000,
+        requestTimeout: 10_000,
+        fetchRetryCount: 2,
+        fetchRetryDelay: 3_000,
         // Queued batches must not outlive the user's decision to stop sending.
         fetch: (url, options) =>
           consentGranted
@@ -91,36 +113,58 @@ async function loadInstallId() {
   }
 }
 
-// Signed-in users share one identity with the renderer's `posthog.identify`;
-// everyone else is an anonymous install that never builds a person profile.
-export function posthogActor() {
-  const userId = currentUserId();
-  return userId
-    ? { distinctId: userId, personless: false }
-    : { distinctId: installId, personless: true };
+// One stable identifier per install, whether or not anyone is signed in, so a
+// device's history never splits at sign-in. No event ever builds a person profile.
+export function posthogDistinctId() {
+  return installId;
 }
 
 export function commonEventProperties() {
   return {
+    $process_person_profile: false,
     app_version: app.getVersion(),
     os_type: os.type(),
     os_release: os.release(),
     arch: process.arch,
+    channel: buildChannel(app.getVersion()),
   };
+}
+
+// Who an install belongs to is its own fact, sent once per owner per run as a
+// hashed account id, so analytics rules about owners can change after the fact.
+function observeInstallOwner(client: PostHog) {
+  const userId = currentUserId();
+  if (!userId) {
+    return;
+  }
+  const ownerId = hashOwnerId(userId);
+  if (reportedOwners.has(ownerId)) {
+    return;
+  }
+  reportedOwners.add(ownerId);
+  client.capture({
+    distinctId: installId,
+    event: 'install.owner_observed',
+    properties: {
+      ...commonEventProperties(),
+      owner_source: 'account',
+      owner_id: ownerId,
+    },
+  });
 }
 
 export function captureDesktopEvent(
   event: string,
   properties: Record<string, unknown> = {},
 ) {
-  const { distinctId, personless } = posthogActor();
-  posthogClient()?.capture({
-    distinctId,
+  const client = posthogClient();
+  if (!client) {
+    return;
+  }
+  observeInstallOwner(client);
+  client.capture({
+    distinctId: installId,
     event,
-    properties: {
-      ...(personless ? { $process_person_profile: false } : {}),
-      ...commonEventProperties(),
-      ...properties,
-    },
+    properties: { ...commonEventProperties(), ...properties },
   });
 }

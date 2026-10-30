@@ -33,7 +33,6 @@ test('Pi classifier includes SDK, policies, integration, backend, and packaging 
     '.github/scripts/verify-pi-integration-evidence.cjs',
     '.github/scripts/verify-packaged-pi-electron-evidence.cjs',
     '.github/scripts/electron-smoke-paths.cjs',
-    '.github/scripts/windows-package-paths.cjs',
     'scripts/check-packaged-resources.cjs',
     'scripts/packaged-diagnostics-smoke.cjs',
     'scripts/file-size-baseline.json',
