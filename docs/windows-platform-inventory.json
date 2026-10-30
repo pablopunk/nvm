@@ -403,20 +403,20 @@
       "surface": "app-discovery-launch-quit"
     },
     {
-      "key": "os-injected-platform-6939b1aa90de",
+      "key": "os-injected-platform-directory-tree-watch",
       "file": "src/app/electron/os/os.ts",
       "category": "injected-platform",
-      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.left.left",
+      "selector": "function:createOsAdapter/variable:watchDirectoryTree::injected-platform::const watchDirectoryTree = createDirectoryTreeWatch( processPlatform, dependencies.watch, );::declarationList.declarations[0].initializer.arguments[0]",
       "disposition": "capability-layer",
       "surface": "app-discovery-launch-quit"
     },
     {
-      "key": "os-injected-platform-d6559a2d8829",
-      "file": "src/app/electron/os/os.ts",
-      "category": "injected-platform",
-      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.right.left",
+      "key": "directory-tree-watch-direct-platform",
+      "file": "src/app/electron/os/directory-tree-watch.ts",
+      "category": "direct-platform",
+      "selector": "variable:watchDirectoryTree::direct-platform::export const watchDirectoryTree = createDirectoryTreeWatch(process.platform);::declarationList.declarations[0].initializer.arguments[0]",
       "disposition": "capability-layer",
-      "surface": "app-discovery-launch-quit"
+      "surface": "files-search-open"
     },
     {
       "key": "os-injected-platform-dff9487b3879",

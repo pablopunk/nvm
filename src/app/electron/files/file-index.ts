@@ -6,9 +6,18 @@ import {
   measureDebugPerformance,
   measureDebugPerformanceSync,
 } from '../diagnostics/debug-performance';
+import { watchDirectoryTree } from '../os/directory-tree-watch';
+import type { JobRegistry } from '../platform/jobs';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { thumbnailUrlForPreviewablePath } from './extension-file';
+import { pathIsInsideRoot } from './file-index-commit';
+import {
+  createFileIndexRefresher,
+  type FileIndexRefresherDeps,
+  type FileIndexScan,
+} from './file-index-refresher';
 import { sortFoundFiles } from './file-index-sorting';
+import { FILE_INDEX_CHANGED_EVENT } from './file-index-watcher';
 import {
   displayUserPath,
   expandUserPath,
@@ -42,7 +51,7 @@ function normalizedIndexRoots(options: any = {}) {
     .filter((root) => root && path.isAbsolute(root));
 }
 
-export async function scanFiles(options: any = {}) {
+export async function scanFileIndex(options: any = {}): Promise<FileIndexScan> {
   return measureDebugPerformance(
     'files.scan',
     {
@@ -65,6 +74,7 @@ export async function scanFiles(options: any = {}) {
       );
       const extensions = extensionsForFindOptions(options);
       const found = [];
+      const unreadableRoots: string[] = [];
 
       async function walk(dir, depth) {
         if (found.length >= limit) return;
@@ -72,6 +82,7 @@ export async function scanFiles(options: any = {}) {
         try {
           entries = await fs.readdir(dir, { withFileTypes: true });
         } catch {
+          if (depth === maxDepth) unreadableRoots.push(dir);
           return;
         }
 
@@ -108,8 +119,10 @@ export async function scanFiles(options: any = {}) {
       markDebugPerformance('files.scan.result', {
         foundCount: sorted.length,
         limit,
+        missingRootCount: missing.length,
+        unreadableRootCount: unreadableRoots.length,
       });
-      return sorted.slice(0, limit).map((file) => ({
+      const files = sorted.slice(0, limit).map((file) => ({
         ...file,
         url:
           thumbnailUrlForPreviewablePath(file.path, file.stat) ||
@@ -118,24 +131,48 @@ export async function scanFiles(options: any = {}) {
         videoUrl: isVideoPath(file.path) ? fileUrlForPath(file.path) : null,
         thumbnailUrl: thumbnailUrlForPreviewablePath(file.path, file.stat),
       }));
+      return {
+        files,
+        existingRoots: existing.filter(
+          (root) => !unreadableRoots.includes(root),
+        ),
+        missingRoots: missing,
+        unreadableRoots,
+      };
     },
   );
 }
 
 export interface FileIndexServiceDeps {
   notifyRootItemsChanged: () => void;
+  jobEvents: Pick<JobRegistry, 'emit'>;
+  watchDirectoryTree?: FileIndexRefresherDeps['watchDirectoryTree'];
+}
+
+function unreadableRootsError(unreadableRoots: string[]) {
+  return new Error(
+    `File index kept cached entries for unreadable roots: ${unreadableRoots
+      .map(displayUserPath)
+      .join(', ')}`,
+  );
 }
 
 export function createFileIndexService(deps: FileIndexServiceDeps) {
-  const { notifyRootItemsChanged } = deps;
-  let fileIndex: any[] = [];
+  let fileIndexOptions: any = {};
+  const refresher = createFileIndexRefresher({
+    scan: scanFileIndex,
+    notifyChanged: deps.notifyRootItemsChanged,
+    watchDirectoryTree: deps.watchDirectoryTree || watchDirectoryTree,
+    onRelevantChange: () => deps.jobEvents.emit(FILE_INDEX_CHANGED_EVENT),
+    mark: markDebugPerformance,
+  });
 
   function fileIndexSnapshot(options: any = {}) {
     return measureDebugPerformanceSync(
       'files.index-snapshot',
       {
         queryLength: String(options.query || '').length,
-        indexedCount: fileIndex.length,
+        indexedCount: refresher.current().length,
         limit: options.limit,
       },
       () => {
@@ -145,14 +182,10 @@ export function createFileIndexService(deps: FileIndexServiceDeps) {
           .filter(Boolean);
         const extensions = extensionsForFindOptions(options);
         const ignored = normalizedIgnorePatterns(options.ignore);
-        let entries = fileIndex;
+        let entries = refresher.current();
         if (roots.length)
           entries = entries.filter((entry) =>
-            roots.some(
-              (root) =>
-                entry.path === root ||
-                entry.path.startsWith(`${root}${path.sep}`),
-            ),
+            roots.some((root) => pathIsInsideRoot(entry.path, root)),
           );
         if (extensions)
           entries = entries.filter((entry) =>
@@ -206,39 +239,41 @@ export function createFileIndexService(deps: FileIndexServiceDeps) {
         alwaysLog: true,
       },
       async () => {
-        fileIndex = await scanFiles(options);
-        notifyRootItemsChanged();
+        fileIndexOptions = options;
+        await refresher.refresh(options);
         return {
-          count: fileIndex.length,
+          count: refresher.current().length,
           roots: normalizedIndexRoots(options).map(displayUserPath),
         };
       },
     );
   }
 
-  async function indexFiles() {
+  async function indexFiles(context: { reason?: string } = {}) {
     await measureDebugPerformance(
       'files.index',
-      { alwaysLog: true },
+      { reason: context.reason, alwaysLog: true },
       async () => {
         try {
-          fileIndex = await scanFiles();
-          markDebugPerformance('files.index.result', {
-            indexedCount: fileIndex.length,
-          });
+          const { scan } = await refresher.refresh(fileIndexOptions);
+          if (scan.unreadableRoots.length)
+            throw unreadableRootsError(scan.unreadableRoots);
         } catch (error) {
           logError('files.index.failed', error, {
             source: 'host',
             scope: 'files',
           });
+          throw error;
         }
       },
     );
   }
 
-  function currentFileIndex() {
-    return fileIndex;
-  }
-
-  return { fileIndexSnapshot, reindexFiles, indexFiles, currentFileIndex };
+  return {
+    fileIndexSnapshot,
+    reindexFiles,
+    indexFiles,
+    currentFileIndex: refresher.current,
+    stopWatchingFileIndexRoots: refresher.close,
+  };
 }

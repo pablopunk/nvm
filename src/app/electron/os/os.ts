@@ -1,7 +1,7 @@
 // biome-ignore-all lint: This platform adapter retains established cross-OS imperative conventions.
 import { execFile, spawn } from 'node:child_process';
 import crypto from 'node:crypto';
-import { type Dirent, watch } from 'node:fs';
+import type { Dirent } from 'node:fs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,6 +22,11 @@ import {
   parseLsappinfoTarget,
 } from './macos-app-focus';
 import { macosSelectionAccess } from './macos-selected-text';
+import {
+  createDirectoryTreeWatch,
+  type DirectoryTreeWatchDependency,
+  type DirectoryTreeWatcher,
+} from './directory-tree-watch';
 import { createLinuxDesktopText } from './linux-desktop-text';
 import { createWindowsDesktopText } from './windows-desktop-text';
 import type {
@@ -39,10 +44,6 @@ type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
 
 type OsPathFacade = Pick<typeof path.win32, 'basename' | 'join' | 'resolve'>;
 type OsFileSystem = Pick<typeof fs, 'readdir'>;
-type OsWatcher = {
-  close: () => unknown;
-  on: (event: string, listener: () => void) => unknown;
-};
 type OsExecFile = typeof execFile;
 
 function isMissingPathError(error: unknown) {
@@ -59,11 +60,7 @@ export type OsAdapterDependencies = {
   processPlatform?: NodeJS.Platform;
   sessionType?: ExtensionWindowSession;
   shell?: typeof shell;
-  watch?: (
-    filename: string,
-    options: { recursive: boolean },
-    listener: () => void,
-  ) => OsWatcher;
+  watch?: DirectoryTreeWatchDependency;
 };
 
 const macOnlyCapabilities = new Set([
@@ -106,7 +103,10 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   const execFileDependency = dependencies.execFile || execFile;
   const shellDependency = dependencies.shell || shell;
   const appDependency = dependencies.app || app;
-  const watchDependency = dependencies.watch || (watch as never);
+  const watchDirectoryTree = createDirectoryTreeWatch(
+    processPlatform,
+    dependencies.watch,
+  );
 
   function dependent<T>(handlers: OsDependent<T>, fallback: T): T {
     return (
@@ -221,17 +221,10 @@ export function createOsAdapter(dependencies: OsAdapterDependencies = {}) {
   }
 
   function watchAppsForPlatform(onChange: () => void) {
-    const watchers: OsWatcher[] = [];
+    const watchers: DirectoryTreeWatcher[] = [];
     for (const root of appScanRootsForPlatform()) {
       try {
-        const watcher = watchDependency(
-          root,
-          {
-            recursive:
-              processPlatform === 'darwin' || processPlatform === 'win32',
-          },
-          onChange,
-        );
+        const watcher = watchDirectoryTree(root, onChange);
         watcher.on('error', () => {});
         watchers.push(watcher);
       } catch {
