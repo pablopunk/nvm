@@ -4,7 +4,10 @@ const path = require('node:path');
 
 const configPath = path.join(process.cwd(), 'electron-builder.yml');
 const config = fs.readFileSync(configPath, 'utf8');
-const packageRoot = path.resolve(process.argv[2] || process.cwd());
+// The packaged ASAR is `packageRoot`; build tooling and installed checker
+// packages are only present in the repository checkout.
+const repoRoot = process.cwd();
+const packageRoot = path.resolve(process.argv[2] || repoRoot);
 const packageJson = JSON.parse(
   fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf8'),
 );
@@ -29,16 +32,14 @@ if (
 }
 
 if (
-  !fs.existsSync(
-    path.join(packageRoot, 'scripts', 'stage-typescript-native.cjs'),
-  )
+  !fs.existsSync(path.join(repoRoot, 'scripts', 'stage-typescript-native.cjs'))
 ) {
   fail('missing scripts/stage-typescript-native.cjs');
 }
 
 const { createRequire } = require('node:module');
 const typescriptRoot = path.dirname(
-  require.resolve('typescript/package.json', { paths: [packageRoot] }),
+  require.resolve('typescript/package.json', { paths: [repoRoot] }),
 );
 const checkerPackage = `@typescript/typescript-${process.platform}-${process.arch}`;
 let checkerLib;
@@ -68,12 +69,12 @@ for (const checkerFile of [
 }
 
 const stagingScript = fs.readFileSync(
-  path.join(packageRoot, 'scripts', 'stage-typescript-native.cjs'),
+  path.join(repoRoot, 'scripts', 'stage-typescript-native.cjs'),
   'utf8',
 );
 const typecheckModule = fs.readFileSync(
   path.join(
-    packageRoot,
+    repoRoot,
     'src',
     'app',
     'electron',
@@ -136,10 +137,7 @@ if (
 if (
   !/afterPack:\s*scripts\/after-pack\.cjs/.test(config) ||
   !/stageTypeScriptNative/.test(
-    fs.readFileSync(
-      path.join(packageRoot, 'scripts', 'after-pack.cjs'),
-      'utf8',
-    ),
+    fs.readFileSync(path.join(repoRoot, 'scripts', 'after-pack.cjs'), 'utf8'),
   )
 ) {
   fail(

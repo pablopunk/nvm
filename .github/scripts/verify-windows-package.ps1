@@ -115,10 +115,13 @@ try {
     'dist/main/main.js',
     'dist/preload/preload.cjs',
     'dist/renderer/index.html',
-    'src/app/resources/nevermind-extension-api.d.ts',
-    'node_modules/typescript/lib/lib.es2022.full.d.ts'
+    'src/app/resources/nevermind-extension-api.d.ts'
   )) {
     Assert-Condition (Test-Path -LiteralPath (Join-Path $ExtractionRoot $requiredPath)) "Packaged ASAR is missing $requiredPath."
+  }
+  foreach ($checkerFile in @('tsc.exe', 'lib.es2022.full.d.ts')) {
+    $stagedChecker = Join-Path $ResolvedPackageRoot "win-unpacked/resources/typescript-native/lib/$checkerFile"
+    Assert-Condition (Test-Path -LiteralPath $stagedChecker) "Packaged resources are missing typescript-native/lib/$checkerFile."
   }
   & node (Join-Path $RepoRoot 'scripts/check-packaged-resources.cjs') $ExtractionRoot
   Assert-Condition ($LASTEXITCODE -eq 0) 'Packaged resource check failed.'

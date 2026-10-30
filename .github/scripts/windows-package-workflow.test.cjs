@@ -80,6 +80,7 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
     'dist/preload/preload.cjs',
     'dist/renderer/index.html',
     'nevermind-extension-api.d.ts',
+    'typescript-native/lib',
     'lib.es2022.full.d.ts',
     'Get-AuthenticodeSignature',
     "'NotSigned'",
