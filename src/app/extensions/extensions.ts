@@ -4,15 +4,20 @@ import {
 } from '../electron/extension-host/extension-capabilities';
 import { inspectExtensionManifest } from '../electron/extension-host/extension-manifest';
 import { extensionContext } from './_context';
+import { accountRootItem } from './account';
+import { extensionsEmptyState } from './extensions-empty-state';
 
 async function extensionsView(ctx) {
   const entries = await extensionContext.extensionManager.list();
+  const emptyState = extensionsEmptyState(accountRootItem());
   return ctx.ui.list({
     id: 'trusted-extensions',
     title: 'Extensions',
     subtitle: EXTENSION_TRUST_DISCLOSURE,
-    emptyView: { title: 'No local extensions found.' },
-    items: entries.map((entry) => extensionItem(ctx, entry)),
+    emptyView: emptyState.emptyView,
+    items: entries.length
+      ? entries.map((entry) => extensionItem(ctx, entry))
+      : emptyState.items,
   });
 }
 

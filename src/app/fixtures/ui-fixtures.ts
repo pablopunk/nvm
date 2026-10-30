@@ -10,6 +10,10 @@ import { chatView } from './ui/chat-fixture.ts';
 import { clipboardView } from './ui/clipboard-fixture.ts';
 import { crudCollectionView } from './ui/crud-collection-fixture.ts';
 import {
+  signedInExtensionsEmptyView,
+  signedOutExtensionsEmptyView,
+} from './ui/extensions-empty-fixtures.ts';
+import {
   floatingWindowToggleAction,
   floatingWindowView,
 } from './ui/floating-window-fixture.ts';
@@ -81,6 +85,18 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Empty List',
       icon: 'list-x',
       run: (ctx) => emptyListView(ctx),
+    },
+    {
+      id: 'extensions-empty-signed-out',
+      title: 'Dev UI: Extensions Empty (Signed Out)',
+      icon: 'person',
+      run: (ctx) => signedOutExtensionsEmptyView(ctx),
+    },
+    {
+      id: 'extensions-empty-signed-in',
+      title: 'Dev UI: Extensions Empty (Signed In)',
+      icon: 'list-x',
+      run: (ctx) => signedInExtensionsEmptyView(ctx),
     },
     {
       id: 'crud-collection',

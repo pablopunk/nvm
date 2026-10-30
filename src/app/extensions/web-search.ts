@@ -34,6 +34,7 @@ export function createWebSearchExtension() {
           id: `web-search:${q}`,
           title: `Search the web for "${q}"`,
           subtitle: 'Search instead',
+          queryFallback: true,
           icon: 'search',
           score:
             10 +

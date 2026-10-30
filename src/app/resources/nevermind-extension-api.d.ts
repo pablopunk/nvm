@@ -691,6 +691,12 @@ export type ExtensionItem = {
   background?: boolean;
   /** Ranking hint. The host caps provider scores and combines them with usage signals. */
   score?: number;
+  /**
+   * `searchItems` only: marks an open-ended action that echoes the typed query, such as `Search the web for "…"`.
+   * The host ignores the echoed title when ranking, keeps the row available for any query, and places it below
+   * word matches from real commands but above loose character-level matches. Aliases and usage still apply.
+   */
+  queryFallback?: boolean;
   /** Milliseconds since epoch. The host treats this as an intrinsic recency signal alongside recorded use. */
   lastUsed?: number;
   dismissAfterRun?: 'auto';

@@ -85,6 +85,7 @@ export function createAiBuilderExtension() {
           title: `Automate "${q}"`,
           subtitle: 'Build a reusable command with AI',
           query: q,
+          queryFallback: true,
           icon: 'bolt',
           score: 40,
           appearance: { foreground: 'yellow', background: 'accent' },
