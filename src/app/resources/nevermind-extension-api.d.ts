@@ -539,7 +539,7 @@ export type ExtensionAction = {
   title?: string;
   icon?: string;
   subtitle?: string;
-  /** Shortcut for this action while its owning item is selected. */
+  /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. */
   shortcut?: string;
   /** @deprecated Global action shortcuts belong on `globalShortcut`. */
   shortcutScope?: ShortcutScope;
