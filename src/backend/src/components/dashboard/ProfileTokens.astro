@@ -1,0 +1,17 @@
+---
+import { ConsoleTokenList } from '../ConsoleTokenList';
+import { getCurrentUser } from '../../lib/admin';
+import { dashboardRead } from '../../lib/dashboard-read';
+import { listApiTokens } from '../../lib/tokens';
+
+let tokens: Awaited<ReturnType<typeof listApiTokens>> | null = null;
+try {
+  const user = await getCurrentUser(Astro.request);
+  if (user) tokens = await dashboardRead(() => listApiTokens(user.id));
+} catch (error) {
+  console.error('Profile tokens unavailable', error);
+}
+---
+<div class="profile-token-list">
+  {tokens ? <ConsoleTokenList client:load tokens={tokens.map((token) => ({ id: token.id, prefix: token.prefix, name: token.name, created: new Date(token.createdAt).toLocaleString(), lastUsed: token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used' }))} /> : <p role="alert">Could not load API tokens. <a href="/profile#tokens-heading">Retry</a></p>}
+</div>

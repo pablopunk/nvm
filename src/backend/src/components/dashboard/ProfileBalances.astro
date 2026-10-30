@@ -1,0 +1,22 @@
+---
+import { ProfileBalanceValues } from './ProfileBalanceValues';
+import { getCurrentUser } from '../../lib/admin';
+import { dashboardRead } from '../../lib/dashboard-read';
+import { ensureMonthlyFreeCredits, getBalances } from '../../lib/users';
+
+let balances: Awaited<ReturnType<typeof getBalances>> | null = null;
+try {
+  const user = await getCurrentUser(Astro.request);
+  if (user) {
+    await ensureMonthlyFreeCredits(user.id);
+    balances = await dashboardRead(() => getBalances(user.id));
+  }
+} catch (error) {
+  console.error('Profile balances unavailable', error);
+}
+---
+<div class="section profile-balance-container">
+  {balances ? (
+    <ProfileBalanceValues client:load initial={balances} />
+  ) : <p role="alert">Could not load credits. <a href="/profile">Retry</a></p>}
+</div>
