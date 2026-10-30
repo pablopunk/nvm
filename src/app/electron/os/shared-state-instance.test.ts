@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,12 +29,21 @@ test('shared identity is used for the singleton and the original profile is rest
     releaseSingleInstanceLock: () => {},
   };
   assert.equal(
-    await acquireSharedStateInstance(app, path.join(directory, 'shared')),
+    await acquireSharedStateInstance(
+      app,
+      path.join(directory, 'shared'),
+      directory,
+    ),
     true,
   );
   assert.equal(
     observed[0]?.userData,
-    path.join(await fs.realpath(directory), '.shared-instance'),
+    path.join(
+      directory,
+      createHash('sha256')
+        .update(path.join(await fs.realpath(directory), 'shared'))
+        .digest('hex'),
+    ),
   );
   assert.equal(observed[0]?.name, 'Nevermind shared state');
   assert.equal(userData, path.join(directory, 'private'));
@@ -65,12 +75,16 @@ test('a refused lock or singleton error leaves the original profile intact', asy
     releaseSingleInstanceLock: () => {},
   };
   assert.equal(
-    await acquireSharedStateInstance(app, path.join(directory, 'shared')),
+    await acquireSharedStateInstance(
+      app,
+      path.join(directory, 'shared'),
+      directory,
+    ),
     false,
   );
   fail = true;
   await assert.rejects(
-    acquireSharedStateInstance(app, path.join(directory, 'shared')),
+    acquireSharedStateInstance(app, path.join(directory, 'shared'), directory),
     /unavailable/,
   );
   assert.equal(userData, 'original');

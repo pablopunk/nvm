@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,14 +52,15 @@ export async function acquireDefaultSharedStateInstance(
 export async function acquireSharedStateInstance(
   app: InstanceApp,
   sharedRoot: string,
+  identityRoot = path.join(os.homedir(), '.config', '.nevermind-instances'),
 ) {
   if (app.hasSingleInstanceLock())
     throw new Error('An instance lock is already held');
   await fs.mkdir(sharedRoot, { recursive: true });
   const canonicalRoot = await fs.realpath(sharedRoot);
   const identity = path.join(
-    path.dirname(canonicalRoot),
-    `.${path.basename(canonicalRoot)}-instance`,
+    identityRoot,
+    createHash('sha256').update(canonicalRoot).digest('hex'),
   );
   await fs.mkdir(identity, { recursive: true, mode: 0o700 });
   const originalPath = app.getPath('userData');
