@@ -7,6 +7,7 @@ import {
   type UpdateDownloadedEvent,
 } from 'electron-updater';
 import type { DownloadUpdateOptions } from 'electron-updater/out/AppUpdater.js';
+import type { ElectronHttpExecutor } from 'electron-updater/out/electronHttpExecutor.js';
 import {
   type PortableExecutable,
   type PortableUpdateHelperPlan,
@@ -71,13 +72,14 @@ export class WindowsPortableUpdater extends BaseUpdater {
   private readonly prepare: typeof preparePortableUpdate;
   private launchHelper: (() => void) | null = null;
   private pendingDownloadedEvent: UpdateDownloadedEvent | null = null;
+  /** AppUpdater creates this at runtime for every updater; its public typings omit the field that the stock updaters download through. */
+  protected declare readonly httpExecutor: ElectronHttpExecutor;
 
   constructor(
     target: PortableExecutable,
     prepare: typeof preparePortableUpdate = preparePortableUpdate,
-    ...updaterArguments: ConstructorParameters<typeof BaseUpdater>
   ) {
-    super(...updaterArguments);
+    super(null);
     this.target = target;
     this.prepare = prepare;
   }
