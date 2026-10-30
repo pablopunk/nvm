@@ -22,7 +22,7 @@ The public pages (`Layout.astro`: landing, pricing, legal) load `posthog-js` thr
 ## Interpreting events
 
 - Count active installs with `feature.used`, never with `operation_completed`: the latter includes extension loads, update polling and other housekeeping.
-- Event counts are not call counts: an operation can emit both `operation_completed` and `feature.used`.
+- Event counts are not call counts: an operation can emit both `operation_completed` and `feature.used`. `feature.used` is emitted once per feature per journey, so a wrapped operation (the sign-in IPC around the sign-in itself) counts once.
 - Compare `channel` before comparing releases; dev and nightly builds are `prerelease` and include the maintainers' own installs.
 - Unknown values stay absent. Do not backfill a missing property from another event.
 - Renderer exceptions carry no install id. Join them to a host `renderer_failure` event on `support_ref`.

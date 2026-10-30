@@ -22,10 +22,18 @@ const reportedOwners = new Set<string>();
 // Provisional until the persisted identifier loads; both are random UUIDs.
 let installId: string = randomUUID();
 let consentGranted = false;
+let installIdReady: Promise<void> = Promise.resolve();
+let installIdLoaded = false;
 
 export function configurePosthogIdentity(provider: () => string | undefined) {
   currentUserId = provider;
-  loadInstallId();
+  installIdReady = loadInstallId().finally(function markInstallIdLoaded() {
+    installIdLoaded = true;
+  });
+}
+
+export function whenInstallIdReady() {
+  return installIdReady;
 }
 
 function posthogConfig() {
@@ -48,7 +56,9 @@ export function setPosthogConsent(granted: boolean) {
 }
 
 export function posthogClient() {
-  return consentGranted ? configuredClient() : null;
+  // Nothing is sent until the persisted install id is known, so one install
+  // never reports under two ids.
+  return consentGranted && installIdLoaded ? configuredClient() : null;
 }
 
 export async function flushPosthog() {

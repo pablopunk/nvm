@@ -9,7 +9,11 @@ import {
   createDiagnosticStore,
   DIAGNOSTIC_FILE_NAME,
 } from './diagnostic-store';
-import { featureUsage, isRoutineBackgroundSuccess } from './feature-usage';
+import {
+  createFeatureUsageDeduper,
+  featureUsage,
+  isRoutineBackgroundSuccess,
+} from './feature-usage';
 import {
   configureObservability,
   failureRecord,
@@ -24,6 +28,7 @@ import {
   posthogClient,
   posthogDistinctId,
   setPosthogConsent,
+  whenInstallIdReady,
 } from './posthog-client';
 
 const REPORTING_CHANGED_CHANNEL = 'diagnostics:reporting-changed';
@@ -36,6 +41,7 @@ let store: ReturnType<typeof createDiagnosticStore> | undefined;
 let updateStore: ReturnType<typeof createDiagnosticStore> | undefined;
 let reportingEnabled = false;
 let launchReported = false;
+const firstUseInJourney = createFeatureUsageDeduper();
 let captureWindowStarted = Date.now();
 let captureWindowCount = 0;
 declare const __NEVERMIND_BUILD__: string;
@@ -51,7 +57,12 @@ export function setDiagnosticReporting(enabled: boolean) {
   setPosthogConsent(enabled);
   if (enabled && !launchReported) {
     launchReported = true;
-    captureDesktopEvent('app.launched', { release: buildIdentity() });
+    // The install id loads asynchronously; a launch must carry the stored one.
+    void whenInstallIdReady().then(function reportLaunch() {
+      if (reportingEnabled) {
+        captureDesktopEvent('app.launched', { release: buildIdentity() });
+      }
+    });
   }
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(REPORTING_CHANGED_CHANNEL, enabled);
@@ -212,7 +223,7 @@ function captureOperation(context: OperationContext, durationMs: number) {
       : { response_status: context.responseStatus }),
   });
   const usage = featureUsage(context);
-  if (usage) {
+  if (usage && firstUseInJourney(context.journeyId, usage.feature)) {
     captureDesktopEvent('feature.used', {
       feature: usage.feature,
       ...(usage.variant ? { variant: usage.variant } : {}),

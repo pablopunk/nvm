@@ -26,6 +26,9 @@ const USER_FEATURES: Partial<Record<DiagnosticOperation, string>> = {
   'update.install': 'update.install',
 };
 
+// Only these action kinds carry a command id declared in source. Root items copy
+// their own id from data (a clipboard entry, an app, a file), so they never do.
+const STATIC_COMMAND_KINDS = new Set(['extension-command', 'extension-action']);
 const SAFE_ID = /^[a-z0-9][a-z0-9._:-]{0,63}$/i;
 const USER_EXTENSION_LABEL = 'user-extension';
 
@@ -57,9 +60,29 @@ export function actionFeatureLabel(
 ) {
   const kind = safeId(action?.kind) ?? 'unknown';
   if (!builtIn) return action?.extensionId ? USER_EXTENSION_LABEL : kind;
-  return [kind, safeId(action?.extensionId), safeId(action?.commandId)]
+  return [
+    kind,
+    safeId(action?.extensionId),
+    STATIC_COMMAND_KINDS.has(kind) ? safeId(action?.commandId) : undefined,
+  ]
     .filter(Boolean)
     .join(':');
+}
+
+/**
+ * One `feature.used` per feature per journey: an operation can wrap another of
+ * the same kind (the sign-in IPC wraps the sign-in itself), and counting both
+ * would double activity.
+ */
+export function createFeatureUsageDeduper(limit = 200) {
+  const seen = new Set<string>();
+  return function firstUseInJourney(journeyId: string, feature: string) {
+    const key = `${journeyId}:${feature}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    if (seen.size > limit) seen.delete(seen.values().next().value as string);
+    return true;
+  };
 }
 
 /** One-way identifier for an account, so analytics can group installs by owner. */

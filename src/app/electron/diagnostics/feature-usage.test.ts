@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   actionFeatureLabel,
   buildChannel,
+  createFeatureUsageDeduper,
   featureUsage,
   hashOwnerId,
   isRoutineBackgroundSuccess,
@@ -80,7 +81,27 @@ test('user extensions collapse to one bucket and never leak their ids or text', 
     ),
     'extension-command',
   );
+  // Root items copy ids from data (clipboard entries, apps, files): never sent.
+  assert.equal(
+    actionFeatureLabel(
+      {
+        kind: 'extension-root-item',
+        extensionId: 'nevermind.clipboard',
+        commandId: 'clipboard-item-3f9a',
+      },
+      true,
+    ),
+    'extension-root-item:nevermind.clipboard',
+  );
   assert.equal(actionFeatureLabel(null, false), 'unknown');
+});
+
+test('a feature counts once per journey but again in another', () => {
+  const firstUse = createFeatureUsageDeduper(2);
+  assert.equal(firstUse('journey-1', 'auth.signin'), true);
+  assert.equal(firstUse('journey-1', 'auth.signin'), false);
+  assert.equal(firstUse('journey-1', 'command.run'), true);
+  assert.equal(firstUse('journey-2', 'auth.signin'), true);
 });
 
 test('owner ids are one-way, stable and fixed width', () => {
