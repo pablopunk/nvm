@@ -15,7 +15,7 @@ const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os', 'os.ts');
  * The doc requires that the main palette window on macOS combines:
  *   1. type: 'panel'         (paletteBrowserWindowOptions)
  *   2. activationPolicy       (prepareAppWindowPolicy)
- *   3. visibleOnAllWorkspaces (applyPaletteWindowPolicy)
+ *   3. visibleOnAllWorkspaces (setPaletteVisibleOnAllWorkspaces)
  *   4. non-normal always-on-top (applyPaletteWindowPolicy)
  */
 const CONTRACTS = [
@@ -27,15 +27,19 @@ const CONTRACTS = [
   },
   {
     name: 'applyPaletteWindowPolicy',
+    required: ['setAlwaysOnTop(true', 'screen-saver', 'darwin'],
+    message: 'must set always-on-top (screen-saver) on macOS',
+    docRef: 'docs/window-management.md:7-10',
+  },
+  {
+    name: 'setPaletteVisibleOnAllWorkspaces',
     required: [
-      'setAlwaysOnTop(true',
-      'screen-saver',
-      'setVisibleOnAllWorkspaces(true',
+      'setVisibleOnAllWorkspaces(enabled',
       'visibleOnFullScreen: true',
+      'skipTransformProcessType: true',
       'darwin',
     ],
-    message:
-      'must set always-on-top (screen-saver) and visible-on-all-workspaces on macOS',
+    message: 'must support showing the palette on all macOS Spaces',
     docRef: 'docs/window-management.md:7-10',
   },
   {
