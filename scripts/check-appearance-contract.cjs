@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
+const ts = require('./lib/parse-typescript.cjs');
 const { readElectronSources } = require('./lib/read-electron-sources.cjs');
 
 // ── config ──────────────────────────────────────────────────────────────────
@@ -50,7 +50,7 @@ function findTypeAlias(sf, name) {
       result = node;
       return;
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
   visit(sf);
   return result;
@@ -74,12 +74,7 @@ function typeLiteralHasMember(typeLiteral, memberName) {
 
 function main() {
   const dtsSource = fs.readFileSync(API_DTS, 'utf8');
-  const sf = ts.createSourceFile(
-    'api.d.ts',
-    dtsSource,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sf = ts.parseTypeScriptSource('api.d.ts', dtsSource);
 
   // 1. Verify appearance exists on each required type
   for (const typeName of TYPES_REQUIRING_APPEARANCE) {

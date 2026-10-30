@@ -1,4 +1,22 @@
-import ts from 'typescript';
+import type {
+  ExportAssignment,
+  Expression,
+  ObjectLiteralExpression,
+} from 'typescript/unstable/ast';
+import {
+  isArrayLiteralExpression,
+  isAsExpression,
+  isExportAssignment,
+  isIdentifier,
+  isMethodDeclaration,
+  isObjectLiteralExpression,
+  isParenthesizedExpression,
+  isPropertyAssignment,
+  isSatisfiesExpression,
+  isStringLiteral,
+  isTypeAssertion,
+} from 'typescript/unstable/ast';
+import { parseTypeScriptSource } from './typescript-api';
 
 interface StaticExtensionManifest {
   id?: string;
@@ -14,30 +32,30 @@ function undeclaredManifest(): StaticExtensionManifest {
   return { capabilities: [], provenance: 'undeclared', dynamic: true };
 }
 
-function unwrap(expression: ts.Expression): ts.Expression {
+function unwrap(expression: Expression): Expression {
   let value = expression;
   while (
-    ts.isParenthesizedExpression(value) ||
-    ts.isAsExpression(value) ||
-    ts.isTypeAssertionExpression(value) ||
-    ts.isSatisfiesExpression(value)
+    isParenthesizedExpression(value) ||
+    isAsExpression(value) ||
+    isTypeAssertion(value) ||
+    isSatisfiesExpression(value)
   ) {
     value = value.expression;
   }
   return value;
 }
 
-function literalString(node: ts.Expression | undefined) {
-  return node && ts.isStringLiteral(node) ? node.text : undefined;
+function literalString(node: Expression | undefined) {
+  return node && isStringLiteral(node) ? node.text : undefined;
 }
 
-function literalStrings(node: ts.Expression | undefined) {
-  if (!(node && ts.isArrayLiteralExpression(node))) {
+function literalStrings(node: Expression | undefined) {
+  if (!(node && isArrayLiteralExpression(node))) {
     return;
   }
   const values: string[] = [];
   for (const element of node.elements) {
-    if (!ts.isStringLiteral(element)) {
+    if (!isStringLiteral(element)) {
       return;
     }
     values.push(element.text);
@@ -46,16 +64,10 @@ function literalStrings(node: ts.Expression | undefined) {
 }
 
 function defaultExport(source: string) {
-  const file = ts.createSourceFile(
-    'extension.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const file = parseTypeScriptSource('extension.ts', source);
   return file.statements.find(
-    (statement): statement is ts.ExportAssignment =>
-      ts.isExportAssignment(statement) && !statement.isExportEquals,
+    (statement): statement is ExportAssignment =>
+      isExportAssignment(statement) && !statement.isExportEquals,
   );
 }
 
@@ -84,7 +96,7 @@ function createStandaloneExtensionFork(
     throw new Error('Extension source must have a default export to fork');
   }
   const expression = unwrap(declaration.expression);
-  if (!ts.isObjectLiteralExpression(expression)) {
+  if (!isObjectLiteralExpression(expression)) {
     throw new Error('Only object-literal extensions can be forked');
   }
 
@@ -135,25 +147,21 @@ export default {
 `;
 }
 
-function manifestProperties(expression: ts.ObjectLiteralExpression) {
-  const values = new Map<string, ts.Expression>();
+function manifestProperties(expression: ObjectLiteralExpression) {
+  const values = new Map<string, Expression>();
   let dynamic = false;
   for (const property of expression.properties) {
-    if (
-      !(ts.isPropertyAssignment(property) || ts.isMethodDeclaration(property))
-    ) {
+    if (!(isPropertyAssignment(property) || isMethodDeclaration(property))) {
       continue;
     }
-    if (
-      !(ts.isIdentifier(property.name) || ts.isStringLiteral(property.name))
-    ) {
+    if (!(isIdentifier(property.name) || isStringLiteral(property.name))) {
       continue;
     }
     const name = property.name.text;
     if (!['id', 'title', 'capabilities', 'permissions'].includes(name)) {
       continue;
     }
-    if (!ts.isPropertyAssignment(property)) {
+    if (!isPropertyAssignment(property)) {
       dynamic = true;
       continue;
     }
@@ -165,7 +173,7 @@ function manifestProperties(expression: ts.ObjectLiteralExpression) {
   return { values, dynamic };
 }
 
-function declaredValues(values: Map<string, ts.Expression>, dynamic: boolean) {
+function declaredValues(values: Map<string, Expression>, dynamic: boolean) {
   const hasCapabilities = values.has('capabilities');
   const capabilities = literalStrings(values.get('capabilities'));
   const permissions = literalStrings(values.get('permissions'));
@@ -196,7 +204,7 @@ function inspectExtensionManifest(source: string): StaticExtensionManifest {
     return undeclaredManifest();
   }
   const expression = unwrap(declaration.expression);
-  if (!ts.isObjectLiteralExpression(expression)) {
+  if (!isObjectLiteralExpression(expression)) {
     return undeclaredManifest();
   }
   const { values, dynamic } = manifestProperties(expression);

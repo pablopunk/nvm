@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
+const ts = require('./lib/parse-typescript.cjs');
 
 // ── config ──────────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ function findFunctionSource(source, sf, name) {
         }
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
 
   visit(sf);
@@ -95,7 +95,7 @@ function findFunctionSource(source, sf, name) {
 
 function main() {
   const source = fs.readFileSync(OS_FILE, 'utf8');
-  const sf = ts.createSourceFile('os.ts', source, ts.ScriptTarget.Latest, true);
+  const sf = ts.parseTypeScriptSource('os.ts', source);
 
   for (const contract of CONTRACTS) {
     const fnSource = findFunctionSource(source, sf, contract.name);

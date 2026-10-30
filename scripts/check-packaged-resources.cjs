@@ -30,17 +30,64 @@ if (
 
 if (
   !fs.existsSync(
-    path.join(
-      packageRoot,
-      'node_modules',
-      'typescript',
-      'lib',
-      'lib.es2022.full.d.ts',
-    ),
+    path.join(packageRoot, 'scripts', 'stage-typescript-native.cjs'),
   )
 ) {
+  fail('missing scripts/stage-typescript-native.cjs');
+}
+
+const { createRequire } = require('node:module');
+const typescriptRoot = path.dirname(
+  require.resolve('typescript/package.json', { paths: [packageRoot] }),
+);
+const checkerPackage = `@typescript/typescript-${process.platform}-${process.arch}`;
+let checkerLib;
+try {
+  const requireFromTypeScript = createRequire(
+    path.join(typescriptRoot, 'package.json'),
+  );
+  checkerLib = path.join(
+    path.dirname(
+      requireFromTypeScript.resolve(`${checkerPackage}/package.json`),
+    ),
+    'lib',
+  );
+} catch {
+  fail(`missing ${checkerPackage}; run mise exec -- pnpm install`);
+}
+
+for (const checkerFile of [
+  process.platform === 'win32' ? 'tsc.exe' : 'tsc',
+  'lib.es2022.full.d.ts',
+]) {
+  if (!fs.existsSync(path.join(checkerLib, checkerFile))) {
+    fail(
+      `missing ${checkerPackage}/lib/${checkerFile}; run mise exec -- pnpm install`,
+    );
+  }
+}
+
+const stagingScript = fs.readFileSync(
+  path.join(packageRoot, 'scripts', 'stage-typescript-native.cjs'),
+  'utf8',
+);
+const typecheckModule = fs.readFileSync(
+  path.join(
+    packageRoot,
+    'src',
+    'app',
+    'electron',
+    'extension-host',
+    'typescript-api.ts',
+  ),
+  'utf8',
+);
+if (
+  !/typescript-native/.test(stagingScript) ||
+  !/typescript-native/.test(typecheckModule)
+) {
   fail(
-    'missing node_modules/typescript/lib/lib.es2022.full.d.ts; run mise exec pnpm -- pnpm install',
+    'scripts/stage-typescript-native.cjs and src/app/electron/extension-host/typescript-api.ts must agree on the Resources/typescript-native staging path',
   );
 }
 
@@ -77,12 +124,26 @@ if (
 }
 
 if (
-  !/from:\s*node_modules\/typescript\/lib[\s\S]*to:\s*node_modules\/typescript\/lib[\s\S]*filter:[\s\S]*['"]?lib\*\.d\.ts['"]?/m.test(
+  /from:\s*node_modules\/typescript\/lib[\s\S]*to:\s*node_modules\/typescript\/lib/.test(
     config,
   )
 ) {
   fail(
-    'electron-builder.yml must package TypeScript lib*.d.ts files so generated extension validation works in the app',
+    'electron-builder.yml must not package node_modules/typescript/lib; TypeScript 7 default libs are staged with the native checker by scripts/stage-typescript-native.cjs',
+  );
+}
+
+if (
+  !/afterPack:\s*scripts\/after-pack\.cjs/.test(config) ||
+  !/stageTypeScriptNative/.test(
+    fs.readFileSync(
+      path.join(packageRoot, 'scripts', 'after-pack.cjs'),
+      'utf8',
+    ),
+  )
+) {
+  fail(
+    'electron-builder.yml must stage the native TypeScript checker via afterPack so generated extension validation works in the app',
   );
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
+const ts = require('./lib/parse-typescript.cjs');
 
 // ── config ──────────────────────────────────────────────────────────────────
 
@@ -84,7 +84,7 @@ function relative(file) {
 
 function parseSourceFile(file) {
   const text = fs.readFileSync(file, 'utf8');
-  return ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  return ts.parseTypeScriptSource(file, text);
 }
 
 function lineOf(sourceFile, node) {
@@ -97,7 +97,7 @@ function lineOf(sourceFile, node) {
 
 function stringLiteralText(node) {
   if (!node) return null;
-  return ts.isStringLiteralLike(node) ? node.text : null;
+  return ts.isStringLiteralLikeNode(node) ? node.text : null;
 }
 
 function isMockModuleCallee(callee) {
@@ -146,7 +146,7 @@ function collectModuleSpecifiers(sourceFile) {
     if (specifier !== null) {
       found.push({ specifier, line: lineOf(sourceFile, node) });
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
   visit(sourceFile);
   return found;
@@ -302,7 +302,7 @@ function checkLayerOrder(edges) {
 // ── rules 3-5: module-scope hygiene ─────────────────────────────────────────
 
 function isFunctionOrClass(node) {
-  return ts.isFunctionLike(node) || ts.isClassLike(node);
+  return ts.isFunctionLikeDeclaration(node) || ts.isClassLikeDeclaration(node);
 }
 
 function isRuntimeFreeNode(node) {
@@ -335,7 +335,7 @@ function findModuleScopeSingletonUses(sourceFile) {
     ) {
       uses.push({ name: node.text, line: lineOf(sourceFile, node) });
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
   visit(sourceFile);
   return uses;

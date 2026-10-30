@@ -2,6 +2,7 @@ const path = require('node:path');
 const {
   verifyPackagedDependencies,
 } = require('./verify-packaged-dependencies.cjs');
+const { stageTypeScriptNative } = require('./stage-typescript-native.cjs');
 
 module.exports = async function verifyPackagedRuntime(context) {
   const resources =
@@ -14,6 +15,12 @@ module.exports = async function verifyPackagedRuntime(context) {
         )
       : path.join(context.appOutDir, 'resources');
   const archive = path.join(resources, 'app.asar');
+  const stagedChecker = stageTypeScriptNative({
+    resources,
+    platform: context.electronPlatformName,
+    arch: require('electron-builder').Arch[context.arch],
+  });
+  console.log(`Staged ${stagedChecker} native checker`);
   const result = verifyPackagedDependencies(archive);
   console.log(
     `Verified ${result.packagesChecked} packaged runtime dependencies`,

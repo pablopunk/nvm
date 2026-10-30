@@ -259,6 +259,22 @@
       "surface": "jobs-watchers"
     },
     {
+      "key": "typescript-api-virtual-key-win32",
+      "file": "src/app/electron/extension-host/typescript-api.ts",
+      "category": "direct-platform",
+      "selector": "function:virtualKey::direct-platform::return process.platform === 'win32' ? normalized.toLowerCase() : normalized;::expression.condition.left",
+      "disposition": "capability-adapter",
+      "surface": "extensions-generated"
+    },
+    {
+      "key": "typescript-api-staged-checker-win32",
+      "file": "src/app/electron/extension-host/typescript-api.ts",
+      "category": "direct-platform",
+      "selector": "function:stagedCheckerPath/call:path.join('typescript-native','lib')::direct-platform::return path.join( resourcesPath, 'typescript-native', 'lib', process.platform === 'win32' ? 'tsc.exe' : 'tsc', );::expression.arguments[3].condition.left",
+      "disposition": "capability-adapter",
+      "surface": "extensions-generated"
+    },
+    {
       "key": "main-direct-platform-bb738d1a16c3",
       "file": "src/app/electron/main.ts",
       "category": "direct-platform",
