@@ -41,3 +41,20 @@ export function createDirectoryTreeWatch(
 }
 
 export const watchDirectoryTree = createDirectoryTreeWatch(process.platform);
+
+export function createShallowDirectoryWatch(
+  watchDependency: DirectoryTreeWatchDependency = watch as never,
+) {
+  return function watchDirectoryShallow(
+    directory: string,
+    onChange: DirectoryTreeChangeListener,
+  ) {
+    return watchDependency(
+      directory,
+      { recursive: false },
+      (_eventType, filename) => onChange(filename ? String(filename) : null),
+    );
+  };
+}
+
+export const watchDirectoryShallow = createShallowDirectoryWatch();

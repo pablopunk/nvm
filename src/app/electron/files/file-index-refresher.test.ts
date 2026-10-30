@@ -179,3 +179,33 @@ test('refresh passes the cached index so known metadata can be reused', async ()
   await refresher.refresh();
   assert.deepEqual(seen, [0, 1]);
 });
+
+test('a root created after startup is indexed once its parent reports it', async () => {
+  const Home = path.dirname(ROOT);
+  const listeners = new Map<string, (relativePath: string | null) => void>();
+  const scans: FileIndexScan[] = [
+    scanOf([], { existingRoots: [], missingRoots: [ROOT] }),
+    scanOf([file('visible.txt')]),
+  ];
+  const refresher = createFileIndexRefresher({
+    scan: async () => scans.shift() as FileIndexScan,
+    notifyChanged: () => {},
+    watchDirectoryTree: () => inertWatch(),
+    watchDirectoryShallow: (directory, onChange) => {
+      listeners.set(directory, onChange);
+      return inertWatch();
+    },
+    onRelevantChange: () => {
+      void refresher.refresh();
+    },
+  });
+  await refresher.refresh();
+  assert.deepEqual(refresher.watchedMissingRoots(), [ROOT]);
+  listeners.get(Home)?.('Documents');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(paths(refresher.current()), [
+    path.join(ROOT, 'visible.txt'),
+  ]);
+  assert.deepEqual(refresher.watchedMissingRoots(), []);
+  assert.deepEqual(refresher.watchedRoots(), [ROOT]);
+});

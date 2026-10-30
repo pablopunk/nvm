@@ -11,6 +11,7 @@ const MAX_INDIVIDUAL_DIRECTORY_WATCHES = 2048;
 
 export type FileIndexWatchScope = {
   roots: string[];
+  missingRoots?: string[];
   indexedDirectories?: string[];
   depth: number;
   includeHidden: boolean;
@@ -20,6 +21,10 @@ export type FileIndexWatchScope = {
 export type FileIndexWatcherDeps = {
   watchDirectoryTree: (
     root: string,
+    onChange: DirectoryTreeChangeListener,
+  ) => DirectoryTreeWatcher;
+  watchDirectoryShallow?: (
+    directory: string,
     onChange: DirectoryTreeChangeListener,
   ) => DirectoryTreeWatcher;
   onRelevantChange: () => void;
@@ -44,8 +49,21 @@ export function changedPathCanAffectFileIndex(
   );
 }
 
+export function changedPathCanCreateMissingRoot(
+  watchedDirectory: string,
+  missingRoot: string,
+  relativePath: string | null,
+) {
+  if (!relativePath) return true;
+  const [nextSegment] = path
+    .relative(watchedDirectory, missingRoot)
+    .split(path.sep);
+  return relativePath.split(/[\\/]+/)[0] === nextSegment;
+}
+
 export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
   const watchers = new Map<string, DirectoryTreeWatcher>();
+  const missingRootWatchers = new Map<string, DirectoryTreeWatcher>();
   let scope: FileIndexWatchScope = {
     roots: [],
     depth: 0,
@@ -74,8 +92,58 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
     }
   }
 
+  function watchClosestExistingParent(missingRoot: string) {
+    const watchShallow = deps.watchDirectoryShallow;
+    if (!watchShallow) return;
+    let directory = path.dirname(missingRoot);
+    for (;;) {
+      const watchedDirectory = directory;
+      try {
+        const watcher = watchShallow(watchedDirectory, (relativePath) => {
+          if (
+            changedPathCanCreateMissingRoot(
+              watchedDirectory,
+              missingRoot,
+              relativePath,
+            )
+          )
+            deps.onRelevantChange();
+        });
+        watcher.on('error', () => forgetMissingRootWatcher(missingRoot));
+        return watcher;
+      } catch {
+        const parent = path.dirname(directory);
+        if (parent === directory) return;
+        directory = parent;
+      }
+    }
+  }
+
+  function forgetMissingRootWatcher(missingRoot: string) {
+    missingRootWatchers.get(missingRoot)?.close();
+    missingRootWatchers.delete(missingRoot);
+    deps.onRelevantChange();
+  }
+
+  function syncMissingRootWatchers(missingRoots: string[]) {
+    const wanted = new Set(
+      missingRoots.slice(0, MAX_INDIVIDUAL_DIRECTORY_WATCHES),
+    );
+    for (const [missingRoot, watcher] of missingRootWatchers) {
+      if (wanted.has(missingRoot)) continue;
+      watcher.close();
+      missingRootWatchers.delete(missingRoot);
+    }
+    for (const missingRoot of wanted) {
+      if (missingRootWatchers.has(missingRoot)) continue;
+      const watcher = watchClosestExistingParent(missingRoot);
+      if (watcher) missingRootWatchers.set(missingRoot, watcher);
+    }
+  }
+
   function sync(nextScope: FileIndexWatchScope) {
     scope = nextScope;
+    syncMissingRootWatchers(nextScope.missingRoots || []);
     const directories =
       (deps.watchDirectoriesIndividually ??
       watchesIndexedDirectoriesIndividually)
@@ -111,10 +179,16 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
     return [...watchers.keys()];
   }
 
+  function watchedMissingRoots() {
+    return [...missingRootWatchers.keys()];
+  }
+
   function close() {
     for (const watcher of watchers.values()) watcher.close();
     watchers.clear();
+    for (const watcher of missingRootWatchers.values()) watcher.close();
+    missingRootWatchers.clear();
   }
 
-  return { sync, watchedRoots, close };
+  return { sync, watchedRoots, watchedMissingRoots, close };
 }
