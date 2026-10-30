@@ -16,6 +16,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# An inherited PowerShell 7 PSModulePath makes Windows PowerShell autoload an incompatible Security module.
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1') -ErrorAction SilentlyContinue
 $LogPath = Join-Path $WorkDirectory 'helper.log'
 $TargetDirectory = [IO.Path]::GetDirectoryName($TargetPath)
 $TargetName = [IO.Path]::GetFileName($TargetPath)
