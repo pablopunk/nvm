@@ -40,6 +40,11 @@ export async function gridView(ctx: ExtensionContext) {
       layout: 'wide',
       aspectRatio: '16 / 9',
       columns: 3,
+      actions: [
+        ctx.actions.copyText('grid action', 'Copy Grid Action', {
+          shortcut: 'Control+N',
+        }),
+      ],
       sections: [
         {
           title: 'Recent Media',
@@ -86,6 +91,11 @@ export async function gridView(ctx: ExtensionContext) {
     layout: 'wide',
     aspectRatio: '16 / 9',
     columns: 3,
+    actions: [
+      ctx.actions.copyText('grid action', 'Copy Grid Action', {
+        shortcut: 'Control+N',
+      }),
+    ],
     maxVisibleItems: 24,
     sections: [
       {

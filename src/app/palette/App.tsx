@@ -102,6 +102,12 @@ import {
   extensionLoadingView,
 } from './model';
 import {
+  localActionCandidates,
+  viewActionsForItem,
+  combinedActionSections,
+  findLocalShortcut,
+} from './local-actions';
+import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
@@ -683,8 +689,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         item.actionPanel,
         item.actions || [],
       );
-      if (itemActions.length > 0)
-        return { panel: item.actionPanel, fallback: item.actions || [] };
+      if (itemActions.length > 0) {
+        return {
+          panel: {
+            sections: combinedActionSections(item, compactView || view),
+          },
+          fallback: [],
+        };
+      }
     }
     return {
       panel: (compactView || view)?.actionPanel,
@@ -1011,20 +1023,8 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     const item = selectedItem();
     const candidates = panelOpen
       ? actionsFromPanel(panel, fallback)
-      : (
-          (item
-            ? [
-                item.primaryAction,
-                ...actionsFromPanel(item.actionPanel, item.actions || []),
-              ]
-            : actionsFromPanel(
-                view?.actionPanel,
-                view?.actions || [],
-              )) as Array<ExtensionViewAction | undefined>
-        ).filter(Boolean);
-    const action = candidates.find(
-      (candidate) => normalizedShortcut(candidate.shortcut) === normalized,
-    );
+      : localActionCandidates(item, compactView || view);
+    const action = findLocalShortcut(candidates, normalized);
     if (!action) return;
     event.preventDefault();
     void runAction(action);
@@ -4390,21 +4390,6 @@ export function App() {
     ].filter((row) => actionMatches(row.title, row.subtitle));
   }
 
-  function actionIdentity(action: ExtensionViewAction) {
-    const nativeId = (action.nativeAction as { id?: string } | undefined)?.id;
-    return [
-      action.type,
-      action.handlerId,
-      nativeId,
-      action.title,
-      action.path,
-      action.url,
-      action.text,
-    ]
-      .filter(Boolean)
-      .join('\u0000');
-  }
-
   function closeActionPanels() {
     setActionSubmenuFor(null);
     setExtensionItemOptionsFor(null);
@@ -4516,9 +4501,17 @@ export function App() {
   }
 
   function getExtensionItemActionRows() {
-    return extensionItemOptionsFor
-      ? commandItemActionRows(extensionItemOptionsFor, 'extension-item')
-      : [];
+    if (!extensionItemOptionsFor) return [];
+    const item = extensionItemOptionsFor;
+    const viewActions = viewActionsForItem(item, extensionView);
+    return [
+      ...commandItemActionRows(item, 'extension-item'),
+      ...actionPanelRows(
+        { sections: [{ title: 'View', actions: viewActions }] },
+        [],
+        'view-action',
+      ),
+    ];
   }
 
   function getShortcutRows() {
@@ -5089,27 +5082,19 @@ export function App() {
       optionsFor ||
       previewFor ||
       confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      actionSubmenuFor ||
+      paletteForm.choices ||
+      palettePrompt.active ||
       shortcutManagerOpen ||
       shortcutFor
     )
       return false;
     const normalized = normalizedShortcut(accelerator);
     const selectedItem = selectedExtensionItem;
-    const itemActions = selectedItem
-      ? actionsFromPanel(selectedItem.actionPanel, selectedItem.actions || [])
-      : [];
-    const viewActions = actionsFromPanel(
-      extensionView.actionPanel,
-      extensionView.actions || [],
-    );
-    const actions = selectedItem
-      ? ([selectedItem.primaryAction, ...itemActions].filter(
-          Boolean,
-        ) as ExtensionViewAction[])
-      : viewActions;
-    const action = actions.find(
-      (item) => normalizedShortcut(item.shortcut) === normalized,
-    );
+    const actions = localActionCandidates(selectedItem, extensionView);
+    const action = findLocalShortcut(actions, normalized);
     if (!action) return false;
     runViewAction(action);
     return true;
@@ -5204,22 +5189,20 @@ export function App() {
   }
 
   function runBuilderPreviewShortcut(accelerator: string) {
-    if (!builderPreviewFocused || !selectedBuilderPreview) return false;
+    // biome-ignore format: Keep the legacy palette within its file-size budget.
+    if (!builderPreviewFocused || !selectedBuilderPreview ||
+      actionSubmenuFor ||
+      confirmBuilderPreviewAction ||
+      confirmViewActionFor ||
+      confirmRemoveFor ||
+      optionsFor ||
+      extensionItemOptionsFor ||
+      previewFor
+    )
+      return false;
     const item = selectedBuilderPreviewItem();
-    const actions = item
-      ? [
-          item.primaryAction,
-          ...actionsFromPanel(item.actionPanel, item.actions || []),
-        ].filter(Boolean)
-      : actionsFromPanel(
-          selectedBuilderPreview.view.actionPanel,
-          selectedBuilderPreview.view.actions || [],
-        );
-    const action = (actions as ExtensionViewAction[]).find(
-      (candidate) =>
-        normalizedShortcut(candidate.shortcut) ===
-        normalizedShortcut(accelerator),
-    );
+    const actions = localActionCandidates(item, selectedBuilderPreview.view);
+    const action = findLocalShortcut(actions, accelerator);
     if (!action) return false;
     void runBuilderPreviewViewAction(selectedBuilderPreview.filename, action);
     return true;
@@ -5229,6 +5212,9 @@ export function App() {
     if (
       extensionView?.type !== 'grid' ||
       confirmRemoveFor ||
+      confirmViewActionFor ||
+      confirmBuilderPreviewAction ||
+      actionSubmenuFor ||
       extensionItemOptionsFor ||
       optionsFor ||
       previewFor
@@ -5243,7 +5229,9 @@ export function App() {
       0,
       items.findIndex((item) => item.id === selectedValue),
     );
-    const grid = document.querySelector<HTMLElement>('.extensionGrid');
+    const grid = resultsListRef.current?.querySelector<HTMLElement>(
+      '.activeExtensionPane .extensionGrid',
+    );
     const columns = grid
       ? Math.max(
           1,
@@ -5267,8 +5255,10 @@ export function App() {
     if (!next) return false;
     selectValue(next.id);
     requestAnimationFrame(() =>
-      document
-        .querySelector(`[data-extension-item-id="${CSS.escape(next.id)}"]`)
+      resultsListRef.current
+        ?.querySelector(
+          `.activeExtensionPane [data-extension-item-id="${CSS.escape(next.id)}"]`,
+        )
         ?.scrollIntoView({ block: 'nearest', inline: 'nearest' }),
     );
     return true;
@@ -5383,6 +5373,18 @@ export function App() {
       if (path) {
         event.preventDefault();
         revealSelectedDiskItem(path);
+        return;
+      }
+    }
+    // biome-ignore format: Keep the legacy palette within its file-size budget.
+    if (localAccelerator && actionSubmenuFor && !confirmViewActionFor && !confirmBuilderPreviewAction && !confirmRemoveFor) {
+      const action = findLocalShortcut(
+        actionsFromPanel(actionSubmenuFor.panel),
+        localAccelerator,
+      );
+      if (action) {
+        event.preventDefault();
+        void (actionSubmenuFor.runAction || runViewAction)(action);
         return;
       }
     }
@@ -5543,15 +5545,13 @@ export function App() {
         const item = allViewItems(selectedBuilderPreview.view).find(
           (candidate) => candidate.id === selectedBuilderPreview.selectedItemId,
         );
-        const panel =
-          item?.actionPanel || selectedBuilderPreview.view.actionPanel;
-        const actions =
-          item?.actions || selectedBuilderPreview.view.actions || [];
-        if (panel || actions.length > 0) {
+        const view = selectedBuilderPreview.view;
+        const sections = combinedActionSections(item, view);
+        if (sections.some((section) => section.actions.length > 0)) {
           setActionQuery('');
           setActionSubmenuFor({
             title: item?.title || selectedBuilderPreview.view.title,
-            panel: panel || actionPanelFromActions(actions),
+            panel: { sections },
             runAction: (action, confirmed) =>
               runBuilderPreviewViewAction(
                 selectedBuilderPreview.filename,
