@@ -86,14 +86,17 @@ function metadataPath(tag: string, fileName: string) {
   return `${RELEASES_PATH}/download/${tag}/${fileName}`;
 }
 
-function metadataYaml(version: string) {
+function metadataYaml(version: string, mac = false) {
+  const file = mac
+    ? `Nevermind-${version}-mac-${process.arch}.zip`
+    : `NVM-${version}.exe`;
   return [
     `version: ${version}`,
     'files:',
-    `  - url: NVM-${version}.exe`,
+    `  - url: ${file}`,
     '    sha512: ZmFrZQ==',
     '    size: 1',
-    `path: NVM-${version}.exe`,
+    `path: ${file}`,
     'sha512: ZmFrZQ==',
     "releaseDate: '2026-10-28T00:00:00.000Z'",
   ].join('\n');
@@ -121,7 +124,12 @@ function publishedMetadata(
   tag: string,
   fileName: string,
 ): Record<string, FakeRouteResponse> {
-  return { [metadataPath(tag, fileName)]: metadataYaml(tag.slice(1)) };
+  return {
+    [metadataPath(tag, fileName)]: metadataYaml(
+      tag.slice(1),
+      fileName.endsWith('-mac.yml'),
+    ),
+  };
 }
 
 function createProvider(
