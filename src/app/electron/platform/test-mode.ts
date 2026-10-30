@@ -4,15 +4,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { app, session } from 'electron';
 import {
+  diagnosticTestCollectorOrigin,
+  isDiagnosticTestCollectorRequest,
+} from './test-diagnostic-collector';
+import {
   isNvmDiagnosticTestMode,
   isNvmHeadlessTestMode,
   isNvmPackagedPiTestMode,
   isNvmTestMode,
 } from './test-mode-flags';
-import {
-  diagnosticTestCollectorOrigin,
-  isDiagnosticTestCollectorRequest,
-} from './test-diagnostic-collector';
 
 export {
   isNvmDiagnosticTestMode,
@@ -38,7 +38,7 @@ export function configureNvmTestMode() {
   if (!isNvmTestMode) return null;
   const userDataDir = testUserDataPath();
   if (isNvmDiagnosticTestMode)
-    diagnosticTestCollectorOrigin(process.env.SENTRY_DSN_DESKTOP);
+    diagnosticTestCollectorOrigin(process.env.POSTHOG_HOST_DESKTOP);
   app.setPath('userData', userDataDir);
   return userDataDir;
 }
@@ -51,7 +51,7 @@ export function installTestNetworkPolicy() {
   fsSync.mkdirSync(artifactDir, { recursive: true });
   const requests: string[] = [];
   const collectorOrigin = isNvmDiagnosticTestMode
-    ? diagnosticTestCollectorOrigin(process.env.SENTRY_DSN_DESKTOP)
+    ? diagnosticTestCollectorOrigin(process.env.POSTHOG_HOST_DESKTOP)
     : undefined;
   fsSync.writeFileSync(path.join(artifactDir, 'network.json'), '[]\n');
   session.defaultSession.webRequest.onBeforeRequest((details, callback) => {

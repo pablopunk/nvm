@@ -1,16 +1,15 @@
 import React from 'react';
-import ReactDOM from 'react-dom/client';
+import ReactDom from 'react-dom/client';
 import { App, ExtensionWindowApp } from './App';
+import './posthog';
 import './styles.css';
-import { captureRendererFailure, initRendererDiagnostics } from './diagnostics';
-
-initRendererDiagnostics();
+import { captureRendererFailure } from './diagnostics';
 
 const extensionWindowId = new URLSearchParams(window.location.search).get(
   'extensionWindowId',
 );
 
-ReactDOM.createRoot(document.getElementById('root')!, {
+ReactDom.createRoot(document.getElementById('root')!, {
   onUncaughtError: captureRendererFailure,
 }).render(
   <React.StrictMode>

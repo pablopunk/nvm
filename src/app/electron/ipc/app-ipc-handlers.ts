@@ -1,10 +1,10 @@
+import type { PaletteHotkeyStatus } from '../../palette/preload-api';
+import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
+import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import {
   createMeasuredIpcRegistrar,
   type IpcMainLike,
 } from './ipc-registration';
-import type { PaletteHotkeyStatus } from '../../palette/preload-api';
-import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
-import type { MaintenanceActivity } from '../platform/maintenance-activity';
 
 export interface AppIpcHandlersDeps {
   activity?: Pick<MaintenanceActivity, 'run'>;
@@ -70,7 +70,12 @@ export interface AppIpcHandlersDeps {
   normalizeHostViewResult: (result: unknown) => unknown;
   createDraftAiChat: (prompt: string) => unknown;
   createDraftConversationChat: (prompt: string) => unknown;
-  getNevermindAuth: () => Promise<{ baseUrl?: string; email?: string } | null>;
+  getNevermindAuth: () => Promise<{
+    baseUrl?: string;
+    userId?: string;
+    email?: string;
+    role?: string;
+  } | null>;
   getNevermindDebugStatus: () => {
     client: { environment: string; baseUrl: string };
     active: { environment: string; baseUrl: string };
@@ -83,7 +88,15 @@ export interface AppIpcHandlersDeps {
   signInToNevermind: (
     onStatusChange?: (status: NevermindDeviceSignInStatus | null) => void,
   ) => Promise<
-    | { ok: true; auth: { baseUrl: string; email?: string } }
+    | {
+        ok: true;
+        auth: {
+          baseUrl: string;
+          userId?: string;
+          email?: string;
+          role?: string;
+        };
+      }
     | { ok: false; error?: string }
   >;
   getNevermindDeviceSignInState: () => NevermindDeviceSignInStatus | null;
@@ -96,7 +109,9 @@ export interface AppIpcHandlersDeps {
   invalidateExtensionRootItems: () => unknown;
   broadcastAuthChanged: (status: {
     authed: boolean;
+    userId?: string;
     email?: string;
+    role?: string;
   }) => unknown;
   appIconCache: { get(appPath: unknown): unknown };
   runningAppStatus: { getForRenderer(appPaths: unknown): unknown };
@@ -276,7 +291,14 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       { authed: Boolean(auth) },
       { source: 'host', scope: 'nevermind' },
     );
-    return auth ? { authed: true, email: auth.email } : { authed: false };
+    return auth
+      ? {
+          authed: true,
+          ...(auth.userId ? { userId: auth.userId } : {}),
+          email: auth.email,
+          ...(auth.role ? { role: auth.role } : {}),
+        }
+      : { authed: false };
   });
   ipcHandleMeasured('nevermind:debug-status', () =>
     deps.getNevermindDebugStatus(),
@@ -308,8 +330,17 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
       deps.setActiveNevermindBaseUrl(result.auth.baseUrl);
       deps.warmNevermindCompatibilityCache(result.auth.baseUrl);
       deps.invalidateExtensionRootItems();
-      deps.broadcastAuthChanged({ authed: true, email: result.auth.email });
-      return { ok: true, email: result.auth.email };
+      deps.broadcastAuthChanged({
+        authed: true,
+        ...(result.auth.userId ? { userId: result.auth.userId } : {}),
+        email: result.auth.email,
+        ...(result.auth.role ? { role: result.auth.role } : {}),
+      });
+      return {
+        ok: true,
+        ...(result.auth.userId ? { userId: result.auth.userId } : {}),
+        email: result.auth.email,
+      };
     }
     const status = deps.getNevermindDeviceSignInState();
     const error =

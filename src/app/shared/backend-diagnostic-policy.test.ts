@@ -24,11 +24,6 @@ test('diagnostic propagation accepts only canonical first-party API origins', ()
   const context = {
     actionId: 'a'.repeat(32),
     journeyId: 'b'.repeat(32),
-    traceHeaders: {
-      'sentry-trace': `${'c'.repeat(32)}-${'d'.repeat(16)}-1`,
-      baggage: 'secret=value',
-      Authorization: 'private',
-    },
   };
   assert.deepEqual(
     backendDiagnosticHeaders('https://custom.example/api/x', context),

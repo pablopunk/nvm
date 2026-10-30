@@ -3,13 +3,12 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { app, safeStorage } from 'electron';
+import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
 import {
   migrateLegacyDesktopOrigin,
-  parsePublicOrigin,
   PRODUCTION_WEB_ORIGIN,
+  parsePublicOrigin,
 } from '../../shared/public-origin';
-import * as logger from '../platform/logger';
-import { nevermindDesktopHeaders } from './nevermind-api';
 import { fetchDiagnosticBackend } from '../diagnostics/backend-observability';
 import {
   operationOutcome,
@@ -17,10 +16,15 @@ import {
   recordOperationFailure,
   runOperation,
 } from '../diagnostics/observability';
-import { checkNevermindCompatibility } from './nevermind-compatibility';
+import * as logger from '../platform/logger';
 import { writePrivateFile } from '../platform/private-file';
 import { openExternalUrl } from '../platform/url-utils';
-import type { NevermindDeviceSignInStatus } from '../../shared/nevermind-auth';
+import {
+  approvedDeviceExchange,
+  type DeviceExchangeResponse,
+} from './device-exchange';
+import { nevermindDesktopHeaders } from './nevermind-api';
+import { checkNevermindCompatibility } from './nevermind-compatibility';
 
 const FILENAME = 'nevermind-auth.json';
 const STORE_FILENAME = 'nevermind-auth-by-origin.json';
@@ -34,6 +38,7 @@ export type NevermindEnvironment =
 type StoredAuth = {
   encryptedToken?: string;
   token?: string;
+  userId?: string;
   email: string;
   role: string;
   baseUrl: string;
@@ -43,6 +48,7 @@ type StoredAuth = {
 type AuthStore = Record<string, StoredAuth>;
 export type NevermindAuthSnapshot = {
   token: string;
+  userId?: string;
   email: string;
   role: string;
   baseUrl: string;
@@ -279,6 +285,7 @@ function authFromStored(data: StoredAuth): NevermindAuthSnapshot {
     });
   return {
     token,
+    userId: data.userId,
     email: data.email,
     role: data.role,
     baseUrl,
@@ -375,18 +382,21 @@ export function setActiveNevermindAuthBaseUrl(baseUrl: string | null) {
 
 async function persist({
   token,
+  userId,
   email,
   role,
   baseUrl,
   environment = nevermindEnvironmentForBaseUrl(baseUrl),
 }: {
   token: string;
+  userId?: string;
   email: string;
   role: string;
   baseUrl: string;
   environment?: NevermindEnvironment;
 }) {
   const payload: StoredAuth = {
+    ...(userId ? { userId } : {}),
     email,
     role,
     baseUrl,
@@ -406,7 +416,7 @@ async function persist({
   const store = await readOrMigrateStore();
   store[normalizedBaseUrl(baseUrl)] = payload;
   await writePrivateFile(currentAuthPath(), JSON.stringify(store, null, 2));
-  cached = { token, email, role, baseUrl, environment };
+  cached = { token, userId, email, role, baseUrl, environment };
   loadPromise = Promise.resolve(cached);
   return cached;
 }
@@ -531,18 +541,11 @@ export async function consumeDeviceCode({
           logger.warn(`device exchange returned ${res.status}`);
           continue;
         }
-        const data = (await res.json()) as {
-          status: string;
-          token?: string;
-          user?: { email: string; role: string };
-        };
-        if (data.status === 'ok' && data.token && data.user) {
-          const auth = await persist({
-            token: data.token,
-            email: data.user.email,
-            role: data.user.role,
-            baseUrl: trimmedBase,
-          });
+        const approved = approvedDeviceExchange(
+          (await res.json()) as DeviceExchangeResponse,
+        );
+        if (approved) {
+          const auth = await persist({ ...approved, baseUrl: trimmedBase });
           return { ok: true, auth };
         }
       }
@@ -646,16 +649,12 @@ async function performSignIn({
           logger.warn(`device exchange returned ${res.status}`);
           continue;
         }
-        const data = (await res.json()) as {
-          status: string;
-          token?: string;
-          user?: { email: string; role: string };
-        };
-        if (data.status === 'ok' && data.token && data.user) {
+        const approved = approvedDeviceExchange(
+          (await res.json()) as DeviceExchangeResponse,
+        );
+        if (approved) {
           const auth = await persist({
-            token: data.token,
-            email: data.user.email,
-            role: data.user.role,
+            ...approved,
             baseUrl: trimmedBase,
             environment,
           });

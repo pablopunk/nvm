@@ -39,6 +39,26 @@ test('accepts a delayed selected schedule without admitting the other cron', () 
   );
 });
 
+test('a several-hour scheduler delay still admits only the selected Madrid run', () => {
+  const delayed = new Date('2026-10-30T07:56:00Z');
+  assert.equal(
+    evaluateScheduleGate({
+      event: 'schedule',
+      now: delayed,
+      scheduledCron: '0 3 * * *',
+    }).run,
+    true,
+  );
+  assert.equal(
+    evaluateScheduleGate({
+      event: 'schedule',
+      now: delayed,
+      scheduledCron: '0 2 * * *',
+    }).run,
+    false,
+  );
+});
+
 test('requires the latest matching production deployment to succeed', () => {
   const passed = {
     id: 10,

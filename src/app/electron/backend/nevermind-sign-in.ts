@@ -25,7 +25,12 @@ export type NevermindSignInDeps = {
   beginAiChatSendSuspension: () => void;
   endAiChatSendSuspension: () => void;
   disposeAiSessions: () => Promise<unknown> | undefined;
-  broadcastAuthChanged: (status: { authed: boolean; email?: string }) => void;
+  broadcastAuthChanged: (status: {
+    authed: boolean;
+    userId?: string;
+    email?: string;
+    role?: string;
+  }) => void;
 };
 
 export function createNevermindSignIn(deps: NevermindSignInDeps) {

@@ -33,7 +33,7 @@ Use this skill for defensive security work on Nevermind. Produce evidence-backed
 - Extension isolation: least-privilege permissions, shell/system actions, file and app helpers, iframe sandbox, untrusted HTML/media, clipboard and AI permissions.
 - Backend proxy/billing: transparent auth swap, forwarded headers, request size/token limits, upstream URL construction, streaming parsing, abuse/rate limits, billing failure modes.
 - Input/output safety: SSR/script injection, DOM insertion, markdown/rendered content, URL/path validation, shell argument handling, log redaction.
-- Secrets/config: committed env files, Vercel env exposure, Sentry DSNs, WorkOS/Redis/Neon keys, release signing material, local auth storage.
+- Secrets/config: committed env files, Vercel env exposure, PostHog project keys, WorkOS/Redis/Neon keys, release signing material, local auth storage.
 - Supply chain: dependency vulnerabilities, Electron version posture, packaged resources, updater/release artifact trust, native modules.
 
 ## Report format

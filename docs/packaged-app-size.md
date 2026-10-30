@@ -4,7 +4,7 @@ Nevermind keeps production packages limited to code that can run in the packaged
 
 ## Dependency classification
 
-Keep in `dependencies` only packages required by packaged runtime code, native runtime helpers, updater/logging, AI/session runtime, Sentry, and generated-extension validation.
+Keep in `dependencies` only packages required by packaged runtime code, native runtime helpers, updater/logging, AI/session runtime, PostHog, and generated-extension validation.
 
 Move to `devDependencies` when a package is only used by:
 
@@ -42,7 +42,7 @@ TypeScript is intentionally still a production dependency. The main process uses
 
 ## What not to strip casually
 
-- Keep Sentry: production crash/error visibility is more valuable than the size saving.
+- Keep PostHog: production crash/error visibility is more valuable than the size saving.
 - Do not manually prune `@earendil-works/pi-ai` provider dependencies unless the src/backend/desktop contract guarantees which provider adapters are needed.
 - Do not strip Electron framework internals beyond supported Electron Builder options; random Chromium/Electron resource removal can break rendering, webviews, media, signing, or launch.
 

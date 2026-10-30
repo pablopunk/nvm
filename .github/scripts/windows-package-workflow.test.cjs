@@ -194,7 +194,7 @@ test('Windows tag release publishes only verified unsigned x64 package artifacts
   assert.equal(/workflow_dispatch|WIN_CSC|AZURE/.test(release), false);
   assert.deepEqual(
     [...release.matchAll(/secrets\.(\w+)/g)].map((match) => match[1]),
-    ['SENTRY_AUTH_TOKEN'],
+    ['POSTHOG_CLI_API_KEY'],
   );
   assert.match(release, /\$collected\.Count -ne \$artifacts\.Count/);
 });

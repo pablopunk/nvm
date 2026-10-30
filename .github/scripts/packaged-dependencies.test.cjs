@@ -1,3 +1,4 @@
+'use strict';
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const os = require('node:os');
@@ -30,11 +31,11 @@ async function packagedFixture(t, manifests) {
   return archive;
 }
 
-test('packaging rejects the missing Sentry transitive dependency from the released app', async function missingDependency(t) {
+test('packaging rejects a missing transitive dependency from the released app', async function missingDependency(t) {
   const archive = await packagedFixture(t, {
-    '': { name: 'nvm', dependencies: { '@sentry/electron': '1' } },
-    'node_modules/@sentry/electron': {
-      name: '@sentry/electron',
+    '': { name: 'nvm', dependencies: { 'posthog-node': '1' } },
+    'node_modules/posthog-node': {
+      name: 'posthog-node',
       dependencies: { 'require-in-the-middle': '1' },
     },
     'node_modules/require-in-the-middle': {

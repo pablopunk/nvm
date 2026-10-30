@@ -1,13 +1,11 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import vercel from '@astrojs/vercel';
-import sentry from '@sentry/astro';
 import react from '@astrojs/react';
 import tailwindcss from '@tailwindcss/vite';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-const sentryDsn = process.env.SENTRY_DSN;
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 const FULL_COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/;
 
@@ -61,16 +59,5 @@ export default defineConfig({
   integrations: [
     generatedPaletteItems,
     react(),
-    ...(sentryDsn
-      ? [
-          sentry({
-            dsn: sentryDsn,
-            release: buildCommitSha ?? process.env.VERCEL_GIT_COMMIT_SHA,
-            environment: process.env.VERCEL_ENV ?? 'development',
-            serverInitPath: './src/sentry.server.config.ts',
-            sourceMapsUploadOptions: { telemetry: false },
-          }),
-        ]
-      : []),
   ],
 });

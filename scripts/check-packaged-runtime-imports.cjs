@@ -25,7 +25,7 @@ const forbiddenPackages = [
 const allowedPackages = [
   '@earendil-works/pi-ai',
   '@earendil-works/pi-coding-agent',
-  '@sentry/electron',
+  'posthog-node',
   'electron',
   'electron-log',
   'electron-updater',

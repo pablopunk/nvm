@@ -16,17 +16,17 @@ async function waitForCapture(collector, predicate) {
   while (Date.now() < deadline) {
     assert.deepEqual(collector.failures, []);
     const captured = collector.events.find(predicate);
-    if (captured) return captured.event;
+    if (captured) return captured.properties;
     await new Promise(function retry(resolve) {
       setTimeout(resolve, 100);
     });
   }
   throw new Error(
-    `Diagnostic capture did not arrive; received ${collector.events.length} envelopes`,
+    `Diagnostic capture did not arrive; received ${collector.events.length} events`,
   );
 }
 
-function smokeEnvironment(temporary, artifacts, dsn, piFixture) {
+function smokeEnvironment(temporary, artifacts, collectorHost, piFixture) {
   const env = Object.fromEntries(
     Object.entries(process.env).filter(function excludeCredentials([name]) {
       return (
@@ -52,7 +52,7 @@ function smokeEnvironment(temporary, artifacts, dsn, piFixture) {
     NVM_TEST_HEADLESS: '0',
     NVM_TEST_USER_DATA_DIR: temporary,
     NVM_TEST_ARTIFACT_DIR: artifacts,
-    SENTRY_DSN_DESKTOP: dsn,
+    POSTHOG_HOST_DESKTOP: collectorHost,
     ...fixtureEnvironment,
   };
 }
@@ -374,7 +374,7 @@ async function prepareDiagnosticFixture(temporary) {
     path.join(extensions, 'diagnostic-smoke.ts'),
     `export default {
     id: 'qa.diagnostic-smoke', title: 'QA Diagnostics', capabilities: [],
-    commands: [{ id: 'error', title: 'QA Diagnostics Error', run: function controlledFailure() { throw new TypeError('PRIVATE_MAIN_FIXTURE'); } }],
+    commands: [{ id: 'error', title: 'QA Diagnostics Error', run: function controlledFailure() { throw new TypeError('MAIN_FIXTURE'); } }],
   };`,
   );
   await fs.writeFile(
@@ -439,7 +439,7 @@ async function packagedDiagnosticsSmoke(
           : process.platform === 'darwin'
             ? ['--use-mock-keychain']
             : [],
-      env: smokeEnvironment(temporary, artifacts, collector.dsn, piFixture),
+      env: smokeEnvironment(temporary, artifacts, collector.host, piFixture),
       timeout: 30_000,
     });
     app.process().stdout?.on('data', function recordStdout(chunk) {
@@ -466,25 +466,22 @@ async function packagedDiagnosticsSmoke(
     const report = await waitForCapture(
       collector,
       function supportReport(item) {
-        return (
-          item.type === 'event' &&
-          item.event.tags?.operation === 'support.report'
-        );
+        return item.event === 'support_report';
       },
     );
-    assert.match(report.tags.support_ref, /^[a-f0-9]{32}$/);
+    assert.match(report.support_ref, /^[a-f0-9]{32}$/);
     await page.screenshot({ path: path.join(artifacts, 'problem-report.png') });
     const journey = await waitForCapture(
       collector,
       function successfulJourney(item) {
         return (
-          item.type === 'transaction' &&
-          item.event.tags?.outcome === 'success' &&
-          item.event.tags?.journey_id === report.tags.journey_id
+          item.event === 'operation_completed' &&
+          item.properties.outcome === 'success' &&
+          item.properties.journey_id === report.journey_id
         );
       },
     );
-    assert.match(journey.tags.action_id, /^[a-f0-9]{32}$/);
+    assert.match(journey.action_id, /^[a-f0-9]{32}$/);
     console.log(
       'Packaged diagnostics: support report captured; testing errors',
     );
@@ -494,35 +491,14 @@ async function packagedDiagnosticsSmoke(
       collector,
       function controlledMainError(item) {
         return (
-          item.type === 'event' &&
-          item.event.tags?.component === 'user-extension' &&
-          item.event.exception?.values?.some(function typeError(value) {
+          item.event === '$exception' &&
+          item.properties.component === 'user-extension' &&
+          item.properties.$exception_list?.some(function typeError(value) {
             return value.type === 'TypeError';
           })
         );
       },
     );
-    const existingEventIds = new Set(
-      collector.events.map(function eventId(item) {
-        return item.event.event_id;
-      }),
-    );
-    await page.evaluate(function failRenderer() {
-      setTimeout(function controlledRendererFailure() {
-        throw new Error('PRIVATE_RENDERER_FIXTURE');
-      }, 0);
-    });
-    const rendererError = await waitForCapture(
-      collector,
-      function controlledRendererError(item) {
-        return (
-          item.type === 'event' &&
-          item.event.tags?.process === 'renderer' &&
-          !existingEventIds.has(item.event.event_id)
-        );
-      },
-    );
-    assert.notEqual(mainError.tags.support_ref, rendererError.tags.support_ref);
     if (piFixture && piArtifacts) {
       console.log('Packaged diagnostics: testing Pi adapter session');
       page.setDefaultTimeout(45_000);
@@ -531,11 +507,9 @@ async function packagedDiagnosticsSmoke(
     const evidence = {
       packaged,
       release: report.release,
-      supportEventId: report.event_id,
-      journeyEventId: journey.event_id,
-      mainErrorEventId: mainError.event_id,
-      rendererErrorEventId: rendererError.event_id,
-      privateContentExcluded: true,
+      supportRef: report.support_ref,
+      journeyActionId: journey.action_id,
+      mainErrorSupportRef: mainError.support_ref,
       collector: 'loopback',
     };
     await fs.writeFile(

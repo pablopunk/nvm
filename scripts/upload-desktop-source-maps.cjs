@@ -3,13 +3,21 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { desktopBuildIdentity } = require('./desktop-build-identity.cjs');
 
+const POSTHOG_CLI_VERSION = '0.19.0';
+
+function pnpmInvocation(execPath, pnpmScript) {
+  if (!pnpmScript || !/pnpm\.(?:c?js|mjs)$/i.test(pnpmScript))
+    throw new Error('Run the source map upload through pnpm');
+  return { executable: execPath, prefix: [pnpmScript] };
+}
+
 function uploadDesktopSourceMaps() {
   const required = process.env.NEVERMIND_RELEASE_BUILD === '1';
   if (!required) return;
   for (const key of [
-    'SENTRY_AUTH_TOKEN',
-    'SENTRY_ORG',
-    'SENTRY_PROJECT_DESKTOP',
+    'POSTHOG_CLI_API_KEY',
+    'POSTHOG_CLI_PROJECT_ID',
+    'VITE_POSTHOG_HOST',
   ]) {
     if (!process.env[key])
       throw new Error(`${key} is required for desktop release source maps`);
@@ -23,24 +31,23 @@ function uploadDesktopSourceMaps() {
       throw new Error(`Missing source map: ${file}`);
   }
   validateSourceMapPairs(path.join(root, 'dist'));
-  const cli = require('@sentry/cli');
+  const pnpm = pnpmInvocation(process.execPath, process.env.npm_execpath);
   execFileSync(
-    cli.getPath(),
+    pnpm.executable,
     [
-      'sourcemaps',
-      'upload',
-      '--org',
-      process.env.SENTRY_ORG,
-      '--project',
-      process.env.SENTRY_PROJECT_DESKTOP,
-      '--release',
-      desktopBuildIdentity(root),
-      '--url-prefix',
-      'app:///dist',
-      '--validate',
-      '--strict',
-      '--wait',
+      ...pnpm.prefix,
+      'dlx',
+      `@posthog/cli@${POSTHOG_CLI_VERSION}`,
+      '--host',
+      process.env.VITE_POSTHOG_HOST,
+      'sourcemap',
+      'process',
+      '--directory',
       path.join(root, 'dist'),
+      '--release-name',
+      'nevermind',
+      '--release-version',
+      desktopBuildIdentity(root),
     ],
     { cwd: root, stdio: 'inherit' },
   );
@@ -64,4 +71,4 @@ function validateSourceMapPairs(directory) {
 }
 
 if (require.main === module) uploadDesktopSourceMaps();
-module.exports = { uploadDesktopSourceMaps };
+module.exports = { pnpmInvocation, uploadDesktopSourceMaps };

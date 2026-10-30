@@ -1,8 +1,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomBytes } from 'node:crypto';
 import type {
-  DiagnosticOperation,
   DiagnosticComponent,
+  DiagnosticOperation,
   DiagnosticOutcome,
   DiagnosticRecord,
   DiagnosticStage,
@@ -17,11 +17,11 @@ export type OperationContext = {
   outcome: DiagnosticOutcome;
   windowId?: number;
   requestId?: string;
-  traceHeaders?: { 'sentry-trace'?: string; baggage?: string };
   serverFailure?: boolean;
   responseStatus?: number;
   component?: DiagnosticComponent;
   targetId?: string;
+  label?: string;
   failure?: DiagnosticRecord;
   closed: boolean;
   completionUnverified?: boolean;
@@ -79,6 +79,13 @@ export function operationTarget(
   context.component = component;
   context.targetId = targetId;
   return targetId;
+}
+
+// Names what ran (for example `extension-command:my.extension:run`) so usage
+// can be grouped by command in analytics.
+export function operationLabel(label: string) {
+  const context = currentOperation();
+  if (context && !context.closed) context.label = label.slice(0, 120);
 }
 
 export function operationStage(stage: DiagnosticStage) {

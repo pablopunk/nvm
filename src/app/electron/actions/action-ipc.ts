@@ -4,6 +4,7 @@ import {
   summarizeDebugValue,
 } from '../diagnostics/debug-performance';
 import {
+  operationLabel,
   operationStage,
   recordOperationFailure,
 } from '../diagnostics/observability';
@@ -81,6 +82,15 @@ export function createActionIpc(deps: ActionIpcDeps) {
             let trustedAction: any = null;
             try {
               trustedAction = resolveRootActionForIpc(action);
+              operationLabel(
+                [
+                  trustedAction?.kind,
+                  trustedAction?.extensionId,
+                  trustedAction?.commandId,
+                ]
+                  .filter(Boolean)
+                  .join(':'),
+              );
               operationStage('invoke');
               const result = presentActionResultFeedback(
                 normalizeHostViewResult(

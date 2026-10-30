@@ -1,0 +1,44 @@
+# Desktop and backend observability
+
+PostHog is the single place for errors, product usage, and performance. Axiom keeps backend request logs.
+
+## What is collected
+
+- **Errors:** main-process exceptions, renderer exceptions (posthog-js), and backend exceptions arrive as `$exception` events with a `support_ref` that matches the local diagnostic record.
+- **Usage and performance:** every instrumented operation (`command.execute`, `view.load`, `ai.stream`, `auth.signin`, `update.*`, `job.run`, ...) emits one `operation_completed` event with `operation`, `label` (the command that ran), `outcome`, `stage`, `duration_ms`, `journey_id`, and `action_id`. Backend requests emit `backend_request` with `route`, `method`, `status`, and `duration_ms`.
+- **Alerts:** failed cron checks and exhausted provider chains emit `backend_alert` with an `alert` property.
+- **People:** signed-in users are identified by account ID (email and role as person properties). Signed-out installs use a random, persisted install ID without a person profile.
+- **Not collected on purpose:** prompts, model output, clipboard content, and screen content are never attached to events. Exception messages and stack traces are sent as the app produced them, so errors that embed user content (for example a provider error echoing a prompt) can carry it; fix such errors at the source.
+
+The `Send Technical Diagnostics` setting is the single switch. It gates the host client and the renderer SDK, and the host broadcasts changes to every window immediately. Development builds never send.
+
+The host client drops queued batches at send time once the setting turns off. The renderer SDK stops capturing at once and clears its identity, but a request already queued by posthog-js (a few seconds of events at most) can still be delivered. The renderer SDK is not even loaded until the host setting reads true, so browser-stored consent from an earlier launch can never act on its own. Errors raised before that moment are not reported. Autocapture, pageviews, replay, surveys and flags are disabled: only exceptions and identity leave the renderer.
+
+## Where it lives
+
+- `src/app/electron/diagnostics/posthog-client.ts` owns the host client, identity, and consent.
+- `src/app/electron/diagnostics/diagnostic-reporting.ts` plugs into the operation seam in `observability.ts` and keeps the local support index.
+- `src/app/palette/posthog.ts` owns the renderer SDK, identification, and consent sync.
+- `src/backend/src/lib/error-tracking.ts` owns backend capture and per-request context; the middleware flushes after each response.
+
+## Local support lookup
+
+Use **Show Recent Errors** in Command-K. Each row can copy an error reference or safe diagnostics. **Report a Problem** emits a `support_report` event. The index is `nevermind-diagnostics.json` in `app.getPath('logs')`: at most 100 records for seven days, written asynchronously.
+
+An event ID or `flush()` is not delivery proof. Only a successful PostHog event lookup for the `support_ref` proves remote availability.
+
+## Release source maps
+
+Main, preload, renderer, and renderer chunks produce hidden maps. Electron packaging excludes `.map` files. The release identity is `nevermind@<version>+<commit>.<build-platform>`.
+
+Release builds run `posthog-cli sourcemap process` (pinned in `scripts/upload-desktop-source-maps.cjs`) over `dist/` before packaging, without rebuilding.
+
+Required configuration:
+
+- Build and runtime: `VITE_POSTHOG_KEY`, `VITE_POSTHOG_HOST` (project token and ingestion host; both are public).
+- Release upload only: `POSTHOG_CLI_API_KEY` (personal API key with error tracking write) and `POSTHOG_CLI_PROJECT_ID`. These come from CI secrets and variables and never from build definitions.
+- Backend: `POSTHOG_KEY` and `POSTHOG_HOST` in the Vercel environment.
+
+## Verification
+
+The packaged diagnostics smoke test points the host client at a loopback collector with `POSTHOG_HOST_DESKTOP` (diagnostic test mode only) and asserts `support_report`, `operation_completed`, and a controlled main-process `$exception`. Renderer delivery depends on the build-time project key and is validated against a real project.

@@ -21,18 +21,14 @@ export function backendDiagnosticHeaders(
   context?: {
     actionId: string;
     journeyId: string;
-    traceHeaders?: { 'sentry-trace'?: string; baggage?: string };
   },
 ) {
   const headers: Record<string, string> = {};
-  if (!isDiagnosticBackend(url) || !context) return headers;
+  if (!(isDiagnosticBackend(url) && context)) return headers;
   if (isDiagnosticId(context.actionId))
     headers['x-nevermind-action-id'] = context.actionId;
   if (isDiagnosticId(context.journeyId))
     headers['x-nevermind-journey-id'] = context.journeyId;
-  const trace = context.traceHeaders?.['sentry-trace'];
-  if (trace && /^[a-f0-9]{32}-[a-f0-9]{16}(?:-[01])?$/.test(trace))
-    headers['sentry-trace'] = trace;
   return headers;
 }
 
