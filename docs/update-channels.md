@@ -21,6 +21,8 @@ and applies to startup, periodic, and manual checks.
 - Stable releases publish the default `latest*.yml` update metadata. Nightly
   releases publish `nightly*.yml` metadata (Windows `nightly.yml`, macOS
   `nightly-mac.yml`, Linux `nightly-linux[-arm64].yml`).
+- Windows is portable-only. Its `latest.yml`/`nightly.yml` name the portable
+  executable, which updates in place; see `docs/windows-release-readiness.md`.
 
 ## Switching to an older build
 
