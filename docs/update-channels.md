@@ -15,10 +15,9 @@ and applies to startup, periodic, and manual checks.
 - Switching channels discards any available or downloaded update from the
   previous channel and cancels its in-flight download. Results stamped for
   another channel are ignored.
-- Nightly versions are the next patch after the newest stable release with a
-  `-nightly.<date>.<run>` prerelease suffix. Semver precedence orders them:
-  a stable release outranks its own nightlies, and nightlies order by date and
-  then run number.
+- Dev builds use `YYYY.MMDD.N` versions, ordered by UTC date and daily build
+  sequence. Nightly and stable promotions retain the exact dev binary version;
+  their GitHub tags identify the channel. See `docs/release-promotion.md`.
 - Stable releases publish the default `latest*.yml` update metadata. Nightly
   releases publish `nightly*.yml` metadata (Windows `nightly.yml`, macOS
   `nightly-mac.yml`, Linux `nightly-linux[-arm64].yml`).
