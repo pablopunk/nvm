@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const fs = require('node:fs');
 const path = require('node:path');
-const ts = require('typescript');
+const ts = require('./lib/parse-typescript.cjs');
 
 // ── allowlist: host-rendered UI methods that require a fixture ──────────────
 // Keep in sync with docs/extension-api-ui-fixtures.md § "Current Fixture".
@@ -66,12 +66,7 @@ function isContextVar(name) {
 // ── 1.  Extract ui.* / input.* method names from the public API type ────────
 
 function extractUIMethods(dtsSource) {
-  const sf = ts.createSourceFile(
-    'api.d.ts',
-    dtsSource,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sf = ts.parseTypeScriptSource('api.d.ts', dtsSource);
   const ctxType = findTypeOrInterface(sf, 'ExtensionContext');
   if (!ctxType) {
     fail('ExtensionContext type not found in nevermind-extension-api.d.ts');
@@ -91,7 +86,7 @@ function findTypeOrInterface(node, name) {
     return node;
   }
   let result = undefined;
-  ts.forEachChild(node, (child) => {
+  node.forEachChild((child) => {
     const found = findTypeOrInterface(child, name);
     if (found) result = found;
   });
@@ -117,7 +112,7 @@ function extractNamespaceMembers(decl, namespaces) {
   }
 
   for (const member of typeLiteral.members) {
-    if (!ts.isPropertySignature(member)) continue;
+    if (!ts.isPropertySignatureDeclaration(member)) continue;
     const name =
       member.name && ts.isIdentifier(member.name)
         ? member.name.text
@@ -145,12 +140,7 @@ function extractNamespaceMembers(decl, namespaces) {
 // ── 2.  Collect fixture call sites (namespace + method) ─────────────────────
 
 function collectFixtureCalls(fixtureSource) {
-  const sf = ts.createSourceFile(
-    'fixture.ts',
-    fixtureSource,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sf = ts.parseTypeScriptSource('fixture.ts', fixtureSource);
   const calls = new Set();
 
   function visit(node) {
@@ -186,7 +176,7 @@ function collectFixtureCalls(fixtureSource) {
         calls.add(`ui.${nsAccess.name.text}`);
       }
     }
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
 
   visit(sf);

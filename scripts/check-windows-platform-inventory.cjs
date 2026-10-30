@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { createHash } = require('node:crypto');
-const ts = require('typescript');
+const ts = require('./lib/parse-typescript.cjs');
 
 const OS_LABELS = [
   'Finder',
@@ -122,9 +122,30 @@ function evidenceNode(node) {
   return current;
 }
 
+function childRoleKeys(node) {
+  const keys = [];
+  const seen = new Set();
+  let prototype = Object.getPrototypeOf(node);
+  while (prototype && prototype !== Object.prototype) {
+    for (const key of Object.getOwnPropertyNames(prototype)) {
+      if (key === 'constructor' || seen.has(key)) continue;
+      seen.add(key);
+      keys.push(key);
+    }
+    prototype = Object.getPrototypeOf(prototype);
+  }
+  return keys;
+}
+
 function childRole(parent, child) {
-  for (const [key, value] of Object.entries(parent)) {
+  for (const key of childRoleKeys(parent)) {
     if (key === 'parent') continue;
+    let value;
+    try {
+      value = parent[key];
+    } catch {
+      continue;
+    }
     if (value === child) return key;
     if (Array.isArray(value)) {
       const index = value.indexOf(child);
@@ -182,7 +203,8 @@ function isInjectedPlatformSite(node) {
   if (!ts.isIdentifier(node) || node.text !== 'processPlatform') return false;
   return !(
     (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) ||
-    (ts.isPropertySignature(node.parent) && node.parent.name === node) ||
+    (ts.isPropertySignatureDeclaration(node.parent) &&
+      node.parent.name === node) ||
     (ts.isPropertyAssignment(node.parent) && node.parent.name === node)
   );
 }
@@ -216,13 +238,7 @@ function isKnownFolderArray(node) {
 }
 
 function detectSitesInSource(relativePath, sourceText) {
-  const sourceFile = ts.createSourceFile(
-    relativePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-    relativePath.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
-  );
+  const sourceFile = ts.parseTypeScriptSource(relativePath, sourceText);
   const sites = [];
 
   function add(category, node) {
@@ -256,7 +272,7 @@ function detectSitesInSource(relativePath, sourceText) {
       isKnownFolderArray(node)
     )
       add('known-folder', node);
-    ts.forEachChild(node, visit);
+    node.forEachChild(visit);
   }
   visit(sourceFile);
   return sites;

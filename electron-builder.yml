@@ -20,10 +20,10 @@ files:
       - '!_context.ts'
       - '!emoji-symbol-data.ts'
       - '!index.ts'
-  - from: node_modules/typescript/lib
-    to: node_modules/typescript/lib
-    filter:
-      - 'lib*.d.ts'
+  # TypeScript 7's native checker cannot spawn from inside the asar; scripts/
+  # after-pack.cjs stages it unpacked under Resources/typescript-native.
+  - '!**/node_modules/@typescript/typescript-*'
+  - '!**/node_modules/@typescript/typescript-*/**'
   - LICENSE
   - THIRD_PARTY_NOTICES.md
   - package.json

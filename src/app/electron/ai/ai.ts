@@ -4,7 +4,7 @@ import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import os from 'node:os';
 import { app } from 'electron';
-import ts from 'typescript';
+import { typecheckTypeScriptFiles } from '../extension-host/typescript-api';
 import type {
   AgentSession as PiAgentSession,
   AgentSessionEvent,
@@ -2043,32 +2043,19 @@ async function ensureExtensionTypeDefinitions(
 }
 
 function typecheckExtension(filePath: string, typeDefinitionsPath: string) {
-  const options: ts.CompilerOptions = {
-    target: ts.ScriptTarget.ES2022,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.Bundler,
+  const errors = typecheckTypeScriptFiles([filePath, typeDefinitionsPath], {
+    target: 'ES2022',
+    module: 'ESNext',
+    moduleResolution: 'Bundler',
     strict: false,
     noEmit: true,
     skipLibCheck: true,
     esModuleInterop: true,
     allowSyntheticDefaultImports: true,
     allowImportingTsExtensions: true,
-  };
-  const program = ts.createProgram([filePath, typeDefinitionsPath], options);
-  const diagnostics = ts
-    .getPreEmitDiagnostics(program)
-    .filter(
-      (diagnostic) => diagnostic.category === ts.DiagnosticCategory.Error,
-    );
-  if (!diagnostics.length) return;
-  const host: ts.FormatDiagnosticsHost = {
-    getCanonicalFileName: (fileName) => fileName,
-    getCurrentDirectory: () => path.dirname(filePath),
-    getNewLine: () => '\n',
-  };
-  const formatted = ts.formatDiagnosticsWithColorAndContext(diagnostics, host);
-  const plain = formatted.replace(/\x1b\[[0-9;]*m/g, '');
-  throw new Error(`TypeScript validation failed:\n${plain}`);
+  });
+  if (!errors.length) return;
+  throw new Error(`TypeScript validation failed:\n${errors.join('\n')}`);
 }
 
 async function validateTypeScriptExtension(

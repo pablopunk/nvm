@@ -38,7 +38,7 @@ If main/preload starts depending on a renderer/build/dev-only package, fix the b
 
 ## Why TypeScript stays packaged
 
-TypeScript is intentionally still a production dependency. The main process uses it to typecheck and validate generated Nevermind extensions before loading them. Do not remove or trim TypeScript without adding packaged extension-validation smoke coverage.
+TypeScript is intentionally still a production dependency. The main process uses it to typecheck and validate generated Nevermind extensions before loading them. TypeScript 7 runs its checker as a native binary that cannot spawn from inside the asar, so `scripts/stage-typescript-native.cjs` copies the target platform's `@typescript/typescript-*` lib directory (checker binary plus `lib*.d.ts`) unpacked under `Resources/typescript-native` during `afterPack`. Do not remove or trim TypeScript without adding packaged extension-validation smoke coverage.
 
 ## What not to strip casually
 

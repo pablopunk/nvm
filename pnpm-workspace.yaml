@@ -1,3 +1,9 @@
+supportedArchitectures:
+  # dist:mac:all builds arm64 and x64 from one machine; both variants of the
+  # TypeScript native checker must be present for scripts/after-pack.cjs staging.
+  cpu:
+    - x64
+    - arm64
 allowBuilds:
   '@google/genai': true
   core-js: false
