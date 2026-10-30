@@ -79,6 +79,17 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
+      - name: Locate pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(mise exec -- pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: dev-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'mise.toml') }}
+
       - name: Stamp nightly package version
         shell: bash
         run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
@@ -154,6 +165,17 @@ jobs:
 
       - name: Setup mise
         uses: jdx/mise-action@v2
+
+      - name: Locate pnpm store
+        id: pnpm-store
+        shell: bash
+        run: echo "path=$(mise exec -- pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: dev-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'mise.toml') }}
 
       - name: Stamp nightly package version
         run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"

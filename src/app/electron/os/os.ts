@@ -11,32 +11,32 @@ import {
   type BrowserWindowConstructorOptions,
   shell,
 } from 'electron';
+import { debug as logDebug, warn as logWarn } from '../platform/logger';
+import {
+  createDirectoryTreeWatch,
+  type DirectoryTreeWatchDependency,
+  type DirectoryTreeWatcher,
+} from './directory-tree-watch';
+import type {
+  DesktopTextAccess,
+  DesktopTextTarget,
+} from './desktop-text-access';
 import {
   EXTENSION_WINDOW_CAPABILITIES,
   type ExtensionWindowSession,
   hasExtensionWindowCapability,
 } from './extension-window-capabilities';
-import { debug as logDebug, warn as logWarn } from '../platform/logger';
+import { createLinuxDesktopText } from './linux-desktop-text';
 import {
   macosAppFocusRestoreScript,
   parseLsappinfoTarget,
 } from './macos-app-focus';
 import { macosSelectionAccess } from './macos-selected-text';
 import {
-  createDirectoryTreeWatch,
-  type DirectoryTreeWatchDependency,
-  type DirectoryTreeWatcher,
-} from './directory-tree-watch';
-import { createLinuxDesktopText } from './linux-desktop-text';
-import { createWindowsDesktopText } from './windows-desktop-text';
-import type {
-  DesktopTextAccess,
-  DesktopTextTarget,
-} from './desktop-text-access';
-import {
   readWindowsIconResourcePng,
   windowsShortcutIconSources,
 } from './windows-app-icons';
+import { createWindowsDesktopText } from './windows-desktop-text';
 
 type OsDependent<T> = Partial<Record<'darwin' | 'linux' | 'win32', T>> & {
   default?: T;
@@ -471,7 +471,6 @@ export function applyPaletteWindowPolicy(win: BrowserWindow | null) {
     darwin: (window) => {
       if (!window) return;
       window.setAlwaysOnTop(true, 'screen-saver');
-      window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
       window.setWindowButtonVisibility?.(false);
       window.setFullScreenable(false);
       window.setSkipTaskbar(true);

@@ -7,6 +7,14 @@ const ts = require('./lib/parse-typescript.cjs');
 
 const ROOT = process.cwd();
 const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os', 'os.ts');
+const SPACES_FILE = path.join(
+  ROOT,
+  'src',
+  'app',
+  'electron',
+  'os',
+  'palette-spaces.ts',
+);
 
 /**
  * Contract points from docs/window-management.md.
@@ -15,7 +23,7 @@ const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os', 'os.ts');
  * The doc requires that the main palette window on macOS combines:
  *   1. type: 'panel'         (paletteBrowserWindowOptions)
  *   2. activationPolicy       (prepareAppWindowPolicy)
- *   3. visibleOnAllWorkspaces (applyPaletteWindowPolicy)
+ *   3. visibleOnAllWorkspaces (setPaletteVisibleOnAllWorkspaces)
  *   4. non-normal always-on-top (applyPaletteWindowPolicy)
  */
 const CONTRACTS = [
@@ -27,15 +35,20 @@ const CONTRACTS = [
   },
   {
     name: 'applyPaletteWindowPolicy',
+    required: ['setAlwaysOnTop(true', 'screen-saver', 'darwin'],
+    message: 'must set always-on-top (screen-saver) on macOS',
+    docRef: 'docs/window-management.md:7-10',
+  },
+  {
+    name: 'setVisibleOnAllSpaces',
+    file: SPACES_FILE,
     required: [
-      'setAlwaysOnTop(true',
-      'screen-saver',
-      'setVisibleOnAllWorkspaces(true',
+      'setVisibleOnAllWorkspaces(visible',
       'visibleOnFullScreen: true',
+      'skipTransformProcessType: true',
       'darwin',
     ],
-    message:
-      'must set always-on-top (screen-saver) and visible-on-all-workspaces on macOS',
+    message: 'must support showing the palette on all macOS Spaces',
     docRef: 'docs/window-management.md:7-10',
   },
   {
@@ -94,14 +107,14 @@ function findFunctionSource(source, sf, name) {
 // ── main ────────────────────────────────────────────────────────────────────
 
 function main() {
-  const source = fs.readFileSync(OS_FILE, 'utf8');
-  const sf = ts.parseTypeScriptSource('os.ts', source);
-
   for (const contract of CONTRACTS) {
+    const file = contract.file || OS_FILE;
+    const source = fs.readFileSync(file, 'utf8');
+    const sf = ts.parseTypeScriptSource(path.basename(file), source);
     const fnSource = findFunctionSource(source, sf, contract.name);
     if (!fnSource) {
       fail(
-        `Function "${contract.name}" not found in ${relative(OS_FILE)}.\n` +
+        `Function "${contract.name}" not found in ${relative(file)}.\n` +
           `  Contract: ${contract.message} (${contract.docRef})`,
       );
       continue;
@@ -110,7 +123,7 @@ function main() {
     for (const required of contract.required) {
       if (!fnSource.includes(required)) {
         fail(
-          `"${required}" missing from ${contract.name}() in ${relative(OS_FILE)}.\n` +
+          `"${required}" missing from ${contract.name}() in ${relative(file)}.\n` +
             `  Contract: ${contract.message} (${contract.docRef})`,
         );
       }
