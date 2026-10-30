@@ -121,7 +121,6 @@ test('every relevant PR gets one same-run fail-closed gate and three OS package 
     'pi-change-classification',
     'check',
     'pi-integration-tests',
-    'electron-smoke',
     'packaged-dependency-contracts',
     'packaged-diagnostics',
     'pi-packaged-macos',
@@ -133,4 +132,17 @@ test('every relevant PR gets one same-run fail-closed gate and three OS package 
   assert.match(ciWorkflow, /verify-packaged-pi-electron-evidence\.cjs/);
   assert.match(ciWorkflow, /Verify packaged Pi Electron session evidence/);
   assert.match(ciWorkflow, /verify-pi-integration-evidence\.cjs/);
+});
+
+test('desktop smoke jobs run only on manual dispatch', function manualSmokeJobs() {
+  for (const [job, next] of [
+    ['electron-smoke', 'macos-electron-smoke'],
+    ['macos-electron-smoke', 'pi-integration-tests'],
+    ['windows-first-run', 'windows-package-smoke'],
+    ['windows-package-smoke', 'postgres-integration'],
+  ]) {
+    const section = jobSection(ciWorkflow, job, next);
+    assert.match(section, /if: github\.event_name == 'workflow_dispatch'/);
+    assert.doesNotMatch(section, /github\.event_name == 'pull_request'/);
+  }
 });

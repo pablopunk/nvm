@@ -7,7 +7,6 @@ const test = require('node:test');
 const {
   normalizeRepositoryPath,
 } = require('../../scripts/check-os-platform-boundaries.cjs');
-const { isWindowsPackageRelevantPath } = require('./windows-package-paths.cjs');
 
 function section(source, start, end) {
   const startIndex = source.indexOf(start);
@@ -16,27 +15,6 @@ function section(source, start, end) {
   assert.notEqual(endIndex, -1, `missing ${end}`);
   return source.slice(startIndex, endIndex);
 }
-
-test('Windows packaging filter covers every package and application input', () => {
-  for (const candidate of [
-    '.gitattributes',
-    '.github/workflows/ci.yml',
-    '.github/scripts/verify-windows-package.ps1',
-    'build/Icon.icon/Assets/icon.png',
-    'electron-builder.yml',
-    'package.json',
-    'pnpm-lock.yaml',
-    'scripts/windows-portable-smoke.cjs',
-    'src/app/electron/main.ts',
-    'src/app/resources/nevermind-extension-api.d.ts',
-    'src/app/palette/ui.tsx',
-    'tests/electron/palette.smoke.spec.ts',
-  ]) {
-    assert.equal(isWindowsPackageRelevantPath(candidate), true, candidate);
-  }
-  assert.equal(isWindowsPackageRelevantPath('src/backend/src/index.ts'), false);
-  assert.equal(isWindowsPackageRelevantPath('README.md'), false);
-});
 
 test('builder config has deterministic unsigned-inspectable Windows targets', () => {
   const builder = fs.readFileSync('electron-builder.yml', 'utf8');
@@ -134,9 +112,10 @@ test('Windows package smoke remains separate from first-run development smoke an
     '\n  postgres-integration:\n',
   );
   assert.match(firstRun, /windows-first-run-smoke\.cjs/);
+  assert.match(packageSmoke, /if: github\.event_name == 'workflow_dispatch'/);
+  assert.doesNotMatch(packageSmoke, /pull_request|windows_package_changed/);
   for (const expected of [
     "github.event_name == 'workflow_dispatch'",
-    'windows_package_changed',
     'runs-on: windows-latest',
     '& $env:PNPM_STANDALONE_PATH verify',
     'CSC_IDENTITY_AUTO_DISCOVERY',
