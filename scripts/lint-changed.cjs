@@ -41,13 +41,17 @@ if (result.status !== 0 && stderr.includes('No files were processed')) {
   process.exit(result.status ?? 1);
 }
 
-const inventory = spawnSync(
-  process.execPath,
-  ['scripts/check-windows-platform-inventory.cjs'],
-  { stdio: 'inherit', timeout: 60_000 },
-);
-if (inventory.error) {
-  process.stderr.write(`${inventory.error.message}\n`);
-  process.exit(1);
+for (const script of [
+  'scripts/check-windows-platform-inventory.cjs',
+  'scripts/check-extension-fixture-coverage.cjs',
+]) {
+  const check = spawnSync(process.execPath, [script], {
+    stdio: 'inherit',
+    timeout: 60_000,
+  });
+  if (check.error) {
+    process.stderr.write(`${check.error.message}\n`);
+    process.exit(1);
+  }
+  if (check.status !== 0) process.exit(check.status ?? 1);
 }
-process.exit(inventory.status ?? 1);

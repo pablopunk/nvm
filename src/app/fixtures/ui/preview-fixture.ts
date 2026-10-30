@@ -40,6 +40,14 @@ function previewFileFixtureAction(
 }
 
 export function previewView(ctx: ExtensionContext) {
+  const legacyPreviewAction = ctx.actions.run(
+    'Preview with legacy API',
+    (innerCtx) =>
+      innerCtx.ui.preview({
+        title: 'Legacy Preview',
+        content: 'Existing extensions can still open preview views.',
+      }),
+  );
   const templateAction = ctx.actions.run(
     'Expand Template',
     async (innerCtx) => {
@@ -71,10 +79,10 @@ export function previewView(ctx: ExtensionContext) {
     title: 'Dev UI · Preview',
     content:
       '# Preview Fixture\n\nThis exercises `ctx.ui.previewView`, bounded text/binary `ctx.ui.previewFile`, action panels, and `ctx.text.template(...)`.',
-    actions: [templateAction, ...fileActions],
+    actions: [templateAction, legacyPreviewAction, ...fileActions],
     actionPanel: {
       sections: [
-        { actions: [templateAction] },
+        { actions: [templateAction, legacyPreviewAction] },
         { title: 'ctx.ui.previewFile', actions: fileActions },
       ],
     },
