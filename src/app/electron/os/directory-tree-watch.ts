@@ -21,6 +21,9 @@ export function requiresIndividualDirectoryWatches(platform: NodeJS.Platform) {
   return platform === 'linux';
 }
 
+export const watchesIndexedDirectoriesIndividually =
+  requiresIndividualDirectoryWatches(process.platform);
+
 export function createDirectoryTreeWatch(
   platform: NodeJS.Platform,
   watchDependency: DirectoryTreeWatchDependency = watch as never,

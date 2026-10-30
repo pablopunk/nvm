@@ -3,7 +3,7 @@ import type {
   DirectoryTreeChangeListener,
   DirectoryTreeWatcher,
 } from '../os/directory-tree-watch';
-import { requiresIndividualDirectoryWatches } from '../os/directory-tree-watch';
+import { watchesIndexedDirectoriesIndividually } from '../os/directory-tree-watch';
 import { warn as logWarn } from '../platform/logger';
 import { ignoredByPattern } from './ignore-patterns';
 
@@ -78,7 +78,7 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
     scope = nextScope;
     const directories =
       (deps.watchDirectoriesIndividually ??
-      requiresIndividualDirectoryWatches(process.platform))
+      watchesIndexedDirectoriesIndividually)
         ? nextScope.indexedDirectories || []
         : [];
     const allDirectories = [...new Set([...nextScope.roots, ...directories])];
