@@ -1,5 +1,6 @@
 // biome-ignore-all lint: End-to-end Electron harness intentionally uses dynamic page payloads, polling, process cleanup primitives, injected environment names, and bounded process control.
 import { execFile as execFileCallback } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import { createRequire } from 'node:module';
@@ -463,7 +464,14 @@ test('shared state has one live app writer and can reopen after a crash', async 
       ),
     );
     await waitForSingletonLockRelease(
-      path.join(directory, '.shared-instance', 'lockfile'),
+      path.join(
+        shared,
+        '.instance-locks',
+        createHash('sha256')
+          .update(path.join(await fs.realpath(directory), 'shared'))
+          .digest('hex'),
+        'lockfile',
+      ),
       10_000,
     );
     await fs.rm(directory, {
