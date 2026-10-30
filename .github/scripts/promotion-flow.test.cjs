@@ -36,7 +36,17 @@ test('dev assets retain verified metadata and bytes through stable promotion', (
   const metadata = `version: ${version}\nfiles:\n  - url: ${binary}\n    sha512: ${digest}\n    size: ${fs.statSync(path.join(dev, binary)).size}\npath: ${binary}\nsha512: ${digest}\n`;
   for (const name of NIGHTLY_UPDATER_METADATA) {
     const file = path.join(dev, name);
-    fs.writeFileSync(file, metadata);
+    const target =
+      name === 'nightly-mac.yml'
+        ? `Nevermind-${version}-mac-arm64.zip`
+        : binary;
+    const targetBytes = fs.readFileSync(path.join(dev, target));
+    const targetDigest = crypto
+      .createHash('sha512')
+      .update(targetBytes)
+      .digest('base64');
+    const targetMetadata = `version: ${version}\nfiles:\n  - url: ${target}\n    sha512: ${targetDigest}\n    size: ${targetBytes.length}\npath: ${target}\nsha512: ${targetDigest}\n`;
+    fs.writeFileSync(file, targetMetadata);
     stampMetadata(file);
   }
   const cli = path.join(__dirname, 'nightly-release-cli.cjs');

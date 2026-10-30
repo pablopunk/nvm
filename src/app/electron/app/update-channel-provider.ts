@@ -28,9 +28,20 @@ export type ChannelUpdateInfo = UpdateInfo & {
   updateChannel: UpdateChannel;
 };
 
+export function hasCompatibleMacUpdate(
+  info: UpdateInfo,
+  arch: string,
+): boolean {
+  if (arch !== 'arm64' && arch !== 'x64') return false;
+  return (info.files ?? []).some((file) =>
+    file.url.endsWith(`-mac-${arch}.zip`),
+  );
+}
+
 // Stock GitHubProvider only understands channel-named prereleases; this provider picks the newest eligible release by semver across stable and nightly tags.
 export class NevermindChannelProvider extends GitHubProvider {
   private readonly resolveChannel: () => UpdateChannel;
+  private readonly updatePlatform: ProviderRuntimeOptions['platform'];
 
   constructor(
     options: ChannelFeedOptions,
@@ -39,6 +50,7 @@ export class NevermindChannelProvider extends GitHubProvider {
   ) {
     super(options, updater, runtimeOptions);
     this.resolveChannel = options.resolveChannel;
+    this.updatePlatform = runtimeOptions.platform;
   }
 
   async getLatestVersion(): Promise<ChannelUpdateInfo> {
@@ -135,6 +147,12 @@ export class NevermindChannelProvider extends GitHubProvider {
           ),
           { code: 'ERR_UPDATER_INVALID_UPDATE_INFO' },
         );
+      if (
+        this.updatePlatform === 'darwin' &&
+        !hasCompatibleMacUpdate(info, process.arch)
+      ) {
+        throw new Error(`No compatible macOS update for ${process.arch}`);
+      }
       return info;
     } catch (error) {
       if ((error as { statusCode?: number }).statusCode === 404) return null;
