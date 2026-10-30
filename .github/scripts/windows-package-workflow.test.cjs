@@ -67,7 +67,7 @@ test('package verifier enforces ASAR, signatures, metadata policy, icons, and fi
     'updaterMetadata = $updaterMetadata',
     '([uint64]$bytes[$Offset] * 16777216)',
     'NativeResourceCounter',
-    'schemaVersion = 1',
+    'schemaVersion = 2',
     "'Portable'",
     'windows-portable-update.ps1',
     'app-update.yml',
