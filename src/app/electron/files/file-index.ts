@@ -85,7 +85,7 @@ export async function scanFileIndex(
         try {
           entries = await fs.readdir(dir, { withFileTypes: true });
         } catch {
-          if (depth === maxDepth) unreadableRoots.push(dir);
+          unreadableRoots.push(dir);
           return;
         }
 
