@@ -6,6 +6,8 @@ process.env.WORKOS_API_KEY = 'sk_test_preview';
 process.env.WORKOS_CLIENT_ID = 'client_test_preview';
 process.env.WORKOS_COOKIE_PASSWORD = 'production-session-key';
 process.env.PREVIEW_SESSION_KEY = 'preview-session-key';
+process.env.NVM_ENV = 'preview';
+process.env.NVM_DATABASE_ENV = 'preview';
 process.env.VERCEL_ENV = 'preview';
 
 const [{ GET: balances }, { GET: billing }, { createPreviewSessionToken, PREVIEW_SESSION_COOKIE }, { setDbForTests, resetDbForTests }] = await Promise.all([
