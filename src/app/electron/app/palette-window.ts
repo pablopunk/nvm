@@ -14,6 +14,7 @@ import {
 import {
   applyPaletteWindowPolicy as applyOsPaletteWindowPolicy,
   paletteBrowserWindowOptions,
+  setPaletteVisibleOnAllWorkspaces,
   supportsProgrammaticWindowPositioning,
 } from '../os/os';
 import * as logger from '../platform/logger';
@@ -22,11 +23,11 @@ import {
   isNvmTestMode,
   recordTestWindowEvent,
 } from '../platform/test-mode';
-import { recordStartupReady } from './startup-ready';
 import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
 } from './palette-shortcuts';
+import { recordStartupReady } from './startup-ready';
 import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
@@ -97,6 +98,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let win: BrowserWindow | null = null;
   let ignorePaletteBlurUntil = 0;
   let pendingShowOnReady = false;
+  let confineToCurrentSpaceTimer: ReturnType<typeof setTimeout> | undefined;
   let currentPaletteMode: PaletteMode = 'default';
   let focusReturnTarget: unknown = null;
   let restoredFocusReturnTarget: unknown = null;
@@ -285,6 +287,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         });
         ignorePaletteBlurUntil = Date.now() + 500;
         applyPaletteWindowPolicy();
+        clearTimeout(confineToCurrentSpaceTimer);
+        setPaletteVisibleOnAllWorkspaces(win, true);
         debugLog('showPalette', {
           options: showOptions,
           visible: win.isVisible(),
@@ -301,6 +305,10 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
           win.webContents.send('palette:shortcut-show');
         else win.webContents.send('palette:shown');
         if (!isNvmHeadlessTestMode) win.show();
+        confineToCurrentSpaceTimer = setTimeout(() => {
+          if (win && !win.isDestroyed() && win.isVisible())
+            setPaletteVisibleOnAllWorkspaces(win, false);
+        }, 80);
         if (isNvmTestMode) recordTestWindowEvent('shown');
         win.moveTop();
         if (!isNvmHeadlessTestMode) {
@@ -348,6 +356,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         bounds: win.getBounds(),
         opacity: win.getOpacity(),
       });
+      clearTimeout(confineToCurrentSpaceTimer);
+      setPaletteVisibleOnAllWorkspaces(win, false);
       if (isNvmTestMode) recordTestWindowEvent('hidden');
       win.webContents.send('palette:hidden');
       win.hide();
