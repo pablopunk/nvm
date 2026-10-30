@@ -22,7 +22,8 @@ The desktop host process does not talk to PostHog directly. It posts PostHog-for
 - keeps the project key server-side (the app ships only a placeholder key),
 - accepts a fixed set of event names from a real install id and drops everything else, rejects client-supplied person properties, location and ip, and forces every event anonymous,
 - rate-limits per IP, caps batch and event size, and accepts gzip,
-- forwards accepted events to PostHog and answers 503 on failure so the app retries with backoff,
+- forwards accepted events to PostHog and answers 503 on failure (or when the server key is missing) so the app retries a few times; after that it drops the batch, so a long PostHog outage loses events instead of queueing them,
+- trims oversized exceptions (message to 2,000 characters, stack to the 50 frames nearest the throw) instead of dropping them,
 - logs a per-batch summary (counts by event name) to Axiom,
 - stops everything with `TELEMETRY_INGEST_ENABLED=false` in the Vercel environment (it answers success so installed apps stop retrying).
 

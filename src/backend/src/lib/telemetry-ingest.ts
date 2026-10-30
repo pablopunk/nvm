@@ -9,6 +9,8 @@ export const MAX_RAW_BYTES = 256 * 1024;
 export const MAX_DECODED_BYTES = 1024 * 1024;
 export const MAX_BATCH_EVENTS = 100;
 const MAX_EVENT_BYTES = 64 * 1024;
+const MAX_EXCEPTION_TEXT = 2_000;
+const MAX_EXCEPTION_FRAMES = 50;
 const MAX_PROPERTY_KEYS = 80;
 const MAX_EVENT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_EVENT_SKEW_MS = 5 * 60 * 1000;
@@ -51,18 +53,41 @@ export type IngestBody =
   | { ok: true; value: unknown }
   | { ok: false; status: 400 | 413 };
 
+// Reads the body incrementally and stops as soon as the cap is crossed, so a
+// request with a missing or false Content-Length cannot be buffered whole.
+async function readCapped(
+  request: Request,
+  limit: number,
+): Promise<{ ok: true; value: Buffer } | { ok: false; status: 400 | 413 }> {
+  if (!request.body) return { ok: true, value: Buffer.alloc(0) };
+  const reader = request.body.getReader();
+  const chunks: Buffer[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > limit) {
+        await reader.cancel();
+        return { ok: false, status: 413 };
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } catch {
+    return { ok: false, status: 400 };
+  }
+  return { ok: true, value: Buffer.concat(chunks) };
+}
+
 export async function readIngestBody(request: Request): Promise<IngestBody> {
   const declared = Number(request.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > MAX_RAW_BYTES) {
     return { ok: false, status: 413 };
   }
-  let raw: Buffer;
-  try {
-    raw = Buffer.from(await request.arrayBuffer());
-  } catch {
-    return { ok: false, status: 400 };
-  }
-  if (raw.length > MAX_RAW_BYTES) return { ok: false, status: 413 };
+  const read = await readCapped(request, MAX_RAW_BYTES);
+  if (!read.ok) return read;
+  const raw = read.value;
   try {
     const decoded =
       request.headers.get('content-encoding')?.toLowerCase() === 'gzip'
@@ -106,6 +131,28 @@ function sanitizeProperties(source: unknown) {
   return properties;
 }
 
+// A long error message or stack must not cost the whole event: keep the head of
+// each message and the frames nearest the throw, which is what debugging needs.
+function truncateException(properties: Record<string, unknown>) {
+  const list = properties.$exception_list;
+  if (!Array.isArray(list)) return;
+  properties.$exception_list = list.slice(0, 5).map((entry) => {
+    if (!isPlainObject(entry)) return entry;
+    const trimmed: Record<string, unknown> = { ...entry };
+    if (typeof trimmed.value === 'string') {
+      trimmed.value = trimmed.value.slice(0, MAX_EXCEPTION_TEXT);
+    }
+    const stack = trimmed.stacktrace;
+    if (isPlainObject(stack) && Array.isArray(stack.frames)) {
+      trimmed.stacktrace = {
+        ...stack,
+        frames: stack.frames.slice(-MAX_EXCEPTION_FRAMES),
+      };
+    }
+    return trimmed;
+  });
+}
+
 function sanitizeEvent(input: unknown, now: number): IngestEvent | null {
   if (!isPlainObject(input)) return null;
   const { event, distinct_id: distinctId, uuid } = input;
@@ -132,7 +179,10 @@ function sanitizeEvent(input: unknown, now: number): IngestEvent | null {
     ...(timestamp ? { timestamp } : {}),
     properties,
   };
-  return JSON.stringify(sanitized).length > MAX_EVENT_BYTES ? null : sanitized;
+  if (JSON.stringify(sanitized).length <= MAX_EVENT_BYTES) return sanitized;
+  if (event !== '$exception') return null;
+  truncateException(sanitized.properties);
+  return JSON.stringify(sanitized).length <= MAX_EVENT_BYTES ? sanitized : null;
 }
 
 export function sanitizeBatch(body: unknown, now: number) {

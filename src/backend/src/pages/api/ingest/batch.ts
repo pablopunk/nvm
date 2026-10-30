@@ -26,6 +26,11 @@ export const POST: APIRoute = async ({ request }) => {
   const batch = sanitizeBatch(body.value, Date.now());
   if (!batch) return new Response(null, { status: 400 });
   const key = process.env.POSTHOG_KEY;
+  if (batch.events.length > 0 && !key) {
+    // Answering success would make every app discard its events silently.
+    log.error('telemetry_ingest_misconfigured', { reason: 'POSTHOG_KEY is not set' });
+    return new Response(null, { status: 503 });
+  }
   if (batch.events.length > 0 && key) {
     let delivered = false;
     try {
@@ -36,14 +41,14 @@ export const POST: APIRoute = async ({ request }) => {
     } catch (error) {
       log.warn('telemetry_ingest_forward_failed', { error });
     }
-    // A 503 makes the app keep the batch and retry with backoff.
+    // A 503 makes the app retry a few times; after that it drops the batch, so
+    // a long PostHog outage loses events rather than queueing them forever.
     if (!delivered) return new Response(null, { status: 503 });
   }
   log.info('telemetry_ingest', {
     accepted: batch.events.length,
     dropped: batch.dropped,
     events: countByEvent(batch.events),
-    forwarded: Boolean(key),
   });
   return new Response(JSON.stringify({ status: 1 }), { headers: JSON_HEADERS });
 };

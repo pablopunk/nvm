@@ -118,6 +118,47 @@ test('a batch is capped and oversized events are dropped', () => {
   assert.equal(sanitizeBatch({ batch: [huge] }, NOW)?.events.length, 0);
 });
 
+test('an oversized exception is trimmed, not dropped', () => {
+  const frame = { filename: 'app:///main.js', lineno: 1, colno: 1, function: 'f' };
+  const exception = event({
+    event: '$exception',
+    properties: {
+      $exception_list: [
+        {
+          type: 'Error',
+          value: 'm'.repeat(200 * 1024),
+          stacktrace: { frames: Array.from({ length: 500 }, () => frame) },
+        },
+      ],
+    },
+  });
+  const result = sanitizeBatch({ batch: [exception] }, NOW);
+  assert.equal(result?.events.length, 1);
+  const entry = (result?.events[0]?.properties.$exception_list as Array<{
+    value: string;
+    stacktrace: { frames: unknown[] };
+  }>)[0];
+  assert.equal(entry?.value.length, 2_000);
+  assert.equal(entry?.stacktrace.frames.length, 50);
+});
+
+test('a body past the cap is refused while streaming, even without a length header', async () => {
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (let index = 0; index < 20; index += 1) {
+        controller.enqueue(new Uint8Array(32 * 1024));
+      }
+      controller.close();
+    },
+  });
+  const streamed = new Request('https://api.nvm.fyi/api/ingest/batch/', {
+    method: 'POST',
+    body: stream,
+    duplex: 'half',
+  } as RequestInit);
+  assert.deepEqual(await readIngestBody(streamed), { ok: false, status: 413 });
+});
+
 test('events are counted by name for the archive log', () => {
   const result = sanitizeBatch(
     { batch: [event(), event(), event({ event: 'app.launched' })] },
