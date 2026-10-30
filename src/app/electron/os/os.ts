@@ -485,20 +485,6 @@ export function applyPaletteWindowPolicy(win: BrowserWindow | null) {
   })(win);
 }
 
-export function setPaletteVisibleOnAllWorkspaces(
-  window: BrowserWindow | null,
-  visible: boolean,
-) {
-  return osFunction<[BrowserWindow | null, boolean], void>({
-    darwin: (win, enabled) => {
-      win?.setVisibleOnAllWorkspaces(enabled, {
-        visibleOnFullScreen: true,
-        skipTransformProcessType: true,
-      });
-    },
-  })(window, visible);
-}
-
 export function prepareAppWindowPolicy() {
   return osFunction({
     darwin: () => {

@@ -7,6 +7,14 @@ const ts = require('./lib/parse-typescript.cjs');
 
 const ROOT = process.cwd();
 const OS_FILE = path.join(ROOT, 'src', 'app', 'electron', 'os', 'os.ts');
+const SPACES_FILE = path.join(
+  ROOT,
+  'src',
+  'app',
+  'electron',
+  'os',
+  'palette-spaces.ts',
+);
 
 /**
  * Contract points from docs/window-management.md.
@@ -32,9 +40,10 @@ const CONTRACTS = [
     docRef: 'docs/window-management.md:7-10',
   },
   {
-    name: 'setPaletteVisibleOnAllWorkspaces',
+    name: 'setVisibleOnAllSpaces',
+    file: SPACES_FILE,
     required: [
-      'setVisibleOnAllWorkspaces(enabled',
+      'setVisibleOnAllWorkspaces(visible',
       'visibleOnFullScreen: true',
       'skipTransformProcessType: true',
       'darwin',
@@ -98,14 +107,14 @@ function findFunctionSource(source, sf, name) {
 // ── main ────────────────────────────────────────────────────────────────────
 
 function main() {
-  const source = fs.readFileSync(OS_FILE, 'utf8');
-  const sf = ts.parseTypeScriptSource('os.ts', source);
-
   for (const contract of CONTRACTS) {
+    const file = contract.file || OS_FILE;
+    const source = fs.readFileSync(file, 'utf8');
+    const sf = ts.parseTypeScriptSource(path.basename(file), source);
     const fnSource = findFunctionSource(source, sf, contract.name);
     if (!fnSource) {
       fail(
-        `Function "${contract.name}" not found in ${relative(OS_FILE)}.\n` +
+        `Function "${contract.name}" not found in ${relative(file)}.\n` +
           `  Contract: ${contract.message} (${contract.docRef})`,
       );
       continue;
@@ -114,7 +123,7 @@ function main() {
     for (const required of contract.required) {
       if (!fnSource.includes(required)) {
         fail(
-          `"${required}" missing from ${contract.name}() in ${relative(OS_FILE)}.\n` +
+          `"${required}" missing from ${contract.name}() in ${relative(file)}.\n` +
             `  Contract: ${contract.message} (${contract.docRef})`,
         );
       }

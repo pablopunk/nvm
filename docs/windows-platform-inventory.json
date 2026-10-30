@@ -635,10 +635,10 @@
       "surface": "system-actions-settings"
     },
     {
-      "key": "os-platform-selector-palette-workspaces",
-      "file": "src/app/electron/os/os.ts",
-      "category": "platform-selector",
-      "selector": "function:setPaletteVisibleOnAllWorkspaces::platform-selector::darwin: (win, enabled) => { win?.setVisibleOnAllWorkspaces(enabled, { visibleOnFullScreen: true,…#942c86aa558d::self",
+      "key": "palette-spaces-direct-platform",
+      "file": "src/app/electron/os/palette-spaces.ts",
+      "category": "direct-platform",
+      "selector": "function:createPaletteSpaces/function:setVisibleOnAllSpaces/if:process.platform !== 'darwin'::direct-platform::if (process.platform !== 'darwin') { return; }::expression.left",
       "disposition": "capability-selector",
       "surface": "system-actions-settings"
     },
