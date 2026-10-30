@@ -52,7 +52,7 @@ test('simulates Windows labels, capabilities, and exact platform paths off-host'
   assert.equal(adapter.hasCapability('open-with'), true);
   assert.equal(adapter.hasCapability('open-with-app-filtering'), false);
   assert.equal(adapter.hasCapability('launch-at-login'), true);
-  assert.equal(adapter.hasCapability('auto-updates'), true);
+  assert.equal(adapter.hasCapability('auto-updates'), false);
   assert.equal(
     adapter.appIdentityKey(String.raw`C:\Apps\Example.EXE`),
     String.raw`c:\apps\example.exe`,
