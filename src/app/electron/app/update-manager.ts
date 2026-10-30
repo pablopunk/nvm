@@ -1,6 +1,5 @@
 import { app } from 'electron';
 import * as logger from '../platform/logger';
-import { supportsAutoUpdates } from '../os/os';
 import {
   bindOperation,
   operationOutcome,
@@ -36,6 +35,7 @@ export function createUpdateManager(
     managerOptions.getUpdateChannel ?? (() => DEFAULT_UPDATE_CHANNEL);
   const createCancellationToken =
     managerOptions.createCancellationToken ?? createLocalCancellationToken;
+  const isUpdaterAvailable = managerOptions.isUpdaterAvailable ?? (() => true);
   let startupTimer: NodeJS.Timeout | null = null;
   let pollTimer: NodeJS.Timeout | null = null;
   let installStarted = false;
@@ -75,7 +75,7 @@ export function createUpdateManager(
   } = createDowngradeGate({ state, managerOptions, isCurrentChannelInfo });
 
   function canUseAutoUpdates() {
-    return app.isPackaged && supportsAutoUpdates();
+    return app.isPackaged && isUpdaterAvailable();
   }
 
   function isCurrentChannelInfo(info: unknown) {

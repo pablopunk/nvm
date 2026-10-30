@@ -48,6 +48,8 @@ type UpdateState = {
 };
 
 type UpdateManagerOptions = {
+  /** Whether this build has an updater target; packaging is checked separately. */
+  isUpdaterAvailable?: () => boolean;
   getUpdateChannel?: () => UpdateChannel;
   prepareUpdateFeed?: () => Promise<unknown>;
   createCancellationToken?: () => CancellationTokenLike;

@@ -6,6 +6,7 @@ import { installNevermindChannelFeed } from './update-channel-feed';
 import { createUpdateManager } from './update-manager';
 import { isStateSafeForInstall } from './state-update-safety';
 import { portableExecutableFromEnvironment } from '../os/windows-portable-update';
+import { supportsAutoUpdates } from '../os/os';
 import { WindowsPortableUpdater } from './windows-portable-updater';
 import { reportPreviousPortableUpdate } from './portable-update-outcome';
 
@@ -40,6 +41,7 @@ export function createAppUpdateManager(input: {
     autoUpdater as any,
     input.recordInstallAttempt,
     {
+      isUpdaterAvailable: supportsAutoUpdates,
       getUpdateChannel: input.getUpdateChannel,
       getCurrentVersion: () => app.getVersion(),
       canInstallUpdate: (info) =>
