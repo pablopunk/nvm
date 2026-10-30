@@ -537,6 +537,8 @@ export type ExtensionAction = {
   /** Host action type. Prefer `ctx.actions.*` helpers instead of spelling this manually. */
   type?: string;
   title?: string;
+  /** Identifies the selected item's in-palette preview action. */
+  previewIntent?: boolean;
   icon?: string;
   subtitle?: string;
   /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. */

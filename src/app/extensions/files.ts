@@ -10,12 +10,16 @@ function inPalettePreviewAction(ctx, item) {
   if (isMediaFile(item)) {
     return ctx.ui.previewAction(item, { title: 'Preview' });
   }
-  return ctx.actions.run(
-    'Preview Contents',
-    function previewFileContents(innerCtx) {
-      return innerCtx.ui.previewFile(item);
-    },
-  );
+  return {
+    ...ctx.actions.run(
+      'Preview Contents',
+      function previewFileContents(innerCtx) {
+        return innerCtx.ui.previewFile(item);
+      },
+    ),
+    previewIntent: true,
+    shortcut: 'Command+Y',
+  };
 }
 
 function systemPreviewAction(item) {
@@ -58,7 +62,9 @@ function fileRootItem(ctx, item) {
         {
           actions: [
             inPalettePreviewAction(ctx, item),
-            systemPreviewAction(item),
+            ...(ctx.system.capabilities.has('quick-look')
+              ? [systemPreviewAction(item)]
+              : []),
             revealAction,
             openAction,
           ],

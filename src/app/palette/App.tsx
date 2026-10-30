@@ -28,6 +28,11 @@ import {
 } from 'react-archer';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
+  previewActionFlags,
+  rootPreviewAction,
+  rootSearchQueryAction,
+} from './root-action-preview';
+import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
   activePaneIsObscured,
@@ -4565,14 +4570,9 @@ export function App() {
       ? commandItemActionRows(commandItemFromAction(optionsFor), 'root-action')
       : [];
   }
-
   function getOptionActionRows() {
-    const declaredActions = actionsFromPanel(optionsFor?.actionPanel);
-    const hasDeclaredPreviewAction = declaredActions.some(
-      (action) => action.type === 'previewClipboardItem',
-    );
-    const hasDeclaredQuickLookAction = declaredActions.some(
-      (action) => action.type === 'quickLook',
+    const { hasPreview, hasQuickLook } = previewActionFlags(
+      optionsFor?.actionPanel,
     );
     const optionRows = [
       {
@@ -4599,7 +4599,7 @@ export function App() {
         subtitle: 'Press → to preview an item',
         shortcut: 'Command+Y',
         onSelect: () => optionsFor && setPreviewFor(optionsFor),
-        show: canPreviewAction && !hasDeclaredPreviewAction,
+        show: canPreviewAction && !hasPreview,
       },
       {
         value: 'option:quick-look',
@@ -4608,7 +4608,7 @@ export function App() {
         subtitle: 'Preview this file',
         shortcut: 'Command+Y',
         onSelect: quickLookOptionsAction,
-        show: canQuickLookAction && !hasDeclaredQuickLookAction,
+        show: canQuickLookAction && !hasQuickLook && !hasPreview,
       },
       {
         value: 'option:alias',
@@ -5098,16 +5098,6 @@ export function App() {
     return true;
   }
 
-  function rootSearchQueryAction(
-    action: Action | null | undefined,
-    title: 'Continue Calculation' | 'Swap Units',
-  ) {
-    return actionsFromPanel(action?.actionPanel, []).find(
-      (candidate) =>
-        candidate.type === 'setSearchQuery' && candidate.title === title,
-    );
-  }
-
   function selectBuilderPreviewItem(filename: string, itemId: string) {
     setBuilderPreviews((previews) =>
       previews.map((preview) =>
@@ -5420,6 +5410,18 @@ export function App() {
       if (action) {
         event.preventDefault();
         runViewAction(action);
+        return;
+      }
+    }
+    if (
+      !isChildOpen &&
+      normalizedShortcut(localAccelerator) === 'command+y' &&
+      selectedAction
+    ) {
+      const preview = rootPreviewAction(selectedAction);
+      if (preview) {
+        event.preventDefault();
+        runViewAction(preview);
         return;
       }
     }
