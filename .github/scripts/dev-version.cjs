@@ -60,9 +60,11 @@ if (require.main === module) {
           'api',
           '--paginate',
           '--slurp',
+          '--jq',
+          'map(.[] | {tag_name, draft, prerelease})',
           `repos/${repository}/releases?per_page=100`,
         ],
-        { encoding: 'utf8' },
+        { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
       ),
     );
     const tags = execFileSync('git', ['tag', '--list'], { encoding: 'utf8' })
@@ -71,7 +73,7 @@ if (require.main === module) {
       .filter(Boolean);
     const result = planDevVersion({
       date: new Date(),
-      releases: pages.flat(),
+      releases: pages,
       tags,
       sourceSha,
       resolveTag: (tag) =>
