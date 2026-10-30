@@ -28,11 +28,6 @@ import {
 } from 'react-archer';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
-  previewActionFlags,
-  rootPreviewAction,
-  rootSearchQueryAction,
-} from './root-action-preview';
-import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
   activePaneIsObscured,
@@ -40,6 +35,7 @@ import {
   confirmationReturnSurface,
 } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
+import { actionsShortcutHint } from './actions-shortcut-hint';
 import { chatSessionKey, useAiChatSessions } from './ai-chat/ai-chat-sessions';
 import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
 import {
@@ -91,6 +87,8 @@ import {
   filterCommandSections,
   valuesMatch,
 } from './filtering';
+// biome-ignore format: Keep the legacy palette within its file-size budget.
+import { actionIdentity, combinedActionSections, findLocalShortcut, localActionCandidates, viewActionsForItem } from './local-actions';
 import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import {
   actionDefinition,
@@ -107,16 +105,14 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
-// biome-ignore format: Keep the legacy palette within its file-size budget.
-import { localActionCandidates, actionIdentity, viewActionsForItem, combinedActionSections, findLocalShortcut } from './local-actions';
-import {
-  resetTransientPaletteState,
-  rootResultSelection,
-} from './palette-lifecycle';
 import {
   PaletteHotkeyNotice,
   paletteHotkeyNoticeIsVisible,
 } from './palette-hotkey-notice';
+import {
+  resetTransientPaletteState,
+  rootResultSelection,
+} from './palette-lifecycle';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -127,6 +123,11 @@ import type {
   ShortcutRecord,
 } from './preload-api';
 import { resultsCardClassName } from './results-card-layout';
+import {
+  previewActionFlags,
+  rootPreviewAction,
+  rootSearchQueryAction,
+} from './root-action-preview';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -154,6 +155,7 @@ import {
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
+
 type ActionKind =
   | 'open-url'
   | 'web-search'
@@ -1414,7 +1416,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
         ) : null}
         {!overlayOpen && hasActions ? (
           <span>
-            <kbd>⌘K</kbd> Actions
+            <kbd>{actionsShortcutHint()}</kbd> Actions
           </span>
         ) : null}
         {overlayOpen ? (
