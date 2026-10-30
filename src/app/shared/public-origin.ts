@@ -6,6 +6,7 @@ export type PublicOriginPolicy =
   | 'smoke';
 
 export const PRODUCTION_WEB_ORIGIN = 'https://www.nvm.fyi';
+export const PRODUCTION_API_ORIGIN = 'https://api.nvm.fyi';
 
 export class PublicOriginError extends Error {
   constructor(message: string) {
