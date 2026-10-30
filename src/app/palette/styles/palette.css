@@ -12,6 +12,16 @@
   -webkit-app-region: no-drag;
 }
 
+.shell,
+.shell * {
+  scrollbar-width: none;
+}
+
+.shell::-webkit-scrollbar,
+.shell *::-webkit-scrollbar {
+  display: none;
+}
+
 .palette {
   position: relative;
   display: flex;
@@ -169,11 +179,6 @@ kbd {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 8px;
-  scrollbar-width: none;
-}
-
-.results::-webkit-scrollbar {
-  display: none;
 }
 
 .results > [cmdk-list-sizer] {
