@@ -114,6 +114,14 @@ export function createActionIpc(deps: ActionIpcDeps) {
               return result;
             } catch (error) {
               recordOperationFailure(error);
+              logError('action.execute.failed', error, {
+                source: 'host',
+                scope: 'action',
+                data: {
+                  actionKind: trustedAction?.kind || action?.kind,
+                  actionId: trustedAction?.id || action?.id,
+                },
+              });
               if (
                 trustedAction?.background ||
                 trustedAction?.dismissAfterRun === 'auto'

@@ -68,6 +68,7 @@ import {
 } from './debug-performance';
 import { dictationDevices } from './dictation/dictation-devices';
 import { recordDictation } from './dictation/dictation-renderer';
+import { mouseDownLandsOnEmptyWindowSpace } from './empty-window-space';
 import { ExtensionViewRenderer } from './extension-view/extension-view';
 import {
   FORM_SAVE_ROW_ID,
@@ -304,14 +305,6 @@ function spotlightConflictView(accelerator: string): ExtensionView {
   };
 }
 
-const SETTINGS_ROOT_ACTION: Action = {
-  id: 'app-settings',
-  kind: 'app-settings',
-  title: 'Settings',
-  subtitle: 'Configure Nevermind',
-  icon: 'settings',
-  score: 0,
-};
 const PALETTE_HOTKEY_PSEUDO_ACTION: Action = {
   id: PALETTE_HOTKEY_ACTION_ID,
   kind: 'builtin',
@@ -3910,8 +3903,6 @@ export function App() {
           );
           return;
         }
-        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
         if (result.spotlightConflict)
           showExtensionView(spotlightConflictView(accelerator), 'push');
         return;
@@ -3938,8 +3929,6 @@ export function App() {
         setRecordedShortcut('');
         setOptionsFor(null);
         setRefreshNonce((nonce) => nonce + 1);
-        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
         return;
       }
       const result = (await window.nvm.runViewAction({
@@ -5288,7 +5277,7 @@ export function App() {
   function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.card, .extensionWindowCompactPanel')) return;
+    if (!mouseDownLandsOnEmptyWindowSpace(target)) return;
     event.preventDefault();
     void window.nvm.hide();
   }
