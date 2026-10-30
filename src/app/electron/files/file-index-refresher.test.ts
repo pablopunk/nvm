@@ -163,3 +163,19 @@ test('a failed scan keeps the cached snapshot', async () => {
   await assert.rejects(refresher.refresh(), /disk unavailable/);
   assert.deepEqual(paths(refresher.current()), [path.join(ROOT, 'a.pdf')]);
 });
+
+test('refresh passes the cached index so known metadata can be reused', async () => {
+  const seen: number[] = [];
+  const refresher = createFileIndexRefresher({
+    scan: async (_options, previousIndex) => {
+      seen.push(previousIndex.length);
+      return scanOf([file('a.pdf')]);
+    },
+    notifyChanged: () => {},
+    watchDirectoryTree: () => inertWatch(),
+    onRelevantChange: () => {},
+  });
+  await refresher.refresh();
+  await refresher.refresh();
+  assert.deepEqual(seen, [0, 1]);
+});

@@ -19,7 +19,7 @@ export type FileIndexScan = {
 };
 
 export type FileIndexRefresherDeps = FileIndexWatcherDeps & {
-  scan: (options: any) => Promise<FileIndexScan>;
+  scan: (options: any, previousIndex: any[]) => Promise<FileIndexScan>;
   notifyChanged: () => void;
   mark?: (operation: string, attributes: Record<string, unknown>) => void;
 };
@@ -56,7 +56,7 @@ export function createFileIndexRefresher(deps: FileIndexRefresherDeps) {
 
   async function refresh(options: any = {}) {
     const scanId = scanGate.begin();
-    const scan = await deps.scan(options);
+    const scan = await deps.scan(options, fileIndex);
     if (!scanGate.tryCommit(scanId)) {
       deps.mark?.('files.index.stale-scan-dropped', { scanId });
       return { scan, committed: false, changed: false };

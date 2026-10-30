@@ -18,8 +18,8 @@ const FILE_INDEX_FRESHNESS_TRIGGERS: JobTrigger[] = [
   {
     type: 'event',
     event: FILE_INDEX_CHANGED_EVENT,
-    debounceMs: 1500,
-    maxWaitMs: 10_000,
+    debounceMs: 2000,
+    maxWaitMs: 30_000,
   },
   { type: 'event', event: 'wake', debounceMs: 5000 },
   { type: 'interval', everyMs: 15 * 60_000 },

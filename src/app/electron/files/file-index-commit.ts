@@ -47,3 +47,18 @@ export function createLatestScanGate() {
 
   return { begin, tryCommit };
 }
+
+export function filesNeedingDateAdded<
+  T extends { path: string; birthtimeMs?: number; dateAddedMs?: number },
+>(files: T[], previousIndex: T[]) {
+  const previousByPath = new Map(
+    previousIndex.map((entry) => [entry.path, entry]),
+  );
+  return files.filter((file) => {
+    const previous = previousByPath.get(file.path);
+    if (!previous?.dateAddedMs || previous.birthtimeMs !== file.birthtimeMs)
+      return true;
+    file.dateAddedMs = previous.dateAddedMs;
+    return false;
+  });
+}

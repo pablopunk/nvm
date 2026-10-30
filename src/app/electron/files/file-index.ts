@@ -10,7 +10,7 @@ import { watchDirectoryTree } from '../os/directory-tree-watch';
 import type { JobRegistry } from '../platform/jobs';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { thumbnailUrlForPreviewablePath } from './extension-file';
-import { pathIsInsideRoot } from './file-index-commit';
+import { filesNeedingDateAdded, pathIsInsideRoot } from './file-index-commit';
 import {
   createFileIndexRefresher,
   type FileIndexRefresherDeps,
@@ -51,7 +51,10 @@ function normalizedIndexRoots(options: any = {}) {
     .filter((root) => root && path.isAbsolute(root));
 }
 
-export async function scanFileIndex(options: any = {}): Promise<FileIndexScan> {
+export async function scanFileIndex(
+  options: any = {},
+  previousIndex: any[] = [],
+): Promise<FileIndexScan> {
   return measureDebugPerformance(
     'files.scan',
     {
@@ -111,7 +114,7 @@ export async function scanFileIndex(options: any = {}): Promise<FileIndexScan> {
 
       await Promise.all(existing.map((root) => walk(root, maxDepth)));
       await attachFileStats(found);
-      await attachDateAdded(found);
+      await attachDateAdded(filesNeedingDateAdded(found, previousIndex));
       const sorted = sortFoundFiles(found, {
         sortBy: options.sortBy || options.sort || 'added',
         order: options.order,
