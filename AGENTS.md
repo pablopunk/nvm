@@ -34,6 +34,7 @@
 * Do not block palette first paint, typing, or command execution on decoration/enrichment work such as running status, icons, thumbnails, metadata, or heavy refreshes.
 * Reset filters and search during navigation unless inheritance is explicit.
 * Reserve empty states for active result lists; do not show them in passive surfaces.
+* Hide scrollbars throughout the palette, including subviews, while preserving scrolling and keyboard navigation.
 * Use canonical storage (`Command+Alt+K`) and symbol display (`⌘⌥K`) formats via `shortcutLabel`.
 
 ## Style and Documentation
