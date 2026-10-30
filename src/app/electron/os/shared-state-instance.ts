@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { defaultSharedStateRoot } from '../platform/shared-state-root';
 
 type InstanceApp = {
-  getPath: (name: 'userData') => string;
+  getPath: (name: 'userData' | 'appData') => string;
   setPath: (name: 'userData', value: string) => void;
   getName: () => string;
   setName: (name: string) => void;
@@ -45,20 +46,24 @@ export async function acquireDefaultSharedStateInstance(
     if (entry?.isSymbolicLink())
       throw new Error('Test shared state cannot be a symbolic link');
   }
-  return acquireSharedStateInstance(app, root);
+  const identityRoot = testMode
+    ? path.join(root, '.instance-locks')
+    : path.join(app.getPath('appData'), 'Nevermind Shared State', 'instances');
+  return acquireSharedStateInstance(app, root, identityRoot);
 }
 
 export async function acquireSharedStateInstance(
   app: InstanceApp,
   sharedRoot: string,
+  identityRoot: string,
 ) {
   if (app.hasSingleInstanceLock())
     throw new Error('An instance lock is already held');
   await fs.mkdir(sharedRoot, { recursive: true });
   const canonicalRoot = await fs.realpath(sharedRoot);
   const identity = path.join(
-    path.dirname(canonicalRoot),
-    `.${path.basename(canonicalRoot)}-instance`,
+    identityRoot,
+    createHash('sha256').update(canonicalRoot).digest('hex'),
   );
   await fs.mkdir(identity, { recursive: true, mode: 0o700 });
   const originalPath = app.getPath('userData');
