@@ -1,6 +1,7 @@
 // biome-ignore-all lint/style/noMagicNumbers: ranking tests intentionally state their score inputs and expected boost.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createActionRanker } from './action-ranker';
 import {
   actionTextSearchScore,
   appResultMarker,
@@ -136,6 +137,28 @@ test('partial word matches in real commands outrank query fallbacks that echo th
       .map((item) => item.title),
     ['Keyboard Shortcuts', 'Automate "shortcut"'],
   );
+});
+
+test('frequent fallback use does not overtake a strong command match', () => {
+  const ranker = createActionRanker({
+    userStateStore: {
+      get: () => ({
+        aliases: {},
+        recents: { fallback: { count: 100, lastUsed: Date.now() } },
+      }),
+    },
+    scheduleSaveState: () => undefined,
+  });
+  const command = ranker.rankAction(
+    { id: 'shortcuts', title: 'Keyboard Shortcuts' },
+    'shortcut',
+  );
+  const fallback = ranker.rankAction(
+    { id: 'fallback', title: 'Automate "shortcut"', queryFallback: true },
+    'shortcut',
+  );
+  assert.ok(command && fallback);
+  assert.ok(command.score > fallback.score);
 });
 
 test('query fallbacks stay above loose character matches for open-ended prompts', () => {
