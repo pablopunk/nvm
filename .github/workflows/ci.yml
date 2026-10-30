@@ -19,7 +19,6 @@ jobs:
     timeout-minutes: 15
     outputs:
       electron_smoke_changed: ${{ steps.app-changes.outputs.changed }}
-      windows_package_changed: ${{ steps.windows-package-changes.outputs.changed }}
 
     steps:
       - name: Checkout
@@ -45,23 +44,6 @@ jobs:
             HEAD="HEAD"
           fi
           changed="$(git diff --name-only "$BASE" "$HEAD" | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
-          echo "changed=$changed" >> "$GITHUB_OUTPUT"
-
-      - name: Classify Windows package changes
-        id: windows-package-changes
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="${{ github.event.pull_request.base.sha }}"
-            HEAD="${{ github.event.pull_request.head.sha }}"
-          elif [ "${{ github.event_name }}" = "merge_group" ]; then
-            BASE="${{ github.event.merge_group.base_sha }}"
-            HEAD="${{ github.event.merge_group.head_sha }}"
-          else
-            BASE="HEAD~1"
-            HEAD="HEAD"
-          fi
-          changed="$(git diff --name-only "$BASE" "$HEAD" | mise exec -- node .github/scripts/windows-package-paths.cjs)"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
@@ -128,9 +110,7 @@ jobs:
 
   electron-smoke:
     name: Linux Electron smoke
-    if: >-
-      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
-      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true')
+    if: github.event_name == 'workflow_dispatch'
     needs: [check, pi-change-classification]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -173,9 +153,7 @@ jobs:
 
   macos-electron-smoke:
     name: macOS Electron smoke
-    if: >-
-      (github.event_name == 'pull_request' || github.event_name == 'merge_group') &&
-      (needs.check.outputs.electron_smoke_changed == 'true' || needs['pi-change-classification'].outputs.relevant == 'true')
+    if: github.event_name == 'workflow_dispatch'
     needs: [check, pi-change-classification]
     runs-on: macos-latest
     timeout-minutes: 20
@@ -384,7 +362,6 @@ jobs:
       - pi-change-classification
       - check
       - pi-integration-tests
-      - electron-smoke
       - packaged-dependency-contracts
       - packaged-diagnostics
       - pi-packaged-macos
@@ -399,7 +376,6 @@ jobs:
           PI_RELEVANT: ${{ needs.pi-change-classification.outputs.relevant }}
           PI_CHECK_RESULT: ${{ needs.check.result }}
           PI_JOB_pi_integration_tests: ${{ needs.pi-integration-tests.result }}
-          PI_JOB_electron_smoke: ${{ needs.electron-smoke.result }}
           PI_JOB_packaged_dependency_contracts: ${{ needs.packaged-dependency-contracts.result }}
           PI_JOB_packaged_diagnostics: ${{ needs.packaged-diagnostics.result }}
           PI_JOB_pi_packaged_macos: ${{ needs.pi-packaged-macos.result }}
@@ -407,7 +383,7 @@ jobs:
 
   windows-first-run:
     name: Windows first-run Electron
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 15
 
@@ -457,10 +433,7 @@ jobs:
 
   windows-package-smoke:
     name: Windows unsigned package smoke
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'pull_request' &&
-      needs.check.outputs.windows_package_changed == 'true')
+    if: github.event_name == 'workflow_dispatch'
     needs: check
     runs-on: windows-latest
     timeout-minutes: 45

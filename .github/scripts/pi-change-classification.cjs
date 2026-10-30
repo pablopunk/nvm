@@ -5,7 +5,6 @@ const RELEVANT_FILES = new Set([
   'electron-builder.yml',
   'electron.vite.config.ts',
   '.github/scripts/electron-smoke-paths.cjs',
-  '.github/scripts/windows-package-paths.cjs',
   'mise.toml',
   'package.json',
   'pnpm-lock.yaml',

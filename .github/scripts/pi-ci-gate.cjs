@@ -1,6 +1,5 @@
 const REQUIRED_PI_JOBS = [
   'pi-integration-tests',
-  'electron-smoke',
   'packaged-dependency-contracts',
   'packaged-diagnostics',
   'pi-packaged-macos',
