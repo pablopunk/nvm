@@ -38,7 +38,7 @@ test('nightly schedule registers both UTC hours and defers the Madrid 04:00 choi
 test('manual trigger defaults to a dry run that never publishes', () => {
   assert.match(
     workflow,
-    /workflow_dispatch:\n    inputs:\n      dry_run:[\s\S]*?default: true/,
+    /workflow_dispatch:\n {4}inputs:\n {6}dry_run:[\s\S]*?default: true/,
   );
   assert.match(
     workflow,
@@ -50,7 +50,7 @@ test('manual trigger defaults to a dry run that never publishes', () => {
     workflow,
     /build: \$\{\{ steps\.plan\.outputs\.build == 'true' && \(steps\.identity\.outputs\.verified == 'true' \|\| \(github\.event_name == 'workflow_dispatch' && inputs\.dry_run\)\) \}\}/,
   );
-  assert.match(workflow, /  validate-assets:/);
+  assert.match(workflow, / {2}validate-assets:/);
 });
 
 test('every tag-driven stable release job refuses a tag older than the latest stable', () => {
@@ -64,19 +64,19 @@ test('every tag-driven stable release job refuses a tag older than the latest st
 test('manual runs cannot publish legacy nightlies outside promotion', () => {
   assert.match(
     workflow,
-    /Refuse legacy publication\n        if: \$\{\{ !inputs\.dry_run \}\}[\s\S]*?promote-nightly\.yml[\s\S]*?exit 1/,
+    /Refuse legacy publication\n {8}if: \$\{\{ !inputs\.dry_run \}\}[\s\S]*?promote-nightly\.yml[\s\S]*?exit 1/,
   );
 });
 
 test('runs are serialized and never cancel an in-flight publication', () => {
   assert.match(
     workflow,
-    /concurrency:\n  group: channel-promotion\n  queue: max/,
+    /concurrency:\n {2}group: channel-promotion\n {2}queue: max/,
   );
 });
 
 test('top-level permissions are read-only and only publish and retain can write contents', () => {
-  assert.match(workflow, /^permissions:\n  contents: read\n/m);
+  assert.match(workflow, /^permissions:\n {2}contents: read\n/m);
   const writeGrants = workflow.match(/contents: write/g) ?? [];
   assert.equal(writeGrants.length, 2, 'publish and retain jobs only');
 });
@@ -129,7 +129,7 @@ test('publish requires every platform build and a completed identity gate', () =
 
 test('nightly builds reuse the stable packaging commands', () => {
   assert.match(workflow, /pnpm run dist:win:x64/);
-  assert.match(workflow, /pnpm run dist:mac:all/);
+  assert.match(workflow, /pnpm run dist:mac:arm64/);
   assert.match(workflow, /pnpm run dist:linux:\$\{\{ matrix\.arch \}\}/);
 });
 

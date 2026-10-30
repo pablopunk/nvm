@@ -191,7 +191,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
-        run: mise exec -- pnpm run dist:mac:all '-c.publish.channel=nightly'
+        run: mise exec -- pnpm run dist:mac:arm64 '-c.publish.channel=nightly'
 
       - name: Collect macOS nightly artifacts
         run: |
@@ -199,8 +199,6 @@ jobs:
           mkdir -p nightly-mac
           cp "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip" \
             "release/Nevermind-${NIGHTLY_VERSION}-mac-arm64.zip.blockmap" \
-            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip" \
-            "release/Nevermind-${NIGHTLY_VERSION}-mac-x64.zip.blockmap" \
             release/nightly-mac.yml nightly-mac/
 
       - name: Stamp macOS compatibility metadata

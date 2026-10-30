@@ -577,3 +577,17 @@ test('every request in one lookup shares a single live cancellation token', asyn
     ),
   );
 });
+
+test('macOS metadata must include a ZIP for the running architecture', async () => {
+  const { hasCompatibleMacUpdate } = await import('./update-channel-provider');
+  const info = {
+    version: '1.0.0',
+    files: [{ url: 'Nevermind-1.0.0-mac-arm64.zip', sha512: 'hash' }],
+    path: 'Nevermind-1.0.0-mac-arm64.zip',
+    sha512: 'hash',
+    releaseDate: '',
+  };
+  assert.equal(hasCompatibleMacUpdate(info, 'arm64'), true);
+  assert.equal(hasCompatibleMacUpdate(info, 'x64'), false);
+  assert.equal(hasCompatibleMacUpdate(info, 'unknown'), false);
+});

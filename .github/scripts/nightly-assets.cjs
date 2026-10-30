@@ -17,8 +17,6 @@ function expectedNightlyAssetNames(version) {
     `Nevermind-${version}-win-x64-portable.exe`,
     `Nevermind-${version}-mac-arm64.zip`,
     `Nevermind-${version}-mac-arm64.zip.blockmap`,
-    `Nevermind-${version}-mac-x64.zip`,
-    `Nevermind-${version}-mac-x64.zip.blockmap`,
     `Nevermind-${version}-linux-x86_64.AppImage`,
     `Nevermind-${version}-linux-x86_64.AppImage.blockmap`,
     `Nevermind-${version}-linux-amd64.deb`,
@@ -119,6 +117,16 @@ function verifyUpdaterMetadata({
   const primary = metadata.files.find((file) => file.url === metadata.path);
   if (metadata.sha512 && metadata.sha512 !== primary.sha512)
     throw new Error(`${name} top-level sha512 does not match ${metadata.path}`);
+  if (name === 'nightly-mac.yml') {
+    const expected = `Nevermind-${version}-mac-arm64.zip`;
+    if (
+      metadata.files.length !== 1 ||
+      metadata.files[0].url !== expected ||
+      metadata.path !== expected
+    ) {
+      throw new Error(`${name} must target only the macOS arm64 ZIP`);
+    }
+  }
   return metadata;
 }
 

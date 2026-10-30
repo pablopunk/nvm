@@ -35,7 +35,7 @@ function windowsMetadata({
 
 test('expected asset set mirrors stable packaging with channel-named updater metadata', () => {
   const names = expectedNightlyAssetNames(VERSION);
-  assert.equal(names.length, 17);
+  assert.equal(names.length, 15);
   for (const metadata of [
     'nightly.yml',
     'nightly-mac.yml',
@@ -151,5 +151,34 @@ test('updater metadata size and top-level digest must match the staged primary f
   assert.throws(
     () => verify(windowsMetadata().replace(/^sha512: AAAA$/m, 'sha512: CCCC')),
     /top-level sha512 does not match/,
+  );
+});
+
+test('macOS updater metadata must target the arm64 ZIP only', () => {
+  const zip = `Nevermind-${VERSION}-mac-arm64.zip`;
+  const metadata = `version: ${VERSION}\nfiles:\n  - url: ${zip}\n    sha512: AAAA\n    size: 10\npath: ${zip}\nsha512: AAAA\n`;
+  const verify = (text) =>
+    verifyUpdaterMetadata({
+      name: 'nightly-mac.yml',
+      text,
+      version: VERSION,
+      assetNames: [zip],
+      sha512Of: () => 'AAAA',
+      sizeOf: () => 10,
+    });
+  assert.equal(verify(metadata).path, zip);
+  assert.throws(
+    () => verify(metadata.replaceAll(zip, 'other.zip')),
+    /release asset/,
+  );
+  assert.throws(
+    () =>
+      verify(
+        metadata.replace(
+          `files:\n`,
+          `files:\n  - url: ${zip}\n    sha512: AAAA\n    size: 10\n`,
+        ),
+      ),
+    /must target only/,
   );
 });

@@ -754,7 +754,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           CSC_KEYCHAIN: ${{ runner.temp }}/build.keychain-db
-        run: mise exec -- pnpm run dist:mac:all
+        run: mise exec -- pnpm run dist:mac:arm64
 
       - name: Collect macOS artifacts
         run: |
@@ -763,11 +763,9 @@ jobs:
           files=(
             release/Nevermind-*-mac-arm64.zip
             release/Nevermind-*-mac-arm64.zip.blockmap
-            release/Nevermind-*-mac-x64.zip
-            release/Nevermind-*-mac-x64.zip.blockmap
             release/latest-mac.yml
           )
-          if (( ${#files[@]} < 5 )); then
+          if (( ${#files[@]} != 3 )); then
             find release -maxdepth 1 -type f -print
             exit 1
           fi

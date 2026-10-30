@@ -24,7 +24,7 @@ test('release packaging uploads the final generated maps before packaging withou
     packageJson.scripts.build,
     /^electron-vite build && node scripts\/upload-desktop-source-maps.cjs$/,
   );
-  for (const name of ['dist:mac:all', 'dist:win:x64'])
+  for (const name of ['dist:mac:arm64', 'dist:win:x64'])
     assert.match(packageJson.scripts[name], /^pnpm build &&/);
   const workflow = fs.readFileSync(
     path.join(root, '.github/workflows/ci.yml'),

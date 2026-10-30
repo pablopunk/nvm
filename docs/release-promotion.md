@@ -16,6 +16,10 @@ Published dev and nightly releases are discovered through small public files on 
 
 Switching channels can move to an older build, but only under the state compatibility contract below. Released builds that predate it keep their own updater behavior and never downgrade.
 
+## macOS architecture
+
+New releases support Apple silicon (arm64) only. Intel Macs cannot run these releases and should remain on their last compatible version or move to an Apple silicon Mac. On Apple silicon, replace an Intel copy running under Rosetta with the arm64 ZIP from the release page: quit Nevermind, download the `mac-arm64.zip`, and replace the app in Applications. Back up your Nevermind data before replacing the app. Existing Intel builds may advertise an update they cannot install; manually choose the correct package instead. New promotion validation requires the arm64-only asset set and will reject older retained dev builds containing Intel assets.
+
 ## State compatibility boundary
 
 The host persists more than `state.json`. A downgrade contract must account for portable configuration, AI chats and image files, learning records, clipboard images, extension windows and drafts, extension storage and secrets, extension source files, account tokens and BYO credentials, and persisted dictation recordings. Cache and diagnostic files have different recovery requirements, but their readers must also tolerate any format left by a newer build. The extension host can run user-provided extension code that mutates its own storage and source independently of application upgrades.

@@ -1,6 +1,5 @@
 supportedArchitectures:
-  # dist:mac:all builds arm64 and x64 from one machine; both variants of the
-  # TypeScript native checker must be present for scripts/after-pack.cjs staging.
+  # CI packages both x64 and arm64 across supported platforms.
   cpu:
     - x64
     - arm64
