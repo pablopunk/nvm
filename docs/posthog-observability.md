@@ -5,7 +5,7 @@ PostHog is the single place for errors, product usage, and performance. Axiom ke
 ## What is collected
 
 - **Errors:** main-process exceptions, renderer exceptions (posthog-js), and backend exceptions arrive as `$exception` events with a `support_ref` that matches the local diagnostic record.
-- **Usage and performance:** every instrumented operation (`command.execute`, `view.load`, `ai.stream`, `auth.signin`, `update.*`, `job.run`, ...) emits one `operation_completed` event with `operation`, `label` (the command that ran), `outcome`, `stage`, `duration_ms`, `journey_id`, and `action_id`. Backend requests emit `backend_request` with `route`, `method`, `status`, and `duration_ms`.
+- **Usage and performance:** every instrumented operation (`command.execute`, `view.load`, `ai.stream`, `auth.signin`, `update.*`, `job.run`, ...) emits one `operation_completed` event (successful `job.run` background ticks are skipped; failures are kept) with `operation`, `label` (the command that ran), `outcome`, `stage`, `duration_ms`, `journey_id`, and `action_id`. Backend requests emit `backend_request` with `route`, `method`, `status`, and `duration_ms`.
 - **Alerts:** failed cron checks and exhausted provider chains emit `backend_alert` with an `alert` property.
 - **People:** signed-in users are identified by account ID (email and role as person properties). Signed-out installs use a random, persisted install ID without a person profile.
 - **Not collected on purpose:** prompts, model output, clipboard content, and screen content are never attached to events. Exception messages and stack traces are sent as the app produced them, so errors that embed user content (for example a provider error echoing a prompt) can carry it; fix such errors at the source.
