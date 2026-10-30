@@ -35,7 +35,6 @@ import {
   confirmationReturnSurface,
 } from './action-menu-presentation';
 import { ActionPanel } from './action-panel';
-import { actionsShortcutHint } from './actions-shortcut-hint';
 import { chatSessionKey, useAiChatSessions } from './ai-chat/ai-chat-sessions';
 import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
 import {
@@ -80,6 +79,7 @@ import {
 import { usePaletteForm } from './extension-view/palette-form';
 import { useExtensionNavigation } from './extension-view/use-extension-navigation';
 import { patchCommandView } from './extension-view/view-patches';
+import { ExtensionWindowFooter } from './extension-window-footer';
 import { feedbackView } from './feedback';
 import {
   allViewItems,
@@ -1407,24 +1407,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
           </aside>
         ) : null}
       </main>
-      <footer className="extensionWindowFooter">
-        {palettePrompt.progress ? <span>{palettePrompt.progress}</span> : null}
-        {!overlayOpen && (view.type === 'list' || view.type === 'grid') ? (
-          <span>
-            <kbd>↵</kbd> Open
-          </span>
-        ) : null}
-        {!overlayOpen && hasActions ? (
-          <span>
-            <kbd>{actionsShortcutHint()}</kbd> Actions
-          </span>
-        ) : null}
-        {overlayOpen ? (
-          <span>
-            <kbd>esc</kbd> Back
-          </span>
-        ) : null}
-      </footer>
+      <ExtensionWindowFooter
+        progress={palettePrompt.progress}
+        showOpen={
+          !overlayOpen && (view.type === 'list' || view.type === 'grid')
+        }
+        showActions={!overlayOpen && hasActions}
+        showBack={overlayOpen}
+      />
     </Command>
   );
 }

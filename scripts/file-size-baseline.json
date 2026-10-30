@@ -10,7 +10,7 @@
   "electron/palette-window.ts": 503,
   "extensions/account.ts": 612,
   "extensions/dictation.ts": 810,
-  "palette/App.tsx": 5951,
+  "palette/App.tsx": 5943,
   "palette/extension-view.tsx": 1158,
   "palette/model.ts": 741,
   "palette/ui.tsx": 947,
