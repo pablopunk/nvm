@@ -27,7 +27,7 @@ export type PortableUpdateResult = {
 
 type HelperFileSystem = Pick<
   typeof fs,
-  'access' | 'mkdir' | 'rm' | 'writeFile'
+  'access' | 'mkdir' | 'open' | 'rm' | 'writeFile'
 >;
 
 type HelperDependencies = {
