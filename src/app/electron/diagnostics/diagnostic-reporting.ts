@@ -10,6 +10,11 @@ import {
   DIAGNOSTIC_FILE_NAME,
 } from './diagnostic-store';
 import {
+  createFeatureUsageDeduper,
+  featureUsage,
+  isRoutineBackgroundSuccess,
+} from './feature-usage';
+import {
   configureObservability,
   failureRecord,
   type OperationContext,
@@ -20,9 +25,10 @@ import {
   commonEventProperties,
   configurePosthogIdentity,
   flushPosthog,
-  posthogActor,
   posthogClient,
+  posthogDistinctId,
   setPosthogConsent,
+  whenInstallIdReady,
 } from './posthog-client';
 
 const REPORTING_CHANGED_CHANNEL = 'diagnostics:reporting-changed';
@@ -34,6 +40,8 @@ let initialized = false;
 let store: ReturnType<typeof createDiagnosticStore> | undefined;
 let updateStore: ReturnType<typeof createDiagnosticStore> | undefined;
 let reportingEnabled = false;
+let launchReported = false;
+const firstUseInJourney = createFeatureUsageDeduper();
 let captureWindowStarted = Date.now();
 let captureWindowCount = 0;
 declare const __NEVERMIND_BUILD__: string;
@@ -47,6 +55,15 @@ export function recentDiagnosticRecords() {
 export function setDiagnosticReporting(enabled: boolean) {
   reportingEnabled = enabled;
   setPosthogConsent(enabled);
+  if (enabled && !launchReported) {
+    launchReported = true;
+    // The install id loads asynchronously; a launch must carry the stored one.
+    void whenInstallIdReady().then(function reportLaunch() {
+      if (reportingEnabled) {
+        captureDesktopEvent('app.launched', { release: buildIdentity() });
+      }
+    });
+  }
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(REPORTING_CHANGED_CHANNEL, enabled);
   }
@@ -83,6 +100,11 @@ export function rendererFailureHandle(windowId: number) {
       : ('local_only' as const),
   };
   rememberFailure(record);
+  // Renderer exceptions travel anonymously from the renderer SDK; this host
+  // event carries the install and shares the support reference as the join key.
+  if (reportingEnabled) {
+    captureDesktopEvent('renderer_failure', recordProperties(record));
+  }
   return record.reference;
 }
 
@@ -170,17 +192,10 @@ function captureFailure(error: unknown, record: DiagnosticRecord) {
   if (record.reporting !== 'capture_requested') {
     return;
   }
-  const { distinctId, personless } = posthogActor();
-  client.captureException(error, distinctId, {
-    ...(personless ? { $process_person_profile: false } : {}),
+  client.captureException(error, posthogDistinctId(), {
     ...commonEventProperties(),
     ...recordProperties(record),
   });
-}
-
-// Background jobs tick every second or so; only their failures are worth an event.
-function isRoutineBackgroundSuccess(context: OperationContext) {
-  return context.operation === 'job.run' && context.outcome === 'success';
 }
 
 function captureOperation(context: OperationContext, durationMs: number) {
@@ -207,6 +222,15 @@ function captureOperation(context: OperationContext, durationMs: number) {
       ? {}
       : { response_status: context.responseStatus }),
   });
+  const usage = featureUsage(context);
+  if (usage && firstUseInJourney(context.journeyId, usage.feature)) {
+    captureDesktopEvent('feature.used', {
+      feature: usage.feature,
+      ...(usage.variant ? { variant: usage.variant } : {}),
+      outcome: context.outcome,
+      release: buildIdentity(),
+    });
+  }
 }
 
 function traceOperation<T>(context: OperationContext, task: () => T): T {

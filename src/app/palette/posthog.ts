@@ -11,53 +11,7 @@ const posthogConfigured = Boolean(env?.PROD && posthogKey && posthogHost);
 let consentEnabled = false;
 let consentGeneration = 0;
 let consentBroadcastVersion = 0;
-let authVersion = 0;
 let initialized = false;
-let identifiedUserId: string | undefined;
-let latestAuth: AuthStatus = { authed: false };
-
-type AuthStatus = {
-  authed: boolean;
-  userId?: string;
-  email?: string;
-  role?: string;
-};
-
-function optInPosthog() {
-  posthog.opt_in_capturing({ captureEventName: false });
-}
-
-// reset() clears consent along with the identity, so it only ever runs while
-// consent is granted and is followed by a fresh opt-in.
-function resetPosthogIdentity() {
-  posthog.reset();
-  optInPosthog();
-  identifiedUserId = undefined;
-}
-
-function applyPosthogIdentity() {
-  if (!consentEnabled) {
-    return;
-  }
-  const { authed, userId, email, role } = latestAuth;
-  if (!(authed && userId)) {
-    if (identifiedUserId) {
-      resetPosthogIdentity();
-    }
-    return;
-  }
-  if (identifiedUserId === userId) {
-    return;
-  }
-  if (identifiedUserId) {
-    resetPosthogIdentity();
-  }
-  posthog.identify(userId, {
-    ...(email ? { email } : {}),
-    ...(role ? { role } : {}),
-  });
-  identifiedUserId = userId;
-}
 
 function initPosthog(key: string) {
   posthog.init(key, {
@@ -65,9 +19,12 @@ function initPosthog(key: string) {
     defaults: '2026-08-30',
     // No identity or consent is restored from browser storage across launches.
     persistence: 'memory',
+    // Exceptions leave the renderer anonymously, with no person profile. The host
+    // process owns the install identity; a `support_ref` property joins the two.
+    person_profiles: 'identified_only',
     // reset() returns to this default, so a reset never re-enables capturing.
     opt_out_capturing_by_default: true,
-    // Errors and identity only: element text can contain prompts or model output.
+    // Errors only: element text can contain prompts or model output.
     autocapture: false,
     capture_pageview: false,
     capture_pageleave: false,
@@ -98,22 +55,13 @@ function applyPosthogConsent(enabled: boolean) {
     if (!initialized && posthogKey) {
       initPosthog(posthogKey);
     }
-    optInPosthog();
-    applyPosthogIdentity();
+    posthog.opt_in_capturing({ captureEventName: false });
     return;
   }
-  // Opting out also drops the in-memory identity, so a later opt-in starts clean.
   if (initialized) {
     posthog.opt_out_capturing();
     posthog.reset();
   }
-  identifiedUserId = undefined;
-}
-
-function applyAuthStatus(status: AuthStatus) {
-  authVersion += 1;
-  latestAuth = status;
-  applyPosthogIdentity();
 }
 
 function onConsentBroadcast(enabled: boolean) {
@@ -136,17 +84,6 @@ async function syncPosthogConsent() {
 
 if (posthogConfigured) {
   window.nvm.onDiagnosticReportingChanged(onConsentBroadcast);
-  window.nvm.onNevermindAuthChanged(applyAuthStatus);
-  const authVersionAtRequest = authVersion;
-  window.nvm
-    .getNevermindAuthStatus()
-    .then((status) => {
-      // A broadcast that arrived meanwhile is newer than this snapshot.
-      if (authVersion === authVersionAtRequest) {
-        applyAuthStatus(status);
-      }
-    })
-    .catch(() => undefined);
   void syncPosthogConsent();
 }
 
