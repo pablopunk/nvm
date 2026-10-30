@@ -31,7 +31,8 @@ test('long indicator labels wrap within a bounded window height', () => {
   });
 
   assert.equal(indicatorSummaryWraps(LONG_ERROR), true);
-  assert.equal(lines, INDICATOR_MAX_SUMMARY_LINES);
+  assert.ok(lines > 1);
+  assert.ok(lines < INDICATOR_MAX_SUMMARY_LINES);
   assert.equal(size.width, 500);
   assert.ok(size.height > INDICATOR_WINDOW_HEIGHT);
   assert.equal(

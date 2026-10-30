@@ -519,8 +519,8 @@ html[data-mic-live="true"]
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
   white-space: normal;
   overflow-wrap: anywhere;
   line-height: 1.4;
