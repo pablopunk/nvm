@@ -29,6 +29,12 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
 
+      - name: Verify dev release planner against GitHub
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: pablopunk/nvm
+        run: mise exec -- node .github/scripts/dev-version.cjs "$(git rev-parse HEAD)"
+
       - name: Classify Electron smoke changes
         id: app-changes
         run: |
