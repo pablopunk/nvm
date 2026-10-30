@@ -42,8 +42,7 @@ function evaluateScheduleGate({ event, now, scheduledCron }) {
   )
     return {
       run: false,
-      reason:
-        'scheduled trigger is outside the selected Madrid 04:00 run',
+      reason: 'scheduled trigger is outside the selected Madrid 04:00 run',
     };
   return { run: true, reason: 'scheduled Europe/Madrid 04:00 run' };
 }
