@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 import { createActivationStatus } from '../platform/activation-status';
-import { createPortableConfigLive } from './portable-config-live';
+mock.module('../os/os', {
+  namedExports: { reservedPaletteShortcutName: () => 'Spotlight' },
+});
+const { createPortableConfigLive } = await import('./portable-config-live');
 
 function liveWithPatchedSettings() {
   const patched: string[] = [];
