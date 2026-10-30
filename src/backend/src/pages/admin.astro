@@ -96,6 +96,7 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     // @ts-nocheck
     import { dashboardFetch } from '../lib/dashboard-fetch';
     import { watchDashboard } from '../lib/dashboard-refresh';
+    import { createDashboardTableUpdates } from '../lib/dashboard-table-updates';
     import { TextMorph } from 'torph';
     const adminConsole = document.getElementById('admin-console');
     const actionButtonClass = adminConsole.dataset.actionClass;
@@ -133,28 +134,23 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       if (!response.ok) throw new Error(await errorMessage(response));
       return response.json();
     }
-    const pendingRows = new WeakMap();
-    function fillRows(tableId, rows, columns) {
+    const tableUpdates = createDashboardTableUpdates();
+    function fillRows(tableId, rows, columns, onApplied = () => {}) {
       const body = document.querySelector(`#${tableId} tbody`);
       const html = rows.length
         ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
         : `<tr><td colspan="${columns}" class="muted">Nothing this month.</td></tr>`;
-      if (body.innerHTML === html) { pendingRows.delete(body); return; }
-      if (body.contains(document.activeElement)) { pendingRows.set(body, html); return; }
-      pendingRows.delete(body);
-      body.innerHTML = html;
+      if (body.innerHTML === html) { tableUpdates.cancel(body); onApplied(); return true; }
+      return tableUpdates.update(body, body.contains(document.activeElement), () => {
+        body.innerHTML = html;
+        onApplied();
+      });
     }
 
     document.getElementById('admin-console').addEventListener('focusout', (event) => {
       const body = event.target.closest('tbody');
       if (!body) return;
-      queueMicrotask(() => {
-        const html = pendingRows.get(body);
-        if (html !== undefined && !body.contains(document.activeElement)) {
-          body.innerHTML = html;
-          pendingRows.delete(body);
-        }
-      });
+      queueMicrotask(() => tableUpdates.flush(body, body.contains(document.activeElement)));
     });
 
     const headlineMorphs = new Map();
@@ -179,7 +175,7 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       });
     }
 
-    function renderSummary(summary, section) {
+    function renderSummary(summary, section, onApplied) {
       if (section === 'overview') {
       const { total, paying, free } = summary;
       renderHeadline(total);
@@ -211,8 +207,8 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
         money(row.costUsd),
         money(row.revenueUsd),
         signedMoney(row.netUsd),
-      ]), 6);
-
+      ]), 6, onApplied);
+      return;
       }
       if (section === 'models') {
       fillRows('models', summary.models.map((row) => [
@@ -223,6 +219,7 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
         money(row.costUsd),
       ]), 5);
       }
+      onApplied();
     }
 
     function renderKnobs(knobs) {
@@ -279,14 +276,17 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       const status = document.getElementById(`${section}-status`);
       const retry = document.querySelector(`[data-retry-section="${section}"]`);
       const previous = displayedMonths[section];
+      if (section === 'users') tableUpdates.cancel(document.querySelector('#top-users tbody'));
       retry.hidden = true;
       status.textContent = previous === month ? `Showing ${previous}.` : previous ? `Showing ${previous}; loading ${month}…` : `Loading ${month}…`;
       try {
         const summary = await getJson(`/api/admin/summary?month=${encodeURIComponent(month)}&section=${section}`);
         if (generation !== generations[section]) return;
-        renderSummary(summary, section);
-        displayedMonths[section] = month;
-        status.textContent = `Showing ${month}.`;
+        renderSummary(summary, section, () => {
+          if (generation !== generations[section]) return;
+          displayedMonths[section] = month;
+          status.textContent = `Showing ${month}.`;
+        });
       } catch (error) {
         if (generation !== generations[section]) return;
         status.textContent = `${previous ? `Showing ${previous}. ` : ''}Could not load ${month}: ${error.message}`;
