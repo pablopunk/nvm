@@ -305,7 +305,7 @@
 .tileGlyph {
   font-family:
     -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI Emoji",
-    "Segoe UI Symbol", sans-serif;
+    "Segoe UI Symbol", "Noto Color Emoji", sans-serif;
   font-size: 32px;
   line-height: 1;
   user-select: none;

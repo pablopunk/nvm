@@ -32,26 +32,58 @@ export function allViewItems(view: CommandView) {
   return view.sections?.flatMap((section) => section.items) || view.items || [];
 }
 
+function commandItemSearchValues(item: CommandItem) {
+  return [
+    item.title,
+    item.subtitle,
+    item.text,
+    item.shortcut,
+    ...(item.keywords || []),
+    ...actionsFromPanel(item.actionPanel, item.actions || []).map(
+      (action) => action.title,
+    ),
+  ];
+}
+
+const EXACT_TITLE_MATCH_RANK = 0;
+const EXACT_KEYWORD_MATCH_RANK = 1;
+const PARTIAL_MATCH_RANK = 2;
+
+function normalizedSearchValue(value: string | undefined) {
+  return (value || '').trim().toLowerCase();
+}
+
+function exactMatchRank(item: CommandItem, filter: string) {
+  if (normalizedSearchValue(item.title) === filter)
+    return EXACT_TITLE_MATCH_RANK;
+  if (
+    (item.keywords || []).some(
+      (value) => normalizedSearchValue(value) === filter,
+    )
+  )
+    return EXACT_KEYWORD_MATCH_RANK;
+  return PARTIAL_MATCH_RANK;
+}
+
+function exactMatchesFirst(items: CommandItem[], filterValue: string) {
+  const filter = normalizedSearchValue(filterValue);
+  if (!filter) return items;
+  return items
+    .map((item, index) => ({ item, index, rank: exactMatchRank(item, filter) }))
+    .sort((left, right) => left.rank - right.rank || left.index - right.index)
+    .map(({ item }) => item);
+}
+
 export function filterCommandItems(
   items: CommandItem[] = [],
   filter: string,
   options?: { minScore?: number },
 ) {
   const minScore = options?.minScore ?? 1;
-  return items.filter((item) =>
-    valuesMatchMinScore(
-      minScore,
-      filter,
-      item.title,
-      item.subtitle,
-      item.text,
-      item.shortcut,
-      ...(item.keywords || []),
-      ...actionsFromPanel(item.actionPanel, item.actions || []).map(
-        (action) => action.title,
-      ),
-    ),
+  const matches = items.filter((item) =>
+    valuesMatchMinScore(minScore, filter, ...commandItemSearchValues(item)),
   );
+  return exactMatchesFirst(matches, filter);
 }
 
 export function filterCommandSections(
@@ -59,7 +91,7 @@ export function filterCommandSections(
   filter: string,
   options?: { minScore?: number },
 ) {
-  if (!view.sections?.length) return undefined;
+  if (!view.sections?.length) return;
   return view.sections
     .map((section) => ({
       ...section,
