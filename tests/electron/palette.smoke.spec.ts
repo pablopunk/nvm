@@ -326,9 +326,9 @@ async function trackLiveProcessTree(
   app: ElectronApplication,
   trackedPids: number[],
 ) {
-  const launched = app.process();
-  if (launched.exitCode !== null || launched.signalCode !== null) return;
   try {
+    const launched = app.process();
+    if (launched.exitCode !== null || launched.signalCode !== null) return;
     for (const pid of await processTree(launched.pid!)) {
       if (!trackedPids.includes(pid)) trackedPids.push(pid);
     }
