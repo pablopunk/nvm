@@ -3,12 +3,16 @@ import type {
   DirectoryTreeChangeListener,
   DirectoryTreeWatcher,
 } from '../os/directory-tree-watch';
+import { requiresIndividualDirectoryWatches } from '../os/directory-tree-watch';
+import { warn as logWarn } from '../platform/logger';
 import { ignoredByPattern } from './ignore-patterns';
 
 export const FILE_INDEX_CHANGED_EVENT = 'files.index.changed';
+const MAX_INDIVIDUAL_DIRECTORY_WATCHES = 2048;
 
 export type FileIndexWatchScope = {
   roots: string[];
+  indexedDirectories?: string[];
   depth: number;
   includeHidden: boolean;
   ignore: string[];
@@ -20,6 +24,7 @@ export type FileIndexWatcherDeps = {
     onChange: DirectoryTreeChangeListener,
   ) => DirectoryTreeWatcher;
   onRelevantChange: () => void;
+  watchDirectoriesIndividually?: boolean;
 };
 
 export function changedPathCanAffectFileIndex(
@@ -54,14 +59,16 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
     deps.onRelevantChange();
   }
 
-  function startRootWatcher(root: string) {
+  function startRootWatcher(root: string, watchedPath: string) {
     try {
-      const watcher = deps.watchDirectoryTree(root, (relativePath) => {
-        if (changedPathCanAffectFileIndex(root, relativePath, scope))
+      const watcher = deps.watchDirectoryTree(watchedPath, (relativePath) => {
+        const prefix = path.relative(root, watchedPath);
+        const changed = relativePath ? path.join(prefix, relativePath) : null;
+        if (changedPathCanAffectFileIndex(root, changed, scope))
           deps.onRelevantChange();
       });
-      watcher.on('error', () => forgetBrokenRootWatcher(root));
-      watchers.set(root, watcher);
+      watcher.on('error', () => forgetBrokenRootWatcher(watchedPath));
+      watchers.set(watchedPath, watcher);
     } catch {
       // Missing or unreadable roots are retried on the next index sync.
     }
@@ -69,13 +76,39 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
 
   function sync(nextScope: FileIndexWatchScope) {
     scope = nextScope;
-    const wanted = new Set(nextScope.roots);
+    const directories =
+      (deps.watchDirectoriesIndividually ??
+      requiresIndividualDirectoryWatches(process.platform))
+        ? nextScope.indexedDirectories || []
+        : [];
+    const allDirectories = [...new Set([...nextScope.roots, ...directories])];
+    if (allDirectories.length > MAX_INDIVIDUAL_DIRECTORY_WATCHES) {
+      logWarn(
+        'files.index.watch-limit',
+        {
+          count: allDirectories.length,
+          limit: MAX_INDIVIDUAL_DIRECTORY_WATCHES,
+        },
+        { source: 'host', scope: 'files' },
+      );
+    }
+    const wanted = new Set(
+      allDirectories.slice(0, MAX_INDIVIDUAL_DIRECTORY_WATCHES),
+    );
     for (const [root, watcher] of watchers) {
       if (wanted.has(root)) continue;
       watcher.close();
       watchers.delete(root);
     }
-    for (const root of wanted) if (!watchers.has(root)) startRootWatcher(root);
+    for (const watchedPath of wanted) {
+      const root = nextScope.roots.find(
+        (candidate) =>
+          watchedPath === candidate ||
+          watchedPath.startsWith(`${candidate}${path.sep}`),
+      );
+      if (root && !watchers.has(watchedPath))
+        startRootWatcher(root, watchedPath);
+    }
   }
 
   function watchedRoots() {

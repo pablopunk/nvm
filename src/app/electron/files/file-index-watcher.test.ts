@@ -91,6 +91,26 @@ function fakeWatchFactory() {
   return { watchers, missing, watchDirectoryTree };
 }
 
+test('individual directory watchers include indexed subfolders and filter their events', () => {
+  const fake = fakeWatchFactory();
+  const nested = path.join(ROOT, 'photos', 'trip');
+  let refreshes = 0;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: fake.watchDirectoryTree,
+    watchDirectoriesIndividually: true,
+    onRelevantChange: () => {
+      refreshes += 1;
+    },
+  });
+  watcher.sync(scope({ indexedDirectories: [ROOT, nested] }));
+  fake.watchers.get(nested)?.emit('new.jpg');
+  fake.watchers.get(nested)?.emit('.hidden');
+  assert.equal(refreshes, 1);
+  watcher.sync(scope({ indexedDirectories: [ROOT] }));
+  assert.equal(fake.watchers.get(nested)?.closed, true);
+  watcher.close();
+});
+
 test('watcher requests refresh only for relevant changes', () => {
   const fake = fakeWatchFactory();
   let refreshes = 0;

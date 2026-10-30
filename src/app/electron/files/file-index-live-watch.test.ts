@@ -5,6 +5,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { createDirectoryTreeWatch } from '../os/directory-tree-watch';
 import { createFileIndexRefresher } from './file-index-refresher';
+import { createFileIndexWatcher } from './file-index-watcher';
 
 async function listTopLevelFiles(root: string) {
   const entries = await fs.readdir(root, { withFileTypes: true });
@@ -91,4 +92,36 @@ test('live watcher refreshes the index after create, rename, move, and delete', 
     await fixture.changeAndRefresh(() => fs.rm(path.join(root, 'c.txt'))),
     [],
   );
+});
+
+test('Linux individual watchers report changes in an indexed subfolder', {
+  skip: process.platform !== 'linux',
+}, async (t) => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-nested-watch-'));
+  const nested = path.join(root, 'photos', 'trip');
+  await fs.mkdir(nested, { recursive: true });
+  let changed = false;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: createDirectoryTreeWatch('linux'),
+    watchDirectoriesIndividually: true,
+    onRelevantChange: () => {
+      changed = true;
+    },
+  });
+  t.after(async () => {
+    watcher.close();
+    await fs.rm(root, { recursive: true, force: true });
+  });
+  watcher.sync({
+    roots: [root],
+    indexedDirectories: [root, nested],
+    depth: 2,
+    includeHidden: false,
+    ignore: [],
+  });
+  await fs.writeFile(path.join(nested, 'photo.jpg'), 'test');
+  const deadline = Date.now() + 3000;
+  while (!changed && Date.now() < deadline)
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.ok(changed, 'expected an event from the indexed subfolder');
 });

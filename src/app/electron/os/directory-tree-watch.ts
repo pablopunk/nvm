@@ -17,6 +17,10 @@ export function nativelyWatchesNestedDirectories(platform: NodeJS.Platform) {
   return platform === 'darwin' || platform === 'win32';
 }
 
+export function requiresIndividualDirectoryWatches(platform: NodeJS.Platform) {
+  return platform === 'linux';
+}
+
 export function createDirectoryTreeWatch(
   platform: NodeJS.Platform,
   watchDependency: DirectoryTreeWatchDependency = watch as never,

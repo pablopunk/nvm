@@ -16,6 +16,7 @@ export type FileIndexScan = {
   existingRoots: string[];
   missingRoots: string[];
   unreadableRoots: string[];
+  indexedDirectories?: string[];
 };
 
 export type FileIndexRefresherDeps = FileIndexWatcherDeps & {
@@ -27,9 +28,11 @@ export type FileIndexRefresherDeps = FileIndexWatcherDeps & {
 function fileIndexWatchScope(
   options: any,
   existingRoots: string[],
+  indexedDirectories: string[] = [],
 ): FileIndexWatchScope {
   return {
     roots: existingRoots,
+    indexedDirectories,
     depth: options.depth ?? 2,
     includeHidden: Boolean(options.includeHidden),
     ignore: normalizedIgnorePatterns(options.ignore),
@@ -65,7 +68,9 @@ export function createFileIndexRefresher(deps: FileIndexRefresherDeps) {
     const changed =
       fileIndexSignature(nextIndex) !== fileIndexSignature(fileIndex);
     fileIndex = nextIndex;
-    watcher.sync(fileIndexWatchScope(options, scan.existingRoots));
+    watcher.sync(
+      fileIndexWatchScope(options, scan.existingRoots, scan.indexedDirectories),
+    );
     if (changed) deps.notifyChanged();
     deps.mark?.('files.index.result', {
       indexedCount: fileIndex.length,

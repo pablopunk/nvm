@@ -1,5 +1,4 @@
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import {
   markDebugPerformance,
@@ -11,6 +10,7 @@ import type { JobRegistry } from '../platform/jobs';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { thumbnailUrlForPreviewablePath } from './extension-file';
 import { filesNeedingDateAdded, pathIsInsideRoot } from './file-index-commit';
+import { defaultFileIndexRoots } from './file-index-roots';
 import {
   createFileIndexRefresher,
   type FileIndexRefresherDeps,
@@ -38,11 +38,7 @@ import { ignoredByPattern, normalizedIgnorePatterns } from './ignore-patterns';
 
 const DEFAULT_FILE_INDEX_LIMIT = 5000;
 
-export function defaultFileIndexRoots() {
-  return ['Desktop', 'Documents', 'Downloads'].map((name) =>
-    path.join(os.homedir(), name),
-  );
-}
+export { defaultFileIndexRoots } from './file-index-roots';
 
 function normalizedIndexRoots(options: any = {}) {
   const roots = normalizeFindRoots(options.roots);
@@ -78,12 +74,14 @@ export async function scanFileIndex(
       const extensions = extensionsForFindOptions(options);
       const found = [];
       const unreadableRoots: string[] = [];
+      const indexedDirectories: string[] = [];
 
       async function walk(dir, depth) {
         if (found.length >= limit) return;
         let entries = [];
         try {
           entries = await fs.readdir(dir, { withFileTypes: true });
+          indexedDirectories.push(dir);
         } catch {
           unreadableRoots.push(dir);
           return;
@@ -141,6 +139,7 @@ export async function scanFileIndex(
         ),
         missingRoots: missing,
         unreadableRoots,
+        indexedDirectories,
       };
     },
   );

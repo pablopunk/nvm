@@ -942,7 +942,7 @@ export type ExtensionFindFilesOptions = {
 };
 
 export type ExtensionFileIndexOptions = ExtensionFindFilesOptions & {
-  /** Roots to scan or filter, e.g. ['~/Downloads']. Defaults to Desktop/Documents/Downloads. */
+  /** Roots to scan or filter, e.g. ['~/Downloads']. Defaults to Desktop, Documents, Downloads, Pictures, Videos, and Movies under the home directory. */
   roots?: string | string[];
   /** Include hidden dotfiles during explicit reindex scans. Defaults to false. */
   includeHidden?: boolean;
