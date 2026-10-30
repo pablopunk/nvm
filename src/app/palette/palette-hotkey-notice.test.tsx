@@ -61,13 +61,11 @@ test('the notice stays a single slim row with one shortcut action', () => {
 });
 
 test('the notice persists in every palette state until a shortcut registers', () => {
-  assert.equal(paletteHotkeyNoticeIsVisible(failed, true), true);
-  assert.equal(paletteHotkeyNoticeIsVisible(failed, false), true);
-  assert.equal(paletteHotkeyNoticeIsVisible(unconfigured, false), true);
-  assert.equal(paletteHotkeyNoticeIsVisible(unconfigured, true), false);
+  assert.equal(paletteHotkeyNoticeIsVisible(failed), true);
+  assert.equal(paletteHotkeyNoticeIsVisible(unconfigured), true);
   assert.equal(
-    paletteHotkeyNoticeIsVisible({ ...failed, registered: true }, false),
+    paletteHotkeyNoticeIsVisible({ ...failed, registered: true }),
     false,
   );
-  assert.equal(paletteHotkeyNoticeIsVisible(null, false), false);
+  assert.equal(paletteHotkeyNoticeIsVisible(null), false);
 });

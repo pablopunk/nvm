@@ -4,10 +4,8 @@ import { shortcutLabel } from './ui';
 
 export function paletteHotkeyNoticeIsVisible(
   status: PaletteHotkeyStatus | null,
-  welcomeOffersShortcutSetup: boolean,
 ): status is PaletteHotkeyStatus {
-  if (!status || status.registered) return false;
-  return status.configured || !welcomeOffersShortcutSetup;
+  return Boolean(status && !status.registered);
 }
 
 export function paletteHotkeyNoticeCopy(status: PaletteHotkeyStatus) {

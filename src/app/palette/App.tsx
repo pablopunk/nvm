@@ -1822,10 +1822,8 @@ export function App() {
       extensionItemOptionsFor ||
       optionsFor,
   );
-  const showPaletteHotkeyNotice = paletteHotkeyNoticeIsVisible(
-    paletteHotkeyStatus,
-    actions.some((action) => action.title === 'Welcome to Nevermind'),
-  );
+  const showPaletteHotkeyNotice =
+    paletteHotkeyNoticeIsVisible(paletteHotkeyStatus);
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
   function selectValue(value: string) {
     selectedValueRef.current = value;
