@@ -35,13 +35,19 @@ if (result.error) {
 const stderr = result.stderr.toString('utf-8');
 process.stderr.write(stderr);
 
-if (result.status === 0) {
-  process.exit(0);
-}
-
-if (stderr.includes('No files were processed')) {
+if (result.status !== 0 && stderr.includes('No files were processed')) {
   process.stdout.write('No biome-lintable files changed — skipping.\n');
-  process.exit(0);
+} else if (result.status !== 0) {
+  process.exit(result.status ?? 1);
 }
 
-process.exit(result.status);
+const inventory = spawnSync(
+  process.execPath,
+  ['scripts/check-windows-platform-inventory.cjs'],
+  { stdio: 'inherit', timeout: 60_000 },
+);
+if (inventory.error) {
+  process.stderr.write(`${inventory.error.message}\n`);
+  process.exit(1);
+}
+process.exit(inventory.status ?? 1);
