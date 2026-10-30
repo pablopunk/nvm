@@ -7,7 +7,7 @@
   "electron/main.ts": 2215,
   "electron/nevermind-auth.ts": 691,
   "electron/os.ts": 1502,
-  "electron/palette-window.ts": 506,
+  "electron/palette-window.ts": 503,
   "extensions/account.ts": 612,
   "extensions/dictation.ts": 810,
   "palette/App.tsx": 5951,
