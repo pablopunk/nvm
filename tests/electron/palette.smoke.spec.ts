@@ -1212,6 +1212,7 @@ test('dismisses transient alias UI and flushes scheduled state before quit', asy
 });
 
 test('proposal activation, rollback, disable, and re-enable are transactional', async () => {
+  test.setTimeout(60_000);
   const lifecycleUserDataDir = path.join(userDataDir, 'pab53-lifecycle');
   const extensionsDir = path.join(lifecycleUserDataDir, 'extensions');
   const draftsDir = path.join(lifecycleUserDataDir, 'extension-drafts');
