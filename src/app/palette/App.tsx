@@ -101,12 +101,8 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
-import {
-  localActionCandidates,
-  viewActionsForItem,
-  combinedActionSections,
-  findLocalShortcut,
-} from './local-actions';
+// biome-ignore format: Keep the legacy palette within its file-size budget.
+import { localActionCandidates, actionIdentity, viewActionsForItem, combinedActionSections, findLocalShortcut } from './local-actions';
 import {
   resetTransientPaletteState,
   rootResultSelection,

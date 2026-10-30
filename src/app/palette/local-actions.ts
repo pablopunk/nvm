@@ -6,7 +6,7 @@ import {
   type CommandView,
 } from './model';
 
-function actionIdentity(action: CommandAction) {
+export function actionIdentity(action: CommandAction) {
   const nativeId = (action.nativeAction as { id?: string } | undefined)?.id;
   return [
     action.type,
