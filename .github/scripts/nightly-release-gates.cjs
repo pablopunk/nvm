@@ -38,14 +38,14 @@ function evaluateScheduleGate({ event, now, scheduledCron }) {
   if (
     (utcHour === null && hour !== SCHEDULED_MADRID_HOUR) ||
     (utcHour !== null &&
-      (madridHour(scheduled) !== SCHEDULED_MADRID_HOUR || hour < 4 || hour > 5))
+      (madridHour(scheduled) !== SCHEDULED_MADRID_HOUR || hour < 4))
   )
     return {
       run: false,
       reason:
-        'scheduled trigger is outside the selected Madrid 04:00 run or its delayed window',
+        'scheduled trigger is outside the selected Madrid 04:00 run',
     };
-  return { run: true, reason: 'scheduled Europe/Madrid 04:xx window' };
+  return { run: true, reason: 'scheduled Europe/Madrid 04:00 run' };
 }
 
 function evaluateCiGate({ sha, runs }) {

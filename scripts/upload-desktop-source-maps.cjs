@@ -5,6 +5,12 @@ const { desktopBuildIdentity } = require('./desktop-build-identity.cjs');
 
 const POSTHOG_CLI_VERSION = '0.19.0';
 
+function pnpmInvocation(execPath, pnpmScript) {
+  if (!pnpmScript || !/pnpm\.(?:c?js|mjs)$/i.test(pnpmScript))
+    throw new Error('Run the source map upload through pnpm');
+  return { executable: execPath, prefix: [pnpmScript] };
+}
+
 function uploadDesktopSourceMaps() {
   const required = process.env.NEVERMIND_RELEASE_BUILD === '1';
   if (!required) return;
@@ -25,9 +31,11 @@ function uploadDesktopSourceMaps() {
       throw new Error(`Missing source map: ${file}`);
   }
   validateSourceMapPairs(path.join(root, 'dist'));
+  const pnpm = pnpmInvocation(process.execPath, process.env.npm_execpath);
   execFileSync(
-    'pnpm',
+    pnpm.executable,
     [
+      ...pnpm.prefix,
       'dlx',
       `@posthog/cli@${POSTHOG_CLI_VERSION}`,
       '--host',
@@ -63,4 +71,4 @@ function validateSourceMapPairs(directory) {
 }
 
 if (require.main === module) uploadDesktopSourceMaps();
-module.exports = { uploadDesktopSourceMaps };
+module.exports = { pnpmInvocation, uploadDesktopSourceMaps };
