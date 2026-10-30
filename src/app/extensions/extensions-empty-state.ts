@@ -6,14 +6,12 @@ export const SIGNED_IN_EXTENSIONS_EMPTY_VIEW = {
     'Type what you want to automate in the palette and choose Automate to build one with AI.',
 };
 
-export interface ExtensionsEmptyAccountItem<Action> {
+export interface ExtensionsEmptyAccountItem {
   id?: string;
-  primaryAction?: Action;
+  primaryAction?: ExtensionAction;
 }
 
-function signInToBuildExtensionsItem<Action>(
-  account: ExtensionsEmptyAccountItem<Action>,
-) {
+function signInToBuildExtensionsItem(account: ExtensionsEmptyAccountItem) {
   return {
     id: 'extensions-sign-in',
     title: 'Sign in to build extensions',
@@ -24,8 +22,8 @@ function signInToBuildExtensionsItem<Action>(
   };
 }
 
-export function extensionsEmptyState<Action>(
-  account: ExtensionsEmptyAccountItem<Action> | null | undefined,
+export function extensionsEmptyState(
+  account: ExtensionsEmptyAccountItem | null | undefined,
 ) {
   if (account?.id === SIGNED_OUT_ACCOUNT_ITEM_ID)
     return {
@@ -34,3 +32,4 @@ export function extensionsEmptyState<Action>(
     };
   return { items: [], emptyView: SIGNED_IN_EXTENSIONS_EMPTY_VIEW };
 }
+import type { ExtensionAction } from '../resources/nevermind-extension-api';
