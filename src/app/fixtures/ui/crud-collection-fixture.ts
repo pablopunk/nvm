@@ -67,6 +67,19 @@ export function crudCollectionView(ctx: ExtensionContext) {
         remove,
       },
       {
+        id: 'launch-checklist',
+        title: 'Launch checklist',
+        subtitle: 'Long action labels with multi-modifier shortcuts',
+        icon: 'list-checks',
+        preview,
+        edit: {
+          ...edit,
+          title: 'Rename and reschedule the launch checklist',
+          shortcut: 'Command+Shift+Alt+E',
+        },
+        remove,
+      },
+      {
         id: 'roadmap',
         title: 'Roadmap draft',
         subtitle: 'Custom remove confirmation and no preview',

@@ -15,7 +15,7 @@
   right: 12px;
   bottom: 40px;
   z-index: 10;
-  width: min(320px, calc(100% - 24px));
+  width: min(360px, calc(100% - 24px));
   max-height: min(360px, calc(100% - 64px));
   overflow: hidden;
   border: 1px solid var(--edge-strong);
@@ -31,7 +31,7 @@
 
 .palette.isStacked .paletteCompactPanel {
   right: calc(12px + var(--stack-card-right-inset));
-  width: min(320px, calc(100% - 24px - var(--stack-card-right-inset)));
+  width: min(360px, calc(100% - 24px - var(--stack-card-right-inset)));
 }
 
 .extensionWindowCompactPanel .extensionWindowSearchRow {
@@ -51,6 +51,21 @@
   min-height: 32px;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
+}
+
+.extensionWindowCompactResults .resultTrailing {
+  gap: 4px;
+  overflow: visible;
+}
+
+.extensionWindowCompactResults .enterHint {
+  display: none;
+}
+
+.extensionWindowCompactResults .shortcutHint {
+  padding: 1px 6px;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0;
 }
 
 .extensionWindowCompactResults .resultIcon {

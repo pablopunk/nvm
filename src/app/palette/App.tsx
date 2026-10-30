@@ -30,6 +30,7 @@ import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
+  activePaneIsObscured,
   type ConfirmationReturnSurface,
   confirmationReturnSurface,
 } from './action-menu-presentation';
@@ -107,6 +108,10 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
+import {
+  PaletteHotkeyNotice,
+  paletteHotkeyNoticeIsVisible,
+} from './palette-hotkey-notice';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -1776,20 +1781,20 @@ export function App() {
     },
   );
   const siblingViews = extensionNavigation.siblingViews;
-  const activePaneObscured = Boolean(
-    shortcutFor ||
-      shortcutManagerOpen ||
-      aliasFor ||
-      confirmRemoveFor ||
-      confirmViewActionFor ||
-      confirmBuilderPreviewAction ||
-      actionSubmenuFor ||
-      extensionItemOptionsFor ||
-      optionsFor ||
-      previewFor ||
-      paletteForm.choices ||
-      palettePrompt.active,
-  );
+  const activePaneObscured = activePaneIsObscured({
+    shortcutRecorder: shortcutFor,
+    shortcutManager: shortcutManagerOpen,
+    alias: aliasFor,
+    confirmation:
+      confirmRemoveFor || confirmViewActionFor || confirmBuilderPreviewAction,
+    actionSubmenu: actionSubmenuFor,
+    itemActions: extensionItemOptionsFor,
+    rootActions: optionsFor,
+    shortcutOptions: shortcutOptionsFor,
+    preview: previewFor,
+    formChoices: paletteForm.choices,
+    prompt: palettePrompt.active,
+  });
   const paneConnectionLayoutKey = JSON.stringify(
     extensionNavigation.frames.map((frame) => frame.history.at(-1)?.id || null),
   );
@@ -1817,10 +1822,9 @@ export function App() {
       extensionItemOptionsFor ||
       optionsFor,
   );
-  const showPaletteHotkeyNotice = Boolean(
-    paletteHotkeyStatus &&
-      (paletteHotkeyStatus.configured ||
-        !actions.some((action) => action.title === 'Welcome to Nevermind')),
+  const showPaletteHotkeyNotice = paletteHotkeyNoticeIsVisible(
+    paletteHotkeyStatus,
+    actions.some((action) => action.title === 'Welcome to Nevermind'),
   );
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
   function selectValue(value: string) {
@@ -5785,42 +5789,12 @@ export function App() {
           </ArcherElement>
 
           {showPaletteHotkeyNotice && paletteHotkeyStatus ? (
-            <div
-              className="shortcutRegistrationNotice"
-              role={paletteHotkeyStatus.configured ? 'alert' : 'status'}
-              data-state={
-                paletteHotkeyStatus.configured
-                  ? 'registration-failed'
-                  : 'unconfigured'
+            <PaletteHotkeyNotice
+              status={paletteHotkeyStatus}
+              onSetShortcut={() =>
+                startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
               }
-            >
-              <Keyboard size={16} aria-hidden="true" />
-              <div className="shortcutRegistrationMessage">
-                <strong>
-                  {paletteHotkeyStatus.configured
-                    ? `Could not register ${shortcutLabel(paletteHotkeyStatus.accelerator, paletteHotkeyStatus.platform)}.`
-                    : 'No keyboard shortcut is set.'}
-                </strong>
-                <span>
-                  {!paletteHotkeyStatus.configured
-                    ? 'Set an optional shortcut to open Nevermind from anywhere. Launching the app also opens the palette.'
-                    : paletteHotkeyStatus.recoveryAccelerator
-                      ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
-                      : 'Open Nevermind again from your app launcher; the running app will come forward.'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="shortcutRegistrationButton"
-                onClick={() =>
-                  startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
-                }
-              >
-                {paletteHotkeyStatus.configured
-                  ? 'Change shortcut'
-                  : 'Set shortcut'}
-              </button>
-            </div>
+            />
           ) : null}
 
           {aiChatSessions.providers}
@@ -5841,7 +5815,7 @@ export function App() {
                   <div
                     key={entry.id}
                     hidden={!isTop || obscured}
-                    inert={!active || undefined}
+                    inert={!active || compactActionMenuVisible || undefined}
                     className={
                       active
                         ? `activeExtensionPane ${siblingViews.length > 0 ? 'card' : ''}`

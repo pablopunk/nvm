@@ -38,3 +38,32 @@ export function actionMenuHostIsStacked({
     hasSiblingViews
   );
 }
+
+export type PaletteOverlaySurface =
+  | 'shortcutRecorder'
+  | 'shortcutManager'
+  | 'alias'
+  | 'confirmation'
+  | 'actionSubmenu'
+  | 'itemActions'
+  | 'rootActions'
+  | 'shortcutOptions'
+  | 'preview'
+  | 'formChoices'
+  | 'prompt';
+
+const COMPACT_OVERLAY_SURFACES = new Set<string>([
+  'actionSubmenu',
+  'itemActions',
+  'rootActions',
+  'shortcutOptions',
+]);
+
+export function activePaneIsObscured(
+  openSurfaces: Partial<Record<PaletteOverlaySurface, unknown>>,
+) {
+  return Object.entries(openSurfaces).some(
+    ([surface, open]) =>
+      Boolean(open) && !COMPACT_OVERLAY_SURFACES.has(surface),
+  );
+}
