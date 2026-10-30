@@ -166,6 +166,12 @@ export function createFileIndexService(deps: FileIndexServiceDeps) {
     notifyChanged: deps.notifyRootItemsChanged,
     watchDirectoryTree: deps.watchDirectoryTree || watchDirectoryTree,
     onRelevantChange: () => deps.jobEvents.emit(FILE_INDEX_CHANGED_EVENT),
+    onWatchLimit: (count, limit) =>
+      logWarn(
+        'files.index.watch-limit',
+        { count, limit },
+        { source: 'host', scope: 'files' },
+      ),
     mark: markDebugPerformance,
   });
 

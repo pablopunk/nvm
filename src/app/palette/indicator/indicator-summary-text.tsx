@@ -1,3 +1,4 @@
+import React from 'react';
 import { indicatorSummaryWraps } from '../../shared/passive-indicator-layout';
 import { MorphingIndicatorText } from './morphing-text';
 

@@ -1,4 +1,5 @@
 import { Keyboard } from 'lucide-react';
+import React from 'react';
 import type { PaletteHotkeyStatus } from './preload-api';
 import { shortcutLabel } from './ui';
 

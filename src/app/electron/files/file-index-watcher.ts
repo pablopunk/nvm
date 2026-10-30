@@ -4,7 +4,6 @@ import type {
   DirectoryTreeWatcher,
 } from '../os/directory-tree-watch';
 import { watchesIndexedDirectoriesIndividually } from '../os/directory-tree-watch';
-import { warn as logWarn } from '../platform/logger';
 import { ignoredByPattern } from './ignore-patterns';
 
 export const FILE_INDEX_CHANGED_EVENT = 'files.index.changed';
@@ -24,6 +23,7 @@ export type FileIndexWatcherDeps = {
     onChange: DirectoryTreeChangeListener,
   ) => DirectoryTreeWatcher;
   onRelevantChange: () => void;
+  onWatchLimit?: (count: number, limit: number) => void;
   watchDirectoriesIndividually?: boolean;
 };
 
@@ -83,13 +83,9 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
         : [];
     const allDirectories = [...new Set([...nextScope.roots, ...directories])];
     if (allDirectories.length > MAX_INDIVIDUAL_DIRECTORY_WATCHES) {
-      logWarn(
-        'files.index.watch-limit',
-        {
-          count: allDirectories.length,
-          limit: MAX_INDIVIDUAL_DIRECTORY_WATCHES,
-        },
-        { source: 'host', scope: 'files' },
+      deps.onWatchLimit?.(
+        allDirectories.length,
+        MAX_INDIVIDUAL_DIRECTORY_WATCHES,
       );
     }
     const wanted = new Set(
