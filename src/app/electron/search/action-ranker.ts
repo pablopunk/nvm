@@ -3,6 +3,7 @@ import {
   actionTextSearchScore,
   effectiveLastUsed,
   priorityBoost,
+  QUERY_FALLBACK_SEARCH_SCORE,
   recencyBoost,
 } from './action-ranking';
 import { normalize } from './search-utils';
@@ -44,15 +45,17 @@ export function createActionRanker(deps: ActionRankerDeps) {
       action.lastUsed,
       userStateStore.get().recents[action.id]?.lastUsed,
     );
+    const boost =
+      priorityBoost(action) + usageBoost(action.id) + recencyBoost(lastUsed);
     return {
       ...action,
       aliases: [...(action.aliases || []), ...actionAliases(action.id)],
       userAliases: actionAliases(action.id),
       score:
         base +
-        priorityBoost(action) +
-        usageBoost(action.id) +
-        recencyBoost(lastUsed),
+        (action.queryFallback === true && base === QUERY_FALLBACK_SEARCH_SCORE
+          ? Math.min(9, boost)
+          : boost),
       lastUsed,
     };
   }

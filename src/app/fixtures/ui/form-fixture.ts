@@ -120,7 +120,7 @@ export function formView(ctx: ExtensionContext) {
       },
     ],
     submitAction: ctx.actions.run('Show Submitted Values', (_ctx, action) =>
-      ctx.ui.preview({
+      ctx.ui.previewView({
         title: 'Submitted Form Values',
         content: `# Submitted Form Values\n\n${valuesMarkdown(action.formValues)}`,
       }),

@@ -1,81 +1,28 @@
 import {
   backoffDelay,
+  DebounceDeadlines,
   JobWorkBarrier,
   mergeEventPayloads,
   timeout,
 } from './job-helpers';
+import type {
+  JobDefinition,
+  JobHistoryEntry,
+  JobPerformanceRunner,
+  JobSnapshot,
+  JobStatus,
+} from './job-types';
 
-export type JobOwner = 'host' | 'extension';
-export type JobStatus =
-  | 'idle'
-  | 'running'
-  | 'succeeded'
-  | 'failed'
-  | 'disabled'
-  | 'backing-off';
-export type JobTrigger =
-  | { type: 'manual' }
-  | { type: 'startup'; delayMs?: number; payload?: unknown }
-  | { type: 'interval'; everyMs: number; delayMs?: number; payload?: unknown }
-  | { type: 'event'; event: string; debounceMs?: number; payload?: unknown };
-
-export type JobRunContext = {
-  id: string;
-  reason: string;
-  event?: string;
-  payload?: unknown;
-  startedAt: number;
-};
-
-export type JobHistoryEntry = {
-  startedAt: number;
-  finishedAt: number;
-  durationMs: number;
-  status: 'succeeded' | 'failed';
-  reason: string;
-  error?: string;
-};
-
-export type JobDefinition = {
-  id: string;
-  title: string;
-  owner?: JobOwner;
-  scope?: string;
-  enabled?: boolean;
-  triggers?: JobTrigger[];
-  timeoutMs?: number;
-  maxConcurrency?: 1;
-  backoff?: { initialMs?: number; maxMs?: number };
-  run: (context: JobRunContext) => unknown | Promise<unknown>;
-};
-
-export type JobPerformanceRunner = <T>(
-  operation: string,
-  attributes: Record<string, unknown>,
-  task: () => T | Promise<T>,
-) => T | Promise<T>;
-
-export type JobSnapshot = {
-  id: string;
-  title: string;
-  owner: JobOwner;
-  scope?: string;
-  status: JobStatus;
-  enabled: boolean;
-  running: boolean;
-  runCount: number;
-  failureCount: number;
-  consecutiveFailures: number;
-  backoffUntil?: number;
-  lastReason?: string;
-  lastStartedAt?: number;
-  lastFinishedAt?: number;
-  lastDurationMs?: number;
-  lastError?: string;
-  nextRunAt?: number;
-  triggers: JobTrigger[];
-  history: JobHistoryEntry[];
-};
+export type {
+  JobDefinition,
+  JobHistoryEntry,
+  JobOwner,
+  JobPerformanceRunner,
+  JobRunContext,
+  JobSnapshot,
+  JobStatus,
+  JobTrigger,
+} from './job-types';
 
 type JobRecord = {
   definition: JobDefinition;
@@ -109,6 +56,7 @@ export class JobRegistry {
   private enabledOverrides: EnabledOverrides = {};
   private performanceTrace?: JobPerformanceRunner;
   private work = new JobWorkBarrier();
+  private debounceDeadlines = new DebounceDeadlines();
 
   constructor(options: { performanceTrace?: JobPerformanceRunner } = {}) {
     this.performanceTrace = options.performanceTrace;
@@ -281,7 +229,7 @@ export class JobRegistry {
   ) {
     if (this.work.paused) return;
     const record = this.records.get(id);
-    if (!record || !record.enabled) return;
+    if (!(record && record.enabled)) return;
     const previous = record.scheduledTimers.get(reason);
     if (previous) clearTimeout(previous);
     record.nextRunAt = Date.now() + Math.max(0, delayMs);
@@ -294,6 +242,7 @@ export class JobRegistry {
         const payload = record.scheduledPayloads.get(reason);
         record.scheduledTimers.delete(reason);
         record.scheduledPayloads.delete(reason);
+        this.debounceDeadlines.settle(`${id}\0${reason}`);
         record.nextRunAt = undefined;
         void this.run(id, reason, payload).catch(() => {});
       },
@@ -308,10 +257,16 @@ export class JobRegistry {
     for (const record of this.records.values()) {
       for (const trigger of record.definition.triggers || []) {
         if (trigger.type !== 'event' || trigger.event !== event) continue;
+        const { id } = record.definition;
+        const reason = `event:${event}`;
         this.schedule(
-          record.definition.id,
-          `event:${event}`,
-          trigger.debounceMs || 0,
+          id,
+          reason,
+          this.debounceDeadlines.delayFor(
+            `${id}\0${reason}`,
+            trigger.debounceMs || 0,
+            trigger.maxWaitMs,
+          ),
           { event, payload: payload ?? trigger.payload },
         );
       }
@@ -341,8 +296,8 @@ export class JobRegistry {
   private applyRecordEnabled(record: JobRecord, enabled: boolean) {
     record.enabled = enabled;
     record.status = enabled ? 'idle' : 'disabled';
-    if (!enabled) this.clearTimers(record);
-    else this.installTriggers(record);
+    if (enabled) this.installTriggers(record);
+    else this.clearTimers(record);
     this.notify();
   }
 
@@ -427,9 +382,7 @@ export class JobRegistry {
 
   private rememberHistory(record: JobRecord) {
     if (
-      !record.lastStartedAt ||
-      !record.lastFinishedAt ||
-      !record.lastDurationMs
+      !(record.lastStartedAt && record.lastFinishedAt && record.lastDurationMs)
     )
       return;
     record.history = [
@@ -485,6 +438,7 @@ export class JobRegistry {
     record.scheduledTimers.clear();
     record.scheduledPayloads.clear();
     record.nextRunAt = undefined;
+    this.debounceDeadlines.settleWithPrefix(`${record.definition.id}\0`);
   }
 
   private notify() {

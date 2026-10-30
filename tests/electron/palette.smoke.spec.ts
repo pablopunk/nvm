@@ -2,8 +2,8 @@
 import { execFile as execFileCallback } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import { createRequire } from 'node:module';
+import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from '@playwright/test';
@@ -773,6 +773,44 @@ test('restores search focus after dismissing a root action panel', async () => {
     await expect(input).toBeFocused();
     await launched.page.keyboard.type('x');
     await expect(input).toHaveValue(/x/);
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
+test('keeps a collection visible under its compact item action panel', async () => {
+  test.setTimeout(40_000);
+  const collectionUserDataDir = path.join(userDataDir, 'collection-actions');
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    launched = await launchTestApplication(collectionUserDataDir);
+    const { page } = launched;
+    const input = page.locator('input[placeholder]').first();
+    await input.fill('Search Floating Notes');
+    await expect(
+      page.getByText('Search Floating Notes', { exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press('Enter');
+    const collectionInput = page.locator('input[placeholder="Find a note"]');
+    await expect(collectionInput).toBeVisible();
+    const pane = page.locator('.activeExtensionPane');
+    await expect(pane.getByText('New note', { exact: true })).toBeVisible();
+
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
+    const panel = page.locator('.paletteCompactPanel');
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText('New note', { exact: true })).toHaveCount(1);
+    await expect(pane.getByText('New note', { exact: true })).toBeVisible();
+    await expect(pane).toHaveAttribute('inert', '');
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+    await expect(pane).not.toHaveAttribute('inert', '');
+    await expect(collectionInput).toBeFocused();
   } finally {
     if (launched)
       await closeTestApplication(launched.app, launched.trackedPids);

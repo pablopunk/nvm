@@ -25,7 +25,7 @@ function ocrResultMarkdown(result: ExtensionOcrResult, source: string) {
 }
 
 function ocrUnavailableView(ctx: ExtensionContext) {
-  return ctx.ui.preview({
+  return ctx.ui.previewView({
     title: 'OCR Unavailable',
     content:
       '# OCR Unavailable\n\nDeclare the `ocr` capability for review and check `ctx.system.capabilities.has("ocr")` before using OCR helpers.',
@@ -33,7 +33,7 @@ function ocrUnavailableView(ctx: ExtensionContext) {
 }
 
 function ocrErrorView(ctx: ExtensionContext, error: unknown) {
-  return ctx.ui.preview({
+  return ctx.ui.previewView({
     title: 'OCR Error',
     content: `# OCR Error\n\n${error instanceof Error ? error.message : String(error)}`,
   });
@@ -53,7 +53,7 @@ async function runOcrImage(
         ? ctx.desktop.files?.thumbnail(input) ||
           ctx.desktop.files?.toFileUrl(input)
         : input.thumbnailUrl || input.url;
-    return ctx.ui.preview({
+    return ctx.ui.previewView({
       title: 'OCR Result',
       content: ocrResultMarkdown(result, source),
       image,
@@ -91,7 +91,7 @@ export function ocrFixtureView(ctx: ExtensionContext) {
         { limit: 1, depth: 2, sortBy: 'recent' },
       )) || [];
     if (!images.length)
-      return innerCtx.ui.preview({
+      return innerCtx.ui.previewView({
         title: 'No Image Found',
         content:
           '# No Image Found\n\nAdd an image to Downloads, Desktop, or Pictures, or use **Choose Image for OCR**.',
@@ -104,7 +104,7 @@ export function ocrFixtureView(ctx: ExtensionContext) {
       return ocrUnavailableView(innerCtx);
     try {
       const result = await innerCtx.ocr.screen();
-      return innerCtx.ui.preview({
+      return innerCtx.ui.previewView({
         title: 'Screen OCR Result',
         content: ocrResultMarkdown(result, 'screen capture'),
       });
@@ -122,7 +122,7 @@ export function ocrFixtureView(ctx: ExtensionContext) {
         width: 900,
         height: 600,
       });
-      return innerCtx.ui.preview({
+      return innerCtx.ui.previewView({
         title: 'Region OCR Result',
         content: ocrResultMarkdown(result, 'screen region 0,0,900×600'),
       });

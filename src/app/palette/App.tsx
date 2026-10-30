@@ -28,8 +28,14 @@ import {
 } from 'react-archer';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
+  previewActionFlags,
+  rootPreviewAction,
+  rootSearchQueryAction,
+} from './root-action-preview';
+import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
+  activePaneIsObscured,
   type ConfirmationReturnSurface,
   confirmationReturnSurface,
 } from './action-menu-presentation';
@@ -107,6 +113,10 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
+import {
+  PaletteHotkeyNotice,
+  paletteHotkeyNoticeIsVisible,
+} from './palette-hotkey-notice';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -1776,20 +1786,20 @@ export function App() {
     },
   );
   const siblingViews = extensionNavigation.siblingViews;
-  const activePaneObscured = Boolean(
-    shortcutFor ||
-      shortcutManagerOpen ||
-      aliasFor ||
-      confirmRemoveFor ||
-      confirmViewActionFor ||
-      confirmBuilderPreviewAction ||
-      actionSubmenuFor ||
-      extensionItemOptionsFor ||
-      optionsFor ||
-      previewFor ||
-      paletteForm.choices ||
-      palettePrompt.active,
-  );
+  const activePaneObscured = activePaneIsObscured({
+    shortcutRecorder: shortcutFor,
+    shortcutManager: shortcutManagerOpen,
+    alias: aliasFor,
+    confirmation:
+      confirmRemoveFor || confirmViewActionFor || confirmBuilderPreviewAction,
+    actionSubmenu: actionSubmenuFor,
+    itemActions: extensionItemOptionsFor,
+    rootActions: optionsFor,
+    shortcutOptions: shortcutOptionsFor,
+    preview: previewFor,
+    formChoices: paletteForm.choices,
+    prompt: palettePrompt.active,
+  });
   const paneConnectionLayoutKey = JSON.stringify(
     extensionNavigation.frames.map((frame) => frame.history.at(-1)?.id || null),
   );
@@ -1817,11 +1827,8 @@ export function App() {
       extensionItemOptionsFor ||
       optionsFor,
   );
-  const showPaletteHotkeyNotice = Boolean(
-    paletteHotkeyStatus &&
-      (paletteHotkeyStatus.configured ||
-        !actions.some((action) => action.title === 'Welcome to Nevermind')),
-  );
+  const showPaletteHotkeyNotice =
+    paletteHotkeyNoticeIsVisible(paletteHotkeyStatus);
   const scrollResultsToTop = () => resultsListRef.current?.scrollTo({ top: 0 });
   function selectValue(value: string) {
     selectedValueRef.current = value;
@@ -4563,14 +4570,9 @@ export function App() {
       ? commandItemActionRows(commandItemFromAction(optionsFor), 'root-action')
       : [];
   }
-
   function getOptionActionRows() {
-    const declaredActions = actionsFromPanel(optionsFor?.actionPanel);
-    const hasDeclaredPreviewAction = declaredActions.some(
-      (action) => action.type === 'previewClipboardItem',
-    );
-    const hasDeclaredQuickLookAction = declaredActions.some(
-      (action) => action.type === 'quickLook',
+    const { hasPreview, hasQuickLook } = previewActionFlags(
+      optionsFor?.actionPanel,
     );
     const optionRows = [
       {
@@ -4597,7 +4599,7 @@ export function App() {
         subtitle: 'Press → to preview an item',
         shortcut: 'Command+Y',
         onSelect: () => optionsFor && setPreviewFor(optionsFor),
-        show: canPreviewAction && !hasDeclaredPreviewAction,
+        show: canPreviewAction && !hasPreview,
       },
       {
         value: 'option:quick-look',
@@ -4606,7 +4608,7 @@ export function App() {
         subtitle: 'Preview this file',
         shortcut: 'Command+Y',
         onSelect: quickLookOptionsAction,
-        show: canQuickLookAction && !hasDeclaredQuickLookAction,
+        show: canQuickLookAction && !hasQuickLook && !hasPreview,
       },
       {
         value: 'option:alias',
@@ -5096,16 +5098,6 @@ export function App() {
     return true;
   }
 
-  function rootSearchQueryAction(
-    action: Action | null | undefined,
-    title: 'Continue Calculation' | 'Swap Units',
-  ) {
-    return actionsFromPanel(action?.actionPanel, []).find(
-      (candidate) =>
-        candidate.type === 'setSearchQuery' && candidate.title === title,
-    );
-  }
-
   function selectBuilderPreviewItem(filename: string, itemId: string) {
     setBuilderPreviews((previews) =>
       previews.map((preview) =>
@@ -5418,6 +5410,18 @@ export function App() {
       if (action) {
         event.preventDefault();
         runViewAction(action);
+        return;
+      }
+    }
+    if (
+      !isChildOpen &&
+      normalizedShortcut(localAccelerator) === 'command+y' &&
+      selectedAction
+    ) {
+      const preview = rootPreviewAction(selectedAction);
+      if (preview) {
+        event.preventDefault();
+        runViewAction(preview);
         return;
       }
     }
@@ -5785,42 +5789,12 @@ export function App() {
           </ArcherElement>
 
           {showPaletteHotkeyNotice && paletteHotkeyStatus ? (
-            <div
-              className="shortcutRegistrationNotice"
-              role={paletteHotkeyStatus.configured ? 'alert' : 'status'}
-              data-state={
-                paletteHotkeyStatus.configured
-                  ? 'registration-failed'
-                  : 'unconfigured'
+            <PaletteHotkeyNotice
+              status={paletteHotkeyStatus}
+              onSetShortcut={() =>
+                startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
               }
-            >
-              <Keyboard size={16} aria-hidden="true" />
-              <div className="shortcutRegistrationMessage">
-                <strong>
-                  {paletteHotkeyStatus.configured
-                    ? `Could not register ${shortcutLabel(paletteHotkeyStatus.accelerator, paletteHotkeyStatus.platform)}.`
-                    : 'No keyboard shortcut is set.'}
-                </strong>
-                <span>
-                  {!paletteHotkeyStatus.configured
-                    ? 'Set an optional shortcut to open Nevermind from anywhere. Launching the app also opens the palette.'
-                    : paletteHotkeyStatus.recoveryAccelerator
-                      ? `Use ${shortcutLabel(paletteHotkeyStatus.recoveryAccelerator, paletteHotkeyStatus.platform)} to reopen Nevermind.`
-                      : 'Open Nevermind again from your app launcher; the running app will come forward.'}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="shortcutRegistrationButton"
-                onClick={() =>
-                  startShortcutRecorder(PALETTE_HOTKEY_PSEUDO_ACTION)
-                }
-              >
-                {paletteHotkeyStatus.configured
-                  ? 'Change shortcut'
-                  : 'Set shortcut'}
-              </button>
-            </div>
+            />
           ) : null}
 
           {aiChatSessions.providers}
@@ -5841,7 +5815,7 @@ export function App() {
                   <div
                     key={entry.id}
                     hidden={!isTop || obscured}
-                    inert={!active || undefined}
+                    inert={!active || compactActionMenuVisible || undefined}
                     className={
                       active
                         ? `activeExtensionPane ${siblingViews.length > 0 ? 'card' : ''}`

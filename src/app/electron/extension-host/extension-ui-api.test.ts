@@ -24,7 +24,7 @@ test('extension ui api stamps view helper types', () => {
   });
 });
 
-test('extension ui preview handles previewable items, file metadata, and plain views', () => {
+test('legacy ui.preview keeps unique-shape routing for items, files, and plain views', () => {
   const ui = createUi();
 
   assert.deepEqual(ui.preview({ kind: 'image', title: 'Image' }), {
@@ -52,6 +52,107 @@ test('extension ui preview handles previewable items, file metadata, and plain v
     content: 'Markdown',
     type: 'preview',
   });
+});
+
+const HELLO_TEXT_PREVIEW = {
+  kind: 'text',
+  text: 'hello',
+  truncated: false,
+  sizeBytes: 'hello'.length,
+} as const;
+
+function createUiWithTextReader() {
+  const reads: string[] = [];
+  const ui = createExtensionUiApi({
+    buildPreviewItemAction: (item) => ({ previewItem: item }),
+    readTextFilePreview: (filePath) => {
+      reads.push(filePath);
+      return Promise.resolve(HELLO_TEXT_PREVIEW);
+    },
+    progressView: (input) => ({ type: 'progress', ...(input as object) }),
+    buildConfirmAction: (input) => ({ type: 'confirm', input }),
+  });
+  return { ui, reads };
+}
+
+const TEXT_FILE = {
+  path: '/tmp/notes.md',
+  name: 'notes.md',
+  displayPath: '~/notes.md',
+  fileUrl: 'nvm-file://notes',
+  url: 'nvm-file://notes',
+  kind: 'file',
+};
+const IMAGE_FILE = {
+  path: '/tmp/shot.png',
+  name: 'shot.png',
+  displayPath: '~/shot.png',
+  url: 'nvm-thumb://shot',
+  thumbnailUrl: 'nvm-thumb://shot',
+  kind: 'image',
+};
+
+test('previewView stamps an explicit preview view', () => {
+  const ui = createUi();
+  assert.deepEqual(ui.previewView({ title: 'Plain', kind: 'image' }), {
+    title: 'Plain',
+    kind: 'image',
+    type: 'preview',
+  });
+});
+
+test('previewFile renders bounded text contents for non-media files', async () => {
+  const { ui, reads } = createUiWithTextReader();
+  const view = await ui.previewFile(TEXT_FILE);
+  assert.deepEqual(reads, ['/tmp/notes.md']);
+  assert.equal(view.type, 'preview');
+  assert.equal(view.title, 'notes.md');
+  assert.equal(view.subtitle, '~/notes.md');
+  assert.equal(view.content, '```md\nhello\n```');
+  assert.equal(view.image, undefined);
+  assert.deepEqual(structuredClone(view), view);
+});
+
+test('previewFile keeps media files and explicit content without reading', async () => {
+  const { ui, reads } = createUiWithTextReader();
+  const media = await ui.previewFile(IMAGE_FILE);
+  assert.equal(media.image, 'nvm-thumb://shot');
+  const custom = await ui.previewFile(TEXT_FILE, { content: 'Metadata' });
+  assert.equal(custom.content, 'Metadata');
+  assert.deepEqual(reads, []);
+});
+
+test('previewFile falls back to the path when text reading is unavailable', async () => {
+  const ui = createUi();
+  const view = await ui.previewFile(TEXT_FILE);
+  assert.equal(view.content, '~/notes.md');
+});
+
+test('previewFile rejects inputs that are not files', async () => {
+  const ui = createUi();
+  await assert.rejects(
+    () => ui.previewFile({ kind: 'image', title: 'Clipboard' }),
+    TypeError,
+  );
+});
+
+test('previewAction maps files and descriptors to clone-safe inline actions', () => {
+  const ui = createUi();
+  const fromFile = ui.previewAction(IMAGE_FILE, { title: 'Preview' });
+  assert.deepEqual(fromFile, {
+    previewItem: {
+      kind: 'image',
+      title: 'Preview',
+      shortcut: undefined,
+      filePath: '/tmp/shot.png',
+      videoUrl: undefined,
+      thumbnailUrl: 'nvm-thumb://shot',
+    },
+  });
+  assert.deepEqual(ui.previewAction({ kind: 'text', text: 'Copied' }), {
+    previewItem: { kind: 'text', text: 'Copied' },
+  });
+  assert.deepEqual(structuredClone(fromFile), fromFile);
 });
 
 test('extension ui api keeps utility helpers stable', () => {
@@ -96,7 +197,7 @@ test('extension ui api keeps utility helpers stable', () => {
 });
 
 test('indicator helpers delegate passive status lifecycle to the host', () => {
-  const calls: Array<[string, unknown]> = [];
+  const calls: [string, unknown][] = [];
   const ui = createExtensionUiApi({
     buildPreviewItemAction: (item) => ({ previewItem: item }),
     progressView: (input) => ({ type: 'progress', ...(input as object) }),

@@ -52,7 +52,7 @@ export function listView(ctx: ExtensionContext) {
             accessories: [{ text: 'root' }],
             primaryAction: ctx.actions.root(
               'Open Root Navigation',
-              ctx.ui.preview({
+              ctx.ui.previewView({
                 id: 'dev-ui-root-navigation',
                 title: 'Dev UI · Root Navigation',
                 content:

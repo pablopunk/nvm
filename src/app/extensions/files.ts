@@ -2,38 +2,35 @@ import { quickLookTitle, revealPathTitle } from '../electron/os/os';
 import { extensionContext } from './_context';
 import { semanticFileSearch } from './files-semantic-search';
 
-function buildPreviewItemActionForFile(input: any) {
-  const kind =
-    input?.kind ||
-    (input?.text
-      ? 'text'
-      : input?.imageDataUrl || input?.imagePath
-        ? 'image'
-        : input?.videoUrl
-          ? 'video'
-          : input?.filePath
-            ? 'file'
-            : 'clipboard');
+function isMediaFile(item) {
+  return item.kind === 'image' || item.kind === 'video';
+}
+
+function inPalettePreviewAction(ctx, item) {
+  if (isMediaFile(item)) {
+    return ctx.ui.previewAction(item, { title: 'Preview' });
+  }
   return {
-    type: 'previewClipboardItem',
-    title: input?.title || 'Preview',
-    description:
-      input?.description ||
-      (kind === 'file' || kind === 'image' || kind === 'video'
-        ? 'Preview this file'
-        : 'Preview clipboard item'),
-    shortcut: input?.shortcut || 'Command+Y',
-    clipboardType: input?.clipboardType || kind,
-    text: input?.text,
-    imageDataUrl: input?.imageDataUrl,
-    imagePath: input?.imagePath,
-    videoUrl: input?.videoUrl,
-    filePath: input?.filePath,
-    thumbnailUrl: input?.thumbnailUrl,
+    ...ctx.actions.run(
+      'Preview Contents',
+      function previewFileContents(innerCtx) {
+        return innerCtx.ui.previewFile(item);
+      },
+    ),
+    previewIntent: true,
+    shortcut: 'Command+Y',
   };
 }
 
-function fileRootItem(item) {
+function systemPreviewAction(item) {
+  return {
+    type: 'quickLook' as const,
+    title: quickLookTitle(),
+    path: item.path,
+  };
+}
+
+function fileRootItem(ctx, item) {
   const openAction = {
     type: 'openPath' as const,
     title: `Open ${item.name}`,
@@ -46,21 +43,8 @@ function fileRootItem(item) {
     path: item.path,
     dismissAfterRun: 'auto' as const,
   };
-  const quickLookAction = {
-    type: 'quickLook' as const,
-    title: quickLookTitle(),
-    path: item.path,
-  };
-  const isMedia = item.kind === 'image' || item.kind === 'video';
+  const isMedia = isMediaFile(item);
   const text = isMedia ? undefined : item.displayPath;
-  const previewAction = buildPreviewItemActionForFile({
-    kind: item.kind || 'file',
-    title: 'Preview',
-    filePath: item.path,
-    videoUrl: item.videoUrl,
-    thumbnailUrl: item.thumbnailUrl,
-    text,
-  });
   return {
     id: `file:${item.path}`,
     title: item.name,
@@ -75,7 +59,16 @@ function fileRootItem(item) {
     primaryAction: openAction,
     actionPanel: {
       sections: [
-        { actions: [previewAction, quickLookAction, revealAction, openAction] },
+        {
+          actions: [
+            inPalettePreviewAction(ctx, item),
+            ...(ctx.system.capabilities.has('quick-look')
+              ? [systemPreviewAction(item)]
+              : []),
+            revealAction,
+            openAction,
+          ],
+        },
       ],
     },
   };
@@ -93,19 +86,21 @@ export function createFilesExtension() {
         subtitle: 'Search recent file names using AI',
         icon: 'sparkles',
         run(ctx) {
-          return ctx.navigation.run(semanticFileSearch(ctx, fileRootItem));
+          return ctx.navigation.run(
+            semanticFileSearch(ctx, (item) => fileRootItem(ctx, item)),
+          );
         },
       },
     ],
     rootItems(ctx) {
       return ctx.desktop.files
         .recent({ limit: extensionContext.FILE_RESULT_LIMIT })
-        .map(fileRootItem);
+        .map((item) => fileRootItem(ctx, item));
     },
     searchItems(ctx, query) {
       return ctx.desktop.files
         .recent()
-        .map(fileRootItem)
+        .map((item) => fileRootItem(ctx, item))
         .filter((item) => extensionContext.rankAction(item, query))
         .slice(0, extensionContext.FILE_RESULT_LIMIT);
     },

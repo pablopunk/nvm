@@ -10,7 +10,7 @@ export function clipboardView(ctx: ExtensionContext) {
   const preview = ctx.actions.run(
     'Preview Clipboard Item',
     (innerCtx) =>
-      innerCtx.ui.preview({
+      innerCtx.ui.previewView({
         title: 'Clipboard Preview',
         content: 'This fixture action uses the selected-item shortcut.',
       }),
@@ -52,7 +52,7 @@ export function clipboardView(ctx: ExtensionContext) {
     const value = await innerCtx.desktop.clipboard?.read({
       formats: ['files', 'html', 'text', 'image'],
     });
-    return innerCtx.ui.preview({
+    return innerCtx.ui.previewView({
       title: 'Clipboard Read Result',
       content: `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\``,
     });

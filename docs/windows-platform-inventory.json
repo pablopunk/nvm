@@ -316,9 +316,9 @@
     },
     {
       "key": "main-known-folder-f76f4b588bf5",
-      "file": "src/app/electron/files/file-index.ts",
+      "file": "src/app/electron/files/file-index-roots.ts",
       "category": "known-folder",
-      "selector": "function:defaultFileIndexRoots::known-folder::return ['Desktop', 'Documents', 'Downloads'].map((name) => path.join(os.homedir(), name), );::expression.expression.expression",
+      "selector": "function:defaultFileIndexRoots::known-folder::return [ 'Desktop', 'Documents', 'Downloads', 'Pictures', 'Videos', 'Movies', ].map((name) => pa…#df540d2ea75d::expression.expression.expression",
       "disposition": "file-index-runtime-adapter",
       "surface": "files-search-open"
     },
@@ -403,20 +403,28 @@
       "surface": "app-discovery-launch-quit"
     },
     {
-      "key": "os-injected-platform-6939b1aa90de",
+      "key": "os-injected-platform-directory-tree-watch",
       "file": "src/app/electron/os/os.ts",
       "category": "injected-platform",
-      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.left.left",
+      "selector": "function:createOsAdapter/variable:watchDirectoryTree::injected-platform::const watchDirectoryTree = createDirectoryTreeWatch( processPlatform, dependencies.watch, );::declarationList.declarations[0].initializer.arguments[0]",
       "disposition": "capability-layer",
       "surface": "app-discovery-launch-quit"
     },
     {
-      "key": "os-injected-platform-d6559a2d8829",
-      "file": "src/app/electron/os/os.ts",
-      "category": "injected-platform",
-      "selector": "function:createOsAdapter/function:watchAppsForPlatform/variable:watcher/property:recursive::injected-platform::recursive: processPlatform === 'darwin' || processPlatform === 'win32'::initializer.right.left",
+      "key": "directory-tree-watch-individual-platform",
+      "file": "src/app/electron/os/directory-tree-watch.ts",
+      "category": "direct-platform",
+      "selector": "variable:watchesIndexedDirectoriesIndividually::direct-platform::export const watchesIndexedDirectoriesIndividually = requiresIndividualDirectoryWatches(process.platform);::declarationList.declarations[0].initializer.arguments[0]",
       "disposition": "capability-layer",
-      "surface": "app-discovery-launch-quit"
+      "surface": "files-search-open"
+    },
+    {
+      "key": "directory-tree-watch-direct-platform",
+      "file": "src/app/electron/os/directory-tree-watch.ts",
+      "category": "direct-platform",
+      "selector": "variable:watchDirectoryTree::direct-platform::export const watchDirectoryTree = createDirectoryTreeWatch(process.platform);::declarationList.declarations[0].initializer.arguments[0]",
+      "disposition": "capability-layer",
+      "surface": "files-search-open"
     },
     {
       "key": "os-injected-platform-dff9487b3879",
@@ -1358,7 +1366,15 @@
       "key": "shared-shortcut-utils-injected-platform-darwin-check",
       "file": "src/app/shared/shortcut-utils.ts",
       "category": "injected-platform",
-      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { return parts.join('+'); }::expression.left",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatfor…#bfcafbe0cc0f::expression.left",
+      "disposition": "presentation-adapter",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shared-shortcut-utils-meta-key-name",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'/variable:metaKeyName::injected-platform::const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatform] ?? 'Super';::declarationList.declarations[0].initializer.left.argumentExpression",
       "disposition": "presentation-adapter",
       "surface": "palette-hotkey"
     }

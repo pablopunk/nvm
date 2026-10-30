@@ -15,7 +15,7 @@
   right: 12px;
   bottom: 40px;
   z-index: 10;
-  width: min(320px, calc(100% - 24px));
+  width: min(360px, calc(100% - 24px));
   max-height: min(360px, calc(100% - 64px));
   overflow: hidden;
   border: 1px solid var(--edge-strong);
@@ -31,7 +31,7 @@
 
 .palette.isStacked .paletteCompactPanel {
   right: calc(12px + var(--stack-card-right-inset));
-  width: min(320px, calc(100% - 24px - var(--stack-card-right-inset)));
+  width: min(360px, calc(100% - 24px - var(--stack-card-right-inset)));
 }
 
 .extensionWindowCompactPanel .extensionWindowSearchRow {
@@ -51,6 +51,21 @@
   min-height: 32px;
   padding: 4px 6px;
   border-radius: var(--radius-sm);
+}
+
+.extensionWindowCompactResults .resultTrailing {
+  gap: 4px;
+  overflow: visible;
+}
+
+.extensionWindowCompactResults .enterHint {
+  display: none;
+}
+
+.extensionWindowCompactResults .shortcutHint {
+  padding: 1px 6px;
+  font-size: var(--fs-2xs);
+  letter-spacing: 0;
 }
 
 .extensionWindowCompactResults .resultIcon {
@@ -355,11 +370,10 @@
 .extensionWindowChromeNone .progressView {
   display: flex;
   align-items: center;
-  height: 40px;
   width: max-content;
   max-width: calc(100% - 80px);
   margin: auto;
-  min-height: 0;
+  min-height: 40px;
   gap: 10px;
   padding: 8px 14px;
   border: 1px solid var(--edge-strong);
@@ -499,6 +513,17 @@ html[data-mic-live="true"]
 
 .extensionWindowChromeNone .progressBar {
   display: none;
+}
+
+.indicatorSummaryWrapped {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 10;
+  line-clamp: 10;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
 }
 
 @keyframes indicatorPulse {

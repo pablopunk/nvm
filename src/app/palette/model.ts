@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { AiChatMessage } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
 import type { CameraViewFields } from './camera-view-fields';
+import type { ClipboardHistoryRange } from './clipboard-history-range';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -378,6 +379,7 @@ export interface CommandApp {
 export interface CommandAction {
   type: CommandActionType;
   title: string;
+  previewIntent?: boolean;
   subtitle?: string;
   description?: string;
   icon?: string;
@@ -413,15 +415,7 @@ export interface CommandAction {
   alias?: string;
   accelerator?: string;
   clipboardType?: string;
-  clipboardHistoryRange?:
-    | 'item'
-    | 'ids'
-    | 'last-5-minutes'
-    | 'last-hour'
-    | 'last-day'
-    | 'last-week'
-    | 'older-than'
-    | 'all';
+  clipboardHistoryRange?: ClipboardHistoryRange;
   clipboardHistoryItemId?: string;
   clipboardHistoryItemIds?: string[];
   content?: unknown;

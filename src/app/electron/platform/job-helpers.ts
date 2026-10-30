@@ -1,4 +1,4 @@
-import type { JobDefinition } from './jobs';
+import type { JobDefinition } from './job-types';
 
 const DEFAULT_EXTENSION_BACKOFF_MS = 30_000;
 const DEFAULT_EXTENSION_MAX_BACKOFF_MS = 15 * 60_000;
@@ -89,4 +89,29 @@ export function mergeEventPayloads(
     };
   }
   return next;
+}
+
+export class DebounceDeadlines {
+  private firstRequestedAt = new Map<string, number>();
+
+  delayFor(
+    key: string,
+    debounceMs: number,
+    maxWaitMs?: number,
+    now = Date.now(),
+  ) {
+    if (!maxWaitMs) return debounceMs;
+    const since = this.firstRequestedAt.get(key) ?? now;
+    this.firstRequestedAt.set(key, since);
+    return Math.max(0, Math.min(debounceMs, since + maxWaitMs - now));
+  }
+
+  settle(key: string) {
+    this.firstRequestedAt.delete(key);
+  }
+
+  settleWithPrefix(prefix: string) {
+    for (const key of this.firstRequestedAt.keys())
+      if (key.startsWith(prefix)) this.firstRequestedAt.delete(key);
+  }
 }

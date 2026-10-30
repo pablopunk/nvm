@@ -27,6 +27,7 @@ import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
 } from './palette-shortcuts';
+import { boundsResizedAroundCenter } from './palette-window-geometry';
 import { recordStartupReady } from './startup-ready';
 import {
   installExternalNavigationPolicy,
@@ -229,16 +230,12 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
                 : mode === 'ai-chat'
                   ? AI_CHAT_WINDOW_SIZE
                   : DEFAULT_WINDOW_SIZE;
-        const { x, y, width, height } = win.getBounds();
-        const centerX = x + width / 2;
-        const centerY = y + height / 2;
-        win.setSize(size.width, size.height, false);
         if (supportsProgrammaticWindowPositioning())
-          win.setPosition(
-            Math.round(centerX - size.width / 2),
-            Math.round(centerY - size.height / 2),
+          win.setBounds(
+            boundsResizedAroundCenter(win.getBounds(), size),
             false,
           );
+        else win.setSize(size.width, size.height, false);
       },
     );
   }

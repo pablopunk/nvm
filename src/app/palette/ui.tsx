@@ -14,18 +14,19 @@ import {
   formRowId,
   formValueLabel,
 } from './extension-view/form-fields';
+import { MarkdownEditor } from './extension-view/markdown-editor';
 import { IndicatorMicTrace } from './indicator/indicator-mic-trace';
 import { IndicatorOrb, indicatorOrbState } from './indicator/indicator-orb';
 import {
   IndicatorStatusIcon,
   indicatorStatusIconKind,
 } from './indicator/indicator-status-icon';
-import { MarkdownEditor } from './extension-view/markdown-editor';
-import type { CommandImage } from './model';
+import { IndicatorSummaryText } from './indicator/indicator-summary-text';
 import {
   MorphingActivityText,
   MorphingIndicatorText,
 } from './indicator/morphing-text';
+import type { CommandImage } from './model';
 import {
   type SystemTheme,
   themedImageSource,
@@ -553,11 +554,10 @@ export function ProgressView({
           ) : null}
           <div>
             <strong>
-              {animateSummaryText ? (
-                <MorphingIndicatorText value={summaryLabel} />
-              ) : (
-                summaryLabel
-              )}
+              <IndicatorSummaryText
+                value={summaryLabel}
+                animate={animateSummaryText}
+              />
             </strong>
             {hasProgress ? (
               <small>

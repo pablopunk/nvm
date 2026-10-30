@@ -1,5 +1,6 @@
 // biome-ignore-all lint: Host-side extension payload boundary keeps dynamic service API shapes by design.
 import type { DictationService } from '../dictation/dictation-service';
+import { readTextFilePreview } from '../files/text-file-preview';
 import {
   createDataLoaderHandle,
   createStaleWhileRevalidateHandle,
@@ -26,8 +27,10 @@ export type ContextUiDeps = {
 
 export function createContextUi(extension, deps: ContextUiDeps) {
   const { extensionWindowManager } = deps;
+  const { canUseDesktopFiles } = trustedContextCapabilities;
   return createExtensionUiApi({
     buildPreviewItemAction,
+    readTextFilePreview: canUseDesktopFiles ? readTextFilePreview : undefined,
     progressView,
     buildConfirmAction,
     showIndicator: (input) =>

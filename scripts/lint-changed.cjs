@@ -35,13 +35,23 @@ if (result.error) {
 const stderr = result.stderr.toString('utf-8');
 process.stderr.write(stderr);
 
-if (result.status === 0) {
-  process.exit(0);
-}
-
-if (stderr.includes('No files were processed')) {
+if (result.status !== 0 && stderr.includes('No files were processed')) {
   process.stdout.write('No biome-lintable files changed — skipping.\n');
-  process.exit(0);
+} else if (result.status !== 0) {
+  process.exit(result.status ?? 1);
 }
 
-process.exit(result.status);
+for (const script of [
+  'scripts/check-windows-platform-inventory.cjs',
+  'scripts/check-extension-fixture-coverage.cjs',
+]) {
+  const check = spawnSync(process.execPath, [script], {
+    stdio: 'inherit',
+    timeout: 60_000,
+  });
+  if (check.error) {
+    process.stderr.write(`${check.error.message}\n`);
+    process.exit(1);
+  }
+  if (check.status !== 0) process.exit(check.status ?? 1);
+}

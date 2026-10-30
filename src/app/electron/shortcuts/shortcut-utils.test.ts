@@ -17,6 +17,7 @@ test('shortcut display uses native macOS symbols only on macOS', () => {
   assert.equal(formatShortcut('Command+Alt+K', 'darwin'), '⌘⌥K');
   assert.equal(formatShortcut('Control+Alt+K', 'win32'), 'Control+Alt+K');
   assert.equal(formatShortcut('Control+Alt+K', 'linux'), 'Control+Alt+K');
+  assert.equal(formatShortcut('Command+Alt+K', 'linux'), 'Super+Alt+K');
 });
 
 test('shortcut normalization remains deterministic across platform wording', () => {

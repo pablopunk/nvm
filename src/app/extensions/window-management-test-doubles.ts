@@ -44,6 +44,7 @@ function fakeWindowUi(indicators: any[]) {
     list: (view: any) => ({ type: 'list', ...view }),
     form: (view: any) => ({ type: 'form', ...view }),
     preview: (view: any) => ({ type: 'preview', ...view }),
+    previewView: (view: any) => ({ type: 'preview', ...view }),
   };
 }
 

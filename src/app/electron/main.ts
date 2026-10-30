@@ -862,11 +862,11 @@ const { processPendingThumbnails, thumbnailResponseForPath } =
     jobRegistry,
     getIconCacheDir: () => iconCacheDir,
   });
-const { fileIndexSnapshot, reindexFiles, indexFiles, currentFileIndex } =
-  createFileIndexService({
-    notifyRootItemsChanged: () =>
-      paletteWindow.win?.webContents.send('root-items:changed'),
-  });
+const fileIndexService = createFileIndexService({
+  notifyRootItemsChanged: () =>
+    paletteWindow.win?.webContents.send('root-items:changed'),
+  jobEvents: jobRegistry,
+});
 const openWithApps = createOpenWithApps({ appIndexService });
 const extensionActionRegistry = new Map<string, any>();
 const extensionModules = new Map<string, any>();
@@ -1488,8 +1488,8 @@ const createExtensionContext = createExtensionContextFactory({
     appIndexService,
     appIconCache,
     openWithApps,
-    fileIndexSnapshot,
-    reindexFiles,
+    fileIndexSnapshot: fileIndexService.fileIndexSnapshot,
+    reindexFiles: fileIndexService.reindexFiles,
     runInBackground: (task, traceId) => runInBackground(task, traceId),
     runShellCommand,
     runShellScript: (script, options) => runShellScript(script, options),
@@ -1569,7 +1569,7 @@ const { stopFrontmostAppPolling, syncFrontmostAppPolling, registerHostJobs } =
     saveUserState,
     appIndexService,
     appIconCache,
-    indexFiles,
+    indexFiles: fileIndexService.indexFiles,
     processPendingThumbnails,
     clipboardImages: {
       getClipboardHistory: () => clipboardHistory,
@@ -1914,7 +1914,7 @@ function initExtensionRuntimeContext() {
       report: reportDiagnosticProblem,
     },
     userState: userStateStore.get(),
-    fileIndex: currentFileIndex(),
+    fileIndex: fileIndexService.currentFileIndex(),
     clipboardService,
     dictationService,
     nevermindAi,

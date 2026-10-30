@@ -1,5 +1,6 @@
+import { FILE_INDEX_CHANGED_EVENT } from '../files/file-index-watcher';
 import { frontmostApp, hasCapability } from '../os/os';
-import type { JobDefinition, JobRegistry } from '../platform/jobs';
+import type { JobDefinition, JobRegistry, JobTrigger } from '../platform/jobs';
 import {
   CLIPBOARD_IMAGE_GC_INTERVAL_MS,
   CLIPBOARD_IMAGE_GC_JOB_ID,
@@ -12,6 +13,17 @@ import { hasEnabledExtensionEventSubscriber } from './frontmost-app-polling';
 export const FRONTMOST_APP_CHANGED_EVENT = 'app.frontmost.changed';
 const FRONTMOST_APP_POLL_JOB_ID = 'frontmost-app.poll';
 const APP_REINDEX_DEBOUNCE_MS = 1000;
+const FILE_INDEX_FRESHNESS_TRIGGERS: JobTrigger[] = [
+  { type: 'startup', delayMs: 200 },
+  {
+    type: 'event',
+    event: FILE_INDEX_CHANGED_EVENT,
+    debounceMs: 2000,
+    maxWaitMs: 30_000,
+  },
+  { type: 'event', event: 'wake', debounceMs: 5000 },
+  { type: 'interval', everyMs: 15 * 60_000 },
+];
 
 type JobRun = JobDefinition['run'];
 
@@ -99,7 +111,7 @@ export function createHostJobs(deps: HostJobsDeps) {
       title: 'File Index',
       owner: 'host',
       scope: 'files',
-      triggers: [{ type: 'startup', delayMs: 200 }],
+      triggers: FILE_INDEX_FRESHNESS_TRIGGERS,
       timeoutMs: 30_000,
       run: indexFiles,
     });

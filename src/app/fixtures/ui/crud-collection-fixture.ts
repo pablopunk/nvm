@@ -4,7 +4,7 @@ import type { ExtensionContext } from '../../resources/nevermind-extension-api';
 
 export function crudCollectionView(ctx: ExtensionContext) {
   const preview = ctx.actions.run('Preview draft', () =>
-    ctx.ui.preview({
+    ctx.ui.previewView({
       id: 'dev-ui-crud-preview',
       title: 'Release notes draft',
       content:
@@ -64,6 +64,19 @@ export function crudCollectionView(ctx: ExtensionContext) {
         icon: 'file-pen-line',
         preview,
         edit,
+        remove,
+      },
+      {
+        id: 'launch-checklist',
+        title: 'Launch checklist',
+        subtitle: 'Long action labels with multi-modifier shortcuts',
+        icon: 'list-checks',
+        preview,
+        edit: {
+          ...edit,
+          title: 'Rename and reschedule the launch checklist',
+          shortcut: 'Command+Shift+Alt+E',
+        },
         remove,
       },
       {

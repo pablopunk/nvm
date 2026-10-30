@@ -1,12 +1,14 @@
 // biome-ignore-all lint/style/noMagicNumbers: ranking tests intentionally state their score inputs and expected boost.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createActionRanker } from './action-ranker';
 import {
   actionTextSearchScore,
   appResultMarker,
   compareRankedActions,
   effectiveLastUsed,
   priorityBoost,
+  queryFallbackMarker,
   recencyBoost,
 } from './action-ranking';
 import { prioritizedTitleSearchScore, scoreNormalized } from './search-utils';
@@ -100,17 +102,97 @@ test('leading query words in a command outrank generated search fallbacks', () =
     query,
   );
   const automationScore = actionTextSearchScore(
-    { title: `Automate "${query}"` },
+    { title: `Automate "${query}"`, queryFallback: true },
     query,
   );
   const webSearchScore = actionTextSearchScore(
-    { title: `Search the web for "${query}"` },
+    { title: `Search the web for "${query}"`, queryFallback: true },
     query,
   );
 
   assert.equal(commandScore, 925);
   assert.ok(commandScore > automationScore);
   assert.ok(commandScore > webSearchScore);
+});
+
+test('partial word matches in real commands outrank query fallbacks that echo the query', () => {
+  const query = 'shortcut';
+  const keyboardShortcuts = {
+    title: 'Keyboard Shortcuts',
+    score: actionTextSearchScore({ title: 'Keyboard Shortcuts' }, query),
+    lastUsed: 0,
+  };
+  const automate = {
+    title: `Automate "${query}"`,
+    score: actionTextSearchScore(
+      { title: `Automate "${query}"`, queryFallback: true },
+      query,
+    ),
+    lastUsed: Date.now(),
+  };
+
+  assert.deepEqual(
+    [automate, keyboardShortcuts]
+      .sort(compareRankedActions)
+      .map((item) => item.title),
+    ['Keyboard Shortcuts', 'Automate "shortcut"'],
+  );
+});
+
+test('frequent fallback use does not overtake a strong command match', () => {
+  const ranker = createActionRanker({
+    userStateStore: {
+      get: () => ({
+        aliases: {},
+        recents: { fallback: { count: 100, lastUsed: Date.now() } },
+      }),
+    },
+    scheduleSaveState: () => undefined,
+  });
+  const command = ranker.rankAction(
+    { id: 'shortcuts', title: 'Keyboard Shortcuts' },
+    'shortcut',
+  );
+  const fallback = ranker.rankAction(
+    { id: 'fallback', title: 'Automate "shortcut"', queryFallback: true },
+    'shortcut',
+  );
+  assert.ok(command && fallback);
+  assert.ok(command.score > fallback.score);
+});
+
+test('query fallbacks stay above loose character matches for open-ended prompts', () => {
+  const query = 'rename screenshots by date';
+  const fallbackScore = actionTextSearchScore(
+    { title: `Automate "${query}"`, queryFallback: true },
+    query,
+  );
+  const looseMatchScore = actionTextSearchScore(
+    { title: 'Rename Screenshots by Date and Location' },
+    'rnm scrnshts',
+  );
+
+  assert.ok(fallbackScore > 0);
+  assert.ok(looseMatchScore > 0);
+  assert.ok(fallbackScore > looseMatchScore);
+});
+
+test('query fallbacks still honor exact aliases', () => {
+  assert.equal(
+    actionTextSearchScore(
+      { title: 'Automate "ship it"', queryFallback: true },
+      'ship it',
+      ['ship it'],
+    ),
+    1050,
+  );
+});
+
+test('query fallback marker survives root-item conversion data shaping', () => {
+  assert.deepEqual(queryFallbackMarker({ queryFallback: true }), {
+    queryFallback: true,
+  });
+  assert.deepEqual(queryFallbackMarker({ queryFallback: 'yes' }), {});
 });
 
 test('exact sign-in aliases outrank title-only matches', () => {

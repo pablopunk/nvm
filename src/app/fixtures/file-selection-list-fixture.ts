@@ -1,8 +1,8 @@
+import { showExtensionFeedback } from '../extensions/feedback.ts';
 import type {
   ExtensionContext,
   NevermindExtension,
 } from '../resources/nevermind-extension-api';
-import { showExtensionFeedback } from '../extensions/feedback.ts';
 
 const FILE_CANDIDATES = [
   {
@@ -63,7 +63,7 @@ function fileSelectionListView(ctx: ExtensionContext) {
       );
       return;
     }
-    return ctx.ui.preview({
+    return ctx.ui.previewView({
       title: 'Selected Files',
       content: [
         '# Selected Files',

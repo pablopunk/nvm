@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { appResultMarker } from '../search/action-ranking';
+import { appResultMarker, queryFallbackMarker } from '../search/action-ranking';
 import { normalizeItemAppearance } from './item-appearance';
 
 function actionsAreSame(left, right) {
@@ -96,6 +96,7 @@ export function createExtensionRootActionNormalizer(
         kind: 'extension-root-item',
         extensionId: entry.extension.id,
         ...appResultMarker(item),
+        ...queryFallbackMarker(item),
         commandId: item.id,
         extensionFile: entry.extension.__filePath
           ? path.basename(entry.extension.__filePath)

@@ -21,7 +21,7 @@ When adding or changing an extension API method that renders UI:
 - `ctx.ui.list`
 - `ctx.ui.collection`
 - `ctx.ui.grid`
-- `ctx.ui.preview`
+- `ctx.ui.preview` (legacy compatibility), `ctx.ui.previewView`, `ctx.ui.previewFile` (text, truncated, and binary files), and `ctx.ui.previewAction`
 - `ctx.ui.chat`
 - `ctx.ui.form`
 - `ctx.input.prompt`

@@ -232,9 +232,9 @@ export function createViewNormalizer(deps: ViewNormalizerDeps) {
       ...(preparedDraft
         ? {
             draft: preparedDraft.draft,
-            ...(preparedDraft.content !== undefined
-              ? { content: preparedDraft.content }
-              : {}),
+            ...(preparedDraft.content === undefined
+              ? {}
+              : { content: preparedDraft.content }),
           }
         : {}),
       actions,
@@ -374,7 +374,7 @@ export function createViewNormalizer(deps: ViewNormalizerDeps) {
     actionCache = new WeakMap<object, any>(),
   ) {
     if (!action) return null;
-    const canCache = typeof action === 'object' && action.submenu;
+    const canCache = typeof action === 'object';
     if (canCache && actionCache.has(action)) return actionCache.get(action);
     const normalized = normalizeViewActionUncached(action, entry, actionCache);
     if (canCache) actionCache.set(action, normalized);

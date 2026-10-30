@@ -1,4 +1,10 @@
 // biome-ignore-all lint: This legacy structural Electron boundary retains established dynamic extension payload and imperative lifecycle conventions.
+
+import {
+  indicatorReadableDurationMs,
+  indicatorSummaryLabel,
+  indicatorWindowSize,
+} from '../../shared/passive-indicator-layout';
 import type { ExtensionWindowCapability } from '../os/extension-window-capabilities';
 import { isNvmHeadlessTestMode } from '../platform/test-mode-flags';
 
@@ -182,10 +188,6 @@ const WINDOW_OPTION_KEYS = new Set([
 ]);
 const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
 const PASSIVE_WINDOW_MIN_WIDTH = 160;
-const INDICATOR_WINDOW_MAX_WIDTH = 420;
-const INDICATOR_HORIZONTAL_CHROME = 56;
-const INDICATOR_APPROXIMATE_CHARACTER_WIDTH = 8;
-const INDICATOR_SHADOW_HORIZONTAL_GUTTER = 80;
 export const EXTENSION_WINDOW_BACKGROUND = Object.freeze({
   dark: '#12151b',
   light: '#ece9e2',
@@ -886,7 +888,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       id,
       type: 'progress',
       title: String(input?.title || 'Status'),
-      label: String(input?.subtitle || status || ''),
+      label: indicatorSummaryLabel(input ?? {}),
       status,
       ...(input?.value === undefined ? {} : { value: Number(input.value) }),
       ...(input?.total === undefined ? {} : { total: Number(input.total) }),
@@ -922,27 +924,6 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     }
   }
 
-  function indicatorWindowWidth(input: any) {
-    const longestLabelLength = [
-      input?.title,
-      input?.subtitle,
-      input?.status,
-    ].reduce(
-      (longest, value) => Math.max(longest, String(value || '').length),
-      0,
-    );
-    return (
-      Math.min(
-        INDICATOR_WINDOW_MAX_WIDTH,
-        Math.max(
-          PASSIVE_WINDOW_MIN_WIDTH,
-          INDICATOR_HORIZONTAL_CHROME +
-            longestLabelLength * INDICATOR_APPROXIMATE_CHARACTER_WIDTH,
-        ),
-      ) + INDICATOR_SHADOW_HORIZONTAL_GUTTER
-    );
-  }
-
   function showIndicator(input: any, ownerExtensionId: string) {
     const id = indicatorWindowId(ownerExtensionId, input?.id);
     suppressedReadyReveals.delete(id);
@@ -954,8 +935,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         title: String(input?.title || 'Status'),
         titleBar: 'hidden',
         chrome: 'none',
-        width: indicatorWindowWidth(input),
-        height: 104,
+        ...indicatorWindowSize(input ?? {}),
         alwaysOnTop: true,
         focusable: false,
         showInactive: true,
@@ -965,7 +945,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       'show',
       ownerExtensionId,
     );
-    scheduleIndicatorHide(id, input?.durationMs);
+    scheduleIndicatorHide(id, indicatorReadableDurationMs(input ?? {}));
   }
 
   function updateIndicator(input: any, ownerExtensionId: string) {

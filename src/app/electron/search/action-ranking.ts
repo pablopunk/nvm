@@ -10,9 +10,17 @@ interface RankedAction {
   isAppResult?: unknown;
 }
 
+interface SearchableAction {
+  aliases?: unknown;
+  queryFallback?: unknown;
+  subtitle?: unknown;
+  title?: unknown;
+}
+
 const APP_RESULT_PRIORITY_BOOST = 25;
 const EXACT_SEARCH_SCORE = 1000;
 const EXACT_ALIAS_SEARCH_SCORE = 1050;
+export const QUERY_FALLBACK_SEARCH_SCORE = 840;
 const MAX_RECENCY_BOOST = 20;
 const MILLISECONDS_PER_HOUR = 36e5;
 
@@ -33,22 +41,42 @@ export function recencyBoost(lastUsed: unknown, now = Date.now()) {
 }
 
 export function actionTextSearchScore(
-  action: { aliases?: unknown; subtitle?: unknown; title?: unknown },
+  action: SearchableAction,
   query: string,
   additionalAliases: unknown[] = [],
 ) {
-  let best = prioritizedTitleSearchScore(action.title, query);
-  if (best >= EXACT_SEARCH_SCORE) return best;
-  best = Math.max(best, scoreNormalized(action.subtitle, query));
-  for (const alias of [
+  const aliases = [
     ...(Array.isArray(action.aliases) ? action.aliases : []),
     ...additionalAliases,
-  ]) {
+  ];
+  if (action.queryFallback === true)
+    return Math.max(
+      QUERY_FALLBACK_SEARCH_SCORE,
+      aliasesSearchScore(aliases, query),
+    );
+  const titleScore = prioritizedTitleSearchScore(action.title, query);
+  if (titleScore >= EXACT_SEARCH_SCORE) return titleScore;
+  return Math.max(
+    titleScore,
+    scoreNormalized(action.subtitle, query),
+    aliasesSearchScore(aliases, query),
+  );
+}
+
+function aliasesSearchScore(aliases: unknown[], query: string) {
+  let best = 0;
+  for (const alias of aliases) {
     const aliasScore = prioritizedTitleSearchScore(alias, query);
     if (aliasScore >= EXACT_SEARCH_SCORE) return EXACT_ALIAS_SEARCH_SCORE;
     best = Math.max(best, aliasScore);
   }
   return best;
+}
+
+export function queryFallbackMarker(item: { queryFallback?: unknown }): {
+  queryFallback?: true;
+} {
+  return item.queryFallback === true ? { queryFallback: true } : {};
 }
 
 export function appResultMarker(

@@ -65,6 +65,7 @@ test('pastes by default and exposes copy, skin tone, and Unicode actions', async
   assert.equal(waving.primaryAction.title, 'Paste Waving Hand');
   assert.equal(waving.primaryAction.type, 'insertCharacter');
   assert.equal(waving.primaryAction.mode, 'paste');
+  assert.equal(view.subtitle, 'Enter to paste. Search to narrow the catalog.');
   assert.deepEqual(actionTitles, [
     'Copy Waving Hand',
     'Paste with Skin Tone',
@@ -91,6 +92,7 @@ test('falls back to copy when frontmost paste is unavailable', async () => {
   assert.equal(waving.primaryAction.title, 'Copy Waving Hand');
   assert.equal(waving.primaryAction.type, 'insertCharacter');
   assert.equal(waving.primaryAction.mode, 'copy');
+  assert.equal(view.subtitle, 'Enter to copy. Search to narrow the catalog.');
   assert.equal(
     waving.actions.some(
       (action: any) => action.title === 'Copy with Skin Tone',

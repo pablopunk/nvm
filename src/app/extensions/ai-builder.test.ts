@@ -28,6 +28,7 @@ test('offers automation as an Enter action without mentioning Tab', () => {
 
   assert.equal(automation?.title, 'Automate "what is the weather"');
   assert.equal(automation?.subtitle, 'Build a reusable command with AI');
+  assert.equal(automation?.queryFallback, true);
   assert.deepEqual(automation?.appearance, {
     foreground: 'yellow',
     background: 'accent',
