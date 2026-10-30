@@ -630,7 +630,15 @@
       "key": "os-platform-selector-1bb967749713",
       "file": "src/app/electron/os/os.ts",
       "category": "platform-selector",
-      "selector": "function:applyPaletteWindowPolicy::platform-selector::darwin: (window) => { if (!window) return; window.setAlwaysOnTop(true, 'screen-saver'); window.s…#e2a0db65f6d2::self",
+      "selector": "function:applyPaletteWindowPolicy::platform-selector::darwin: (window) => { if (!window) return; window.setAlwaysOnTop(true, 'screen-saver'); window.s…#89f862168846::self",
+      "disposition": "capability-selector",
+      "surface": "system-actions-settings"
+    },
+    {
+      "key": "palette-spaces-direct-platform",
+      "file": "src/app/electron/os/palette-spaces.ts",
+      "category": "direct-platform",
+      "selector": "function:createPaletteSpaces/function:setVisibleOnAllSpaces/if:process.platform !== 'darwin'::direct-platform::if (process.platform !== 'darwin') { return; }::expression.left",
       "disposition": "capability-selector",
       "surface": "system-actions-settings"
     },

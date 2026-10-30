@@ -16,17 +16,18 @@ import {
   paletteBrowserWindowOptions,
   supportsProgrammaticWindowPositioning,
 } from '../os/os';
+import { createPaletteSpaces } from '../os/palette-spaces';
 import * as logger from '../platform/logger';
 import {
   isNvmHeadlessTestMode,
   isNvmTestMode,
   recordTestWindowEvent,
 } from '../platform/test-mode';
-import { recordStartupReady } from './startup-ready';
 import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
 } from './palette-shortcuts';
+import { recordStartupReady } from './startup-ready';
 import {
   installExternalNavigationPolicy,
   isTrustedAppPage,
@@ -97,6 +98,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let win: BrowserWindow | null = null;
   let ignorePaletteBlurUntil = 0;
   let pendingShowOnReady = false;
+  const paletteSpaces = createPaletteSpaces();
   let currentPaletteMode: PaletteMode = 'default';
   let focusReturnTarget: unknown = null;
   let restoredFocusReturnTarget: unknown = null;
@@ -147,7 +149,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     } satisfies BrowserWindowConstructorOptions);
 
     installPaletteRendererIsolationHeaders(win);
-    applyPaletteWindowPolicy();
+    applyOsPaletteWindowPolicy(win);
 
     win.on('blur', () => dismissAfterFocusLoss('window-blur'));
     app.on('browser-window-blur', (_event, blurredWindow) => {
@@ -257,10 +259,6 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     });
   }
 
-  function applyPaletteWindowPolicy() {
-    applyOsPaletteWindowPolicy(win);
-  }
-
   function showPalette(
     showOptions: {
       deferReveal?: boolean;
@@ -273,8 +271,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       { options: showOptions },
       () => {
         if (!win) return;
-        const wasVisible = win.isVisible();
-        if (!wasVisible) {
+        const wasFocused = win.isVisible() && win.isFocused();
+        if (!wasFocused) {
           restoredFocusReturnTarget = null;
           focusReturnTarget = showOptions.focusReturnTarget ?? null;
           options.onOpen?.();
@@ -284,7 +282,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
           bounds: win.getBounds(),
         });
         ignorePaletteBlurUntil = Date.now() + 500;
-        applyPaletteWindowPolicy();
+        applyOsPaletteWindowPolicy(win);
+        paletteSpaces.prepare(win);
         debugLog('showPalette', {
           options: showOptions,
           visible: win.isVisible(),
@@ -301,6 +300,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
           win.webContents.send('palette:shortcut-show');
         else win.webContents.send('palette:shown');
         if (!isNvmHeadlessTestMode) win.show();
+        paletteSpaces.confine(win);
         if (isNvmTestMode) recordTestWindowEvent('shown');
         win.moveTop();
         if (!isNvmHeadlessTestMode) {
@@ -348,6 +348,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         bounds: win.getBounds(),
         opacity: win.getOpacity(),
       });
+      paletteSpaces.hide(win);
       if (isNvmTestMode) recordTestWindowEvent('hidden');
       win.webContents.send('palette:hidden');
       win.hide();
@@ -381,7 +382,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   }
 
   async function togglePalette() {
-    if (win?.isVisible()) {
+    if (win?.isVisible() && win.isFocused()) {
       await hidePalette();
       return;
     }
@@ -490,7 +491,6 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     debugLog,
     setPaletteSizeForMode,
     centerWindow,
-    applyPaletteWindowPolicy,
     showPalette,
     revealPalette,
     hidePalette,
