@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import * as logger from '../platform/logger';
 
 export type PortableExecutable = {
   executablePath: string;
@@ -42,6 +43,8 @@ const PORTABLE_UPDATE_HEALTH_FILE_NAME =
   /^nevermind-update-health-[0-9a-f]{32}\.json$/;
 const HELPER_SCRIPT_NAME = 'windows-portable-update.ps1';
 const RESULT_FILE_NAME = 'result.json';
+const HELPER_OUTPUT_FILE_NAME = 'helper-output.log';
+const HELPER_LOG_SCOPE = { source: 'host' as const, scope: 'updater' };
 const PORTABLE_UPDATE_OUTCOMES = new Set([
   'installed',
   'failed',
@@ -172,18 +175,41 @@ export async function preparePortableUpdateHelper(
   });
   const scriptPath = path.join(plan.workDirectory, HELPER_SCRIPT_NAME);
   await fileSystem.writeFile(scriptPath, await dependencies.helperScript());
+  const output = await fileSystem.open(
+    path.join(plan.workDirectory, HELPER_OUTPUT_FILE_NAME),
+    'w',
+  );
   return function launchPortableUpdateHelper() {
-    const helper = spawnProcess(
-      powershell,
-      portableUpdateHelperArguments(plan, scriptPath),
-      {
-        detached: true,
-        env: portableUpdateHelperEnvironment(environment),
-        stdio: 'ignore',
-        windowsHide: true,
-      },
-    );
-    helper.unref();
+    try {
+      const helper = spawnProcess(
+        powershell,
+        portableUpdateHelperArguments(plan, scriptPath),
+        {
+          detached: true,
+          env: portableUpdateHelperEnvironment(environment),
+          stdio: ['ignore', output.fd, output.fd],
+          windowsHide: true,
+        },
+      );
+      logger.info(
+        'updater.portable.helper.started',
+        { pid: helper.pid, version: plan.version },
+        HELPER_LOG_SCOPE,
+      );
+      helper.once('error', (error) =>
+        logger.error('updater.portable.helper.failed', error, HELPER_LOG_SCOPE),
+      );
+      helper.once('exit', (code) =>
+        logger.warn(
+          'updater.portable.helper.exited',
+          { code },
+          HELPER_LOG_SCOPE,
+        ),
+      );
+      helper.unref();
+    } finally {
+      void output.close().catch(() => undefined);
+    }
   };
 }
 

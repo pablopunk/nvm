@@ -2,8 +2,16 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
-import {
+import test, { mock } from 'node:test';
+
+mock.module('electron', {
+  namedExports: { app: { isPackaged: true } },
+});
+mock.module('electron-log/main', {
+  defaultExport: { error() {}, info() {}, warn() {} },
+});
+
+const {
   confirmPortableUpdateLaunch,
   consumePortableUpdateResult,
   PORTABLE_UPDATE_HEALTH_FILE_ENV,
@@ -11,7 +19,7 @@ import {
   portableUpdateHelperArguments,
   portableUpdateHelperEnvironment,
   preparePortableUpdateHelper,
-} from './windows-portable-update';
+} = await import('./windows-portable-update');
 
 const target = {
   executablePath: String.raw`D:\Tools\My Nevermind.exe`,
@@ -78,6 +86,7 @@ test('preparation fails before quitting when the update cannot be launched', asy
       if (file.endsWith('powershell.exe')) throw new Error('missing');
     },
     mkdir: async () => undefined,
+    open: async () => ({ fd: 1, close: async () => undefined }),
     rm: async () => undefined,
     writeFile: async (file: string) => {
       written.push(String(file));
@@ -98,6 +107,7 @@ test('preparation rejects an unwritable portable folder', async () => {
   const fileSystem = {
     access: async () => undefined,
     mkdir: async () => undefined,
+    open: async () => ({ fd: 1, close: async () => undefined }),
     rm: async () => undefined,
     writeFile: async (file: string) => {
       if (String(file).includes('.nevermind-update-probe-'))
@@ -125,6 +135,7 @@ test('the prepared launch spawns one detached hidden helper', async () => {
       fileSystem: {
         access: async () => undefined,
         mkdir: fs.mkdir,
+        open: fs.open,
         rm: fs.rm,
         writeFile: async (file: string, data: string) => {
           if (!String(file).includes('.nevermind-update-probe-'))
@@ -134,7 +145,7 @@ test('the prepared launch spawns one detached hidden helper', async () => {
       helperScript: async () => 'param()',
       spawnProcess: ((command: string, _args: string[], options: never) => {
         calls.push({ command, options });
-        return { unref() {} };
+        return { pid: 7, once() {}, unref() {} };
       }) as never,
     });
     assert.equal(calls.length, 0);
@@ -143,6 +154,11 @@ test('the prepared launch spawns one detached hidden helper', async () => {
     assert.match(calls[0].command, /powershell\.exe$/);
     assert.equal(calls[0].options.detached, true);
     assert.equal(calls[0].options.windowsHide, true);
+    assert.equal(
+      (calls[0].options.stdio as unknown[])[0],
+      'ignore',
+      'the helper output is kept for diagnosis',
+    );
     assert.equal(
       (calls[0].options.env as NodeJS.ProcessEnv).PORTABLE_EXECUTABLE_FILE,
       undefined,
