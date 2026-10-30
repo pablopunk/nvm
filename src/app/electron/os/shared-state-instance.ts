@@ -5,7 +5,7 @@ import path from 'node:path';
 import { defaultSharedStateRoot } from '../platform/shared-state-root';
 
 type InstanceApp = {
-  getPath: (name: 'userData') => string;
+  getPath: (name: 'userData' | 'appData') => string;
   setPath: (name: 'userData', value: string) => void;
   getName: () => string;
   setName: (name: string) => void;
@@ -46,13 +46,16 @@ export async function acquireDefaultSharedStateInstance(
     if (entry?.isSymbolicLink())
       throw new Error('Test shared state cannot be a symbolic link');
   }
-  return acquireSharedStateInstance(app, root);
+  const identityRoot = testMode
+    ? path.join(root, '.instance-locks')
+    : path.join(app.getPath('appData'), 'Nevermind Shared State', 'instances');
+  return acquireSharedStateInstance(app, root, identityRoot);
 }
 
 export async function acquireSharedStateInstance(
   app: InstanceApp,
   sharedRoot: string,
-  identityRoot = path.join(os.homedir(), '.config', '.nevermind-instances'),
+  identityRoot: string,
 ) {
   if (app.hasSingleInstanceLock())
     throw new Error('An instance lock is already held');
