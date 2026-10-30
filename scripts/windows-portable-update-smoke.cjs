@@ -10,7 +10,8 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 
-const scenarioTimeoutMilliseconds = 420_000;
+// Longer than the helper's own app-exit, target-release and health budgets combined.
+const scenarioTimeoutMilliseconds = 720_000;
 const lockHoldMilliseconds = 10_000;
 const userFileName = 'My Nevermind.exe';
 
@@ -86,6 +87,33 @@ function processIsRunning(pid) {
   }
 }
 
+function preserveDiagnostics(userData, installDirectory, evidence, oldPid) {
+  for (const folder of ['portable-update', 'logs']) {
+    const source = path.join(userData, folder);
+    if (fs.existsSync(source))
+      fs.cpSync(source, path.join(evidence, `profile-${folder}`), {
+        recursive: true,
+      });
+  }
+  const processes = spawnSync(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-Command',
+      "Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'Nevermind|powershell' } | Select-Object ProcessId, ParentProcessId, Name, CommandLine | Format-List | Out-String -Width 400",
+    ],
+    { encoding: 'utf8' },
+  );
+  fs.writeFileSync(
+    path.join(evidence, 'diagnostics.txt'),
+    [
+      `old app pid ${oldPid} running: ${oldPid ? processIsRunning(oldPid) : 'unknown'}`,
+      `install directory: ${fs.existsSync(installDirectory) ? fs.readdirSync(installDirectory).join(', ') : '<missing>'}`,
+      processes.stdout || processes.stderr || '',
+    ].join('\n'),
+  );
+}
+
 async function runScenario(scenario, input) {
   const root = fs.mkdtempSync(
     path.join(os.tmpdir(), `nvm-portable-update-${scenario.name}-`),
@@ -121,10 +149,9 @@ async function runScenario(scenario, input) {
   });
   let relaunched;
   let releasedAt;
+  let first;
   try {
-    const first = await waitFor('the old build to start', () =>
-      readJson(marker),
-    );
+    first = await waitFor('the old build to start', () => readJson(marker));
     assert.equal(first.appVersion, input.oldVersion);
     if (lock) releasedAt = await lock.releaseAfterAppExit(first.pid);
     const result = await waitFor('the helper result', () =>
@@ -160,6 +187,7 @@ async function runScenario(scenario, input) {
       `${scenario.name}: ${result.outcome} (${result.reason}); relaunched ${relaunched.appVersion}\n`,
     );
   } finally {
+    preserveDiagnostics(userData, installDirectory, evidence, first?.pid);
     lock?.holder.kill();
     stopProcessTree(relaunched?.pid);
     stopProcessTree(launcher.pid);
