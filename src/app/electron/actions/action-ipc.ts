@@ -90,6 +90,7 @@ export function createActionIpc(deps: ActionIpcDeps) {
           async () => {
             let trustedAction: any = null;
             let observation: ActionRunObservation | null = null;
+            let observedFailure = false;
             try {
               trustedAction = resolveRootActionForIpc(action);
               observation = observeActionRun?.(trustedAction) ?? null;
@@ -112,7 +113,12 @@ export function createActionIpc(deps: ActionIpcDeps) {
                     },
                     () =>
                       runInWindowInvocationScope({ source: 'palette' }, () =>
-                        executeAction(trustedAction),
+                        executeAction(trustedAction, {
+                          onFailure: (error: unknown) => {
+                            observedFailure = true;
+                            observation?.failed(error);
+                          },
+                        }),
                       ),
                   ),
                 ),
@@ -120,7 +126,7 @@ export function createActionIpc(deps: ActionIpcDeps) {
               );
               structuredClone(result);
               spawnPendingViewLoaders(result, trustedAction?.traceId);
-              observation?.succeeded();
+              if (!observedFailure) observation?.succeeded();
               return result;
             } catch (error) {
               recordOperationFailure(error);

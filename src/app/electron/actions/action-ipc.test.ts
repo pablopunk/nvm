@@ -6,6 +6,10 @@ mock.module('electron', {
 });
 
 const { createActionIpc } = await import('./action-ipc');
+const { createExtensionActionResults } = await import(
+  './extension-action-results'
+);
+const { createRootActionExecutor } = await import('./root-action-executor');
 
 const commandAction = { kind: 'extension-command', id: 'summarize' };
 const errorView = { id: 'extension-action-error' };
@@ -57,6 +61,55 @@ test('a failing command still renders the error view and reports the error to th
   assert.deepEqual(result, { view: errorView });
   assert.deepEqual(recorder.calls, ['failed:text.trim is not a function']);
   assert.deepEqual(recorder.observed, [commandAction]);
+});
+
+test('a real extension root handler failure reaches the observer and retains its error view', async () => {
+  const failure = new TypeError('text.trim is not a function');
+  const entry = { extension: { id: 'summary' }, command: { id: 'summarize' } };
+  const extension = createExtensionActionResults({
+    executeViewAction: async () => undefined,
+    createExtensionContext: () => ({}),
+    setDiagnosticExtensionTarget: () => {},
+    extensionActionHandlers: new Map([
+      [
+        'handler',
+        {
+          entry,
+          handler: () => {
+            throw failure;
+          },
+        },
+      ],
+    ]),
+    extensionErrorView: () => errorView,
+    extensionDraftStore: { resolveByKey: () => {} } as any,
+    schedulePersistExtensionDrafts: () => {},
+    normalizeViewAction: (action) => action,
+    normalizeExtensionView: (view) => view,
+    normalizeViewPatch: (patch) => patch,
+    normalizeViewItems: (items) => items,
+  });
+  const executor = createRootActionExecutor({
+    paletteWindow: { hidePalette: () => {} },
+    recordRecent: () => {},
+    currentActionForStoredShortcut: (action) => action,
+    openSystemKeyboardSettings: () => {},
+    executeExtensionRootItem: extension.executeExtensionRootItem,
+    presentActionResultFeedback: (result) => result,
+  });
+  const recorder = recordingObserver();
+  const { executeActionForIpc } = actionIpc(
+    executor.executeAction,
+    recorder.observeActionRun,
+  );
+  const action = {
+    kind: 'extension-action',
+    id: 'summarize',
+    rootAction: { type: 'runExtensionAction', handlerId: 'handler' },
+  };
+
+  assert.deepEqual(await executeActionForIpc(action), { view: errorView });
+  assert.deepEqual(recorder.calls, ['failed:text.trim is not a function']);
 });
 
 test('a succeeding command is reported to the observer once and executes once', async () => {

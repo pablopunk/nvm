@@ -1,9 +1,9 @@
+import { feedbackView } from '../../palette/feedback';
 import {
   measureDebugPerformance,
   performanceTraces,
   summarizeDebugValue,
 } from '../diagnostics/debug-performance';
-import { feedbackView } from '../../palette/feedback';
 import { recordOperationFailure } from '../diagnostics/observability';
 import type { createExtensionDraftStore } from '../extension-host/extension-draft-store';
 import { error as logError, warn as logWarn } from '../platform/logger';
@@ -51,7 +51,10 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
     normalizeViewItems,
   } = deps;
 
-  async function executeExtensionRootItem(action) {
+  async function executeExtensionRootItem(
+    action,
+    options: { onFailure?: (error: unknown) => void } = {},
+  ) {
     return performanceTraces.run(
       'extension.rootItem.execute',
       {
@@ -128,6 +131,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
               );
               return executeViewActionResult(result, record.entry);
             } catch (error) {
+              options.onFailure?.(error);
               recordOperationFailure(error, 'invoke');
               logError('extension.rootItem.failed', error, {
                 source: 'host',
@@ -182,7 +186,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
         toast: result.toast,
         patch: result.patch,
       };
-      if (!followUp.view && !followUp.patch)
+      if (!(followUp.view || followUp.patch))
         return { toast: followUp.toast || { message: 'Draft updated' } };
       result = followUp;
     }

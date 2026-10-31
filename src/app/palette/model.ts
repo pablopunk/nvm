@@ -1,8 +1,4 @@
 import type { ReactNode } from 'react';
-import type { AiChatMessage } from '../shared/ai-chat-images';
-import type { AiChatModel } from '../shared/ai-chat-model';
-import type { CameraViewFields } from './camera-view-fields';
-import type { ClipboardHistoryRange } from './clipboard-history-range';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
@@ -11,6 +7,7 @@ import type {
   ExtensionFormOption,
   ExtensionFormValue,
   ExtensionImage,
+  ExtensionItem,
   ExtensionView,
   ExtensionWebviewPermission,
   ForegroundColor,
@@ -19,6 +16,10 @@ import type {
   ViewPresentation,
   ViewSize,
 } from '../resources/nevermind-extension-api';
+import type { AiChatMessage } from '../shared/ai-chat-images';
+import type { AiChatModel } from '../shared/ai-chat-model';
+import type { CameraViewFields } from './camera-view-fields';
+import type { ClipboardHistoryRange } from './clipboard-history-range';
 
 const CUSTOMIZABLE_ACTION_KINDS = new Set([
   'app',
@@ -517,7 +518,7 @@ export interface CommandFormField {
   canCreateDirectories?: boolean;
 }
 
-export interface CommandItem {
+export interface CommandItem extends Pick<ExtensionItem, 'contextual'> {
   id: string;
   title: string;
   subtitle?: string;
@@ -541,10 +542,7 @@ export interface CommandItem {
   actionPanel?: CommandActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: CommandItemAppearance;
-  /** Visible context only; disabled items are skipped by keyboard selection. */
   disabled?: boolean;
-  /** With `disabled`: render the row as legible, wrapped guidance instead of a dimmed placeholder. */
-  contextual?: boolean;
   className?: string;
   detail?: CommandDetail;
 }
