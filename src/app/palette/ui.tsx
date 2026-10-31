@@ -15,17 +15,7 @@ import {
   formValueLabel,
 } from './extension-view/form-fields';
 import { MarkdownEditor } from './extension-view/markdown-editor';
-import { IndicatorMicTrace } from './indicator/indicator-mic-trace';
-import { IndicatorOrb, indicatorOrbState } from './indicator/indicator-orb';
-import {
-  IndicatorStatusIcon,
-  indicatorStatusIconKind,
-} from './indicator/indicator-status-icon';
-import { IndicatorSummaryText } from './indicator/indicator-summary-text';
-import {
-  MorphingActivityText,
-  MorphingIndicatorText,
-} from './indicator/morphing-text';
+import { MorphingActivityText } from './indicator/morphing-text';
 import type { CommandImage } from './model';
 import {
   type SystemTheme,
@@ -95,14 +85,6 @@ export interface PreviewViewProps {
   video?: string;
   poster?: string;
   actions?: ReactNode;
-}
-export interface ProgressViewProps {
-  steps: { title: string; status?: string }[];
-  value?: number;
-  total?: number;
-  label?: string;
-  status?: string;
-  animateSummaryText?: boolean;
 }
 export type FormValue = string | boolean | string[];
 export interface FormField {
@@ -507,97 +489,6 @@ export function PreviewView({
   );
 }
 
-function normalizedProgressStatus(status?: string) {
-  const value = String(status || '').toLowerCase();
-  if (['done', 'complete', 'completed', 'success'].includes(value))
-    return 'done';
-  if (
-    ['active', 'running', 'loading', 'in progress', 'progress'].includes(value)
-  )
-    return 'active';
-  if (['error', 'failed', 'failure'].includes(value)) return 'error';
-  return 'pending';
-}
-
-export function ProgressView({
-  steps,
-  value,
-  total,
-  label,
-  status,
-  animateSummaryText = false,
-}: ProgressViewProps) {
-  const normalizedStatus = normalizedProgressStatus(status);
-  const hasProgress =
-    typeof value === 'number' && typeof total === 'number' && total > 0;
-  const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
-  const percent = Math.round(ratio * 100);
-  const showSummary = Boolean(label || status) || hasProgress;
-  const summaryLabel = label || status || 'Working…';
-  const progressLabel = `${value} of ${total} · ${percent}%`;
-  const orbState = animateSummaryText ? indicatorOrbState(status) : undefined;
-  return (
-    <div className="extensionView progressView">
-      {orbState === 'listening' ? <IndicatorMicTrace /> : null}
-      {showSummary ? (
-        <div
-          className="progressOverview"
-          data-status={normalizedStatus}
-          data-mark={animateSummaryText ? 'true' : undefined}
-          role={normalizedStatus === 'error' ? 'alert' : 'status'}
-        >
-          {orbState ? <IndicatorOrb state={orbState} /> : null}
-          {animateSummaryText && !orbState ? (
-            <IndicatorStatusIcon
-              kind={indicatorStatusIconKind(normalizedStatus)}
-            />
-          ) : null}
-          <div>
-            <strong>
-              <IndicatorSummaryText
-                value={summaryLabel}
-                animate={animateSummaryText}
-              />
-            </strong>
-            {hasProgress ? (
-              <small>
-                {animateSummaryText ? (
-                  <MorphingIndicatorText value={progressLabel} />
-                ) : (
-                  progressLabel
-                )}
-              </small>
-            ) : null}
-          </div>
-          <div
-            className="progressBar"
-            role="progressbar"
-            aria-valuenow={hasProgress ? value : undefined}
-            aria-valuemin={hasProgress ? 0 : undefined}
-            aria-valuemax={hasProgress ? total : undefined}
-            aria-label={status || 'Progress'}
-          >
-            <span style={{ width: hasProgress ? `${percent}%` : undefined }} />
-          </div>
-        </div>
-      ) : null}
-      {steps.map((step, index) => (
-        <div
-          key={index}
-          className="progressStep"
-          data-status={normalizedProgressStatus(step.status)}
-        >
-          <span className="progressStepMarker" aria-hidden="true" />
-          <div>
-            <strong>{step.title}</strong>
-            <small>{step.status || 'Pending'}</small>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function FormView({
   fields,
   values = {},
@@ -721,7 +612,7 @@ export function EditorView({
             {language ? <small>{language}</small> : null}
           </div>
         ) : null}
-        {format === 'markdown' ? (
+        {format === 'markdown' && !showsPreview ? (
           <MarkdownEditor
             value={value}
             placeholder={placeholder}
@@ -733,6 +624,7 @@ export function EditorView({
         ) : (
           <textarea
             className="editorTextarea"
+            data-source={showsPreview ? 'markdown' : undefined}
             value={value}
             placeholder={placeholder}
             readOnly={readOnly}

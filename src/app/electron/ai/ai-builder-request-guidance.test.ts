@@ -16,3 +16,14 @@ test('routes live-while-typing requests to root searchItems', () => {
 test('requires the completion message to name every key press', () => {
   assert.match(BUILDER_REQUEST_GUIDANCE, /every key press/);
 });
+
+test('names the action menu shortcut for every platform and keeps it out of extension copy', () => {
+  assert.match(
+    BUILDER_REQUEST_GUIDANCE,
+    /Command\+K on macOS and Control\+K on Windows and Linux/,
+  );
+  assert.match(
+    BUILDER_REQUEST_GUIDANCE,
+    /never write a keyboard shortcut into extension/,
+  );
+});

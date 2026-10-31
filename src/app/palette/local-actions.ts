@@ -1,10 +1,10 @@
-import { normalizedShortcut } from './shortcuts';
 import {
   actionsFromPanel,
   type CommandAction,
   type CommandItem,
   type CommandView,
 } from './model';
+import { normalizedShortcut } from './shortcuts';
 
 export function actionIdentity(action: CommandAction) {
   const nativeId = (action.nativeAction as { id?: string } | undefined)?.id;
@@ -71,4 +71,17 @@ export function findLocalShortcut(
     (action) =>
       normalizedShortcut(action.shortcut) === normalizedShortcut(accelerator),
   );
+}
+
+/** Matches the row value `actionPanelRows(..., 'extension-view')` gives the first inline view action. */
+export function firstViewActionRowValue(view: CommandView) {
+  const sections = view.actionPanel?.sections?.length
+    ? view.actionPanel.sections
+    : [{ actions: view.actions || [] }];
+  for (const [sectionIndex, section] of sections.entries()) {
+    const action = section.actions?.[0];
+    if (action)
+      return `extension-view:${sectionIndex}:0:${action.type}:${action.title}`;
+  }
+  return '';
 }

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   combinedActionSections,
   findLocalShortcut,
+  firstViewActionRowValue,
   localActionCandidates,
 } from './local-actions';
 import type { CommandAction, CommandItem, CommandView } from './model';
@@ -53,4 +54,25 @@ test('view actions are deduplicated and hidden panels omit their view section', 
       .length,
     1,
   );
+});
+
+test('selects the first inline view action row, skipping empty panel sections', () => {
+  const next = { type: 'run', title: 'Continue' } as CommandAction;
+  assert.equal(
+    firstViewActionRowValue({
+      title: 'Wizard',
+      actions: [next],
+    } as CommandView),
+    'extension-view:0:0:run:Continue',
+  );
+  assert.equal(
+    firstViewActionRowValue({
+      title: 'Wizard',
+      actionPanel: {
+        sections: [{ title: 'Empty', actions: [] }, { actions: [next] }],
+      },
+    } as CommandView),
+    'extension-view:1:0:run:Continue',
+  );
+  assert.equal(firstViewActionRowValue({ title: 'Plain' } as CommandView), '');
 });

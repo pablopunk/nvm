@@ -31,7 +31,7 @@ Rules:
 - A generated source file is eligible for overwrite only after every page from one source revision has been read in this chat. Reading a partial page does not satisfy read-before-write.
 - When tweaking an existing extension, keep the extension `id`, command `id`s, and persistent action `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Prefer declarative `ctx.ui.*`, `ctx.actions.*`, and `ctx.navigation.*` primitives over custom UI state or raw shell behavior.
-- Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them under Cmd+K.
+- Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them in the action menu.
 - Use `selectedItemId` to choose the initial focused list/grid item; keep visual sorting independent from selection.
 - Use `actions(ctx)` for stable shortcut-worthy actions/variants such as fixed compression presets or window toggles. Use `ctx.actions.ref(id)` inside views to reference durable actions. Use `rootItems(ctx)` and `searchItems(ctx, query)` for dynamic/status/query items that should not become global shortcuts.
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.

@@ -80,7 +80,6 @@
   --warning-text: #80531f;
   --danger-text: #9b4141;
   --danger-surface: rgba(155, 65, 65, 0.12);
-  --progress-marker-contrast: #29251a;
   --loading-accent-faint: rgba(138, 106, 0, 0.06);
   --loading-accent-strong: rgba(138, 106, 0, 0.88);
   --mask-fill: #000;
@@ -162,7 +161,6 @@
     --warning-text: #dcb681;
     --danger-text: #e2a6a6;
     --danger-surface: rgba(226, 166, 166, 0.14);
-    --progress-marker-contrast: #29251a;
     --loading-accent-faint: rgba(241, 207, 84, 0.06);
     --loading-accent-strong: rgba(241, 207, 84, 0.92);
 

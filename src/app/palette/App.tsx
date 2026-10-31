@@ -90,7 +90,7 @@ import {
   valuesMatch,
 } from './filtering';
 // biome-ignore format: Keep the legacy palette within its file-size budget.
-import { actionIdentity, combinedActionSections, findLocalShortcut, localActionCandidates, viewActionsForItem } from './local-actions';
+import { actionIdentity, combinedActionSections, findLocalShortcut, firstViewActionRowValue, localActionCandidates, viewActionsForItem } from './local-actions';
 import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import {
   actionDefinition,
@@ -107,6 +107,7 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
+import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import {
   PaletteHotkeyNotice,
   paletteHotkeyNoticeIsVisible,
@@ -115,7 +116,6 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
-import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -158,6 +158,7 @@ import {
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
+
 type ActionKind =
   | 'open-url'
   | 'web-search'
@@ -1676,6 +1677,7 @@ export function App() {
     useState<ExtensionViewItem | null>(null);
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{
     title: string;
+    placeholder?: string;
     panel: CommandActionPanel;
     runAction?: (
       action: ExtensionViewAction,
@@ -2419,11 +2421,8 @@ export function App() {
       selectValue(ids.includes(formSelection) ? formSelection : ids[0] || '');
     } else if (extensionView && isFilterableExtensionView)
       selectExtensionItem(extensionView);
-    else if (extensionView?.actions?.length)
-      selectValue(
-        `extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`,
-      );
-    else if (extensionView) selectValue('preview');
+    else if (extensionView)
+      selectValue(firstViewActionRowValue(extensionView) || 'preview');
     else {
       const current = selectedValueRef.current;
       selectValue(
@@ -2797,7 +2796,7 @@ export function App() {
   });
   const childPlaceholder =
     actionSubmenuFor && !compactActionMenuVisible
-      ? `Filter ${actionSubmenuFor.title}`
+      ? actionSubmenuFor.placeholder || `Filter ${actionSubmenuFor.title}`
       : shortcutOptionsFor && !compactActionMenuVisible
         ? `Actions for “${shortcutOptionsFor.action.title}”`
         : shortcutManagerOpen
@@ -2818,7 +2817,7 @@ export function App() {
                         ? `Filter ${extensionView.title}`
                         : '';
   const compactActionPlaceholder = actionSubmenuFor
-    ? `Filter ${actionSubmenuFor.title}`
+    ? actionSubmenuFor.placeholder || `Filter ${actionSubmenuFor.title}`
     : shortcutOptionsFor
       ? `Filter actions for “${shortcutOptionsFor.action.title}”`
       : extensionItemOptionsFor
@@ -5586,6 +5585,7 @@ export function App() {
         setActionQuery('');
         setActionSubmenuFor({
           title: extensionView.title,
+          placeholder: 'Filter actions',
           panel: viewActionPanel(extensionView),
         });
         return;
