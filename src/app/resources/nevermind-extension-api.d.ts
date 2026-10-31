@@ -2292,7 +2292,7 @@ export type NevermindExtension = {
     | Promise<ExtensionItem[]>
     | { items: ExtensionItem[] }
     | Promise<{ items: ExtensionItem[] }>;
-  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. Use for dynamic/query-specific items, not duplicate launchers for durable actions. */
+  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. Use for dynamic/query-specific items, not duplicate launchers for durable actions. This is the only way to show a result while the user types: views have no per-keystroke callback, and `ctx.input.prompt` returns values only after submit. Return a row whose title is the live result (for example `212 °F` for the query `100 C`) with a copy or run `primaryAction`, and return no items for queries you do not recognize. */
   searchItems?(
     ctx: ExtensionContext,
     query: string,

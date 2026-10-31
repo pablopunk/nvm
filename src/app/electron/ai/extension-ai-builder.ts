@@ -50,7 +50,7 @@ export function createAiBuilderApiFactory(deps: AiBuilderApiDeps) {
             const item = createDraftAiChat(prompt);
             return {
               view: await aiChatView(item, {
-                start: item.messages.length <= 1,
+                initialPrompt: prompt || undefined,
               }),
             };
           },

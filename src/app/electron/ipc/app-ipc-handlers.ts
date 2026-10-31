@@ -250,14 +250,11 @@ export function registerAppIpcHandlers(deps: AppIpcHandlersDeps) {
     async (_event, input: unknown = {}) => {
       // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
       const typedInput = input as any;
-      const item = deps.createDraftAiChat(
-        String(typedInput?.prompt || typedInput?.query || ''),
-      );
-      // biome-ignore lint/suspicious/noExplicitAny: legacy IPC payload shape
-      const messages = (item as any).messages;
+      const prompt = String(typedInput?.prompt || typedInput?.query || '');
+      const item = deps.createDraftAiChat(prompt);
       return deps.normalizeHostViewResult({
         view: await deps.aiChatView(item, {
-          start: messages.length <= 1,
+          initialPrompt: prompt.trim() || undefined,
         }),
       });
     },

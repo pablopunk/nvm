@@ -27,6 +27,17 @@ export function chatTouchedExtensionFiles(chat) {
   );
 }
 
+export function builderOpeningMessages(query: string) {
+  if (query) return [];
+  return [
+    {
+      role: 'assistant',
+      content:
+        "What should this command do? Tell me the exact behavior, inputs, and what UI you want, then I'll build it.",
+    },
+  ];
+}
+
 export function aiChatItem(id, query) {
   return {
     id,
@@ -37,11 +48,6 @@ export function aiChatItem(id, query) {
     status: 'running',
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    messages: [
-      {
-        role: 'assistant',
-        content: `What should "${query}" do? Tell me the exact behavior, inputs, and what UI you want, then I'll build it.`,
-      },
-    ],
+    messages: builderOpeningMessages(query),
   };
 }

@@ -289,7 +289,7 @@ test('registerAppIpcHandlers awaits restored AI chat views', async () => {
       view: {
         type: 'chat',
         item: { prompt: 'Restore', messages: [] },
-        options: { start: true },
+        options: { initialPrompt: 'Restore' },
       },
     },
   });
