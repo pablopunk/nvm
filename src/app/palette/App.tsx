@@ -44,6 +44,7 @@ import {
   builderPreviewResultIsCurrent,
   builderPreviewRootActions,
   builderPreviewSelectedItemId,
+  claimBuilderSession,
   hydrateBuilderPreviewViewById,
   patchBuilderPreviewState,
   patchBuilderPreviewViewById,
@@ -1716,8 +1717,7 @@ export function App() {
     for (const view of retainedViews) {
       if (!view.aiChat) continue;
       const key = chatSessionKey(view);
-      if (initializedBuilderSessionsRef.current.has(key)) continue;
-      initializedBuilderSessionsRef.current.add(key);
+      if (!claimBuilderSession(initializedBuilderSessionsRef, key)) continue;
       setBuilderPreviewsForSession(
         key,
         (view.builderPreviews || [])
@@ -3691,8 +3691,7 @@ export function App() {
     runBuilderAutoActions = false,
   ) {
     const sessionKey = chatSessionKey(view);
-    if (initializedBuilderSessionsRef.current.has(sessionKey)) return;
-    initializedBuilderSessionsRef.current.add(sessionKey);
+    if (!claimBuilderSession(initializedBuilderSessionsRef, sessionKey)) return;
     const previews = (view.builderPreviews || [])
       .map(builderPreviewFrom)
       .filter(Boolean) as BuilderPreviewState[];

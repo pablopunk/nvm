@@ -195,6 +195,78 @@ function actionNamed(view: any, title: string) {
   throw new Error(`Missing ${title} action in Extensions view`);
 }
 
+async function expectVisiblyRendered(page: any, locator: any) {
+  const box = await locator.boundingBox();
+  expect(box).not.toBeNull();
+  const viewport = await page.evaluate(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
+  expect(box.width).toBeGreaterThan(40);
+  expect(box.height).toBeGreaterThan(16);
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(viewport.width);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  return box;
+}
+
+function overflowExtensionSource(actionCount: number) {
+  return `export default {
+  id: 'pab261.overflow',
+  title: 'PAB-261 Overflow Menu',
+  commands: [{
+    id: 'open',
+    title: 'PAB-261 Overflow Menu',
+    run: (ctx) => ctx.ui.list({
+      id: 'pab261-overflow',
+      title: 'PAB-261 Overflow Menu',
+      contentSizing: 'fit',
+      items: [ctx.ui.item({
+        id: 'only-row',
+        title: 'Only row',
+        primaryAction: ctx.actions.run('Primary action', () => undefined),
+        actions: Array.from({ length: ${actionCount} }, (_, index) =>
+          ctx.actions.run('Extra action ' + (index + 1), () => undefined),
+        ),
+      })],
+    }),
+  }],
+};
+`;
+}
+
+function disabledRowsExtensionSource(guidance: string) {
+  return `export default {
+  id: 'pab261.disabled-rows',
+  title: 'PAB-261 Disabled Rows',
+  commands: [{
+    id: 'open',
+    title: 'PAB-261 Disabled Rows',
+    run: (ctx) => ctx.ui.list({
+      id: 'pab261-disabled-rows',
+      title: 'PAB-261 Disabled Rows',
+      items: [
+        ctx.ui.item({
+          id: 'contextual',
+          title: 'Weather unavailable',
+          subtitle: ${JSON.stringify(guidance)},
+          disabled: true,
+          contextual: true,
+        }),
+        ctx.ui.item({
+          id: 'plain',
+          title: 'Nevermind account',
+          subtitle: ${JSON.stringify(guidance)},
+          disabled: true,
+        }),
+      ],
+    }),
+  }],
+};
+`;
+}
+
 async function searchTitles(page: any, query: string) {
   return page.evaluate(async (value: string) => {
     const state = window as typeof window & { testSearchGeneration?: number };
@@ -803,14 +875,20 @@ test('keeps a collection visible under its compact item action panel', async () 
     );
     const panel = page.locator('.paletteCompactPanel');
     await expect(panel).toBeVisible();
-    const panelBox = await panel.boundingBox();
+    const panelBox = await expectVisiblyRendered(page, panel);
     const cardBox = await page.locator('.card.results').boundingBox();
-    expect(panelBox).not.toBeNull();
     expect(cardBox).not.toBeNull();
-    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(
+    expect(panelBox.height).toBeGreaterThanOrEqual(80);
+    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(
       cardBox!.y + cardBox!.height,
     );
-    await expect(panel.getByText('New note', { exact: true })).toHaveCount(1);
+    const panelRow = panel.getByText('New note', { exact: true });
+    await expect(panelRow).toHaveCount(1);
+    const rowBox = await expectVisiblyRendered(page, panelRow);
+    expect(rowBox.y).toBeGreaterThanOrEqual(panelBox.y);
+    expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(
+      panelBox.y + panelBox.height,
+    );
     await expect(pane.getByText('New note', { exact: true })).toBeVisible();
     await expect(pane).toHaveAttribute('inert', '');
 
@@ -818,6 +896,131 @@ test('keeps a collection visible under its compact item action panel', async () 
     await expect(panel).toHaveCount(0);
     await expect(pane).not.toHaveAttribute('inert', '');
     await expect(collectionInput).toBeFocused();
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
+test('keeps a long compact action menu inside the window and scrollable above a short list', async () => {
+  test.setTimeout(40_000);
+  const overflowUserDataDir = path.join(userDataDir, 'pab261-overflow');
+  const extensionsDir = path.join(overflowUserDataDir, 'extensions');
+  const actionCount = 14;
+  await fs.mkdir(extensionsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(extensionsDir, 'pab261-overflow.ts'),
+    overflowExtensionSource(actionCount),
+  );
+  await fs.writeFile(
+    path.join(overflowUserDataDir, 'state.json'),
+    `${JSON.stringify({
+      extensionManager: { schemaVersion: 0, files: {}, proposals: {} },
+    })}\n`,
+  );
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    launched = await launchTestApplication(overflowUserDataDir);
+    const { page } = launched;
+    await page
+      .locator('input[placeholder]')
+      .first()
+      .fill('PAB-261 Overflow Menu');
+    await expect(
+      page.getByText('PAB-261 Overflow Menu', { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press('Enter');
+    await expect(page.getByText('Only row', { exact: true })).toBeVisible();
+
+    await page.keyboard.press(
+      process.platform === 'darwin' ? 'Meta+K' : 'Control+K',
+    );
+    const panel = page.locator('.paletteCompactPanel');
+    await expect(panel).toBeVisible();
+    const panelBox = await expectVisiblyRendered(page, panel);
+    const cardBox = await page.locator('.card.results').boundingBox();
+    expect(cardBox).not.toBeNull();
+    expect(panelBox.y + panelBox.height).toBeLessThanOrEqual(
+      cardBox!.y + cardBox!.height,
+    );
+
+    const results = panel.locator('.extensionWindowCompactResults');
+    const scrolls = await results.evaluate(
+      (element) => element.scrollHeight > element.clientHeight,
+    );
+    expect(scrolls).toBe(true);
+    await expectVisiblyRendered(page, panel.locator('[cmdk-item]').first());
+
+    await page.keyboard.press('Escape');
+    await expect(panel).toHaveCount(0);
+  } finally {
+    if (launched)
+      await closeTestApplication(launched.app, launched.trackedPids);
+  }
+});
+
+test('renders contextual error rows legibly while plain disabled rows stay dimmed', async () => {
+  test.setTimeout(40_000);
+  const legibilityUserDataDir = path.join(userDataDir, 'pab261-legibility');
+  const extensionsDir = path.join(legibilityUserDataDir, 'extensions');
+  const guidance =
+    'The weather service did not answer. Check your connection, then press Enter on the city again so Nevermind can retry the request and show the forecast.';
+  await fs.mkdir(extensionsDir, { recursive: true });
+  await fs.writeFile(
+    path.join(extensionsDir, 'pab261-disabled-rows.ts'),
+    disabledRowsExtensionSource(guidance),
+  );
+  await fs.writeFile(
+    path.join(legibilityUserDataDir, 'state.json'),
+    `${JSON.stringify({
+      extensionManager: { schemaVersion: 0, files: {}, proposals: {} },
+    })}\n`,
+  );
+  let launched: Awaited<ReturnType<typeof launchTestApplication>> | undefined;
+
+  try {
+    launched = await launchTestApplication(legibilityUserDataDir);
+    const { page } = launched;
+    await page
+      .locator('input[placeholder]')
+      .first()
+      .fill('PAB-261 Disabled Rows');
+    await expect(
+      page.getByText('PAB-261 Disabled Rows', { exact: true }).first(),
+    ).toBeVisible();
+    await page.keyboard.press('Enter');
+
+    const contextualRow = page.locator('.result', {
+      hasText: 'Weather unavailable',
+    });
+    const plainRow = page.locator('.result', { hasText: 'Nevermind account' });
+    await expect(contextualRow).toBeVisible();
+    await expectVisiblyRendered(page, contextualRow);
+
+    const rendered = (row: any) =>
+      row.evaluate((element: HTMLElement) => {
+        const subtitle = element.querySelector('small') as HTMLElement;
+        const subtitleStyle = getComputedStyle(subtitle);
+        return {
+          rowOpacity: Number(getComputedStyle(element).opacity),
+          subtitleWhiteSpace: subtitleStyle.whiteSpace,
+          subtitleHeight: subtitle.getBoundingClientRect().height,
+          subtitleFontSize: Number.parseFloat(subtitleStyle.fontSize),
+          subtitleClipped: subtitle.scrollWidth > subtitle.clientWidth + 1,
+        };
+      });
+    const contextual = await rendered(contextualRow);
+    expect(contextual.rowOpacity).toBe(1);
+    expect(contextual.subtitleWhiteSpace).toBe('normal');
+    expect(contextual.subtitleClipped).toBe(false);
+    expect(contextual.subtitleHeight).toBeGreaterThan(
+      contextual.subtitleFontSize * 2.5,
+    );
+
+    const plain = await rendered(plainRow);
+    expect(plain.rowOpacity).toBeLessThan(1);
+    expect(plain.subtitleWhiteSpace).toBe('nowrap');
   } finally {
     if (launched)
       await closeTestApplication(launched.app, launched.trackedPids);
