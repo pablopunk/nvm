@@ -4,7 +4,7 @@ Once the user answers, or a later message adds enough detail, start building imm
 
 const FEASIBILITY_GUIDANCE = `Only promise behavior the extension API supports. Views have no per-keystroke callback: a view filters its own items by the typed text, and ctx.input.prompt returns values only after the user submits. To show a result while the user types, use searchItems(ctx, query) so the result appears as a root palette row for a recognizable query such as "100 C", with primaryAction ctx.actions.copyText for Enter. Do not build a view that pretends to update per keystroke.
 When a request needs behavior the API lacks, build the closest supported interaction and say so plainly in your final message instead of implying the original request works.
-Show recoverable input errors with ctx.ui.empty(title, subtitle) or ctx.ui.previewView content, not as a list row whose subtitle carries the hint: row subtitles are single-line and truncate. Keep row titles and subtitles short.`;
+Show recoverable input errors with ctx.ui.error(title, message), with a short title and complete corrective guidance in the message.`;
 
 const COMPLETION_MESSAGE_GUIDANCE =
   'When done, tell the user the command title and aliases to search for, exactly what to type, and every key press needed to reach the result, such as Enter to submit and Enter again to copy. Name anything the request asked for that is not supported.';

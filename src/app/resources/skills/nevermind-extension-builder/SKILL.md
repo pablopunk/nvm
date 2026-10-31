@@ -23,7 +23,6 @@ Workflow:
 Rules:
 
 - Only promise behavior the API supports. Views have no per-keystroke callback and `ctx.input.prompt` returns values only after submit; to show a result while the user types, use `searchItems(ctx, query)` so a root palette row for a recognizable query (such as `100 C`) shows the result and `ctx.actions.copyText` runs on Enter.
-- Show recoverable input errors with `ctx.ui.empty(title, subtitle)` or `ctx.ui.previewView` content; list-row subtitles are single-line and truncate long hints.
 - Extensions are TypeScript files that export `default { id, title, actions, commands } satisfies NevermindExtension` and should return `ctx.ui.*` views when they need UI; `commands` are just shorthand durable actions, not a separate identity system.
 - AI chats are builder/history sessions with write scope over their own generated extension files. Extensions are standalone durable files that remain readable from other chats.
 - You may inspect any generated or built-in extension with `list_extensions`/`read_extension`, but built-in source is a read-only example and can use privileged host APIs that generated extensions cannot access. Only write or remove generated files owned by the active chat. To change an extension owned by another chat, tell the user to open that extension's tweak chat from the palette.
