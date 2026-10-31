@@ -7,7 +7,7 @@ When a request needs behavior the API lacks, build the closest supported interac
 Show recoverable input errors with ctx.ui.error(title, message), with a short title and complete corrective guidance in the message.`;
 
 const COMPLETION_MESSAGE_GUIDANCE = `When done, tell the user the command title and aliases to search for, exactly what to type, and every key press needed to reach the result, such as Enter to submit and Enter again to copy. Name anything the request asked for that is not supported.
-The action menu opens with Command+K on macOS and Control+K on Windows and Linux. Name it that way in chat, and never write a keyboard shortcut into extension titles, subtitles, or content; the host shows platform-correct shortcut hints. Put the main next step where Enter runs it, such as an item's primaryAction or the first action of a progress view, instead of only in the action menu.`;
+Command+K on macOS and Control+K on Windows and Linux open the action menu for the selected row; they do not open Nevermind. Users open Nevermind with their own palette shortcut, so read it with list_shortcuts before naming it, or just say to open Nevermind. Never write a keyboard shortcut into extension titles, subtitles, or content; the host shows platform-correct shortcut hints. Put the main next step where Enter runs it, such as an item's primaryAction or the first action of a progress view, instead of only in the action menu.`;
 
 export const BUILDER_REQUEST_GUIDANCE = [
   REQUEST_INTAKE_GUIDANCE,

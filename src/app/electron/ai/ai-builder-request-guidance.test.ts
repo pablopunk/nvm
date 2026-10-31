@@ -24,6 +24,7 @@ test('names the action menu shortcut for every platform and keeps it out of exte
   );
   assert.match(
     BUILDER_REQUEST_GUIDANCE,
-    /never write a keyboard shortcut into extension/,
+    /never write a keyboard shortcut into extension/i,
   );
+  assert.match(BUILDER_REQUEST_GUIDANCE, /they do not open Nevermind/);
 });
