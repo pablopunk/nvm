@@ -1,5 +1,5 @@
 import type { MaintenanceActivity } from '../platform/maintenance-activity';
-import { isNvmTestMode } from '../platform/test-mode';
+import { isNvmTestMode } from '../platform/test-mode-flags';
 import type { ActionRunOptions } from './action-run-options';
 import { runInBackground } from './run-in-background';
 

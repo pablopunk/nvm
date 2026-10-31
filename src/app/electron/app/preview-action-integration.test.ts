@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
 mock.module('electron', {
-  namedExports: { app: { isPackaged: false, getPath: () => '/tmp' } },
+  namedExports: {
+    app: { isPackaged: false, getPath: () => '/tmp' },
+    session: {},
+  },
 });
 
 const { createActionIpc } = await import('../actions/action-ipc');
