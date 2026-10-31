@@ -25,6 +25,11 @@ export function builderPreviewAutoRunAction(preview: BuilderPreview) {
   return preview.preview.commands[0];
 }
 
+export function builderPreviewAutoRun(preview: BuilderPreview) {
+  const action = builderPreviewAutoRunAction(preview);
+  return action ? { action, hostResult: preview.autoRunResult } : null;
+}
+
 export function builderPreviewResultIsCurrent(
   actionVersion: number,
   currentVersion: number,

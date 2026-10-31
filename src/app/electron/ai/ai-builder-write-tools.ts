@@ -2,8 +2,26 @@ import path from 'node:path';
 import { formatBuilderValidationError } from './ai-builder-read-page';
 import {
   observeBuilderTool,
+  summarizeBuilderText,
   type BuilderToolOptions,
 } from './ai-builder-tool-shared';
+import type { PreviewAutoRun } from './ai-preview-auto-run';
+
+const PREVIEW_FAILURE_MAX_CHARS = 2000;
+
+function previewRunFailureMessage(filename: string, failureMessage: string) {
+  return [
+    `${filename} was installed and enabled, but running its first command in the preview failed, so it does NOT work yet.`,
+    'Fix the extension and call write_extension again. Do not tell the user it works until a write_extension call succeeds.',
+    `Error:\n${summarizeBuilderText(failureMessage, PREVIEW_FAILURE_MAX_CHARS)}`,
+  ].join('\n\n');
+}
+
+function installedMessage(filename: string, autoRun?: PreviewAutoRun) {
+  if (autoRun?.timedOut)
+    return `Installed and enabled ${filename}. Its first command was still running when the preview check timed out, so it is not verified.`;
+  return `Installed and enabled ${filename}.${autoRun ? ' Its first command ran in the preview without errors.' : ''}`;
+}
 
 type PiApi = typeof import('@earendil-works/pi-coding-agent');
 type TypeApi = typeof import('@earendil-works/pi-ai').Type;
@@ -36,16 +54,20 @@ export function createBuilderWriteTools(
           _toolCallId: string,
           params: { filename: string; code: string },
         ) => {
-          const { filePath, filename, preview } =
+          const { filePath, filename, preview, autoRun } =
             await options.stageGeneratedExtension(params, readFiles);
           options.markGeneratedExtension?.(filePath);
           options.emitEvent?.({
             type: 'extension_activated',
-            data: { filename, preview },
+            data: { filename, preview, autoRunResult: autoRun?.result },
           });
+          if (autoRun?.failureMessage)
+            throw new Error(
+              previewRunFailureMessage(filename, autoRun.failureMessage),
+            );
           return {
             content: [
-              { type: 'text', text: `Installed and enabled ${filename}.` },
+              { type: 'text', text: installedMessage(filename, autoRun) },
             ],
             details: { filePath, filename },
           };

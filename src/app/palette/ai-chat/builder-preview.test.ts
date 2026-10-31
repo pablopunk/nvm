@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   applyBuilderPreviewActionResult,
+  builderPreviewAutoRun,
   builderPreviewAutoRunAction,
   builderPreviewPromptForActiveChat,
   builderPreviewResultIsCurrent,
@@ -238,4 +239,52 @@ test('builder preview keeps hydrate retry feedback local to the matching view', 
   assert.equal(retrying[0].view.id, 'issues');
   assert.equal(retrying[0].view.isLoading, true);
   assert.equal(retrying[0].view.items?.length, 0);
+});
+
+test('builder preview auto-run reuses the result the host already produced', () => {
+  const hostResult = { view: { id: 'extension-action-error' } };
+  const preview: BuilderPreview = {
+    filename: 'summarizer.ts',
+    preview: {
+      extensionId: 'dev.summarizer',
+      rootItems: [],
+      commands: [{ id: 'summarize' }],
+      actions: [],
+    },
+    autoRunResult: hostResult,
+  };
+  assert.deepEqual(builderPreviewAutoRun(preview), {
+    action: { id: 'summarize' },
+    hostResult,
+  });
+});
+
+test('builder preview auto-run executes the command when the host has no result', () => {
+  const preview: BuilderPreview = {
+    filename: 'summarizer.ts',
+    preview: {
+      extensionId: 'dev.summarizer',
+      rootItems: [],
+      commands: [{ id: 'summarize' }],
+      actions: [],
+    },
+  };
+  assert.deepEqual(builderPreviewAutoRun(preview), {
+    action: { id: 'summarize' },
+    hostResult: undefined,
+  });
+});
+
+test('builder preview auto-run is absent without commands', () => {
+  const preview: BuilderPreview = {
+    filename: 'quit.ts',
+    preview: {
+      extensionId: 'dev.quit',
+      rootItems: [],
+      commands: [],
+      actions: [{ id: 'quit' }],
+    },
+    autoRunResult: {},
+  };
+  assert.equal(builderPreviewAutoRun(preview), null);
 });

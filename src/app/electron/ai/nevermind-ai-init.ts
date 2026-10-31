@@ -5,6 +5,10 @@ import type { UserStateStore } from '../state/user-state-store';
 import { createNevermindAi } from './ai';
 import { CONVERSATION_SYSTEM_PROMPT } from './ai-chat-prompts';
 import { isBuilderAiChat } from './ai-chat-records';
+import {
+  createPreviewAutoRunner,
+  type GeneratedExtensionActivation,
+} from './ai-preview-auto-run';
 import type { NevermindAiEvent } from './nevermind-ai-event-handler';
 
 type AnyRecord = Record<string, any>;
@@ -40,7 +44,10 @@ export type NevermindAiInitializerDeps = {
   ) => Promise<{ draftFile: string }>;
   discardExtensionProposal: (filename: string) => Promise<unknown>;
   activateManagedExtension: (filename: string) => Promise<unknown>;
-  activatedExtensionPreview: (filename: string) => Promise<any>;
+  activatedExtensionPreview: (
+    filename: string,
+  ) => Promise<GeneratedExtensionActivation>;
+  executeActionForIpc: (action: unknown, options: any) => Promise<unknown>;
   scheduleSaveState: () => void;
   withLiveExtensionWriteLock: NonNullable<
     NevermindAiOptions['withLiveExtensionWriteLock']
@@ -77,6 +84,7 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
     discardExtensionProposal,
     activateManagedExtension,
     activatedExtensionPreview,
+    executeActionForIpc,
     scheduleSaveState,
     withLiveExtensionWriteLock,
     removeGeneratedExtensionForChat,
@@ -99,6 +107,10 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
     return isBuilderAiChat(chat) ? chat : null;
   }
 
+  const runPreviewAutoAction = createPreviewAutoRunner({
+    executeAction: executeActionForIpc,
+  });
+
   async function activateGeneratedExtension(filename, source, chatId) {
     const chat = chatId
       ? userStateStore.get().aiChats[chatId] || draftAiChats.get(chatId)
@@ -119,7 +131,8 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
         `Refusing to write ${path.basename(filename)}: this AI chat does not own that extension.`,
       );
     scheduleSaveState();
-    return activatedExtensionPreview(filename);
+    const activation = await activatedExtensionPreview(filename);
+    return { ...activation, autoRun: await runPreviewAutoAction(activation) };
   }
 
   async function builderResourcePaths() {

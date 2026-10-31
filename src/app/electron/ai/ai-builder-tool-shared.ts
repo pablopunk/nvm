@@ -1,5 +1,6 @@
 import type { LogLevel, LogSource } from '../platform/logger';
 import type { BuilderReadPage } from './ai-builder-read-page';
+import type { PreviewAutoRun } from './ai-preview-auto-run';
 
 export type BuilderAiEvent = {
   type: string;
@@ -44,7 +45,12 @@ export type BuilderToolOptions = {
   stageGeneratedExtension: (
     params: { filename: string; code: string },
     readFiles: ReadonlySet<string>,
-  ) => Promise<{ filePath: string; filename: string; preview: unknown }>;
+  ) => Promise<{
+    filePath: string;
+    filename: string;
+    preview: unknown;
+    autoRun?: PreviewAutoRun;
+  }>;
   validateGeneratedExtension: (filePath: string) => Promise<void>;
   safeExtensionPath: (root: string, filename: string) => string;
   isExtensionSourceFile: (filename: string) => boolean;

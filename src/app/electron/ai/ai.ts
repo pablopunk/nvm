@@ -34,6 +34,7 @@ import { ensurePiExtensionsLoaded } from './ai-pi-extension-load';
 import { createBuilderTools } from './ai-builder-tools';
 import { formatBuilderValidationError } from './ai-builder-read-page';
 import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
+import type { GeneratedExtensionActivation } from './ai-preview-auto-run';
 import {
   type AiToolMode,
   aiPromptUsesDirectModel,
@@ -172,15 +173,6 @@ type NevermindAiOptions = {
 };
 
 type AiImageContent = { type: 'image'; data: string; mimeType: string };
-
-type GeneratedExtensionActivation = {
-  filename: string;
-  preview: {
-    extensionId: string;
-    rootItems: unknown[];
-    actions: unknown[];
-  };
-};
 
 type AiModelRole = 'smart' | 'fast';
 type ThinkingLevel =
@@ -1986,7 +1978,7 @@ export async function stageAiGeneratedExtension(
         params.code,
         options.chatId,
       );
-      return { filePath, filename, preview: activated.preview };
+      return { filePath, ...activated };
     } catch (error) {
       if (
         error instanceof Error &&
@@ -2344,7 +2336,7 @@ When tweaking an existing generated action, call read_current_extension before w
 Use list_capabilities when unsure which UI or OS capabilities exist. Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed or built-in extensions. Built-in source is read-only reference material and may use privileged host APIs unavailable to generated extensions.
 Only write .ts extension files with write_extension.
-write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
+write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it. It also runs the extension's first command in the preview; when it returns an error, the extension is installed but broken, so fix it and call write_extension again, and never tell the user it works.
 remove_extension deletes a generated .ts extension file only when this chat owns it.
 validate_extension typechecks changed extension files and verifies they load with Electron's native TypeScript runtime.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.

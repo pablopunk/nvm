@@ -68,7 +68,10 @@ export function createActionIpc(deps: ActionIpcDeps) {
     paneInvocations,
   } = deps;
 
-  async function executeActionForIpc(action) {
+  async function executeActionForIpc(
+    action,
+    options: { onFailure?: (error: unknown) => void } = {},
+  ) {
     return performanceTraces.run(
       'action.root',
       {
@@ -114,6 +117,7 @@ export function createActionIpc(deps: ActionIpcDeps) {
               return result;
             } catch (error) {
               recordOperationFailure(error);
+              options.onFailure?.(error);
               if (!(error instanceof Error && error.name === 'AbortError'))
                 logError(
                   'action.execute.failed',
