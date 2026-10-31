@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 import { createActivationStatus } from '../platform/activation-status';
 mock.module('../os/os', {
-  namedExports: { reservedPaletteShortcutName: () => 'Spotlight' },
+  namedExports: {
+    reservedPaletteShortcutName: () => 'Spotlight',
+    isReservedPaletteAccelerator: () => false,
+  },
 });
 const { createPortableConfigLive } = await import('./portable-config-live');
 
