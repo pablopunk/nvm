@@ -49,6 +49,10 @@ test('provider rate limits are not reported as the user reaching a Nevermind lim
   assert.match(anthropic?.message || '', /not your Nevermind usage limit/);
   assert.equal(openAi?.kind, 'provider_busy');
   assert.equal(openAi?.retryAfterSec, 20);
+  assert.equal(
+    aiLimitNoticeFromError(new Error('429 Rate limit exceeded'))?.kind,
+    'provider_busy',
+  );
 });
 
 test('a stack frame on line 429 is not mistaken for a rate limit', () => {

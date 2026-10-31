@@ -67,7 +67,7 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       },
     };
   }
-  if (/rate[_ -]?limited|rate limit exceeded/i.test(text)) {
+  if (/rate_limited/i.test(text)) {
     return {
       kind: 'rate_limited',
       title: 'AI limit reached',
