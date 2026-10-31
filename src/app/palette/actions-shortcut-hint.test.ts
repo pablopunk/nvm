@@ -6,7 +6,7 @@ test('actions hint uses the command symbol on macOS', () => {
   assert.equal(actionsShortcutHint('darwin'), '⌘K');
 });
 
-test('actions hint names the meta key on Linux and Windows', () => {
-  assert.equal(actionsShortcutHint('linux'), 'Super+K');
-  assert.equal(actionsShortcutHint('win32'), 'Win+K');
+test('actions hint names the control key on Linux and Windows', () => {
+  assert.equal(actionsShortcutHint('linux'), 'Control+K');
+  assert.equal(actionsShortcutHint('win32'), 'Control+K');
 });

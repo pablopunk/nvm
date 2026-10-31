@@ -156,7 +156,6 @@ import {
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
-
 type ActionKind =
   | 'open-url'
   | 'web-search'
@@ -178,14 +177,11 @@ type ActionKind =
   | 'calculate'
   | 'extension-root-item'
   | 'extension-action';
-
 type ActionIcon = string;
-
 type AppInfo = {
   name?: string;
   path?: string;
 };
-
 type FeedbackTone = 'default' | 'info' | 'success' | 'error';
 
 function showFeedbackIndicator(
@@ -1002,7 +998,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     if (palettePrompt.active) return;
-    if (normalized === 'command+k') {
+    if (
+      normalized === 'command+k' ||
+      (window.nvm.platform !== 'darwin' && normalized === 'control+k')
+    ) {
       event.preventDefault();
       setCompactQuery('');
       if (confirmFor) {

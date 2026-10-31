@@ -107,7 +107,7 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
               relativePath,
             )
           )
-            deps.onRelevantChange();
+            forgetMissingRootWatcher(missingRoot);
         });
         watcher.on('error', () => forgetMissingRootWatcher(missingRoot));
         return watcher;
@@ -125,10 +125,8 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
     deps.onRelevantChange();
   }
 
-  function syncMissingRootWatchers(missingRoots: string[]) {
-    const wanted = new Set(
-      missingRoots.slice(0, MAX_INDIVIDUAL_DIRECTORY_WATCHES),
-    );
+  function syncMissingRootWatchers(missingRoots: string[], limit: number) {
+    const wanted = new Set(missingRoots.slice(0, limit));
     for (const [missingRoot, watcher] of missingRootWatchers) {
       if (wanted.has(missingRoot)) continue;
       watcher.close();
@@ -143,21 +141,28 @@ export function createFileIndexWatcher(deps: FileIndexWatcherDeps) {
 
   function sync(nextScope: FileIndexWatchScope) {
     scope = nextScope;
-    syncMissingRootWatchers(nextScope.missingRoots || []);
     const directories =
       (deps.watchDirectoriesIndividually ??
       watchesIndexedDirectoriesIndividually)
         ? nextScope.indexedDirectories || []
         : [];
     const allDirectories = [...new Set([...nextScope.roots, ...directories])];
-    if (allDirectories.length > MAX_INDIVIDUAL_DIRECTORY_WATCHES) {
+    const missingRoots = nextScope.missingRoots || [];
+    if (
+      allDirectories.length + missingRoots.length >
+      MAX_INDIVIDUAL_DIRECTORY_WATCHES
+    ) {
       deps.onWatchLimit?.(
-        allDirectories.length,
+        allDirectories.length + missingRoots.length,
         MAX_INDIVIDUAL_DIRECTORY_WATCHES,
       );
     }
     const wanted = new Set(
       allDirectories.slice(0, MAX_INDIVIDUAL_DIRECTORY_WATCHES),
+    );
+    syncMissingRootWatchers(
+      missingRoots,
+      Math.max(0, MAX_INDIVIDUAL_DIRECTORY_WATCHES - wanted.size),
     );
     for (const [root, watcher] of watchers) {
       if (wanted.has(root)) continue;

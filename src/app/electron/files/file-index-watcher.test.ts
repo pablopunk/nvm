@@ -220,6 +220,10 @@ test('a missing root under missing folders is watched at the nearest existing an
   watcher.sync(scope({ roots: [], missingRoots: [nested] }));
   fake.watchers.get(HOME)?.emit('Work');
   assert.equal(refreshes, 1);
+  fake.missing.delete(path.join(HOME, 'Work'));
+  watcher.sync(scope({ roots: [], missingRoots: [nested] }));
+  fake.watchers.get(path.join(HOME, 'Work'))?.emit('Documents');
+  assert.equal(refreshes, 2);
   watcher.close();
 });
 
