@@ -26,7 +26,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--palette-stack-gap);
   height: 100%;
   overflow: visible;
   padding: 0;
@@ -42,7 +42,7 @@
 
 .palette.isStacked {
   overflow: visible;
-  padding-right: 34px;
+  padding-right: var(--stack-pane-offset);
 }
 
 .card {
@@ -201,7 +201,7 @@ kbd {
   height: auto !important;
   min-height: 0;
   width: calc(100% - var(--stack-card-right-inset));
-  margin-left: 34px;
+  margin-left: var(--stack-pane-offset);
   overflow: visible;
 }
 

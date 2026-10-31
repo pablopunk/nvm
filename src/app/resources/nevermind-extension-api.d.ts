@@ -677,7 +677,7 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: ExtensionItemAppearance;
-  /** Show contextual information without making it selectable. */
+  /** Show contextual information without making it selectable. The host renders the title and wrapped subtitle at full contrast, so prefer `ctx.ui.error` for failures and invalid input. */
   disabled?: boolean;
   /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
   detail?: ExtensionDetail;
@@ -1679,6 +1679,7 @@ export type ExtensionContext = {
     empty(title?: string, subtitle?: string): ExtensionView;
     /** Compact loading-only list surface; the host renders the perimeter sweep instead of an inline spinner or progress screen. */
     loading(title?: string): ExtensionView;
+    /** Host-owned failure or invalid-input view with a Back action. Keep `title` short; put the full corrective guidance, including an example, in `message`, which the host wraps at full contrast. Do not hand-build `disabled` rows to show errors. */
     error(title?: string, message?: string): ExtensionView;
   };
 

@@ -19,7 +19,13 @@ import {
 } from './ui/floating-window-fixture.ts';
 import { formView } from './ui/form-fixture.ts';
 import { gridView } from './ui/grid-fixture.ts';
-import { emptyListView, listView, loadingView } from './ui/list-fixtures.ts';
+import {
+  emptyListView,
+  errorView,
+  listView,
+  loadingView,
+  shortActionMenuView,
+} from './ui/list-fixtures.ts';
 import {
   delayedNestedToolView,
   failingNestedTool,
@@ -85,6 +91,18 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Empty List',
       icon: 'list-x',
       run: (ctx) => emptyListView(ctx),
+    },
+    {
+      id: 'error',
+      title: 'Dev UI: Error With Long Guidance',
+      icon: 'circle-alert',
+      run: (ctx) => errorView(ctx),
+    },
+    {
+      id: 'short-action-menu',
+      title: 'Dev UI: Short View Action Menu',
+      icon: 'panel-bottom-open',
+      run: (ctx) => shortActionMenuView(ctx),
     },
     {
       id: 'extensions-empty-signed-out',

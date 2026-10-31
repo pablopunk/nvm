@@ -452,6 +452,23 @@ test('renders feedback as a cmdk list with an accessible recovery action', () =>
   assert.match(html, /aria-disabled="true"/);
 });
 
+test('renders error guidance as a contextual row that wraps at full contrast', () => {
+  const html = renderExtensionView(
+    feedbackView({
+      id: 'invalid-temperature',
+      title: 'Invalid temperature',
+      message: 'Enter a number followed by C, F, or K, such as 100 C.',
+      tone: 'error',
+    }),
+  );
+
+  assert.match(
+    html,
+    /class="result extensionListItem extensionListItemWrapSubtitle extensionListItemContext"/,
+  );
+  assert.match(html, /Enter a number followed by C, F, or K, such as 100 C\./);
+});
+
 test('does not render the legacy thin loading bar', () => {
   const activeLoading = renderExtensionView({
     type: 'list',

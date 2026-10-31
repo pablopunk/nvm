@@ -53,6 +53,7 @@ import {
 } from './extension-webview-permissions';
 import { AI_CHAT_MARKDOWN_OPTIONS } from '../markdown-content';
 import { formApplyRowId } from './form-fields';
+import { extensionListItemClassName } from './list-item-class-name';
 import type { usePaletteForm } from './palette-form';
 
 type AiChatState = {
@@ -735,11 +736,7 @@ function ListExtensionView({
           <CommandRow
             key={item.id}
             value={item.id}
-            className={
-              view.id === 'os-permissions'
-                ? 'extensionListItem extensionListItemWrapSubtitle'
-                : 'extensionListItem'
-            }
+            className={extensionListItemClassName(view.id, item)}
             icon={iconForItem(item)}
             title={item.title}
             subtitle={item.subtitle || item.text}

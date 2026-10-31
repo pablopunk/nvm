@@ -114,6 +114,7 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
+import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -5901,28 +5902,13 @@ export function App() {
             )}
           </Command.List>
           {compactActionMenuVisible ? (
-            <aside className="extensionWindowCompactPanel paletteCompactPanel">
-              <div className="extensionWindowSearchRow">
-                <Search size={15} className="extensionWindowSearchIcon" />
-                <input
-                  ref={compactActionInputRef}
-                  autoFocus
-                  value={actionQuery}
-                  onChange={(event) =>
-                    setActionQuery(event.currentTarget.value)
-                  }
-                  placeholder={compactActionPlaceholder}
-                  aria-label={compactActionPlaceholder}
-                  spellCheck={false}
-                />
-              </div>
-              <Command.List className="extensionWindowCompactResults">
-                <ActionPanel
-                  rows={getCompactActionRows()}
-                  emptyMessage="No matching actions"
-                />
-              </Command.List>
-            </aside>
+            <PaletteCompactActionPanel
+              inputRef={compactActionInputRef}
+              query={actionQuery}
+              onQueryChange={setActionQuery}
+              placeholder={compactActionPlaceholder}
+              rows={getCompactActionRows()}
+            />
           ) : null}
         </Command>
       </ArcherContainer>

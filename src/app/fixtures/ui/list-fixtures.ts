@@ -190,3 +190,36 @@ export function emptyListView(ctx: ExtensionContext) {
     items: [],
   });
 }
+
+export function errorView(ctx: ExtensionContext) {
+  return ctx.ui.error(
+    'Invalid temperature',
+    'Enter a number followed by C, F, or K, such as 100 C, -40 F, or 273.15 K.',
+  );
+}
+
+export function shortActionMenuView(ctx: ExtensionContext) {
+  return ctx.ui.list({
+    id: 'dev-ui-short-action-menu',
+    title: 'Dev UI · Short View Action Menu',
+    subtitle:
+      'One row; press Command+K and the menu must sit beside the row, not at the window bottom.',
+    items: [
+      ctx.ui.item({
+        id: 'only-row',
+        title: 'Only task',
+        primaryAction: ctx.actions.run('Complete', (innerCtx) =>
+          showExtensionFeedback(innerCtx, 'Short View', 'Completed'),
+        ),
+        actions: [
+          ctx.actions.run('Edit', (innerCtx) =>
+            showExtensionFeedback(innerCtx, 'Short View', 'Edit'),
+          ),
+          ctx.actions.run('Delete', (innerCtx) =>
+            showExtensionFeedback(innerCtx, 'Short View', 'Delete'),
+          ),
+        ],
+      }),
+    ],
+  });
+}
