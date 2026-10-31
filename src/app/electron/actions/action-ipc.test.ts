@@ -10,6 +10,9 @@ const { createExtensionActionResults } = await import(
   './extension-action-results'
 );
 const { createRootActionExecutor } = await import('./root-action-executor');
+const { createPreviewRunObserver } = await import(
+  '../ai/ai-preview-run-observer'
+);
 
 const commandAction = { kind: 'extension-command', id: 'summarize' };
 const errorView = { id: 'extension-action-error' };
@@ -89,27 +92,50 @@ test('a real extension root handler failure reaches the observer and retains its
     normalizeViewPatch: (patch) => patch,
     normalizeViewItems: (items) => items,
   });
+  const action = {
+    kind: 'extension-action',
+    id: 'summarize',
+    extensionFile: 'summary.ts',
+    rootAction: { type: 'runExtensionAction', handlerId: 'handler' },
+  };
   const executor = createRootActionExecutor({
     paletteWindow: { hidePalette: () => {} },
     recordRecent: () => {},
-    currentActionForStoredShortcut: (action) => action,
+    currentActionForStoredShortcut: () => action,
     openSystemKeyboardSettings: () => {},
     executeExtensionRootItem: extension.executeExtensionRootItem,
     presentActionResultFeedback: (result) => result,
   });
-  const recorder = recordingObserver();
+  const observer = createPreviewRunObserver();
+  observer.expectRun('summary.ts', 'summarize');
   const { executeActionForIpc } = actionIpc(
     executor.executeAction,
-    recorder.observeActionRun,
+    observer.observeRun,
   );
-  const action = {
-    kind: 'extension-action',
+  const originalAction = {
+    kind: 'extension-command',
     id: 'summarize',
-    rootAction: { type: 'runExtensionAction', handlerId: 'handler' },
+    extensionFile: 'summary.ts',
   };
 
-  assert.deepEqual(await executeActionForIpc(action), { view: errorView });
-  assert.deepEqual(recorder.calls, ['failed:text.trim is not a function']);
+  assert.deepEqual(await executeActionForIpc(originalAction), {
+    view: errorView,
+  });
+  assert.match(
+    ((await observer.outcomeFor('summary.ts', 0)) as { message: string })
+      .message,
+    /text\.trim is not a function/,
+  );
+  observer.expectRun('summary.ts', 'summarize');
+  action.rootAction.handlerId = 'missing';
+  assert.equal(
+    (await executeActionForIpc(originalAction)).view.title,
+    'Action unavailable',
+  );
+  const unavailable = await observer.outcomeFor('summary.ts', 0);
+  assert.equal(unavailable.status, 'failed');
+  if (unavailable.status === 'failed')
+    assert.match(unavailable.message, /Action unavailable/);
 });
 
 test('a succeeding command is reported to the observer once and executes once', async () => {

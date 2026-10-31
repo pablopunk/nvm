@@ -1,5 +1,6 @@
 import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import { isNvmTestMode } from '../platform/test-mode';
+import type { ActionRunOptions } from './action-run-options';
 import { runInBackground } from './run-in-background';
 
 export type RootActionExecutorDeps = {
@@ -10,7 +11,7 @@ export type RootActionExecutorDeps = {
   openSystemKeyboardSettings: () => unknown;
   executeExtensionRootItem: (
     action: any,
-    options?: { onFailure?: (error: unknown) => void },
+    options?: ActionRunOptions,
   ) => Promise<any>;
   presentActionResultFeedback: (result: any, action: any) => any;
 };
@@ -25,7 +26,10 @@ export function createRootActionExecutor(deps: RootActionExecutorDeps) {
     presentActionResultFeedback,
   } = deps;
 
-  async function executeActionWithoutFeedback(action, options: any = {}) {
+  async function executeActionWithoutFeedback(
+    action,
+    options: ActionRunOptions = {},
+  ) {
     if (!action) return;
     recordRecent(action);
     let result;
@@ -47,6 +51,7 @@ export function createRootActionExecutor(deps: RootActionExecutorDeps) {
       }
       case 'extension-command': {
         const upgraded = currentActionForStoredShortcut(action);
+        if (!upgraded) options.onFailure?.(new Error('Action unavailable'));
         if (upgraded !== action)
           return executeActionWithoutFeedback(upgraded, options);
         break;
@@ -61,7 +66,7 @@ export function createRootActionExecutor(deps: RootActionExecutorDeps) {
     return result;
   }
 
-  async function executeAction(action, options: any = {}) {
+  async function executeAction(action, options: ActionRunOptions = {}) {
     const execute = async () =>
       presentActionResultFeedback(
         await executeActionWithoutFeedback(action, options),

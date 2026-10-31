@@ -13,6 +13,7 @@ import { isInternalExtension } from '../extension-host/internal-extension';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import type { ViewRefreshRecord } from './action-execution-records';
+import type { ActionRunOptions } from './action-run-options';
 
 export type ActionRunObservation = {
   succeeded: () => void;
@@ -29,7 +30,7 @@ function refreshBackoffDelay(failureCount: number) {
 export type ActionIpcDeps = {
   resolveRootActionForIpc: (action: any) => any;
   resolveViewActionForIpc: (action: any) => any;
-  executeAction: (action: any, options?: any) => Promise<any>;
+  executeAction: (action: any, options?: ActionRunOptions) => Promise<any>;
   executeViewAction: (action: any, launchContext?: any) => Promise<any>;
   executeHostRefreshAction: (
     record: any,

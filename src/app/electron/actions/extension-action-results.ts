@@ -8,6 +8,7 @@ import { recordOperationFailure } from '../diagnostics/observability';
 import type { createExtensionDraftStore } from '../extension-host/extension-draft-store';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { isLoaderHandle } from '../state/data-loader';
+import type { ActionRunOptions } from './action-run-options';
 import { isView } from './view-types';
 
 function isAction(value) {
@@ -53,7 +54,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
 
   async function executeExtensionRootItem(
     action,
-    options: { onFailure?: (error: unknown) => void } = {},
+    options: ActionRunOptions = {},
   ) {
     return performanceTraces.run(
       'extension.rootItem.execute',
@@ -80,7 +81,8 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
             const record = extensionActionHandlers.get(
               action.rootAction.handlerId,
             );
-            if (!record)
+            if (!record) {
+              options.onFailure?.(new Error('Action unavailable'));
               return {
                 view: {
                   type: 'preview',
@@ -88,7 +90,11 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
                   content: 'This extension item is no longer available.',
                 },
               };
+            }
             if (!(record.entry && record.entry.extension)) {
+              options.onFailure?.(
+                new Error('Action unavailable in the current context'),
+              );
               logWarn('extension.rootItem.missingEntry', {
                 handlerId: action.rootAction.handlerId,
                 actionTitle: action.title,
