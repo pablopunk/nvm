@@ -5,17 +5,20 @@ import {
   measureDebugPerformance,
   measureDebugPerformanceSync,
 } from '../diagnostics/debug-performance';
-import { watchDirectoryTree } from '../os/directory-tree-watch';
+import {
+  watchDirectoryShallow,
+  watchDirectoryTree,
+} from '../os/directory-tree-watch';
 import type { JobRegistry } from '../platform/jobs';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { thumbnailUrlForPreviewablePath } from './extension-file';
 import { filesNeedingDateAdded, pathIsInsideRoot } from './file-index-commit';
-import { defaultFileIndexRoots } from './file-index-roots';
 import {
   createFileIndexRefresher,
   type FileIndexRefresherDeps,
   type FileIndexScan,
 } from './file-index-refresher';
+import { defaultFileIndexRoots } from './file-index-roots';
 import { sortFoundFiles } from './file-index-sorting';
 import { FILE_INDEX_CHANGED_EVENT } from './file-index-watcher';
 import {
@@ -149,6 +152,7 @@ export interface FileIndexServiceDeps {
   notifyRootItemsChanged: () => void;
   jobEvents: Pick<JobRegistry, 'emit'>;
   watchDirectoryTree?: FileIndexRefresherDeps['watchDirectoryTree'];
+  watchDirectoryShallow?: FileIndexRefresherDeps['watchDirectoryShallow'];
 }
 
 function unreadableRootsError(unreadableRoots: string[]) {
@@ -165,6 +169,7 @@ export function createFileIndexService(deps: FileIndexServiceDeps) {
     scan: scanFileIndex,
     notifyChanged: deps.notifyRootItemsChanged,
     watchDirectoryTree: deps.watchDirectoryTree || watchDirectoryTree,
+    watchDirectoryShallow: deps.watchDirectoryShallow || watchDirectoryShallow,
     onRelevantChange: () => deps.jobEvents.emit(FILE_INDEX_CHANGED_EVENT),
     onWatchLimit: (count, limit) =>
       logWarn(

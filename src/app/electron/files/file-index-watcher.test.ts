@@ -3,6 +3,7 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   changedPathCanAffectFileIndex,
+  changedPathCanCreateMissingRoot,
   createFileIndexWatcher,
   type FileIndexWatchScope,
 } from './file-index-watcher';
@@ -163,4 +164,99 @@ test('a failed root watcher is dropped and requests a refresh', () => {
   assert.deepEqual(watcher.watchedRoots(), []);
   watcher.sync(scope());
   assert.deepEqual(watcher.watchedRoots(), [ROOT]);
+});
+
+const HOME = path.join(path.sep, 'home', 'me');
+const DOCUMENTS = path.join(HOME, 'Documents');
+
+test('only the child that leads to the missing root can create it', () => {
+  assert.equal(
+    changedPathCanCreateMissingRoot(HOME, DOCUMENTS, 'Documents'),
+    true,
+  );
+  assert.equal(changedPathCanCreateMissingRoot(HOME, DOCUMENTS, null), true);
+  assert.equal(
+    changedPathCanCreateMissingRoot(HOME, DOCUMENTS, 'notes.txt'),
+    false,
+  );
+  assert.equal(
+    changedPathCanCreateMissingRoot(HOME, DOCUMENTS, '.cache'),
+    false,
+  );
+});
+
+test('a missing root is watched through its closest existing parent', () => {
+  const fake = fakeWatchFactory();
+  let refreshes = 0;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: fake.watchDirectoryTree,
+    watchDirectoryShallow: fake.watchDirectoryTree,
+    onRelevantChange: () => {
+      refreshes += 1;
+    },
+  });
+  watcher.sync(scope({ missingRoots: [DOCUMENTS] }));
+  assert.deepEqual(watcher.watchedRoots(), [ROOT]);
+  assert.deepEqual(watcher.watchedMissingRoots(), [DOCUMENTS]);
+  fake.watchers.get(HOME)?.emit('unrelated.txt');
+  assert.equal(refreshes, 0);
+  fake.watchers.get(HOME)?.emit('Documents');
+  assert.equal(refreshes, 1);
+  watcher.close();
+});
+
+test('a missing root under missing folders is watched at the nearest existing ancestor', () => {
+  const fake = fakeWatchFactory();
+  const nested = path.join(HOME, 'Work', 'Documents');
+  fake.missing.add(path.join(HOME, 'Work'));
+  let refreshes = 0;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: fake.watchDirectoryTree,
+    watchDirectoryShallow: fake.watchDirectoryTree,
+    onRelevantChange: () => {
+      refreshes += 1;
+    },
+  });
+  watcher.sync(scope({ roots: [], missingRoots: [nested] }));
+  fake.watchers.get(HOME)?.emit('Work');
+  assert.equal(refreshes, 1);
+  fake.missing.delete(path.join(HOME, 'Work'));
+  watcher.sync(scope({ roots: [], missingRoots: [nested] }));
+  fake.watchers.get(path.join(HOME, 'Work'))?.emit('Documents');
+  assert.equal(refreshes, 2);
+  watcher.close();
+});
+
+test('a missing root watcher is dropped once the root exists or is no longer wanted', () => {
+  const fake = fakeWatchFactory();
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: fake.watchDirectoryTree,
+    watchDirectoryShallow: fake.watchDirectoryTree,
+    onRelevantChange: () => {},
+  });
+  watcher.sync(scope({ roots: [], missingRoots: [DOCUMENTS] }));
+  watcher.sync(scope({ roots: [DOCUMENTS], missingRoots: [] }));
+  assert.equal(fake.watchers.get(HOME)?.closed, true);
+  assert.deepEqual(watcher.watchedMissingRoots(), []);
+  watcher.close();
+});
+
+test('a failed missing root watcher is dropped, requests a refresh, and is retried', () => {
+  const fake = fakeWatchFactory();
+  let refreshes = 0;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: fake.watchDirectoryTree,
+    watchDirectoryShallow: fake.watchDirectoryTree,
+    onRelevantChange: () => {
+      refreshes += 1;
+    },
+  });
+  const missing = scope({ roots: [], missingRoots: [DOCUMENTS] });
+  watcher.sync(missing);
+  fake.watchers.get(HOME)?.fail();
+  assert.equal(refreshes, 1);
+  assert.deepEqual(watcher.watchedMissingRoots(), []);
+  watcher.sync(missing);
+  assert.deepEqual(watcher.watchedMissingRoots(), [DOCUMENTS]);
+  watcher.close();
 });

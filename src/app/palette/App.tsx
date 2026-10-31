@@ -28,11 +28,6 @@ import {
 } from 'react-archer';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import {
-  previewActionFlags,
-  rootPreviewAction,
-  rootSearchQueryAction,
-} from './root-action-preview';
-import {
   actionMenuHostIsStacked,
   actionMenuPresentation,
   activePaneIsObscured,
@@ -73,6 +68,7 @@ import {
 } from './debug-performance';
 import { dictationDevices } from './dictation/dictation-devices';
 import { recordDictation } from './dictation/dictation-renderer';
+import { mouseDownLandsOnEmptyWindowSpace } from './empty-window-space';
 import { ExtensionViewRenderer } from './extension-view/extension-view';
 import {
   FORM_SAVE_ROW_ID,
@@ -84,6 +80,7 @@ import {
 import { usePaletteForm } from './extension-view/palette-form';
 import { useExtensionNavigation } from './extension-view/use-extension-navigation';
 import { patchCommandView } from './extension-view/view-patches';
+import { ExtensionWindowFooter } from './extension-window-footer';
 import { feedbackView } from './feedback';
 import {
   allViewItems,
@@ -91,6 +88,8 @@ import {
   filterCommandSections,
   valuesMatch,
 } from './filtering';
+// biome-ignore format: Keep the legacy palette within its file-size budget.
+import { actionIdentity, combinedActionSections, findLocalShortcut, localActionCandidates, viewActionsForItem } from './local-actions';
 import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import {
   actionDefinition,
@@ -107,16 +106,14 @@ import {
   canCustomizeCommandAction,
   extensionLoadingView,
 } from './model';
-// biome-ignore format: Keep the legacy palette within its file-size budget.
-import { localActionCandidates, actionIdentity, viewActionsForItem, combinedActionSections, findLocalShortcut } from './local-actions';
-import {
-  resetTransientPaletteState,
-  rootResultSelection,
-} from './palette-lifecycle';
 import {
   PaletteHotkeyNotice,
   paletteHotkeyNoticeIsVisible,
 } from './palette-hotkey-notice';
+import {
+  resetTransientPaletteState,
+  rootResultSelection,
+} from './palette-lifecycle';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -127,6 +124,11 @@ import type {
   ShortcutRecord,
 } from './preload-api';
 import { resultsCardClassName } from './results-card-layout';
+import {
+  previewActionFlags,
+  rootPreviewAction,
+  rootSearchQueryAction,
+} from './root-action-preview';
 import {
   ShortcutManagerView,
   type ShortcutRecordLike,
@@ -175,14 +177,11 @@ type ActionKind =
   | 'calculate'
   | 'extension-root-item'
   | 'extension-action';
-
 type ActionIcon = string;
-
 type AppInfo = {
   name?: string;
   path?: string;
 };
-
 type FeedbackTone = 'default' | 'info' | 'success' | 'error';
 
 function showFeedbackIndicator(
@@ -302,14 +301,6 @@ function spotlightConflictView(accelerator: string): ExtensionView {
   };
 }
 
-const SETTINGS_ROOT_ACTION: Action = {
-  id: 'app-settings',
-  kind: 'app-settings',
-  title: 'Settings',
-  subtitle: 'Configure Nevermind',
-  icon: 'settings',
-  score: 0,
-};
 const PALETTE_HOTKEY_PSEUDO_ACTION: Action = {
   id: PALETTE_HOTKEY_ACTION_ID,
   kind: 'builtin',
@@ -1007,7 +998,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
       return;
     }
     if (palettePrompt.active) return;
-    if (normalized === 'command+k') {
+    if (
+      normalized === 'command+k' ||
+      (window.nvm.platform !== 'darwin' && normalized === 'control+k')
+    ) {
       event.preventDefault();
       setCompactQuery('');
       if (confirmFor) {
@@ -1405,24 +1399,14 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
           </aside>
         ) : null}
       </main>
-      <footer className="extensionWindowFooter">
-        {palettePrompt.progress ? <span>{palettePrompt.progress}</span> : null}
-        {!overlayOpen && (view.type === 'list' || view.type === 'grid') ? (
-          <span>
-            <kbd>↵</kbd> Open
-          </span>
-        ) : null}
-        {!overlayOpen && hasActions ? (
-          <span>
-            <kbd>⌘K</kbd> Actions
-          </span>
-        ) : null}
-        {overlayOpen ? (
-          <span>
-            <kbd>esc</kbd> Back
-          </span>
-        ) : null}
-      </footer>
+      <ExtensionWindowFooter
+        progress={palettePrompt.progress}
+        showOpen={
+          !overlayOpen && (view.type === 'list' || view.type === 'grid')
+        }
+        showActions={!overlayOpen && hasActions}
+        showBack={overlayOpen}
+      />
     </Command>
   );
 }
@@ -3918,8 +3902,6 @@ export function App() {
           );
           return;
         }
-        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
         if (result.spotlightConflict)
           showExtensionView(spotlightConflictView(accelerator), 'push');
         return;
@@ -3946,8 +3928,6 @@ export function App() {
         setRecordedShortcut('');
         setOptionsFor(null);
         setRefreshNonce((nonce) => nonce + 1);
-        const refreshed = await window.nvm.execute(SETTINGS_ROOT_ACTION);
-        if (refreshed?.view) showExtensionView(refreshed.view, 'replace');
         return;
       }
       const result = (await window.nvm.runViewAction({
@@ -5296,7 +5276,7 @@ export function App() {
   function dismissFromEmptyWindowSpace(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
     const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest('.card, .extensionWindowCompactPanel')) return;
+    if (!mouseDownLandsOnEmptyWindowSpace(target)) return;
     event.preventDefault();
     void window.nvm.hide();
   }

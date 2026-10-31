@@ -27,12 +27,12 @@ export type FileIndexRefresherDeps = FileIndexWatcherDeps & {
 
 function fileIndexWatchScope(
   options: any,
-  existingRoots: string[],
-  indexedDirectories: string[] = [],
+  scan: FileIndexScan,
 ): FileIndexWatchScope {
   return {
-    roots: existingRoots,
-    indexedDirectories,
+    roots: scan.existingRoots,
+    missingRoots: scan.missingRoots,
+    indexedDirectories: scan.indexedDirectories || [],
     depth: options.depth ?? 2,
     includeHidden: Boolean(options.includeHidden),
     ignore: normalizedIgnorePatterns(options.ignore),
@@ -68,9 +68,7 @@ export function createFileIndexRefresher(deps: FileIndexRefresherDeps) {
     const changed =
       fileIndexSignature(nextIndex) !== fileIndexSignature(fileIndex);
     fileIndex = nextIndex;
-    watcher.sync(
-      fileIndexWatchScope(options, scan.existingRoots, scan.indexedDirectories),
-    );
+    watcher.sync(fileIndexWatchScope(options, scan));
     if (changed) deps.notifyChanged();
     deps.mark?.('files.index.result', {
       indexedCount: fileIndex.length,
@@ -90,6 +88,7 @@ export function createFileIndexRefresher(deps: FileIndexRefresherDeps) {
     refresh,
     current,
     watchedRoots: watcher.watchedRoots,
+    watchedMissingRoots: watcher.watchedMissingRoots,
     close: watcher.close,
   };
 }

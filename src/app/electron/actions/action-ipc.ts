@@ -114,6 +114,16 @@ export function createActionIpc(deps: ActionIpcDeps) {
               return result;
             } catch (error) {
               recordOperationFailure(error);
+              if (!(error instanceof Error && error.name === 'AbortError'))
+                logError(
+                  'action.execute.failed',
+                  {
+                    error,
+                    actionKind: trustedAction?.kind || action?.kind,
+                    actionId: trustedAction?.id || action?.id,
+                  },
+                  { source: 'host', scope: 'action' },
+                );
               if (
                 trustedAction?.background ||
                 trustedAction?.dismissAfterRun === 'auto'
@@ -268,15 +278,20 @@ export function createActionIpc(deps: ActionIpcDeps) {
                 trustedAction?.type === 'runExtensionAction'
                   ? extensionActionHandlers.get(trustedAction.handlerId)
                   : null;
-              logError('extension.viewAction.failed', error, {
-                source: 'host',
-                scope: 'extension',
-                extensionId: record?.entry?.extension?.id,
-                data: {
-                  actionType: trustedAction?.type || action?.type,
-                  actionTitle: trustedAction?.title || action?.title,
-                },
-              });
+              if (!(error instanceof Error && error.name === 'AbortError'))
+                logError(
+                  'extension.viewAction.failed',
+                  {
+                    error,
+                    actionType: trustedAction?.type || action?.type,
+                    actionTitle: trustedAction?.title || action?.title,
+                  },
+                  {
+                    source: 'host',
+                    scope: 'extension',
+                    extensionId: record?.entry?.extension?.id,
+                  },
+                );
               if (
                 trustedAction?.dismissAfterRun === 'auto' &&
                 !trustedAction?.keepPaletteOpen

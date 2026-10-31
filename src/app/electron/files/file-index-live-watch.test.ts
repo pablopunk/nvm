@@ -3,7 +3,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { createDirectoryTreeWatch } from '../os/directory-tree-watch';
+import {
+  createDirectoryTreeWatch,
+  createShallowDirectoryWatch,
+} from '../os/directory-tree-watch';
 import { createFileIndexRefresher } from './file-index-refresher';
 import { createFileIndexWatcher } from './file-index-watcher';
 
@@ -124,4 +127,49 @@ test('Linux individual watchers report changes in an indexed subfolder', {
   while (!changed && Date.now() < deadline)
     await new Promise((resolve) => setTimeout(resolve, 25));
   assert.ok(changed, 'expected an event from the indexed subfolder');
+});
+
+test('live watcher reports a missing root being created, removed, and recreated', async (t) => {
+  const home = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-missing-root-'));
+  const documents = path.join(home, 'Documents');
+  let changeSignals = 0;
+  const watcher = createFileIndexWatcher({
+    watchDirectoryTree: createDirectoryTreeWatch(process.platform),
+    watchDirectoryShallow: createShallowDirectoryWatch(),
+    onRelevantChange: () => {
+      changeSignals += 1;
+    },
+  });
+  t.after(async () => {
+    watcher.close();
+    await fs.rm(home, { recursive: true, force: true });
+  });
+  async function signalAfter(change: () => Promise<unknown>) {
+    const before = changeSignals;
+    await change();
+    const deadline = Date.now() + 3000;
+    while (changeSignals === before && Date.now() < deadline)
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    return changeSignals > before;
+  }
+  const missingScope = {
+    roots: [],
+    missingRoots: [documents],
+    depth: 2,
+    includeHidden: false,
+    ignore: [],
+  };
+  watcher.sync(missingScope);
+  assert.deepEqual(watcher.watchedMissingRoots(), [documents]);
+  assert.equal(await signalAfter(() => fs.mkdir(documents)), true);
+
+  watcher.sync({ ...missingScope, roots: [documents], missingRoots: [] });
+  assert.deepEqual(watcher.watchedMissingRoots(), []);
+  assert.equal(
+    await signalAfter(() => fs.rm(documents, { recursive: true })),
+    true,
+  );
+
+  watcher.sync(missingScope);
+  assert.equal(await signalAfter(() => fs.mkdir(documents)), true);
 });

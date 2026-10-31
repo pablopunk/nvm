@@ -23,6 +23,7 @@ import {
   isNvmTestMode,
   recordTestWindowEvent,
 } from '../platform/test-mode';
+import { installDevToolsShortcut } from './devtools-shortcut';
 import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
@@ -167,6 +168,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
         hidePalette();
       }
     });
+
+    installDevToolsShortcut(win);
 
     installExternalNavigationPolicy(win, (url) =>
       isTrustedAppPage(
@@ -467,16 +470,6 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       showPaletteWhenReady();
     }
 
-    win?.webContents.on('before-input-event', (_event, input) => {
-      if (
-        !(input.meta || input.control) ||
-        !input.alt ||
-        input.key.toLowerCase() !== 'i'
-      )
-        return;
-      if (win?.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
-      else win?.webContents.openDevTools({ mode: 'detach' });
-    });
     return status;
   }
 
