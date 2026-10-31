@@ -5,11 +5,13 @@ mock.module('electron', {
   namedExports: { app: { isPackaged: false, getPath: () => '/tmp' } },
 });
 
-const { createActionIpc } = await import('./action-ipc');
+const { createActionIpc } = await import('../actions/action-ipc');
 const { createExtensionActionResults } = await import(
-  './extension-action-results'
+  '../actions/extension-action-results'
 );
-const { createRootActionExecutor } = await import('./root-action-executor');
+const { createRootActionExecutor } = await import(
+  '../actions/root-action-executor'
+);
 const { createPreviewRunObserver } = await import(
   '../ai/ai-preview-run-observer'
 );
