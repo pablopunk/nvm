@@ -1,3 +1,4 @@
+import { patchCommandView } from '../extension-view/view-patches';
 import { feedbackView } from '../feedback';
 import { allViewItems } from '../filtering';
 import {
@@ -7,7 +8,6 @@ import {
   type CommandViewPatch,
   extensionLoadingView,
 } from '../model';
-import { patchCommandView } from '../extension-view/view-patches';
 
 export function builderPreviewRootActions(preview: BuilderPreview) {
   return [
@@ -23,6 +23,15 @@ export function builderPreviewShouldAutoRun(preview: BuilderPreview) {
 
 export function builderPreviewAutoRunAction(preview: BuilderPreview) {
   return preview.preview.commands[0];
+}
+
+export function claimBuilderSession(
+  initializedSessions: { current: Set<string> },
+  sessionKey: string,
+) {
+  if (initializedSessions.current.has(sessionKey)) return false;
+  initializedSessions.current.add(sessionKey);
+  return true;
 }
 
 export function builderPreviewResultIsCurrent(

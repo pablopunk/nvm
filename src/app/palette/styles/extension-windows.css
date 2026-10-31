@@ -37,7 +37,19 @@
 }
 
 .paletteCompactPanel {
+  display: flex;
+  flex-direction: column;
   bottom: 12px;
+  max-height: var(--compact-panel-max-height);
+}
+
+.paletteCompactPanel .extensionWindowSearchRow {
+  flex: none;
+}
+
+.paletteCompactPanel .extensionWindowCompactResults {
+  flex: 0 1 auto;
+  min-height: 0;
 }
 
 .palette.isStacked .paletteCompactPanel {

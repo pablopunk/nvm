@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import type { BuilderPreview, CommandView } from '../model';
 import {
   applyBuilderPreviewActionResult,
   builderPreviewAutoRunAction,
@@ -8,6 +9,7 @@ import {
   builderPreviewRootActions,
   builderPreviewSelectedItemId,
   builderPreviewShouldAutoRun,
+  claimBuilderSession,
   hydrateBuilderPreviewViewById,
   patchBuilderPreviewState,
   patchBuilderPreviewViewById,
@@ -15,7 +17,6 @@ import {
   retryBuilderPreviewHydration,
   upsertBuilderPreview,
 } from './builder-preview';
-import type { BuilderPreview, CommandView } from '../model';
 
 test('builder preview does not auto-run standalone actions', () => {
   const preview: BuilderPreview = {
@@ -238,4 +239,21 @@ test('builder preview keeps hydrate retry feedback local to the matching view', 
   assert.equal(retrying[0].view.id, 'issues');
   assert.equal(retrying[0].view.isLoading, true);
   assert.equal(retrying[0].view.items?.length, 0);
+});
+
+test('a builder session is claimed once so its first command is never auto-run twice', () => {
+  const initialized = { current: new Set<string>() };
+  assert.equal(claimBuilderSession(initialized, 'chat-a'), true);
+  assert.equal(claimBuilderSession(initialized, 'chat-a'), false);
+  assert.equal(claimBuilderSession(initialized, 'chat-b'), true);
+});
+
+test('a retained inactive chat claims its session without becoming eligible for a later auto-run', () => {
+  const initialized = { current: new Set<string>() };
+  claimBuilderSession(initialized, 'retained-chat');
+  const claimedAgainOnActivation = claimBuilderSession(
+    initialized,
+    'retained-chat',
+  );
+  assert.equal(claimedAgainOnActivation, false);
 });
