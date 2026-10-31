@@ -33,7 +33,11 @@ import {
 import { ensurePiExtensionsLoaded } from './ai-pi-extension-load';
 import { createBuilderTools } from './ai-builder-tools';
 import { formatBuilderValidationError } from './ai-builder-read-page';
-import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
+import {
+  currentBuilderExtensionFile,
+  type GeneratedExtensionActivation,
+} from './ai-builder-tool-shared';
+import type { PreviewRunReader } from './ai-preview-run-observer';
 import {
   type AiToolMode,
   aiPromptUsesDirectModel,
@@ -46,6 +50,7 @@ import {
   PI_AI_COMPACTION_RESERVE_TOKENS,
 } from './pi-runtime';
 import { validateExtensionCapabilities } from './extension-capability-validation';
+import { BUILDER_REQUEST_GUIDANCE } from './ai-builder-request-guidance';
 import { WINDOW_GUIDANCE } from './window-management-builder-guidance';
 import { registerObservedPiProvider } from './pi-provider';
 import { isMessageUpdateEvent } from './pi-session-events';
@@ -155,6 +160,7 @@ type NevermindAiOptions = {
     source: string,
     chatId?: string,
   ) => Promise<GeneratedExtensionActivation>;
+  readPreviewRun?: PreviewRunReader;
   withLiveExtensionWriteLock?: <T>(
     filename: string,
     operation: () => Promise<T>,
@@ -171,15 +177,6 @@ type NevermindAiOptions = {
 };
 
 type AiImageContent = { type: 'image'; data: string; mimeType: string };
-
-type GeneratedExtensionActivation = {
-  filename: string;
-  preview: {
-    extensionId: string;
-    rootItems: unknown[];
-    actions: unknown[];
-  };
-};
 
 type AiModelRole = 'smart' | 'fast';
 type ThinkingLevel =
@@ -1270,6 +1267,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getChat,
       markGeneratedExtension,
       activateGeneratedExtension,
+      readPreviewRun,
       withLiveExtensionWriteLock,
       canWriteExtension,
       removeExtension,
@@ -1363,6 +1361,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getCapabilities: capabilities,
       markGeneratedExtension: (filePath) =>
         markGeneratedExtension?.(filePath, chatId),
+      readPreviewRun,
       stageGeneratedExtension: (params, readFiles) =>
         stageAiGeneratedExtension(
           {
@@ -2331,10 +2330,8 @@ function capabilities() {
 function systemPrompt() {
   return `You are Nevermind's extension-building agent.
 Build local Nevermind extensions, not shell scripts.
-When the first user message is vague, ask clarifying questions before using tools.
-Do not call read_extension_api, list_capabilities, write_extension, remove_extension, validate_extension, or install_extension until the user has confirmed the desired command behavior.
-Once the user provides enough details, start building immediately by calling read_extension_api in the same turn. Do not say you are going to call a tool; call it.
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, remove_extension, validate_extension, install_extension. Web access tools may also be available as web_search, source_check, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+${BUILDER_REQUEST_GUIDANCE}
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, read_preview_run, remove_extension, validate_extension, install_extension. Web access tools may also be available as web_search, source_check, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api returns the typed API reference and is the source of truth for extension authoring details.
@@ -2345,7 +2342,7 @@ When tweaking an existing generated action, call read_current_extension before w
 Use list_capabilities when unsure which UI or OS capabilities exist. Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed or built-in extensions. Built-in source is read-only reference material and may use privileged host APIs unavailable to generated extensions.
 Only write .ts extension files with write_extension.
-write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it.
+write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it. write_extension does not run the extension. After it succeeds, call read_preview_run: it reports whether the extension's first command ran in the user's preview without errors, failed with an error (fix it and call write_extension again), or did not run (preview closed or still busy). Only say the extension works when read_preview_run reports it ran without errors; otherwise say it is installed but not verified.
 remove_extension deletes a generated .ts extension file only when this chat owns it.
 validate_extension typechecks changed extension files and verifies they load with Electron's native TypeScript runtime.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.
@@ -2355,8 +2352,7 @@ Declare capabilities explicitly: use 'system' for shell helpers and system actio
 For image grids, use file.url from ctx.desktop.files.findImages() or ctx.desktop.files.toFileUrl(path), never raw filesystem paths, so thumbnails render in Electron.
 Use primaryAction for the Enter behavior. Put secondary item actions in actions; Nevermind exposes them under Cmd+K automatically.
 Use actions(ctx) for persistent shortcut-worthy variants such as “Compress 720p”, “Compress 1080p”, “Toggle Floating Note”, or fixed snippet actions; these are searchable, aliasable, and global-shortcutable without opening a view. When a view row should run one of those durable actions, set primaryAction: ctx.actions.ref('action-id') instead of duplicating inline logic. Use rootItems(ctx) for high-signal empty-query dynamic/status contributions such as upcoming events or active status; keep root items few, stable, cached, and bounded because Nevermind owns ranking and limits.
-Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the host collects fields one at a time through the palette input and the wrapped action receives submitted values in action.formValues. Use ctx.actions.pasteText(text, title, { restoreClipboard: true, concealed: true }) for snippets/transforms that should paste without polluting clipboard history, and use ctx.actions.typeText or ctx.desktop.keyboard.typeText when an extension must avoid touching the clipboard. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.
-When done, tell the user what command was installed and how to find it.`;
+Use ctx.navigation.push/replace/pop/run as the preferred explicit return helpers from action handlers. Use ctx.actions.push/replace/pop for static declarative navigation actions. Use ctx.input.prompt({ fields, action }) when an action needs lightweight arguments before it runs; the host collects fields one at a time through the palette input and the wrapped action receives submitted values in action.formValues. Use ctx.actions.pasteText(text, title, { restoreClipboard: true, concealed: true }) for snippets/transforms that should paste without polluting clipboard history, and use ctx.actions.typeText or ctx.desktop.keyboard.typeText when an extension must avoid touching the clipboard. Use ctx.ui.editor({ title, content, format: 'markdown', submitAction }) for host-owned editable text/markdown surfaces; submit actions receive action.editorContent. Prefer host-owned native views such as ctx.ui.camera({ title, actions }) for media/interactive surfaces; camera views include host-owned desktop camera switching, so extensions should bind camera controls with ctx.actions.camera.switchDevice/nextDevice/previousDevice/toggleMuted/toggleControls and normal action shortcuts instead of owning the stream. Use ctx.ui.webview only as an advanced escape hatch for custom live browser UI. Set size: 'large' when a view needs a larger palette. Use ctx.actions.run for script work triggered from UI.`;
 }
 
 function systemContext(extensionApiPath: string) {

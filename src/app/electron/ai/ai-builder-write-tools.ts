@@ -2,8 +2,36 @@ import path from 'node:path';
 import { formatBuilderValidationError } from './ai-builder-read-page';
 import {
   observeBuilderTool,
+  summarizeBuilderText,
   type BuilderToolOptions,
 } from './ai-builder-tool-shared';
+
+const PREVIEW_FAILURE_MAX_CHARS = 2000;
+
+export function installedMessage(filename: string, hasFirstCommand: boolean) {
+  const installed = `Installed and enabled ${filename}.`;
+  if (!hasFirstCommand) return installed;
+  return `${installed} Its first command has not been run or verified yet: call read_preview_run before telling the user it works.`;
+}
+
+export function previewRunMessage(
+  filename: string,
+  outcome: Awaited<
+    ReturnType<NonNullable<BuilderToolOptions['readPreviewRun']>>
+  >,
+) {
+  if (outcome.status === 'ran')
+    return `${filename}'s first command ran in the preview without errors. Later interactions and async view loading are not covered by this check.`;
+  if (outcome.status === 'failed')
+    throw new Error(
+      [
+        `${filename} is installed, but running its first command in the preview failed, so it does NOT work yet.`,
+        'Fix the extension and call write_extension again. Do not tell the user it works.',
+        `Error:\n${summarizeBuilderText(outcome.message, PREVIEW_FAILURE_MAX_CHARS)}`,
+      ].join('\n\n'),
+    );
+  return `${filename}'s first command did not run in the preview (the preview may be closed, not focused on this chat, or still busy). It is installed but NOT verified: tell the user it is unverified. Call read_preview_run again later to pick up a late result.`;
+}
 
 type PiApi = typeof import('@earendil-works/pi-coding-agent');
 type TypeApi = typeof import('@earendil-works/pi-ai').Type;
@@ -45,9 +73,48 @@ export function createBuilderWriteTools(
           });
           return {
             content: [
-              { type: 'text', text: `Installed and enabled ${filename}.` },
+              {
+                type: 'text',
+                text: installedMessage(
+                  filename,
+                  Boolean(preview.commands?.length),
+                ),
+              },
             ],
             details: { filePath, filename },
+          };
+        },
+      ),
+    }),
+    pi.defineTool({
+      name: 'read_preview_run',
+      label: 'Read Preview Run',
+      description:
+        "Report how the first command of a generated extension ended when the user's preview ran it after write_extension. Waits briefly for the run; never runs anything itself.",
+      parameters: Type.Object({
+        filename: Type.String({
+          description: 'Generated extension filename ending in .ts',
+        }),
+      }),
+      execute: observeBuilderTool(
+        options.emitEvent,
+        'read_preview_run',
+        async (_toolCallId: string, params: { filename: string }) => {
+          const filename = path.basename(
+            options.safeExtensionPath(options.extensionsDir, params.filename),
+          );
+          if (!options.canWriteExtension?.(filename))
+            throw new Error(
+              `Refusing to read ${filename}: this AI chat does not own that extension.`,
+            );
+          const outcome = (await options.readPreviewRun?.(filename)) ?? {
+            status: 'not-run' as const,
+          };
+          return {
+            content: [
+              { type: 'text', text: previewRunMessage(filename, outcome) },
+            ],
+            details: { filename, status: outcome.status },
           };
         },
       ),

@@ -27,3 +27,21 @@ export function trustedAiLimitAction(
     return { type: 'checkForUpdates', title: 'Check for Update' };
   return null;
 }
+
+export function createAiEventActionRegistrar(deps: {
+  getDashboardUrl: () => string;
+  registerViewAction: (action: CommandAction) => unknown;
+}) {
+  return function registerAiEventActionForRenderer<
+    T extends { data?: unknown },
+  >(event: T): T {
+    const data = event?.data as Record<string, unknown> | undefined;
+    if (!(data && typeof data === 'object' && data.action)) return event;
+    const action = trustedAiLimitAction(event, deps.getDashboardUrl());
+    if (!action) return { ...event, data: { ...data, action: undefined } };
+    return {
+      ...event,
+      data: { ...data, action: deps.registerViewAction(action) },
+    };
+  };
+}

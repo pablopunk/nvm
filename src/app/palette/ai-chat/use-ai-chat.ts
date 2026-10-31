@@ -21,6 +21,7 @@ import {
   EMPTY_AI_CHAT_ACTIVITY,
   transitionAiChatActivity,
 } from './ai-chat-activity';
+import { appendAssistantDelta } from './ai-chat-delta';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -332,16 +333,7 @@ export function useAiChat(
     current: NonNullable<CommandView['messages']>,
     text: string,
   ) {
-    const last = current[current.length - 1];
-    if (last?.role === 'assistant')
-      return [
-        ...current.slice(0, -1),
-        { ...last, content: `${last.content}${text}` },
-      ];
-    return boundedMessages([
-      ...current,
-      { role: 'assistant' as const, content: text },
-    ]);
+    return boundedMessages(appendAssistantDelta(current, text));
   }
 
   function releaseMessagePreviews(
@@ -773,8 +765,10 @@ export function useAiChat(
     if (event.type === 'aborted') {
       finishActiveAiTrace('ai.aborted', 'cancelled', event.traceId);
     }
-    if (event.type === 'delta' && aiChatDeltaHasVisibleText(event.text)) {
-      updateActivity({ type: 'delta' });
+    if (event.type === 'delta' && event.text) {
+      if (aiChatDeltaHasVisibleText(event.text)) {
+        updateActivity({ type: 'delta' });
+      }
       appendDelta(event.text);
     }
     if (event.type === 'tool_start' && event.name) {

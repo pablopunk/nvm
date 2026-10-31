@@ -25,6 +25,17 @@
   -webkit-app-region: no-drag;
 }
 
+.paletteCompactPanelAnchor {
+  position: relative;
+  flex: none;
+  height: 0;
+  margin-top: calc(-1 * var(--palette-stack-gap));
+}
+
+.palette.isStacked .paletteCompactPanelAnchor {
+  margin-right: calc(-1 * var(--stack-pane-offset));
+}
+
 .paletteCompactPanel {
   bottom: 12px;
 }

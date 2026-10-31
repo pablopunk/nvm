@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { trustedAiLimitAction } from './ai-limit-action-policy';
+import {
+  createAiEventActionRegistrar,
+  trustedAiLimitAction,
+} from './ai-limit-action-policy';
 
 const dashboardUrl = 'http://localhost:4321/dashboard';
 
@@ -64,4 +67,40 @@ test('rejects arbitrary or stale AI limit actions', () => {
     },
   ])
     assert.equal(trustedAiLimitAction(event, dashboardUrl), null);
+});
+
+test('registers a trusted action for the renderer and strips untrusted ones', () => {
+  const registerViewAction = (action: unknown) => ({
+    ...(action as object),
+    executionId: 'token-1',
+  });
+  const register = createAiEventActionRegistrar({
+    getDashboardUrl: () => dashboardUrl,
+    registerViewAction: registerViewAction as never,
+  });
+  const dashboardAction = {
+    type: 'openUrl' as const,
+    title: 'Open Dashboard',
+    url: dashboardUrl,
+  };
+
+  const trusted = register({
+    type: 'error',
+    data: { kind: 'insufficient_credits', action: dashboardAction },
+  });
+  const untrusted = register({
+    type: 'error',
+    data: {
+      kind: 'insufficient_credits',
+      action: { ...dashboardAction, url: 'https://evil.example' },
+    },
+  });
+  const noAction = { type: 'delta', data: { text: 'hi' } };
+
+  assert.deepEqual((trusted.data as { action: unknown }).action, {
+    ...dashboardAction,
+    executionId: 'token-1',
+  });
+  assert.equal((untrusted.data as { action: unknown }).action, undefined);
+  assert.equal(register(noAction), noAction);
 });

@@ -13,6 +13,12 @@ import { isInternalExtension } from '../extension-host/internal-extension';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import type { ViewRefreshRecord } from './action-execution-records';
+import type { ActionRunOptions } from './action-run-options';
+
+export type ActionRunObservation = {
+  succeeded: () => void;
+  failed: (error: unknown) => void;
+};
 
 function refreshBackoffDelay(failureCount: number) {
   return Math.min(
@@ -24,7 +30,7 @@ function refreshBackoffDelay(failureCount: number) {
 export type ActionIpcDeps = {
   resolveRootActionForIpc: (action: any) => any;
   resolveViewActionForIpc: (action: any) => any;
-  executeAction: (action: any, options?: any) => Promise<any>;
+  executeAction: (action: any, options?: ActionRunOptions) => Promise<any>;
   executeViewAction: (action: any, launchContext?: any) => Promise<any>;
   executeHostRefreshAction: (
     record: any,
@@ -45,6 +51,7 @@ export type ActionIpcDeps = {
   paneInvocations: {
     owns: (context: unknown, senderId?: number) => boolean;
   };
+  observeActionRun?: (action: any) => ActionRunObservation | null;
 };
 
 export function createActionIpc(deps: ActionIpcDeps) {
@@ -66,6 +73,7 @@ export function createActionIpc(deps: ActionIpcDeps) {
     viewRefreshRecords,
     extensionActionHandlers,
     paneInvocations,
+    observeActionRun,
   } = deps;
 
   async function executeActionForIpc(action) {
@@ -82,8 +90,11 @@ export function createActionIpc(deps: ActionIpcDeps) {
           { action: summarizeDebugValue(action), alwaysLog: true },
           async () => {
             let trustedAction: any = null;
+            let observation: ActionRunObservation | null = null;
+            let observedFailure = false;
             try {
               trustedAction = resolveRootActionForIpc(action);
+              observation = observeActionRun?.(trustedAction) ?? null;
               operationLabel(
                 actionFeatureLabel(
                   trustedAction,
@@ -103,7 +114,12 @@ export function createActionIpc(deps: ActionIpcDeps) {
                     },
                     () =>
                       runInWindowInvocationScope({ source: 'palette' }, () =>
-                        executeAction(trustedAction),
+                        executeAction(trustedAction, {
+                          onFailure: (error: unknown) => {
+                            observedFailure = true;
+                            observation?.failed(error);
+                          },
+                        }),
                       ),
                   ),
                 ),
@@ -111,9 +127,11 @@ export function createActionIpc(deps: ActionIpcDeps) {
               );
               structuredClone(result);
               spawnPendingViewLoaders(result, trustedAction?.traceId);
+              if (!observedFailure) observation?.succeeded();
               return result;
             } catch (error) {
               recordOperationFailure(error);
+              observation?.failed(error);
               if (!(error instanceof Error && error.name === 'AbortError'))
                 logError(
                   'action.execute.failed',

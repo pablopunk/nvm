@@ -1,17 +1,17 @@
 {
-  "electron/ai.ts": 2386,
+  "electron/ai.ts": 2382,
   "electron/calculator.ts": 1406,
   "electron/clipboard-history.ts": 1021,
   "electron/extension-window-manager.ts": 1019,
   "electron/learning-store.ts": 933,
-  "electron/main.ts": 2215,
+  "electron/main.ts": 2210,
   "electron/nevermind-auth.ts": 691,
   "electron/os.ts": 1494,
   "extensions/account.ts": 612,
   "extensions/dictation.ts": 810,
-  "palette/App.tsx": 5931,
-  "palette/extension-view.tsx": 1158,
+  "palette/App.tsx": 5917,
+  "palette/extension-view.tsx": 1155,
   "palette/model.ts": 741,
   "palette/ui.tsx": 947,
-  "palette/use-ai-chat.ts": 873
+  "palette/use-ai-chat.ts": 867
 }

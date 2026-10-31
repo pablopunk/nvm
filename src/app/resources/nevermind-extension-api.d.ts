@@ -677,8 +677,10 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: ExtensionItemAppearance;
-  /** Show contextual information without making it selectable. */
+  /** Show informational context without making it selectable. The row keeps the host's dimmed disabled styling. */
   disabled?: boolean;
+  /** Only with `disabled: true`: render the row as full-contrast guidance whose title and subtitle wrap, for messages the user must read. `ctx.ui.error` sets it for you, so prefer that for failures and invalid input; leave it off for passive rows such as status or account information. */
+  contextual?: boolean;
   /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
   detail?: ExtensionDetail;
   /** Local shortcut for this item's action; shown only while this item is selected. */
@@ -1679,6 +1681,7 @@ export type ExtensionContext = {
     empty(title?: string, subtitle?: string): ExtensionView;
     /** Compact loading-only list surface; the host renders the perimeter sweep instead of an inline spinner or progress screen. */
     loading(title?: string): ExtensionView;
+    /** Host-owned failure or invalid-input view with a Back action. Keep `title` short; put the full corrective guidance, including an example, in `message`, which the host wraps at full contrast. Do not hand-build `disabled` rows to show errors. */
     error(title?: string, message?: string): ExtensionView;
   };
 
@@ -2292,7 +2295,7 @@ export type NevermindExtension = {
     | Promise<ExtensionItem[]>
     | { items: ExtensionItem[] }
     | Promise<{ items: ExtensionItem[] }>;
-  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. Use for dynamic/query-specific items, not duplicate launchers for durable actions. */
+  /** Query-aware root contributions. The host debounces, caps, ranks, caches, and failure-isolates providers. Use for dynamic/query-specific items, not duplicate launchers for durable actions. This is the only way to show a result while the user types: views have no per-keystroke callback, and `ctx.input.prompt` returns values only after submit. Return a row whose title is the live result (for example `212 °F` for the query `100 C`) with a copy or run `primaryAction`, and return no items for queries you do not recognize. */
   searchItems?(
     ctx: ExtensionContext,
     query: string,

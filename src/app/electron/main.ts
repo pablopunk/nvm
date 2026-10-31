@@ -45,7 +45,8 @@ import { createAiChatViews } from './ai/ai-chat-views';
 import { createAiCreatedActions } from './ai/ai-created-actions';
 import { createAiExtensionOwnership } from './ai/ai-extension-ownership';
 import { createAiLearningReview } from './ai/ai-learning-review';
-import { trustedAiLimitAction } from './ai/ai-limit-action-policy';
+import { createAiEventActionRegistrar } from './ai/ai-limit-action-policy';
+import { createPreviewRunObserver } from './ai/ai-preview-run-observer';
 import { createConversationAiWarmup } from './ai/conversation-ai-warmup';
 import { createExtensionAiFactory } from './ai/extension-ai';
 import {
@@ -1226,8 +1227,10 @@ const { executeViewAction } = createViewActionExecutor({
     extensionErrorView,
   }),
 });
+const previewRunObserver = createPreviewRunObserver();
 const { executeActionForIpc, refreshViewForIpc, executeViewActionForIpc } =
   createActionIpc({
+    observeActionRun: previewRunObserver.observeRun,
     resolveRootActionForIpc,
     resolveViewActionForIpc,
     executeAction,
@@ -1252,19 +1255,10 @@ const { extensionCacheFor, createExtensionCache } = createExtensionMemoryCache({
     invalidateExtensionRootItemsForExtension(extension),
 });
 
-function registerAiEventActionForRenderer(event) {
-  const data = event?.data;
-  if (!(data && typeof data === 'object' && data.action)) return event;
-  const action = trustedAiLimitAction(event, getNevermindDashboardUrl());
-  if (!action) return { ...event, data: { ...data, action: undefined } };
-  return {
-    ...event,
-    data: {
-      ...data,
-      action: registerViewActionForRenderer(action),
-    },
-  };
-}
+const registerAiEventActionForRenderer = createAiEventActionRegistrar({
+  getDashboardUrl: getNevermindDashboardUrl,
+  registerViewAction: (action) => registerViewActionForRenderer(action),
+});
 
 const REQUIRED_INTERNAL_EXTENSIONS = [
   'nevermind.system',
@@ -1804,6 +1798,7 @@ const { initNevermindAi } = createNevermindAiInitializer({
   discardExtensionProposal,
   activateManagedExtension,
   activatedExtensionPreview,
+  previewRunObserver,
   scheduleSaveState,
   withLiveExtensionWriteLock,
   removeGeneratedExtensionForChat,

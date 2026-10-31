@@ -5,6 +5,7 @@ import type { UserStateStore } from '../state/user-state-store';
 import { createNevermindAi } from './ai';
 import { CONVERSATION_SYSTEM_PROMPT } from './ai-chat-prompts';
 import { isBuilderAiChat } from './ai-chat-records';
+import type { createPreviewRunObserver } from './ai-preview-run-observer';
 import type { NevermindAiEvent } from './nevermind-ai-event-handler';
 
 type AnyRecord = Record<string, any>;
@@ -41,6 +42,7 @@ export type NevermindAiInitializerDeps = {
   discardExtensionProposal: (filename: string) => Promise<unknown>;
   activateManagedExtension: (filename: string) => Promise<unknown>;
   activatedExtensionPreview: (filename: string) => Promise<any>;
+  previewRunObserver: ReturnType<typeof createPreviewRunObserver>;
   scheduleSaveState: () => void;
   withLiveExtensionWriteLock: NonNullable<
     NevermindAiOptions['withLiveExtensionWriteLock']
@@ -77,6 +79,7 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
     discardExtensionProposal,
     activateManagedExtension,
     activatedExtensionPreview,
+    previewRunObserver,
     scheduleSaveState,
     withLiveExtensionWriteLock,
     removeGeneratedExtensionForChat,
@@ -119,7 +122,14 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
         `Refusing to write ${path.basename(filename)}: this AI chat does not own that extension.`,
       );
     scheduleSaveState();
-    return activatedExtensionPreview(filename);
+    const activation = await activatedExtensionPreview(filename);
+    const firstCommand = activation.preview.commands?.[0];
+    if (firstCommand)
+      previewRunObserver.expectRun(
+        path.basename(filename),
+        String(firstCommand.id),
+      );
+    return activation;
   }
 
   async function builderResourcePaths() {
@@ -164,6 +174,7 @@ export function createNevermindAiInitializer(deps: NevermindAiInitializerDeps) {
       markGeneratedExtension: (filePath, chatId) =>
         markGeneratedExtensionForActiveChat(filePath, chatId),
       activateGeneratedExtension,
+      readPreviewRun: previewRunObserver.outcomeFor,
       withLiveExtensionWriteLock,
       canWriteExtension: (filename, chatId) =>
         chatCanWriteExtension(filename, chatId),

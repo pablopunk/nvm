@@ -42,6 +42,7 @@ export function feedbackView({
       icon: feedbackIcon[tone],
       appearance: feedbackAppearance[tone],
       disabled: true,
+      contextual: true,
     },
     ...details.map((detail, index) => ({
       id: `${id}:detail:${index}`,
@@ -49,6 +50,7 @@ export function feedbackView({
       subtitle: detail.subtitle,
       icon: 'minus',
       disabled: true,
+      contextual: true,
     })),
     ...navigationActions.map((action, index) => ({
       id: `${id}:action:${index}`,

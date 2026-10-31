@@ -47,7 +47,7 @@
 .results[data-pane-stack] .activeExtensionPane {
   flex: 0 1 auto;
   width: calc(100% - var(--stack-card-right-inset));
-  margin-left: 34px;
+  margin-left: var(--stack-pane-offset);
   padding: 8px;
   min-height: 120px;
 }

@@ -803,6 +803,13 @@ test('keeps a collection visible under its compact item action panel', async () 
     );
     const panel = page.locator('.paletteCompactPanel');
     await expect(panel).toBeVisible();
+    const panelBox = await panel.boundingBox();
+    const cardBox = await page.locator('.card.results').boundingBox();
+    expect(panelBox).not.toBeNull();
+    expect(cardBox).not.toBeNull();
+    expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(
+      cardBox!.y + cardBox!.height,
+    );
     await expect(panel.getByText('New note', { exact: true })).toHaveCount(1);
     await expect(pane.getByText('New note', { exact: true })).toBeVisible();
     await expect(pane).toHaveAttribute('inert', '');

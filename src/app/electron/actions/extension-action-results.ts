@@ -1,13 +1,14 @@
+import { feedbackView } from '../../palette/feedback';
 import {
   measureDebugPerformance,
   performanceTraces,
   summarizeDebugValue,
 } from '../diagnostics/debug-performance';
-import { feedbackView } from '../../palette/feedback';
 import { recordOperationFailure } from '../diagnostics/observability';
 import type { createExtensionDraftStore } from '../extension-host/extension-draft-store';
 import { error as logError, warn as logWarn } from '../platform/logger';
 import { isLoaderHandle } from '../state/data-loader';
+import type { ActionRunOptions } from './action-run-options';
 import { isView } from './view-types';
 
 function isAction(value) {
@@ -51,7 +52,10 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
     normalizeViewItems,
   } = deps;
 
-  async function executeExtensionRootItem(action) {
+  async function executeExtensionRootItem(
+    action,
+    options: ActionRunOptions = {},
+  ) {
     return performanceTraces.run(
       'extension.rootItem.execute',
       {
@@ -77,7 +81,8 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
             const record = extensionActionHandlers.get(
               action.rootAction.handlerId,
             );
-            if (!record)
+            if (!record) {
+              options.onFailure?.(new Error('Action unavailable'));
               return {
                 view: {
                   type: 'preview',
@@ -85,7 +90,11 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
                   content: 'This extension item is no longer available.',
                 },
               };
+            }
             if (!(record.entry && record.entry.extension)) {
+              options.onFailure?.(
+                new Error('Action unavailable in the current context'),
+              );
               logWarn('extension.rootItem.missingEntry', {
                 handlerId: action.rootAction.handlerId,
                 actionTitle: action.title,
@@ -128,6 +137,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
               );
               return executeViewActionResult(result, record.entry);
             } catch (error) {
+              options.onFailure?.(error);
               recordOperationFailure(error, 'invoke');
               logError('extension.rootItem.failed', error, {
                 source: 'host',
@@ -182,7 +192,7 @@ export function createExtensionActionResults(deps: ExtensionActionResultsDeps) {
         toast: result.toast,
         patch: result.patch,
       };
-      if (!followUp.view && !followUp.patch)
+      if (!(followUp.view || followUp.patch))
         return { toast: followUp.toast || { message: 'Draft updated' } };
       result = followUp;
     }
