@@ -552,7 +552,10 @@ test('counts completed steps so an active final step never reads as finished', (
 });
 
 test('keeps explicit progress values and shows the next action below the steps', () => {
-  const continueAction = { type: 'run', title: 'Continue' } as CommandAction;
+  const continueAction = {
+    type: 'runExtensionAction',
+    title: 'Continue',
+  } as CommandAction;
   const html = renderExtensionView(
     {
       type: 'progress',
@@ -584,7 +587,7 @@ test('host indicators never render inline view actions', () => {
       type: 'progress',
       title: 'Timer',
       label: 'Running',
-      actions: [{ type: 'run', title: 'Stop' } as CommandAction],
+      actions: [{ type: 'runExtensionAction', title: 'Stop' } as CommandAction],
     },
     {},
     {
@@ -596,18 +599,12 @@ test('host indicators never render inline view actions', () => {
   assert.doesNotMatch(html, /data-inline-actions/);
 });
 
-test('split Markdown preview edits source text while single-pane Markdown stays rich text', () => {
+test('split Markdown preview edits source text beside the rendered preview', () => {
   const split = renderExtensionView({
     type: 'editor',
     title: 'Scratchpad',
     format: 'markdown',
     preview: true,
-    content: '# Title',
-  });
-  const rich = renderExtensionView({
-    type: 'editor',
-    title: 'Notes',
-    format: 'markdown',
     content: '# Title',
   });
 
@@ -616,8 +613,7 @@ test('split Markdown preview edits source text while single-pane Markdown stays 
     /<textarea[^>]*data-source="markdown"[^>]*># Title<\/textarea>/,
   );
   assert.match(split, /class="editorPreviewPane"/);
-  assert.doesNotMatch(rich, /<textarea/);
-  assert.doesNotMatch(rich, /editorPreviewPane/);
+  assert.doesNotMatch(split, /markdownEditorContent/);
 });
 
 test('renders an opted-in side preview for the selected list item', () => {

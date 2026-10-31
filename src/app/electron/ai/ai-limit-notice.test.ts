@@ -1,6 +1,17 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
-import { aiLimitNoticeFromError } from './ai-limit-notice';
+import test, { mock } from 'node:test';
+
+mock.module('electron', {
+  namedExports: {
+    app: { isPackaged: false, getPath: () => '/tmp/nvm-ai-limit-notice-test' },
+    safeStorage: { isEncryptionAvailable: () => false },
+  },
+});
+mock.module('electron-log/main', {
+  defaultExport: { error() {}, info() {}, warn() {}, debug() {} },
+});
+
+const { aiLimitNoticeFromError } = await import('./ai-limit-notice');
 
 const nevermindRateLimitBody = JSON.stringify({
   error: {

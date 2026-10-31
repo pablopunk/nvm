@@ -57,13 +57,16 @@ test('view actions are deduplicated and hidden panels omit their view section', 
 });
 
 test('selects the first inline view action row, skipping empty panel sections', () => {
-  const next = { type: 'run', title: 'Continue' } as CommandAction;
+  const next = {
+    type: 'runExtensionAction',
+    title: 'Continue',
+  } as CommandAction;
   assert.equal(
     firstViewActionRowValue({
       title: 'Wizard',
       actions: [next],
     } as CommandView),
-    'extension-view:0:0:run:Continue',
+    'extension-view:0:0:runExtensionAction:Continue',
   );
   assert.equal(
     firstViewActionRowValue({
@@ -72,7 +75,7 @@ test('selects the first inline view action row, skipping empty panel sections', 
         sections: [{ title: 'Empty', actions: [] }, { actions: [next] }],
       },
     } as CommandView),
-    'extension-view:1:0:run:Continue',
+    'extension-view:1:0:runExtensionAction:Continue',
   );
   assert.equal(firstViewActionRowValue({ title: 'Plain' } as CommandView), '');
 });

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { IndicatorMicTrace } from '../indicator/indicator-mic-trace';
 import { IndicatorOrb, indicatorOrbState } from '../indicator/indicator-orb';
 import {
