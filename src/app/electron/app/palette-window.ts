@@ -24,6 +24,7 @@ import {
   recordTestWindowEvent,
 } from '../platform/test-mode';
 import { installDevToolsShortcut } from './devtools-shortcut';
+import { createNativeDialogHold } from './palette-native-dialog-hold';
 import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
@@ -109,6 +110,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
   let restoredFocusReturnTarget: unknown = null;
   let hotkeyStatus: PaletteHotkeyStatus | null = null;
   const registeredHotkeys = new Set<string>();
+  const nativeDialogHold = createNativeDialogHold(() => win?.focus());
 
   function debugLog(message: string, data?: unknown) {
     logger.debug(message, data, { source: 'host', scope: 'palette-window' });
@@ -120,7 +122,7 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
       setTimeout(() => dismissAfterFocusLoss(reason), remainingBlurGrace);
       return;
     }
-    if (!win?.isVisible() || win.isFocused()) return;
+    if (!win?.isVisible() || win.isFocused() || nativeDialogHold.active) return;
     debugLog('dismissAfterFocusLoss', { reason });
     hidePalette();
   }
@@ -488,5 +490,6 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     isHotkeyReserved,
     registerHotkey,
     unregisterHotkey,
+    keepOpenDuringNativeDialog: nativeDialogHold.during,
   };
 }

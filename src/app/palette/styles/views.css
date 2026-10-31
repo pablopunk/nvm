@@ -476,8 +476,13 @@
 }
 
 .formFieldEditor.editorView {
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 2px;
   padding: 0;
+}
+
+.formFieldEditor.editorView:has(> .editorHeader) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .formFieldEditor .editorHeader {

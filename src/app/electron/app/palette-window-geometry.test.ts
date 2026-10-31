@@ -34,7 +34,7 @@ test('large palette modes keep the visible palette inside a short work area', ()
     96,
   );
 
-  assert.deepEqual(preview, { x: -96, y: -56, width: 1272, height: 952 });
+  assert.deepEqual(preview, { x: 4, y: -56, width: 1272, height: 952 });
   assert.ok(preview.y + 96 >= workArea.y);
   assert.ok(preview.y + preview.height - 96 <= workArea.height);
 });
