@@ -22,3 +22,15 @@ test('shortcutLabel names the meta key for Linux and Windows instead of Command'
   );
   assert.equal(shortcutLabel('Command+Backspace', 'win32'), 'Win+Backspace');
 });
+
+test('CommandOrControl shows the primary modifier for each platform', () => {
+  assert.equal(shortcutLabel('CommandOrControl+Enter', 'darwin'), '⌘↵');
+  assert.equal(
+    shortcutLabel('CommandOrControl+Enter', 'linux'),
+    'Control+Enter',
+  );
+  assert.equal(
+    shortcutLabel('CommandOrControl+Enter', 'win32'),
+    'Control+Enter',
+  );
+});

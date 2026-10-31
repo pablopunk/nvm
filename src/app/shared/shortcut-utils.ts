@@ -3,6 +3,7 @@
 export type ShortcutPlatform = NodeJS.Platform;
 
 const SHORTCUT_SYMBOLS: Record<string, string> = {
+  CommandOrControl: '⌘',
   Command: '⌘',
   Cmd: '⌘',
   Control: '⌃',
@@ -23,6 +24,8 @@ const META_KEY_NAME_BY_PLATFORM: Partial<Record<ShortcutPlatform, string>> = {
 };
 
 const SHORTCUT_ALIASES = new Map([
+  ['commandorcontrol', 'CommandOrControl'],
+  ['cmdorctrl', 'CommandOrControl'],
   ['cmd', 'Command'],
   ['command', 'Command'],
   ['⌘', 'Command'],
@@ -59,10 +62,15 @@ export function formatShortcut(
   if (processPlatform !== 'darwin') {
     const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatform] ?? 'Super';
     return parts
-      .map((part) => (part === 'Command' ? metaKeyName : part))
+      .map((part) => (part === 'Command' ? metaKeyName : nonMacKeyName(part)))
       .join('+');
   }
   return parts.map((part) => SHORTCUT_SYMBOLS[part] || part).join('');
+}
+
+/** Electron's `CommandOrControl` is Command on macOS and Control elsewhere. */
+function nonMacKeyName(part: string) {
+  return part === 'CommandOrControl' ? 'Control' : part;
 }
 
 export function normalizeAccelerator(value: unknown) {

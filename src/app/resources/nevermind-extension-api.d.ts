@@ -1644,7 +1644,7 @@ export type ExtensionContext = {
     /** @deprecated Use `previewAction(input)`. Routing by `kind` alone is ambiguous with `ExtensionFile.kind`. */
     preview(input: ExtensionPreviewItemDescriptor): ExtensionAction;
     chat(view: ExtensionView): ExtensionView;
-    /** Structured settings form shown as searchable palette rows. Enter edits the selected field through the palette input, choice rows, an editor, or a native picker; Escape returns to the form without discarding other draft values. Select the submit row or press Command+Enter to save. Prefer `ctx.input.prompt` for lightweight arguments. */
+    /** Structured settings form shown as searchable palette rows. Enter edits the selected field through the palette input, choice rows, an editor, or a native picker; Escape returns to the form without discarding other draft values. Select the submit row or press Command+Enter (Control+Enter on Windows and Linux) to save. Prefer `ctx.input.prompt` for lightweight arguments. */
     form(view: ExtensionView): ExtensionView;
     /** Editable host-owned text/Markdown surface. Markdown is rendered as single-pane rich text with Markdown shortcuts while remaining the persisted value. The host injects `editorContent` into `submitAction`; use `titleFromContent` for note-like documents instead of a separate rename flow. */
     editor(view: ExtensionView): ExtensionView;

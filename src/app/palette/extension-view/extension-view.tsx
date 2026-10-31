@@ -933,7 +933,7 @@ function FormExtensionView({
             value={formApplyRowId(formController.field.id)}
             icon={<Check size={18} />}
             title="Apply"
-            shortcut="Command+Enter"
+            shortcut="CommandOrControl+Enter"
             appearance={{ prominence: 'primary' }}
             onSelect={() => formController.commit(formController.query)}
           />

@@ -1366,7 +1366,7 @@
       "key": "shared-shortcut-utils-injected-platform-darwin-check",
       "file": "src/app/shared/shortcut-utils.ts",
       "category": "injected-platform",
-      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatfor…#bfcafbe0cc0f::expression.left",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatfor…#1eaf5ce8eec9::expression.left",
       "disposition": "presentation-adapter",
       "surface": "palette-hotkey"
     },
