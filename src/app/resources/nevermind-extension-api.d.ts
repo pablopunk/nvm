@@ -677,8 +677,10 @@ export type ExtensionItem = {
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
   appearance?: ExtensionItemAppearance;
-  /** Show contextual information without making it selectable. The host renders the title and wrapped subtitle at full contrast, so prefer `ctx.ui.error` for failures and invalid input. */
+  /** Show informational context without making it selectable. The row keeps the host's dimmed disabled styling. */
   disabled?: boolean;
+  /** Only with `disabled: true`: render the row as full-contrast guidance whose title and subtitle wrap, for messages the user must read. `ctx.ui.error` sets it for you, so prefer that for failures and invalid input; leave it off for passive rows such as status or account information. */
+  contextual?: boolean;
   /** Optional detail/inspector content rendered by list views with `view.detail.visible`. */
   detail?: ExtensionDetail;
   /** Local shortcut for this item's action; shown only while this item is selected. */

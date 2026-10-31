@@ -123,3 +123,35 @@ test('distinct actions that share a title stay separate', () => {
     2,
   );
 });
+
+test('normalized views keep the explicit contextual flag only where hosts set it', () => {
+  const { normalizer } = createNormalizer();
+  const ui = createExtensionUiApi({
+    buildPreviewItemAction: (item) => item,
+    progressView: (input) => input,
+    buildConfirmAction: (input) => input,
+  });
+  const error = normalizer.normalizeView(
+    ui.error('Invalid temperature', 'Try 100 C.'),
+    entry,
+  );
+  const passive = normalizer.normalizeView(
+    ui.list({
+      id: 'getting-started',
+      title: 'Getting started',
+      items: [
+        {
+          id: 'account',
+          title: 'Nevermind account',
+          disabled: true,
+        },
+      ],
+    }),
+    entry,
+  );
+
+  assert.equal(error.items[0].contextual, true);
+  assert.equal(passive.items[0].disabled, true);
+  assert.equal(passive.items[0].contextual, undefined);
+  assert.deepEqual(structuredClone(error), error);
+});

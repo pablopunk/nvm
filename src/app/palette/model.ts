@@ -544,6 +544,8 @@ export interface CommandItem {
   appearance?: CommandItemAppearance;
   /** Visible context only; disabled items are skipped by keyboard selection. */
   disabled?: boolean;
+  /** With `disabled`: render the row as legible, wrapped guidance instead of a dimmed placeholder. */
+  contextual?: boolean;
   className?: string;
   detail?: CommandDetail;
 }

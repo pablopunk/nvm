@@ -20,7 +20,15 @@ test('feedback views keep context and actions in a keyboard-navigable list', () 
     icon: 'circle-alert',
     appearance: { foreground: 'red' },
     disabled: true,
+    contextual: true,
   });
   assert.equal(view.items?.[1].disabled, true);
+  assert.equal(view.items?.[1].contextual, true);
+  assert.equal(view.items?.[2].contextual, undefined);
   assert.equal(view.items?.[2].primaryAction?.type, 'popView');
+});
+
+test('feedback views stay structured-clone safe across IPC', () => {
+  const view = feedbackView({ title: 'Invalid', message: 'Try 100 C.' });
+  assert.deepEqual(structuredClone(view), view);
 });

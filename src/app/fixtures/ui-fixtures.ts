@@ -20,6 +20,7 @@ import {
 import { formView } from './ui/form-fixture.ts';
 import { gridView } from './ui/grid-fixture.ts';
 import {
+  disabledRowsView,
   emptyListView,
   errorView,
   listView,
@@ -97,6 +98,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Error With Long Guidance',
       icon: 'circle-alert',
       run: (ctx) => errorView(ctx),
+    },
+    {
+      id: 'disabled-rows',
+      title: 'Dev UI: Disabled Rows (Passive vs Contextual)',
+      icon: 'eye-off',
+      run: (ctx) => disabledRowsView(ctx),
     },
     {
       id: 'short-action-menu',

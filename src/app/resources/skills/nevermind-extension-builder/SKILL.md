@@ -41,6 +41,6 @@ Rules:
 - Keep system automation focused, bounded, and represented in native views with useful output/errors.
 - Keep generated code small, readable, dependency-free, and inside the generated extensions directory.
 - Throw meaningful `Error` objects instead of swallowing failures unless the extension can recover or add context and rethrow.
-- Report invalid user input and other recoverable problems with `ctx.ui.error(title, message)`: keep `title` short and put the full corrective guidance, including an example, in `message`, because the host wraps it at full contrast. Do not hand-build `disabled` rows as error displays.
+- Report invalid user input and other recoverable problems with `ctx.ui.error(title, message)`: keep `title` short and put the full corrective guidance, including an example, in `message`, because the host wraps it at full contrast. Do not hand-build `disabled` rows as error displays; plain `disabled` rows are dimmed informational context, and `contextual: true` is only for guidance the user must read.
 - `ctx.launch` is populated for host-owned view refreshes, declarative trigger runs, and startup/wake/login events. It is `undefined` for manual palette opens and programmatic `ctx.actions.run()`/`ctx.views.refresh()` calls from non-triggered contexts. Use `ctx.launch?.refresh` to detect background revalidation; never implement process-level workarounds like `hasRenderedCache` flags.
 - Do not ask the user to edit files manually. If extension tools are unavailable, stop and report the tool failure instead of pasting code.
