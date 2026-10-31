@@ -134,35 +134,3 @@ test('write_extension removes staging when live activation fails', async () => {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
-
-test('write_extension returns the preview auto-run outcome from activation', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'nvm-ai-autorun-'));
-  const autoRun = {
-    result: { view: { id: 'extension-action-error' } },
-    failureMessage: 'TypeError: text.trim is not a function',
-  };
-  try {
-    const result = await stageAiGeneratedExtension(
-      {
-        ...options(root),
-        activateGeneratedExtension: (filename) =>
-          Promise.resolve({
-            filename,
-            preview: {
-              extensionId: 'test.ai-live',
-              rootItems: [],
-              commands: [{ id: 'open' }],
-              actions: [],
-            },
-            autoRun,
-          }),
-      },
-      { filename: 'ai-live.ts', code: validSource },
-    );
-
-    assert.equal(result.filename, 'ai-live.ts');
-    assert.deepEqual(result.autoRun, autoRun);
-  } finally {
-    await fs.rm(root, { recursive: true, force: true });
-  }
-});

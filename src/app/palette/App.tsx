@@ -39,7 +39,7 @@ import { chatSessionKey, useAiChatSessions } from './ai-chat/ai-chat-sessions';
 import { shouldStartConversationFromTab } from './ai-chat/ai-chat-shortcuts';
 import {
   applyBuilderPreviewActionResult,
-  builderPreviewAutoRun,
+  builderPreviewAutoRunAction,
   builderPreviewPromptForActiveChat,
   builderPreviewResultIsCurrent,
   builderPreviewRootActions,
@@ -2298,14 +2298,15 @@ export function App() {
         setSelectedBuilderPreviewForSession(eventSession, preview.filename);
         if (eventSession !== aiChatIdRef.current) return;
         setBuilderPreviewFocused(false);
-        const autoRun = builderPreviewAutoRun(event.data as BuilderPreview);
-        if (autoRun)
+        const action = builderPreviewAutoRunAction(
+          event.data as BuilderPreview,
+        );
+        if (action)
           queueMicrotask(
             () =>
               void runBuilderPreviewAction(
                 preview.filename,
-                autoRun.action as BuilderPreviewAction,
-                autoRun.hostResult,
+                action as BuilderPreviewAction,
               ),
           );
         requestAnimationFrame(() => inputRef.current?.focus());
@@ -3102,11 +3103,10 @@ export function App() {
   async function runBuilderPreviewAction(
     filename: string,
     action: BuilderPreviewAction,
-    hostResult?: unknown,
   ) {
     const previewVersion = builderPreviewVersionRef.current;
     try {
-      const result = hostResult ?? (await window.nvm.execute(action));
+      const result = await window.nvm.execute(action);
       if (
         !builderPreviewResultIsCurrent(
           previewVersion,
@@ -3708,13 +3708,13 @@ export function App() {
     );
     if (runBuilderAutoActions)
       for (const preview of view.builderPreviews || []) {
-        const autoRun = builderPreviewAutoRun(preview);
-        if (autoRun)
+        const action = builderPreviewAutoRunAction(preview);
+        if (action)
           queueMicrotask(
             () =>
               void runBuilderPreviewAction(
                 preview.filename,
-                autoRun.action as BuilderPreviewAction,
+                action as BuilderPreviewAction,
               ),
           );
       }

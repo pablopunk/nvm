@@ -1,6 +1,16 @@
 import type { LogLevel, LogSource } from '../platform/logger';
 import type { BuilderReadPage } from './ai-builder-read-page';
-import type { PreviewAutoRun } from './ai-preview-auto-run';
+import type { PreviewRunReader } from './ai-preview-run-observer';
+
+export type GeneratedExtensionActivation = {
+  filename: string;
+  preview: {
+    extensionId: string;
+    rootItems: unknown[];
+    commands?: unknown[];
+    actions: unknown[];
+  };
+};
 
 export type BuilderAiEvent = {
   type: string;
@@ -42,14 +52,14 @@ export type BuilderToolOptions = {
   getActiveChat?: () => BuilderActiveChat | null;
   getCapabilities: () => unknown;
   markGeneratedExtension?: (filePath: string) => void;
+  readPreviewRun?: PreviewRunReader;
   stageGeneratedExtension: (
     params: { filename: string; code: string },
     readFiles: ReadonlySet<string>,
   ) => Promise<{
     filePath: string;
     filename: string;
-    preview: unknown;
-    autoRun?: PreviewAutoRun;
+    preview: GeneratedExtensionActivation['preview'];
   }>;
   validateGeneratedExtension: (filePath: string) => Promise<void>;
   safeExtensionPath: (root: string, filename: string) => string;

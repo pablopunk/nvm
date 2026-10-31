@@ -39,6 +39,7 @@ const TOOL_ACTIVITY_LABELS = new Map([
   ['read_extension', 'Reading an extension'],
   ['read_current_extension', 'Reading the current extension'],
   ['write_extension', 'Writing the extension'],
+  ['read_preview_run', 'Checking the preview run'],
   ['remove_extension', 'Removing the extension'],
   ['validate_extension', 'Validating the extension'],
   ['install_extension', 'Installing the extension'],

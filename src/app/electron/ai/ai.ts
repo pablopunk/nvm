@@ -33,8 +33,11 @@ import {
 import { ensurePiExtensionsLoaded } from './ai-pi-extension-load';
 import { createBuilderTools } from './ai-builder-tools';
 import { formatBuilderValidationError } from './ai-builder-read-page';
-import { currentBuilderExtensionFile } from './ai-builder-tool-shared';
-import type { GeneratedExtensionActivation } from './ai-preview-auto-run';
+import {
+  currentBuilderExtensionFile,
+  type GeneratedExtensionActivation,
+} from './ai-builder-tool-shared';
+import type { PreviewRunReader } from './ai-preview-run-observer';
 import {
   type AiToolMode,
   aiPromptUsesDirectModel,
@@ -157,6 +160,7 @@ type NevermindAiOptions = {
     source: string,
     chatId?: string,
   ) => Promise<GeneratedExtensionActivation>;
+  readPreviewRun?: PreviewRunReader;
   withLiveExtensionWriteLock?: <T>(
     filename: string,
     operation: () => Promise<T>,
@@ -1263,6 +1267,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getChat,
       markGeneratedExtension,
       activateGeneratedExtension,
+      readPreviewRun,
       withLiveExtensionWriteLock,
       canWriteExtension,
       removeExtension,
@@ -1356,6 +1361,7 @@ function createNevermindAi(options: NevermindAiOptions) {
       getCapabilities: capabilities,
       markGeneratedExtension: (filePath) =>
         markGeneratedExtension?.(filePath, chatId),
+      readPreviewRun,
       stageGeneratedExtension: (params, readFiles) =>
         stageAiGeneratedExtension(
           {
@@ -1978,7 +1984,7 @@ export async function stageAiGeneratedExtension(
         params.code,
         options.chatId,
       );
-      return { filePath, ...activated };
+      return { filePath, filename, preview: activated.preview };
     } catch (error) {
       if (
         error instanceof Error &&
@@ -2325,7 +2331,7 @@ function systemPrompt() {
   return `You are Nevermind's extension-building agent.
 Build local Nevermind extensions, not shell scripts.
 ${BUILDER_REQUEST_GUIDANCE}
-The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, remove_extension, validate_extension, install_extension. Web access tools may also be available as web_search, source_check, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
+The available Nevermind extension-building tool names are: read_extension_api, list_capabilities, list_shortcuts, read_app_logs, list_extensions, read_extension, read_current_extension, write_extension, read_preview_run, remove_extension, validate_extension, install_extension. Web access tools may also be available as web_search, source_check, fetch_content, and get_search_content. Never invent tool names like read_file, write_file, list_directory, or bash.
 Never write XML or pseudo tool calls in the chat. Use real structured tool calls only.
 Never provide instructions to manually save extension files; if tool access fails, report the failure briefly and ask the user to retry.
 The nevermind-extension-builder skill is the workflow and safety checklist; read_extension_api returns the typed API reference and is the source of truth for extension authoring details.
@@ -2336,7 +2342,7 @@ When tweaking an existing generated action, call read_current_extension before w
 Use list_capabilities when unsure which UI or OS capabilities exist. Use read_app_logs when debugging host/API/renderer/extension failures or when an extension error view does not explain the root cause.
 Use list_extensions and read_extension when you need awareness of other installed or built-in extensions. Built-in source is read-only reference material and may use privileged host APIs unavailable to generated extensions.
 Only write .ts extension files with write_extension.
-write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it. It also runs the extension's first command in the preview; when it returns an error, the extension is installed but broken, so fix it and call write_extension again, and never tell the user it works.
+write_extension creates standalone TypeScript extension files. It may overwrite the focused extension or a file you already read in this chat; otherwise read the file first before updating it. write_extension does not run the extension. After it succeeds, call read_preview_run: it reports whether the extension's first command ran in the user's preview without errors, failed with an error (fix it and call write_extension again), or did not run (preview closed or still busy). Only say the extension works when read_preview_run reports it ran without errors; otherwise say it is installed but not verified.
 remove_extension deletes a generated .ts extension file only when this chat owns it.
 validate_extension typechecks changed extension files and verifies they load with Electron's native TypeScript runtime.
 install_extension is only a backwards-compatible no-op; do not rely on it for writing or replacing.

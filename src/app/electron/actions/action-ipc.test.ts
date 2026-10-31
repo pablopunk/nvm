@@ -10,7 +10,10 @@ const { createActionIpc } = await import('./action-ipc');
 const commandAction = { kind: 'extension-command', id: 'summarize' };
 const errorView = { id: 'extension-action-error' };
 
-function actionIpc(executeAction: (action: unknown) => Promise<unknown>) {
+function actionIpc(
+  executeAction: (action: unknown) => Promise<unknown>,
+  observeActionRun?: (action: unknown) => unknown,
+) {
   return createActionIpc({
     resolveRootActionForIpc: (action) => action,
     resolveViewActionForIpc: (action) => action,
@@ -21,32 +24,76 @@ function actionIpc(executeAction: (action: unknown) => Promise<unknown>) {
     normalizeHostViewResult: (result) => result,
     presentActionResultFeedback: (result) => result,
     spawnPendingViewLoaders: () => {},
+    observeActionRun,
   } as unknown as Parameters<typeof createActionIpc>[0]);
 }
 
-test('a failing command still renders the error view and reports the underlying error to the host caller', async () => {
-  const failure = new TypeError('text.trim is not a function');
-  const { executeActionForIpc } = actionIpc(() => Promise.reject(failure));
-  const failures: unknown[] = [];
+function recordingObserver() {
+  const calls: string[] = [];
+  const observed: unknown[] = [];
+  return {
+    calls,
+    observed,
+    observeActionRun: (action: unknown) => {
+      observed.push(action);
+      return {
+        succeeded: () => calls.push('succeeded'),
+        failed: (error: unknown) =>
+          calls.push(`failed:${(error as Error).message}`),
+      };
+    },
+  };
+}
 
-  const result = await executeActionForIpc(commandAction, {
-    onFailure: (error) => failures.push(error),
-  });
+test('a failing command still renders the error view and reports the error to the observer once', async () => {
+  const recorder = recordingObserver();
+  const { executeActionForIpc } = actionIpc(
+    () => Promise.reject(new TypeError('text.trim is not a function')),
+    recorder.observeActionRun,
+  );
+
+  const result = await executeActionForIpc(commandAction);
 
   assert.deepEqual(result, { view: errorView });
-  assert.deepEqual(failures, [failure]);
+  assert.deepEqual(recorder.calls, ['failed:text.trim is not a function']);
+  assert.deepEqual(recorder.observed, [commandAction]);
 });
 
-test('a succeeding command does not report a failure', async () => {
+test('a succeeding command is reported to the observer once and executes once', async () => {
+  const recorder = recordingObserver();
+  const execute = mock.fn(() => Promise.resolve({ view: { id: 'summary' } }));
+  const { executeActionForIpc } = actionIpc(execute, recorder.observeActionRun);
+
+  const result = await executeActionForIpc(commandAction);
+
+  assert.deepEqual(result, { view: { id: 'summary' } });
+  assert.deepEqual(recorder.calls, ['succeeded']);
+  assert.equal(execute.mock.callCount(), 1);
+});
+
+test('actions run unchanged when nothing observes them', async () => {
   const { executeActionForIpc } = actionIpc(() =>
     Promise.resolve({ view: { id: 'summary' } }),
   );
-  const failures: unknown[] = [];
 
-  const result = await executeActionForIpc(commandAction, {
-    onFailure: (error) => failures.push(error),
+  assert.deepEqual(await executeActionForIpc(commandAction), {
+    view: { id: 'summary' },
   });
+});
 
-  assert.deepEqual(result, { view: { id: 'summary' } });
-  assert.deepEqual(failures, []);
+test('an untrusted action is rejected before it is observed', async () => {
+  const recorder = recordingObserver();
+  const { executeActionForIpc } = createActionIpc({
+    resolveRootActionForIpc: () => {
+      throw new Error('Untrusted action');
+    },
+    executeAction: () => Promise.reject(new Error('must not run')),
+    actionFailedFeedbackView: () => ({ id: 'action-failed' }),
+    observeActionRun: recorder.observeActionRun,
+  } as unknown as Parameters<typeof createActionIpc>[0]);
+
+  const result = await executeActionForIpc(commandAction);
+
+  assert.deepEqual(result, { view: { id: 'action-failed' } });
+  assert.deepEqual(recorder.observed, []);
 });

@@ -19,7 +19,6 @@ import type {
   ViewPresentation,
   ViewSize,
 } from '../resources/nevermind-extension-api';
-import type { BuilderPreview } from './ai-chat/builder-preview-types';
 
 const CUSTOMIZABLE_ACTION_KINDS = new Set([
   'app',
@@ -556,7 +555,15 @@ export interface CommandItemSection {
   items: CommandItem[];
 }
 
-export type { BuilderPreview };
+export interface BuilderPreview {
+  filename: string;
+  preview: {
+    extensionId: string;
+    rootItems: unknown[];
+    commands: unknown[];
+    actions: unknown[];
+  };
+}
 
 export interface CommandViewPatch {
   items?: CommandItemPatch[];

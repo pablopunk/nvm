@@ -14,6 +14,11 @@ import { runInWindowInvocationScope } from '../extension-host/window-invocation-
 import { error as logError, warn as logWarn } from '../platform/logger';
 import type { ViewRefreshRecord } from './action-execution-records';
 
+export type ActionRunObservation = {
+  succeeded: () => void;
+  failed: (error: unknown) => void;
+};
+
 function refreshBackoffDelay(failureCount: number) {
   return Math.min(
     30_000,
@@ -45,6 +50,7 @@ export type ActionIpcDeps = {
   paneInvocations: {
     owns: (context: unknown, senderId?: number) => boolean;
   };
+  observeActionRun?: (action: any) => ActionRunObservation | null;
 };
 
 export function createActionIpc(deps: ActionIpcDeps) {
@@ -66,12 +72,10 @@ export function createActionIpc(deps: ActionIpcDeps) {
     viewRefreshRecords,
     extensionActionHandlers,
     paneInvocations,
+    observeActionRun,
   } = deps;
 
-  async function executeActionForIpc(
-    action,
-    options: { onFailure?: (error: unknown) => void } = {},
-  ) {
+  async function executeActionForIpc(action) {
     return performanceTraces.run(
       'action.root',
       {
@@ -85,8 +89,10 @@ export function createActionIpc(deps: ActionIpcDeps) {
           { action: summarizeDebugValue(action), alwaysLog: true },
           async () => {
             let trustedAction: any = null;
+            let observation: ActionRunObservation | null = null;
             try {
               trustedAction = resolveRootActionForIpc(action);
+              observation = observeActionRun?.(trustedAction) ?? null;
               operationLabel(
                 actionFeatureLabel(
                   trustedAction,
@@ -114,10 +120,11 @@ export function createActionIpc(deps: ActionIpcDeps) {
               );
               structuredClone(result);
               spawnPendingViewLoaders(result, trustedAction?.traceId);
+              observation?.succeeded();
               return result;
             } catch (error) {
               recordOperationFailure(error);
-              options.onFailure?.(error);
+              observation?.failed(error);
               if (!(error instanceof Error && error.name === 'AbortError'))
                 logError(
                   'action.execute.failed',
