@@ -28,7 +28,11 @@ import {
   isPaletteHotkeyReserved,
   registerPaletteHotkey,
 } from './palette-shortcuts';
-import { boundsResizedAroundCenter } from './palette-window-geometry';
+import {
+  PALETTE_WINDOW_BLUR_MARGIN,
+  paletteBoundsPlacedInWorkArea,
+  paletteBoundsResizedInWorkArea,
+} from './palette-window-geometry';
 import { recordStartupReady } from './startup-ready';
 import {
   installExternalNavigationPolicy,
@@ -55,7 +59,6 @@ type PaletteWindowOptions = {
   onOpen?: () => void;
 };
 
-const WINDOW_BLUR_MARGIN = 96;
 const DEFAULT_PALETTE_SIZE = { width: 720, height: 480 };
 const AI_CHAT_PALETTE_SIZE = DEFAULT_PALETTE_SIZE;
 const STACKED_PALETTE_SIZE = { width: 760, height: 720 };
@@ -69,8 +72,8 @@ const SIDE_PREVIEW_WINDOW_SIZE = addWindowBlurMargin(SIDE_PREVIEW_PALETTE_SIZE);
 
 function addWindowBlurMargin(size: { width: number; height: number }) {
   return {
-    width: size.width + WINDOW_BLUR_MARGIN * 2,
-    height: size.height + WINDOW_BLUR_MARGIN * 2,
+    width: size.width + PALETTE_WINDOW_BLUR_MARGIN * 2,
+    height: size.height + PALETTE_WINDOW_BLUR_MARGIN * 2,
   };
 }
 
@@ -233,12 +236,12 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
                 : mode === 'ai-chat'
                   ? AI_CHAT_WINDOW_SIZE
                   : DEFAULT_WINDOW_SIZE;
+        const current = win.getBounds();
+        const { workArea } = screen.getDisplayMatching(current);
+        const bounds = paletteBoundsResizedInWorkArea(current, size, workArea);
         if (supportsProgrammaticWindowPositioning())
-          win.setBounds(
-            boundsResizedAroundCenter(win.getBounds(), size),
-            false,
-          );
-        else win.setSize(size.width, size.height, false);
+          win.setBounds(bounds, false);
+        else win.setSize(bounds.width, bounds.height, false);
       },
     );
   }
@@ -247,15 +250,8 @@ export function createPaletteWindowController(options: PaletteWindowOptions) {
     measureDebugPerformanceSync('palette-window.center', undefined, () => {
       if (!win || !supportsProgrammaticWindowPositioning()) return;
       const cursor = screen.getCursorScreenPoint();
-      const display = screen.getDisplayNearestPoint(cursor);
-      const { width, height } = win.getBounds();
-      const { x, y, width: sw, height: sh } = display.workArea;
-      win.setBounds({
-        x: Math.round(x + (sw - width) / 2),
-        y: Math.round(y + Math.min(sh * 0.18, 180)),
-        width,
-        height,
-      });
+      const { workArea } = screen.getDisplayNearestPoint(cursor);
+      win.setBounds(paletteBoundsPlacedInWorkArea(win.getBounds(), workArea));
     });
   }
 
