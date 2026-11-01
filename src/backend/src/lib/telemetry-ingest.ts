@@ -23,9 +23,12 @@ export const INGEST_EVENTS: ReadonlySet<string> = new Set([
   'renderer_failure',
   'support_report',
   '$exception',
+  '$pageview',
 ]);
 
 const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OWNER_ID = /^[0-9a-f]{64}$/;
 const PROPERTY_KEY = /^[$a-z][a-z0-9_.]{0,63}$/i;
 // Clients may not set person properties, location, or the project key.
@@ -40,6 +43,19 @@ const FORBIDDEN_PROPERTIES = new Set([
   'api_key',
   'token',
 ]);
+
+// Desktop pageviews describe a host-defined category, never what was on screen.
+const APP_VIEWS: ReadonlySet<unknown> = new Set(['palette', 'extension', 'ai-chat']);
+const APP_VIEW_HOST = 'app.nevermind.invalid';
+// Everything else a pageview may carry comes from the host's common properties.
+const PAGEVIEW_CONTEXT_KEYS = [
+  'app_version',
+  'os_type',
+  'os_release',
+  'arch',
+  'channel',
+] as const;
+const MAX_CONTEXT_VALUE_LENGTH = 64;
 
 export type IngestEvent = {
   event: string;
@@ -128,7 +144,39 @@ function sanitizeProperties(source: unknown) {
   // Every event is anonymous and location-free, whatever the client claims.
   properties.$process_person_profile = false;
   properties.$geoip_disable = true;
+  // Every event on this route comes from the desktop app, so website and
+  // desktop data can be told apart even for clients that predate this field.
+  properties.source = 'desktop';
+  if (!isSessionId(properties.$session_id)) delete properties.$session_id;
   return properties;
+}
+
+function isSessionId(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_ID.test(value);
+}
+
+// A pageview is rebuilt from validated parts instead of filtered, so nothing
+// the client adds besides the host's own context can ride along.
+function pageviewProperties(properties: Record<string, unknown>) {
+  const { view, $session_id: sessionId } = properties;
+  if (!(APP_VIEWS.has(view) && isSessionId(sessionId))) return null;
+  const rebuilt: Record<string, unknown> = {
+    $process_person_profile: false,
+    $geoip_disable: true,
+    source: 'desktop',
+    view,
+    $session_id: sessionId,
+    $current_url: `https://${APP_VIEW_HOST}/${view}`,
+    $host: APP_VIEW_HOST,
+    $pathname: `/${view}`,
+  };
+  for (const key of PAGEVIEW_CONTEXT_KEYS) {
+    const value = properties[key];
+    if (typeof value === 'string' && value.length <= MAX_CONTEXT_VALUE_LENGTH) {
+      rebuilt[key] = value;
+    }
+  }
+  return rebuilt;
 }
 
 // A long error message or stack must not cost the whole event: keep the head of
@@ -160,7 +208,12 @@ function sanitizeEvent(input: unknown, now: number): IngestEvent | null {
   if (typeof distinctId !== 'string' || !INSTALL_ID.test(distinctId)) {
     return null;
   }
-  const properties = sanitizeProperties(input.properties);
+  const sanitizedProperties = sanitizeProperties(input.properties);
+  if (!sanitizedProperties) return null;
+  const properties =
+    event === '$pageview'
+      ? pageviewProperties(sanitizedProperties)
+      : sanitizedProperties;
   if (!properties) return null;
   if (
     event === 'install.owner_observed' &&
