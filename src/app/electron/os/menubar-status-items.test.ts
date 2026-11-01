@@ -174,7 +174,7 @@ test('Windows opens the menu on a primary click and reports the open', () => {
   assert.deepEqual(opened, ['pomodoro:main']);
 });
 
-test('updates wait while the menu is open and apply after it closes', async () => {
+test('menu rows wait while the menu is open; the title keeps updating', async () => {
   const fake = createFakeElectron();
   const items = createMenuBarStatusItems({
     platform: 'darwin',
@@ -185,12 +185,35 @@ test('updates wait while the menu is open and apply after it closes', async () =
   const openMenu = fake.trays[0].contextMenu;
   openMenu.listeners.get('menu-will-show')();
 
-  items.upsert('pomodoro:main', { ...spec, title: '24:58' });
-  assert.equal(fake.trays[0].title, '24:59');
+  items.upsert('pomodoro:main', {
+    ...spec,
+    title: '24:58',
+    menu: [{ type: 'item', label: 'Stop' }],
+  });
+  assert.equal(fake.trays[0].title, '24:58');
+  assert.equal(fake.trays[0].contextMenu, openMenu);
 
   openMenu.listeners.get('menu-will-close')();
   await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(fake.trays[0].title, '24:58');
+  assert.notEqual(fake.trays[0].contextMenu, openMenu);
+  assert.equal(fake.trays[0].contextMenu.template[0].label, 'Stop');
+});
+
+test('a ticking title never rebuilds the native menu', () => {
+  const fake = createFakeElectron();
+  const items = createMenuBarStatusItems({
+    platform: 'linux',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  items.upsert('pomodoro:main', spec);
+  const menusBuilt = fake.menus.length;
+
+  items.upsert('pomodoro:main', { ...spec, title: '24:58' });
+  items.upsert('pomodoro:main', { ...spec, title: '24:57' });
+
+  assert.equal(fake.menus.length, menusBuilt);
+  assert.equal(fake.trays[0].tooltip, 'Pomodoro — 24:57');
 });
 
 test('retainOnly destroys status items that are no longer contributed', () => {

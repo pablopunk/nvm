@@ -59,9 +59,12 @@ export type MenuBarStatusItemsDeps = {
 type LiveStatusItem = {
   tray: ElectronTray;
   spec: StatusItemSpec;
-  signature: string;
+  /** Spec the native menu was built from; clicks resolve against it. */
+  menuSpec: StatusItemSpec;
+  appearanceSignature: string;
+  menuSignature: string;
   menuOpen: boolean;
-  pendingSpec: StatusItemSpec | null;
+  menuRebuildPending: boolean;
 };
 
 export function menuBarStatusItemsPlatform(
@@ -72,10 +75,18 @@ export function menuBarStatusItemsPlatform(
     : null;
 }
 
-export function statusItemSpecSignature(spec: StatusItemSpec) {
-  return JSON.stringify(spec, (_key, value) =>
-    typeof value === 'function' ? undefined : value,
+function signatureWithoutHandlers(value: unknown) {
+  return JSON.stringify(value, (_key, entry) =>
+    typeof entry === 'function' ? undefined : entry,
   );
+}
+
+export function statusItemAppearanceSignature(spec: StatusItemSpec) {
+  return signatureWithoutHandlers([spec.icon, spec.title, spec.tooltip]);
+}
+
+export function statusItemMenuSignature(spec: StatusItemSpec) {
+  return signatureWithoutHandlers(spec.menu);
 }
 
 function usesTemplateImages(platform: StatusItemPlatform) {
@@ -236,13 +247,13 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     const item = live.get(id);
     if (!item) return;
     item.menuOpen = false;
-    const pending = item.pendingSpec;
-    item.pendingSpec = null;
-    if (pending) upsert(id, pending);
+    if (!item.menuRebuildPending) return;
+    item.menuRebuildPending = false;
+    applyMenu(id, item);
   }
 
   function clickCurrentEntry(id: string, path: number[]) {
-    const entry = menuEntryAtPath(live.get(id)?.spec.menu ?? [], path);
+    const entry = menuEntryAtPath(live.get(id)?.menuSpec.menu ?? [], path);
     if (entry?.type === 'item') entry.onClick?.();
   }
 
@@ -283,14 +294,20 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     return menu;
   }
 
-  function applySpec(id: string, item: LiveStatusItem) {
+  function applyAppearance(item: LiveStatusItem) {
     if (!platform) return;
     const { tray, spec } = item;
     tray.setImage(statusImage(spec.icon));
     if (supportsStatusTitle(platform))
       tray.setTitle(spec.title || '', { fontType: 'monospacedDigit' });
     tray.setToolTip(statusItemTooltip(spec, platform));
-    tray.setContextMenu(buildMenu(id, spec));
+  }
+
+  /** Rebuilding replaces an open native menu, so callers rebuild only when rows change. */
+  function applyMenu(id: string, item: LiveStatusItem) {
+    item.menuSpec = item.spec;
+    item.menuSignature = statusItemMenuSignature(item.spec);
+    item.tray.setContextMenu(buildMenu(id, item.spec));
   }
 
   function createTray(id: string, spec: StatusItemSpec) {
@@ -303,30 +320,44 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     return tray;
   }
 
+  function updateExisting(
+    id: string,
+    item: LiveStatusItem,
+    spec: StatusItemSpec,
+  ) {
+    item.spec = spec;
+    const appearanceSignature = statusItemAppearanceSignature(spec);
+    if (item.appearanceSignature !== appearanceSignature) {
+      item.appearanceSignature = appearanceSignature;
+      applyAppearance(item);
+    }
+    if (item.menuSignature === statusItemMenuSignature(spec)) {
+      item.menuSpec = spec;
+      return;
+    }
+    if (item.menuOpen) item.menuRebuildPending = true;
+    else applyMenu(id, item);
+  }
+
   function upsert(id: string, spec: StatusItemSpec) {
     if (!platform) return false;
-    const signature = statusItemSpecSignature(spec);
     const existing = live.get(id);
-    if (existing?.menuOpen) {
-      existing.pendingSpec = spec;
-      return true;
-    }
     if (existing) {
-      existing.spec = spec;
-      if (existing.signature === signature) return true;
-      existing.signature = signature;
-      applySpec(id, existing);
+      updateExisting(id, existing, spec);
       return true;
     }
-    const item = {
+    const item: LiveStatusItem = {
       tray: createTray(id, spec),
       spec,
-      signature,
+      menuSpec: spec,
+      appearanceSignature: statusItemAppearanceSignature(spec),
+      menuSignature: '',
       menuOpen: false,
-      pendingSpec: null,
+      menuRebuildPending: false,
     };
     live.set(id, item);
-    applySpec(id, item);
+    applyAppearance(item);
+    applyMenu(id, item);
     return true;
   }
 
