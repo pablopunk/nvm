@@ -44,9 +44,17 @@ export function webviewThemeStyle(values: WebviewThemeValues) {
 
 /** Inserts after `<head>` when present so a leading doctype keeps standards mode. */
 export function withWebviewTheme(html: string, values: WebviewThemeValues) {
+  if (!Object.keys(values).length) return html;
   const style = webviewThemeStyle(values);
   const head = html.match(/<head[^>]*>/i);
   if (!head || head.index === undefined) return `${style}${html}`;
   const insertAt = head.index + head[0].length;
   return `${html.slice(0, insertAt)}${style}${html.slice(insertAt)}`;
+}
+
+/** Server rendering and tests have no document; webviews then get no theme. */
+export function currentWebviewThemeValues(): WebviewThemeValues {
+  if (typeof document === 'undefined' || typeof getComputedStyle !== 'function')
+    return {};
+  return readWebviewThemeValues(getComputedStyle(document.documentElement));
 }

@@ -921,7 +921,7 @@ test('menu bar popovers open silently under the clicked icon', () => {
   const win = FakeBrowserWindow.instances[0];
   win.handlers.get('once:ready-to-show')();
 
-  assert.equal(result?.toast, undefined);
+  assert.equal(Boolean(result && 'toast' in result), false);
   assert.deepEqual(win.getBounds(), { x: 352, y: 30, width: 320, height: 240 });
   rememberStatusItemAnchor(null);
 });

@@ -42,3 +42,7 @@ test('computed palette values are read for every token', () => {
   assert.equal(read.accent, '#fff');
   assert.equal(read['font-sans'], 'Inter');
 });
+
+test('without theme values the html is left untouched', () => {
+  assert.equal(withWebviewTheme('<p>x</p>', {}), '<p>x</p>');
+});

@@ -3,7 +3,7 @@ import {
   EXTENSION_WEBVIEW_SANDBOX,
   extensionWebviewAllow,
 } from './extension-webview-permissions';
-import { readWebviewThemeValues, withWebviewTheme } from './webview-theme';
+import { currentWebviewThemeValues, withWebviewTheme } from './webview-theme';
 
 function useCameraAccessForWebview(webviewPermissions?: readonly string[]) {
   const needsCamera = Boolean(webviewPermissions?.includes('camera'));
@@ -26,11 +26,7 @@ function useCameraAccessForWebview(webviewPermissions?: readonly string[]) {
 
 function useThemedWebviewSource(html: string) {
   return useMemo(
-    () =>
-      withWebviewTheme(
-        html,
-        readWebviewThemeValues(getComputedStyle(document.documentElement)),
-      ),
+    () => withWebviewTheme(html, currentWebviewThemeValues()),
     [html],
   );
 }
