@@ -251,3 +251,33 @@ test('GNOME-family panels are dark even with a light app theme', () => {
     false,
   );
 });
+
+test('unchanged specs keep the menu and clicks reach the newest handler', () => {
+  const fake = createFakeElectron();
+  const items = createMenuBarStatusItems({
+    platform: 'linux',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  const clicks: string[] = [];
+  const specWithClick = (label: string): StatusItemSpec => ({
+    ...spec,
+    menu: [
+      {
+        type: 'item',
+        label: 'Run',
+        submenu: [
+          { type: 'item', label: 'Nested', onClick: () => clicks.push(label) },
+        ],
+      },
+    ],
+  });
+  items.upsert('a:main', specWithClick('first'));
+  const builtMenus = fake.menus.length;
+
+  items.upsert('a:main', specWithClick('second'));
+  fake.menus.at(-1).template[0].submenu[0].click();
+
+  assert.equal(fake.menus.length, builtMenus);
+  assert.deepEqual(clicks, ['second']);
+});

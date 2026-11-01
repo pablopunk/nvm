@@ -178,6 +178,19 @@ export function statusItemMenuTemplate(
   });
 }
 
+export function menuEntryAtPath(
+  entries: StatusItemMenuEntry[],
+  path: number[],
+): StatusItemMenuEntry | undefined {
+  let list: StatusItemMenuEntry[] | undefined = entries;
+  let entry: StatusItemMenuEntry | undefined;
+  for (const index of path) {
+    entry = list?.[index];
+    list = entry?.type === 'item' ? entry.submenu : undefined;
+  }
+  return entry;
+}
+
 export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
   const platform = menuBarStatusItemsPlatform(deps.platform);
   const { Tray, Menu, nativeImage, nativeTheme } = deps.electron;
@@ -228,10 +241,40 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     if (pending) upsert(id, pending);
   }
 
+  function clickCurrentEntry(id: string, path: number[]) {
+    const entry = menuEntryAtPath(live.get(id)?.spec.menu ?? [], path);
+    if (entry?.type === 'item') entry.onClick?.();
+  }
+
+  /** Clicks resolve against the latest spec, so unchanged menus never need rebuilding. */
+  function withLiveClickHandlers(
+    id: string,
+    entries: StatusItemMenuEntry[],
+    path: number[] = [],
+  ): StatusItemMenuEntry[] {
+    return entries.map((entry, index) => {
+      if (entry.type !== 'item') return entry;
+      const entryPath = [...path, index];
+      return {
+        ...entry,
+        ...(entry.submenu
+          ? { submenu: withLiveClickHandlers(id, entry.submenu, entryPath) }
+          : {}),
+        ...(entry.onClick
+          ? { onClick: () => clickCurrentEntry(id, entryPath) }
+          : {}),
+      };
+    });
+  }
+
   function buildMenu(id: string, spec: StatusItemSpec) {
     if (!platform) throw new Error('Status items are not supported');
     const menu = Menu.buildFromTemplate(
-      statusItemMenuTemplate(spec.menu, platform, menuItemImage),
+      statusItemMenuTemplate(
+        withLiveClickHandlers(id, spec.menu),
+        platform,
+        menuItemImage,
+      ),
     );
     menu.on('menu-will-show', () => markMenuOpen(id));
     menu.on('menu-will-close', () =>
@@ -270,10 +313,7 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     }
     if (existing) {
       existing.spec = spec;
-      if (existing.signature === signature) {
-        existing.tray.setContextMenu(buildMenu(id, spec));
-        return true;
-      }
+      if (existing.signature === signature) return true;
       existing.signature = signature;
       applySpec(id, existing);
       return true;
