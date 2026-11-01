@@ -184,6 +184,7 @@ export type ViewHydratePayload = {
 
 export type NevermindApi = {
   prepareDiagnosticFailure: () => Promise<string | null>;
+  reportAppView: (view: 'palette' | 'extension' | 'ai-chat') => void;
   platform: ShortcutPlatform;
   search: (
     query: string,

@@ -50,6 +50,17 @@ test('only known events from a real install id are accepted', () => {
   assert.equal(sanitizeBatch('x', NOW), null);
 });
 
+test('pageviews accept only fixed views and a valid session and canonicalize their URL', () => {
+  const result = sanitizeBatch({ batch: [
+    event({ event: '$pageview', properties: { view: 'extension', $session_id: '0198a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b', $current_url: 'https://example.com/private' } }),
+    event({ event: '$pageview', properties: { view: 'private user data', $session_id: '0198a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b' } }),
+    event({ event: '$pageview', properties: { view: 'palette', $session_id: 'invalid' } }),
+  ] }, NOW);
+  assert.equal(result?.events.length, 1);
+  assert.equal(result?.dropped, 2);
+  assert.equal(result?.events[0].properties.$current_url, 'https://app.nevermind.invalid/extension');
+});
+
 test('clients cannot set person data, location, ip or the project key', () => {
   const result = sanitizeBatch(
     {

@@ -1,9 +1,11 @@
 // biome-ignore-all lint/style/useNamingConvention: PostHog event and exception properties are snake_case on the wire.
 // biome-ignore-all lint/complexity/noVoid: Fire-and-forget loads must not block the diagnostic path.
 // biome-ignore-all lint/style/useExportsLast: Exports are grouped by concern, matching the module it replaces.
+
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { app, BrowserWindow } from 'electron';
+import { uuidv7 } from 'posthog-node';
 import type { DiagnosticRecord } from '../../shared/diagnostics';
 import {
   createDiagnosticStore,
@@ -31,6 +33,8 @@ import {
   whenInstallIdReady,
 } from './posthog-client';
 
+const VIEW_SESSION_IDLE_MS = 1_800_000;
+const VIEW_SESSION_MAX_MS = 86_400_000;
 const REPORTING_CHANGED_CHANNEL = 'diagnostics:reporting-changed';
 const CAPTURES_PER_MINUTE = 60;
 const CAPTURE_WINDOW_MS = 60_000;
@@ -40,6 +44,10 @@ let initialized = false;
 let store: ReturnType<typeof createDiagnosticStore> | undefined;
 let updateStore: ReturnType<typeof createDiagnosticStore> | undefined;
 let reportingEnabled = false;
+let reportingGeneration = 0;
+let viewSessionId: string | null = null;
+let lastViewAt = 0;
+let viewSessionStartedAt = 0;
 let launchReported = false;
 const firstUseInJourney = createFeatureUsageDeduper();
 let captureWindowStarted = Date.now();
@@ -53,7 +61,13 @@ export function recentDiagnosticRecords() {
 }
 
 export function setDiagnosticReporting(enabled: boolean) {
+  if (enabled !== reportingEnabled) {
+    reportingGeneration += 1;
+  }
   reportingEnabled = enabled;
+  if (!enabled) {
+    viewSessionId = null;
+  }
   setPosthogConsent(enabled);
   if (enabled && !launchReported) {
     launchReported = true;
@@ -67,6 +81,40 @@ export function setDiagnosticReporting(enabled: boolean) {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(REPORTING_CHANGED_CHANNEL, enabled);
   }
+}
+
+export function recordAppView(view: unknown) {
+  if (!reportingEnabled) {
+    return;
+  }
+  if (view !== 'palette' && view !== 'extension' && view !== 'ai-chat') {
+    return;
+  }
+  const generation = reportingGeneration;
+  void whenInstallIdReady().then(function captureView() {
+    if (
+      !reportingEnabled ||
+      reportingGeneration !== generation ||
+      !posthogClient()
+    ) {
+      return;
+    }
+    const now = Date.now();
+    if (
+      !viewSessionId ||
+      now - lastViewAt >= VIEW_SESSION_IDLE_MS ||
+      now - viewSessionStartedAt >= VIEW_SESSION_MAX_MS
+    ) {
+      viewSessionId = uuidv7();
+      viewSessionStartedAt = now;
+    }
+    lastViewAt = now;
+    captureDesktopEvent('$pageview', {
+      view,
+      $current_url: `https://app.nevermind.invalid/${view}`,
+      $session_id: viewSessionId,
+    });
+  });
 }
 
 export async function flushDiagnosticRecords() {
@@ -269,11 +317,9 @@ export function reportDiagnosticProblem() {
 // should be logged, reported and contained, not silently kill the process.
 export function installProcessErrorSafetyNet() {
   process.on('unhandledRejection', (reason) => {
-    console.error('FATAL: unhandled rejection (would crash Electron):', reason);
     recordOperationFailure(reason);
   });
   process.on('uncaughtException', (error) => {
-    console.error('FATAL: uncaught exception (would crash Electron):', error);
     recordOperationFailure(error);
   });
 }

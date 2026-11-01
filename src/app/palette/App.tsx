@@ -1,5 +1,6 @@
 // biome-ignore-all lint: This legacy palette component retains established renderer conventions.
 import { Command } from 'cmdk';
+import { usePaletteViewMode } from './use-palette-view-mode';
 import {
   Clipboard,
   Copy,
@@ -123,7 +124,6 @@ import type {
   DictationCommand,
   NevermindApi,
   PaletteHotkeyStatus,
-  PaletteMode,
   ShortcutRecord,
 } from './preload-api';
 import { resultsCardClassName } from './results-card-layout';
@@ -1643,7 +1643,6 @@ export function App() {
     new Map<string, ReturnType<typeof createRendererPerformanceTrace>>(),
   );
   const latestInteractionTraceIdRef = useRef<string | undefined>(undefined);
-  const paletteModeRef = useRef<PaletteMode | null>(null);
   const queryRef = useRef('');
   const queryHistoryRef = useRef<string[]>([]);
   const queryHistoryIndexRef = useRef<number | null>(null);
@@ -1693,6 +1692,17 @@ export function App() {
     inputRef.current?.focus(),
   );
   const extensionView = extensionNavigation.view;
+  const analyticsVisible = useRef(false);
+  useEffect(() => {
+    if (analyticsVisible.current)
+      window.nvm.reportAppView(
+        extensionView
+          ? extensionView.aiChat
+            ? 'ai-chat'
+            : 'extension'
+          : 'palette',
+      );
+  }, [extensionNavigation.navigationKey]);
   const extensionViewBackStack = extensionNavigation.backStack;
   const retainedViews = extensionNavigation.frames.flatMap((frame) =>
     frame.history.map((entry) => entry.view),
@@ -2122,6 +2132,8 @@ export function App() {
     };
 
     const stopShown = window.nvm.onShown(() => {
+      analyticsVisible.current = true;
+      window.nvm.reportAppView(aiChatOpenRef.current ? 'ai-chat' : 'palette');
       markDebugPerformance('palette.shown', { queryLength: query.length });
       resetTransientSurfaces();
       if (!aiChatOpenRef.current) {
@@ -2138,11 +2150,16 @@ export function App() {
       window.setTimeout(focusActiveInput, 50);
     });
     const stopShortcutShown = window.nvm.onShortcutShown(() => {
+      analyticsVisible.current = true;
+      window.nvm.reportAppView(
+        extensionNavigation.currentView()?.aiChat ? 'ai-chat' : 'extension',
+      );
       markDebugPerformance('palette.shortcut-shown');
       requestAnimationFrame(focusActiveInput);
       window.setTimeout(focusActiveInput, 50);
     });
     const stopHidden = window.nvm.onHidden(() => {
+      analyticsVisible.current = false;
       markDebugPerformance('palette.hidden', {
         aiChatOpen: aiChatOpenRef.current,
       });
@@ -2488,39 +2505,14 @@ export function App() {
     return () => cancelAnimationFrame(frame);
   }, [pendingShortcutReveal, extensionView]);
 
-  useEffect(() => {
-    const visibleAiChat = extensionView?.aiChat
-      ? extensionView
-      : [...siblingViews].reverse().find((view) => view.aiChat);
-    const isAiChat = Boolean(visibleAiChat);
-    const isLarge =
-      extensionView?.size === 'large' ||
-      extensionView?.presentation === 'preview';
-    aiChatOpenRef.current = isAiChat;
-    aiChatIdRef.current = visibleAiChat?.chatId;
-    const mode: PaletteMode = previewFor
-      ? 'preview'
-      : extensionView?.presentation === 'side-preview'
-        ? 'side-preview'
-        : isLarge || (isAiChat && builderPreviews.length > 0)
-          ? 'preview'
-          : siblingViews.length > 0
-            ? 'stacked'
-            : isAiChat
-              ? 'ai-chat'
-              : 'default';
-    if (paletteModeRef.current !== mode) {
-      paletteModeRef.current = mode;
-      window.nvm.setPaletteMode(mode);
-    }
-  }, [
-    actionSubmenuFor,
-    extensionItemOptionsFor,
-    extensionView,
-    previewFor,
-    siblingViews,
-    builderPreviews.length,
-  ]);
+  usePaletteViewMode({
+    view: extensionView,
+    siblings: siblingViews,
+    hasPreview: Boolean(previewFor),
+    previewCount: builderPreviews.length,
+    chatOpen: aiChatOpenRef,
+    chatId: aiChatIdRef,
+  });
 
   useEffect(() => {
     if (!(extensionView?.aiChat || siblingViews.some((view) => view.aiChat)))

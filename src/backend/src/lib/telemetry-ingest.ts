@@ -23,9 +23,11 @@ export const INGEST_EVENTS: ReadonlySet<string> = new Set([
   'renderer_failure',
   'support_report',
   '$exception',
+  '$pageview',
 ]);
 
 const INSTALL_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const OWNER_ID = /^[0-9a-f]{64}$/;
 const PROPERTY_KEY = /^[$a-z][a-z0-9_.]{0,63}$/i;
 // Clients may not set person properties, location, or the project key.
@@ -162,6 +164,12 @@ function sanitizeEvent(input: unknown, now: number): IngestEvent | null {
   }
   const properties = sanitizeProperties(input.properties);
   if (!properties) return null;
+  if (event === '$pageview') {
+    const view = properties.view;
+    if ((view !== 'palette' && view !== 'extension' && view !== 'ai-chat') ||
+        typeof properties.$session_id !== 'string' || !SESSION_ID.test(properties.$session_id)) return null;
+    properties.$current_url = `https://app.nevermind.invalid/${view}`;
+  }
   if (
     event === 'install.owner_observed' &&
     !(
