@@ -39,15 +39,41 @@ function decimalRate(value: unknown): number | null {
   return Number.isFinite(rate) && rate >= 0 ? rate : null;
 }
 
+// Units checked against OpenRouter's model pages and a short billed transcription.
+// The rate itself always comes from the current admissible catalog snapshot.
+const durationPricingUnits = new Map<string, number>([
+  ['nvidia/nemotron-3.5-transcribe', 1],
+  ['mistralai/voxtral-small-transcribe-3-0', 1],
+  ['mistralai/voxtral-mini-transcribe-3-0', 1],
+  ['assemblyai/universal-3-6-pro', 1],
+  ['elevenlabs/scribe-v2', 1],
+  ['elevenlabs/scribe-v2-medical', 1],
+  ['fish-audio/transcribe-1-pro', 1],
+  ['assemblyai/universal-3-5-pro', 1],
+  ['meta/muse-voice-transcribe-1.0', 1],
+  ['microsoft/mai-transcribe-2', 3600],
+  ['nvidia/nemotron-3.5-asr-streaming-multilingual-0.6b', 1],
+  ['mistralai/voxtral-small-24b-2507-stt', 1],
+  ['mistralai/voxtral-mini-3b-2507', 1],
+  ['qwen/qwen3-asr-1.7b', 1],
+  ['qwen/qwen3-asr-0.6b', 1],
+  ['openai/gpt-transcribe', 1],
+  ['fish-audio/transcribe-1', 1],
+  ['x-ai/grok-stt-1.0', 1],
+  ['deepgram/nova-3', 1],
+  ['microsoft/mai-transcribe-1.5', 3600],
+  ['nvidia/parakeet-tdt-0.6b-v3', 1],
+  ['mistralai/voxtral-mini-transcribe', 1],
+  ['google/chirp-3', 1],
+  ['openai/whisper-large-v3', 1],
+  ['openai/whisper-large-v3-turbo', 1],
+  ['openai/whisper-1', 1],
+]);
+
 function durationPricing(
   model: OpenRouterModel,
 ): TranscriptionDurationPricing | null {
-  // OpenRouter's catalog omits units; these are verified against its model pages.
-  const secondsPerUnit = new Map<string, number>([
-    ['nvidia/parakeet-tdt-0.6b-v3', 1],
-    ['microsoft/mai-transcribe-2', 3600],
-  ]);
-  const divisor = typeof model.id === 'string' ? secondsPerUnit.get(model.id) : undefined;
+  const divisor = typeof model.id === 'string' ? durationPricingUnits.get(model.id) : undefined;
   if (!divisor) return null;
   const rate = decimalRate(model.pricing?.prompt);
   const outputRate = decimalRate(model.pricing?.completion);
