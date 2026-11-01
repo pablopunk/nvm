@@ -27,6 +27,7 @@ function createRegistrationHarness() {
   const extensionModules = new Map<string, any>();
   const extensionActionRegistry = new Map<string, any>();
   const extensionActionHandlers = new Map<string, any>();
+  const menuBarHidden = new Set<string>();
   const effects = {
     shortcutSyncs: 0,
     rootInvalidations: 0,
@@ -56,7 +57,13 @@ function createRegistrationHarness() {
     createExtensionContext: () => ({}),
     registerExtensionBackgroundJob() {},
     registerExtensionMenuBarJob() {},
-    menuBarVisibility: { isShown: () => true, setShown() {} },
+    menuBarVisibility: {
+      isShown: (id: string) => !menuBarHidden.has(id),
+      setShown: (id: string, shown: boolean) => {
+        if (shown) menuBarHidden.delete(id);
+        else menuBarHidden.add(id);
+      },
+    },
     unregisterExtensionBackgroundJob(_extension, item) {
       effects.jobsUnregistered.push(item.id);
     },
@@ -78,6 +85,8 @@ function createRegistrationHarness() {
   return {
     extensionModules,
     extensionActionRegistry,
+    extensionActionHandlers,
+    menuBarHidden,
     effects,
     lookup,
     normalizer,
@@ -267,4 +276,84 @@ test('a refresh from a replaced extension module cannot overwrite the reloaded o
   assert.equal(result.ok, false);
   assert.equal(harness.extensionActionRegistry.has('reloaded:old'), true);
   assert.equal(harness.effects.shortcutSyncs, 0);
+});
+
+function menuBarExtension(overrides: Record<string, any> = {}) {
+  return {
+    id: 'pomodoro',
+    title: 'Pomodoro',
+    menuBar: { render: () => ({ icon: 'timer', items: [] }) },
+    ...overrides,
+  };
+}
+
+function runToggleHandler(harness) {
+  const entry = harness.extensionActionRegistry.get(
+    'pomodoro:menu-bar-visibility',
+  );
+  const handlerId = entry.item.primaryAction.handlerId;
+  return harness.extensionActionHandlers.get(handlerId).handler({}, {});
+}
+
+test('menu bar extensions always get a host-owned visibility toggle', async () => {
+  const harness = createRegistrationHarness();
+  await harness.registration.registerExtension(menuBarExtension());
+
+  const toggle = registeredActionFor(
+    harness,
+    'pomodoro',
+    'menu-bar-visibility',
+  );
+  assert.equal(toggle.title, 'Hide Pomodoro from Menu Bar');
+  assert.equal(toggle.id, 'extension-menubar:pomodoro');
+  assert.equal(toggle.background, true);
+});
+
+test('extensions without a menu bar get no visibility toggle', async () => {
+  const harness = createRegistrationHarness();
+  await harness.registration.registerExtension({
+    id: 'plain',
+    title: 'Plain',
+    commands: [{ id: 'run', title: 'Run', run: () => {} }],
+  });
+
+  assert.equal(
+    harness.extensionActionRegistry.has('plain:menu-bar-visibility'),
+    false,
+  );
+});
+
+test('running the toggle flips visibility and retitles the action', async () => {
+  const harness = createRegistrationHarness();
+  await harness.registration.registerExtension(menuBarExtension());
+  const invalidationsBefore = harness.effects.rootInvalidations;
+
+  await runToggleHandler(harness);
+
+  assert.equal(harness.menuBarHidden.has('pomodoro'), true);
+  assert.equal(
+    registeredActionFor(harness, 'pomodoro', 'menu-bar-visibility').title,
+    'Show Pomodoro in Menu Bar',
+  );
+  assert.ok(harness.effects.rootInvalidations > invalidationsBefore);
+
+  await runToggleHandler(harness);
+  assert.equal(harness.menuBarHidden.has('pomodoro'), false);
+});
+
+test('refreshing durable actions keeps the menu bar toggle', async () => {
+  const harness = createRegistrationHarness();
+  const extension = menuBarExtension({
+    actions: () => [{ id: 'start', title: 'Start', run: () => ({}) }],
+  });
+  await harness.registration.registerExtension(extension);
+
+  const result =
+    await harness.registration.refreshExtensionContributions(extension);
+
+  assert.equal(result.ok, true);
+  assert.equal(
+    harness.extensionActionRegistry.has('pomodoro:menu-bar-visibility'),
+    true,
+  );
 });
