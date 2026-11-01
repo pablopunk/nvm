@@ -328,9 +328,11 @@ test('running the toggle flips visibility and retitles the action', async () => 
   await harness.registration.registerExtension(menuBarExtension());
   const invalidationsBefore = harness.effects.rootInvalidations;
 
-  await runToggleHandler(harness);
+  const result = await runToggleHandler(harness);
 
   assert.equal(harness.menuBarHidden.has('pomodoro'), true);
+  assert.deepEqual(result.patch.items[0].accessories, [{ text: 'Off' }]);
+  assert.equal(result.patch.items[0].id, 'setting:menu-bar:pomodoro');
   assert.equal(
     registeredActionFor(harness, 'pomodoro', 'menu-bar-visibility').title,
     'Show Pomodoro in Menu Bar',

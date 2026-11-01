@@ -1,4 +1,5 @@
 // biome-ignore-all lint: Setting definitions and open-view patches are dynamic payloads moved verbatim from main.ts.
+import { appMenuBarSettingItem } from '../state/menubar-visibility';
 import type { UserStateStore } from '../state/user-state-store';
 import {
   choiceSettingLabel,
@@ -151,13 +152,16 @@ export function createSettingsService(deps: SettingsServiceDeps) {
   }
 
   function settingsItems() {
-    return availableSettingDefinitions().map((definition) => ({
-      id: `setting:${definition.id}`,
-      title: definition.title,
-      subtitle: definition.description,
-      icon: definition.icon || 'settings',
-      ...settingItemPatch(definition),
-    }));
+    return [
+      ...availableSettingDefinitions().map((definition) => ({
+        id: `setting:${definition.id}`,
+        title: definition.title,
+        subtitle: definition.description,
+        icon: definition.icon || 'settings',
+        ...settingItemPatch(definition),
+      })),
+      appMenuBarSettingItem(userStateStore.get()),
+    ];
   }
 
   function settingsView(selectedItemId = '') {

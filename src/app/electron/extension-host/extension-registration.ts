@@ -8,7 +8,11 @@ import {
 import { hasCapability } from '../os/os';
 import { error as logError } from '../platform/logger';
 import { extensionCommandAction } from './extension-command-action';
-import type { MenuBarVisibility } from '../state/menubar-visibility';
+import {
+  MENU_BAR_TOGGLE_ACTION_ID,
+  type MenuBarVisibility,
+  menuBarSettingRowPatch,
+} from '../state/menubar-visibility';
 import type { ExtensionRuntimeRegistries } from './extension-runtime-state';
 import {
   extensionMenuBarRenderer,
@@ -18,7 +22,6 @@ import { markInternalExtension } from './internal-extension';
 import { missingRequiredInternalCommands } from './internal-extension-requirements';
 
 const EXTENSION_ACTIONS_TIMEOUT_MS = 10_000;
-const MENU_BAR_TOGGLE_ID = 'menu-bar-visibility';
 
 function extensionCommandActionId(extension, command) {
   return `extension:${extension.id}:${command.id}`;
@@ -196,7 +199,7 @@ export function createExtensionRegistration(deps: ExtensionRegistrationDeps) {
     const title = extension.title || extension.id;
     const shown = menuBarVisibility.isShown(extension.id);
     return {
-      id: MENU_BAR_TOGGLE_ID,
+      id: MENU_BAR_TOGGLE_ACTION_ID,
       actionId: `extension-menubar:${extension.id}`,
       title: shown
         ? `Hide ${title} from Menu Bar`
@@ -219,14 +222,13 @@ export function createExtensionRegistration(deps: ExtensionRegistrationDeps) {
   }
 
   function toggleExtensionMenuBar(extension) {
-    menuBarVisibility.setShown(
-      extension.id,
-      !menuBarVisibility.isShown(extension.id),
-    );
+    const shown = !menuBarVisibility.isShown(extension.id);
+    menuBarVisibility.setShown(extension.id, shown);
     if (extensionModules.get(extension.id) === extension)
       registerMenuBarToggle(extension);
     registerActionShortcuts();
     invalidateExtensionRootItems();
+    return { patch: { items: [menuBarSettingRowPatch(extension.id, shown)] } };
   }
 
   function registerExtensionCommands(extension) {
