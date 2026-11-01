@@ -24,6 +24,7 @@ function createDefaultUserState(): UserStateRecord {
     rateCache: {},
     appFirstSeenAtById: {},
     appFirstSeenInitialized: false,
+    menuBarHidden: {},
     extensionManager: { schemaVersion: 1, files: {}, proposals: {} },
     nevermindEnvironment: {
       environment: nevermindEnvironmentForBaseUrl(getDefaultNevermindBaseUrl()),
@@ -56,6 +57,10 @@ function userStateFromLoadedFile(loaded: UserState): UserStateRecord {
     rateCache: loaded.rateCache || {},
     appFirstSeenAtById: loaded.appFirstSeenAtById || {},
     appFirstSeenInitialized: loaded.appFirstSeenInitialized === true,
+    menuBarHidden:
+      loaded.menuBarHidden && typeof loaded.menuBarHidden === 'object'
+        ? (loaded.menuBarHidden as Record<string, boolean>)
+        : {},
     extensionManager: loaded.extensionManager || {
       schemaVersion: 0,
       files: {},

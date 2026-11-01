@@ -137,10 +137,15 @@ export type ExtensionTriggersDeps = {
   runtimeState: ExtensionRuntimeState;
   EXTENSION_ROOT_ITEMS_TIMEOUT_MS: number;
   executeViewAction: (action: any, launchContext?: any) => Promise<any>;
+  refreshExtensionMenuBar: (extensionId: string) => unknown;
 };
 
 function extensionBackgroundJobId(extension, item) {
   return `extension.${extension.id}.${item.id}`;
+}
+
+function extensionMenuBarJobId(extension) {
+  return `extension.${extension.id}.menubar`;
 }
 
 export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
@@ -149,6 +154,7 @@ export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
     runtimeState,
     EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
     executeViewAction,
+    refreshExtensionMenuBar,
   } = deps;
 
   function attachExtensionFileTrigger(
@@ -324,14 +330,38 @@ export function createExtensionTriggers(deps: ExtensionTriggersDeps) {
           );
       },
     };
+    stageOrRegisterJob(definition);
+  }
+
+  function stageOrRegisterJob(definition: JobDefinition) {
     if (runtimeState.extensionRuntimePreparation)
       runtimeState.extensionRuntimePreparation.jobs.push(definition);
     else jobRegistry.register(definition);
+  }
+
+  function registerExtensionMenuBarJob(extension, triggers: any[]) {
+    const id = extensionMenuBarJobId(extension);
+    const jobTriggers = jobTriggersFromExtensionTriggers(
+      extension,
+      triggers,
+      id,
+    );
+    if (jobTriggers.length === 0) return;
+    stageOrRegisterJob({
+      id,
+      title: `${extension.title || extension.id} menu bar`,
+      owner: 'extension',
+      scope: extension.id,
+      triggers: jobTriggers,
+      timeoutMs: EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+      run: () => refreshExtensionMenuBar(extension.id),
+    });
   }
 
   return {
     attachExtensionFileTrigger,
     registerExtensionBackgroundJob,
     unregisterExtensionBackgroundJob,
+    registerExtensionMenuBarJob,
   };
 }

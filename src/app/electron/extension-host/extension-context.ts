@@ -64,6 +64,7 @@ export type ExtensionContextDeps = {
   shortcuts: ContextShortcutsDeps;
   views: ContextViewsDeps;
   updates: ContextUpdatesDeps;
+  menuBar: { refresh: (extensionId: string) => unknown };
   ai: {
     createExtensionAi: ExtensionFacetFactory;
     createAiBuilderApi: ExtensionFacetFactory;
@@ -126,6 +127,9 @@ export function createExtensionContextFactory(deps: ExtensionContextDeps) {
       cache: deps.storage.createExtensionCache(extension),
       views: createExtensionViewsApi(extension, command, deps.views),
       updates: createContextUpdates(deps.updates),
+      menuBar: {
+        refresh: () => void deps.menuBar.refresh(extension.id),
+      },
       state: {},
       data: createContextData(),
       ai: canUseAi ? deps.ai.createExtensionAi(extension) : undefined,

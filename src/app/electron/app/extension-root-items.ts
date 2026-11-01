@@ -25,6 +25,7 @@ export type ExtensionRootItemsDeps = {
   rankAction: (action: any, query: any) => any;
   EXTENSION_ROOT_ITEMS_TTL_MS: number;
   EXTENSION_ROOT_ITEMS_TIMEOUT_MS: number;
+  onInvalidated?: () => void;
 };
 
 export function createExtensionRootItems(deps: ExtensionRootItemsDeps) {
@@ -54,12 +55,14 @@ export function createExtensionRootItems(deps: ExtensionRootItemsDeps) {
   function invalidateExtensionRootItems() {
     extensionRootItemsCache.clear();
     paletteWindow.win?.webContents.send('root-items:changed');
+    deps.onInvalidated?.();
   }
 
   function invalidateExtensionRootItemsForExtension(extension) {
     const cacheKey = extension.__filePath || extension.id;
     extensionRootItemsCache.delete(cacheKey);
     paletteWindow.win?.webContents.send('root-items:changed');
+    deps.onInvalidated?.();
   }
 
   function rankContributionActions(actions, query) {

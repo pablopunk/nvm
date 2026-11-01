@@ -7,7 +7,10 @@ import { runInWindowInvocationScope } from '../extension-host/window-invocation-
 import type { WindowFocusTarget } from '../os/window-management-types';
 import { error as logError } from '../platform/logger';
 import type { MaintenanceActivity } from '../platform/maintenance-activity';
-import { shortcutActionRunsWithoutView } from './shortcut-lifecycle';
+import {
+  shortcutActionOpensPalette,
+  shortcutActionRunsWithoutView,
+} from './shortcut-lifecycle';
 
 export type ShortcutRunnerDeps = {
   activity?: Pick<MaintenanceActivity, 'run'>;
@@ -77,6 +80,10 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
       { traceId },
     );
     const currentAction = currentActionForStoredShortcut(action);
+    if (shortcutActionOpensPalette(currentAction)) {
+      paletteWindow.showPalette({});
+      return;
+    }
     const instantView = isClipboardHistoryAction(currentAction)
       ? clipboardHistoryView()
       : null;

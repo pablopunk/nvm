@@ -55,6 +55,8 @@ function createRegistrationHarness() {
     normalizeViewItems: normalizer.normalizeViewItems,
     createExtensionContext: () => ({}),
     registerExtensionBackgroundJob() {},
+    registerExtensionMenuBarJob() {},
+    menuBarVisibility: { isShown: () => true, setShown() {} },
     unregisterExtensionBackgroundJob(_extension, item) {
       effects.jobsUnregistered.push(item.id);
     },
