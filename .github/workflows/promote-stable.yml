@@ -59,16 +59,29 @@ jobs:
           curl -fsS --max-time 20 "$PRODUCTION_API_ORIGIN/api/health" -o production-health.json
           mise exec -- node "$NIGHTLY_CLI" identity --sha "$SOURCE_SHA" --health production-health.json | jq -e '.status == "verified"'
           echo "STABLE_TAG=$stable" >> "$GITHUB_ENV"
-      - name: Stage stable metadata and notes
+      - name: Install OpenCode
+        run: |
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+      - name: Write release notes
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        run: |
+          set -euo pipefail
+          opencode run --auto --model opencode-go/muse-spark-1.3-contributor \
+            "Write user-facing release notes for Nevermind $VERSION, covering all changes from $STABLE_TAG to $SOURCE_SHA. Inspect the commit history and relevant diffs, and use gh release list and gh release view to study older stable releases with a marketing name and emoji highlights. Group meaningful user-visible changes, avoid internal CI details and unsupported claims, and mention material platform limitations. Write a short marketing name alone to release-name.txt and the Markdown notes to notes.md. Follow the older format: a heading with version and name, a short introduction, and easy-to-read emoji bullets. End with a full changelog link to https://github.com/$GITHUB_REPOSITORY/compare/$STABLE_TAG...v$VERSION. Do not modify other files, commit, push, or publish anything."
+          test -s release-name.txt
+          test -s notes.md
+          [[ $(wc -l < release-name.txt) -eq 1 ]] || { echo 'Release name must be one line' >&2; exit 1; }
+          grep -F "https://github.com/$GITHUB_REPOSITORY/compare/$STABLE_TAG...v$VERSION" notes.md >/dev/null
+          printf '\nPromoted from %s; source %s.\n' "$DEV_TAG" "$SOURCE_SHA" >> notes.md
+      - name: Stage stable metadata
         run: |
           set -euo pipefail
           cp dev/nightly.yml dev/latest.yml
           cp dev/nightly-mac.yml dev/latest-mac.yml
           cp dev/nightly-linux.yml dev/latest-linux.yml
           cp dev/nightly-linux-arm64.yml dev/latest-linux-arm64.yml
-          printf 'Changes since %s:\n\n' "$STABLE_TAG" > notes.md
-          git log --format='- %s (%h)' "$STABLE_TAG..$SOURCE_SHA" >> notes.md
-          printf '\nPromoted from %s; source %s.\n' "$DEV_TAG" "$SOURCE_SHA" >> notes.md
           (cd dev && sha256sum * | sort) > expected-sha256.txt
       - name: Create and verify draft
         id: draft
@@ -85,7 +98,7 @@ jobs:
             gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$tag" -f "sha=$SOURCE_SHA" >/dev/null
             echo 'created_tag=true' >> "$GITHUB_OUTPUT"
           fi
-          gh release create "$tag" --draft --latest=false --title "Nevermind $VERSION" --notes-file notes.md dev/*
+          gh release create "$tag" --draft --latest=false --title "v$VERSION - $(cat release-name.txt)" --notes-file notes.md dev/*
           mkdir remote
           gh release download "$tag" --dir remote
           (cd remote && sha256sum * | sort) > remote-sha256.txt
