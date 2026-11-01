@@ -1,8 +1,8 @@
 import { Check, ChevronRight, FileUp } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { formFieldValue, formRowId, invalidFormFields } from './form-fields';
 import type { CommandAction, CommandView } from '../model';
 import type { ActionPanelRow, FormField, FormValue } from '../ui';
+import { formFieldValue, formRowId, invalidFormFields } from './form-fields';
 
 export function usePaletteForm(
   view: CommandView | null,
@@ -79,7 +79,7 @@ export function usePaletteForm(
   async function open(fieldToEdit: FormField) {
     if (fieldToEdit.disabled) return;
     if (fieldToEdit.type === 'checkbox') {
-      update(fieldToEdit.id, !Boolean(formFieldValue(fieldToEdit, values)));
+      update(fieldToEdit.id, !formFieldValue(fieldToEdit, values));
       return;
     }
     if (['file', 'files', 'folder'].includes(fieldToEdit.type || '')) {
@@ -133,7 +133,7 @@ export function usePaletteForm(
       field.type === 'multiselect'
     ) {
       const selected = Array.isArray(current) ? current : [];
-      const options = (field.options || [])
+      const options: ActionPanelRow[] = (field.options || [])
         .filter((option) =>
           `${option.title} ${option.value}`
             .toLowerCase()
@@ -157,6 +157,10 @@ export function usePaletteForm(
             />
           ),
           title: option.title,
+          checked:
+            field.type === 'multiselect'
+              ? selected.includes(option.value)
+              : undefined,
           onSelect: () => {
             if (field.type !== 'multiselect') return commit(option.value);
             update(
@@ -205,12 +209,17 @@ export function usePaletteForm(
     save,
     closeEditor,
     commit,
-    placeholder:
-      field?.placeholder ||
-      (field?.type === 'date'
-        ? 'YYYY-MM-DD'
-        : `Enter ${field?.label || field?.id}`),
+    placeholder: field ? formFieldEditorPlaceholder(field) : '',
     concealed: field?.type === 'password',
     selectionKey: `${editingId || ''}:${query}`,
   };
+}
+
+const CHOICE_FIELD_TYPES = ['dropdown', 'select', 'multiselect'];
+
+function formFieldEditorPlaceholder(field: FormField) {
+  const label = field.label || field.id;
+  if (CHOICE_FIELD_TYPES.includes(field.type || '')) return `Filter ${label}`;
+  if (field.placeholder) return field.placeholder;
+  return field.type === 'date' ? 'YYYY-MM-DD' : `Enter ${label}`;
 }

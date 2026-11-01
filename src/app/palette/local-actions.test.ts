@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   combinedActionSections,
   findLocalShortcut,
+  firstViewActionRowValue,
   localActionCandidates,
 } from './local-actions';
 import type { CommandAction, CommandItem, CommandView } from './model';
@@ -53,4 +54,42 @@ test('view actions are deduplicated and hidden panels omit their view section', 
       .length,
     1,
   );
+});
+
+test('selects the first inline view action row, skipping empty panel sections', () => {
+  const next = {
+    type: 'runExtensionAction',
+    title: 'Continue',
+  } as CommandAction;
+  assert.equal(
+    firstViewActionRowValue({
+      title: 'Wizard',
+      actions: [next],
+    } as CommandView),
+    'extension-view:0:0:runExtensionAction:Continue',
+  );
+  assert.equal(
+    firstViewActionRowValue({
+      title: 'Wizard',
+      actionPanel: {
+        sections: [{ title: 'Empty', actions: [] }, { actions: [next] }],
+      },
+    } as CommandView),
+    'extension-view:1:0:runExtensionAction:Continue',
+  );
+  assert.equal(firstViewActionRowValue({ title: 'Plain' } as CommandView), '');
+});
+
+test('CommandOrControl shortcuts match Command on macOS and Control elsewhere', () => {
+  const edit = {
+    type: 'runExtensionAction',
+    title: 'Edit',
+    shortcut: 'CommandOrControl+E',
+  } as CommandAction;
+
+  assert.equal(findLocalShortcut([edit], 'Command+E', 'darwin'), edit);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'darwin'), undefined);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'linux'), edit);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'win32'), edit);
+  assert.equal(findLocalShortcut([edit], 'Command+E', 'linux'), undefined);
 });

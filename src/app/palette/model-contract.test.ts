@@ -159,3 +159,28 @@ test('host model shares canonical public extension API literal contracts', () =>
     'windows.display-recovery',
   ]);
 });
+
+test('extension run actions have no generic subtitle while built-in actions keep theirs', async () => {
+  const { actionDescription } = await import('./model');
+
+  assert.equal(
+    actionDescription({ type: 'runExtensionAction', title: 'Continue' }),
+    '',
+  );
+  assert.equal(
+    actionDescription({
+      type: 'runExtensionAction',
+      title: 'Continue',
+      subtitle: 'Go to step 2',
+    }),
+    'Go to step 2',
+  );
+  assert.notEqual(
+    actionDescription({
+      type: 'openUrl',
+      title: 'Docs',
+      url: 'https://x.test',
+    }),
+    '',
+  );
+});

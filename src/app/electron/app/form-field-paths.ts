@@ -9,7 +9,10 @@ export type FormFieldPathPickerDeps = {
       options: any,
     ) => Promise<{ canceled: boolean; filePaths: string[] }>;
   };
-  paletteWindow: { readonly win: any };
+  paletteWindow: {
+    readonly win: any;
+    keepOpenDuringNativeDialog: <T>(showDialog: () => Promise<T>) => Promise<T>;
+  };
 };
 
 export function createFormFieldPathPicker(deps: FormFieldPathPickerDeps) {
@@ -43,22 +46,27 @@ export function createFormFieldPathPicker(deps: FormFieldPathPickerDeps) {
             },
           ]
         : undefined;
-    const result = await dialog.showOpenDialog(senderWindow, {
-      title:
-        input.title ||
-        (type === 'folder'
-          ? 'Choose Folder'
-          : type === 'files'
-            ? 'Choose Files'
-            : 'Choose File'),
-      buttonLabel: input.buttonLabel || 'Choose',
-      properties,
-      filters,
-      defaultPath:
-        typeof input.defaultPath === 'string'
-          ? expandUserPath(input.defaultPath)
-          : undefined,
-    });
+    const showDialog = () =>
+      dialog.showOpenDialog(senderWindow, {
+        title:
+          input.title ||
+          (type === 'folder'
+            ? 'Choose Folder'
+            : type === 'files'
+              ? 'Choose Files'
+              : 'Choose File'),
+        buttonLabel: input.buttonLabel || 'Choose',
+        properties,
+        filters,
+        defaultPath:
+          typeof input.defaultPath === 'string'
+            ? expandUserPath(input.defaultPath)
+            : undefined,
+      });
+    const result =
+      senderWindow && senderWindow === paletteWindow.win
+        ? await paletteWindow.keepOpenDuringNativeDialog(showDialog)
+        : await showDialog();
     return result.canceled
       ? { canceled: true, paths: [] }
       : { canceled: false, paths: result.filePaths };

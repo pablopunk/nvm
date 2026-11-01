@@ -23,6 +23,7 @@ import type { AiChatAttachment, AiLimitState } from '../ai-chat/use-ai-chat';
 import { iconForItem } from '../command-icons';
 import { RootCommandList } from '../command-list';
 import { captureRendererFailure } from '../diagnostics';
+import { AI_CHAT_MARKDOWN_OPTIONS } from '../markdown-content';
 import {
   actionsFromPanel,
   type CommandAction,
@@ -41,17 +42,16 @@ import {
   FormView,
   GridView,
   ListView,
-  PreviewView,
-  ProgressView,
 } from '../ui';
-import { ChatInputForm } from './chat-input-form';
 import { CameraView } from './camera-view';
+import { ChatInputForm } from './chat-input-form';
 import { titleFromFirstContentLine } from './editor-title';
 import { ExtensionWebviewFrame } from './extension-webview';
-import { AI_CHAT_MARKDOWN_OPTIONS } from '../markdown-content';
 import { formApplyRowId } from './form-fields';
 import { extensionListItemClassName } from './list-item-class-name';
 import type { usePaletteForm } from './palette-form';
+import { PreviewView } from './preview-view';
+import { ProgressView } from './progress-view';
 
 type AiChatState = {
   messages: NonNullable<CommandView['messages']>;
@@ -724,7 +724,12 @@ function ListExtensionView({
     <ListView
       items={items}
       sections={filterSections(view)}
-      empty={renderEmpty(view)}
+      empty={
+        <>
+          {renderEmpty(view)}
+          {inlineViewActions({ view, renderActionPanel, actionPanelRows })}
+        </>
+      }
       isLoading={view.isLoading}
       pagination={<ViewPagination view={view} runAction={runAction} />}
       renderItem={(item) => {
@@ -930,7 +935,7 @@ function FormExtensionView({
             value={formApplyRowId(formController.field.id)}
             icon={<Check size={18} />}
             title="Apply"
-            shortcut="Command+Enter"
+            shortcut="CommandOrControl+Enter"
             appearance={{ prominence: 'primary' }}
             onSelect={() => formController.commit(formController.query)}
           />
@@ -957,30 +962,12 @@ function FormExtensionView({
   );
 }
 
-function EditorExtensionView({
-  view,
-  renderMarkdown,
-  renderActionPanel,
-  actionPanelRows,
-  runAction,
-  surface,
-}: ExtensionViewSurfaceProps) {
-  const editorActionRows = visibleActionPanelRows(
-    view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-editor',
-      false,
-    ),
-  );
-  const editorActions = editorActionRows.length
-    ? renderActionPanel(editorActionRows)
-    : null;
+function EditorExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view, renderMarkdown, runAction, surface } = props;
   return (
     <EditorSurface
       view={view}
-      actions={editorActions}
+      actions={inlineViewActions(props, 'extension-editor')}
       renderMarkdown={renderMarkdown}
       runAction={runAction}
       surface={surface}
@@ -988,23 +975,9 @@ function EditorExtensionView({
   );
 }
 
-function WebExtensionView({
-  view,
-  renderActionPanel,
-  actionPanelRows,
-}: ExtensionViewSurfaceProps) {
-  const webviewActionRows = visibleActionPanelRows(
-    view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-webview',
-      false,
-    ),
-  );
-  const webviewActions = webviewActionRows.length
-    ? renderActionPanel(webviewActionRows)
-    : null;
+function WebExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view } = props;
+  const webviewActions = inlineViewActions(props, 'extension-webview');
   return (
     <div
       className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}
@@ -1019,47 +992,35 @@ function WebExtensionView({
   );
 }
 
-function CameraExtensionView({
-  view,
-  active,
-  renderActionPanel,
-  actionPanelRows,
-}: ExtensionViewSurfaceProps) {
-  const cameraActionRows = visibleActionPanelRows(
-    view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-camera',
-      false,
-    ),
-  );
-  const cameraActions = cameraActionRows.length
-    ? renderActionPanel(cameraActionRows)
-    : null;
+function CameraExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view, active } = props;
+  const cameraActions = inlineViewActions(props, 'extension-camera');
   return (
     <CameraView view={view} actions={cameraActions} active={active !== false} />
   );
 }
 
-function PreviewExtensionView({
-  view,
-  renderMarkdown,
-  renderActionPanel,
-  actionPanelRows,
-}: ExtensionViewSurfaceProps) {
-  const previewActionRows = visibleActionPanelRows(
+function inlineViewActions(
+  {
     view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-view',
-      false,
-    ),
+    renderActionPanel,
+    actionPanelRows,
+  }: Pick<
+    ExtensionViewSurfaceProps,
+    'view' | 'renderActionPanel' | 'actionPanelRows'
+  >,
+  prefix = 'extension-view',
+) {
+  const rows = visibleActionPanelRows(
+    view,
+    actionPanelRows(view.actionPanel, view.actions || [], prefix, false),
   );
-  const previewActions = previewActionRows.length
-    ? renderActionPanel(previewActionRows)
-    : null;
+  return rows.length ? renderActionPanel(rows) : null;
+}
+
+function PreviewExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view, renderMarkdown } = props;
+  const previewActions = inlineViewActions(props);
   const previewContent = view.content
     ? renderMarkdown(view.content)
     : view.subtitle || '';
@@ -1078,6 +1039,22 @@ function PreviewExtensionView({
         actions={previewActions}
       />
     </div>
+  );
+}
+
+function ProgressExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view } = props;
+  const indicator = isHostIndicatorView(view);
+  return (
+    <ProgressView
+      steps={view.steps || []}
+      value={view.value}
+      total={view.total}
+      label={view.label}
+      status={view.status}
+      animateSummaryText={indicator}
+      actions={indicator ? null : inlineViewActions(props)}
+    />
   );
 }
 
@@ -1101,16 +1078,7 @@ function ExtensionViewSurface(props: ExtensionViewRendererProps) {
   if (props.view.type === 'editor')
     return <EditorExtensionView {...surfaceProps} />;
   if (props.view.type === 'progress')
-    return (
-      <ProgressView
-        steps={props.view.steps || []}
-        value={props.view.value}
-        total={props.view.total}
-        label={props.view.label}
-        status={props.view.status}
-        animateSummaryText={isHostIndicatorView(props.view)}
-      />
-    );
+    return <ProgressExtensionView {...surfaceProps} />;
   if (props.view.type === 'webview')
     return <WebExtensionView {...surfaceProps} />;
   if (props.view.type === 'camera')

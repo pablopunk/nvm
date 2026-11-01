@@ -70,6 +70,7 @@ import {
 import { dictationDevices } from './dictation/dictation-devices';
 import { recordDictation } from './dictation/dictation-renderer';
 import { mouseDownLandsOnEmptyWindowSpace } from './empty-window-space';
+import { extensionLoadingView } from './extension-loading-view';
 import { ExtensionViewRenderer } from './extension-view/extension-view';
 import {
   FORM_SAVE_ROW_ID,
@@ -91,7 +92,7 @@ import {
   valuesMatch,
 } from './filtering';
 // biome-ignore format: Keep the legacy palette within its file-size budget.
-import { actionIdentity, combinedActionSections, findLocalShortcut, localActionCandidates, viewActionsForItem } from './local-actions';
+import { actionIdentity, combinedActionSections, findLocalShortcut, firstViewActionRowValue, localActionCandidates, viewActionsForItem } from './local-actions';
 import { MarkdownContent, type MarkdownOptions } from './markdown-content';
 import {
   actionDefinition,
@@ -106,8 +107,8 @@ import {
   type CommandView,
   type CommandViewPatch,
   canCustomizeCommandAction,
-  extensionLoadingView,
 } from './model';
+import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import {
   PaletteHotkeyNotice,
   paletteHotkeyNoticeIsVisible,
@@ -116,7 +117,6 @@ import {
   resetTransientPaletteState,
   rootResultSelection,
 } from './palette-lifecycle';
-import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import { usePalettePrompt } from './palette-prompt';
 import { createRendererPerformanceTrace } from './performance-trace';
 import type {
@@ -153,12 +153,14 @@ import {
   EMPTY_ROOT_TITLE,
   EmptyState,
   type FormValue,
+  PaneRowsUnavailable,
   SearchAccessory,
   setShortcutLabelHyperKey,
   shortcutLabel,
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
+
 type ActionKind =
   | 'open-url'
   | 'web-search'
@@ -1670,6 +1672,7 @@ export function App() {
     useState<ExtensionViewItem | null>(null);
   const [actionSubmenuFor, setActionSubmenuFor] = useState<{
     title: string;
+    placeholder?: string;
     panel: CommandActionPanel;
     runAction?: (
       action: ExtensionViewAction,
@@ -2348,7 +2351,7 @@ export function App() {
       selectValue(
         current && items.some((item) => item.id === current)
           ? current
-          : declaredSelection || items[0]?.id || '',
+          : declaredSelection || items[0]?.id || firstViewActionRowValue(view),
       );
     }
 
@@ -2413,11 +2416,8 @@ export function App() {
       selectValue(ids.includes(formSelection) ? formSelection : ids[0] || '');
     } else if (extensionView && isFilterableExtensionView)
       selectExtensionItem(extensionView);
-    else if (extensionView?.actions?.length)
-      selectValue(
-        `extension-view:0:${extensionView.actions[0].type}:${extensionView.actions[0].title}`,
-      );
-    else if (extensionView) selectValue('preview');
+    else if (extensionView)
+      selectValue(firstViewActionRowValue(extensionView) || 'preview');
     else {
       const current = selectedValueRef.current;
       selectValue(
@@ -2791,7 +2791,7 @@ export function App() {
   });
   const childPlaceholder =
     actionSubmenuFor && !compactActionMenuVisible
-      ? `Filter ${actionSubmenuFor.title}`
+      ? actionSubmenuFor.placeholder || `Filter ${actionSubmenuFor.title}`
       : shortcutOptionsFor && !compactActionMenuVisible
         ? `Actions for “${shortcutOptionsFor.action.title}”`
         : shortcutManagerOpen
@@ -2812,7 +2812,7 @@ export function App() {
                         ? `Filter ${extensionView.title}`
                         : '';
   const compactActionPlaceholder = actionSubmenuFor
-    ? `Filter ${actionSubmenuFor.title}`
+    ? actionSubmenuFor.placeholder || `Filter ${actionSubmenuFor.title}`
     : shortcutOptionsFor
       ? `Filter actions for “${shortcutOptionsFor.action.title}”`
       : extensionItemOptionsFor
@@ -4056,10 +4056,6 @@ export function App() {
     }
   }
 
-  async function tweakWithAi() {
-    await tweakActionWithAi(optionsFor);
-  }
-
   async function renameExtensionAction() {
     if (!optionsFor) return;
     setOptionsFor(null);
@@ -4624,7 +4620,7 @@ export function App() {
         icon: <Wand2 size={18} />,
         title: 'Tweak with AI',
         subtitle: 'Open the original creation chat for this action',
-        onSelect: tweakWithAi,
+        onSelect: () => tweakActionWithAi(optionsFor),
         show: canTweakWithAi,
       },
       {
@@ -4998,52 +4994,55 @@ export function App() {
   function renderExtensionView(
     view: ExtensionView,
     entry = extensionNavigation.activeEntry,
+    paneHidden = false,
   ) {
     return (
-      <ExtensionViewRenderer
-        view={view}
-        aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
-        active={entry?.id === extensionNavigation.activeEntry?.id}
-        nevermindAuthed={nevermindAuthed}
-        deviceSignInStatus={deviceSignInStatus}
-        onSignInToNevermind={async () => {
-          const result = await window.nvm.signInToNevermind();
-          if (result.ok) setNevermindAuthed(true);
-          else
-            showFeedbackIndicator(
-              `Sign-in failed: ${result.error || 'unknown'}`,
-              'error',
-            );
-        }}
-        onRetryDeviceSignInBrowser={() =>
-          window.nvm.retryNevermindDeviceSignInBrowser()
-        }
-        onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
-        formValues={entry?.formValues || formValues}
-        formController={view === extensionView ? paletteForm : undefined}
-        formQuery={entry?.query || ''}
-        setFormValues={setFormValues}
-        filterItems={(items) =>
-          filterExtensionItems(items || [], view, entry?.query || '').map(
-            hydrateExtensionItemIcon,
-          )
-        }
-        filterSections={(currentView) =>
-          filterViewSections(currentView, entry?.query || '')
-        }
-        renderMarkdown={renderMarkdown}
-        renderActionPanel={renderActionPanel}
-        actionPanelRows={actionPanelRows}
-        renderRootIcon={iconForCommandItem}
-        renderEmpty={renderViewEmpty}
-        runDefaultAction={runDefaultViewAction}
-        runAction={runViewAction}
-        sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
-        abortAiChat={window.nvm.abortAiChat}
-        dragPathForItem={dragPathForItem}
-        startItemDrag={startItemDrag}
-        selectedItemId={entry?.selection || selectedValue}
-      />
+      <PaneRowsUnavailable.Provider value={paneHidden}>
+        <ExtensionViewRenderer
+          view={view}
+          aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
+          active={entry?.id === extensionNavigation.activeEntry?.id}
+          nevermindAuthed={nevermindAuthed}
+          deviceSignInStatus={deviceSignInStatus}
+          onSignInToNevermind={async () => {
+            const result = await window.nvm.signInToNevermind();
+            if (result.ok) setNevermindAuthed(true);
+            else
+              showFeedbackIndicator(
+                `Sign-in failed: ${result.error || 'unknown'}`,
+                'error',
+              );
+          }}
+          onRetryDeviceSignInBrowser={() =>
+            window.nvm.retryNevermindDeviceSignInBrowser()
+          }
+          onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
+          formValues={entry?.formValues || formValues}
+          formController={view === extensionView ? paletteForm : undefined}
+          formQuery={entry?.query || ''}
+          setFormValues={setFormValues}
+          filterItems={(items) =>
+            filterExtensionItems(items || [], view, entry?.query || '').map(
+              hydrateExtensionItemIcon,
+            )
+          }
+          filterSections={(currentView) =>
+            filterViewSections(currentView, entry?.query || '')
+          }
+          renderMarkdown={renderMarkdown}
+          renderActionPanel={renderActionPanel}
+          actionPanelRows={actionPanelRows}
+          renderRootIcon={iconForCommandItem}
+          renderEmpty={renderViewEmpty}
+          runDefaultAction={runDefaultViewAction}
+          runAction={runViewAction}
+          sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
+          abortAiChat={window.nvm.abortAiChat}
+          dragPathForItem={dragPathForItem}
+          startItemDrag={startItemDrag}
+          selectedItemId={entry?.selection || selectedValue}
+        />
+      </PaneRowsUnavailable.Provider>
     );
   }
 
@@ -5063,10 +5062,8 @@ export function App() {
       shortcutFor
     )
       return false;
-    const normalized = normalizedShortcut(accelerator);
-    const selectedItem = selectedExtensionItem;
-    const actions = localActionCandidates(selectedItem, extensionView);
-    const action = findLocalShortcut(actions, normalized);
+    const actions = localActionCandidates(selectedExtensionItem, extensionView);
+    const action = findLocalShortcut(actions, accelerator);
     if (!action) return false;
     runViewAction(action);
     return true;
@@ -5580,6 +5577,7 @@ export function App() {
         setActionQuery('');
         setActionSubmenuFor({
           title: extensionView.title,
+          placeholder: 'Filter actions',
           panel: viewActionPanel(extensionView),
         });
         return;
@@ -5784,11 +5782,11 @@ export function App() {
                 const isTop = historyIndex === frame.history.length - 1;
                 const active =
                   frameIndex === extensionNavigation.frames.length - 1 && isTop;
-                const obscured = active && activePaneObscured;
+                const paneHidden = !isTop || (active && activePaneObscured);
                 const pane = (
                   <div
                     key={entry.id}
-                    hidden={!isTop || obscured}
+                    hidden={paneHidden}
                     inert={!active || compactActionMenuVisible || undefined}
                     className={
                       active
@@ -5809,7 +5807,7 @@ export function App() {
                           : 'siblingBody'
                       }
                     >
-                      {renderExtensionView(entry.view, entry)}
+                      {renderExtensionView(entry.view, entry, paneHidden)}
                       {active && entry.view.aiChat && selectedBuilderPreview
                         ? renderBuilderPreview()
                         : null}

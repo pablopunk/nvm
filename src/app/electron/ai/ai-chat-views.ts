@@ -5,6 +5,7 @@ import { getByoKey } from '../backend/byo-key';
 import { error as logError } from '../platform/logger';
 import { aiChatPreviewFiles, prepareAiChatPreview } from './ai-chat-previews';
 import { isConversationAiChat } from './ai-chat-records';
+import { guidanceUpdatePromptForFile } from './extension-guidance-updates';
 
 export type AiChatViewsDeps = {
   extensionModules: Map<string, any>;
@@ -78,10 +79,25 @@ export function createAiChatViews(deps: AiChatViewsDeps) {
       chatId: item.id,
       aiModel: aiChatModelForChat(item),
       initialPrompt: options.initialPrompt,
+      suggestedPrompt: options.initialPrompt
+        ? undefined
+        : await suggestedGuidanceUpdate(item),
       messages: aiChatMessagesForRenderer(item.messages),
       builderPreviews,
       selectedBuilderPreviewFilename,
     };
+  }
+
+  async function suggestedGuidanceUpdate(item) {
+    const filename = path.basename(item.contextExtensionFile || '');
+    const extension = Array.from(extensionModules.values()).find(
+      (candidate: any) =>
+        path.basename(candidate.__filePath || '') === filename,
+    );
+    if (!(filename && extension?.__filePath)) return undefined;
+    return (
+      (await guidanceUpdatePromptForFile(extension.__filePath)) || undefined
+    );
   }
 
   async function activatedExtensionPreview(filename) {

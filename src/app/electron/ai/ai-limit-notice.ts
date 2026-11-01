@@ -1,6 +1,6 @@
+import type { CommandAction } from '../../palette/model';
 import { freeSpendCapNoticeFromText } from '../backend/free-spend-cap-notice';
 import { getNevermindDashboardUrl } from '../backend/nevermind-auth';
-import type { CommandAction } from '../../palette/model';
 import { pricingUnavailableNoticeFromText } from './ai-pricing-notice';
 
 export type AiLimitNotice = {
@@ -8,6 +8,7 @@ export type AiLimitNotice = {
     | 'insufficient_credits'
     | 'free_spend_cap_reached'
     | 'rate_limited'
+    | 'provider_busy'
     | 'prompt_too_large'
     | 'request_too_large'
     | 'unsupported_request_shape'
@@ -19,6 +20,14 @@ export type AiLimitNotice = {
   action?: CommandAction;
   retryAfterSec?: number;
 };
+
+function httpStatusPattern(status: number) {
+  return `(?:^|[\\s"'(=])${status}(?:[\\s"',:)]|$)`;
+}
+
+function matchesStatusOrText(text: string, status: number, phrases: string) {
+  return new RegExp(`${httpStatusPattern(status)}|${phrases}`, 'im').test(text);
+}
 
 export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
   const text = searchableErrorText(error);
@@ -38,7 +47,13 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
   }
   const pricingNotice = pricingUnavailableNoticeFromText(text);
   if (pricingNotice) return pricingNotice;
-  if (/insufficient[_ -]?credits|no credits remaining|402\b/i.test(text)) {
+  if (
+    matchesStatusOrText(
+      text,
+      402,
+      'insufficient[_ -]?credits|no credits remaining',
+    )
+  ) {
     return {
       kind: 'insufficient_credits',
       title: 'Credits needed',
@@ -52,7 +67,7 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
       },
     };
   }
-  if (/rate[_ -]?limited|rate limit exceeded|429\b/i.test(text)) {
+  if (/rate_limited/i.test(text)) {
     return {
       kind: 'rate_limited',
       title: 'AI limit reached',
@@ -65,6 +80,14 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
         title: 'Open Dashboard',
         url: getNevermindDashboardUrl(),
       },
+      retryAfterSec,
+    };
+  }
+  if (matchesStatusOrText(text, 429, 'rate[_ -]?limit|overloaded')) {
+    return {
+      kind: 'provider_busy',
+      title: 'AI provider busy',
+      message: `The AI provider is limiting requests right now. This is not your Nevermind usage limit. ${retryAfterSec ? `Try again in about ${retryAfterSec} seconds.` : 'Wait a moment and try again.'}`,
       retryAfterSec,
     };
   }
@@ -84,7 +107,9 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
         'This AI request uses an input or tool that the selected route cannot safely process. Remove it or switch to a supported model.',
     };
   }
-  if (/prompt[_ -]?too[_ -]?large|prompt exceeds|413\b/i.test(text)) {
+  if (
+    matchesStatusOrText(text, 413, 'prompt[_ -]?too[_ -]?large|prompt exceeds')
+  ) {
     return {
       kind: 'prompt_too_large',
       title: 'Prompt too large',
@@ -93,8 +118,10 @@ export function aiLimitNoticeFromError(error: unknown): AiLimitNotice | null {
     };
   }
   if (
-    /unsupported[_ -]?client|unsupported[_ -]?desktop|unsupported[_ -]?api|no longer supported|426\b/i.test(
+    matchesStatusOrText(
       text,
+      426,
+      'unsupported[_ -]?client|unsupported[_ -]?desktop|unsupported[_ -]?api|no longer supported',
     )
   ) {
     return {

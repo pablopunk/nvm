@@ -18,6 +18,7 @@ import {
   type createOpenWithApps,
   quickLookPath,
 } from '../files/quick-look-and-open-with';
+import { writeTextFile } from '../files/write-text-file';
 import type { createElectronClipboardApi } from '../os/electron-clipboard';
 import {
   frontmostApp,
@@ -174,6 +175,8 @@ function createDesktopFiles(deps: ContextDesktopDeps) {
           ),
         preview: quickLookPath,
         readText: (filePath) => fs.readFile(expandUserPath(filePath), 'utf8'),
+        writeText: async (filePath, text, options) =>
+          fileToExtensionFile(await writeTextFile(filePath, text, options)),
         displayPath: (filePath) => displayUserPath(expandUserPath(filePath)),
         toFileUrl: (filePath) => fileUrlForPath(expandUserPath(filePath)),
         thumbnail: (filePath) => thumbnailUrlForPreviewablePath(filePath),

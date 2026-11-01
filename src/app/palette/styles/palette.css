@@ -439,17 +439,15 @@ kbd {
   max-height: calc(100vh - var(--window-blur-margin) * 2 - 106px);
   border-radius: var(--radius-md);
   object-fit: contain;
-  background: var(--surface-media);
-  box-shadow: var(--shadow-inset);
 }
 
 .previewMedia {
-  width: 100%;
+  justify-self: center;
+  width: auto;
+  max-width: 100%;
   max-height: min(360px, calc(100vh - var(--window-blur-margin) * 2 - 106px));
   object-fit: contain;
   border-radius: var(--radius-md);
-  background: var(--surface-media);
-  box-shadow: var(--shadow-inset);
 }
 
 .previewMode .extensionView {
@@ -485,6 +483,7 @@ kbd {
 
 .previewMode .previewMedia {
   height: 100%;
+  width: auto;
   min-height: 0;
   max-height: calc(100vh - var(--window-blur-margin) * 2 - 134px);
 }

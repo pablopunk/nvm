@@ -1,6 +1,7 @@
 // biome-ignore-all lint: Host-side extension payload boundary keeps dynamic view shapes by design.
+
+import { extensionLoadingView } from '../../palette/extension-loading-view';
 import { feedbackView } from '../../palette/feedback';
-import { extensionLoadingView } from '../../palette/model';
 import {
   createExtensionUiPreview,
   type ExtensionUiPreviewDeps,
@@ -26,7 +27,7 @@ function collectionRecord(item: any) {
       `Collection item ids must not start with "${RESERVED_ITEM_ID_PREFIX}"`,
     );
   const editAction = edit
-    ? { shortcut: 'Command+E', ...edit, title: edit.title || 'Edit' }
+    ? { shortcut: 'CommandOrControl+E', ...edit, title: edit.title || 'Edit' }
     : null;
   const removeAction = remove
     ? {

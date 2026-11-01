@@ -4,8 +4,8 @@ import { Command } from 'cmdk';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackView } from '../feedback';
-import type { CommandAction, CommandFormField, CommandView } from '../model';
 import { MarkdownContent } from '../markdown-content';
+import type { CommandAction, CommandFormField, CommandView } from '../model';
 import { initialCameraSelection } from './camera-view';
 import {
   ExtensionViewRenderer,
@@ -533,6 +533,115 @@ test('morphs host indicator status text without an extension API option', () => 
   assert.doesNotMatch(extensionProgress, /indicatorMorphingText/);
 });
 
+test('counts completed steps so an active final step never reads as finished', () => {
+  const html = renderExtensionView({
+    type: 'progress',
+    title: 'Setup',
+    label: 'Step 3 of 3',
+    status: 'Pick a small first deliverable.',
+    steps: [
+      { title: 'Intent', status: 'Complete' },
+      { title: 'Tools', status: 'Complete' },
+      { title: 'Milestone', status: 'In progress' },
+    ],
+  });
+
+  assert.match(html, /2 of 3 · 67%/);
+  assert.match(html, /aria-valuenow="2"/);
+  assert.match(html, /class="progressDetail">Pick a small first deliverable\./);
+});
+
+test('keeps explicit progress values and shows the next action below the steps', () => {
+  const continueAction = {
+    type: 'runExtensionAction',
+    title: 'Continue',
+  } as CommandAction;
+  const html = renderExtensionView(
+    {
+      type: 'progress',
+      title: 'Download',
+      value: 3,
+      total: 4,
+      status: 'active',
+      steps: [{ title: 'Fetch', status: 'Running' }],
+      actions: [continueAction],
+    },
+    {},
+    {
+      actionPanelRows: (_panel, actions) => actions,
+      renderActionPanel: (rows) => (
+        <div data-inline-actions={(rows as CommandAction[]).length} />
+      ),
+    },
+  );
+
+  assert.match(html, /3 of 4 · 75%/);
+  assert.doesNotMatch(html, /progressDetail/);
+  assert.match(html, /data-inline-actions="1"/);
+});
+
+test('host indicators never render inline view actions', () => {
+  const html = renderExtensionView(
+    {
+      id: 'indicator:timer',
+      type: 'progress',
+      title: 'Timer',
+      label: 'Running',
+      actions: [{ type: 'runExtensionAction', title: 'Stop' } as CommandAction],
+    },
+    {},
+    {
+      actionPanelRows: (_panel, actions) => actions,
+      renderActionPanel: () => <div data-inline-actions="true" />,
+    },
+  );
+
+  assert.doesNotMatch(html, /data-inline-actions/);
+});
+
+test('split Markdown preview edits source text beside the rendered preview', () => {
+  const split = renderExtensionView({
+    type: 'editor',
+    title: 'Scratchpad',
+    format: 'markdown',
+    preview: true,
+    content: '# Title',
+  });
+
+  assert.match(
+    split,
+    /<textarea[^>]*data-source="markdown"[^>]*># Title<\/textarea>/,
+  );
+  assert.match(split, /class="editorPreviewPane"/);
+  assert.doesNotMatch(split, /markdownEditorContent/);
+});
+
+test('empty lists show their first view action below the empty state', () => {
+  const add = {
+    type: 'runExtensionAction',
+    title: 'Add Task',
+  } as CommandAction;
+  const html = renderExtensionView(
+    {
+      type: 'list',
+      title: 'My Tasks',
+      items: [],
+      emptyView: { title: 'No tasks yet' },
+      actions: [add],
+    },
+    {},
+    {
+      actionPanelRows: (_panel, actions) => actions,
+      renderActionPanel: (rows) => (
+        <div data-inline-actions={(rows as CommandAction[])[0]?.title} />
+      ),
+    },
+  );
+
+  assert.match(html, /No tasks yet/);
+  assert.match(html, /data-inline-actions="Add Task"/);
+});
+
 test('renders an opted-in side preview for the selected list item', () => {
   const html = renderExtensionView({
     type: 'list',
@@ -971,4 +1080,27 @@ test('an explicit camera device id wins over the saved selection', () => {
   assert.deepEqual(initialCameraSelection(undefined, 'camera-device:desk'), {
     source: 'default',
   });
+});
+
+test('rows of a pane hidden under a prompt are not selectable', async () => {
+  const { CommandRow, PaneRowsUnavailable } = await import('../ui');
+  const row = (
+    <CommandRow
+      value="task-1"
+      icon={null}
+      title="Buy milk"
+      onSelect={() => {}}
+    />
+  );
+  const hidden = renderToStaticMarkup(
+    <Command>
+      <PaneRowsUnavailable.Provider value={true}>
+        {row}
+      </PaneRowsUnavailable.Provider>
+    </Command>,
+  );
+  const visible = renderToStaticMarkup(<Command>{row}</Command>);
+
+  assert.match(hidden, /aria-disabled="true"/);
+  assert.doesNotMatch(visible, /aria-disabled="true"/);
 });

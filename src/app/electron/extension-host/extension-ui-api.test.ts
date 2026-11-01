@@ -262,7 +262,7 @@ test('extension ui collection gives records consistent CRUD actions', () => {
   assert.equal(record.primaryAction, preview);
   const [recordPreview, recordEdit, recordRemove] = record.actions;
   assert.equal(recordPreview, preview);
-  assert.equal(recordEdit.shortcut, 'Command+E');
+  assert.equal(recordEdit.shortcut, 'CommandOrControl+E');
   assert.equal(recordEdit.title, 'Edit task');
   assert.equal(recordRemove.shortcut, 'Command+Backspace');
   assert.equal(recordRemove.requiresConfirmation, true);

@@ -1,9 +1,14 @@
 import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
   Clipboard,
   Folder,
   Globe,
   icons,
+  Plus,
   Sparkles,
+  SquareTerminal,
   Trash2,
 } from 'lucide-react';
 import React, { type ComponentType } from 'react';
@@ -112,7 +117,23 @@ function iconForAction(action: CommandAction) {
   if (action.type === 'nativeAction') {
     return <Sparkles size={18} />;
   }
-  return <Globe size={18} />;
+  if (action.type === 'openUrl') return <Globe size={18} />;
+  if (action.type === 'popView') return <ArrowLeft size={18} />;
+  if (['pushView', 'replaceView', 'rootView'].includes(action.type))
+    return <ChevronRight size={18} />;
+  if (action.type === 'shellExec' || action.type === 'shellScript')
+    return <SquareTerminal size={18} />;
+  return iconForActionTitle(action.title);
+}
+
+const CREATE_ACTION_TITLE_PATTERN = /^(add|new|create)\b/i;
+
+function iconForActionTitle(title: string) {
+  return CREATE_ACTION_TITLE_PATTERN.test(title) ? (
+    <Plus size={18} />
+  ) : (
+    <ArrowRight size={18} />
+  );
 }
 
 function CommandItemIcon({

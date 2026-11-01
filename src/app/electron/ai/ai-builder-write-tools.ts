@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { formatBuilderValidationError } from './ai-builder-read-page';
 import {
+  type BuilderToolOptions,
   observeBuilderTool,
   summarizeBuilderText,
-  type BuilderToolOptions,
 } from './ai-builder-tool-shared';
+import { guidanceUpdatePromptForFile } from './extension-guidance-updates';
 
 const PREVIEW_FAILURE_MAX_CHARS = 2000;
 
@@ -183,9 +184,11 @@ export function createBuilderWriteTools(
               formatBuilderValidationError(pi, path.basename(filePath), error),
             );
           }
+          const updates = await guidanceUpdatePromptForFile(filePath);
+          const text = `Validated ${path.basename(filePath)}`;
           return {
             content: [
-              { type: 'text', text: `Validated ${path.basename(filePath)}` },
+              { type: 'text', text: updates ? `${text}\n\n${updates}` : text },
             ],
             details: { filePath },
           };

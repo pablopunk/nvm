@@ -764,7 +764,6 @@ function createProtocolFixture(
     timeout: ReturnType<typeof setTimeout>;
   }> = [];
   let rejectedLargeResult = false;
-  let requestedContinuation = false;
   let builderTaskStarted = false;
   let summaryServed = false;
   let sessionTaskRejected = false;
@@ -931,8 +930,7 @@ function createProtocolFixture(
           builderTaskStarted = true;
           setRequestPhase(currentRequest, 'builder-task-start');
           sendBuilderToolCall(response, '{}', ZERO_USAGE);
-        } else if (!requestedContinuation) {
-          requestedContinuation = true;
+        } else if (!fixture.apiReadComplete) {
           setRequestPhase(currentRequest, 'builder-read-continuation');
           const nextOffset = fixture.nextOffset;
           if (typeof nextOffset !== 'number') {
@@ -1169,8 +1167,7 @@ function createProtocolFixture(
       return;
     }
 
-    if (!requestedContinuation) {
-      requestedContinuation = true;
+    if (!fixture.apiReadComplete) {
       const nextOffset = fixture.nextOffset;
       if (typeof nextOffset !== 'number') {
         sendJson(response, 500, {
@@ -1193,6 +1190,8 @@ function createProtocolFixture(
     baseUrl: '',
     currentApi: 'openai-completions',
     nextOffset: undefined as number | undefined,
+    /** The API grows; the scripted model keeps reading pages until one is complete. */
+    apiReadComplete: false,
     async listen() {
       await new Promise<void>((resolve) =>
         server.listen(0, '127.0.0.1', resolve),
@@ -1372,8 +1371,10 @@ function createAi(
         event.type === 'tool_trace_end' &&
         event.name === 'read_extension_api'
       ) {
-        const nextOffset = toolTraceDetails(event).nextOffset;
-        if (typeof nextOffset === 'number') fixture.nextOffset = nextOffset;
+        const details = toolTraceDetails(event);
+        if (typeof details.nextOffset === 'number')
+          fixture.nextOffset = details.nextOffset;
+        fixture.apiReadComplete = details.complete === true;
       }
     },
   });
@@ -1461,7 +1462,7 @@ test('the real builder adapter proactively compacts bounded API reads and accept
           event.type === 'tool_trace_end' &&
           event.name === 'read_extension_api',
       );
-      assert.equal(apiReadEvents.length, 2);
+      assert.ok(apiReadEvents.length >= 2, 'the API spans several pages');
       const apiReadStarts = events.filter(
         (event) =>
           event.type === 'tool_trace_start' &&
@@ -1487,11 +1488,18 @@ test('the real builder adapter proactively compacts bounded API reads and accept
       );
       assert.equal(pageDetails[0].totalLines, apiLines.length);
       assert.ok(firstNextOffset < apiLines.length);
-      assert.equal(Number(pageInputs[1]?.offset), firstNextOffset);
-      assert.equal(pageDetails[1].nextOffset, null);
-      assert.equal(pageDetails[1].complete, true);
-      assert.equal(pageDetails[1].totalLines, pageDetails[0].totalLines);
-      assert.equal(pageDetails[1].revision, pageDetails[0].revision);
+      for (let page = 1; page < pageDetails.length; page += 1) {
+        assert.equal(
+          Number(pageInputs[page]?.offset),
+          Number(pageDetails[page - 1].nextOffset),
+          'each page continues from the previous page offset',
+        );
+        assert.equal(pageDetails[page].totalLines, pageDetails[0].totalLines);
+        assert.equal(pageDetails[page].revision, pageDetails[0].revision);
+      }
+      const lastPage = pageDetails.at(-1);
+      assert.equal(lastPage?.nextOffset, null);
+      assert.equal(lastPage?.complete, true);
       const continuationLine = apiLines
         .slice(firstNextOffset)
         .find((line) => line.trim().length > 0);
@@ -1535,7 +1543,7 @@ test('the real builder adapter proactively compacts bounded API reads and accept
         (index) => index < continuationIndex,
       );
       assert.ok(
-        proactiveSummaryIndices.length <= 4,
+        proactiveSummaryIndices.length <= 2 * apiReadEvents.length,
         'each API page may cause at most a history and split-turn summary',
       );
       assert.ok(continuationIndex > 0);

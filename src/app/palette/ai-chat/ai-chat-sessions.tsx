@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { startNestedChatFixtureStream } from '../../fixtures/nested-chat-stream';
+import { startNestedChatFixtureStream } from './nested-chat-fixture-stream';
 import { AiChatEventOwners } from './ai-chat-event-routing';
 import type { CommandView } from '../model';
 import type { AiChatEvent } from '../preload-api';

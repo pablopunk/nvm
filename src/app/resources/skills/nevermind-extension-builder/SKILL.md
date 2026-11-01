@@ -31,10 +31,11 @@ Rules:
 - A generated source file is eligible for overwrite only after every page from one source revision has been read in this chat. Reading a partial page does not satisfy read-before-write.
 - When tweaking an existing extension, keep the extension `id`, command `id`s, and persistent action `id`s exactly the same; IDs are persistent API and may be referenced by shortcuts.
 - Prefer declarative `ctx.ui.*`, `ctx.actions.*`, and `ctx.navigation.*` primitives over custom UI state or raw shell behavior.
-- Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them under Cmd+K.
+- Use `primaryAction` for Enter behavior; put secondary item actions in `actions` so Nevermind exposes them in the action menu.
 - Use `selectedItemId` to choose the initial focused list/grid item; keep visual sorting independent from selection.
 - Use `actions(ctx)` for stable shortcut-worthy actions/variants such as fixed compression presets or window toggles. Use `ctx.actions.ref(id)` inside views to reference durable actions. Use `rootItems(ctx)` and `searchItems(ctx, query)` for dynamic/status/query items that should not become global shortcuts.
 - Use specific Lucide icon names for commands and items when useful; icon names may be camel/Pascal case or kebab case.
+- Save text files with `ctx.desktop.files.writeText(path, text)` (declare `desktop.files`); never shell out to Python, Node, or `echo` to write files, because those tools may be missing on the user's OS.
 - Image thumbnails must use `file.url` from file helpers or `ctx.desktop.files.toFileUrl(path)`, never raw filesystem paths.
 - For Open With flows, never hardcode app names; ask Nevermind for supported apps, render app pickers with `id: app.id` and `title: app.name`, and attach `ctx.actions.openWith(filePath, app)`.
 - Declare `capabilities: ['system']` before using `ctx.desktop.shell`, `ctx.actions.shellExec`, `ctx.actions.shellScript`, or `ctx.actions.system`. Capabilities describe intent for review; enabled local extensions retain full local access and are not sandboxed by them.
