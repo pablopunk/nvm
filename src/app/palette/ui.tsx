@@ -1,7 +1,13 @@
 // biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
 import { Check, ChevronRight, Folder, Search } from 'lucide-react';
-import React, { type ReactNode, useLayoutEffect, useRef } from 'react';
+import React, {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import {
   formatShortcut,
   normalizeAccelerator,
@@ -22,6 +28,9 @@ import {
   themedImageSource,
   useSystemTheme,
 } from './system-theme';
+
+/** Rows of a pane hidden or inert under another surface must not be selectable, or cmdk auto-selects them. */
+export const PaneRowsUnavailable = createContext(false);
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
 export const EMPTY_RESULTS_TITLE = 'No results';
@@ -80,13 +89,6 @@ export interface EmptyStateProps {
   title: string;
   subtitle?: string;
   action?: ActionPanelRow;
-}
-export interface PreviewViewProps {
-  content?: ReactNode;
-  image?: CommandImage;
-  video?: string;
-  poster?: string;
-  actions?: ReactNode;
 }
 export type FormValue = string | boolean | string[];
 export interface FormField {
@@ -248,7 +250,10 @@ export function KeyHints({
 
 const MAX_VISIBLE_ACCESSORIES = 3;
 
-function imageProps(image: CommandImage | undefined, theme: SystemTheme) {
+export function imageProps(
+  image: CommandImage | undefined,
+  theme: SystemTheme,
+) {
   if (!image) return null;
   if (typeof image === 'string')
     return { src: image, alt: '', fit: undefined, shape: undefined };
@@ -272,12 +277,14 @@ export function CommandRow({
   className,
   appearance,
   selectedOnlyShortcut = false,
-  disabled,
+  disabled: disabledByRow,
   checked,
   draggable,
   onDragStart,
   onSelect,
 }: CommandRowProps) {
+  const paneRowsUnavailable = useContext(PaneRowsUnavailable);
+  const disabled = disabledByRow || paneRowsUnavailable;
   const keyHints = selectedOnlyShortcut ? (
     shortcut ? (
       <span className="keyHints selectedOnlyEnter">
@@ -361,6 +368,7 @@ export function CommandTile({
   onDragStart,
   onSelect,
 }: CommandTileProps) {
+  const paneRowsUnavailable = useContext(PaneRowsUnavailable);
   const theme = useSystemTheme();
   const media = imageProps(image, theme);
   const visual = glyph ? (
@@ -399,6 +407,7 @@ export function CommandTile({
       data-foreground={appearance?.foreground}
       data-background={appearance?.background}
       data-prominence={appearance?.prominence}
+      disabled={paneRowsUnavailable}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={onSelect}
@@ -453,44 +462,6 @@ export function SearchAccessory({
         </option>
       ))}
     </select>
-  );
-}
-
-export function PreviewView({
-  content,
-  image,
-  video,
-  poster,
-  actions,
-}: PreviewViewProps) {
-  const theme = useSystemTheme();
-  const media = imageProps(image, theme);
-  return (
-    <div className="extensionView previewView">
-      {video ? (
-        <video
-          className="previewMedia"
-          src={video}
-          poster={poster || media?.src}
-          controls={true}
-          autoPlay={true}
-          muted={true}
-          loop={true}
-          playsInline={true}
-        />
-      ) : null}
-      {!video && media?.src ? (
-        <img
-          className="previewMedia"
-          src={media.src}
-          alt={media.alt}
-          data-fit={media.fit}
-          data-shape={media.shape}
-        />
-      ) : null}
-      <div className="previewText">{content}</div>
-      {actions}
-    </div>
   );
 }
 

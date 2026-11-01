@@ -1891,3 +1891,7 @@
 .cameraError strong {
   color: var(--danger-text);
 }
+
+.empty + .result {
+  margin-top: 8px;
+}

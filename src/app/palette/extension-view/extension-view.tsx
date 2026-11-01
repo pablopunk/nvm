@@ -42,7 +42,6 @@ import {
   FormView,
   GridView,
   ListView,
-  PreviewView,
 } from '../ui';
 import { CameraView } from './camera-view';
 import { ChatInputForm } from './chat-input-form';
@@ -54,6 +53,7 @@ import {
 import { formApplyRowId } from './form-fields';
 import { extensionListItemClassName } from './list-item-class-name';
 import type { usePaletteForm } from './palette-form';
+import { PreviewView } from './preview-view';
 import { ProgressView } from './progress-view';
 
 type AiChatState = {

@@ -152,6 +152,7 @@ import {
   EMPTY_ROOT_TITLE,
   EmptyState,
   type FormValue,
+  PaneRowsUnavailable,
   SearchAccessory,
   setShortcutLabelHyperKey,
   shortcutLabel,
@@ -4061,10 +4062,6 @@ export function App() {
     }
   }
 
-  async function tweakWithAi() {
-    await tweakActionWithAi(optionsFor);
-  }
-
   async function renameExtensionAction() {
     if (!optionsFor) return;
     setOptionsFor(null);
@@ -4629,7 +4626,7 @@ export function App() {
         icon: <Wand2 size={18} />,
         title: 'Tweak with AI',
         subtitle: 'Open the original creation chat for this action',
-        onSelect: tweakWithAi,
+        onSelect: () => tweakActionWithAi(optionsFor),
         show: canTweakWithAi,
       },
       {
@@ -5004,51 +5001,54 @@ export function App() {
     view: ExtensionView,
     entry = extensionNavigation.activeEntry,
   ) {
+    const active = entry?.id === extensionNavigation.activeEntry?.id;
     return (
-      <ExtensionViewRenderer
-        view={view}
-        aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
-        active={entry?.id === extensionNavigation.activeEntry?.id}
-        nevermindAuthed={nevermindAuthed}
-        deviceSignInStatus={deviceSignInStatus}
-        onSignInToNevermind={async () => {
-          const result = await window.nvm.signInToNevermind();
-          if (result.ok) setNevermindAuthed(true);
-          else
-            showFeedbackIndicator(
-              `Sign-in failed: ${result.error || 'unknown'}`,
-              'error',
-            );
-        }}
-        onRetryDeviceSignInBrowser={() =>
-          window.nvm.retryNevermindDeviceSignInBrowser()
-        }
-        onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
-        formValues={entry?.formValues || formValues}
-        formController={view === extensionView ? paletteForm : undefined}
-        formQuery={entry?.query || ''}
-        setFormValues={setFormValues}
-        filterItems={(items) =>
-          filterExtensionItems(items || [], view, entry?.query || '').map(
-            hydrateExtensionItemIcon,
-          )
-        }
-        filterSections={(currentView) =>
-          filterViewSections(currentView, entry?.query || '')
-        }
-        renderMarkdown={renderMarkdown}
-        renderActionPanel={renderActionPanel}
-        actionPanelRows={actionPanelRows}
-        renderRootIcon={iconForCommandItem}
-        renderEmpty={renderViewEmpty}
-        runDefaultAction={runDefaultViewAction}
-        runAction={runViewAction}
-        sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
-        abortAiChat={window.nvm.abortAiChat}
-        dragPathForItem={dragPathForItem}
-        startItemDrag={startItemDrag}
-        selectedItemId={entry?.selection || selectedValue}
-      />
+      <PaneRowsUnavailable.Provider value={active && activePaneObscured}>
+        <ExtensionViewRenderer
+          view={view}
+          aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
+          active={active}
+          nevermindAuthed={nevermindAuthed}
+          deviceSignInStatus={deviceSignInStatus}
+          onSignInToNevermind={async () => {
+            const result = await window.nvm.signInToNevermind();
+            if (result.ok) setNevermindAuthed(true);
+            else
+              showFeedbackIndicator(
+                `Sign-in failed: ${result.error || 'unknown'}`,
+                'error',
+              );
+          }}
+          onRetryDeviceSignInBrowser={() =>
+            window.nvm.retryNevermindDeviceSignInBrowser()
+          }
+          onCancelDeviceSignIn={() => window.nvm.cancelNevermindDeviceSignIn()}
+          formValues={entry?.formValues || formValues}
+          formController={view === extensionView ? paletteForm : undefined}
+          formQuery={entry?.query || ''}
+          setFormValues={setFormValues}
+          filterItems={(items) =>
+            filterExtensionItems(items || [], view, entry?.query || '').map(
+              hydrateExtensionItemIcon,
+            )
+          }
+          filterSections={(currentView) =>
+            filterViewSections(currentView, entry?.query || '')
+          }
+          renderMarkdown={renderMarkdown}
+          renderActionPanel={renderActionPanel}
+          actionPanelRows={actionPanelRows}
+          renderRootIcon={iconForCommandItem}
+          renderEmpty={renderViewEmpty}
+          runDefaultAction={runDefaultViewAction}
+          runAction={runViewAction}
+          sendAiPrompt={(message) => sendAiPrompt(message, view.chatId)}
+          abortAiChat={window.nvm.abortAiChat}
+          dragPathForItem={dragPathForItem}
+          startItemDrag={startItemDrag}
+          selectedItemId={entry?.selection || selectedValue}
+        />
+      </PaneRowsUnavailable.Provider>
     );
   }
 
@@ -5068,10 +5068,8 @@ export function App() {
       shortcutFor
     )
       return false;
-    const normalized = normalizedShortcut(accelerator);
-    const selectedItem = selectedExtensionItem;
-    const actions = localActionCandidates(selectedItem, extensionView);
-    const action = findLocalShortcut(actions, normalized);
+    const actions = localActionCandidates(selectedExtensionItem, extensionView);
+    const action = findLocalShortcut(actions, accelerator);
     if (!action) return false;
     runViewAction(action);
     return true;

@@ -1081,3 +1081,26 @@ test('an explicit camera device id wins over the saved selection', () => {
     source: 'default',
   });
 });
+
+test('rows of a pane hidden under a prompt are not selectable', async () => {
+  const { CommandRow, PaneRowsUnavailable } = await import('../ui');
+  const row = (
+    <CommandRow
+      value="task-1"
+      icon={null}
+      title="Buy milk"
+      onSelect={() => {}}
+    />
+  );
+  const hidden = renderToStaticMarkup(
+    <Command>
+      <PaneRowsUnavailable.Provider value={true}>
+        {row}
+      </PaneRowsUnavailable.Provider>
+    </Command>,
+  );
+  const visible = renderToStaticMarkup(<Command>{row}</Command>);
+
+  assert.match(hidden, /aria-disabled="true"/);
+  assert.doesNotMatch(visible, /aria-disabled="true"/);
+});
