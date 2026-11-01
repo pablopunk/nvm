@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   AI_CHAT_IMAGE_LIMIT,
   AI_CHAT_IMAGE_MAX_BYTES,
@@ -789,10 +789,6 @@ export function useAiChat(
       }
     }
   }
-
-  useLayoutEffect(() => {
-    resizeInput();
-  }, [input]);
 
   useEffect(() => {
     if (activityTimerRef.current) {
