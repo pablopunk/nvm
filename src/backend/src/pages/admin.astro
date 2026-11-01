@@ -120,7 +120,8 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       element.className = `status${kind ? ` status--${kind}` : ''}`;
     }
     async function errorMessage(response) {
-      try { return (await response.json()).error?.message || response.statusText; } catch { return response.statusText; }
+      const body = await response.text();
+      try { return JSON.parse(body).error?.message || response.statusText; } catch { return body.trim() || response.statusText; }
     }
     async function getJson(path) {
       return dashboardFetch(path);
@@ -371,13 +372,32 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     }
     async function saveRoute(row, path, payload) {
       const status = row.querySelector('[data-status]');
+      const selects = [...row.querySelectorAll('select')];
+      const controls = [...selects, ...row.querySelectorAll('button')];
+      const disabled = controls.map((control) => control.disabled);
+      controls.forEach((control) => { control.disabled = true; });
       setStatus(status, 'Saving…');
-      try { await adminMutation(path, 'PUT', payload); setStatus(status, 'Saved', 'ok'); }
-      catch (error) { setStatus(status, error.message, 'err'); }
+      try {
+        await adminMutation(path, 'PUT', payload);
+        selects.forEach((select) => { select.dataset.savedValue = select.value; });
+        setStatus(status, 'Saved', 'ok');
+      } catch (error) {
+        selects.forEach((select) => {
+          select.value = select.dataset.savedValue;
+          select.dispatchEvent(new Event('host-selection-reset'));
+        });
+        setStatus(status, `Could not save: ${error.message}`, 'err');
+      } finally {
+        controls.forEach((control, index) => { control.disabled = disabled[index]; });
+      }
+    }
+    function rememberRoute(row) {
+      row.querySelectorAll('select').forEach((select) => { select.dataset.savedValue = select.value; });
     }
     function initializeModelRoutes() {
       document.querySelectorAll('[data-model-route]:not([data-initialized])').forEach((row) => {
         row.dataset.initialized = 'true';
+        rememberRoute(row);
         loadRoutePricing(row);
         row.querySelectorAll('select').forEach((select) => select.addEventListener('change', async () => {
           await saveRoute(row, '/api/admin/model', { purpose: row.dataset.modelRoute, modelRef: row.querySelector('.model-select').value, thinkingLevel: row.querySelector('.thinking-select')?.value ?? 'off' });
@@ -386,10 +406,12 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       });
       document.querySelectorAll('[data-audio-model-route]:not([data-initialized])').forEach((row) => {
         row.dataset.initialized = 'true';
+        rememberRoute(row);
         row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/audio-model', splitRef(event.currentTarget.value)));
       });
       document.querySelectorAll('[data-decision-model-route]:not([data-initialized])').forEach((row) => {
         row.dataset.initialized = 'true';
+        rememberRoute(row);
         row.querySelector('select').addEventListener('change', (event) => saveRoute(row, '/api/admin/decision-model', splitRef(event.currentTarget.value)));
       });
     }

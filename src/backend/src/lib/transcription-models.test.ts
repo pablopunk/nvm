@@ -87,6 +87,24 @@ test('lookups read the validated catalog and never reach the network', async () 
   assert.equal(requests.length, requestsBeforeLookups);
 });
 
+test('hourly catalog pricing is converted to seconds and invalid rates are rejected', async () => {
+  const model = {
+    id: 'microsoft/mai-transcribe-2',
+    architecture: { input_modalities: ['audio'], output_modalities: ['transcription'] },
+    pricing: { prompt: '0.1', completion: '0' },
+  };
+  answerCatalogWith({ data: [model] });
+  await refreshTranscriptionCatalog();
+  assert.deepEqual(await lookupTranscriptionDurationPricing('openrouter', model.id), {
+    unit: 'second',
+    usdPerSecond: 0.1 / 3600,
+    source: 'openrouter_transcription_catalog',
+  });
+  answerCatalogWith({ data: [{ ...model, pricing: { prompt: '0.1', completion: '1' } }] });
+  await refreshTranscriptionCatalog();
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', model.id), null);
+});
+
 test('an unvalidated catalog lists and prices nothing, and a lookup never fetches it', async () => {
   answerCatalogWith(PARAKEET_CATALOG);
 

@@ -42,15 +42,19 @@ function decimalRate(value: unknown): number | null {
 function durationPricing(
   model: OpenRouterModel,
 ): TranscriptionDurationPricing | null {
-  // Parakeet's provider documents USD/minute; the STT catalog exposes
-  // USD/second. Other STT models may bill tokens and must not inherit this unit.
-  if (model.id !== 'nvidia/parakeet-tdt-0.6b-v3') return null;
-  const usdPerSecond = decimalRate(model.pricing?.prompt);
+  // OpenRouter's catalog omits units; these are verified against its model pages.
+  const secondsPerUnit = new Map<string, number>([
+    ['nvidia/parakeet-tdt-0.6b-v3', 1],
+    ['microsoft/mai-transcribe-2', 3600],
+  ]);
+  const divisor = typeof model.id === 'string' ? secondsPerUnit.get(model.id) : undefined;
+  if (!divisor) return null;
+  const rate = decimalRate(model.pricing?.prompt);
   const outputRate = decimalRate(model.pricing?.completion);
-  if (usdPerSecond == null || outputRate !== 0) return null;
+  if (rate == null || outputRate !== 0) return null;
   return {
     unit: 'second',
-    usdPerSecond,
+    usdPerSecond: rate / divisor,
     source: 'openrouter_transcription_catalog',
   };
 }
