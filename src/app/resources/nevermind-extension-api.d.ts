@@ -503,6 +503,138 @@ export type ExtensionIndicatorInput = {
   durationMs?: number;
 };
 
+/** Monochrome glyphs pre-rendered for native menu bar / tray status items. Unknown names fall back to `zap`. */
+export type ExtensionMenuBarIcon =
+  | 'zap'
+  | 'circle'
+  | 'circle-dot'
+  | 'circle-check'
+  | 'circle-alert'
+  | 'circle-x'
+  | 'bell'
+  | 'bell-dot'
+  | 'timer'
+  | 'clock'
+  | 'alarm-clock'
+  | 'calendar'
+  | 'coffee'
+  | 'mic'
+  | 'mic-off'
+  | 'video'
+  | 'music'
+  | 'play'
+  | 'pause'
+  | 'activity'
+  | 'cpu'
+  | 'hard-drive'
+  | 'memory-stick'
+  | 'wifi'
+  | 'battery-medium'
+  | 'cloud'
+  | 'cloud-sun'
+  | 'sun'
+  | 'moon'
+  | 'git-pull-request'
+  | 'git-branch'
+  | 'git-commit-horizontal'
+  | 'terminal'
+  | 'code'
+  | 'bug'
+  | 'rocket'
+  | 'server'
+  | 'globe'
+  | 'mail'
+  | 'message-square'
+  | 'inbox'
+  | 'list-todo'
+  | 'square-check'
+  | 'star'
+  | 'heart'
+  | 'flame'
+  | 'eye'
+  | 'lock'
+  | 'shield'
+  | 'sparkles'
+  | 'bot'
+  | 'clipboard'
+  | 'sticky-note'
+  | 'folder'
+  | 'download'
+  | 'upload'
+  | 'refresh-cw'
+  | 'chart-line'
+  | 'gauge'
+  | 'thermometer'
+  | 'droplet'
+  | 'house'
+  | 'briefcase'
+  | 'dollar-sign';
+
+/** One row in a menu bar item's native menu. */
+export type ExtensionMenuBarRow = {
+  /** Stable id within its section. */
+  id: string;
+  title: string;
+  /** Secondary text. macOS shows it below the title; Windows and Linux append it to the title. */
+  subtitle?: string;
+  /** Row glyph, shown on macOS only. */
+  icon?: ExtensionMenuBarIcon;
+  /** Renders a checkmark when true and an unchecked checkbox when false. */
+  checked?: boolean;
+  disabled?: boolean;
+  /** Display-only shortcut label in canonical storage format such as `Command+Shift+K`. Register real shortcuts on durable actions. Not shown on Linux. */
+  shortcut?: string;
+  /** Runs like a global shortcut: view results open the palette, background actions run in place. Ignored when `items` is set. */
+  action?: ExtensionAction;
+  /** Submenu rows, one level deep. */
+  items?: ExtensionMenuBarRow[];
+};
+
+export type ExtensionMenuBarSection = {
+  /** Disabled header row above the section. */
+  title?: string;
+  items: ExtensionMenuBarRow[];
+};
+
+/** A native menu bar (macOS) or tray (Windows, Linux) status item rendered by the host. */
+export type ExtensionMenuBar = {
+  /** Stable id within the extension. Defaults to `main` for the first item. */
+  id?: string;
+  /** Status glyph. Defaults to `zap`. */
+  icon?: ExtensionMenuBarIcon;
+  /** Short text beside the glyph, e.g. `3 PRs` or `12:30`. macOS only; Windows and Linux append it to the tooltip. Capped at 24 characters. */
+  title?: string;
+  /** Hover text. Defaults to the extension title. */
+  tooltip?: string;
+  /** Menu sections separated by native separators. */
+  sections?: ExtensionMenuBarSection[];
+  /** Shorthand for a single untitled section. */
+  items?: ExtensionMenuBarRow[];
+};
+
+/**
+ * Menu bar contribution. The host renders `render(ctx)` once at load, again when the user opens
+ * the menu (the open shows the cached menu immediately and the refresh lands on the next open),
+ * on each declared trigger, and when the extension calls `ctx.menuBar.refresh()`. A throw or a
+ * 10 second timeout keeps the last good menu. Return `null` to show nothing.
+ *
+ * The host always adds a durable root action named `Hide <title> from Menu Bar` /
+ * `Show <title> in Menu Bar`; extensions cannot remove it and do not need their own toggle.
+ * Platform notes: macOS opens the menu on click; Windows opens it on left or right click;
+ * Linux trays open it on right click and need a StatusNotifier/AppIndicator host on GNOME.
+ */
+export type ExtensionMenuBarContribution = {
+  /** Extra refresh triggers, e.g. `{ type: 'interval', every: '1m' }` for a clock or counter. */
+  triggers?: ExtensionBackgroundTrigger[];
+  render(
+    ctx: ExtensionContext,
+  ):
+    | ExtensionMenuBar
+    | ExtensionMenuBar[]
+    | null
+    | Promise<ExtensionMenuBar | ExtensionMenuBar[] | null>;
+};
+
 /** In-place list/grid update returned from an action handler. */
 export type ExtensionViewPatch = {
   /** How to apply item changes. Defaults to host behavior, usually patch. */
@@ -1743,6 +1875,11 @@ export type ExtensionContext = {
      * that backs `actions(ctx)` changes, e.g. when the extension adds or removes user-defined commands.
      */
     refreshContributions(): Promise<ExtensionContributionRefreshResult>;
+    /** Show the palette at its root search. Use it for an `Open …` menu bar row. */
+    openPalette(
+      title?: string,
+      options?: Partial<ExtensionAction>,
+    ): ExtensionAction;
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
     typeText(
       text: string,
@@ -2197,6 +2334,8 @@ export type ExtensionContext = {
   cache: ExtensionRuntimeCache;
   /** Current-view helpers. `refresh()` may be placed in `view.refresh.action`; the host converts it to an opaque refresh handle before IPC. */
   views: { refresh(): ExtensionAction; invalidate(): void };
+  /** Re-render this extension's `menuBar` contribution in the background. */
+  menuBar: { refresh(): void };
   /** App update state. Declare the `updates` capability for review and pair with `ctx.actions.updates.*`. */
   updates?: { getState(): ExtensionUpdateState };
   state: Record<string, unknown>;
@@ -2259,6 +2398,8 @@ export type NevermindExtension = {
    * restoration when this returns null. Views and action handlers are never
    * serialized as restoration state.
    */
+  /** Native menu bar / tray status items. See `ExtensionMenuBarContribution`. */
+  menuBar?: ExtensionMenuBarContribution;
   restoreWindow?(
     ctx: ExtensionContext,
     restoreKey: string,

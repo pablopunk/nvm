@@ -40,11 +40,8 @@ export type NormalizedMenuBar = {
 export type MenuBarNormalizationIssue = { menuBarId?: string; message: string };
 
 export function extensionMenuBarRenderer(extension: any) {
-  const contribution = extension?.menuBar;
-  if (typeof contribution === 'function') return contribution;
-  return typeof contribution?.render === 'function'
-    ? contribution.render
-    : null;
+  const render = extension?.menuBar?.render;
+  return typeof render === 'function' ? render : null;
 }
 
 export function extensionMenuBarTriggers(extension: any): unknown[] {

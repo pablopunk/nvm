@@ -14,6 +14,7 @@ import { createFilesExtension } from './files';
 import { createFloatingNotesExtension } from './floating-notes';
 import { createGettingStartedExtension } from './getting-started';
 import { createKeyboardShortcutsExtension } from './keyboard-shortcuts';
+import { createNevermindMenuBarExtension } from './menubar';
 import { createQuitAppsExtension } from './quit-apps';
 import { createSettingsExtension } from './settings';
 import { createPermissionsExtension } from './permissions';
@@ -46,6 +47,7 @@ export const INTERNAL_EXTENSION_FACTORIES: Array<() => any> = [
   createDiagnosticsExtension,
   createAccountExtension,
   createGettingStartedExtension,
+  createNevermindMenuBarExtension,
 ];
 
 export const INTERNAL_EXTENSION_SOURCE_FILES = [
@@ -65,6 +67,7 @@ export const INTERNAL_EXTENSION_SOURCE_FILES = [
   'getting-started.ts',
   'permissions.ts',
   'keyboard-shortcuts.ts',
+  'menubar.ts',
   'quit-apps.ts',
   'settings.ts',
   'system.ts',

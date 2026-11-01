@@ -1,5 +1,17 @@
 import { extensionContext } from './_context';
 
+export function appSettingsView(ctx: any) {
+  return ctx.ui.list({
+    type: 'list',
+    id: 'app-settings',
+    title: 'Settings',
+    presentation: 'root',
+    selectedItemId: ctx.state.selectedItemId,
+    searchBarPlaceholder: 'Search Settings',
+    items: extensionContext.settingsItems(),
+  });
+}
+
 export function createSettingsExtension() {
   return {
     id: 'nevermind.settings',
@@ -13,16 +25,7 @@ export function createSettingsExtension() {
         subtitle: 'Configure Nevermind',
         icon: 'settings',
         score: 16,
-        run: (ctx) =>
-          ctx.ui.list({
-            type: 'list',
-            id: 'app-settings',
-            title: 'Settings',
-            presentation: 'root',
-            selectedItemId: ctx.state.selectedItemId,
-            searchBarPlaceholder: 'Search Settings',
-            items: extensionContext.settingsItems(),
-          }),
+        run: appSettingsView,
       },
     ],
   };
