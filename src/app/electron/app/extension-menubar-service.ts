@@ -34,6 +34,15 @@ type RenderedMenuBars = {
   menuBars: NormalizedMenuBar[];
 };
 
+export function menuRowRunsWithoutView(action: any) {
+  return (
+    action?.dismissAfterRun === 'auto' ||
+    action?.background === true ||
+    action?.mode === 'background' ||
+    action?.mode === 'noView'
+  );
+}
+
 function menuBarEntry(extension: any) {
   return {
     extension,
@@ -129,6 +138,7 @@ export function createExtensionMenuBarService(
           id: `menubar:${menuBarId}:${rowPath}`,
           title: row.title,
           primaryAction: row.action,
+          ...(menuRowRunsWithoutView(row.action) ? { mode: 'noView' } : {}),
         },
       );
       if (!rootAction) return;

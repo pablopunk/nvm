@@ -173,3 +173,25 @@ test('opening a status item refreshes its owning extension', async () => {
 
   assert.equal(renders, 2);
 });
+
+test('fire-and-forget rows run without opening the palette', async () => {
+  const { service, specs, bound } = createHarness([
+    timerExtension(() => ({
+      items: [
+        {
+          id: 'copy',
+          title: 'Copy',
+          action: { type: 'copyText', dismissAfterRun: 'auto' },
+        },
+        { id: 'log', title: 'Log', action: { type: 'pushView' } },
+      ],
+    })),
+  ]);
+  await service.syncAll();
+
+  specs.get('pomodoro:main').menu[0].onClick();
+  specs.get('pomodoro:main').menu[1].onClick();
+
+  assert.equal(bound[0].mode, 'noView');
+  assert.equal(bound[1].mode, undefined);
+});
