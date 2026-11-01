@@ -5,7 +5,7 @@ import {
   Square,
   X,
 } from 'lucide-react';
-import React, { useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { canSendAiChatMessage } from '../../shared/ai-chat-images';
 import type { AiChatModel } from '../../shared/ai-chat-model';
 import type { AiChatAttachment } from '../ai-chat/use-ai-chat';
@@ -52,6 +52,11 @@ export function ChatInputForm({
   onModelChange?: (model: AiChatModel) => void;
 }) {
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const resizeRef = useRef(onResize);
+  resizeRef.current = onResize;
+  useLayoutEffect(() => {
+    resizeRef.current(inputRef.current);
+  }, [value, inputRef]);
   return (
     <form
       className="chatInputRow"

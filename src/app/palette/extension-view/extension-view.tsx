@@ -846,9 +846,6 @@ function ChatExtensionView({
     el.style.overflowY = el.scrollHeight > 120 ? 'auto' : 'hidden';
   }
   useLayoutEffect(() => {
-    resizeChatInput();
-  }, []);
-  useLayoutEffect(() => {
     if (!active || view.aiChat || !view.submitAction) return;
     const frame = requestAnimationFrame(() => chatInputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
