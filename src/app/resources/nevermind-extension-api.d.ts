@@ -784,6 +784,7 @@ export type ExtensionView = {
   /** List views only: `fit` wraps a short status-style list instead of filling the palette. Defaults to `fill`. */
   contentSizing?: 'fill' | 'fit';
   presentation?: ViewPresentation;
+  /** Grids show it above their tiles, editors in their header, and previews only when they have no `content`. Lists and forms do not show it, so put status a user must see (counts, totals, last run) in an item or field. */
   subtitle?: string;
   content?: string;
   /** Optional host-owned draft lifecycle for editor views only. */
