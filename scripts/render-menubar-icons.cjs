@@ -4,6 +4,7 @@
 // Run with Electron (it provides the canvas): `electron scripts/render-menubar-icons.cjs`.
 const fs = require('node:fs');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const { app, BrowserWindow } = require('electron');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -23,11 +24,15 @@ function curatedIconNames() {
   return [...list[1].matchAll(/'([a-z0-9-]+)'/g)].map((match) => match[1]);
 }
 
-function lucideIconNode(name) {
-  const source = fs.readFileSync(path.join(LUCIDE_DIR, `${name}.mjs`), 'utf8');
-  const node = source.match(/node: (\[[\s\S]*?\])\n\};/);
-  if (!node) throw new Error(`Lucide icon data not found for ${name}`);
-  return Function(`"use strict"; return (${node[1]});`)();
+async function lucideIconNode(name) {
+  const file = path.join(LUCIDE_DIR, `${name}.mjs`);
+  const module = await import(pathToFileURL(file).href);
+  if (module.__iconData?.node) return module.__iconData.node;
+  const alias = fs
+    .readFileSync(file, 'utf8')
+    .match(/export \{ default \} from '\.\/([a-z0-9-]+)\.mjs'/);
+  if (alias) return lucideIconNode(alias[1]);
+  throw new Error(`Lucide icon data not found for ${name}`);
 }
 
 function svgFor(iconNode, color) {
@@ -71,7 +76,7 @@ async function renderAll() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
   const names = curatedIconNames();
   for (const name of names) {
-    const iconNode = lucideIconNode(name);
+    const iconNode = await lucideIconNode(name);
     for (const variant of VARIANTS) {
       const svg = svgFor(iconNode, variant.color);
       for (const scale of [1, 2]) {
