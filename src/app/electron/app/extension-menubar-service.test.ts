@@ -140,7 +140,9 @@ test('a render that never settles times out without blocking others', async () =
     },
   ]);
 
+  const keepEventLoopAliveForUnrefTimeout = setInterval(() => {}, 10);
   await service.syncAll();
+  clearInterval(keepEventLoopAliveForUnrefTimeout);
 
   assert.equal(specs.has('pomodoro:main'), false);
   assert.equal(specs.get('clock:main').title, '12:00');
