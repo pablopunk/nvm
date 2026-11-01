@@ -9,19 +9,12 @@ import {
   type AiChatMessageImage,
   canSendAiChatMessage,
 } from '../../shared/ai-chat-images';
-import { imageDimensions } from '../../shared/ai-image-dimensions';
 import {
   type AiChatModel,
   DEFAULT_AI_CHAT_MODEL,
   isAiChatModel,
 } from '../../shared/ai-chat-model';
-import {
-  type AiChatActivityEvent,
-  aiChatDeltaHasVisibleText,
-  EMPTY_AI_CHAT_ACTIVITY,
-  transitionAiChatActivity,
-} from './ai-chat-activity';
-import { appendAssistantDelta } from './ai-chat-delta';
+import { imageDimensions } from '../../shared/ai-image-dimensions';
 import {
   markDebugPerformance,
   measureDebugPerformance,
@@ -30,6 +23,13 @@ import {
 } from '../debug-performance';
 import type { CommandAction, CommandView } from '../model';
 import { createRendererPerformanceTrace } from '../performance-trace';
+import {
+  type AiChatActivityEvent,
+  aiChatDeltaHasVisibleText,
+  EMPTY_AI_CHAT_ACTIVITY,
+  transitionAiChatActivity,
+} from './ai-chat-activity';
+import { appendAssistantDelta } from './ai-chat-delta';
 
 export type AiLimitState = {
   kind?: string;
@@ -698,7 +698,7 @@ export function useAiChat(
         setModelChangingState(false);
         setLimit(null);
         setCreditNotice(null);
-        setInput('');
+        setInput(view.suggestedPrompt || '');
         optimisticTraceIdRef.current = undefined;
         attachmentGenerationRef.current += 1;
         pendingAttachmentCountRef.current = 0;

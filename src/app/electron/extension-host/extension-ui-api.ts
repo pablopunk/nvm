@@ -1,6 +1,7 @@
 // biome-ignore-all lint: Host-side extension payload boundary keeps dynamic view shapes by design.
+
+import { extensionLoadingView } from '../../palette/extension-loading-view';
 import { feedbackView } from '../../palette/feedback';
-import { extensionLoadingView } from '../../palette/model';
 import {
   createExtensionUiPreview,
   type ExtensionUiPreviewDeps,

@@ -70,6 +70,7 @@ import {
 import { dictationDevices } from './dictation/dictation-devices';
 import { recordDictation } from './dictation/dictation-renderer';
 import { mouseDownLandsOnEmptyWindowSpace } from './empty-window-space';
+import { extensionLoadingView } from './extension-loading-view';
 import { ExtensionViewRenderer } from './extension-view/extension-view';
 import {
   FORM_SAVE_ROW_ID,
@@ -105,7 +106,6 @@ import {
   type CommandView,
   type CommandViewPatch,
   canCustomizeCommandAction,
-  extensionLoadingView,
 } from './model';
 import { PaletteCompactActionPanel } from './palette-compact-action-panel';
 import {

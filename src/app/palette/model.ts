@@ -596,6 +596,8 @@ export interface CommandView extends CameraViewFields {
   builderPreviews?: BuilderPreview[];
   selectedBuilderPreviewFilename?: string;
   initialPrompt?: string;
+  /** Prefills the AI chat input without sending it. */
+  suggestedPrompt?: string;
   subtitle?: string;
   content?: string;
   draft?: {
@@ -659,18 +661,6 @@ export interface CommandView extends CameraViewFields {
   layout?: NonNullable<ExtensionView['layout']>;
   aspectRatio?: NonNullable<ExtensionView['aspectRatio']>;
   columns?: NonNullable<ExtensionView['columns']>;
-}
-
-export function extensionLoadingView(title = 'Loading…'): CommandView {
-  return {
-    type: 'list',
-    id: `extension-loading:${title}`,
-    title,
-    searchBarPlaceholder: title,
-    contentSizing: 'fit',
-    isLoading: true,
-    items: [],
-  };
 }
 
 export interface RowModel {
