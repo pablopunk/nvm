@@ -10,7 +10,9 @@ const extension = { id: 'pomodoro', title: 'Pomodoro' };
 
 test('a single descriptor becomes the main menu bar with defaults', () => {
   const { menuBars, issues } = normalizeExtensionMenuBars(extension, {
-    items: [{ id: 'start', title: 'Start Focus', action: { type: 'x' } }],
+    sections: [
+      { items: [{ id: 'start', title: 'Start Focus', action: { type: 'x' } }] },
+    ],
   });
 
   assert.deepEqual(issues, []);
@@ -31,7 +33,7 @@ test('a single descriptor becomes the main menu bar with defaults', () => {
 test('unknown icons fall back to zap and are reported', () => {
   const { menuBars, issues } = normalizeExtensionMenuBars(extension, {
     icon: 'not-an-icon',
-    items: [{ id: 'a', title: 'A', icon: 'also-wrong' }],
+    sections: [{ items: [{ id: 'a', title: 'A', icon: 'also-wrong' }] }],
   });
 
   assert.equal(menuBars[0].icon, 'zap');
@@ -42,7 +44,7 @@ test('unknown icons fall back to zap and are reported', () => {
 test('status titles are capped so they cannot flood the menu bar', () => {
   const { menuBars } = normalizeExtensionMenuBars(extension, {
     title: 'A very long status title that keeps going',
-    items: [],
+    sections: [],
   });
 
   assert.equal(menuBars[0].title?.length, 24);
@@ -66,16 +68,20 @@ test('rows without id or title are dropped and empty sections removed', () => {
 
 test('submenus nest one level and drop the parent action', () => {
   const { menuBars } = normalizeExtensionMenuBars(extension, {
-    items: [
+    sections: [
       {
-        id: 'parent',
-        title: 'Parent',
-        action: { type: 'ignored' },
         items: [
           {
-            id: 'child',
-            title: 'Child',
-            items: [{ id: 'grandchild', title: 'Too deep' }],
+            id: 'parent',
+            title: 'Parent',
+            action: { type: 'ignored' },
+            items: [
+              {
+                id: 'child',
+                title: 'Child',
+                items: [{ id: 'grandchild', title: 'Too deep' }],
+              },
+            ],
           },
         ],
       },
@@ -90,8 +96,8 @@ test('submenus nest one level and drop the parent action', () => {
 
 test('extra menu bars need stable unique ids and are capped at three', () => {
   const { menuBars, issues } = normalizeExtensionMenuBars(extension, [
-    { items: [] },
-    { items: [] },
+    { sections: [] },
+    { sections: [] },
     { id: 'b', items: [] },
     { id: 'b', items: [] },
     { id: 'c', items: [] },
@@ -119,4 +125,11 @@ test('only menuBar.render contributions are recognised', () => {
     }),
     [{ type: 'interval', every: '1m' }],
   );
+});
+
+test('rows must live in sections', () => {
+  const { menuBars } = normalizeExtensionMenuBars(extension, {
+    items: [{ id: 'loose', title: 'Loose' }],
+  });
+  assert.deepEqual(menuBars[0].sections, []);
 });

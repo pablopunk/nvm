@@ -108,8 +108,7 @@ function normalizeRows(
 }
 
 function sectionsFromDescriptor(descriptor: any) {
-  if (Array.isArray(descriptor?.sections)) return descriptor.sections;
-  return Array.isArray(descriptor?.items) ? [{ items: descriptor.items }] : [];
+  return Array.isArray(descriptor?.sections) ? descriptor.sections : [];
 }
 
 function normalizeSections(

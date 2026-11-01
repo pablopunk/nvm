@@ -89,7 +89,9 @@ test('rendered menu bars become status item specs with sections', async () => {
 test('row actions bind lazily and run through the menu action runner', async () => {
   const { service, specs, ran, bound } = createHarness([
     timerExtension(() => ({
-      items: [{ id: 'start', title: 'Start', action: { type: 'start' } }],
+      sections: [
+        { items: [{ id: 'start', title: 'Start', action: { type: 'start' } }] },
+      ],
     })),
   ]);
   await service.syncAll();
@@ -105,7 +107,7 @@ test('row actions bind lazily and run through the menu action runner', async () 
 
 test('hidden extensions contribute no status items', async () => {
   const { service, specs } = createHarness(
-    [timerExtension(() => ({ items: [] }))],
+    [timerExtension(() => ({ sections: [] }))],
     new Set(['pomodoro']),
   );
 
@@ -119,7 +121,7 @@ test('a failing render keeps the last good menu', async () => {
   const { service, specs } = createHarness([
     timerExtension(() => {
       if (fail) throw new Error('boom');
-      return { title: 'ok', items: [] };
+      return { title: 'ok', sections: [] };
     }),
   ]);
   await service.syncAll();
@@ -136,7 +138,7 @@ test('a render that never settles times out without blocking others', async () =
     {
       id: 'clock',
       title: 'Clock',
-      menuBar: { render: () => ({ title: '12:00', items: [] }) },
+      menuBar: { render: () => ({ title: '12:00', sections: [] }) },
     },
   ]);
 
@@ -149,7 +151,7 @@ test('a render that never settles times out without blocking others', async () =
 });
 
 test('removed extensions lose their status items on the next sync', async () => {
-  const harness = createHarness([timerExtension(() => ({ items: [] }))]);
+  const harness = createHarness([timerExtension(() => ({ sections: [] }))]);
   await harness.service.syncAll();
   harness.extensionModules.delete('pomodoro');
 
@@ -177,13 +179,17 @@ test('opening a status item refreshes its owning extension', async () => {
 test('fire-and-forget rows run without opening the palette', async () => {
   const { service, specs, bound } = createHarness([
     timerExtension(() => ({
-      items: [
+      sections: [
         {
-          id: 'copy',
-          title: 'Copy',
-          action: { type: 'copyText', dismissAfterRun: 'auto' },
+          items: [
+            {
+              id: 'copy',
+              title: 'Copy',
+              action: { type: 'copyText', dismissAfterRun: 'auto' },
+            },
+            { id: 'log', title: 'Log', action: { type: 'pushView' } },
+          ],
         },
-        { id: 'log', title: 'Log', action: { type: 'pushView' } },
       ],
     })),
   ]);

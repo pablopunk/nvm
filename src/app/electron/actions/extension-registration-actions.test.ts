@@ -282,7 +282,7 @@ function menuBarExtension(overrides: Record<string, any> = {}) {
   return {
     id: 'pomodoro',
     title: 'Pomodoro',
-    menuBar: { render: () => ({ icon: 'timer', items: [] }) },
+    menuBar: { render: () => ({ icon: 'timer', sections: [] }) },
     ...overrides,
   };
 }
