@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, beforeEach, test } from 'node:test';
 import { expirePricingCacheForTests, resetPricingCacheForTests } from './pricing';
 import { setStaleAdmissionsHaltedForTests } from './pricing-overrun-cap';
+import { canSelectTranscriptionModel, listSelectableTranscriptionModels } from './transcription-eligibility';
 import {
   SNAPSHOT_CURRENT_MAX_AGE_MS,
   SNAPSHOT_MAX_AGE_MS,
@@ -103,6 +104,20 @@ test('hourly catalog pricing is converted to seconds and invalid rates are rejec
   answerCatalogWith({ data: [{ ...model, pricing: { prompt: '0.1', completion: '1' } }] });
   await refreshTranscriptionCatalog();
   assert.equal(await lookupTranscriptionDurationPricing('openrouter', model.id), null);
+});
+
+test('selection excludes unpriced models and models that exceed the stale recording budget', async () => {
+  const architecture = { input_modalities: ['audio'], output_modalities: ['transcription'] };
+  answerCatalogWith({ data: [
+    { id: PARAKEET, architecture, pricing: { prompt: '0.000025', completion: '0' } },
+    { id: 'unknown/model', architecture, pricing: { prompt: '0.00001', completion: '0' } },
+    { id: 'microsoft/mai-transcribe-2', architecture, pricing: { prompt: '360', completion: '0' } },
+  ] });
+  await refreshTranscriptionCatalog();
+  assert.equal(await canSelectTranscriptionModel('openrouter', PARAKEET), true);
+  assert.equal(await canSelectTranscriptionModel('openrouter', 'unknown/model'), false);
+  assert.equal(await canSelectTranscriptionModel('openrouter', 'microsoft/mai-transcribe-2'), false);
+  assert.deepEqual((await listSelectableTranscriptionModels()).map((model) => model.modelId), [PARAKEET]);
 });
 
 test('an unvalidated catalog lists and prices nothing, and a lookup never fetches it', async () => {

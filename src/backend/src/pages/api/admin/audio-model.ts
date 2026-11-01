@@ -16,9 +16,9 @@ import {
 } from '../../../lib/settings';
 import {
   listTranscriptionModels,
-  lookupTranscriptionDurationPricing,
   refreshTranscriptionCatalog,
 } from '../../../lib/transcription-models';
+import { canSelectTranscriptionModel } from '../../../lib/transcription-eligibility';
 import { safeJsonBody } from '../../../lib/validation';
 
 const updateAudioModelSchema = z
@@ -57,13 +57,13 @@ export const PUT: APIRoute = async ({ request }) => {
     });
   // Admin-selected routes validate their catalog here, the one fetch outside the scheduled refresh.
   await refreshTranscriptionCatalog().catch(() => undefined);
-  const pricing = await lookupTranscriptionDurationPricing(
+  const eligible = await canSelectTranscriptionModel(
     route.provider,
     route.modelId,
   ).catch(() => null);
-  if (!pricing)
+  if (!eligible)
     return new Response(
-      'Model does not have verified audio transcription pricing',
+      'Model pricing is unavailable or exceeds the recording budget',
       {
         status: 400,
       },
