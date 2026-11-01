@@ -2,6 +2,12 @@
 import assert from 'node:assert/strict';
 import test, { mock } from 'node:test';
 
+mock.module('electron', {
+  namedExports: {
+    app: { isPackaged: false, getPath: () => '/tmp/nvm-menubar-test' },
+  },
+});
+
 mock.module('electron-log/main', {
   defaultExport: { error() {}, info() {}, warn() {}, debug() {} },
 });
