@@ -1,8 +1,10 @@
+import reviewedPricing from './transcription-pricing-reviewed.json';
 import {
   durableOpenRouterCatalog,
   openRouterCatalogData,
 } from './openrouter-catalog-snapshots';
 import { staleAdmissionsHalted } from './pricing-overrun-cap';
+import { log } from './log';
 
 export type TranscriptionModel = {
   provider: 'openrouter';
@@ -15,6 +17,8 @@ export type TranscriptionDurationPricing = {
   unit: 'second';
   usdPerSecond: number;
   source: 'openrouter_transcription_catalog';
+  /** Unit and rate are operator-reviewed rather than supplied by the catalog. */
+  reviewed?: true;
   /** Present only when the validated catalog is past the current window. */
   stale?: true;
 };
@@ -39,37 +43,9 @@ function decimalRate(value: unknown): number | null {
   return Number.isFinite(rate) && rate >= 0 ? rate : null;
 }
 
-// Reviewed against OpenRouter model pages and a billed short sample on 2026-11-01.
-// A changed catalog rate needs review: the API does not specify the price unit.
-// Parakeet retains its existing catalog-driven behavior for released clients.
-const durationPricingUnits = new Map<string, { seconds: number; observedRate?: number }>([
-  ['nvidia/nemotron-3.5-transcribe', { seconds: 1, observedRate: 0.0000333 }],
-  ['mistralai/voxtral-small-transcribe-3-0', { seconds: 1, observedRate: 0.0000666667 }],
-  ['mistralai/voxtral-mini-transcribe-3-0', { seconds: 1, observedRate: 0.0000583333 }],
-  ['assemblyai/universal-3-6-pro', { seconds: 1, observedRate: 0.0000833333 }],
-  ['elevenlabs/scribe-v2', { seconds: 1, observedRate: 0.0000611111111111 }],
-  ['elevenlabs/scribe-v2-medical', { seconds: 1, observedRate: 0.0000611111111111 }],
-  ['fish-audio/transcribe-1-pro', { seconds: 1, observedRate: 0.0001 }],
-  ['assemblyai/universal-3-5-pro', { seconds: 1, observedRate: 0.0000833333 }],
-  ['meta/muse-voice-transcribe-1.0', { seconds: 1, observedRate: 0.00005 }],
-  ['microsoft/mai-transcribe-2', { seconds: 3600, observedRate: 0.1 }],
-  ['nvidia/nemotron-3.5-asr-streaming-multilingual-0.6b', { seconds: 1, observedRate: 0.00000333 }],
-  ['mistralai/voxtral-small-24b-2507-stt', { seconds: 1, observedRate: 0.00005 }],
-  ['mistralai/voxtral-mini-3b-2507', { seconds: 1, observedRate: 0.0000166667 }],
-  ['qwen/qwen3-asr-1.7b', { seconds: 1, observedRate: 0.0000075 }],
-  ['qwen/qwen3-asr-0.6b', { seconds: 1, observedRate: 0.00000333 }],
-  ['openai/gpt-transcribe', { seconds: 1, observedRate: 0.000075 }],
-  ['fish-audio/transcribe-1', { seconds: 1, observedRate: 0.0001 }],
-  ['x-ai/grok-stt-1.0', { seconds: 1, observedRate: 0.0000277777777778 }],
-  ['deepgram/nova-3', { seconds: 1, observedRate: 0.0000716666666667 }],
-  ['microsoft/mai-transcribe-1.5', { seconds: 3600, observedRate: 0.36 }],
-  ['nvidia/parakeet-tdt-0.6b-v3', { seconds: 1 }],
-  ['mistralai/voxtral-mini-transcribe', { seconds: 1, observedRate: 0.00005 }],
-  ['google/chirp-3', { seconds: 1, observedRate: 0.000266666666667 }],
-  ['openai/whisper-large-v3', { seconds: 1, observedRate: 0.0000075 }],
-  ['openai/whisper-large-v3-turbo', { seconds: 1, observedRate: 0.00000333 }],
-  ['openai/whisper-1', { seconds: 1, observedRate: 0.0001 }],
-]);
+// Reviewed price units are data, separate from catalog parsing.
+const durationPricingUnits = new Map(reviewedPricing.models.map((entry) => [entry.modelId, entry]));
+
 function durationPricing(
   model: OpenRouterModel,
 ): TranscriptionDurationPricing | null {
@@ -77,7 +53,11 @@ function durationPricing(
   if (!unit) return null;
   const rate = decimalRate(model.pricing?.prompt);
   const outputRate = decimalRate(model.pricing?.completion);
-  if (rate == null || outputRate !== 0 || (unit.observedRate !== undefined && rate !== unit.observedRate)) return null;
+  if (rate == null || outputRate !== 0) return null;
+  if (unit.observedRate !== undefined && rate !== unit.observedRate) {
+    log.warn('transcription_catalog_rate_requires_review', { model: model.id, observed_rate: rate, reviewed_rate: unit.observedRate });
+    return null;
+  }
   return {
     unit: 'second',
     usdPerSecond: rate / unit.seconds,
@@ -140,23 +120,34 @@ export async function listTranscriptionModels(): Promise<TranscriptionModel[]> {
   return (await transcriptionCatalog.admissible())?.value ?? [];
 }
 
-/** Duration pricing for a model, marked stale past the current window. Never fetches. */
-export async function lookupTranscriptionDurationPricing(
-  provider: string,
-  modelId: string,
-): Promise<TranscriptionDurationPricing | null> {
-  if (provider !== 'openrouter') return null;
-  const catalog = await transcriptionCatalog.admissible();
-  const pricing = catalog?.value.find((model) => model.modelId === modelId)
-    ?.durationPricing;
+function validatedPricing(modelId: string, pricing?: TranscriptionDurationPricing): TranscriptionDurationPricing | null {
   if (!pricing) return null;
   // Snapshots can have been written by older code; recheck reviewed rates at read time.
   const unit = durationPricingUnits.get(modelId);
   if (!unit || pricing.unit !== 'second' || pricing.source !== 'openrouter_transcription_catalog' ||
       !Number.isFinite(pricing.usdPerSecond) || pricing.usdPerSecond < 0 ||
       (unit.observedRate !== undefined && pricing.usdPerSecond !== unit.observedRate / unit.seconds)) return null;
-  if (catalog?.validity !== 'stale') return pricing;
-  return (await staleAdmissionsHalted()) ? null : { ...pricing, stale: true };
+  return unit.observedRate === undefined ? pricing : { ...pricing, reviewed: true };
+}
+
+/** Return usable prices from one snapshot, with one stale-admission check. */
+export async function listPricedTranscriptionModels(): Promise<TranscriptionModel[]> {
+  const catalog = await transcriptionCatalog.admissible();
+  if (!catalog || (catalog.validity === 'stale' && await staleAdmissionsHalted())) return [];
+  return catalog.value.flatMap((model) => {
+    const pricing = validatedPricing(model.modelId, model.durationPricing);
+    if (!pricing) return [];
+    return [{ ...model, durationPricing: catalog.validity === 'stale' ? { ...pricing, stale: true as const } : pricing }];
+  });
+}
+
+/** Duration pricing for a model, marked stale past the current window. Never fetches. */
+export async function lookupTranscriptionDurationPricing(
+  provider: string,
+  modelId: string,
+): Promise<TranscriptionDurationPricing | null> {
+  if (provider !== 'openrouter') return null;
+  return (await listPricedTranscriptionModels()).find((model) => model.modelId === modelId)?.durationPricing ?? null;
 }
 
 export function resetTranscriptionModelCacheForTests() {

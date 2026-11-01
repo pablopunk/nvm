@@ -121,7 +121,12 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     }
     async function errorMessage(response) {
       const body = await response.text();
-      try { return JSON.parse(body).error?.message || response.statusText; } catch { return body.trim() || response.statusText; }
+      const type = response.headers.get('content-type') || '';
+      if (type.includes('application/json')) {
+        try { return JSON.parse(body).error?.message || response.statusText || `Request failed (${response.status})`; } catch { /* Fall through to a safe message. */ }
+      }
+      if (type.startsWith('text/plain')) return body.trim().slice(0, 300) || response.statusText;
+      return response.statusText || `Request failed (${response.status})`;
     }
     async function getJson(path) {
       return dashboardFetch(path);
@@ -389,6 +394,7 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
         setStatus(status, `Could not save: ${error.message}`, 'err');
       } finally {
         controls.forEach((control, index) => { control.disabled = disabled[index]; });
+        if (document.activeElement === document.body) row.querySelector('button[role="combobox"]:not(:disabled)')?.focus();
       }
     }
     function rememberRoute(row) {

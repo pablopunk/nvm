@@ -14,11 +14,8 @@ import {
   ModelNotConfiguredError,
   setAudioModelRoute,
 } from '../../../lib/settings';
-import {
-  listTranscriptionModels,
-  refreshTranscriptionCatalog,
-} from '../../../lib/transcription-models';
-import { canSelectTranscriptionModel } from '../../../lib/transcription-eligibility';
+import { refreshTranscriptionCatalog } from '../../../lib/transcription-models';
+import { canSelectTranscriptionModel, listSelectableTranscriptionModels } from '../../../lib/transcription-eligibility';
 import { safeJsonBody } from '../../../lib/validation';
 
 const updateAudioModelSchema = z
@@ -39,7 +36,7 @@ export const GET: APIRoute = async ({ request }) => {
     return new Response('Forbidden', { status: 403 });
   return Response.json({
     current: await currentAudioModel(),
-    models: await listTranscriptionModels(),
+    models: (await isProviderEnabled('openrouter')) ? await listSelectableTranscriptionModels() : [],
   });
 };
 

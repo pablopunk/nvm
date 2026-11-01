@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { AUDIO_RESERVATION_CREDITS as RESERVATION_CREDITS } from '../../../../lib/audio-reservation-policy';
 import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
 import {
   backendKillSwitchEnabled,
@@ -32,7 +33,7 @@ import {
   tooManyRequests,
 } from '../../../../lib/ratelimit';
 import { isRouteTripped } from '../../../../lib/route-breakers';
-import { reservationMarginFor } from '../../../../lib/pricing';
+import { reservationMarginFor, STALE_RESERVATION_MARGIN } from '../../../../lib/pricing';
 import {
   getAudioModelRoute,
   isProviderEnabled,
@@ -50,10 +51,6 @@ export const config = { maxDuration: 60 };
 
 const MAX_AUDIO_BYTES = TRANSCRIPTION_AUDIO_LIMITS.inputBytes;
 const MAX_REQUEST_BYTES = Math.ceil((MAX_AUDIO_BYTES * 4) / 3) + 8 * 1024;
-const RESERVATION_CREDITS = Math.max(
-  1,
-  Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
-);
 const UPSTREAM_TIMEOUT_MS = Math.max(
   1000,
   Number(process.env.AUDIO_TRANSCRIPTION_TIMEOUT_MS ?? 15_000),
@@ -460,7 +457,7 @@ export const POST: APIRoute = async ({ request }) => {
     const estimatedProviderCostUsd =
       normalizedAudio.estimatedBillableSeconds *
       pricing.usdPerSecond *
-      reservationMarginFor(pricing);
+      (pricing.reviewed ? STALE_RESERVATION_MARGIN : reservationMarginFor(pricing));
     if (usdToCredits(estimatedProviderCostUsd) > RESERVATION_CREDITS) {
       await failClaim();
       return responseWithRequestId(
@@ -637,6 +634,17 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
       const seconds = finiteNonnegative(body.usage?.seconds);
+      if (providerCostUsd > normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond * STALE_RESERVATION_MARGIN) {
+        log.warn('audio_transcription_price_estimate_exceeded', {
+          request_id: requestId,
+          provider: route.provider,
+          model: route.modelId,
+          estimated_seconds: normalizedAudio.estimatedBillableSeconds,
+          reported_seconds: seconds,
+          provider_cost_usd: providerCostUsd,
+          catalog_usd_per_second: pricing.usdPerSecond,
+        });
+      }
       const settlementStartedAt = performance.now();
       const settlement = finalizeReservation({
         requestId: reservationId,
@@ -646,7 +654,7 @@ export const POST: APIRoute = async ({ request }) => {
         provider: route.provider,
         routeSlot: 'audio',
         modality: 'audio',
-        audioDurationMs: seconds == null ? 0 : Math.round(seconds * 1000),
+        audioDurationMs: Math.round((seconds ?? normalizedAudio.durationSeconds) * 1000),
         tokens: {
           inputTokens: finiteNonnegative(body.usage?.input_tokens) ?? 0,
           outputTokens: finiteNonnegative(body.usage?.output_tokens) ?? 0,

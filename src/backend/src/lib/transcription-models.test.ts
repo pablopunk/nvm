@@ -4,6 +4,7 @@ import { expirePricingCacheForTests, resetPricingCacheForTests } from './pricing
 import { setStaleAdmissionsHaltedForTests } from './pricing-overrun-cap';
 import { canSelectTranscriptionModel, listSelectableTranscriptionModels } from './transcription-eligibility';
 import {
+  activePricingSnapshotStore,
   SNAPSHOT_CURRENT_MAX_AGE_MS,
   SNAPSHOT_MAX_AGE_MS,
 } from './pricing-snapshot-store';
@@ -100,6 +101,7 @@ test('hourly catalog pricing is converted to seconds and invalid rates are rejec
     unit: 'second',
     usdPerSecond: 0.1 / 3600,
     source: 'openrouter_transcription_catalog',
+    reviewed: true,
   });
   answerCatalogWith({ data: [{ ...model, pricing: { prompt: '0.2', completion: '0' } }] });
   await refreshTranscriptionCatalog();
@@ -114,13 +116,15 @@ test('selection excludes unpriced models and models that exceed the stale record
   answerCatalogWith({ data: [
     { id: PARAKEET, architecture, pricing: { prompt: '0.000025', completion: '0' } },
     { id: 'unknown/model', architecture, pricing: { prompt: '0.00001', completion: '0' } },
-    { id: 'microsoft/mai-transcribe-2', architecture, pricing: { prompt: '360', completion: '0' } },
+    { id: 'openai/whisper-1', architecture, pricing: { prompt: '0.0001', completion: '0' } },
+    { id: 'openai/gpt-transcribe', architecture, pricing: { prompt: '0.000075', completion: '0' } },
   ] });
   await refreshTranscriptionCatalog();
   assert.equal(await canSelectTranscriptionModel('openrouter', PARAKEET), true);
   assert.equal(await canSelectTranscriptionModel('openrouter', 'unknown/model'), false);
-  assert.equal(await canSelectTranscriptionModel('openrouter', 'microsoft/mai-transcribe-2'), false);
-  assert.deepEqual((await listSelectableTranscriptionModels()).map((model) => model.modelId), [PARAKEET]);
+  assert.equal(await canSelectTranscriptionModel('openrouter', 'openai/whisper-1'), false);
+  assert.equal(await canSelectTranscriptionModel('openrouter', 'openai/gpt-transcribe'), true);
+  assert.deepEqual((await listSelectableTranscriptionModels()).map((model) => model.modelId).sort(), [PARAKEET, 'openai/gpt-transcribe'].sort());
 });
 
 test('the existing configured Parakeet route remains catalog-priced when its rate changes', async () => {
@@ -131,6 +135,20 @@ test('the existing configured Parakeet route remains catalog-priced when its rat
     ...PARAKEET_PRICING,
     usdPerSecond: 0.00003,
   });
+});
+
+test('a restored snapshot with a different reviewed rate is refused', async () => {
+  await activePricingSnapshotStore().save({
+    key: 'openrouter_transcription_models',
+    validatedAt: Date.now(),
+    payload: [{
+      provider: 'openrouter',
+      modelId: 'microsoft/mai-transcribe-2',
+      name: 'MAI Transcribe 2',
+      durationPricing: { unit: 'second', usdPerSecond: 0.2 / 3600, source: 'openrouter_transcription_catalog' },
+    }],
+  });
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', 'microsoft/mai-transcribe-2'), null);
 });
 
 test('an unvalidated catalog lists and prices nothing, and a lookup never fetches it', async () => {
