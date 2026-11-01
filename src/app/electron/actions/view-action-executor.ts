@@ -133,6 +133,8 @@ export function createViewActionExecutor(handlers: ViewActionHandlers) {
         return handleOpenKeyboardSettings(action);
       case 'quitApp':
         return handleQuitApp(action);
+      case 'openPalette':
+        return;
       case 'forceQuitApp':
         return handleForceQuitApp(action);
       case 'checkForUpdates':

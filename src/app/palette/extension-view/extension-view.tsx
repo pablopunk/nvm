@@ -46,10 +46,7 @@ import {
 import { CameraView } from './camera-view';
 import { ChatInputForm } from './chat-input-form';
 import { titleFromFirstContentLine } from './editor-title';
-import {
-  EXTENSION_WEBVIEW_SANDBOX,
-  extensionWebviewAllow,
-} from './extension-webview-permissions';
+import { ExtensionWebviewFrame } from './extension-webview';
 import { formApplyRowId } from './form-fields';
 import { extensionListItemClassName } from './list-item-class-name';
 import type { usePaletteForm } from './palette-form';
@@ -978,42 +975,18 @@ function EditorExtensionView(props: ExtensionViewSurfaceProps) {
   );
 }
 
-function useCameraAccessForWebview(webviewPermissions?: readonly string[]) {
-  const needsCamera = Boolean(webviewPermissions?.includes('camera'));
-  const [ready, setReady] = useState(!needsCamera);
-  useEffect(() => {
-    if (!needsCamera) return;
-    let cancelled = false;
-    window.nvm
-      .requestCameraAccess()
-      .catch(() => undefined)
-      .then(() => {
-        if (!cancelled) setReady(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [needsCamera]);
-  return ready;
-}
-
 function WebExtensionView(props: ExtensionViewSurfaceProps) {
   const { view } = props;
   const webviewActions = inlineViewActions(props, 'extension-webview');
-  const cameraAccessReady = useCameraAccessForWebview(view.webviewPermissions);
   return (
     <div
       className={`webviewSurface ${view.size === 'large' || view.presentation === 'preview' ? 'webviewLarge' : ''}`}
     >
-      {cameraAccessReady && (
-        <iframe
-          className="extensionWebview"
-          title={view.title}
-          srcDoc={view.html || view.content || ''}
-          sandbox={EXTENSION_WEBVIEW_SANDBOX}
-          allow={extensionWebviewAllow(view.webviewPermissions)}
-        />
-      )}
+      <ExtensionWebviewFrame
+        title={view.title}
+        html={view.html || view.content || ''}
+        webviewPermissions={view.webviewPermissions}
+      />
       {webviewActions}
     </div>
   );

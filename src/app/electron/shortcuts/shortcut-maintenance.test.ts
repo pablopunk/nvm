@@ -10,7 +10,9 @@ mock.module('../diagnostics/observability', {
     runOperation: (_name: string, task: () => unknown) => task(),
   },
 });
-mock.module('../platform/logger', { namedExports: { error: () => {} } });
+mock.module('../platform/logger', {
+  namedExports: { error: () => {}, warn: () => {} },
+});
 const { createShortcutRunner } = await import('./shortcut-runner');
 
 test('maintenance waits for shortcut work and reports a blocked shortcut', async () => {

@@ -408,8 +408,8 @@ export type ExtensionWindowOptions = {
   showInactive?: boolean;
   /** Ignore mouse input so the window cannot intercept the user's current target. */
   ignoreMouseEvents?: boolean;
-  /** Position a passive companion relative to the current display work area. */
-  position?: 'center' | 'top-center' | 'bottom-center';
+  /** Position relative to the display work area; `menu-bar` opens under the last clicked menu bar icon. */
+  position?: 'center' | 'top-center' | 'bottom-center' | 'menu-bar';
   /**
    * Retain the window for relaunch restoration. Defaults to false.
    *
@@ -501,6 +501,120 @@ export type ExtensionIndicatorInput = {
   total?: number;
   /** Hide this indicator after the given duration. Omit it for status that remains until `hide`. */
   durationMs?: number;
+};
+
+/** Curated status glyphs; unknown names fall back to `zap`. */
+export type ExtensionMenuBarIcon =
+  | 'zap'
+  | 'circle'
+  | 'circle-dot'
+  | 'circle-check'
+  | 'circle-alert'
+  | 'circle-x'
+  | 'bell'
+  | 'bell-dot'
+  | 'timer'
+  | 'clock'
+  | 'alarm-clock'
+  | 'calendar'
+  | 'coffee'
+  | 'mic'
+  | 'mic-off'
+  | 'video'
+  | 'music'
+  | 'play'
+  | 'pause'
+  | 'activity'
+  | 'cpu'
+  | 'hard-drive'
+  | 'memory-stick'
+  | 'wifi'
+  | 'battery-medium'
+  | 'cloud'
+  | 'cloud-sun'
+  | 'sun'
+  | 'moon'
+  | 'git-pull-request'
+  | 'git-branch'
+  | 'git-commit-horizontal'
+  | 'terminal'
+  | 'code'
+  | 'bug'
+  | 'rocket'
+  | 'server'
+  | 'globe'
+  | 'mail'
+  | 'message-square'
+  | 'inbox'
+  | 'list-todo'
+  | 'square-check'
+  | 'star'
+  | 'heart'
+  | 'flame'
+  | 'eye'
+  | 'lock'
+  | 'shield'
+  | 'sparkles'
+  | 'bot'
+  | 'clipboard'
+  | 'sticky-note'
+  | 'folder'
+  | 'download'
+  | 'upload'
+  | 'refresh-cw'
+  | 'chart-line'
+  | 'gauge'
+  | 'thermometer'
+  | 'droplet'
+  | 'house'
+  | 'briefcase'
+  | 'dollar-sign';
+
+/** Menu row. `action` runs like a global shortcut: views open the palette, background actions run in place. */
+export type ExtensionMenuBarRow = {
+  id: string;
+  title: string;
+  /** Shown under the title on macOS, appended to it elsewhere. */
+  subtitle?: string;
+  /** macOS only. */
+  icon?: ExtensionMenuBarIcon;
+  checked?: boolean;
+  disabled?: boolean;
+  /** Display-only label such as `Command+Shift+K`. */
+  shortcut?: string;
+  action?: ExtensionAction;
+  /** One-level submenu; replaces `action`. */
+  items?: ExtensionMenuBarRow[];
+};
+
+/** Native menu bar (macOS) or tray (Windows, Linux) status item. */
+export type ExtensionMenuBar = {
+  /** Stable id; defaults to `main`. */
+  id?: string;
+  icon?: ExtensionMenuBarIcon;
+  /** Text beside the glyph (macOS; tooltip elsewhere), max 24 chars. Put per-second values here, not in rows: row changes rebuild the native menu. */
+  title?: string;
+  tooltip?: string;
+  /** Separated sections; `title` renders a disabled header. */
+  sections?: Array<{ title?: string; items: ExtensionMenuBarRow[] }>;
+  /** Click opens this view under the icon (sections move to right click); renders update it live. Free-form: `ctx.ui.webview` with `--nvm-*` theme variables. */
+  popover?: { view: ExtensionView; width?: number; height?: number };
+};
+
+/**
+ * Rendered at load, on menu open (next open shows the result), on `triggers`, and on
+ * `ctx.menuBar.refresh()`. Failures keep the last good menu; `null` shows nothing. The host
+ * always adds a `Hide/Show <title> in Menu Bar` root action.
+ */
+export type ExtensionMenuBarContribution = {
+  triggers?: ExtensionBackgroundTrigger[];
+  render(
+    ctx: ExtensionContext,
+  ):
+    | ExtensionMenuBar
+    | ExtensionMenuBar[]
+    | null
+    | Promise<ExtensionMenuBar | ExtensionMenuBar[] | null>;
 };
 
 /** In-place list/grid update returned from an action handler. */
@@ -1748,6 +1862,11 @@ export type ExtensionContext = {
      * that backs `actions(ctx)` changes, e.g. when the extension adds or removes user-defined commands.
      */
     refreshContributions(): Promise<ExtensionContributionRefreshResult>;
+    /** Show the palette at root, e.g. from a menu bar row. */
+    openPalette(
+      title?: string,
+      options?: Partial<ExtensionAction>,
+    ): ExtensionAction;
     /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */
     typeText(
       text: string,
@@ -2208,6 +2327,8 @@ export type ExtensionContext = {
   cache: ExtensionRuntimeCache;
   /** Current-view helpers. `refresh()` may be placed in `view.refresh.action`; the host converts it to an opaque refresh handle before IPC. */
   views: { refresh(): ExtensionAction; invalidate(): void };
+  /** Re-render this extension's `menuBar`. */
+  menuBar: { refresh(): void };
   /** App update state. Declare the `updates` capability for review and pair with `ctx.actions.updates.*`. */
   updates?: { getState(): ExtensionUpdateState };
   state: Record<string, unknown>;
@@ -2270,6 +2391,7 @@ export type NevermindExtension = {
    * restoration when this returns null. Views and action handlers are never
    * serialized as restoration state.
    */
+  menuBar?: ExtensionMenuBarContribution;
   restoreWindow?(
     ctx: ExtensionContext,
     restoreKey: string,

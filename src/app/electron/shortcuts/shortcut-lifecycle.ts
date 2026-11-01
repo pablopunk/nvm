@@ -32,6 +32,12 @@ export function shortcutActionLifecycle(
   return resolve(action);
 }
 
+export function shortcutActionOpensPalette(action: unknown): boolean {
+  const current = action as ShortcutLifecycleAction | undefined;
+  const rootAction = current?.rootAction as { type?: unknown } | undefined;
+  return current?.type === 'openPalette' || rootAction?.type === 'openPalette';
+}
+
 export function shortcutActionRunsWithoutView(action: unknown): boolean {
   const lifecycle = shortcutActionLifecycle(action);
   return Boolean(

@@ -8,7 +8,16 @@ import {
 import { hasCapability } from '../os/os';
 import { error as logError } from '../platform/logger';
 import { extensionCommandAction } from './extension-command-action';
+import {
+  MENU_BAR_TOGGLE_ACTION_ID,
+  type MenuBarVisibility,
+  menuBarSettingRowPatch,
+} from '../state/menubar-visibility';
 import type { ExtensionRuntimeRegistries } from './extension-runtime-state';
+import {
+  extensionMenuBarRenderer,
+  extensionMenuBarTriggers,
+} from './extension-menubar';
 import { markInternalExtension } from './internal-extension';
 import { missingRequiredInternalCommands } from './internal-extension-requirements';
 
@@ -75,6 +84,8 @@ export type ExtensionRegistrationDeps = Pick<
   createExtensionContext: (extension: any, command: any) => any;
   registerExtensionBackgroundJob: (entry: any, item: any) => void;
   unregisterExtensionBackgroundJob: (extension: any, item: any) => void;
+  registerExtensionMenuBarJob: (extension: any, triggers: any[]) => void;
+  menuBarVisibility: MenuBarVisibility;
   registerActionShortcuts: () => void;
   invalidateExtensionRootItems: () => void;
 };
@@ -91,6 +102,8 @@ export function createExtensionRegistration(deps: ExtensionRegistrationDeps) {
     createExtensionContext,
     registerExtensionBackgroundJob,
     unregisterExtensionBackgroundJob,
+    registerExtensionMenuBarJob,
+    menuBarVisibility,
     registerActionShortcuts,
     invalidateExtensionRootItems,
   } = deps;
@@ -174,6 +187,50 @@ export function createExtensionRegistration(deps: ExtensionRegistrationDeps) {
     registerExtensionBackgroundJob(entry, normalizedItem);
   }
 
+  function menuBarToggleEntry(extension) {
+    return {
+      extension,
+      command: { id: 'menubar', title: extension.title || extension.id },
+      source: 'menubar',
+    };
+  }
+
+  function menuBarToggleItem(extension) {
+    const title = extension.title || extension.id;
+    const shown = menuBarVisibility.isShown(extension.id);
+    return {
+      id: MENU_BAR_TOGGLE_ACTION_ID,
+      actionId: `extension-menubar:${extension.id}`,
+      title: shown
+        ? `Hide ${title} from Menu Bar`
+        : `Show ${title} in Menu Bar`,
+      subtitle: shown ? 'Shown in the menu bar' : 'Hidden from the menu bar',
+      aliases: ['menu bar', 'menubar', 'tray', 'status bar'],
+      icon: 'panel-top',
+      mode: 'noView',
+      run: () => toggleExtensionMenuBar(extension),
+    };
+  }
+
+  /** Host-owned and mandatory: every menu bar extension can be hidden from the palette. */
+  function registerMenuBarToggle(extension) {
+    if (!extensionMenuBarRenderer(extension)) return;
+    registerDeclaredActionItem(
+      menuBarToggleEntry(extension),
+      menuBarToggleItem(extension),
+    );
+  }
+
+  function toggleExtensionMenuBar(extension) {
+    const shown = !menuBarVisibility.isShown(extension.id);
+    menuBarVisibility.setShown(extension.id, shown);
+    if (extensionModules.get(extension.id) === extension)
+      registerMenuBarToggle(extension);
+    registerActionShortcuts();
+    invalidateExtensionRootItems();
+    return { patch: { items: [menuBarSettingRowPatch(extension.id, shown)] } };
+  }
+
   function registerExtensionCommands(extension) {
     for (const command of extension.commands || []) {
       if (!(command?.id && command.title) || typeof command.run !== 'function')
@@ -250,6 +307,11 @@ export function createExtensionRegistration(deps: ExtensionRegistrationDeps) {
             extension.__executionVersion ||= crypto.randomUUID();
             extensionModules.set(extension.id, extension);
             registerExtensionCommands(extension);
+            registerExtensionMenuBarJob(
+              extension,
+              extensionMenuBarTriggers(extension),
+            );
+            registerMenuBarToggle(extension);
             const entry = declaredActionEntry(extension);
             for (const item of declaredItems)
               registerDeclaredActionItem(entry, item);

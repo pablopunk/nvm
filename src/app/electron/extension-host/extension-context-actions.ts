@@ -122,6 +122,11 @@ export function createContextActions(extension, deps: ContextActionsDeps) {
   const { buildRecordShortcutAction, buildRemoveShortcutAction } = deps;
   return {
     refreshContributions: () => deps.refreshContributions(extension),
+    openPalette: (title = 'Open Nevermind', options: any = {}) => ({
+      ...options,
+      type: 'openPalette',
+      title,
+    }),
     openPath: (filePath, title = 'Open', options: any = {}) => ({
       dismissAfterRun: 'auto',
       ...options,

@@ -28,6 +28,7 @@ When adding or changing an extension API method that renders UI:
 - `ctx.ui.editor`
 - `ctx.ui.progress`
 - `ctx.ui.indicator`
+- `menuBar` status items, including the host-owned `Show/Hide … in Menu Bar` toggle (`menubar-fixture.ts`), and menu bar popovers with a themed webview (`menubar-popover-fixture.ts`)
 - `ctx.ui.webview`
 - `ctx.ui.camera`
 - `ctx.ui.confirm`

@@ -83,6 +83,7 @@ import { usePaletteForm } from './extension-view/palette-form';
 import { useExtensionNavigation } from './extension-view/use-extension-navigation';
 import { patchCommandView } from './extension-view/view-patches';
 import { ExtensionWindowFooter } from './extension-window-footer';
+import { extensionWindowShellClassName } from './extension-window-shell';
 import { feedbackView } from './feedback';
 import {
   allViewItems,
@@ -1173,17 +1174,10 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const searchable = searchableView;
   const hasActions =
     actionsFromPanel(view.actionPanel, view.actions || []).length > 0;
-  const framelessWindow = windowOptions.chrome === 'none';
-  const shellClassName = [
-    'extensionWindowShell',
-    view.isLoading ? 'loadingBorder' : '',
-    windowOptions.titleBar === 'hidden' && !framelessWindow
-      ? 'extensionWindowTitleBarHidden'
-      : '',
-    framelessWindow ? 'extensionWindowChromeNone' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  const shellClassName = extensionWindowShellClassName(
+    windowOptions,
+    Boolean(view.isLoading),
+  );
 
   return (
     <Command

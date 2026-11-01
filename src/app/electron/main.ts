@@ -1,7 +1,6 @@
 // biome-ignore-all lint: This Electron entry point follows established imperative startup conventions.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PaneInvocations } from './app/pane-invocations';
@@ -169,6 +168,7 @@ import {
   characterWithSkinTone,
 } from './app/emoji-symbol-catalog';
 import { createExtensionRootItems } from './app/extension-root-items';
+import { createAppMenuBar } from './app/menubar-composition';
 import { createFormFieldPathPicker } from './app/form-field-paths';
 import { registerInstanceEvents } from './app/instance-events';
 import { createPaletteSearch } from './app/palette-search';
@@ -192,6 +192,8 @@ import { createAppStateMaintenance } from './app/state-maintenance-setup';
 import { createTestModeIpc } from './app/test-mode-ipc';
 import { createAppUpdateManager } from './app/update-manager-setup';
 import { registerDeepLinkProtocol } from './os/deep-link-protocol';
+import { prepareLinuxDesktopSession } from './os/linux-desktop-session';
+import { osCacheRoot } from './os/os-cache-root';
 import { createUpdatesService } from './app/updates-service';
 import { createWindowManagementComposition } from './app/window-management-composition';
 import {
@@ -328,19 +330,7 @@ if (!isNvmTestMode || isNvmDiagnosticTestMode)
   initDiagnostics({ currentUserId: () => getCachedNevermindAuth()?.userId });
 setDeepLinkLogger({ warn: logWarn });
 const LINUX_DESKTOP_NAME = 'com.pablopunk.nvm.desktop';
-if (process.platform === 'linux') {
-  app.setDesktopName(LINUX_DESKTOP_NAME);
-  const isWaylandSession =
-    String(process.env.XDG_SESSION_TYPE || '').toLowerCase() === 'wayland' ||
-    Boolean(process.env.WAYLAND_DISPLAY);
-  if (isWaylandSession) {
-    app.commandLine.appendSwitch('enable-features', 'GlobalShortcutsPortal');
-    app.commandLine.appendSwitch(
-      'disable-features',
-      'WaylandFractionalScaleV1',
-    );
-  }
-}
+prepareLinuxDesktopSession(LINUX_DESKTOP_NAME);
 
 const updateManager: any = createAppUpdateManager({
   isTestMode: isNvmTestMode,
@@ -665,6 +655,7 @@ const {
   afterSettingCommitted: (settingId) => {
     if (settingId === 'updateChannel')
       updateManager.handleUpdateChannelChanged();
+    menuBar.scheduleSync();
   },
   canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
@@ -789,22 +780,6 @@ const selectedText = createSelectedTextReader({
     }),
 });
 
-function osCacheRoot() {
-  const appName = app.getName();
-  if (process.platform === 'darwin')
-    return path.join(os.homedir(), 'Library', 'Caches', appName);
-  if (process.platform === 'win32')
-    return path.join(
-      process.env.LOCALAPPDATA || app.getPath('appData'),
-      appName,
-      'Cache',
-    );
-  return path.join(
-    process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'),
-    appName,
-  );
-}
-
 const appIndexService = createAppIndexService({
   scanApps,
   trackFirstSeen: (apps, initializeBaseline) => {
@@ -871,6 +846,17 @@ const fileIndexService = createFileIndexService({
 const openWithApps = createOpenWithApps({ appIndexService });
 const extensionActionRegistry = new Map<string, any>();
 const extensionModules = new Map<string, any>();
+const menuBar = createAppMenuBar({
+  extensionModules,
+  userStateStore,
+  scheduleSaveState,
+  createExtensionContext: (ext, cmd) => createExtensionContext(ext, cmd),
+  extensionRootActionFromItem: (e, i) => extensionRootActionFromItem(e, i),
+  runMenuAction: (action) => executeShortcutAction(action),
+  renderTimeoutMs: EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+  normalizeView: (view, entry) => normalizeView(view, entry),
+  windows: extensionWindowManager,
+});
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
 const extensionJsonStore = createExtensionJsonStore();
 const {
@@ -1080,6 +1066,7 @@ const {
   rankAction,
   EXTENSION_ROOT_ITEMS_TTL_MS,
   EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+  onInvalidated: () => menuBar.scheduleSync(),
 });
 const {
   visibleExtensionActionEntries,
@@ -1136,8 +1123,7 @@ const {
   executeViewActionResult,
   executeHostRefreshAction,
 } = createExtensionActionResults({
-  executeViewAction: (action, launchContext) =>
-    executeViewAction(action, launchContext),
+  executeViewAction: (action, context) => executeViewAction(action, context),
   createExtensionContext: (extension, command, launchContext, options) =>
     createExtensionContext(extension, command, launchContext, options),
   setDiagnosticExtensionTarget: (extension) =>
@@ -1517,6 +1503,7 @@ const createExtensionContext = createExtensionContextFactory({
     extensionCacheFor,
   },
   updates: { updatesStateSnapshot: () => updatesStateSnapshot() },
+  menuBar: { refresh: (extensionId) => menuBar.refresh(extensionId) },
   ai: {
     createExtensionAi: createExtensionAiFactory({
       checkAiRateLimit: (extension) => checkAiRateLimit(extension),
@@ -1575,12 +1562,13 @@ const {
   attachExtensionFileTrigger,
   registerExtensionBackgroundJob,
   unregisterExtensionBackgroundJob,
+  registerExtensionMenuBarJob,
 } = createExtensionTriggers({
   jobRegistry,
   runtimeState: extensionRuntimeState,
   EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
-  executeViewAction: (action, launchContext) =>
-    executeViewAction(action, launchContext),
+  executeViewAction: (action, context) => executeViewAction(action, context),
+  refreshExtensionMenuBar: (extensionId) => menuBar.refresh(extensionId),
 });
 const registration = createExtensionRegistration({
   extensionModules,
@@ -1593,6 +1581,8 @@ const registration = createExtensionRegistration({
   createExtensionContext,
   registerExtensionBackgroundJob,
   unregisterExtensionBackgroundJob,
+  registerExtensionMenuBarJob,
+  menuBarVisibility: menuBar.visibility,
   registerActionShortcuts: () => registerActionShortcuts(),
   invalidateExtensionRootItems: () => invalidateExtensionRootItems(),
 });
@@ -2073,6 +2063,7 @@ const startup = app.whenReady().then(async () => {
   appReady = true;
   flushBufferedDeepLinks();
   registerActionShortcuts();
+  void menuBar.start();
   try {
     await startClipboardWatcher();
   } catch (error) {

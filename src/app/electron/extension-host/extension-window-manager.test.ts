@@ -4,12 +4,15 @@ import test from 'node:test';
 import {
   createExtensionWindowManager,
   EXTENSION_WINDOW_BACKGROUND,
-  EXTENSION_WINDOW_OPTION_DEFAULTS,
   extensionWindowBackgroundColor,
+} from './extension-window-manager';
+import {
+  EXTENSION_WINDOW_OPTION_DEFAULTS,
   extensionWindowId,
   extensionWindowSize,
   normalizeExtensionWindowOptions,
-} from './extension-window-manager';
+} from './extension-window-options';
+import { rememberStatusItemAnchor } from '../os/status-item-anchor';
 
 class FakeBrowserWindow {
   static instances: FakeBrowserWindow[] = [];
@@ -901,4 +904,80 @@ test('hydrates persisted state once for the async startup path', () => {
   ]);
   manager.forgetPersistentWindow('notes');
   assert.equal(writes.length, 1);
+});
+
+const popoverOptions = {
+  id: 'menubar.monitor.main',
+  position: 'menu-bar',
+  chrome: 'none',
+  hideOnBlur: true,
+  width: 320,
+  height: 240,
+};
+
+test('menu bar popovers open silently under the clicked icon', () => {
+  const { manager } = createManager();
+  rememberStatusItemAnchor({ x: 500, y: 0, width: 24, height: 24 });
+
+  const result = manager.executeWindowAction({
+    type: 'toggleWindow',
+    id: popoverOptions.id,
+    view: { title: 'Monitor' },
+    windowOptions: popoverOptions,
+  });
+  const win = FakeBrowserWindow.instances[0];
+  win.handlers.get('once:ready-to-show')();
+
+  assert.equal(Boolean(result && 'toast' in result), false);
+  assert.deepEqual(win.getBounds(), { x: 352, y: 30, width: 320, height: 240 });
+  rememberStatusItemAnchor(null);
+});
+
+test('clicking the icon right after blur closed the popover keeps it closed', () => {
+  const { manager } = createManager();
+  manager.executeWindowAction({
+    type: 'toggleWindow',
+    id: popoverOptions.id,
+    view: { title: 'Monitor' },
+    windowOptions: popoverOptions,
+  });
+  const win = FakeBrowserWindow.instances[0];
+  win.show();
+  win.handlers.get('blur')();
+  assert.equal(win.visible, false);
+
+  manager.executeWindowAction({ type: 'toggleWindow', id: popoverOptions.id });
+
+  assert.equal(win.visible, false);
+});
+
+test('popover updates replace the view only while the window exists', () => {
+  const { manager } = createManager();
+  assert.equal(
+    manager.executeWindowAction({
+      type: 'updateWindow',
+      id: popoverOptions.id,
+      view: { title: 'Missing' },
+    }),
+    null,
+  );
+  manager.executeWindowAction({
+    type: 'toggleWindow',
+    id: popoverOptions.id,
+    view: { title: 'Monitor' },
+    windowOptions: popoverOptions,
+  });
+  const win = FakeBrowserWindow.instances[0];
+  win.show();
+  const showsBefore = win.showCount;
+
+  manager.executeWindowAction({
+    type: 'updateWindow',
+    id: popoverOptions.id,
+    view: { title: 'Monitor 42%' },
+  });
+
+  assert.equal(manager.getState(popoverOptions.id)?.view.title, 'Monitor 42%');
+  assert.equal(win.showCount, showsBefore);
+  assert.equal(manager.isWindowVisible(popoverOptions.id), true);
 });
