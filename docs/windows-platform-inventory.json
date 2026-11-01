@@ -275,16 +275,16 @@
       "surface": "extensions-generated"
     },
     {
-      "key": "main-direct-platform-bb738d1a16c3",
-      "file": "src/app/electron/main.ts",
+      "key": "os-cache-root-darwin",
+      "file": "src/app/electron/os/os-cache-root.ts",
       "category": "direct-platform",
       "selector": "function:osCacheRoot/if:process.platform === 'darwin'::direct-platform::if (process.platform === 'darwin') return path.join(os.homedir(), 'Library', 'Caches', appName);::expression.left",
       "disposition": "runtime-startup-adapter",
       "surface": "logs-crash-recovery"
     },
     {
-      "key": "main-direct-platform-024cefd1a2fd",
-      "file": "src/app/electron/main.ts",
+      "key": "os-cache-root-win32",
+      "file": "src/app/electron/os/os-cache-root.ts",
       "category": "direct-platform",
       "selector": "function:osCacheRoot/if:process.platform === 'win32'::direct-platform::if (process.platform === 'win32') return path.join( process.env.LOCALAPPDATA || app.getPath('app…#547e6cd2e2c3::expression.left",
       "disposition": "runtime-startup-adapter",
@@ -307,11 +307,19 @@
       "surface": "camera"
     },
     {
-      "key": "main-direct-platform-30aa31c30033",
-      "file": "src/app/electron/main.ts",
+      "key": "linux-desktop-session-startup",
+      "file": "src/app/electron/os/linux-desktop-session.ts",
       "category": "direct-platform",
-      "selector": "if:process.platform === 'linux'::direct-platform::if (process.platform === 'linux') { app.setDesktopName(LINUX_DESKTOP_NAME); const isWaylandSessi…#30aa31c30033::expression.left",
+      "selector": "function:prepareLinuxDesktopSession/if:process.platform !== 'linux'::direct-platform::if (process.platform !== 'linux') return;::expression.left",
       "disposition": "runtime-startup-adapter",
+      "surface": "window-behavior"
+    },
+    {
+      "key": "menubar-composition-platform",
+      "file": "src/app/electron/app/menubar-composition.ts",
+      "category": "direct-platform",
+      "selector": "function:createAppMenuBar/function:startService/variable:statusItems/property:platform::direct-platform::platform: process.platform::initializer",
+      "disposition": "intentional-composition-seam",
       "surface": "window-behavior"
     },
     {

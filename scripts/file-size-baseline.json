@@ -4,7 +4,7 @@
   "electron/clipboard-history.ts": 1021,
   "electron/extension-window-manager.ts": 1019,
   "electron/learning-store.ts": 933,
-  "electron/main.ts": 2210,
+  "electron/main.ts": 2202,
   "electron/nevermind-auth.ts": 691,
   "electron/os.ts": 1494,
   "extensions/account.ts": 612,
