@@ -16,7 +16,11 @@ const { createExtensionMenuBarService } = await import(
   './extension-menubar-service'
 );
 
-function createHarness(extensions: any[], hidden = new Set<string>()) {
+function createHarness(
+  extensions: any[],
+  hidden = new Set<string>(),
+  popoverCalls: string[] = [],
+) {
   const extensionModules = new Map(
     extensions.map((extension) => [extension.id, extension]),
   );
@@ -49,6 +53,12 @@ function createHarness(extensions: any[], hidden = new Set<string>()) {
     runMenuAction: (action) => ran.push(action),
     renderTimeoutMs: 50,
     isVisibleExtension: (extension) => !hidden.has(extension.id),
+    popovers: {
+      toggle: (extension, menuBar) =>
+        popoverCalls.push(`toggle:${extension.id}:${menuBar.id}`),
+      updateIfOpen: (extension, menuBar) =>
+        popoverCalls.push(`update:${extension.id}:${menuBar.popover?.width}`),
+    },
   });
   return { service, specs, ran, bound, extensionModules };
 }
@@ -200,4 +210,34 @@ test('fire-and-forget rows run without opening the palette', async () => {
 
   assert.equal(bound[0].mode, 'noView');
   assert.equal(bound[1].mode, undefined);
+});
+
+test('popover items open on icon click and every render updates them', async () => {
+  const calls: string[] = [];
+  let cpu = 10;
+  const { service, specs } = createHarness(
+    [
+      timerExtension(() => ({
+        title: `${cpu}%`,
+        popover: {
+          view: { type: 'webview', html: `<p>${cpu}</p>` },
+          width: 320,
+        },
+      })),
+    ],
+    new Set(),
+    calls,
+  );
+  await service.syncAll();
+
+  specs.get('pomodoro:main').onPrimaryClick();
+  cpu = 42;
+  await service.refresh('pomodoro');
+
+  assert.deepEqual(calls, [
+    'update:pomodoro:320',
+    'toggle:pomodoro:main',
+    'update:pomodoro:320',
+  ]);
+  assert.equal(specs.get('pomodoro:main').title, '42%');
 });

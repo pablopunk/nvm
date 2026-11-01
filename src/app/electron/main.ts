@@ -854,6 +854,8 @@ const menuBar = createAppMenuBar({
   extensionRootActionFromItem: (e, i) => extensionRootActionFromItem(e, i),
   runMenuAction: (action) => executeShortcutAction(action),
   renderTimeoutMs: EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
+  normalizeView: (view, entry) => normalizeView(view, entry),
+  windows: extensionWindowManager,
 });
 const extensionStorageRefreshes = new Map<string, Promise<any>>();
 const extensionJsonStore = createExtensionJsonStore();
@@ -1121,8 +1123,7 @@ const {
   executeViewActionResult,
   executeHostRefreshAction,
 } = createExtensionActionResults({
-  executeViewAction: (action, launchContext) =>
-    executeViewAction(action, launchContext),
+  executeViewAction: (action, context) => executeViewAction(action, context),
   createExtensionContext: (extension, command, launchContext, options) =>
     createExtensionContext(extension, command, launchContext, options),
   setDiagnosticExtensionTarget: (extension) =>
@@ -1566,8 +1567,7 @@ const {
   jobRegistry,
   runtimeState: extensionRuntimeState,
   EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
-  executeViewAction: (action, launchContext) =>
-    executeViewAction(action, launchContext),
+  executeViewAction: (action, context) => executeViewAction(action, context),
   refreshExtensionMenuBar: (extensionId) => menuBar.refresh(extensionId),
 });
 const registration = createExtensionRegistration({

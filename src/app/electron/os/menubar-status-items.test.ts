@@ -1,8 +1,8 @@
 // biome-ignore-all lint: Fake Electron tray objects are intentionally loose.
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { createMenuBarStatusItems } from './menubar-status-items';
 import {
-  createMenuBarStatusItems,
   menuRebuildCooldownMs,
   type StatusItemMenuEntry,
   type StatusItemSpec,
@@ -10,7 +10,7 @@ import {
   statusAreaIsDark,
   statusItemMenuTemplate,
   statusItemTooltip,
-} from './menubar-status-items';
+} from './menubar-status-item-model';
 
 const menu: StatusItemMenuEntry[] = [
   { type: 'header', label: 'Focus' },
@@ -375,4 +375,46 @@ test('the emoji style uses the native emoji as the macOS title', () => {
     statusItemIconFile('nevermind-emoji', 'win32', true),
     'nevermind-emoji.png',
   );
+});
+
+test('a primary click runs the popover and the menu moves to right click', () => {
+  const fake = createFakeElectron();
+  let opened = 0;
+  const items = createMenuBarStatusItems({
+    platform: 'darwin',
+    iconsDir: '/icons',
+    electron: fake.electron,
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+  });
+  items.upsert('monitor:main', {
+    ...spec,
+    onPrimaryClick: () => (opened += 1),
+  });
+  const tray = fake.trays[0];
+
+  assert.equal(tray.contextMenu, null);
+  tray.listeners.get('click')({}, { x: 900, y: 0, width: 24, height: 24 });
+  assert.equal(opened, 1);
+  tray.listeners.get('right-click')();
+  assert.equal(tray.popUps, 1);
+});
+
+test('Linux adds an Open row because some tray hosts never report clicks', () => {
+  const fake = createFakeElectron();
+  let opened = 0;
+  const items = createMenuBarStatusItems({
+    platform: 'linux',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  items.upsert('monitor:main', {
+    ...spec,
+    tooltip: 'System Monitor',
+    onPrimaryClick: () => (opened += 1),
+  });
+  const template = fake.trays[0].contextMenu.template;
+
+  assert.equal(template[0].label, 'Open System Monitor');
+  template[0].click();
+  assert.equal(opened, 1);
 });

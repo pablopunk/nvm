@@ -6,7 +6,18 @@ import {
   indicatorWindowSize,
 } from '../../shared/passive-indicator-layout';
 import type { ExtensionWindowCapability } from '../os/extension-window-capabilities';
+import { lastStatusItemAnchor } from '../os/status-item-anchor';
 import { isNvmHeadlessTestMode } from '../platform/test-mode-flags';
+import {
+  fallbackMenuBarAnchor,
+  menuBarWindowBounds,
+} from './menu-bar-window-placement';
+import {
+  extensionWindowId,
+  extensionWindowSize,
+  normalizeExtensionWindowOptions,
+  PASSIVE_WINDOW_MIN_WIDTH,
+} from './extension-window-options';
 
 type ExtensionWindowLike = {
   webContents: {
@@ -60,7 +71,22 @@ type ExtensionWindowRecord = {
   compatibility: ExtensionWindowCompatibility;
   ownerExtensionId?: string;
   restoredFrame?: boolean;
+  hiddenByBlurAt?: number;
 };
+
+/** A click on the icon right after blur closed the popover means "close", not "reopen". */
+const BLUR_TOGGLE_GRACE_MS = 300;
+
+function isMenuBarWindow(record: Pick<ExtensionWindowRecord, 'options'>) {
+  return record.options?.position === 'menu-bar';
+}
+
+/** Popovers open and close silently; other windows confirm with a toast. */
+function windowActionFeedback(record: ExtensionWindowRecord, message: string) {
+  return isMenuBarWindow(record)
+    ? { ...record.compatibility }
+    : { toast: { message }, ...record.compatibility };
+}
 
 export type PersistedExtensionWindowFrame = {
   x: number;
@@ -150,44 +176,6 @@ type ExtensionWindowManagerDeps = {
   cancelIndicatorHide?: (timer: unknown) => void;
 };
 
-export const EXTENSION_WINDOW_OPTION_DEFAULTS = Object.freeze({
-  titleBar: 'default',
-  chrome: 'default',
-  size: 'default',
-  width: 560,
-  height: 420,
-  alwaysOnTop: true,
-  visibleOnAllSpaces: false,
-  hideOnBlur: false,
-  persistent: false,
-  remembersFrame: false,
-  focusable: true,
-  showInactive: false,
-  ignoreMouseEvents: false,
-  position: 'center',
-} as const);
-
-const WINDOW_OPTION_KEYS = new Set([
-  'id',
-  'restoreKey',
-  'title',
-  'titleBar',
-  'chrome',
-  'width',
-  'height',
-  'size',
-  'alwaysOnTop',
-  'visibleOnAllSpaces',
-  'hideOnBlur',
-  'focusable',
-  'showInactive',
-  'ignoreMouseEvents',
-  'position',
-  'persistent',
-  'remembersFrame',
-]);
-const STABLE_KEY = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
-const PASSIVE_WINDOW_MIN_WIDTH = 160;
 export const EXTENSION_WINDOW_BACKGROUND = Object.freeze({
   dark: '#12151b',
   light: '#ece9e2',
@@ -202,125 +190,6 @@ export function extensionWindowBackgroundColor(
   return shouldUseDarkColors
     ? EXTENSION_WINDOW_BACKGROUND.dark
     : EXTENSION_WINDOW_BACKGROUND.light;
-}
-
-function invalidWindowInput(message: string): never {
-  throw new Error(`Invalid extension window input: ${message}`);
-}
-
-function finiteDimension(value: unknown, fallback: number, name: string) {
-  if (value === undefined) return fallback;
-  if (typeof value !== 'number' || !Number.isFinite(value))
-    invalidWindowInput(`${name} must be a finite number`);
-  return Math.round(value);
-}
-
-/** Validate only the bounded window-options structure, never ExtensionView itself. */
-export function normalizeExtensionWindowOptions(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value))
-    invalidWindowInput('options must be an object');
-  const options = value as Record<string, unknown>;
-  for (const key of Object.keys(options)) {
-    if (!WINDOW_OPTION_KEYS.has(key))
-      invalidWindowInput(`unknown option ${key}`);
-  }
-  for (const key of ['id', 'restoreKey'] as const) {
-    if (options[key] !== undefined) {
-      if (typeof options[key] !== 'string' || !STABLE_KEY.test(options[key]))
-        invalidWindowInput(`${key} must be a bounded stable key`);
-    }
-  }
-  if (options.title !== undefined && typeof options.title !== 'string')
-    invalidWindowInput('title must be a string');
-  if (
-    options.titleBar !== undefined &&
-    options.titleBar !== 'default' &&
-    options.titleBar !== 'hidden'
-  )
-    invalidWindowInput('titleBar must be default or hidden');
-  if (
-    options.chrome !== undefined &&
-    options.chrome !== 'default' &&
-    options.chrome !== 'none'
-  )
-    invalidWindowInput('chrome must be default or none');
-  if (
-    options.size !== undefined &&
-    options.size !== 'default' &&
-    options.size !== 'large'
-  )
-    invalidWindowInput('size must be default or large');
-  for (const key of [
-    'alwaysOnTop',
-    'visibleOnAllSpaces',
-    'hideOnBlur',
-    'focusable',
-    'showInactive',
-    'ignoreMouseEvents',
-    'persistent',
-    'remembersFrame',
-  ]) {
-    if (options[key] !== undefined && typeof options[key] !== 'boolean')
-      invalidWindowInput(`${key} must be a boolean`);
-  }
-  if (
-    options.position !== undefined &&
-    !['center', 'top-center', 'bottom-center'].includes(
-      String(options.position),
-    )
-  )
-    invalidWindowInput('position must be center, top-center, or bottom-center');
-  finiteDimension(
-    options.width,
-    EXTENSION_WINDOW_OPTION_DEFAULTS.width,
-    'width',
-  );
-  finiteDimension(
-    options.height,
-    EXTENSION_WINDOW_OPTION_DEFAULTS.height,
-    'height',
-  );
-  return { ...options };
-}
-
-export function extensionWindowSize(options: any = {}) {
-  const large = options.size === 'large';
-  const passive = options.focusable === false;
-  return {
-    width: Math.max(
-      passive ? PASSIVE_WINDOW_MIN_WIDTH : 320,
-      Math.min(
-        1600,
-        finiteDimension(options.width, large ? 900 : 560, 'width'),
-      ),
-    ),
-    height: Math.max(
-      passive ? 64 : 240,
-      Math.min(
-        1200,
-        finiteDimension(options.height, large ? 680 : 420, 'height'),
-      ),
-    ),
-  };
-}
-
-export function extensionWindowId(
-  view: any,
-  options: any = {},
-  hash = defaultHashValue,
-) {
-  return String(
-    options.id ||
-      view?.id ||
-      `window:${hash(`${view?.title || 'Extension Window'}:${JSON.stringify(view || {})}`)}`,
-  );
-}
-
-function defaultHashValue(value: string) {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1)
-    hash = (Math.imul(31, hash) + value.charCodeAt(index)) | 0;
-  return String(Math.abs(hash));
 }
 
 function cloneSafeWindowOptions(value: unknown): CloneSafeValue | undefined {
@@ -559,7 +428,26 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     });
   }
 
+  function positionUnderStatusItem(win: ExtensionWindowLike) {
+    const anchor = lastStatusItemAnchor();
+    const display = deps.getDisplayNearestPoint(
+      anchor || deps.getCursorScreenPoint(),
+    );
+    const bounds = win.getBounds();
+    win.setBounds(
+      menuBarWindowBounds(
+        anchor || fallbackMenuBarAnchor(display.workArea),
+        { width: bounds.width, height: bounds.height },
+        display.workArea,
+      ),
+    );
+  }
+
   function positionWindow(win: ExtensionWindowLike, position = 'center') {
+    if (position === 'menu-bar') {
+      positionUnderStatusItem(win);
+      return;
+    }
     if (position === 'center') {
       center(win);
       return;
@@ -637,6 +525,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       );
       existing.win.webContents.send('extension-window:view', payload);
       if (visibility === 'show') {
+        if (isMenuBarWindow(existing)) positionUnderStatusItem(existing.win);
         revealWindow(existing.win, existing.options);
       }
       if (resized && existing.options.focusable === false)
@@ -722,7 +611,11 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       if (!suppressedReadyReveals.has(id))
         revealWindow(win, record.options, false);
     });
-    if ((safeOptions as any).hideOnBlur) win.on('blur', () => win.hide());
+    if ((safeOptions as any).hideOnBlur)
+      win.on('blur', () => {
+        record.hiddenByBlurAt = Date.now();
+        win.hide();
+      });
     if (safeOptions.remembersFrame) {
       const trackFrame = () =>
         rememberFrame(id, record.options, win.getBounds());
@@ -769,12 +662,19 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         'show',
         action.ownerExtensionId,
       );
-      return {
-        toast: { message: 'Opened window' },
-        ...record.compatibility,
-      };
+      return windowActionFeedback(record, 'Opened window');
     }
     const record = records.get(id);
+    if (action.type === 'updateWindow') {
+      if (record)
+        createOrUpdate(
+          action.view,
+          { ...record.options, ...(action.windowOptions || {}), id },
+          'preserve',
+          action.ownerExtensionId,
+        );
+      return null;
+    }
     if (!record) {
       if (action.type === 'toggleWindow' && action.view) {
         const created = createOrUpdate(
@@ -786,10 +686,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           'show',
           action.ownerExtensionId,
         );
-        return {
-          toast: { message: 'Opened window' },
-          ...created.compatibility,
-        };
+        return windowActionFeedback(created, 'Opened window');
       }
       return { toast: { message: 'Window is not open', tone: 'error' } };
     }
@@ -810,11 +707,10 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     if (action.type === 'toggleWindow') {
       if (record.win.isVisible()) {
         record.win.hide();
-        return {
-          toast: { message: 'Toggled window' },
-          ...record.compatibility,
-        };
+        return windowActionFeedback(record, 'Toggled window');
       }
+      if (Date.now() - (record.hiddenByBlurAt || 0) < BLUR_TOGGLE_GRACE_MS)
+        return windowActionFeedback(record, 'Toggled window');
       if (action.view || action.windowOptions)
         createOrUpdate(
           action.view || record.view,
@@ -826,11 +722,9 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           'preserve',
           action.ownerExtensionId,
         );
+      if (isMenuBarWindow(record)) positionUnderStatusItem(record.win);
       revealWindow(record.win, record.options);
-      return {
-        toast: { message: 'Toggled window' },
-        ...record.compatibility,
-      };
+      return windowActionFeedback(record, 'Toggled window');
     }
     if (action.type === 'closeWindow') {
       record.win.close();
@@ -840,6 +734,13 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       };
     }
     return null;
+  }
+
+  function isWindowVisible(id: string) {
+    const record = records.get(String(id || ''));
+    return Boolean(
+      record && !record.win.isDestroyed() && record.win.isVisible(),
+    );
   }
 
   function getState(id: string) {
@@ -1002,6 +903,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     records,
     createOrUpdate,
     executeWindowAction,
+    isWindowVisible,
     getState,
     getStateForSender,
     closeForSender,

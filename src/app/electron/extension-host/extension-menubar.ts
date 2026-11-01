@@ -31,13 +31,50 @@ export type NormalizedMenuBarSection = {
   items: NormalizedMenuBarRow[];
 };
 
+export type NormalizedMenuBarPopover = {
+  view: Record<string, unknown>;
+  width: number;
+  height: number;
+};
+
 export type NormalizedMenuBar = {
   id: string;
   icon: StatusItemGlyph;
   title?: string;
   tooltip: string;
   sections: NormalizedMenuBarSection[];
+  popover?: NormalizedMenuBarPopover;
 };
+
+const POPOVER_SIZE = {
+  width: { min: 240, max: 800, fallback: 360 },
+  height: { min: 120, max: 800, fallback: 420 },
+};
+
+function boundedPopoverDimension(
+  value: unknown,
+  limits: { min: number; max: number; fallback: number },
+) {
+  if (typeof value !== 'number' || !Number.isFinite(value))
+    return limits.fallback;
+  return Math.round(Math.min(limits.max, Math.max(limits.min, value)));
+}
+
+function normalizePopover(
+  popover: any,
+  issues: MenuBarNormalizationIssue[],
+): NormalizedMenuBarPopover | undefined {
+  if (popover === undefined) return undefined;
+  if (!popover?.view || typeof popover.view !== 'object') {
+    issues.push({ message: 'Menu bar popovers need a view' });
+    return undefined;
+  }
+  return {
+    view: popover.view,
+    width: boundedPopoverDimension(popover.width, POPOVER_SIZE.width),
+    height: boundedPopoverDimension(popover.height, POPOVER_SIZE.height),
+  };
+}
 
 export type MenuBarNormalizationIssue = { menuBarId?: string; message: string };
 
@@ -159,7 +196,8 @@ function normalizeMenuBar(
       isInternalExtension(extension),
     ) || DEFAULT_MENUBAR_ICON;
   const title = boundedText(descriptor.title, MAX_STATUS_TITLE);
-  const normalized = {
+  const popover = normalizePopover(descriptor.popover, scopedIssues);
+  const normalized: NormalizedMenuBar = {
     id,
     icon,
     ...(title ? { title } : {}),
@@ -168,6 +206,7 @@ function normalizeMenuBar(
       boundedText(extension?.title, MAX_ROW_TEXT) ||
       String(extension?.id || 'Nevermind'),
     sections: normalizeSections(descriptor, scopedIssues),
+    ...(popover ? { popover } : {}),
   };
   for (const issue of scopedIssues) issues.push({ ...issue, menuBarId: id });
   return normalized;

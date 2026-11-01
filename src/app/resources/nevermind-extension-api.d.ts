@@ -408,8 +408,8 @@ export type ExtensionWindowOptions = {
   showInactive?: boolean;
   /** Ignore mouse input so the window cannot intercept the user's current target. */
   ignoreMouseEvents?: boolean;
-  /** Position a passive companion relative to the current display work area. */
-  position?: 'center' | 'top-center' | 'bottom-center';
+  /** Position relative to the display work area; `menu-bar` opens under the last clicked menu bar icon. */
+  position?: 'center' | 'top-center' | 'bottom-center' | 'menu-bar';
   /**
    * Retain the window for relaunch restoration. Defaults to false.
    *
@@ -596,7 +596,9 @@ export type ExtensionMenuBar = {
   title?: string;
   tooltip?: string;
   /** Separated sections; `title` renders a disabled header. */
-  sections: Array<{ title?: string; items: ExtensionMenuBarRow[] }>;
+  sections?: Array<{ title?: string; items: ExtensionMenuBarRow[] }>;
+  /** Click opens this view under the icon (sections move to right click); renders update it live. Free-form: `ctx.ui.webview` with `--nvm-*` theme variables. */
+  popover?: { view: ExtensionView; width?: number; height?: number };
 };
 
 /**

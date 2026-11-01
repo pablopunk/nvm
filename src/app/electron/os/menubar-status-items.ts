@@ -6,38 +6,39 @@ import type {
   Tray as ElectronTray,
 } from 'electron';
 import {
-  APP_MENU_BAR_EMOJI,
-  DEFAULT_MENUBAR_ICON,
+  rememberStatusItemAnchor,
+  type StatusItemAnchor,
+  statusItemAnchorFrom,
+} from './status-item-anchor';
+import {
   glyphFollowsTheme,
-  glyphIsEmoji,
-  isAppMenuBarGlyph,
-  isMenuBarIconName,
   type StatusItemGlyph,
 } from '../../shared/menubar-icons';
+import {
+  menuBarStatusItemsPlatform,
+  menuEntryAtPath,
+  menuRebuildCooldownMs,
+  opensMenuOnPrimaryClick,
+  type StatusItemMenuEntry,
+  type StatusItemSpec,
+  statusAreaIsDark,
+  statusItemAppearanceSignature,
+  statusItemIconFile,
+  statusItemMenuEntries,
+  statusItemMenuSignature,
+  statusItemMenuTemplate,
+  statusItemOwnsContextMenu,
+  statusItemTitle,
+  statusItemTooltip,
+  statusItemUsesEmojiTitle,
+  supportsStatusTitle,
+  usesTemplateImages,
+} from './menubar-status-item-model';
 
-export type StatusItemMenuEntry =
-  | { type: 'separator' }
-  | { type: 'header'; label: string }
-  | {
-      type: 'item';
-      label: string;
-      sublabel?: string;
-      icon?: StatusItemGlyph;
-      checked?: boolean;
-      enabled?: boolean;
-      accelerator?: string;
-      submenu?: StatusItemMenuEntry[];
-      onClick?: () => void;
-    };
-
-export type StatusItemSpec = {
-  icon: StatusItemGlyph;
-  title?: string;
-  tooltip: string;
-  menu: StatusItemMenuEntry[];
-};
-
-export type StatusItemPlatform = 'darwin' | 'win32' | 'linux';
+export type {
+  StatusItemMenuEntry,
+  StatusItemSpec,
+} from './menubar-status-item-model';
 
 export type MenuBarStatusItemsDeps = {
   platform: NodeJS.Platform;
@@ -61,6 +62,8 @@ export type MenuBarStatusItemsDeps = {
   };
   /** Fires when the user opens an item's menu; refresh it in the background for the next open. */
   onMenuOpened?: (id: string) => void;
+  /** Anchors primary clicks where trays report no icon bounds (Linux). */
+  getCursorScreenPoint?: () => { x: number; y: number };
 };
 
 type LiveStatusItem = {
@@ -70,176 +73,12 @@ type LiveStatusItem = {
   menuSpec: StatusItemSpec;
   appearanceSignature: string;
   menuSignature: string;
+  menu: ElectronMenu | null;
   menuOpen: boolean;
   menuRebuildPending: boolean;
   menuBuiltAt: number;
   menuRebuildTimer: ReturnType<typeof setTimeout> | null;
 };
-
-export function menuBarStatusItemsPlatform(
-  platform: NodeJS.Platform,
-): StatusItemPlatform | null {
-  return platform === 'darwin' || platform === 'win32' || platform === 'linux'
-    ? platform
-    : null;
-}
-
-function signatureWithoutHandlers(value: unknown) {
-  return JSON.stringify(value, (_key, entry) =>
-    typeof entry === 'function' ? undefined : entry,
-  );
-}
-
-export function statusItemAppearanceSignature(spec: StatusItemSpec) {
-  return signatureWithoutHandlers([spec.icon, spec.title, spec.tooltip]);
-}
-
-export function statusItemMenuSignature(spec: StatusItemSpec) {
-  return signatureWithoutHandlers(spec.menu);
-}
-
-function usesTemplateImages(platform: StatusItemPlatform) {
-  return platform === 'darwin';
-}
-
-function supportsStatusTitle(platform: StatusItemPlatform) {
-  return platform === 'darwin';
-}
-
-function supportsMenuSublabels(platform: StatusItemPlatform) {
-  return platform === 'darwin';
-}
-
-function supportsMenuAccelerators(platform: StatusItemPlatform) {
-  return platform !== 'linux';
-}
-
-function supportsMenuItemIcons(platform: StatusItemPlatform) {
-  return platform === 'darwin';
-}
-
-const LINUX_MENU_REBUILD_COOLDOWN_MS = 5000;
-
-/** Linux trays report no menu open/close, and a rebuild replaces an open menu. */
-export function menuRebuildCooldownMs(platform: StatusItemPlatform) {
-  return platform === 'linux' ? LINUX_MENU_REBUILD_COOLDOWN_MS : 0;
-}
-
-function opensMenuOnPrimaryClick(platform: StatusItemPlatform) {
-  return platform === 'win32';
-}
-
-function knownGlyph(icon: StatusItemGlyph): StatusItemGlyph {
-  return isMenuBarIconName(icon) || isAppMenuBarGlyph(icon)
-    ? icon
-    : DEFAULT_MENUBAR_ICON;
-}
-
-export function statusItemIconFile(
-  icon: StatusItemGlyph,
-  platform: StatusItemPlatform,
-  darkBackground: boolean,
-) {
-  const name = knownGlyph(icon);
-  const whiteVariant =
-    glyphFollowsTheme(name) && !usesTemplateImages(platform) && darkBackground;
-  return whiteVariant ? `${name}-white.png` : `${name}.png`;
-}
-
-/** The native emoji renders as the macOS status title, so it needs no image. */
-export function statusItemUsesEmojiTitle(
-  icon: StatusItemGlyph,
-  platform: StatusItemPlatform,
-) {
-  return platform === 'darwin' && glyphIsEmoji(icon);
-}
-
-export function statusItemTitle(
-  spec: StatusItemSpec,
-  platform: StatusItemPlatform,
-) {
-  const title = spec.title || '';
-  if (!statusItemUsesEmojiTitle(spec.icon, platform)) return title;
-  return title ? `${APP_MENU_BAR_EMOJI} ${title}` : APP_MENU_BAR_EMOJI;
-}
-
-const ALWAYS_DARK_LINUX_PANELS = /gnome|unity|ubuntu|pantheon|budgie/i;
-
-/** Tray glyphs must contrast with the panel, which does not always follow the app theme. */
-export function statusAreaIsDark(input: {
-  platform: StatusItemPlatform;
-  desktopEnvironment?: string;
-  shouldUseDarkColors: boolean;
-  shouldUseDarkColorsForSystemIntegratedUI?: boolean;
-}) {
-  if (input.platform === 'win32')
-    return (
-      input.shouldUseDarkColorsForSystemIntegratedUI ??
-      input.shouldUseDarkColors
-    );
-  if (input.platform === 'linux')
-    return (
-      ALWAYS_DARK_LINUX_PANELS.test(input.desktopEnvironment || '') ||
-      input.shouldUseDarkColors
-    );
-  return input.shouldUseDarkColors;
-}
-
-export function statusItemTooltip(
-  spec: StatusItemSpec,
-  platform: StatusItemPlatform,
-) {
-  if (supportsStatusTitle(platform) || !spec.title) return spec.tooltip;
-  return `${spec.tooltip} — ${spec.title}`;
-}
-
-export function statusItemMenuTemplate(
-  entries: StatusItemMenuEntry[],
-  platform: StatusItemPlatform,
-  menuIcon: (icon: StatusItemGlyph) => NativeImage,
-): MenuItemConstructorOptions[] {
-  return entries.map((entry): MenuItemConstructorOptions => {
-    if (entry.type === 'separator') return { type: 'separator' };
-    if (entry.type === 'header') return { label: entry.label, enabled: false };
-    const label =
-      entry.sublabel && !supportsMenuSublabels(platform)
-        ? `${entry.label} — ${entry.sublabel}`
-        : entry.label;
-    return {
-      label,
-      ...(entry.sublabel && supportsMenuSublabels(platform)
-        ? { sublabel: entry.sublabel }
-        : {}),
-      ...(entry.checked !== undefined
-        ? { type: 'checkbox' as const, checked: entry.checked }
-        : {}),
-      enabled: entry.enabled !== false,
-      ...(entry.accelerator && supportsMenuAccelerators(platform)
-        ? { accelerator: entry.accelerator, registerAccelerator: false }
-        : {}),
-      ...(entry.icon && supportsMenuItemIcons(platform)
-        ? { icon: menuIcon(entry.icon) }
-        : {}),
-      ...(entry.submenu?.length
-        ? { submenu: statusItemMenuTemplate(entry.submenu, platform, menuIcon) }
-        : {}),
-      ...(entry.onClick ? { click: entry.onClick } : {}),
-    };
-  });
-}
-
-export function menuEntryAtPath(
-  entries: StatusItemMenuEntry[],
-  path: number[],
-): StatusItemMenuEntry | undefined {
-  let list: StatusItemMenuEntry[] | undefined = entries;
-  let entry: StatusItemMenuEntry | undefined;
-  for (const index of path) {
-    entry = list?.[index];
-    list = entry?.type === 'item' ? entry.submenu : undefined;
-  }
-  return entry;
-}
 
 export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
   const platform = menuBarStatusItemsPlatform(deps.platform);
@@ -294,8 +133,42 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     applyMenu(id, item);
   }
 
+  function menuEntriesFor(id: string, spec: StatusItemSpec) {
+    if (!platform) return spec.menu;
+    return statusItemMenuEntries(spec, platform, () => runPrimaryClick(id));
+  }
+
+  function runPrimaryClick(id: string, bounds?: Partial<StatusItemAnchor>) {
+    const cursor = deps.getCursorScreenPoint?.() ?? { x: 0, y: 0 };
+    rememberStatusItemAnchor(statusItemAnchorFrom(bounds, cursor));
+    live.get(id)?.spec.onPrimaryClick?.();
+  }
+
+  function handlePrimaryClick(id: string, bounds?: Partial<StatusItemAnchor>) {
+    const item = live.get(id);
+    if (!(item && platform)) return;
+    if (item.spec.onPrimaryClick) {
+      runPrimaryClick(id, bounds);
+      return;
+    }
+    if (!opensMenuOnPrimaryClick(platform)) return;
+    deps.onMenuOpened?.(id);
+    item.tray.popUpContextMenu();
+  }
+
+  function handleSecondaryClick(id: string) {
+    const item = live.get(id);
+    if (!(item?.menu && platform)) return;
+    if (statusItemOwnsContextMenu(item.menuSpec, platform)) return;
+    if (!item.menuSpec.menu.length) return;
+    deps.onMenuOpened?.(id);
+    item.tray.popUpContextMenu(item.menu);
+  }
+
   function clickCurrentEntry(id: string, path: number[]) {
-    const entry = menuEntryAtPath(live.get(id)?.menuSpec.menu ?? [], path);
+    const item = live.get(id);
+    const entries = item ? menuEntriesFor(id, item.menuSpec) : [];
+    const entry = menuEntryAtPath(entries, path);
     if (entry?.type === 'item') entry.onClick?.();
   }
 
@@ -324,7 +197,7 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     if (!platform) throw new Error('Status items are not supported');
     const menu = Menu.buildFromTemplate(
       statusItemMenuTemplate(
-        withLiveClickHandlers(id, spec.menu),
+        withLiveClickHandlers(id, menuEntriesFor(id, spec)),
         platform,
         menuItemImage,
       ),
@@ -354,16 +227,18 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     item.menuBuiltAt = Date.now();
     item.menuSpec = item.spec;
     item.menuSignature = statusItemMenuSignature(item.spec);
-    item.tray.setContextMenu(buildMenu(id, item.spec));
+    item.menu = buildMenu(id, item.spec);
+    item.tray.setContextMenu(
+      platform && statusItemOwnsContextMenu(item.spec, platform)
+        ? item.menu
+        : null,
+    );
   }
 
   function createTray(id: string, spec: StatusItemSpec) {
     const tray = new Tray(statusImage(spec.icon));
-    if (platform && opensMenuOnPrimaryClick(platform))
-      tray.on('click', () => {
-        deps.onMenuOpened?.(id);
-        tray.popUpContextMenu();
-      });
+    tray.on('click', (_event, bounds) => handlePrimaryClick(id, bounds));
+    tray.on('right-click', () => handleSecondaryClick(id));
     return tray;
   }
 
@@ -413,6 +288,7 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
       menuSpec: spec,
       appearanceSignature: statusItemAppearanceSignature(spec),
       menuSignature: '',
+      menu: null,
       menuOpen: false,
       menuRebuildPending: false,
       menuBuiltAt: 0,

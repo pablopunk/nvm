@@ -25,6 +25,10 @@ export type ExtensionMenuBarServiceDeps = {
   createExtensionContext: (extension: any, command: any) => any;
   extensionRootActionFromItem: (entry: any, item: any) => any;
   runMenuAction: (rootAction: any) => unknown;
+  popovers?: {
+    toggle(extension: any, menuBar: NormalizedMenuBar): void;
+    updateIfOpen(extension: any, menuBar: NormalizedMenuBar): void;
+  };
   renderTimeoutMs: number;
   isVisibleExtension?: (extension: any) => boolean;
 };
@@ -113,7 +117,30 @@ export function createExtensionMenuBarService(
       ...(menuBar.title ? { title: menuBar.title } : {}),
       tooltip: menuBar.tooltip,
       menu,
+      ...(menuBar.popover
+        ? { onPrimaryClick: () => togglePopover(state.extension, menuBar) }
+        : {}),
     };
+  }
+
+  function togglePopover(extension: any, menuBar: NormalizedMenuBar) {
+    try {
+      deps.popovers?.toggle(extension, menuBar);
+    } catch (error) {
+      logActionFailure(extension, error);
+    }
+  }
+
+  /** Each render refreshes an open popover in place, so triggers drive live content. */
+  function updateOpenPopovers(extension: any, menuBars: NormalizedMenuBar[]) {
+    for (const menuBar of menuBars) {
+      if (!menuBar.popover) continue;
+      try {
+        deps.popovers?.updateIfOpen(extension, menuBar);
+      } catch (error) {
+        logActionFailure(extension, error);
+      }
+    }
   }
 
   function logActionFailure(extension: any, error: unknown) {
@@ -198,6 +225,7 @@ export function createExtensionMenuBarService(
       );
       logIssues(extension, issues);
       rendered.set(extension.id, { extension, menuBars });
+      updateOpenPopovers(extension, menuBars);
     } catch (error) {
       logError(
         isPromiseTimeoutError(error)

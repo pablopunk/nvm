@@ -147,3 +147,20 @@ test('Nevermind app glyphs are reserved for internal extensions', () => {
     'nevermind-gold-filled',
   );
 });
+
+test('popovers keep their view and bound their size', () => {
+  const view = { type: 'webview', html: '<p>CPU</p>' };
+  const { menuBars } = normalizeExtensionMenuBars(extension, {
+    popover: { view, width: 5000, height: 10 },
+  });
+  assert.deepEqual(menuBars[0].popover, { view, width: 800, height: 120 });
+  assert.deepEqual(menuBars[0].sections, []);
+});
+
+test('popovers without a view are reported and dropped', () => {
+  const { menuBars, issues } = normalizeExtensionMenuBars(extension, {
+    popover: { width: 300 },
+  });
+  assert.equal(menuBars[0].popover, undefined);
+  assert.ok(issues.some((issue) => issue.message.includes('need a view')));
+});
