@@ -5,7 +5,7 @@ import { performanceTraces } from '../diagnostics/debug-performance';
 import { runOperation } from '../diagnostics/observability';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';
 import type { WindowFocusTarget } from '../os/window-management-types';
-import { error as logError } from '../platform/logger';
+import { error as logError, warn as logWarn } from '../platform/logger';
 import type { MaintenanceActivity } from '../platform/maintenance-activity';
 import {
   shortcutActionOpensPalette,
@@ -55,6 +55,19 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
     actionFailedFeedbackView,
   } = deps;
 
+  /** The target only enriches paste-style actions; an unavailable desktop-text backend must not block the run. */
+  async function captureFrontmostTargetOrNull() {
+    try {
+      return await captureFrontmostTarget();
+    } catch (error) {
+      logWarn('shortcut.frontmostTarget.unavailable', error, {
+        source: 'host',
+        scope: 'shortcuts',
+      });
+      return null;
+    }
+  }
+
   function executeShortcutAction(action) {
     const execute = () =>
       runOperation('command.execute', () => runShortcutAction(action), {
@@ -89,7 +102,7 @@ export function createShortcutRunner(deps: ShortcutRunnerDeps) {
       : null;
     if (instantView) recordRecent(currentAction);
     if (shortcutActionRunsWithoutView(currentAction)) {
-      const target = await captureFrontmostTarget();
+      const target = await captureFrontmostTargetOrNull();
       runInBackground(async () => {
         try {
           await runInWindowInvocationScope({ source: 'shortcut', target }, () =>
