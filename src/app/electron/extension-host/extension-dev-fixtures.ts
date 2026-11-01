@@ -7,6 +7,7 @@ import {
   isExtensionSourceFile,
 } from './extension-source-files';
 import { loadExtensionModule } from './extension-module-loader';
+import { resolveExtensionlessSourceImports } from './extension-source-import-resolution';
 import type {
   ExtensionRuntimeRegistries,
   ExtensionRuntimeState,
@@ -111,6 +112,7 @@ export function createExtensionDevFixtures(deps: ExtensionDevFixturesDeps) {
   }
 
   async function loadDevExtensions() {
+    resolveExtensionlessSourceImports();
     const fixturesDir = path.join(getAppPath(), 'src', 'app', 'fixtures');
     const entries = (
       await fs.readdir(fixturesDir, { withFileTypes: true }).catch(() => [])
