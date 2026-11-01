@@ -525,8 +525,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
       );
       existing.win.webContents.send('extension-window:view', payload);
       if (visibility === 'show') {
-        if (isMenuBarWindow(existing)) positionUnderStatusItem(existing.win);
         revealWindow(existing.win, existing.options);
+        if (isMenuBarWindow(existing)) positionUnderStatusItem(existing.win);
       }
       if (resized && existing.options.focusable === false)
         positionWindow(
@@ -610,6 +610,7 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
         positionWindow(win, String(record.options.position || 'center'));
       if (!suppressedReadyReveals.has(id))
         revealWindow(win, record.options, false);
+      if (isMenuBarWindow(record)) positionUnderStatusItem(win);
     });
     if ((safeOptions as any).hideOnBlur)
       win.on('blur', () => {
@@ -722,8 +723,8 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
           'preserve',
           action.ownerExtensionId,
         );
-      if (isMenuBarWindow(record)) positionUnderStatusItem(record.win);
       revealWindow(record.win, record.options);
+      if (isMenuBarWindow(record)) positionUnderStatusItem(record.win);
       return windowActionFeedback(record, 'Toggled window');
     }
     if (action.type === 'closeWindow') {

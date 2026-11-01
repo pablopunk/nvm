@@ -39,7 +39,7 @@ export function webviewThemeStyle(values: WebviewThemeValues) {
     .filter(([, value]) => value)
     .map(([token, value]) => `--nvm-${token}:${value.replace(/[<;{}]/g, '')};`)
     .join('');
-  return `<style data-nevermind-theme>:root{color-scheme:light dark;${declarations}}</style>`;
+  return `<style data-nevermind-theme>:root{color-scheme:light dark;scrollbar-width:none;${declarations}}::-webkit-scrollbar{display:none}</style>`;
 }
 
 /** Inserts after `<head>` when present so a leading doctype keeps standards mode. */
