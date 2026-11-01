@@ -40,3 +40,12 @@ test('current-guidance extensions get no update prompt', () => {
   assert.deepEqual(findings, []);
   assert.equal(guidanceUpdatePrompt(findings), '');
 });
+
+test('flags hand-built disabled error rows', () => {
+  const findings = outdatedGuidanceFindings(`
+    items: [{ id: 'offline', title: 'Could not connect', disabled: true }]
+  `);
+
+  assert.deepEqual(findings.length, 1);
+  assert.match(findings[0], /ctx\.ui\.error/);
+});

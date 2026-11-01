@@ -31,6 +31,12 @@ const OUTDATED_GUIDANCE_RULES: GuidanceRule[] = [
     finding:
       'It joins preview lines with single newlines, which Markdown shows as one line. Use a list or blank lines between values.',
   },
+  {
+    pattern: /disabled:\s*true/,
+    also: /offline|could not|couldn't|failed|error/i,
+    finding:
+      'It shows errors as disabled rows, which render dimmed and truncated. Return ctx.ui.error(title, message) instead.',
+  },
 ];
 
 export function outdatedGuidanceFindings(source: string) {
