@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createMenuBarStatusItems,
+  menuRebuildCooldownMs,
   type StatusItemMenuEntry,
   type StatusItemSpec,
   statusItemIconFile,
@@ -303,4 +304,29 @@ test('unchanged specs keep the menu and clicks reach the newest handler', () => 
 
   assert.equal(fake.menus.length, builtMenus);
   assert.deepEqual(clicks, ['second']);
+});
+
+test('Linux coalesces menu rebuilds so an open menu survives frequent changes', () => {
+  assert.equal(menuRebuildCooldownMs('linux'), 5000);
+  assert.equal(menuRebuildCooldownMs('darwin'), 0);
+  const fake = createFakeElectron();
+  const items = createMenuBarStatusItems({
+    platform: 'linux',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  items.upsert('pomodoro:main', spec);
+  const menusBuilt = fake.menus.length;
+
+  items.upsert('pomodoro:main', {
+    ...spec,
+    menu: [{ type: 'item', label: 'A' }],
+  });
+  items.upsert('pomodoro:main', {
+    ...spec,
+    menu: [{ type: 'item', label: 'B' }],
+  });
+
+  assert.equal(fake.menus.length, menusBuilt);
+  items.retainOnly([]);
 });

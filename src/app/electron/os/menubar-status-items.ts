@@ -65,6 +65,8 @@ type LiveStatusItem = {
   menuSignature: string;
   menuOpen: boolean;
   menuRebuildPending: boolean;
+  menuBuiltAt: number;
+  menuRebuildTimer: ReturnType<typeof setTimeout> | null;
 };
 
 export function menuBarStatusItemsPlatform(
@@ -107,6 +109,13 @@ function supportsMenuAccelerators(platform: StatusItemPlatform) {
 
 function supportsMenuItemIcons(platform: StatusItemPlatform) {
   return platform === 'darwin';
+}
+
+const LINUX_MENU_REBUILD_COOLDOWN_MS = 5000;
+
+/** Linux trays report no menu open/close, and a rebuild replaces an open menu. */
+export function menuRebuildCooldownMs(platform: StatusItemPlatform) {
+  return platform === 'linux' ? LINUX_MENU_REBUILD_COOLDOWN_MS : 0;
 }
 
 function opensMenuOnPrimaryClick(platform: StatusItemPlatform) {
@@ -305,6 +314,9 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
 
   /** Rebuilding replaces an open native menu, so callers rebuild only when rows change. */
   function applyMenu(id: string, item: LiveStatusItem) {
+    if (item.menuRebuildTimer) clearTimeout(item.menuRebuildTimer);
+    item.menuRebuildTimer = null;
+    item.menuBuiltAt = Date.now();
     item.menuSpec = item.spec;
     item.menuSignature = statusItemMenuSignature(item.spec);
     item.tray.setContextMenu(buildMenu(id, item.spec));
@@ -336,7 +348,21 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
       return;
     }
     if (item.menuOpen) item.menuRebuildPending = true;
-    else applyMenu(id, item);
+    else scheduleMenuRebuild(id, item);
+  }
+
+  function scheduleMenuRebuild(id: string, item: LiveStatusItem) {
+    if (!platform || item.menuRebuildTimer) return;
+    const wait =
+      item.menuBuiltAt + menuRebuildCooldownMs(platform) - Date.now();
+    if (wait <= 0) {
+      applyMenu(id, item);
+      return;
+    }
+    item.menuRebuildTimer = setTimeout(() => {
+      if (live.get(id) === item) applyMenu(id, item);
+    }, wait);
+    item.menuRebuildTimer.unref?.();
   }
 
   function upsert(id: string, spec: StatusItemSpec) {
@@ -354,6 +380,8 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
       menuSignature: '',
       menuOpen: false,
       menuRebuildPending: false,
+      menuBuiltAt: 0,
+      menuRebuildTimer: null,
     };
     live.set(id, item);
     applyAppearance(item);
@@ -365,6 +393,7 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     const item = live.get(id);
     if (!item) return;
     live.delete(id);
+    if (item.menuRebuildTimer) clearTimeout(item.menuRebuildTimer);
     item.tray.destroy();
   }
 

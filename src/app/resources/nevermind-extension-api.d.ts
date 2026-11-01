@@ -602,7 +602,7 @@ export type ExtensionMenuBar = {
   id?: string;
   /** Status glyph. Defaults to `zap`. */
   icon?: ExtensionMenuBarIcon;
-  /** Short text beside the glyph, e.g. `3 PRs` or `12:30`. macOS only; Windows and Linux append it to the tooltip. Capped at 24 characters. */
+  /** Short text beside the glyph, e.g. `3 PRs` or `12:30`. macOS only; Windows and Linux append it to the tooltip. Capped at 24 characters. Put values that change every second here, not in rows: row changes rebuild the native menu, and Linux trays cannot defer that while the menu is open (the host coalesces Linux rebuilds to one per 5 seconds). */
   title?: string;
   /** Hover text. Defaults to the extension title. */
   tooltip?: string;
