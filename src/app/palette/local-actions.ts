@@ -1,4 +1,8 @@
 import {
+  acceleratorForPlatform,
+  type ShortcutPlatform,
+} from '../shared/shortcut-utils';
+import {
   actionsFromPanel,
   type CommandAction,
   type CommandItem,
@@ -66,10 +70,13 @@ export function combinedActionSections(
 export function findLocalShortcut(
   actions: CommandAction[],
   accelerator: string,
+  platform: ShortcutPlatform = globalThis.window?.nvm?.platform ?? 'darwin',
 ) {
+  const pressed = normalizedShortcut(accelerator);
   return actions.find(
     (action) =>
-      normalizedShortcut(action.shortcut) === normalizedShortcut(accelerator),
+      normalizedShortcut(acceleratorForPlatform(action.shortcut, platform)) ===
+      pressed,
   );
 }
 

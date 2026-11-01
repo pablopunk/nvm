@@ -23,6 +23,9 @@ const META_KEY_NAME_BY_PLATFORM: Partial<Record<ShortcutPlatform, string>> = {
   win32: 'Win',
 };
 
+const PRIMARY_MODIFIER_BY_PLATFORM: Partial<Record<ShortcutPlatform, string>> =
+  { darwin: 'Command' };
+
 const SHORTCUT_ALIASES = new Map([
   ['commandorcontrol', 'CommandOrControl'],
   ['cmdorctrl', 'CommandOrControl'],
@@ -79,5 +82,18 @@ export function normalizeAccelerator(value: unknown) {
     .map((part) => part.trim())
     .filter(Boolean)
     .map(normalizeAcceleratorPart)
+    .join('+');
+}
+
+/** Resolves Electron's `CommandOrControl` to the key this platform actually reports, for matching keyboard events. */
+export function acceleratorForPlatform(
+  accelerator: unknown,
+  processPlatform: ShortcutPlatform,
+) {
+  const primaryModifier =
+    PRIMARY_MODIFIER_BY_PLATFORM[processPlatform] ?? 'Control';
+  return normalizeAccelerator(accelerator)
+    .split('+')
+    .map((part) => (part === 'CommandOrControl' ? primaryModifier : part))
     .join('+');
 }

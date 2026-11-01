@@ -26,7 +26,7 @@ function collectionRecord(item: any) {
       `Collection item ids must not start with "${RESERVED_ITEM_ID_PREFIX}"`,
     );
   const editAction = edit
-    ? { shortcut: 'Command+E', ...edit, title: edit.title || 'Edit' }
+    ? { shortcut: 'CommandOrControl+E', ...edit, title: edit.title || 'Edit' }
     : null;
   const removeAction = remove
     ? {

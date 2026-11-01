@@ -79,3 +79,17 @@ test('selects the first inline view action row, skipping empty panel sections', 
   );
   assert.equal(firstViewActionRowValue({ title: 'Plain' } as CommandView), '');
 });
+
+test('CommandOrControl shortcuts match Command on macOS and Control elsewhere', () => {
+  const edit = {
+    type: 'runExtensionAction',
+    title: 'Edit',
+    shortcut: 'CommandOrControl+E',
+  } as CommandAction;
+
+  assert.equal(findLocalShortcut([edit], 'Command+E', 'darwin'), edit);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'darwin'), undefined);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'linux'), edit);
+  assert.equal(findLocalShortcut([edit], 'Control+E', 'win32'), edit);
+  assert.equal(findLocalShortcut([edit], 'Command+E', 'linux'), undefined);
+});

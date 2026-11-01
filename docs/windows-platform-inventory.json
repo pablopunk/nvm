@@ -1355,6 +1355,22 @@
       "surface": "palette-hotkey"
     },
     {
+      "key": "shared-shortcut-utils-accelerator-platform-param",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:acceleratorForPlatform::injected-platform::processPlatform: ShortcutPlatform::name",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shared-shortcut-utils-primary-modifier",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:acceleratorForPlatform/variable:primaryModifier::injected-platform::const primaryModifier = PRIMARY_MODIFIER_BY_PLATFORM[processPlatform] ?? 'Control';::declarationList.declarations[0].initializer.left.argumentExpression",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
       "key": "shared-shortcut-utils-injected-platform-param",
       "file": "src/app/shared/shortcut-utils.ts",
       "category": "injected-platform",
