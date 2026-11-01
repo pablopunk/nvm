@@ -541,7 +541,7 @@ export type ExtensionAction = {
   previewIntent?: boolean;
   icon?: string;
   subtitle?: string;
-  /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. */
+  /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. Prefer `CommandOrControl+…` for cross-platform shortcuts: it is Command on macOS and Control on Windows and Linux, while `Command+…` means Super/Win there. */
   shortcut?: string;
   /** @deprecated Global action shortcuts belong on `globalShortcut`. */
   shortcutScope?: ShortcutScope;
@@ -736,6 +736,7 @@ export type ExtensionCrudCollection = {
   title: string;
   subtitle?: string;
   searchBarPlaceholder?: string;
+  /** Shown when a list has no items. The host also shows the view's first action below it so Enter runs it; keep the subtitle short and do not tell users to open the action menu. */
   emptyView?: { title?: string; subtitle?: string };
   /** Creates a new record. The host renders this as the always-visible first collection row and in the collection action panel. */
   add?: ExtensionAction;
@@ -820,6 +821,7 @@ export type ExtensionView = {
   sections?: ExtensionItemSection[];
   /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
+  /** Shown when a list has no items. The host also shows the view's first action below it so Enter runs it; keep the subtitle short and do not tell users to open the action menu. */
   emptyView?: { title?: string; subtitle?: string };
   /** Optional item detail pane for richer list views. `presentation: 'side-preview'` uses this as the selected-item preview. */
   detail?: { placement?: 'side' | 'bottom'; visible?: boolean };
@@ -2123,6 +2125,12 @@ export type ExtensionContext = {
       /** Opens the OS file previewer (Quick Look on macOS) outside Nevermind. Only available when `ctx.system.capabilities.has('quick-look')`; label it with `ctx.system.labels.previewFile`. For an in-palette preview use `ctx.ui.previewFile`. */
       preview(filePath: string): unknown;
       readText(filePath: string): Promise<string>;
+      /** Save UTF-8 text into an existing folder and return the file's metadata. Fails when the file exists unless `overwrite: true`, which replaces it atomically; never creates folders. Paths may start with `~`. Use this instead of shell commands to save text, Markdown, JSON, or CSV. */
+      writeText(
+        filePath: string,
+        text: string,
+        options?: { overwrite?: boolean },
+      ): Promise<ExtensionFile>;
       /** Format a path for display, replacing the current user's home directory with `~`. Does not change the path used for file operations. */
       displayPath(filePath: string): string;
       toFileUrl(filePath: string): string;

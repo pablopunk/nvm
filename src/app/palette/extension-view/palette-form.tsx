@@ -133,7 +133,7 @@ export function usePaletteForm(
       field.type === 'multiselect'
     ) {
       const selected = Array.isArray(current) ? current : [];
-      const options = (field.options || [])
+      const options: ActionPanelRow[] = (field.options || [])
         .filter((option) =>
           `${option.title} ${option.value}`
             .toLowerCase()
@@ -157,6 +157,10 @@ export function usePaletteForm(
             />
           ),
           title: option.title,
+          checked:
+            field.type === 'multiselect'
+              ? selected.includes(option.value)
+              : undefined,
           onSelect: () => {
             if (field.type !== 'multiselect') return commit(option.value);
             update(

@@ -152,7 +152,7 @@ export const ACTION_DEFINITIONS = {
     execute: 'main',
   },
   runExtensionAction: {
-    description: 'Run action',
+    description: '',
     dismiss: 'immediate',
     loading: 'none',
     execute: 'main',
@@ -737,5 +737,5 @@ export function actionDescription(action: CommandAction) {
       ? `Open with ${action.app.name}`
       : actionDefinition(action)?.description || 'Run action';
   }
-  return actionDefinition(action)?.description || 'Run action';
+  return actionDefinition(action)?.description ?? 'Run action';
 }

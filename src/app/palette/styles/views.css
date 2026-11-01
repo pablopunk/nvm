@@ -1024,7 +1024,7 @@
   height: 4px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: var(--surface-interactive);
+  background: var(--edge-subtle);
 }
 
 .progressBar span {

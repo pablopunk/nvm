@@ -43,6 +43,13 @@ export function formFieldMatches(
     .includes(query.trim().toLowerCase());
 }
 
+const INVALID_VALUE_MESSAGES: Record<string, string> = {
+  email: 'Enter an email address, such as name@example.com',
+  url: 'Enter a full URL, such as https://example.com',
+  number: 'Enter a number',
+  date: 'Enter a date as YYYY-MM-DD',
+};
+
 export function invalidFormFields(
   fields: FormField[],
   values: Record<string, FormValue>,
@@ -58,19 +65,19 @@ export function invalidFormFields(
     const value = formFieldValue(field, values);
     if (
       field.required &&
-      (Array.isArray(value) ? !value.length : !value || !String(value).trim())
+      (Array.isArray(value) ? !value.length : !(value && String(value).trim()))
     ) {
       errors[field.id] = `${field.label || field.id} is required`;
       continue;
     }
     if (!value || Array.isArray(value) || typeof value !== 'string') continue;
-    if (!['email', 'url', 'number', 'date'].includes(field.type || ''))
-      continue;
+    const invalidMessage = INVALID_VALUE_MESSAGES[field.type || ''];
+    if (!invalidMessage) continue;
     const input = document.createElement('input');
     input.type = field.type || 'text';
     input.value = value;
     if (!input.checkValidity() || input.value !== value)
-      errors[field.id] = `Enter a valid ${field.label || field.id}`;
+      errors[field.id] = invalidMessage;
   }
   return errors;
 }

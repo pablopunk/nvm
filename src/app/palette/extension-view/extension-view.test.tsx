@@ -616,6 +616,32 @@ test('split Markdown preview edits source text beside the rendered preview', () 
   assert.doesNotMatch(split, /markdownEditorContent/);
 });
 
+test('empty lists show their first view action below the empty state', () => {
+  const add = {
+    type: 'runExtensionAction',
+    title: 'Add Task',
+  } as CommandAction;
+  const html = renderExtensionView(
+    {
+      type: 'list',
+      title: 'My Tasks',
+      items: [],
+      emptyView: { title: 'No tasks yet' },
+      actions: [add],
+    },
+    {},
+    {
+      actionPanelRows: (_panel, actions) => actions,
+      renderActionPanel: (rows) => (
+        <div data-inline-actions={(rows as CommandAction[])[0]?.title} />
+      ),
+    },
+  );
+
+  assert.match(html, /No tasks yet/);
+  assert.match(html, /data-inline-actions="Add Task"/);
+});
+
 test('renders an opted-in side preview for the selected list item', () => {
   const html = renderExtensionView({
     type: 'list',

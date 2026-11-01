@@ -2356,7 +2356,7 @@ export function App() {
       selectValue(
         current && items.some((item) => item.id === current)
           ? current
-          : declaredSelection || items[0]?.id || '',
+          : declaredSelection || items[0]?.id || firstViewActionRowValue(view),
       );
     }
 

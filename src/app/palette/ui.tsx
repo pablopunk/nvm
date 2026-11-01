@@ -57,6 +57,8 @@ export interface CommandRowProps {
   appearance?: ItemAppearance;
   selectedOnlyShortcut?: boolean;
   disabled?: boolean;
+  /** Multi-select choice state, exposed as aria-checked. */
+  checked?: boolean;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent) => void;
   onSelect: () => void;
@@ -178,6 +180,7 @@ export interface ActionPanelRow {
   className?: string;
   sectionHeader?: boolean;
   disabled?: boolean;
+  checked?: boolean;
   onSelect: () => void;
 }
 export interface ActionPanelViewProps {
@@ -270,6 +273,7 @@ export function CommandRow({
   appearance,
   selectedOnlyShortcut = false,
   disabled,
+  checked,
   draggable,
   onDragStart,
   onSelect,
@@ -304,6 +308,7 @@ export function CommandRow({
       disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
+      aria-checked={checked}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={() => {
@@ -526,8 +531,8 @@ export function FormView({
             key={field.id}
             value={formRowId(field.id)}
             icon={
-              field.type === 'checkbox' && value ? (
-                <Check size={18} />
+              field.type === 'checkbox' ? (
+                <Check size={18} opacity={value ? 1 : 0} />
               ) : (
                 <ChevronRight size={18} />
               )
@@ -821,17 +826,7 @@ export function ActionPanelView({ rows, renderEmpty }: ActionPanelViewProps) {
             {row.title}
           </div>
         ) : (
-          <CommandRow
-            key={row.value}
-            value={row.value}
-            icon={row.icon}
-            title={row.title}
-            subtitle={row.subtitle}
-            shortcut={row.shortcut}
-            className={row.className}
-            disabled={row.disabled}
-            onSelect={row.onSelect}
-          />
+          <CommandRow key={row.value} {...row} icon={row.icon} />
         ),
       )}
     </>

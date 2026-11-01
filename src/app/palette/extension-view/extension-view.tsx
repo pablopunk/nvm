@@ -727,7 +727,12 @@ function ListExtensionView({
     <ListView
       items={items}
       sections={filterSections(view)}
-      empty={renderEmpty(view)}
+      empty={
+        <>
+          {renderEmpty(view)}
+          {inlineViewActions({ view, renderActionPanel, actionPanelRows })}
+        </>
+      }
       isLoading={view.isLoading}
       pagination={<ViewPagination view={view} runAction={runAction} />}
       renderItem={(item) => {
@@ -992,23 +997,9 @@ function useCameraAccessForWebview(webviewPermissions?: readonly string[]) {
   return ready;
 }
 
-function WebExtensionView({
-  view,
-  renderActionPanel,
-  actionPanelRows,
-}: ExtensionViewSurfaceProps) {
-  const webviewActionRows = visibleActionPanelRows(
-    view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-webview',
-      false,
-    ),
-  );
-  const webviewActions = webviewActionRows.length
-    ? renderActionPanel(webviewActionRows)
-    : null;
+function WebExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view } = props;
+  const webviewActions = inlineViewActions(props, 'extension-webview');
   const cameraAccessReady = useCameraAccessForWebview(view.webviewPermissions);
   return (
     <div
@@ -1028,31 +1019,23 @@ function WebExtensionView({
   );
 }
 
-function CameraExtensionView({
-  view,
-  active,
-  renderActionPanel,
-  actionPanelRows,
-}: ExtensionViewSurfaceProps) {
-  const cameraActionRows = visibleActionPanelRows(
-    view,
-    actionPanelRows(
-      view.actionPanel,
-      view.actions || [],
-      'extension-camera',
-      false,
-    ),
-  );
-  const cameraActions = cameraActionRows.length
-    ? renderActionPanel(cameraActionRows)
-    : null;
+function CameraExtensionView(props: ExtensionViewSurfaceProps) {
+  const { view, active } = props;
+  const cameraActions = inlineViewActions(props, 'extension-camera');
   return (
     <CameraView view={view} actions={cameraActions} active={active !== false} />
   );
 }
 
 function inlineViewActions(
-  { view, renderActionPanel, actionPanelRows }: ExtensionViewSurfaceProps,
+  {
+    view,
+    renderActionPanel,
+    actionPanelRows,
+  }: Pick<
+    ExtensionViewSurfaceProps,
+    'view' | 'renderActionPanel' | 'actionPanelRows'
+  >,
   prefix = 'extension-view',
 ) {
   const rows = visibleActionPanelRows(
