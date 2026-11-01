@@ -55,7 +55,7 @@ function durationPricing(
   const outputRate = decimalRate(model.pricing?.completion);
   if (rate == null || outputRate !== 0) return null;
   if (unit.observedRate !== undefined && rate !== unit.observedRate) {
-    log.warn('transcription_catalog_rate_requires_review', { model: model.id, observed_rate: rate, reviewed_rate: unit.observedRate });
+    log.warn('transcription_catalog_rate_requires_review', { model: unit.modelId, observed_rate: rate, reviewed_rate: unit.observedRate });
     return null;
   }
   return {

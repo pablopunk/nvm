@@ -634,7 +634,7 @@ export const POST: APIRoute = async ({ request }) => {
         );
       }
       const seconds = finiteNonnegative(body.usage?.seconds);
-      if (providerCostUsd > normalizedAudio.estimatedBillableSeconds * pricing.usdPerSecond * STALE_RESERVATION_MARGIN) {
+      if (providerCostUsd > estimatedProviderCostUsd) {
         log.warn('audio_transcription_price_estimate_exceeded', {
           request_id: requestId,
           provider: route.provider,
