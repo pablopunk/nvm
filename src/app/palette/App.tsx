@@ -5002,8 +5002,13 @@ export function App() {
     entry = extensionNavigation.activeEntry,
   ) {
     const active = entry?.id === extensionNavigation.activeEntry?.id;
+    const coveredByNewerView = !extensionNavigation.frames.some(
+      (frame) => frame.history.at(-1)?.id === entry?.id,
+    );
     return (
-      <PaneRowsUnavailable.Provider value={active && activePaneObscured}>
+      <PaneRowsUnavailable.Provider
+        value={coveredByNewerView || (active && activePaneObscured)}
+      >
         <ExtensionViewRenderer
           view={view}
           aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
