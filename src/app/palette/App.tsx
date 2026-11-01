@@ -54,6 +54,8 @@ import {
 } from './ai-chat/builder-preview';
 import { useAiChat } from './ai-chat/use-ai-chat';
 import { isAppIconPath } from './app-icons';
+import { useAppViewReporting } from './app-view-reporting';
+import { useShortcutReveal } from './use-shortcut-reveal';
 import {
   type CommandIconName,
   iconFor,
@@ -1693,6 +1695,7 @@ export function App() {
     inputRef.current?.focus(),
   );
   const extensionView = extensionNavigation.view;
+  useAppViewReporting(extensionNavigation.activeFrame);
   const extensionViewBackStack = extensionNavigation.backStack;
   const retainedViews = extensionNavigation.frames.flatMap((frame) =>
     frame.history.map((entry) => entry.view),
@@ -2477,16 +2480,11 @@ export function App() {
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [paletteForm.editing]);
 
-  useEffect(() => {
-    if (!(pendingShortcutReveal && extensionView)) return;
-    const frame = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        window.nvm.shortcutReady();
-        setPendingShortcutReveal(false);
-      });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [pendingShortcutReveal, extensionView]);
+  useShortcutReveal(
+    pendingShortcutReveal,
+    extensionView,
+    setPendingShortcutReveal,
+  );
 
   useEffect(() => {
     const visibleAiChat = extensionView?.aiChat

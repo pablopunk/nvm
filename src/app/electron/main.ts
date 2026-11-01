@@ -90,7 +90,6 @@ import {
   installProcessErrorSafetyNet,
   recentDiagnosticRecords,
   recordUpdateInstallAttempt,
-  rendererFailureHandle,
   reportDiagnosticProblem,
   setDiagnosticReporting,
 } from './diagnostics/diagnostic-reporting';
@@ -191,6 +190,7 @@ import { createSettingsService } from './app/settings-service';
 import { createAppStateMaintenance } from './app/state-maintenance-setup';
 import { createTestModeIpc } from './app/test-mode-ipc';
 import { createAppUpdateManager } from './app/update-manager-setup';
+import { registerDiagnosticViewIpc } from './ipc/diagnostic-view-ipc';
 import { registerDeepLinkProtocol } from './os/deep-link-protocol';
 import { prepareLinuxDesktopSession } from './os/linux-desktop-session';
 import { osCacheRoot } from './os/os-cache-root';
@@ -198,7 +198,6 @@ import { createUpdatesService } from './app/updates-service';
 import { createWindowManagementComposition } from './app/window-management-composition';
 import {
   installExternalNavigationPolicy,
-  isTrustedAppPage,
   isTrustedExtensionWindowPage,
 } from './app/window-navigation-policy';
 import {
@@ -339,19 +338,7 @@ const updateManager: any = createAppUpdateManager({
 });
 const preloadPath = path.join(__dirname, '..', 'preload', 'preload.cjs');
 const rendererIndexPath = path.join(__dirname, '..', 'renderer', 'index.html');
-ipcMain.handle('diagnostics:renderer-failure', (event) => {
-  if (
-    event.senderFrame !== event.sender.mainFrame ||
-    !isTrustedAppPage(
-      event.sender.getURL(),
-      isDev,
-      rendererUrl,
-      rendererIndexPath,
-    )
-  )
-    return null;
-  return rendererFailureHandle(event.sender.id);
-});
+registerDiagnosticViewIpc({ ipcMain, isDev, rendererUrl, rendererIndexPath });
 nativeTheme.themeSource = 'system';
 const paletteWindow = createPaletteWindowController({
   isDev: Boolean(rendererUrl),

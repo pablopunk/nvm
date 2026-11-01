@@ -50,6 +50,83 @@ test('only known events from a real install id are accepted', () => {
   assert.equal(sanitizeBatch('x', NOW), null);
 });
 
+const SESSION = '0198a1b2-c3d4-7e5f-8a6b-7c8d9e0f1a2b';
+
+function pageview(properties: Record<string, unknown>) {
+  return event({ event: '$pageview', properties });
+}
+
+test('pageviews accept only fixed views with a valid session', () => {
+  const result = sanitizeBatch(
+    {
+      batch: [
+        pageview({ view: 'extension', $session_id: SESSION }),
+        pageview({ view: 'private user data', $session_id: SESSION }),
+        pageview({ view: 'palette', $session_id: 'invalid' }),
+        pageview({ view: 'palette' }),
+      ],
+    },
+    NOW,
+  );
+  assert.equal(result?.events.length, 1);
+  assert.equal(result?.dropped, 3);
+});
+
+test('pageviews are rebuilt from validated parts only', () => {
+  const result = sanitizeBatch(
+    {
+      batch: [
+        pageview({
+          view: 'ai-chat',
+          $session_id: SESSION,
+          $current_url: 'https://example.com/private?q=secret',
+          $title: 'Reading my private notes',
+          $pathname: '/private',
+          query: 'secret search',
+          app_version: '1.2.3',
+          channel: 'stable',
+          os_type: 'x'.repeat(200),
+        }),
+      ],
+    },
+    NOW,
+  );
+  assert.deepEqual(result?.events[0]?.properties, {
+    $process_person_profile: false,
+    $geoip_disable: true,
+    source: 'desktop',
+    view: 'ai-chat',
+    $session_id: SESSION,
+    $current_url: 'https://app.nevermind.invalid/ai-chat',
+    $host: 'app.nevermind.invalid',
+    $pathname: '/ai-chat',
+    app_version: '1.2.3',
+    channel: 'stable',
+  });
+});
+
+test('every event is marked as desktop and keeps only a valid session id', () => {
+  const result = sanitizeBatch(
+    {
+      batch: [
+        event({
+          properties: { feature: 'command.run', $session_id: SESSION },
+        }),
+        event({
+          properties: { feature: 'command.run', $session_id: 'not-a-session' },
+        }),
+        event({ properties: { feature: 'command.run', source: 'website' } }),
+      ],
+    },
+    NOW,
+  );
+  const [valid, invalid, spoofed] = result?.events ?? [];
+  assert.equal(valid?.properties.$session_id, SESSION);
+  assert.equal('$session_id' in (invalid?.properties ?? {}), false);
+  assert.equal(spoofed?.properties.source, 'desktop');
+  assert.equal(result?.events.length, 3);
+});
+
 test('clients cannot set person data, location, ip or the project key', () => {
   const result = sanitizeBatch(
     {
@@ -75,6 +152,7 @@ test('clients cannot set person data, location, ip or the project key', () => {
     '$geoip_disable',
     '$process_person_profile',
     'feature',
+    'source',
   ]);
   assert.equal(properties.$process_person_profile, false);
   assert.equal(properties.$geoip_disable, true);

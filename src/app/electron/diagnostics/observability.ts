@@ -22,6 +22,9 @@ export type OperationContext = {
   component?: DiagnosticComponent;
   targetId?: string;
   label?: string;
+  // Set for everything that runs under a background job, however deeply nested:
+  // nobody started it, so it is never activity.
+  inBackgroundJob?: boolean;
   failure?: DiagnosticRecord;
   closed: boolean;
   completionUnverified?: boolean;
@@ -231,6 +234,7 @@ export function runOperation<T>(
     windowId: options.windowId ?? parent?.windowId,
     component: parent?.component,
     targetId: parent?.targetId,
+    inBackgroundJob: operation === 'job.run' || parent?.inBackgroundJob,
     breadcrumbs: parent
       ? parent.breadcrumbs.slice(-49)
       : diagnosticBreadcrumbs(options.windowId).slice(-20),

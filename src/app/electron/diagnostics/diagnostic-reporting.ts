@@ -4,7 +4,9 @@
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { app, BrowserWindow } from 'electron';
+import { appViewUrl, isAppView } from '../../shared/app-view';
 import type { DiagnosticRecord } from '../../shared/diagnostics';
+import { createAnalyticsSession } from './analytics-session';
 import {
   createDiagnosticStore,
   DIAGNOSTIC_FILE_NAME,
@@ -13,6 +15,7 @@ import {
   createFeatureUsageDeduper,
   featureUsage,
   isRoutineBackgroundSuccess,
+  isUserOperation,
 } from './feature-usage';
 import {
   configureObservability,
@@ -42,6 +45,9 @@ let updateStore: ReturnType<typeof createDiagnosticStore> | undefined;
 let reportingEnabled = false;
 let launchReported = false;
 const firstUseInJourney = createFeatureUsageDeduper();
+// One owner for the session: views and person-initiated operations both keep it
+// alive, and both stamp their events with it.
+const analyticsSession = createAnalyticsSession();
 let captureWindowStarted = Date.now();
 let captureWindowCount = 0;
 declare const __NEVERMIND_BUILD__: string;
@@ -54,6 +60,9 @@ export function recentDiagnosticRecords() {
 
 export function setDiagnosticReporting(enabled: boolean) {
   reportingEnabled = enabled;
+  if (!enabled) {
+    analyticsSession.end();
+  }
   setPosthogConsent(enabled);
   if (enabled && !launchReported) {
     launchReported = true;
@@ -67,6 +76,25 @@ export function setDiagnosticReporting(enabled: boolean) {
   for (const window of BrowserWindow.getAllWindows()) {
     window.webContents.send(REPORTING_CHANGED_CHANNEL, enabled);
   }
+}
+
+// A pageview is one settled, visible navigation reported by the renderer. The
+// renderer names only a host-defined category; identity, session and URL are
+// assigned here, never taken from the caller.
+export function recordAppView(view: unknown) {
+  if (!(reportingEnabled && isAppView(view))) {
+    return;
+  }
+  void whenInstallIdReady().then(function captureView() {
+    if (!(reportingEnabled && posthogClient())) {
+      return;
+    }
+    captureDesktopEvent('$pageview', {
+      view,
+      $current_url: appViewUrl(view),
+      $session_id: analyticsSession.touch(),
+    });
+  });
 }
 
 export async function flushDiagnosticRecords() {
@@ -198,7 +226,11 @@ function captureFailure(error: unknown, record: DiagnosticRecord) {
   });
 }
 
-function captureOperation(context: OperationContext, durationMs: number) {
+function captureOperation(
+  context: OperationContext,
+  durationMs: number,
+  sessionId: string | undefined,
+) {
   if (!(reportingEnabled && posthogClient())) {
     return;
   }
@@ -214,6 +246,7 @@ function captureOperation(context: OperationContext, durationMs: number) {
     journey_id: context.journeyId,
     action_id: context.actionId,
     release: buildIdentity(),
+    ...sessionProperties(sessionId),
     ...(context.label ? { label: context.label } : {}),
     ...(context.component ? { component: context.component } : {}),
     ...(context.targetId ? { target_id: context.targetId } : {}),
@@ -222,15 +255,24 @@ function captureOperation(context: OperationContext, durationMs: number) {
       ? {}
       : { response_status: context.responseStatus }),
   });
-  const usage = featureUsage(context);
+  const usage = context.inBackgroundJob ? undefined : featureUsage(context);
   if (usage && firstUseInJourney(context.journeyId, usage.feature)) {
     captureDesktopEvent('feature.used', {
       feature: usage.feature,
       ...(usage.variant ? { variant: usage.variant } : {}),
       outcome: context.outcome,
       release: buildIdentity(),
+      ...sessionProperties(sessionId),
     });
   }
+}
+
+function isPersonStarted(context: OperationContext) {
+  return isUserOperation(context.operation) && !context.inBackgroundJob;
+}
+
+function sessionProperties(sessionId: string | undefined) {
+  return sessionId ? { $session_id: sessionId } : {};
 }
 
 function traceOperation<T>(context: OperationContext, task: () => T): T {
@@ -238,8 +280,22 @@ function traceOperation<T>(context: OperationContext, task: () => T): T {
     return task();
   }
   const startedAt = performance.now();
+  // The session is fixed when the operation starts, so a long AI stream that
+  // outlives the idle window still belongs to the session it began in.
+  const sessionEpoch = analyticsSession.epoch();
+  const sessionId = isPersonStarted(context)
+    ? analyticsSession.touch()
+    : undefined;
   function finish() {
-    captureOperation(context, performance.now() - startedAt);
+    // Withdrawing consent ends the session for good: an operation that began
+    // before it must not bring the discarded id back afterwards.
+    const survivingSessionId =
+      sessionEpoch === analyticsSession.epoch() ? sessionId : undefined;
+    captureOperation(
+      context,
+      performance.now() - startedAt,
+      survivingSessionId,
+    );
   }
   try {
     const result = task();

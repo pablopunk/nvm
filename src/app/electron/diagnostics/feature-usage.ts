@@ -36,6 +36,11 @@ function safeId(value: unknown) {
   return typeof value === 'string' && SAFE_ID.test(value) ? value : undefined;
 }
 
+/** Whether a person started this operation, so it counts as activity. */
+export function isUserOperation(operation: DiagnosticOperation) {
+  return operation in USER_FEATURES;
+}
+
 /**
  * The canonical "someone used the app" fact. Variants come only from closed
  * sets: action kinds and built-in command ids from this repository, or the
@@ -45,7 +50,7 @@ export function featureUsage(
   context: FeatureContext,
 ): FeatureUsage | undefined {
   const feature = USER_FEATURES[context.operation];
-  if (!feature || context.outcome === 'cancelled') return undefined;
+  if (!feature || context.outcome === 'cancelled') return;
   const variant = context.label ?? context.component;
   return variant ? { feature, variant } : { feature };
 }

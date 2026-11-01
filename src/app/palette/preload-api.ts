@@ -2,6 +2,7 @@
 
 import type { AiChatImageInput } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
+import type { AppView } from '../shared/app-view';
 import type { NevermindDeviceSignInStatus } from '../shared/nevermind-auth';
 import type { ShortcutPlatform } from '../shared/shortcut-utils';
 import type {
@@ -184,6 +185,7 @@ export type ViewHydratePayload = {
 
 export type NevermindApi = {
   prepareDiagnosticFailure: () => Promise<string | null>;
+  reportAppView: (view: AppView) => void;
   platform: ShortcutPlatform;
   search: (
     query: string,
