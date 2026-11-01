@@ -52,6 +52,17 @@ test('ending the session forgets it', () => {
   assert.notEqual(session.touch(), first);
 });
 
+test('only ending the session changes its epoch', () => {
+  const { session, advance } = sessionAt(1_000);
+  const epoch = session.epoch();
+  session.touch();
+  advance(45 * MINUTE);
+  session.touch();
+  assert.equal(session.epoch(), epoch);
+  session.end();
+  assert.notEqual(session.epoch(), epoch);
+});
+
 test('minted ids are UUIDv7 carrying their start time', () => {
   const now = Date.parse('2026-11-01T12:00:00.000Z');
   const id = newSessionId(now);

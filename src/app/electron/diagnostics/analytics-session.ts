@@ -31,6 +31,7 @@ export function createAnalyticsSession(
 ) {
   let current: { id: string; startedAt: number; lastActiveAt: number } | null =
     null;
+  let epoch = 0;
   return {
     /** Records activity and returns the session it belongs to. */
     touch() {
@@ -48,6 +49,11 @@ export function createAnalyticsSession(
     /** Forgets the session, so withdrawn consent leaves nothing to resume. */
     end() {
       current = null;
+      epoch += 1;
+    },
+    /** Changes only when the session is ended, never when it merely expires. */
+    epoch() {
+      return epoch;
     },
   };
 }

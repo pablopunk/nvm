@@ -1695,7 +1695,7 @@ export function App() {
     inputRef.current?.focus(),
   );
   const extensionView = extensionNavigation.view;
-  useAppViewReporting(extensionNavigation.activeEntry);
+  useAppViewReporting(extensionNavigation.activeFrame);
   const extensionViewBackStack = extensionNavigation.backStack;
   const retainedViews = extensionNavigation.frames.flatMap((frame) =>
     frame.history.map((entry) => entry.view),

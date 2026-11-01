@@ -255,7 +255,7 @@ function captureOperation(
       ? {}
       : { response_status: context.responseStatus }),
   });
-  const usage = featureUsage(context);
+  const usage = context.inBackgroundJob ? undefined : featureUsage(context);
   if (usage && firstUseInJourney(context.journeyId, usage.feature)) {
     captureDesktopEvent('feature.used', {
       feature: usage.feature,
@@ -265,6 +265,10 @@ function captureOperation(
       ...sessionProperties(sessionId),
     });
   }
+}
+
+function isPersonStarted(context: OperationContext) {
+  return isUserOperation(context.operation) && !context.inBackgroundJob;
 }
 
 function sessionProperties(sessionId: string | undefined) {
@@ -278,11 +282,20 @@ function traceOperation<T>(context: OperationContext, task: () => T): T {
   const startedAt = performance.now();
   // The session is fixed when the operation starts, so a long AI stream that
   // outlives the idle window still belongs to the session it began in.
-  const sessionId = isUserOperation(context.operation)
+  const sessionEpoch = analyticsSession.epoch();
+  const sessionId = isPersonStarted(context)
     ? analyticsSession.touch()
     : undefined;
   function finish() {
-    captureOperation(context, performance.now() - startedAt, sessionId);
+    // Withdrawing consent ends the session for good: an operation that began
+    // before it must not bring the discarded id back afterwards.
+    const survivingSessionId =
+      sessionEpoch === analyticsSession.epoch() ? sessionId : undefined;
+    captureOperation(
+      context,
+      performance.now() - startedAt,
+      survivingSessionId,
+    );
   }
   try {
     const result = task();
