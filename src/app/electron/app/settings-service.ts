@@ -147,8 +147,31 @@ export function createSettingsService(deps: SettingsServiceDeps) {
       id: `setting:${definition.id}`,
       accessories: accessoryText ? [{ text: accessoryText }] : [],
       primaryAction,
-      actionPanel: { sections: [{ actions: [primaryAction] }] },
+      actionPanel: {
+        sections: [
+          { actions: [primaryAction] },
+          ...choiceOptionSections(definition, value),
+        ],
+      },
     };
+  }
+
+  /** Enter cycles a choice; Cmd+K jumps straight to any option. */
+  function choiceOptionSections(definition, value) {
+    if (definition.type !== 'choice') return [];
+    return [
+      {
+        title: definition.title,
+        actions: definition.options
+          .filter((option) => option.value !== value)
+          .map((option) => ({
+            type: 'toggleSetting',
+            title: `Use ${option.label}`,
+            settingId: definition.id,
+            value: option.value,
+          })),
+      },
+    ];
   }
 
   function settingsItems() {

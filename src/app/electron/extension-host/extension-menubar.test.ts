@@ -5,6 +5,7 @@ import {
   extensionMenuBarTriggers,
   normalizeExtensionMenuBars,
 } from './extension-menubar';
+import { markInternalExtension } from './internal-extension';
 
 const extension = { id: 'pomodoro', title: 'Pomodoro' };
 
@@ -132,4 +133,17 @@ test('rows must live in sections', () => {
     items: [{ id: 'loose', title: 'Loose' }],
   });
   assert.deepEqual(menuBars[0].sections, []);
+});
+
+test('Nevermind app glyphs are reserved for internal extensions', () => {
+  const descriptor = { icon: 'nevermind-gold-filled', sections: [] };
+  assert.equal(
+    normalizeExtensionMenuBars(extension, descriptor).menuBars[0].icon,
+    'zap',
+  );
+  const internal = markInternalExtension({ id: 'nevermind.menubar' });
+  assert.equal(
+    normalizeExtensionMenuBars(internal, descriptor).menuBars[0].icon,
+    'nevermind-gold-filled',
+  );
 });

@@ -86,6 +86,9 @@ function createFakeElectron() {
   };
   const loaded: string[] = [];
   const nativeImage = {
+    createEmpty() {
+      return { empty: true, ...fakeImage() };
+    },
     createFromPath(file: string) {
       loaded.push(file);
       return fakeImage();
@@ -329,4 +332,47 @@ test('Linux coalesces menu rebuilds so an open menu survives frequent changes', 
 
   assert.equal(fake.menus.length, menusBuilt);
   items.retainOnly([]);
+});
+
+test('colored app glyphs ship one variant and are never template images', () => {
+  assert.equal(
+    statusItemIconFile('nevermind-gold-filled', 'linux', true),
+    'nevermind-gold-filled.png',
+  );
+  assert.equal(
+    statusItemIconFile('nevermind-bolt-filled', 'linux', true),
+    'nevermind-bolt-filled-white.png',
+  );
+  const fake = createFakeElectron();
+  const items = createMenuBarStatusItems({
+    platform: 'darwin',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  items.upsert('app:main', {
+    ...spec,
+    icon: 'nevermind-gold-filled',
+    title: undefined,
+  });
+  assert.equal(fake.trays[0].image.template, false);
+});
+
+test('the emoji style uses the native emoji as the macOS title', () => {
+  const fake = createFakeElectron();
+  const items = createMenuBarStatusItems({
+    platform: 'darwin',
+    iconsDir: '/icons',
+    electron: fake.electron,
+  });
+  items.upsert('app:main', {
+    ...spec,
+    icon: 'nevermind-emoji',
+    title: undefined,
+  });
+  assert.equal(fake.trays[0].title, '⚡');
+  assert.equal(fake.trays[0].image.empty, true);
+  assert.equal(
+    statusItemIconFile('nevermind-emoji', 'win32', true),
+    'nevermind-emoji.png',
+  );
 });

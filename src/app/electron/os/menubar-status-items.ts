@@ -6,9 +6,13 @@ import type {
   Tray as ElectronTray,
 } from 'electron';
 import {
+  APP_MENU_BAR_EMOJI,
   DEFAULT_MENUBAR_ICON,
+  glyphFollowsTheme,
+  glyphIsEmoji,
+  isAppMenuBarGlyph,
   isMenuBarIconName,
-  type MenuBarIconName,
+  type StatusItemGlyph,
 } from '../../shared/menubar-icons';
 
 export type StatusItemMenuEntry =
@@ -18,7 +22,7 @@ export type StatusItemMenuEntry =
       type: 'item';
       label: string;
       sublabel?: string;
-      icon?: MenuBarIconName;
+      icon?: StatusItemGlyph;
       checked?: boolean;
       enabled?: boolean;
       accelerator?: string;
@@ -27,7 +31,7 @@ export type StatusItemMenuEntry =
     };
 
 export type StatusItemSpec = {
-  icon: MenuBarIconName;
+  icon: StatusItemGlyph;
   title?: string;
   tooltip: string;
   menu: StatusItemMenuEntry[];
@@ -45,7 +49,10 @@ export type MenuBarStatusItemsDeps = {
     Menu: {
       buildFromTemplate(template: MenuItemConstructorOptions[]): ElectronMenu;
     };
-    nativeImage: { createFromPath(path: string): NativeImage };
+    nativeImage: {
+      createFromPath(path: string): NativeImage;
+      createEmpty(): NativeImage;
+    };
     nativeTheme: {
       readonly shouldUseDarkColors: boolean;
       readonly shouldUseDarkColorsForSystemIntegratedUI?: boolean;
@@ -122,15 +129,38 @@ function opensMenuOnPrimaryClick(platform: StatusItemPlatform) {
   return platform === 'win32';
 }
 
+function knownGlyph(icon: StatusItemGlyph): StatusItemGlyph {
+  return isMenuBarIconName(icon) || isAppMenuBarGlyph(icon)
+    ? icon
+    : DEFAULT_MENUBAR_ICON;
+}
+
 export function statusItemIconFile(
-  icon: MenuBarIconName,
+  icon: StatusItemGlyph,
   platform: StatusItemPlatform,
   darkBackground: boolean,
 ) {
-  const name = isMenuBarIconName(icon) ? icon : DEFAULT_MENUBAR_ICON;
-  return !usesTemplateImages(platform) && darkBackground
-    ? `${name}-white.png`
-    : `${name}.png`;
+  const name = knownGlyph(icon);
+  const whiteVariant =
+    glyphFollowsTheme(name) && !usesTemplateImages(platform) && darkBackground;
+  return whiteVariant ? `${name}-white.png` : `${name}.png`;
+}
+
+/** The native emoji renders as the macOS status title, so it needs no image. */
+export function statusItemUsesEmojiTitle(
+  icon: StatusItemGlyph,
+  platform: StatusItemPlatform,
+) {
+  return platform === 'darwin' && glyphIsEmoji(icon);
+}
+
+export function statusItemTitle(
+  spec: StatusItemSpec,
+  platform: StatusItemPlatform,
+) {
+  const title = spec.title || '';
+  if (!statusItemUsesEmojiTitle(spec.icon, platform)) return title;
+  return title ? `${APP_MENU_BAR_EMOJI} ${title}` : APP_MENU_BAR_EMOJI;
 }
 
 const ALWAYS_DARK_LINUX_PANELS = /gnome|unity|ubuntu|pantheon|budgie/i;
@@ -166,7 +196,7 @@ export function statusItemTooltip(
 export function statusItemMenuTemplate(
   entries: StatusItemMenuEntry[],
   platform: StatusItemPlatform,
-  menuIcon: (icon: MenuBarIconName) => NativeImage,
+  menuIcon: (icon: StatusItemGlyph) => NativeImage,
 ): MenuItemConstructorOptions[] {
   return entries.map((entry): MenuItemConstructorOptions => {
     if (entry.type === 'separator') return { type: 'separator' };
@@ -217,18 +247,21 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
   const live = new Map<string, LiveStatusItem>();
   const images = new Map<string, NativeImage>();
 
-  function loadImage(icon: MenuBarIconName, darkBackground: boolean) {
+  function loadImage(icon: StatusItemGlyph, darkBackground: boolean) {
     if (!platform) throw new Error('Status items are not supported');
+    if (statusItemUsesEmojiTitle(icon, platform))
+      return nativeImage.createEmpty();
     const file = statusItemIconFile(icon, platform, darkBackground);
     const cached = images.get(file);
     if (cached) return cached;
     const image = nativeImage.createFromPath(path.join(deps.iconsDir, file));
-    if (usesTemplateImages(platform)) image.setTemplateImage(true);
+    if (usesTemplateImages(platform) && glyphFollowsTheme(icon))
+      image.setTemplateImage(true);
     images.set(file, image);
     return image;
   }
 
-  function statusImage(icon: MenuBarIconName) {
+  function statusImage(icon: StatusItemGlyph) {
     if (!platform) throw new Error('Status items are not supported');
     return loadImage(
       icon,
@@ -242,7 +275,7 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     );
   }
 
-  function menuItemImage(icon: MenuBarIconName) {
+  function menuItemImage(icon: StatusItemGlyph) {
     return loadImage(icon, false);
   }
 
@@ -308,7 +341,9 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
     const { tray, spec } = item;
     tray.setImage(statusImage(spec.icon));
     if (supportsStatusTitle(platform))
-      tray.setTitle(spec.title || '', { fontType: 'monospacedDigit' });
+      tray.setTitle(statusItemTitle(spec, platform), {
+        fontType: 'monospacedDigit',
+      });
     tray.setToolTip(statusItemTooltip(spec, platform));
   }
 

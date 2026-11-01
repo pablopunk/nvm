@@ -655,6 +655,7 @@ const {
   afterSettingCommitted: (settingId) => {
     if (settingId === 'updateChannel')
       updateManager.handleUpdateChannelChanged();
+    menuBar.scheduleSync();
   },
   canChangeUpdateChannel: () => !updateManager.state.installInFlight,
 });
@@ -849,10 +850,8 @@ const menuBar = createAppMenuBar({
   extensionModules,
   userStateStore,
   scheduleSaveState,
-  createExtensionContext: (extension, command) =>
-    createExtensionContext(extension, command),
-  extensionRootActionFromItem: (entry, item) =>
-    extensionRootActionFromItem(entry, item),
+  createExtensionContext: (ext, cmd) => createExtensionContext(ext, cmd),
+  extensionRootActionFromItem: (e, i) => extensionRootActionFromItem(e, i),
   runMenuAction: (action) => executeShortcutAction(action),
   renderTimeoutMs: EXTENSION_ROOT_ITEMS_TIMEOUT_MS,
 });

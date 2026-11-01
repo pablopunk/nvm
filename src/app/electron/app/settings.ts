@@ -1,4 +1,9 @@
 import {
+  APP_MENU_BAR_ICON_STYLES,
+  type AppMenuBarIconStyle,
+  DEFAULT_APP_MENU_BAR_ICON_STYLE,
+} from '../../shared/menubar-icons';
+import {
   DEFAULT_UPDATE_CHANNEL,
   UPDATE_CHANNEL_OPTIONS,
   type UpdateChannel,
@@ -35,6 +40,15 @@ export type SettingDefinition =
       icon: string;
       type: 'choice';
       default: UpdateChannel;
+      options: ReadonlyArray<ChoiceSettingOption>;
+    }
+  | {
+      id: 'menuBarIconStyle';
+      title: string;
+      description: string;
+      icon: string;
+      type: 'choice';
+      default: AppMenuBarIconStyle;
       options: ReadonlyArray<ChoiceSettingOption>;
     };
 
@@ -101,6 +115,18 @@ export const SETTING_DEFINITIONS: SettingDefinition[] = [
     type: 'choice',
     default: DEFAULT_UPDATE_CHANNEL,
     options: UPDATE_CHANNEL_OPTIONS,
+  },
+  {
+    id: 'menuBarIconStyle',
+    title: 'Menu Bar Icon Style',
+    description: 'How the Nevermind icon looks in the menu bar',
+    icon: 'zap',
+    type: 'choice',
+    default: DEFAULT_APP_MENU_BAR_ICON_STYLE,
+    options: APP_MENU_BAR_ICON_STYLES.map(({ value, label }) => ({
+      value,
+      label,
+    })),
   },
 ];
 

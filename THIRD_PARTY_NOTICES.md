@@ -111,3 +111,11 @@ Except as contained in this notice, the name of a copyright holder shall
 not be used in advertising or otherwise to promote the sale, use or other
 dealings in these Data Files or Software without prior written
 authorization of the copyright holder.
+
+## Noto Emoji
+
+The ⚡ menu bar icon style (`src/app/resources/menubar-icons/nevermind-emoji*.png`) is rendered from `emoji_u26a1.svg` in https://github.com/googlefonts/noto-emoji. Copyright 2013 Google LLC. Emoji images are licensed under the Apache License, Version 2.0 (https://www.apache.org/licenses/LICENSE-2.0); the font is licensed under the SIL Open Font License, Version 1.1.
+
+## Lucide
+
+Menu bar and tray glyphs (`src/app/resources/menubar-icons/`) are rendered from Lucide icons (https://lucide.dev), licensed under the ISC License. Copyright (c) Lucide Contributors.

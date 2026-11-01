@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
-import { MENUBAR_ICON_NAMES } from './menubar-icons';
+import {
+  APP_MENU_BAR_ICON_STYLES,
+  glyphFollowsTheme,
+  MENUBAR_ICON_NAMES,
+} from './menubar-icons';
 
 const resourcesDir = path.join(import.meta.dirname, '..', 'resources');
 
@@ -32,5 +36,20 @@ test('every curated icon ships light, dark and @2x assets', () => {
       `${name}-white@2x.png`,
     ].filter((file) => !fs.existsSync(path.join(iconsDir, file))),
   );
+  assert.deepEqual(missing, []);
+});
+
+test('every app icon style ships its assets', () => {
+  const iconsDir = path.join(resourcesDir, 'menubar-icons');
+  const missing = APP_MENU_BAR_ICON_STYLES.flatMap(({ value }) => {
+    const glyph = `nevermind-${value}` as const;
+    const variants = glyphFollowsTheme(glyph) ? ['', '-white'] : [''];
+    return variants
+      .flatMap((variant) => [
+        `${glyph}${variant}.png`,
+        `${glyph}${variant}@2x.png`,
+      ])
+      .filter((file) => !fs.existsSync(path.join(iconsDir, file)));
+  });
   assert.deepEqual(missing, []);
 });

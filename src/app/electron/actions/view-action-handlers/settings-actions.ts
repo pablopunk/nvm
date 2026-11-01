@@ -32,7 +32,9 @@ export function createSettingActionHandlers(deps: SettingActionHandlerDeps) {
       return { toast: { message: 'Setting not found', tone: 'error' } };
     const result = await setSetting(
       definition.id,
-      toggledSettingValue(definition, getSetting(definition.id)),
+      action.value !== undefined && definition.type === 'choice'
+        ? action.value
+        : toggledSettingValue(definition, getSetting(definition.id)),
     );
     if (!result.ok)
       return { toast: { message: result.message, tone: 'error' } };

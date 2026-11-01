@@ -1,9 +1,11 @@
 // biome-ignore-all lint: Menu bar descriptors are authored by extensions and normalized defensively.
 import {
   DEFAULT_MENUBAR_ICON,
+  isAppMenuBarGlyph,
   isMenuBarIconName,
-  type MenuBarIconName,
+  type StatusItemGlyph,
 } from '../../shared/menubar-icons';
+import { isInternalExtension } from './internal-extension';
 
 const MAX_MENU_BARS_PER_EXTENSION = 3;
 const MAX_SECTIONS = 8;
@@ -16,7 +18,7 @@ export type NormalizedMenuBarRow = {
   id: string;
   title: string;
   subtitle?: string;
-  icon?: MenuBarIconName;
+  icon?: StatusItemGlyph;
   checked?: boolean;
   disabled?: boolean;
   shortcut?: string;
@@ -31,7 +33,7 @@ export type NormalizedMenuBarSection = {
 
 export type NormalizedMenuBar = {
   id: string;
-  icon: MenuBarIconName;
+  icon: StatusItemGlyph;
   title?: string;
   tooltip: string;
   sections: NormalizedMenuBarSection[];
@@ -56,9 +58,18 @@ function boundedText(value: unknown, max: number) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
-function optionalIcon(value: unknown, issues: MenuBarNormalizationIssue[]) {
+/** Nevermind's own glyphs are reserved for the app's internal status item. */
+function iconIsAllowed(value: unknown, internal: boolean) {
+  return isMenuBarIconName(value) || (internal && isAppMenuBarGlyph(value));
+}
+
+function optionalIcon(
+  value: unknown,
+  issues: MenuBarNormalizationIssue[],
+  internal = false,
+) {
   if (value === undefined) return undefined;
-  if (isMenuBarIconName(value)) return value;
+  if (iconIsAllowed(value, internal)) return value as StatusItemGlyph;
   issues.push({ message: `Unknown menu bar icon "${String(value)}"` });
   return undefined;
 }
@@ -142,7 +153,11 @@ function normalizeMenuBar(
   }
   const scopedIssues: MenuBarNormalizationIssue[] = [];
   const icon =
-    optionalIcon(descriptor.icon, scopedIssues) || DEFAULT_MENUBAR_ICON;
+    optionalIcon(
+      descriptor.icon,
+      scopedIssues,
+      isInternalExtension(extension),
+    ) || DEFAULT_MENUBAR_ICON;
   const title = boundedText(descriptor.title, MAX_STATUS_TITLE);
   const normalized = {
     id,

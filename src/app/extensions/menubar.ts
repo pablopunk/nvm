@@ -1,3 +1,4 @@
+import { appMenuBarGlyph } from '../shared/menubar-icons';
 import { extensionContext } from './_context';
 import { appSettingsView } from './settings';
 
@@ -19,7 +20,7 @@ function updateRow() {
 function nevermindMenuBar(ctx: any) {
   const update = updateRow();
   return {
-    icon: 'zap',
+    icon: appMenuBarGlyph(ctx.settings.get('menuBarIconStyle')),
     tooltip: 'Nevermind',
     sections: [
       {
