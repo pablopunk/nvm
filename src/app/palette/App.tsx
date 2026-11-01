@@ -5000,19 +5000,14 @@ export function App() {
   function renderExtensionView(
     view: ExtensionView,
     entry = extensionNavigation.activeEntry,
+    paneHidden = false,
   ) {
-    const active = entry?.id === extensionNavigation.activeEntry?.id;
-    const coveredByNewerView = !extensionNavigation.frames.some(
-      (frame) => frame.history.at(-1)?.id === entry?.id,
-    );
     return (
-      <PaneRowsUnavailable.Provider
-        value={coveredByNewerView || (active && activePaneObscured)}
-      >
+      <PaneRowsUnavailable.Provider value={paneHidden}>
         <ExtensionViewRenderer
           view={view}
           aiChat={view.aiChat ? aiChatSessions.forView(view) : aiChat}
-          active={active}
+          active={entry?.id === extensionNavigation.activeEntry?.id}
           nevermindAuthed={nevermindAuthed}
           deviceSignInStatus={deviceSignInStatus}
           onSignInToNevermind={async () => {
@@ -5793,11 +5788,11 @@ export function App() {
                 const isTop = historyIndex === frame.history.length - 1;
                 const active =
                   frameIndex === extensionNavigation.frames.length - 1 && isTop;
-                const obscured = active && activePaneObscured;
+                const paneHidden = !isTop || (active && activePaneObscured);
                 const pane = (
                   <div
                     key={entry.id}
-                    hidden={!isTop || obscured}
+                    hidden={paneHidden}
                     inert={!active || compactActionMenuVisible || undefined}
                     className={
                       active
@@ -5818,7 +5813,7 @@ export function App() {
                           : 'siblingBody'
                       }
                     >
-                      {renderExtensionView(entry.view, entry)}
+                      {renderExtensionView(entry.view, entry, paneHidden)}
                       {active && entry.view.aiChat && selectedBuilderPreview
                         ? renderBuilderPreview()
                         : null}
