@@ -1,5 +1,6 @@
 import { and, eq, gt, inArray, lte, sql } from 'drizzle-orm';
 import { db } from '../db/client';
+import { AUDIO_RESERVATION_CREDITS } from './audio-reservation-policy';
 import {
   creditLedger,
   creditReservations,
@@ -143,7 +144,7 @@ export function isAudioPreparation(
 }
 
 function validateAudioCreditCeiling(credits: number) {
-  if (!Number.isSafeInteger(credits) || credits !== 5)
+  if (!Number.isSafeInteger(credits) || credits !== AUDIO_RESERVATION_CREDITS)
     throw new Error(
       'Audio reservations require the configured five-credit ceiling',
     );

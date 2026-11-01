@@ -84,7 +84,7 @@ function createState() {
     backgroundTasks: [] as Promise<unknown>[],
     events: [] as string[],
     claimEvents: [] as string[],
-    pricing: PRICING as typeof PRICING | null,
+    pricing: PRICING as (typeof PRICING & { reviewed?: true }) | null,
     normalizationError: null as Error | null,
     estimatedBillableSeconds: 13,
     admissionFailure: null as Extract<ReservationResult, { ok: false }> | null,
@@ -607,6 +607,14 @@ test('audio admission route regressions', async function audioAdmissionTests(t) 
       );
     }
   }
+
+  await t.test('reviewed pricing reserves with the conservative margin', async () => {
+    state = createState();
+    state.pricing = { ...PRICING, reviewed: true };
+    const response = await transcribe(context(audioRequest('transcriptions')));
+    assert.equal(response.status, 200);
+    assert.equal(state.admissionCalls[0]?.estimatedProviderCostUsd, 13 * PRICING.usdPerSecond * 2);
+  });
 
   for (const prepared of [true, false]) {
     for (const failure of ['pricing', 'media', 'admission'] as const) {

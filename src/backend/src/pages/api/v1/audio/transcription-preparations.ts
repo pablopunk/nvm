@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
+import { AUDIO_RESERVATION_CREDITS as RESERVATION_CREDITS } from '../../../../lib/audio-reservation-policy';
 import {
   backendKillSwitchEnabled,
   compatibilityError,
@@ -29,10 +30,6 @@ import {
 import { getUserFromBearer } from '../../../../lib/tokens';
 import { ensureMonthlyFreeCredits } from '../../../../lib/users';
 
-const RESERVATION_CREDITS = Math.max(
-  1,
-  Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
-);
 const preparationRequestSchema = z
   .object({ operationId: z.string().min(1).max(200) })
   .strict();

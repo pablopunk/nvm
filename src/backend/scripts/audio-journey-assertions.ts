@@ -20,6 +20,7 @@ import {
   users,
 } from '../src/db/schema';
 import { usdToCredits, usdToMicrocents } from '../src/lib/cost';
+import { AUDIO_RESERVATION_CREDITS } from '../src/lib/audio-reservation-policy';
 import {
   ensureFreeSpendMonthlyBudget,
   utcMonthKey,
@@ -71,7 +72,7 @@ export async function runAudioJourneyAssertions(
     'journey requires the default free grant',
   );
   assert.equal(
-    Number(process.env.AUDIO_TRANSCRIPTION_RESERVATION_CREDITS ?? 5),
+    AUDIO_RESERVATION_CREDITS,
     5,
   );
 

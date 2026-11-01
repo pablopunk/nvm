@@ -31,6 +31,14 @@ export function ConsoleCombobox({ options, defaultValue, label }: Props) {
     [initial],
   );
 
+  useEffect(function syncHostSelection() {
+    const element = select.current;
+    if (!element) return;
+    function sync() { setValue(element!.value); }
+    element.addEventListener('host-selection-reset', sync);
+    return () => element.removeEventListener('host-selection-reset', sync);
+  }, []);
+
   function choose(next: string) {
     setValue(next);
     setOpen(false);
