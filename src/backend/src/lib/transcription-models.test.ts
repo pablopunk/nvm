@@ -101,6 +101,9 @@ test('hourly catalog pricing is converted to seconds and invalid rates are rejec
     usdPerSecond: 0.1 / 3600,
     source: 'openrouter_transcription_catalog',
   });
+  answerCatalogWith({ data: [{ ...model, pricing: { prompt: '0.2', completion: '0' } }] });
+  await refreshTranscriptionCatalog();
+  assert.equal(await lookupTranscriptionDurationPricing('openrouter', model.id), null, 'changed rates require their unit to be reviewed again');
   answerCatalogWith({ data: [{ ...model, pricing: { prompt: '0.1', completion: '1' } }] });
   await refreshTranscriptionCatalog();
   assert.equal(await lookupTranscriptionDurationPricing('openrouter', model.id), null);
@@ -118,6 +121,16 @@ test('selection excludes unpriced models and models that exceed the stale record
   assert.equal(await canSelectTranscriptionModel('openrouter', 'unknown/model'), false);
   assert.equal(await canSelectTranscriptionModel('openrouter', 'microsoft/mai-transcribe-2'), false);
   assert.deepEqual((await listSelectableTranscriptionModels()).map((model) => model.modelId), [PARAKEET]);
+});
+
+test('the existing configured Parakeet route remains catalog-priced when its rate changes', async () => {
+  const model = { ...PARAKEET_CATALOG.data[0], pricing: { prompt: '0.00003', completion: '0' } };
+  answerCatalogWith({ data: [model] });
+  await refreshTranscriptionCatalog();
+  assert.deepEqual(await lookupTranscriptionDurationPricing('openrouter', PARAKEET), {
+    ...PARAKEET_PRICING,
+    usdPerSecond: 0.00003,
+  });
 });
 
 test('an unvalidated catalog lists and prices nothing, and a lookup never fetches it', async () => {

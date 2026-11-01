@@ -92,6 +92,7 @@ decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
         <section class="model-route-row" data-audio-model-route>
           <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status role="status" aria-live="polite"></span></header>
           <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? ''} options={[...(!audioRouteRef ? [{ value: '', label: 'Select a dictation model', disabled: true }] : []), ...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (unavailable for new selection)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
+          <p class="muted">Models are checked against the budget for a typical one-minute recording segment. If a longer segment exceeds the budget, try a shorter recording.</p>
         </section>
         <section class="model-route-row" data-decision-model-route>
           <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status role="status" aria-live="polite"></span></header>

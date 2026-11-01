@@ -5,14 +5,15 @@ import {
   lookupTranscriptionDurationPricing,
 } from './transcription-models';
 
-// A 60-second desktop segment can round up to 61 billable seconds.
-const MAX_SEGMENT_BILLABLE_SECONDS = 61;
+// Picker guidance for a normal 60-second segment, rounded up with one second of slack.
+// Admission still checks the actual recording; a delayed timer can make it longer.
+const STANDARD_SEGMENT_BILLABLE_SECONDS = 61;
 const AUDIO_RESERVATION_CREDITS = 5;
 
 export async function canSelectTranscriptionModel(provider: string, modelId: string) {
   const pricing = await lookupTranscriptionDurationPricing(provider, modelId);
   return pricing !== null && usdToCredits(
-    pricing.usdPerSecond * MAX_SEGMENT_BILLABLE_SECONDS * STALE_RESERVATION_MARGIN,
+    pricing.usdPerSecond * STANDARD_SEGMENT_BILLABLE_SECONDS * STALE_RESERVATION_MARGIN,
   ) <= AUDIO_RESERVATION_CREDITS;
 }
 
