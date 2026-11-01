@@ -194,7 +194,7 @@
   background: transparent;
 }
 
-.extensionWindowShell .editorViewMarkdown .editorTextarea {
+.extensionWindowShell .editorViewMarkdown .editorTextarea:not([data-source]) {
   font:
     14px / 1.65 -apple-system,
     BlinkMacSystemFont,

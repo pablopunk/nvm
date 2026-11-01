@@ -1355,6 +1355,22 @@
       "surface": "palette-hotkey"
     },
     {
+      "key": "shared-shortcut-utils-accelerator-platform-param",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:acceleratorForPlatform::injected-platform::processPlatform: ShortcutPlatform::name",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
+      "key": "shared-shortcut-utils-primary-modifier",
+      "file": "src/app/shared/shortcut-utils.ts",
+      "category": "injected-platform",
+      "selector": "function:acceleratorForPlatform/variable:primaryModifier::injected-platform::const primaryModifier = PRIMARY_MODIFIER_BY_PLATFORM[processPlatform] ?? 'Control';::declarationList.declarations[0].initializer.left.argumentExpression",
+      "disposition": "capability-selector",
+      "surface": "palette-hotkey"
+    },
+    {
       "key": "shared-shortcut-utils-injected-platform-param",
       "file": "src/app/shared/shortcut-utils.ts",
       "category": "injected-platform",
@@ -1366,7 +1382,7 @@
       "key": "shared-shortcut-utils-injected-platform-darwin-check",
       "file": "src/app/shared/shortcut-utils.ts",
       "category": "injected-platform",
-      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatfor…#bfcafbe0cc0f::expression.left",
+      "selector": "function:formatShortcut/if:processPlatform !== 'darwin'::injected-platform::if (processPlatform !== 'darwin') { const metaKeyName = META_KEY_NAME_BY_PLATFORM[processPlatfor…#1eaf5ce8eec9::expression.left",
       "disposition": "presentation-adapter",
       "surface": "palette-hotkey"
     },

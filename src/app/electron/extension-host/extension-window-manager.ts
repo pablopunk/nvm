@@ -660,10 +660,10 @@ export function createExtensionWindowManager(deps: ExtensionWindowManagerDeps) {
     const win = new deps.BrowserWindow({
       width: size.width,
       height: size.height,
-      minWidth:
-        safeOptions.focusable === false ? PASSIVE_WINDOW_MIN_WIDTH : 320,
-      minHeight: safeOptions.focusable === false ? 64 : 240,
+      minWidth: passive ? PASSIVE_WINDOW_MIN_WIDTH : 320,
+      minHeight: passive ? 64 : 240,
       show: false,
+      autoHideMenuBar: true,
       focusable: safeOptions.focusable !== false,
       frame: !frameless,
       transparent: frameless,

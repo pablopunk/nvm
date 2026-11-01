@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import type { BrowserWindow } from 'electron';
-import { extensionLoadingView } from '../../palette/model';
+import { extensionLoadingView } from '../../palette/extension-loading-view';
 import { performanceTraces } from '../diagnostics/debug-performance';
 import { runOperation } from '../diagnostics/observability';
 import { runInWindowInvocationScope } from '../extension-host/window-invocation-scope';

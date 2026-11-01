@@ -1,12 +1,12 @@
+import { extensionLoadingView } from '../extension-loading-view';
 import { patchCommandView } from '../extension-view/view-patches';
 import { feedbackView } from '../feedback';
 import { allViewItems } from '../filtering';
-import {
-  type BuilderPreview,
-  type CommandAction,
-  type CommandView,
-  type CommandViewPatch,
-  extensionLoadingView,
+import type {
+  BuilderPreview,
+  CommandAction,
+  CommandView,
+  CommandViewPatch,
 } from '../model';
 
 export function builderPreviewRootActions(preview: BuilderPreview) {

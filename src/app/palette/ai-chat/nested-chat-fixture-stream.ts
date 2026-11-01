@@ -1,4 +1,4 @@
-import type { AiChatEvent } from '../palette/preload-api';
+import type { AiChatEvent } from '../preload-api';
 
 /** Feeds the real chat controller without credentials or a model request. */
 export function startNestedChatFixtureStream(

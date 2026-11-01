@@ -476,8 +476,13 @@
 }
 
 .formFieldEditor.editorView {
+  grid-template-rows: minmax(0, 1fr) auto;
   gap: 2px;
   padding: 0;
+}
+
+.formFieldEditor.editorView:has(> .editorHeader) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .formFieldEditor .editorHeader {
@@ -978,20 +983,13 @@
   background: var(--surface-raised);
 }
 
-.progressOverview {
-  padding: 8px 10px;
-  background: var(--surface-sunken);
-  box-shadow: var(--shadow-inset);
-}
-
-.progressStep {
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--edge-subtle);
-  background: transparent;
+.progressView {
+  gap: 6px;
 }
 
 .progressOverview {
   gap: 8px;
+  padding: 6px 8px 10px;
 }
 
 .progressOverview > div:first-child {
@@ -999,106 +997,131 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
+  min-width: 0;
 }
 
-.progressOverview small,
-.progressStep small {
+.progressOverview strong {
+  min-width: 0;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.progressOverview small {
+  flex: none;
   color: var(--text-tertiary);
   font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.progressDetail {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
 }
 
 .progressBar {
-  height: 6px;
+  height: 4px;
   overflow: hidden;
   border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
+  background: var(--edge-subtle);
 }
 
 .progressBar span {
   display: block;
+  width: 0;
   height: 100%;
-  min-width: 8px;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--accent-fill));
+  background: var(--accent-fill);
+  transition: width 200ms var(--ease-out, ease-out);
+}
+
+.progressOverview[data-status="error"] .progressBar span {
+  background: var(--danger-text);
+}
+
+.progressSteps {
+  display: grid;
+  gap: 2px;
 }
 
 .progressStep {
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-height: 36px;
+  padding: 6px 8px;
 }
 
 .progressStep > div {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   min-width: 0;
 }
 
 .progressStep strong {
   min-width: 0;
   overflow: hidden;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .progressStep small {
   flex: none;
-  border: 1px solid var(--edge-subtle);
-  border-radius: var(--radius-pill);
-  padding: 1px 6px;
-  background: var(--surface-interactive);
-  line-height: 1.4;
+  color: var(--text-tertiary);
+  font-size: var(--fs-xs);
 }
 
 .progressStepMarker {
   position: relative;
-  width: 12px;
-  height: 12px;
-  border: 1px solid var(--edge-strong);
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--edge-strong);
   border-radius: var(--radius-pill);
-  background: var(--surface-sunken);
 }
 
 .progressStep[data-status="done"] .progressStepMarker {
   border-color: var(--success-text);
-  background: var(--success-text);
 }
 
 .progressStep[data-status="done"] .progressStepMarker::after {
   content: "";
   position: absolute;
-  left: 3px;
+  left: 3.5px;
   top: 1px;
   width: 4px;
   height: 7px;
-  border: solid var(--progress-marker-contrast);
-  border-width: 0 2px 2px 0;
+  border: solid var(--success-text);
+  border-width: 0 1.5px 1.5px 0;
   transform: rotate(45deg);
+}
+
+.progressStep[data-status="done"] strong {
+  color: var(--text-secondary);
+}
+
+.progressStep[data-status="active"] {
+  border-radius: var(--radius-lg);
+  background: var(--surface-interactive);
 }
 
 .progressStep[data-status="active"] .progressStepMarker {
   border-color: var(--accent-fill);
-  background: transparent;
-  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .progressStep[data-status="active"] .progressStepMarker::after {
   content: "";
   position: absolute;
-  inset: 3px;
+  inset: 2.5px;
   border-radius: inherit;
-  background: var(--accent);
-}
-
-.progressStep[data-status="done"] small {
-  color: var(--success-text);
-  background: var(--surface-interactive);
+  background: var(--accent-fill);
 }
 
 .progressStep[data-status="active"] small {
-  color: var(--text-primary);
-  background: var(--surface-raised);
+  color: var(--text-secondary);
 }
 
 .progressStep[data-status="error"] .progressStepMarker {
@@ -1108,7 +1131,10 @@
 
 .progressStep[data-status="error"] small {
   color: var(--danger-text);
-  background: var(--danger-surface);
+}
+
+.progressView > .result {
+  margin-top: 6px;
 }
 
 .markdownContent {
@@ -1864,4 +1890,8 @@
 
 .cameraError strong {
   color: var(--danger-text);
+}
+
+.empty + .result {
+  margin-top: 8px;
 }

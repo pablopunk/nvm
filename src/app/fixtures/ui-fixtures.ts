@@ -43,6 +43,7 @@ import {
 import {
   cameraView,
   mirroredCameraView,
+  progressStepsView,
   progressView,
   webviewView,
 } from './ui/simple-view-fixtures.ts';
@@ -260,6 +261,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Progress',
       icon: 'loader',
       run: (ctx) => progressView(ctx),
+    },
+    {
+      id: 'progress-steps',
+      title: 'Dev UI: Progress Steps',
+      icon: 'list-checks',
+      run: (ctx) => progressStepsView(ctx),
     },
     {
       id: 'webview',

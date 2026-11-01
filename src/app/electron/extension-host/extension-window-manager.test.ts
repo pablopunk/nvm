@@ -272,6 +272,13 @@ test('extension window backgrounds follow the active system theme', () => {
   assert.equal(extensionWindowBackgroundColor(false, false), '#ece9e2');
 });
 
+test('framed extension windows hide the default app menu bar on Windows and Linux', () => {
+  const { manager } = createManager();
+  manager.createOrUpdate({ id: 'notes', type: 'editor', title: 'Notes' });
+
+  assert.equal(FakeBrowserWindow.instances[0].options.autoHideMenuBar, true);
+});
+
 test('broadcast sends clone-safe host events to each live extension window', () => {
   const { manager } = createManager();
   manager.createOrUpdate({ id: 'one', type: 'list', title: 'One', items: [] });

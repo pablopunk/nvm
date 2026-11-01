@@ -310,9 +310,9 @@ export type ExtensionActionContribution = {
   triggers?: ExtensionBackgroundTrigger[];
   /** Declarative action to run, commonly `ctx.windows.toggle(...)`, `ctx.actions.pasteText(...)`, or `ctx.actions.push(...)`. */
   action?: ExtensionAction;
-  /** Secondary actions listed in this durable action's Cmd+K panel, beside the host-owned Set keyboard shortcut, Set alias, and Options rows. Same shape and placement rules as an item's `actions`; reference another durable action with `ctx.actions.ref(...)`. */
+  /** Secondary actions listed in this durable action's action menu, beside the host-owned Set keyboard shortcut, Set alias, and Options rows. Same shape and placement rules as an item's `actions`; reference another durable action with `ctx.actions.ref(...)`. */
   actions?: ExtensionAction[];
-  /** Cmd+K panel for this durable action when sections or titles are needed. Normalized like an item's `actionPanel`; prefer `actions` for a flat list. */
+  /** Action menu for this durable action when sections or titles are needed. Normalized like an item's `actionPanel`; prefer `actions` for a flat list. */
   actionPanel?: ExtensionActionPanel;
   /** Handler to run when a simple declarative action is not enough. */
   run?: (
@@ -541,7 +541,7 @@ export type ExtensionAction = {
   previewIntent?: boolean;
   icon?: string;
   subtitle?: string;
-  /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. */
+  /** Local shortcut. The selected item's primary and secondary actions take precedence over view actions. Hidden action panels retain their shortcuts. Prefer `CommandOrControl+…` for cross-platform shortcuts: it is Command on macOS and Control on Windows and Linux, while `Command+…` means Super/Win there. */
   shortcut?: string;
   /** @deprecated Global action shortcuts belong on `globalShortcut`. */
   shortcutScope?: ShortcutScope;
@@ -551,7 +551,7 @@ export type ExtensionAction = {
   confirmLabel?: string;
   cancelLabel?: string;
   dismissAfterRun?: 'auto';
-  /** Nested Cmd+K action panel. */
+  /** Nested action-menu panel. */
   submenu?: ExtensionActionPanel;
   /** Field values injected by the host when a form's `submitAction` runs. */
   formValues?: Record<string, ExtensionFormValue>;
@@ -580,7 +580,7 @@ export type ExtensionActionSection = {
   isLoading?: boolean;
 };
 
-/** Grouped actions exposed through Cmd+K, selected-item shortcuts, and host-owned action UI. */
+/** Grouped actions exposed through the action menu, selected-item shortcuts, and host-owned action UI. The action menu opens with Command+K on macOS and Control+K on Windows and Linux; the host shows the correct hint, so never write that shortcut into extension titles, subtitles, or content. */
 export type ExtensionActionPanel = {
   title?: string;
   sections: ExtensionActionSection[];
@@ -672,7 +672,7 @@ export type ExtensionItem = {
   fileUrl?: string;
   /** Enter/default behavior. For a stable root action, reference a durable `actions(ctx)` contribution with `ctx.actions.ref(...)` so the host can expose aliases, shortcuts, and Options. */
   primaryAction?: ExtensionAction;
-  /** Secondary actions shown by Cmd+K. Do not repeat `primaryAction`; the host removes duplicate primary entries. */
+  /** Secondary actions shown in the action menu. Do not repeat `primaryAction`; the host removes duplicate primary entries. */
   actions?: ExtensionAction[];
   actionPanel?: ExtensionActionPanel;
   actionPanelVisibility?: ActionPanelVisibility;
@@ -736,6 +736,7 @@ export type ExtensionCrudCollection = {
   title: string;
   subtitle?: string;
   searchBarPlaceholder?: string;
+  /** Shown when a list has no items. The host also shows the view's first action below it so Enter runs it; keep the subtitle short and do not tell users to open the action menu. */
   emptyView?: { title?: string; subtitle?: string };
   /** Creates a new record. The host renders this as the always-visible first collection row and in the collection action panel. */
   add?: ExtensionAction;
@@ -783,6 +784,7 @@ export type ExtensionView = {
   /** List views only: `fit` wraps a short status-style list instead of filling the palette. Defaults to `fill`. */
   contentSizing?: 'fill' | 'fit';
   presentation?: ViewPresentation;
+  /** Grids show it above their tiles, editors in their header, and previews only when they have no `content`. Lists and forms do not show it, so put status a user must see (counts, totals, last run) in an item or field. */
   subtitle?: string;
   content?: string;
   /** Optional host-owned draft lifecycle for editor views only. */
@@ -791,7 +793,7 @@ export type ExtensionView = {
   placeholder?: string;
   /** Text format for editable text surfaces. Markdown editors render rich headings, emphasis, links, code, lists, and checklists in place while preserving Markdown storage. */
   format?: ExtensionEditorFormat;
-  /** Markdown editors only: render a split host-rendered live preview next to the text. Defaults to false. */
+  /** Markdown editors only: edit the raw Markdown source in a plain-text pane beside a host-rendered live preview. Defaults to false, which edits Markdown as single-pane rich text. */
   preview?: boolean;
   /** Editor views only: derive and live-update the visible title from the first non-empty content line. Markdown heading markers are stripped. */
   titleFromContent?: boolean;
@@ -820,6 +822,7 @@ export type ExtensionView = {
   sections?: ExtensionItemSection[];
   /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
+  /** Shown when a list has no items. The host also shows the view's first action below it so Enter runs it; keep the subtitle short and do not tell users to open the action menu. */
   emptyView?: { title?: string; subtitle?: string };
   /** Optional item detail pane for richer list views. `presentation: 'side-preview'` uses this as the selected-item preview. */
   detail?: { placement?: 'side' | 'bottom'; visible?: boolean };
@@ -851,8 +854,9 @@ export type ExtensionView = {
   messages?: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
   fields?: ExtensionFormField[];
   submitAction?: ExtensionAction;
+  /** Progress views only. Status is display text; the host recognizes `Complete`/`Done`, `In progress`/`Active`/`Running`, and `Error`/`Failed` for markers, and treats anything else as pending. */
   steps?: Array<{ title: string; status?: string }>;
-  /** Current progress value for progress views. Pair with `total` for a determinate bar. */
+  /** Completed work for progress views, not the current step number: while a step is still in progress it is not complete. Pair with `total`; omit both to let the host count completed `steps`. */
   value?: number;
   /** Total progress value for progress views. Pair with `value` for a determinate bar. */
   total?: number;
@@ -1616,7 +1620,7 @@ export type ExtensionContext = {
     /** A generic list/search surface that consistently wires supplied add, preview, edit, and remove actions. */
     collection(input: ExtensionCrudCollection): ExtensionView;
     grid(view: ExtensionView): ExtensionView;
-    /** Full-screen preview view for Markdown/text/media content you already have. */
+    /** Full-screen preview view for Markdown/text/media content you already have. `content` is Markdown, so a single newline does not start a new line: use a list (`- Name: Ada`) or blank lines for one value per line. */
     previewView(view: ExtensionView): ExtensionView;
     /**
      * Full-screen preview of a file from `ctx.desktop.files.*` (use `metadata(path)` for a path string).
@@ -1643,10 +1647,11 @@ export type ExtensionContext = {
     /** @deprecated Use `previewAction(input)`. Routing by `kind` alone is ambiguous with `ExtensionFile.kind`. */
     preview(input: ExtensionPreviewItemDescriptor): ExtensionAction;
     chat(view: ExtensionView): ExtensionView;
-    /** Structured settings form shown as searchable palette rows. Enter edits the selected field through the palette input, choice rows, an editor, or a native picker; Escape returns to the form without discarding other draft values. Select the submit row or press Command+Enter to save. Prefer `ctx.input.prompt` for lightweight arguments. */
+    /** Structured settings form shown as searchable palette rows. Enter edits the selected field through the palette input, choice rows, an editor, or a native picker; Escape returns to the form without discarding other draft values. Select the submit row or press Command+Enter (Control+Enter on Windows and Linux) to save. Prefer `ctx.input.prompt` for lightweight arguments. */
     form(view: ExtensionView): ExtensionView;
     /** Editable host-owned text/Markdown surface. Markdown is rendered as single-pane rich text with Markdown shortcuts while remaining the persisted value. The host injects `editorContent` into `submitAction`; use `titleFromContent` for note-like documents instead of a separate rename flow. */
     editor(view: ExtensionView): ExtensionView;
+    /** Step or task progress. Put the next action first in the view's `actions`: the host shows it below the steps and Enter runs it. Advance with `ctx.navigation.replace(...)`. */
     progress(input?: {
       title?: string;
       label?: string;
@@ -2121,6 +2126,12 @@ export type ExtensionContext = {
       /** Opens the OS file previewer (Quick Look on macOS) outside Nevermind. Only available when `ctx.system.capabilities.has('quick-look')`; label it with `ctx.system.labels.previewFile`. For an in-palette preview use `ctx.ui.previewFile`. */
       preview(filePath: string): unknown;
       readText(filePath: string): Promise<string>;
+      /** Save UTF-8 text into an existing folder and return the file's metadata. Fails when the file exists unless `overwrite: true`, which replaces it atomically; never creates folders. Paths may start with `~`. Use this instead of shell commands to save text, Markdown, JSON, or CSV. */
+      writeText(
+        filePath: string,
+        text: string,
+        options?: { overwrite?: boolean },
+      ): Promise<ExtensionFile>;
       /** Format a path for display, replacing the current user's home directory with `~`. Does not change the path used for file operations. */
       displayPath(filePath: string): string;
       toFileUrl(filePath: string): string;
@@ -2287,7 +2298,7 @@ export type NevermindExtension = {
         | ExtensionActionContribution[]
         | { actions: ExtensionActionContribution[] }
       >;
-  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Prefer one primary item per capability; expose Settings and secondary actions through that item's `actionPanel` so they appear under Cmd+K. If a secondary action should also be independently searchable, register it with `actions(ctx)` and reference it with `ctx.actions.ref(...)`. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
+  /** Empty-query root contributions. Keep small, stable, cached, JSON-serializable, and bounded. Prefer one primary item per capability; expose Settings and secondary actions through that item's `actionPanel` so they appear in the action menu. If a secondary action should also be independently searchable, register it with `actions(ctx)` and reference it with `ctx.actions.ref(...)`. Do not duplicate durable actions here just for styling; put `appearance` on the action or command itself. */
   rootItems?(
     ctx: ExtensionContext,
   ):

@@ -1,7 +1,13 @@
 // biome-ignore-all lint: This legacy shared UI module retains established renderer conventions.
 import { Command } from 'cmdk';
 import { Check, ChevronRight, Folder, Search } from 'lucide-react';
-import React, { type ReactNode, useLayoutEffect, useRef } from 'react';
+import React, {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import {
   formatShortcut,
   normalizeAccelerator,
@@ -15,23 +21,16 @@ import {
   formValueLabel,
 } from './extension-view/form-fields';
 import { MarkdownEditor } from './extension-view/markdown-editor';
-import { IndicatorMicTrace } from './indicator/indicator-mic-trace';
-import { IndicatorOrb, indicatorOrbState } from './indicator/indicator-orb';
-import {
-  IndicatorStatusIcon,
-  indicatorStatusIconKind,
-} from './indicator/indicator-status-icon';
-import { IndicatorSummaryText } from './indicator/indicator-summary-text';
-import {
-  MorphingActivityText,
-  MorphingIndicatorText,
-} from './indicator/morphing-text';
+import { MorphingActivityText } from './indicator/morphing-text';
 import type { CommandImage } from './model';
 import {
   type SystemTheme,
   themedImageSource,
   useSystemTheme,
 } from './system-theme';
+
+/** Rows of a pane hidden or inert under another surface must not be selectable, or cmdk auto-selects them. */
+export const PaneRowsUnavailable = createContext(false);
 
 export const EMPTY_ROOT_TITLE = 'Type anything';
 export const EMPTY_RESULTS_TITLE = 'No results';
@@ -67,6 +66,8 @@ export interface CommandRowProps {
   appearance?: ItemAppearance;
   selectedOnlyShortcut?: boolean;
   disabled?: boolean;
+  /** Multi-select choice state, exposed as aria-checked. */
+  checked?: boolean;
   draggable?: boolean;
   onDragStart?: (event: React.DragEvent) => void;
   onSelect: () => void;
@@ -88,21 +89,6 @@ export interface EmptyStateProps {
   title: string;
   subtitle?: string;
   action?: ActionPanelRow;
-}
-export interface PreviewViewProps {
-  content?: ReactNode;
-  image?: CommandImage;
-  video?: string;
-  poster?: string;
-  actions?: ReactNode;
-}
-export interface ProgressViewProps {
-  steps: { title: string; status?: string }[];
-  value?: number;
-  total?: number;
-  label?: string;
-  status?: string;
-  animateSummaryText?: boolean;
 }
 export type FormValue = string | boolean | string[];
 export interface FormField {
@@ -196,6 +182,7 @@ export interface ActionPanelRow {
   className?: string;
   sectionHeader?: boolean;
   disabled?: boolean;
+  checked?: boolean;
   onSelect: () => void;
 }
 export interface ActionPanelViewProps {
@@ -263,7 +250,10 @@ export function KeyHints({
 
 const MAX_VISIBLE_ACCESSORIES = 3;
 
-function imageProps(image: CommandImage | undefined, theme: SystemTheme) {
+export function imageProps(
+  image: CommandImage | undefined,
+  theme: SystemTheme,
+) {
   if (!image) return null;
   if (typeof image === 'string')
     return { src: image, alt: '', fit: undefined, shape: undefined };
@@ -287,11 +277,14 @@ export function CommandRow({
   className,
   appearance,
   selectedOnlyShortcut = false,
-  disabled,
+  disabled: disabledByRow,
+  checked,
   draggable,
   onDragStart,
   onSelect,
 }: CommandRowProps) {
+  const paneRowsUnavailable = useContext(PaneRowsUnavailable);
+  const disabled = disabledByRow || paneRowsUnavailable;
   const keyHints = selectedOnlyShortcut ? (
     shortcut ? (
       <span className="keyHints selectedOnlyEnter">
@@ -322,6 +315,7 @@ export function CommandRow({
       disabled={disabled}
       data-disabled={disabled ? 'true' : undefined}
       aria-disabled={disabled ? 'true' : undefined}
+      aria-checked={checked}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={() => {
@@ -374,6 +368,7 @@ export function CommandTile({
   onDragStart,
   onSelect,
 }: CommandTileProps) {
+  const paneRowsUnavailable = useContext(PaneRowsUnavailable);
   const theme = useSystemTheme();
   const media = imageProps(image, theme);
   const visual = glyph ? (
@@ -412,6 +407,7 @@ export function CommandTile({
       data-foreground={appearance?.foreground}
       data-background={appearance?.background}
       data-prominence={appearance?.prominence}
+      disabled={paneRowsUnavailable}
       draggable={draggable}
       onDragStart={onDragStart}
       onSelect={onSelect}
@@ -469,135 +465,6 @@ export function SearchAccessory({
   );
 }
 
-export function PreviewView({
-  content,
-  image,
-  video,
-  poster,
-  actions,
-}: PreviewViewProps) {
-  const theme = useSystemTheme();
-  const media = imageProps(image, theme);
-  return (
-    <div className="extensionView previewView">
-      {video ? (
-        <video
-          className="previewMedia"
-          src={video}
-          poster={poster || media?.src}
-          controls={true}
-          autoPlay={true}
-          muted={true}
-          loop={true}
-          playsInline={true}
-        />
-      ) : null}
-      {!video && media?.src ? (
-        <img
-          className="previewMedia"
-          src={media.src}
-          alt={media.alt}
-          data-fit={media.fit}
-          data-shape={media.shape}
-        />
-      ) : null}
-      <div className="previewText">{content}</div>
-      {actions}
-    </div>
-  );
-}
-
-function normalizedProgressStatus(status?: string) {
-  const value = String(status || '').toLowerCase();
-  if (['done', 'complete', 'completed', 'success'].includes(value))
-    return 'done';
-  if (
-    ['active', 'running', 'loading', 'in progress', 'progress'].includes(value)
-  )
-    return 'active';
-  if (['error', 'failed', 'failure'].includes(value)) return 'error';
-  return 'pending';
-}
-
-export function ProgressView({
-  steps,
-  value,
-  total,
-  label,
-  status,
-  animateSummaryText = false,
-}: ProgressViewProps) {
-  const normalizedStatus = normalizedProgressStatus(status);
-  const hasProgress =
-    typeof value === 'number' && typeof total === 'number' && total > 0;
-  const ratio = hasProgress ? Math.max(0, Math.min(1, value / total)) : 0;
-  const percent = Math.round(ratio * 100);
-  const showSummary = Boolean(label || status) || hasProgress;
-  const summaryLabel = label || status || 'Working…';
-  const progressLabel = `${value} of ${total} · ${percent}%`;
-  const orbState = animateSummaryText ? indicatorOrbState(status) : undefined;
-  return (
-    <div className="extensionView progressView">
-      {orbState === 'listening' ? <IndicatorMicTrace /> : null}
-      {showSummary ? (
-        <div
-          className="progressOverview"
-          data-status={normalizedStatus}
-          data-mark={animateSummaryText ? 'true' : undefined}
-          role={normalizedStatus === 'error' ? 'alert' : 'status'}
-        >
-          {orbState ? <IndicatorOrb state={orbState} /> : null}
-          {animateSummaryText && !orbState ? (
-            <IndicatorStatusIcon
-              kind={indicatorStatusIconKind(normalizedStatus)}
-            />
-          ) : null}
-          <div>
-            <strong>
-              <IndicatorSummaryText
-                value={summaryLabel}
-                animate={animateSummaryText}
-              />
-            </strong>
-            {hasProgress ? (
-              <small>
-                {animateSummaryText ? (
-                  <MorphingIndicatorText value={progressLabel} />
-                ) : (
-                  progressLabel
-                )}
-              </small>
-            ) : null}
-          </div>
-          <div
-            className="progressBar"
-            role="progressbar"
-            aria-valuenow={hasProgress ? value : undefined}
-            aria-valuemin={hasProgress ? 0 : undefined}
-            aria-valuemax={hasProgress ? total : undefined}
-            aria-label={status || 'Progress'}
-          >
-            <span style={{ width: hasProgress ? `${percent}%` : undefined }} />
-          </div>
-        </div>
-      ) : null}
-      {steps.map((step, index) => (
-        <div
-          key={index}
-          className="progressStep"
-          data-status={normalizedProgressStatus(step.status)}
-        >
-          <span className="progressStepMarker" aria-hidden="true" />
-          <div>
-            <strong>{step.title}</strong>
-            <small>{step.status || 'Pending'}</small>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export function FormView({
   fields,
   values = {},
@@ -635,8 +502,8 @@ export function FormView({
             key={field.id}
             value={formRowId(field.id)}
             icon={
-              field.type === 'checkbox' && value ? (
-                <Check size={18} />
+              field.type === 'checkbox' ? (
+                <Check size={18} opacity={value ? 1 : 0} />
               ) : (
                 <ChevronRight size={18} />
               )
@@ -661,7 +528,7 @@ export function FormView({
           value={FORM_SAVE_ROW_ID}
           icon={<Check size={18} />}
           title={submitTitle}
-          shortcut="Command+Enter"
+          shortcut="CommandOrControl+Enter"
           className="formSaveRow"
           appearance={{ prominence: 'primary' }}
           onSelect={() => onSubmit?.()}
@@ -721,7 +588,7 @@ export function EditorView({
             {language ? <small>{language}</small> : null}
           </div>
         ) : null}
-        {format === 'markdown' ? (
+        {format === 'markdown' && !showsPreview ? (
           <MarkdownEditor
             value={value}
             placeholder={placeholder}
@@ -733,6 +600,7 @@ export function EditorView({
         ) : (
           <textarea
             className="editorTextarea"
+            data-source={showsPreview ? 'markdown' : undefined}
             value={value}
             placeholder={placeholder}
             readOnly={readOnly}
@@ -929,17 +797,7 @@ export function ActionPanelView({ rows, renderEmpty }: ActionPanelViewProps) {
             {row.title}
           </div>
         ) : (
-          <CommandRow
-            key={row.value}
-            value={row.value}
-            icon={row.icon}
-            title={row.title}
-            subtitle={row.subtitle}
-            shortcut={row.shortcut}
-            className={row.className}
-            disabled={row.disabled}
-            onSelect={row.onSelect}
-          />
+          <CommandRow key={row.value} {...row} icon={row.icon} />
         ),
       )}
     </>
