@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { requireAdmin } from '../../../lib/admin';
-import { listAdminModelRefs } from '../../../lib/admin-model-options';
+import { listAdminModelRefs, openRouterAccessibleModels } from '../../../lib/admin-model-options';
 import {
   adminMutationKeyFromRequest,
   adminMutationResponse,
@@ -118,6 +118,15 @@ export const PUT: APIRoute = async ({ request }) => {
       },
       { status: 400 },
     );
+
+  if (route.provider === 'openrouter') {
+    const accessible = await openRouterAccessibleModels();
+    if (!accessible || !accessible.has(route.modelId))
+      return Response.json(
+        { error: { type: 'model_unavailable', message: accessible ? 'This model is not available to the configured OpenRouter key.' : 'Could not verify OpenRouter model availability. Try again.' } },
+        { status: accessible ? 400 : 503 },
+      );
+  }
 
   // Admin-selected routes validate their price here, the one place a route's
   // catalog or endpoint is fetched outside the scheduled refresh.

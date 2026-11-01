@@ -4185,7 +4185,7 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
     if (url.startsWith('https://primary.example')) {
       return Response.json(
         { error: { message: 'Bad request' } },
-        { status: 400 },
+        { status: 400, headers: { 'content-encoding': 'gzip' } },
       );
     }
     fallbackCalled = true;
@@ -4197,6 +4197,8 @@ test('proxy failover: 4xx errors do not trigger failover', async () => {
   );
 
   assert.equal(response.status, 400);
+  assert.equal(response.headers.get('content-encoding'), null);
+  assert.equal((await response.json() as any).error.message, 'Bad request');
   assert.ok(!fallbackCalled, 'fallback should NOT be called on 4xx');
 });
 

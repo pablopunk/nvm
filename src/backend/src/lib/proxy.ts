@@ -2116,7 +2116,7 @@ export async function proxyAndBill(cfg: ProxyConfig): Promise<Response> {
 function stripHopByHop(input: Headers): Headers {
   const out = new Headers();
   for (const [name, value] of input) {
-    if (HOP_BY_HOP.has(name.toLowerCase())) continue;
+    if (HOP_BY_HOP.has(name.toLowerCase()) || name.toLowerCase() === 'content-encoding') continue;
     out.set(name, value);
   }
   return out;
