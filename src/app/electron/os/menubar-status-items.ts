@@ -37,6 +37,8 @@ export type StatusItemPlatform = 'darwin' | 'win32' | 'linux';
 
 export type MenuBarStatusItemsDeps = {
   platform: NodeJS.Platform;
+  /** `XDG_CURRENT_DESKTOP`; some Linux panels stay dark whatever the app theme is. */
+  desktopEnvironment?: string;
   iconsDir: string;
   electron: {
     Tray: new (image: NativeImage) => ElectronTray;
@@ -46,6 +48,7 @@ export type MenuBarStatusItemsDeps = {
     nativeImage: { createFromPath(path: string): NativeImage };
     nativeTheme: {
       readonly shouldUseDarkColors: boolean;
+      readonly shouldUseDarkColorsForSystemIntegratedUI?: boolean;
       on(event: 'updated', listener: () => void): unknown;
     };
   };
@@ -110,6 +113,28 @@ export function statusItemIconFile(
     : `${name}.png`;
 }
 
+const ALWAYS_DARK_LINUX_PANELS = /gnome|unity|ubuntu|pantheon|budgie/i;
+
+/** Tray glyphs must contrast with the panel, which does not always follow the app theme. */
+export function statusAreaIsDark(input: {
+  platform: StatusItemPlatform;
+  desktopEnvironment?: string;
+  shouldUseDarkColors: boolean;
+  shouldUseDarkColorsForSystemIntegratedUI?: boolean;
+}) {
+  if (input.platform === 'win32')
+    return (
+      input.shouldUseDarkColorsForSystemIntegratedUI ??
+      input.shouldUseDarkColors
+    );
+  if (input.platform === 'linux')
+    return (
+      ALWAYS_DARK_LINUX_PANELS.test(input.desktopEnvironment || '') ||
+      input.shouldUseDarkColors
+    );
+  return input.shouldUseDarkColors;
+}
+
 export function statusItemTooltip(
   spec: StatusItemSpec,
   platform: StatusItemPlatform,
@@ -171,7 +196,17 @@ export function createMenuBarStatusItems(deps: MenuBarStatusItemsDeps) {
   }
 
   function statusImage(icon: MenuBarIconName) {
-    return loadImage(icon, nativeTheme.shouldUseDarkColors);
+    if (!platform) throw new Error('Status items are not supported');
+    return loadImage(
+      icon,
+      statusAreaIsDark({
+        platform,
+        desktopEnvironment: deps.desktopEnvironment,
+        shouldUseDarkColors: nativeTheme.shouldUseDarkColors,
+        shouldUseDarkColorsForSystemIntegratedUI:
+          nativeTheme.shouldUseDarkColorsForSystemIntegratedUI,
+      }),
+    );
   }
 
   function menuItemImage(icon: MenuBarIconName) {

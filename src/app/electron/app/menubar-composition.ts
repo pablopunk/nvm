@@ -27,6 +27,7 @@ export function createAppMenuBar(deps: AppMenuBarDeps) {
     const iconsDir = await bundledResourcePath('menubar-icons');
     const statusItems = createMenuBarStatusItems({
       platform: process.platform,
+      desktopEnvironment: process.env.XDG_CURRENT_DESKTOP,
       iconsDir,
       electron: { Tray, Menu, nativeImage, nativeTheme },
       onMenuOpened: (id) => service?.refreshForStatusItem(id),

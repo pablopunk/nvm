@@ -6,6 +6,7 @@ import {
   type StatusItemMenuEntry,
   type StatusItemSpec,
   statusItemIconFile,
+  statusAreaIsDark,
   statusItemMenuTemplate,
   statusItemTooltip,
 } from './menubar-status-items';
@@ -219,4 +220,34 @@ test('unsupported platforms create nothing', () => {
   assert.equal(items.supported, false);
   assert.equal(items.upsert('a:main', spec), false);
   assert.equal(fake.trays.length, 0);
+});
+
+test('the Windows taskbar theme wins over the app theme', () => {
+  assert.equal(
+    statusAreaIsDark({
+      platform: 'win32',
+      shouldUseDarkColors: false,
+      shouldUseDarkColorsForSystemIntegratedUI: true,
+    }),
+    true,
+  );
+});
+
+test('GNOME-family panels are dark even with a light app theme', () => {
+  assert.equal(
+    statusAreaIsDark({
+      platform: 'linux',
+      desktopEnvironment: 'ubuntu:GNOME',
+      shouldUseDarkColors: false,
+    }),
+    true,
+  );
+  assert.equal(
+    statusAreaIsDark({
+      platform: 'linux',
+      desktopEnvironment: 'KDE',
+      shouldUseDarkColors: false,
+    }),
+    false,
+  );
 });
