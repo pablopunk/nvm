@@ -3,9 +3,23 @@
 const { execFileSync } = require('node:child_process');
 const { compareVersions } = require('./nightly-versioning.cjs');
 
-function planDevVersion({ date, releases, tags, sourceSha, resolveTag }) {
+function isBuildRelevantPath(path) {
+  return !(
+    /^(marketing|tests|\.agents|\.githooks|src\/backend)\//.test(path) ||
+    /^(README|AGENTS|CLAUDE)\.md$/i.test(path)
+  );
+}
+
+function planDevVersion({
+  date,
+  releases,
+  tags,
+  sourceSha,
+  resolveTag,
+  hasRelevantChanges = () => true,
+}) {
   if (!/^[0-9a-f]{40}$/.test(sourceSha)) throw new Error('Invalid source SHA');
-  if (!(date instanceof Date) || !Number.isFinite(date.getTime()))
+  if (!(date instanceof Date && Number.isFinite(date.getTime())))
     throw new Error('Invalid release date');
   const year = date.getUTCFullYear();
   if (year < 2000 || year > 9999) throw new Error('Invalid release year');
@@ -28,8 +42,14 @@ function planDevVersion({ date, releases, tags, sourceSha, resolveTag }) {
   const published = devReleases.find(
     (release) => !release.draft && release.prerelease,
   );
-  if (published && resolveTag(published.tag_name) === sourceSha)
-    return { version: published.tag_name.slice(1, -4), build: false };
+  if (published) {
+    const publishedSha = resolveTag(published.tag_name);
+    if (
+      publishedSha === sourceSha ||
+      !hasRelevantChanges(publishedSha, sourceSha)
+    )
+      return { version: published.tag_name.slice(1, -4), build: false };
+  }
 
   const draft = devReleases.find((release) => release.draft);
   if (
@@ -43,7 +63,8 @@ function planDevVersion({ date, releases, tags, sourceSha, resolveTag }) {
   const previous = latestVersion?.startsWith(`${today}.`)
     ? Number(latestVersion.split('.')[2])
     : 0;
-  if (previous >= 65535) throw new Error('Daily Windows version limit reached');
+  if (previous >= 65_535)
+    throw new Error('Daily Windows version limit reached');
   return { version: `${today}.${previous + 1}`, build: true };
 }
 
@@ -81,6 +102,31 @@ if (require.main === module) {
         execFileSync('git', ['rev-parse', `${tag}^{commit}`], {
           encoding: 'utf8',
         }).trim(),
+      hasRelevantChanges: (previousSha, currentSha) => {
+        try {
+          execFileSync('git', [
+            'merge-base',
+            '--is-ancestor',
+            previousSha,
+            currentSha,
+          ]);
+        } catch {
+          return true;
+        }
+        const paths = execFileSync(
+          'git',
+          [
+            'diff',
+            '--no-renames',
+            '--name-only',
+            '-z',
+            previousSha,
+            currentSha,
+          ],
+          { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024 },
+        );
+        return paths.split('\0').filter(Boolean).some(isBuildRelevantPath);
+      },
     });
     console.log(JSON.stringify(result));
   } catch (error) {
@@ -89,4 +135,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { planDevVersion };
+module.exports = { isBuildRelevantPath, planDevVersion };
