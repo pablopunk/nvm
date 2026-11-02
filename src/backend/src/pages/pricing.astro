@@ -30,12 +30,13 @@ const isLoggedIn = Boolean(session);
       <div><span class="price-card__credits">$0</span><span class="price-card__period">/ month</span></div>
       <ul class="price-card__features">
         <li>Batteries included</li>
-        <li>No credit card required</li>
-        <li>No need to sign in</li>
-        <li>Free monthly credits to build with AI</li>
-        <li>Free monthly credits to chat with AI</li>
-        <li>Bring your own AI</li>
-        <li>Dotfiles friendly</li>
+        <li><strong>No credit card</strong> required</li>
+        <li>No need to <strong>sign in</strong></li>
+        <li><strong>Unlimited transcriptions</strong></li>
+        <li><strong>Free</strong> monthly credits to build with AI</li>
+        <li><strong>Free</strong> monthly credits to chat with AI</li>
+        <li>Bring <strong>your own AI</strong></li>
+        <li><strong>Dotfiles</strong> friendly</li>
       </ul>
       <a class="button" href="https://github.com/pablopunk/nvm/releases">Download the app</a>
     </div>
@@ -52,11 +53,11 @@ const isLoggedIn = Boolean(session);
           )}
           <ul class="price-card__features">
             <li>Everything in Free</li>
-            <li>{tier.credits.toLocaleString('en')} AI credits each billing cycle</li>
-            <li>Build more tools with AI</li>
-            <li>Chat more with AI</li>
-            {hasTopUps && <li>Top up your credits whenever you need more</li>}
-            <li>Cancel anytime</li>
+            <li><strong>{tier.credits.toLocaleString('en')} AI credits</strong> each billing cycle</li>
+            <li><strong>Build more tools</strong> with AI</li>
+            <li><strong>Chat more</strong> with AI</li>
+            {hasTopUps && <li><strong>Top up</strong> your credits whenever you need more</li>}
+            <li><strong>Cancel</strong> anytime</li>
           </ul>
           {!isLoggedIn && (
             <a class="button button--primary" href={`/api/auth/signin?return_to=/profile`}>Get Started</a>
