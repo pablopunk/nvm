@@ -246,7 +246,7 @@ const billingState = Astro.url.searchParams.get('billing');
       status.className = 'status';
       status.textContent = 'Opening Stripe…';
       const checkout = button.classList.contains('billing-checkout');
-      openBillingUrl(checkout ? '/api/billing/checkout' : '/api/billing/portal', checkout ? { kind: button.dataset.kind, priceId: button.dataset.priceId } : undefined)
+      openBillingUrl(checkout ? '/api/billing/checkout' : '/api/billing/portal', checkout ? { kind: button.dataset.kind, priceId: button.dataset.priceId, ...(button.dataset.quantity ? { quantity: Number(button.dataset.quantity) } : {}) } : undefined)
         .finally(() => { button.disabled = false; });
     });
 

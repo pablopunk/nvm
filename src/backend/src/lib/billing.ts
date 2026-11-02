@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import { productionWebOrigin } from './auth-config';
 import { env } from './env';
+import { MAX_TOP_UP_QUANTITY } from './billing-limits';
 import { log } from './log';
 
 /**
@@ -20,12 +21,16 @@ type SubscriptionTier = {
   priceId: string;
   tier: string;
   credits: number;
+  /** Still honored by webhooks for existing subscribers, but no longer offered or purchasable. */
+  retired?: boolean;
 };
 
 type TopUpPack = {
   kind: 'top_up';
   priceId: string;
   credits: number;
+  /** Still honored by webhooks for in-flight checkouts, but no longer offered or purchasable. */
+  retired?: boolean;
 };
 
 export type BillingCatalogItem = SubscriptionTier | TopUpPack;
@@ -77,7 +82,7 @@ export class BillingEligibilityError extends Error {
 
 export class BillingRequestError extends Error {
   constructor(
-    public type: 'unknown_price',
+    public type: 'unknown_price' | 'invalid_quantity',
     message: string,
   ) {
     super(message);
@@ -143,15 +148,39 @@ export function billingCatalog(): BillingCatalog {
     const credits = parsePositiveInt(raw.credits);
     const tier = String(raw.tier ?? raw.plan ?? 'pro').trim() || 'pro';
     if (priceId && credits)
-      subscriptionTiers.push({ kind: 'subscription', priceId, tier, credits });
+      subscriptionTiers.push({
+        kind: 'subscription',
+        priceId,
+        tier,
+        credits,
+        ...(raw.retired === true ? { retired: true } : {}),
+      });
   }
   const topUps: TopUpPack[] = [];
   for (const raw of parseCatalogEnv('STRIPE_TOP_UP_PACKS')) {
     const priceId = String(raw.priceId ?? raw.price_id ?? '').trim();
     const credits = parsePositiveInt(raw.credits);
-    if (priceId && credits) topUps.push({ kind: 'top_up', priceId, credits });
+    if (priceId && credits)
+      topUps.push({
+        kind: 'top_up',
+        priceId,
+        credits,
+        ...(raw.retired === true ? { retired: true } : {}),
+      });
   }
   return { subscriptions: subscriptionTiers, topUps };
+}
+
+/**
+ * What customers may see and buy. Retired prices stay in `billingCatalog` so webhooks
+ * keep crediting existing subscribers, but they are never offered or checked out.
+ */
+export function purchasableBillingCatalog(): BillingCatalog {
+  const catalog = billingCatalog();
+  return {
+    subscriptions: catalog.subscriptions.filter((item) => !item.retired),
+    topUps: catalog.topUps.filter((item) => !item.retired),
+  };
 }
 
 export function findCatalogItem(input: {
@@ -159,7 +188,7 @@ export function findCatalogItem(input: {
   priceId?: string;
   tier?: string;
 }): BillingCatalogItem | null {
-  const catalog = billingCatalog();
+  const catalog = purchasableBillingCatalog();
   const items: BillingCatalogItem[] =
     input.kind === 'subscription' ? catalog.subscriptions : catalog.topUps;
   if (input.priceId)
@@ -255,6 +284,7 @@ export async function createBillingCheckout(input: {
   kind: BillingKind;
   priceId?: string;
   tier?: string;
+  quantity?: number;
 }): Promise<{ url: string }> {
   const item = findCatalogItem(input);
   if (!item) {
@@ -262,6 +292,13 @@ export async function createBillingCheckout(input: {
       throw new BillingRequestError('unknown_price', 'Unknown Stripe billing price.');
     throw new BillingConfigError(`No Stripe ${input.kind} price is configured`);
   }
+  const quantity = input.quantity ?? 1;
+  const maxQuantity = item.kind === 'top_up' ? MAX_TOP_UP_QUANTITY : 1;
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > maxQuantity)
+    throw new BillingRequestError(
+      'invalid_quantity',
+      `Quantity must be a whole number from 1 to ${maxQuantity}.`,
+    );
   const subscribed = await userHasActiveSubscription(input.user.id);
   if (item.kind === 'subscription' && subscribed)
     throw new BillingEligibilityError(
@@ -280,6 +317,7 @@ export async function createBillingCheckout(input: {
     user_id: input.user.id,
     price_id: item.priceId,
     credits: String(item.credits),
+    quantity: String(quantity),
     ...(item.kind === 'subscription' ? { tier: item.tier } : {}),
   };
   const window = Math.floor(Date.now() / CHECKOUT_IDEMPOTENCY_WINDOW_MS);
@@ -288,7 +326,7 @@ export async function createBillingCheckout(input: {
       mode: item.kind === 'subscription' ? 'subscription' : 'payment',
       customer,
       client_reference_id: input.user.id,
-      line_items: [{ price: item.priceId, quantity: 1 }],
+      line_items: [{ price: item.priceId, quantity }],
       success_url: publicUrl('/profile?billing=success'),
       cancel_url: publicUrl('/profile?billing=canceled'),
       metadata,
@@ -297,7 +335,7 @@ export async function createBillingCheckout(input: {
         : { payment_intent_data: { metadata } }),
     },
     {
-      idempotencyKey: `checkout:${input.user.id}:${item.priceId}:${window}`,
+      idempotencyKey: `checkout:${input.user.id}:${item.priceId}:${quantity}:${window}`,
       timeout: STRIPE_REQUEST_TIMEOUT_MS,
     },
   );
@@ -474,10 +512,20 @@ async function handleCheckoutCompleted(
     throw new BillingConfigError(`Top-up price ${priceId} is not in STRIPE_TOP_UP_PACKS`);
   await grantPaidCredits(tx, {
     userId,
-    credits: pack.credits,
+    credits: pack.credits * purchasedTopUpQuantity(session),
     reason: LEDGER_REASON.topUp,
     refId: objectId(session.payment_intent) ?? session.id,
   });
+}
+
+/** We set the quantity in checkout metadata; sessions created before quantities existed have none. */
+function purchasedTopUpQuantity(session: Stripe.Checkout.Session): number {
+  const raw = session.metadata?.quantity;
+  if (raw === undefined) return 1;
+  const quantity = Number(raw);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_TOP_UP_QUANTITY)
+    throw new Error(`Checkout ${session.id} has invalid top-up quantity ${raw}`);
+  return quantity;
 }
 
 /** The first invoice is granted by checkout; only renewals grant here. */

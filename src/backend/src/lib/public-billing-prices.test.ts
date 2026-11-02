@@ -30,6 +30,19 @@ test('displays the Stripe amount and billing interval', () => {
   );
 });
 
+test('shows a crossed-out list price only from valid list_amount metadata above the real price', () => {
+  const withList = (list_amount: string, unit_amount = 299) =>
+    publicPriceDisplay(price({ unit_amount, metadata: { list_amount } }));
+  assert.deepEqual(withList('1000'), {
+    amount: '$2.99',
+    period: 'month',
+    listAmount: '$10.00',
+  });
+  for (const invalid of ['299', '100', '10.00', 'ten', '-1', '']) {
+    assert.deepEqual(withList(invalid), { amount: '$2.99', period: 'month' });
+  }
+});
+
 test('preserves multi-month periods and one-time top-ups', () => {
   const quarterly = price();
   quarterly.recurring!.interval_count = 3;

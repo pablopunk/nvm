@@ -10,6 +10,7 @@ import {
   createBillingCheckout,
   rejectCrossOriginBillingPost,
 } from '../../../lib/billing';
+import { MAX_TOP_UP_QUANTITY } from '../../../lib/billing-limits';
 import { getSessionFromCookies } from '../../../lib/workos';
 import { safeJsonBody } from '../../../lib/validation';
 
@@ -17,6 +18,7 @@ const checkoutSchema = z.object({
   kind: z.enum(['subscription', 'top_up']),
   priceId: z.string().optional(),
   tier: z.string().optional(),
+  quantity: z.number().int().min(1).max(MAX_TOP_UP_QUANTITY).optional(),
 });
 
 function checkoutError(status: number, type: string, message: string) {

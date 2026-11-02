@@ -5,7 +5,7 @@ import { Card } from '../ui/card';
 import { db } from '../../db/client';
 import { subscriptions } from '../../db/schema';
 import { getCurrentUser } from '../../lib/admin';
-import { billingCatalog } from '../../lib/billing';
+import { purchasableBillingCatalog } from '../../lib/billing';
 import { dashboardRead } from '../../lib/dashboard-read';
 const { billingState } = Astro.props;
 let user = null;
@@ -17,7 +17,7 @@ try {
     const userId = user.id;
     const [row] = await dashboardRead(() => db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1));
     subscription = row ?? null;
-    catalog = billingCatalog();
+    catalog = purchasableBillingCatalog();
   }
 } catch (error) {
   console.error('Profile billing unavailable', error);
