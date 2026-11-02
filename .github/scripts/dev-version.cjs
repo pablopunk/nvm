@@ -5,7 +5,7 @@ const { compareVersions } = require('./nightly-versioning.cjs');
 
 function isBuildRelevantPath(path) {
   return !(
-    /^(marketing|\.agents|src\/backend)\//.test(path) ||
+    /^(marketing|tests|\.agents|\.githooks|src\/backend)\//.test(path) ||
     /^(README|AGENTS|CLAUDE)\.md$/i.test(path)
   );
 }

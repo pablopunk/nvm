@@ -82,6 +82,8 @@ test('skips non-package changes since the last published build', () => {
     'marketing/index.html',
     'src/backend/package.json',
     'src/backend/src/pages/index.astro',
+    'tests/electron/palette.smoke.spec.ts',
+    '.githooks/pre-commit',
   ])
     assert.equal(isBuildRelevantPath(path), false, path);
   for (const path of [
