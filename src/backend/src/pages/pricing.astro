@@ -45,6 +45,7 @@ const isLoggedIn = Boolean(session);
       const displayPrice = displayPriceFor(tier);
       return (
         <div class="price-card">
+          <span class="price-card__badge">Beta price</span>
           <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
           {displayPrice ? (
             <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
@@ -54,6 +55,7 @@ const isLoggedIn = Boolean(session);
           <ul class="price-card__features">
             <li>Everything in Free</li>
             <li><strong>{tier.credits.toLocaleString('en')} AI credits</strong> each billing cycle</li>
+            <li>The <strong>same model</strong> as Free, with far more usage</li>
             <li><strong>Build more tools</strong> with AI</li>
             <li><strong>Chat more</strong> with AI</li>
             {hasTopUps && <li><strong>Top up</strong> your credits whenever you need more</li>}
@@ -125,7 +127,7 @@ const isLoggedIn = Boolean(session);
     <h2>FAQ</h2>
     <div class="faq-item">
       <h3>What is a credit?</h3>
-      <p>Credits are Nevermind's usage unit. One credit covers roughly one AI operation. Actual consumption depends on model, prompt size, and response length. Free credits are included monthly; paid credits are purchased through a subscription or top-up.</p>
+      <p>Credits are Nevermind's usage unit. A short chat or a small extension call costs about one credit, and larger requests with long context or lots of reasoning cost a few more. Free credits are included monthly; paid credits are purchased through a subscription or top-up.</p>
     </div>
     <div class="faq-item">
       <h3>Can I cancel anytime?</h3>
@@ -137,7 +139,7 @@ const isLoggedIn = Boolean(session);
     </div>
     <div class="faq-item">
       <h3>What models are available?</h3>
-      <p>Nevermind routes to multiple AI providers automatically. You get the best model available at your credit level.</p>
+      <p>Free and Pro use the same fast, capable model, so Pro simply gives you much more usage. Want a different model? Bring your own AI on any plan.</p>
     </div>
   </div>
 </Layout>
