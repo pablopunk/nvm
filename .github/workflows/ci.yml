@@ -52,6 +52,18 @@ jobs:
           changed="$(git diff --name-only "$BASE" "$HEAD" | mise exec -- node .github/scripts/electron-smoke-paths.cjs)"
           echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
+      - name: Locate pnpm store
+        id: pnpm-store
+        run: echo "path=$(mise exec -- pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      # Separate from dev-build's key: packaging jobs skip src/backend, so their
+      # store lacks backend packages this job installs.
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ci-check-pnpm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', 'src/backend/pnpm-lock.yaml', 'mise.toml') }}
+
       - name: Install dependencies
         run: mise exec -- pnpm install --frozen-lockfile
 
@@ -235,6 +247,9 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
       - name: Verify package dependency and blockmap contracts
         run: mise exec -- pnpm exec node --test .github/scripts/packaged-dependencies.test.cjs .github/scripts/linux-blockmap.test.cjs
@@ -277,6 +292,9 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
       - name: Install Xvfb
         run: sudo apt-get update && sudo apt-get install --yes xvfb
@@ -317,13 +335,16 @@ jobs:
       - name: Setup mise
         uses: jdx/mise-action@v2
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
       - name: Build
         env:
           NVM_TEST_PI_PACKAGED_BUILD: '1'
         run: mise exec -- pnpm build
       - name: Build selected-text helper resources
-        run: node scripts/build-macos-selected-text-helper.cjs --universal
+        run: node scripts/build-macos-selected-text-helper.cjs
       - name: Package unsigned native-architecture app and run packaged Pi session
         timeout-minutes: 10
         shell: bash
@@ -655,6 +676,9 @@ jobs:
           mise exec -- node .github/scripts/release-tag-guard.cjs "$GITHUB_REF_NAME" "$latest"
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build unsigned Windows x64 portable package
@@ -750,6 +774,9 @@ jobs:
           mise exec -- node .github/scripts/release-tag-guard.cjs "$GITHUB_REF_NAME" "$latest"
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Import Apple signing certificate
@@ -866,6 +893,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libarchive-tools rpm xvfb
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build Linux release

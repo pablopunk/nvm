@@ -95,6 +95,9 @@ jobs:
         run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build unsigned Windows x64 portable package
@@ -181,6 +184,9 @@ jobs:
         run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Import Apple signing certificate
@@ -280,6 +286,9 @@ jobs:
         run: mise exec -- node .github/scripts/nightly-release-cli.cjs set-dev-package-version --version "$NIGHTLY_VERSION"
 
       - name: Install dependencies
+        env:
+          # Desktop packaging never imports src/backend.
+          NEVERMIND_SKIP_BACKEND_INSTALL: '1'
         run: mise exec -- pnpm install --frozen-lockfile
 
       - name: Build Linux nightly

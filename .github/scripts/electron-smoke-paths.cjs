@@ -13,6 +13,7 @@ const appBuildPaths = new Set([
   'pnpm-lock.yaml',
   'scripts/electron-test.cjs',
   'scripts/after-pack.cjs',
+  'scripts/lib/packaging-timings.cjs',
   'scripts/verify-packaged-dependencies.cjs',
   'scripts/packaged-diagnostics-smoke.cjs',
   'scripts/diagnostic-smoke-collector.cjs',

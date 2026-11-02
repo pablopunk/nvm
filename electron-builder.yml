@@ -84,6 +84,12 @@ linux:
   mimeTypes:
     - x-scheme-handler/nvm
   artifactName: '${productName}-${version}-linux-${arch}.${ext}'
+deb:
+  # gzip packs far faster than fpm's default xz and every dpkg reads it (zstd
+  # needs dpkg >= 1.21.18). The deb is a manual download, never an updater
+  # payload, so only its size grows; AppImage, mac zip, and blockmaps keep
+  # their defaults.
+  compression: gz
 win:
   icon: build/Icon.icon/Assets/icon.png
   extraResources:

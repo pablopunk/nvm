@@ -4,6 +4,10 @@ const {
   verifyPackagedDependencies,
 } = require('./verify-packaged-dependencies.cjs');
 const { stageTypeScriptNative } = require('./stage-typescript-native.cjs');
+const {
+  markAfterPackFinished,
+  recordPackagingPhase,
+} = require('./lib/packaging-timings.cjs');
 
 // electron-builder only writes app-update.yml for NSIS; the portable updater
 // reads the same GitHub feed and cache settings.
@@ -24,6 +28,7 @@ function writeWindowsPortableUpdateConfig(resources, packager) {
 }
 
 module.exports = async function verifyPackagedRuntime(context) {
+  let phaseStartedAt = Date.now();
   const resources =
     context.electronPlatformName === 'darwin'
       ? path.join(
@@ -42,15 +47,23 @@ module.exports = async function verifyPackagedRuntime(context) {
     arch: require('electron-builder').Arch[context.arch],
   });
   console.log(`Staged ${stagedChecker} native checker`);
+  recordPackagingPhase('afterPack: stage native checker', phaseStartedAt);
+  phaseStartedAt = Date.now();
   const result = verifyPackagedDependencies(archive);
+  recordPackagingPhase(
+    'afterPack: verify packaged dependencies',
+    phaseStartedAt,
+  );
   console.log(
     `Verified ${result.packagesChecked} packaged runtime dependencies`,
   );
   if (
     !process.env.CI ||
     context.arch !== require('electron-builder').Arch[process.arch]
-  )
+  ) {
+    markAfterPackFinished();
     return;
+  }
   const product = context.packager.appInfo.productFilename;
   const executable =
     context.electronPlatformName === 'darwin'
@@ -80,9 +93,12 @@ module.exports = async function verifyPackagedRuntime(context) {
           `packaged-pi-electron-${context.electronPlatformName}-${process.arch}`,
         )
       : undefined;
+  phaseStartedAt = Date.now();
   await require('./packaged-diagnostics-smoke.cjs').packagedDiagnosticsSmoke(
     executable,
     artifacts,
     { archive, piArtifacts },
   );
+  recordPackagingPhase('afterPack: packaged diagnostics smoke', phaseStartedAt);
+  markAfterPackFinished();
 };

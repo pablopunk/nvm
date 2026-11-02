@@ -20,9 +20,24 @@ const sources = [
 ].map((name) => path.join(root, 'src/app/resources/macos-helper', name));
 const outputDirectory = path.join(root, 'build/native');
 const output = path.join(outputDirectory, 'macos-selected-text');
-const architectures = process.argv.includes('--universal')
-  ? ['arm64', 'x86_64']
-  : [process.arch === 'x64' ? 'x86_64' : 'arm64'];
+const swiftArchitectures = { arm64: 'arm64', x64: 'x86_64' };
+
+// `--arch=<arm64|x64>` matches the packaged app's architecture so release
+// builds skip compiling a slice they never ship; `--universal` keeps
+// compile coverage for every supported architecture.
+function requestedArchitectures(argv) {
+  if (argv.includes('--universal')) return Object.values(swiftArchitectures);
+  const requested = argv.find(function isArchFlag(argument) {
+    return argument.startsWith('--arch=');
+  });
+  const arch = requested ? requested.slice('--arch='.length) : process.arch;
+  const swiftArchitecture = swiftArchitectures[arch];
+  if (!swiftArchitecture)
+    throw new Error(`Unsupported macOS helper architecture: ${arch}`);
+  return [swiftArchitecture];
+}
+
+const architectures = requestedArchitectures(process.argv);
 
 fs.mkdirSync(outputDirectory, { recursive: true });
 const slices = architectures.map((architecture) => {
