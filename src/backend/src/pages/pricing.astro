@@ -8,6 +8,10 @@ function displayPriceFor(item: BillingCatalogItem): string | null {
   return priceDisplays.get(item.priceId)?.amount ?? null;
 }
 
+function listPriceFor(item: BillingCatalogItem): string | null {
+  return priceDisplays.get(item.priceId)?.listAmount ?? null;
+}
+
 const catalog = (() => {
   try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
@@ -43,12 +47,13 @@ const isLoggedIn = Boolean(session);
 
     {catalog.subscriptions.map((tier) => {
       const displayPrice = displayPriceFor(tier);
+      const listPrice = listPriceFor(tier);
       return (
         <div class="price-card">
           <span class="price-card__badge">Beta price</span>
           <h3>{tier.tier.charAt(0).toUpperCase() + tier.tier.slice(1)}</h3>
           {displayPrice ? (
-            <div><span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
+            <div>{listPrice && <s class="price-card__period" aria-label={`Regular price ${listPrice}`}>{listPrice}</s>} <span class="price-card__credits">{displayPrice}</span><span class="price-card__period">/ {priceDisplays.get(tier.priceId)?.period}</span></div>
           ) : (
             <div class="price-card__desc">Price temporarily unavailable</div>
           )}

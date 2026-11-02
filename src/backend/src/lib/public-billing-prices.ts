@@ -2,7 +2,12 @@ import type Stripe from 'stripe';
 import { formatBillingPrice, stripeClient } from './billing';
 import { log } from './log';
 
-type PriceDisplay = { amount: string; period: string | null };
+type PriceDisplay = {
+  amount: string;
+  period: string | null;
+  /** The undiscounted price to show crossed out, from the Stripe price's `list_amount` metadata. */
+  listAmount?: string;
+};
 const cache = new Map<
   string,
   { expiresAt: number; value: Promise<PriceDisplay | null> }
@@ -26,11 +31,31 @@ export function publicPriceDisplay(price: Stripe.Price): PriceDisplay | null {
     currency: price.currency,
   });
   if (!amount) return null;
-  if (price.type === 'one_time') return { amount, period: null };
+  const listAmount = listAmountDisplay(price);
+  const extras = listAmount ? { listAmount } : {};
+  if (price.type === 'one_time') return { amount, period: null, ...extras };
   if (!price.recurring || price.recurring.usage_type !== 'licensed')
     return null;
   const { interval, interval_count: count } = price.recurring;
-  return { amount, period: count === 1 ? interval : `${count} ${interval}s` };
+  return {
+    amount,
+    period: count === 1 ? interval : `${count} ${interval}s`,
+    ...extras,
+  };
+}
+
+/** A crossed-out price is shown only when it is a whole minor-unit amount above the real one. */
+function listAmountDisplay(price: Stripe.Price): string | null {
+  const raw = price.metadata?.list_amount;
+  if (!raw || !/^\d+$/.test(raw)) return null;
+  const listAmount = Number(raw);
+  if (
+    !Number.isSafeInteger(listAmount) ||
+    price.unit_amount === null ||
+    listAmount <= price.unit_amount
+  )
+    return null;
+  return formatBillingPrice({ amount: listAmount, currency: price.currency });
 }
 
 async function loadPublicPrice(priceId: string): Promise<PriceDisplay | null> {
