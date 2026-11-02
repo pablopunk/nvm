@@ -16,6 +16,26 @@ export function valuesMatch(
   return Math.max(...values.map((value) => scoreText(value, filter))) > 0;
 }
 
+export function rankActionRows<
+  T extends { title: string; subtitle?: string; sectionHeader?: boolean },
+>(rows: T[], queryValue: string): T[] {
+  const query = queryValue.trim().toLowerCase();
+  if (!query) return rows;
+  return rows
+    .filter((row) => !row.sectionHeader)
+    .map((row) => {
+      const titleScore = scoreText(row.title, query);
+      return {
+        row,
+        titleScore,
+        score: Math.max(titleScore, scoreText(row.subtitle, query)),
+      };
+    })
+    .filter(({ score }) => score > 0)
+    .sort((a, b) => b.score - a.score || b.titleScore - a.titleScore)
+    .map(({ row }) => row);
+}
+
 export function valuesMatchMinScore(
   minScore: number,
   filterValue: string,
