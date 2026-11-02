@@ -69,6 +69,17 @@ export async function flushPosthog() {
   await configuredClient()?.flush();
 }
 
+// The packaged diagnostics smoke waits on each capture; batching there only
+// adds idle seconds per assertion. Release batching is unchanged.
+const RELEASE_FLUSH_POLICY = { flushAt: 10, flushInterval: 10_000 };
+const DIAGNOSTIC_TEST_FLUSH_POLICY = { flushAt: 1, flushInterval: 100 };
+
+function flushPolicy() {
+  return isNvmDiagnosticTestMode
+    ? DIAGNOSTIC_TEST_FLUSH_POLICY
+    : RELEASE_FLUSH_POLICY;
+}
+
 function configuredClient() {
   if (client !== undefined) {
     return client;
@@ -77,8 +88,7 @@ function configuredClient() {
   client = config
     ? new PostHog(config.key, {
         host: config.host,
-        flushAt: 10,
-        flushInterval: 10_000,
+        ...flushPolicy(),
         // Bounded memory and bounded waiting: an unreachable endpoint must never
         // pile events up or hold the quit flush.
         maxQueueSize: 1_000,
