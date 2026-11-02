@@ -4,7 +4,9 @@ import type Stripe from 'stripe';
 import { resetDbForTests, setDbForTests } from '../db/client';
 import { creditLedger, stripeEvents, subscriptions, users } from '../db/schema';
 import {
+  BillingRequestError,
   billingCatalog,
+  createBillingCheckout,
   findCatalogItem,
   formatBillingPrice,
   processStripeEvent,
@@ -178,6 +180,55 @@ test('top-up checkout grants the pack credits under the payment intent key', asy
   assert.deepEqual(ledgerGrants(writes), [
     { userId: 'user-1', delta: 500, kind: 'paid', reason: 'stripe_top_up', refId: 'pi_1' },
   ]);
+});
+
+test('a multi-unit top-up grants the pack credits times the purchased quantity', async () => {
+  const writes = installFakeDb();
+  installFakeStripe(stripeSubscription());
+  await processStripeEvent(
+    event('checkout.session.completed', {
+      id: 'cs_3',
+      mode: 'payment',
+      payment_status: 'paid',
+      payment_intent: 'pi_3',
+      metadata: { user_id: 'user-1', price_id: TOP_UP_PRICE, quantity: '3' },
+    }),
+  );
+  assert.deepEqual(ledgerGrants(writes), [
+    { userId: 'user-1', delta: 1500, kind: 'paid', reason: 'stripe_top_up', refId: 'pi_3' },
+  ]);
+});
+
+test('a top-up with a corrupt quantity fails the event instead of granting', async () => {
+  const writes = installFakeDb();
+  installFakeStripe(stripeSubscription());
+  await assert.rejects(
+    processStripeEvent(
+      event('checkout.session.completed', {
+        id: 'cs_4',
+        mode: 'payment',
+        payment_status: 'paid',
+        payment_intent: 'pi_4',
+        metadata: { user_id: 'user-1', price_id: TOP_UP_PRICE, quantity: '9' },
+      }),
+    ),
+    /invalid top-up quantity/,
+  );
+  assert.deepEqual(ledgerGrants(writes), []);
+});
+
+test('checkout rejects quantities outside one to four for top-ups and above one for plans', async () => {
+  const user = { id: 'user-1' } as never;
+  for (const quantity of [0, 5, 1.5]) {
+    await assert.rejects(
+      createBillingCheckout({ user, kind: 'top_up', priceId: TOP_UP_PRICE, quantity }),
+      (error) => error instanceof BillingRequestError && error.type === 'invalid_quantity',
+    );
+  }
+  await assert.rejects(
+    createBillingCheckout({ user, kind: 'subscription', priceId: PRO_PRICE, quantity: 2 }),
+    (error) => error instanceof BillingRequestError && error.type === 'invalid_quantity',
+  );
 });
 
 test('unpaid async checkouts wait for the payment-succeeded event', async () => {

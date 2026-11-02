@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { dashboardFetch } from '../../lib/dashboard-fetch';
 import { watchDashboard } from '../../lib/dashboard-refresh';
+import { MAX_TOP_UP_QUANTITY } from '../../lib/billing-limits';
 import { Button } from '../ui/button';
 
 type Billing = {
@@ -30,7 +31,7 @@ export function ProfileBillingContent({ initial, billingState }: { initial: Bill
     {billingState === 'canceled' && <p className="status">Checkout canceled. Nothing was charged.</p>}
     <div className="row">
       {!active && catalog.subscriptions.map((item) => <Button variant="default" className="billing-checkout" data-kind="subscription" data-price-id={item.priceId} key={item.priceId}>Subscribe {item.tier} · {item.credits} credits/mo</Button>)}
-      {active && catalog.topUps.map((item) => <Button variant="outline" className="billing-checkout" data-kind="top_up" data-price-id={item.priceId} key={item.priceId}>Top up · {item.credits} credits</Button>)}
+      {active && catalog.topUps.flatMap((item) => Array.from({ length: MAX_TOP_UP_QUANTITY }, (_, index) => index + 1).map((quantity) => <Button variant="outline" className="billing-checkout" data-kind="top_up" data-price-id={item.priceId} data-quantity={quantity} key={`${item.priceId}:${quantity}`}>Top up · {(item.credits * quantity).toLocaleString('en')} credits</Button>))}
       {!active && catalog.topUps.length > 0 && <span className="muted">Top-ups unlock after subscribing to Pro.</span>}
       {hasCustomer && <Button variant={active ? 'default' : 'outline'} id="manage-billing" type="button">{active ? 'Manage subscription' : 'Manage billing'}</Button>}
       {catalog.subscriptions.length === 0 && catalog.topUps.length === 0 && <span className="muted">Billing is not configured yet.</span>}

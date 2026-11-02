@@ -88,14 +88,14 @@ const isLoggedIn = Boolean(session);
   {hasTopUps && (
     <div class="section">
       <h2>Top-ups</h2>
-      <p class="muted">One-time credit packs for when you need more. Available with an active subscription.</p>
+      <p class="muted">One-time credit packs for when you need more. Available with an active subscription, up to 4 at a time.</p>
       <div class="top-up-section">
         {catalog.topUps.map((pack) => {
           const displayPrice = displayPriceFor(pack);
           return (
             <div class="top-up-card">
               <div class="top-up-card__credits">{pack.credits}</div>
-              <div style="font-size:13px;color:var(--muted)">credits{displayPrice ? ` · ${displayPrice}` : ''}</div>
+              <div style="font-size:13px;color:var(--muted)">credits{displayPrice ? ` · ${displayPrice} each` : ''}</div>
             </div>
           );
         })}
