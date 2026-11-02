@@ -1,5 +1,4 @@
 import { app } from 'electron';
-import * as logger from '../platform/logger';
 import {
   bindOperation,
   operationOutcome,
@@ -7,6 +6,8 @@ import {
   recordOperationFailure,
   runOperation,
 } from '../diagnostics/observability';
+import * as logger from '../platform/logger';
+import { compareSemverVersions } from '../platform/version-utils';
 import {
   DEFAULT_UPDATE_CHANNEL,
   isUpdateInfoForChannel,
@@ -14,13 +15,14 @@ import {
 
 import { createDowngradeGate } from './update-downgrade';
 import {
-  createLocalCancellationToken,
   type AutoUpdaterLike,
   type CancellationTokenLike,
+  createLocalCancellationToken,
   type UpdateInfo,
   type UpdateManagerOptions,
   type UpdateState,
 } from './update-manager-types';
+
 export type { UpdateManagerOptions } from './update-manager-types';
 
 const AUTO_UPDATE_STARTUP_DELAY_MS = 15_000;
@@ -132,7 +134,8 @@ export function createUpdateManager(
       notifyStateChanged();
       return null;
     }
-    if (state.downloadedInfo) return state.downloadedInfo;
+    if (state.downloadedInfo && trigger !== 'manual')
+      return state.downloadedInfo;
     if (state.checkInFlight || state.downloadInFlight || state.installInFlight)
       return state.availableInfo || state.downloadedInfo;
     state.checkInFlight = true;
@@ -169,7 +172,11 @@ export function createUpdateManager(
         result?.isUpdateAvailable &&
         candidate &&
         isCurrentChannelInfo(candidate) &&
-        !state.downloadedInfo
+        (!state.downloadedInfo ||
+          (compareSemverVersions(
+            candidate.version,
+            state.downloadedInfo.version,
+          ) ?? 0) > 0)
       )
         await downloadAvailableUpdate(candidate);
       return candidate || null;
@@ -188,7 +195,11 @@ export function createUpdateManager(
         captureActiveFailure = previousCapture;
       state.checkInFlight = false;
       if (state.status === 'checking')
-        state.status = state.availableInfo ? 'available' : 'idle';
+        state.status = state.downloadedInfo
+          ? 'downloaded'
+          : state.availableInfo
+            ? 'available'
+            : 'idle';
       notifyStateChanged();
       runDeferredChannelRecheck();
     }
@@ -204,7 +215,11 @@ export function createUpdateManager(
       !canUseAutoUpdates() ||
       state.downloadInFlight ||
       state.installInFlight ||
-      state.downloadedInfo ||
+      (state.downloadedInfo &&
+        (compareSemverVersions(
+          availableInfo?.version ?? '',
+          state.downloadedInfo.version,
+        ) ?? 0) <= 0) ||
       !availableInfo ||
       !isCurrentChannelInfo(availableInfo)
     )
@@ -223,10 +238,11 @@ export function createUpdateManager(
     captureActiveFailure = capture;
     operationStage('save');
     try {
-      if (isDowngradeCandidate(availableInfo)) {
-        if (!(await isInstallPermitted(availableInfo)))
-          return blockDowngrade(availableInfo);
-      }
+      if (
+        isDowngradeCandidate(availableInfo) &&
+        !(await isInstallPermitted(availableInfo))
+      )
+        return blockDowngrade(availableInfo);
       await autoUpdater.downloadUpdate(cancellation);
     } catch (error) {
       if (cancellation.cancelled) {
@@ -345,10 +361,9 @@ export function createUpdateManager(
         logIgnoredChannelResult('update-not-available', info);
         return;
       }
-      state.availableInfo = null;
-      state.downloadedInfo = null;
+      state.availableInfo = state.downloadedInfo;
       state.latestVersion = info?.version ?? null;
-      state.status = 'idle';
+      state.status = state.downloadedInfo ? 'downloaded' : 'idle';
       logger.info('updater.notAvailable', undefined, {
         source: 'host',
         scope: 'updater',
