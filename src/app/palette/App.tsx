@@ -55,7 +55,6 @@ import {
 import { useAiChat } from './ai-chat/use-ai-chat';
 import { isAppIconPath } from './app-icons';
 import { useAppViewReporting } from './app-view-reporting';
-import { useShortcutReveal } from './use-shortcut-reveal';
 import {
   type CommandIconName,
   iconFor,
@@ -91,6 +90,7 @@ import {
   allViewItems,
   filterCommandItems,
   filterCommandSections,
+  rankActionRows,
   valuesMatch,
 } from './filtering';
 // biome-ignore format: Keep the legacy palette within its file-size budget.
@@ -162,6 +162,7 @@ import {
 } from './ui';
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
+import { useShortcutReveal } from './use-shortcut-reveal';
 
 type ActionKind =
   | 'open-url'
@@ -797,14 +798,6 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
     ];
   }
 
-  function filteredRows(rows: ActionPanelRow[], filter: string) {
-    if (!filter) return rows;
-    return rows.filter(
-      (row) =>
-        row.sectionHeader || valuesMatch(filter, row.title, row.subtitle),
-    );
-  }
-
   function openActionPanel(origin: EventTarget | null) {
     actionPanelFocusOriginRef.current =
       origin instanceof HTMLElement && shellRef.current?.contains(origin)
@@ -1080,7 +1073,7 @@ export function ExtensionWindowApp({ windowId }: { windowId: string }) {
   const surfaceRows = confirmFor
     ? confirmRows()
     : actionSurfaceOpen
-      ? filteredRows(actionPanelRows(panel, fallback), compactQuery)
+      ? rankActionRows(actionPanelRows(panel, fallback), compactQuery)
       : palettePrompt.active
         ? palettePrompt.rows
         : paletteForm.choices
@@ -2360,7 +2353,9 @@ export function App() {
 
     if (shortcutFor) selectValue('shortcut:save');
     else if (shortcutOptionsFor)
-      selectValue(getShortcutOptionRows()[0]?.value ?? '');
+      selectValue(
+        getCompactActionRows().find((row) => !row.sectionHeader)?.value ?? '',
+      );
     else if (shortcutManagerOpen)
       selectValue(getShortcutRows()[0]?.value ?? '');
     else if (aliasFor) selectValue(getAliasActionRows()[0]?.value ?? '');
@@ -2370,20 +2365,10 @@ export function App() {
       selectValue(getConfirmViewActionRows()[0]?.value ?? '');
     else if (confirmBuilderPreviewAction)
       selectValue(getConfirmBuilderPreviewActionRows()[0]?.value ?? '');
-    else if (actionSubmenuFor)
+    else if (actionSubmenuFor || extensionItemOptionsFor || optionsFor)
       selectValue(
-        actionPanelRows(
-          actionSubmenuFor.panel,
-          [],
-          'action-submenu',
-          true,
-          new Set<string>(),
-          actionSubmenuFor.runAction,
-        )[0]?.value ?? '',
+        getCompactActionRows().find((row) => !row.sectionHeader)?.value ?? '',
       );
-    else if (extensionItemOptionsFor)
-      selectValue(getExtensionItemActionRows()[0]?.value ?? '');
-    else if (optionsFor) selectValue(getOptionActionRows()[0]?.value ?? '');
     else if (previewFor) selectValue('preview');
     else if (paletteForm.editor && paletteForm.field)
       selectValue(formApplyRowId(paletteForm.field.id));
@@ -4650,17 +4635,19 @@ export function App() {
   }
 
   function getCompactActionRows() {
-    if (shortcutOptionsFor) return getShortcutOptionRows();
-    if (actionSubmenuFor)
-      return actionPanelRows(
+    let rows: ActionPanelRow[] = [];
+    if (shortcutOptionsFor) rows = getShortcutOptionRows();
+    else if (actionSubmenuFor)
+      rows = actionPanelRows(
         actionSubmenuFor.panel,
         [],
         'action-submenu',
         true,
       );
-    if (extensionItemOptionsFor) return getExtensionItemActionRows();
-    if (optionsFor) return getOptionActionRows();
-    return [];
+    else if (extensionItemOptionsFor) rows = getExtensionItemActionRows();
+    else if (optionsFor) rows = getOptionActionRows();
+
+    return rankActionRows(rows, actionQuery);
   }
 
   function renderChildEmpty(message = EMPTY_ACTIONS_TITLE, subtitle?: string) {
