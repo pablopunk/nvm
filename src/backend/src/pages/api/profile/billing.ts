@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { subscriptions } from '../../../db/schema';
 import { getCurrentUser } from '../../../lib/admin';
-import { billingCatalog } from '../../../lib/billing';
+import { purchasableBillingCatalog } from '../../../lib/billing';
 import { dashboardRead } from '../../../lib/dashboard-read';
 
 export const GET: APIRoute = async ({ request }) => {
@@ -13,6 +13,6 @@ export const GET: APIRoute = async ({ request }) => {
   return Response.json({
     subscription: subscription ? { status: subscription.status, currentPeriodEnd: subscription.currentPeriodEnd } : null,
     hasCustomer: Boolean(user.stripeCustomerId),
-    catalog: billingCatalog(),
+    catalog: purchasableBillingCatalog(),
   }, { headers: { 'Cache-Control': 'private, no-store' } });
 };

@@ -8,6 +8,7 @@ import {
   findCatalogItem,
   formatBillingPrice,
   processStripeEvent,
+  purchasableBillingCatalog,
   setStripeForTests,
   type StripeLike,
 } from './billing';
@@ -117,6 +118,23 @@ test('catalog maps price IDs to credits and ignores legacy amount fields', () =>
     topUps: [{ kind: 'top_up', priceId: TOP_UP_PRICE, credits: 500 }],
   });
   assert.equal(findCatalogItem({ kind: 'top_up', priceId: 'price_unknown' }), null);
+  assert.equal(findCatalogItem({ kind: 'subscription' })?.priceId, PRO_PRICE);
+});
+
+test('retired prices still credit webhooks but are never offered or checked out', () => {
+  process.env.STRIPE_SUBSCRIPTION_TIERS = JSON.stringify([
+    { priceId: 'price_old', tier: 'pro', credits: 1000, retired: true },
+    { priceId: PRO_PRICE, tier: 'pro', credits: 1000 },
+  ]);
+  assert.deepEqual(
+    billingCatalog().subscriptions.map((item) => item.priceId),
+    ['price_old', PRO_PRICE],
+  );
+  assert.deepEqual(
+    purchasableBillingCatalog().subscriptions.map((item) => item.priceId),
+    [PRO_PRICE],
+  );
+  assert.equal(findCatalogItem({ kind: 'subscription', priceId: 'price_old' }), null);
   assert.equal(findCatalogItem({ kind: 'subscription' })?.priceId, PRO_PRICE);
 });
 

@@ -20,12 +20,16 @@ type SubscriptionTier = {
   priceId: string;
   tier: string;
   credits: number;
+  /** Still honored by webhooks for existing subscribers, but no longer offered or purchasable. */
+  retired?: boolean;
 };
 
 type TopUpPack = {
   kind: 'top_up';
   priceId: string;
   credits: number;
+  /** Still honored by webhooks for in-flight checkouts, but no longer offered or purchasable. */
+  retired?: boolean;
 };
 
 export type BillingCatalogItem = SubscriptionTier | TopUpPack;
@@ -143,15 +147,39 @@ export function billingCatalog(): BillingCatalog {
     const credits = parsePositiveInt(raw.credits);
     const tier = String(raw.tier ?? raw.plan ?? 'pro').trim() || 'pro';
     if (priceId && credits)
-      subscriptionTiers.push({ kind: 'subscription', priceId, tier, credits });
+      subscriptionTiers.push({
+        kind: 'subscription',
+        priceId,
+        tier,
+        credits,
+        ...(raw.retired === true ? { retired: true } : {}),
+      });
   }
   const topUps: TopUpPack[] = [];
   for (const raw of parseCatalogEnv('STRIPE_TOP_UP_PACKS')) {
     const priceId = String(raw.priceId ?? raw.price_id ?? '').trim();
     const credits = parsePositiveInt(raw.credits);
-    if (priceId && credits) topUps.push({ kind: 'top_up', priceId, credits });
+    if (priceId && credits)
+      topUps.push({
+        kind: 'top_up',
+        priceId,
+        credits,
+        ...(raw.retired === true ? { retired: true } : {}),
+      });
   }
   return { subscriptions: subscriptionTiers, topUps };
+}
+
+/**
+ * What customers may see and buy. Retired prices stay in `billingCatalog` so webhooks
+ * keep crediting existing subscribers, but they are never offered or checked out.
+ */
+export function purchasableBillingCatalog(): BillingCatalog {
+  const catalog = billingCatalog();
+  return {
+    subscriptions: catalog.subscriptions.filter((item) => !item.retired),
+    topUps: catalog.topUps.filter((item) => !item.retired),
+  };
 }
 
 export function findCatalogItem(input: {
@@ -159,7 +187,7 @@ export function findCatalogItem(input: {
   priceId?: string;
   tier?: string;
 }): BillingCatalogItem | null {
-  const catalog = billingCatalog();
+  const catalog = purchasableBillingCatalog();
   const items: BillingCatalogItem[] =
     input.kind === 'subscription' ? catalog.subscriptions : catalog.topUps;
   if (input.priceId)

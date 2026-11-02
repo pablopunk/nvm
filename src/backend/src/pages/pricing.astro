@@ -1,6 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import { billingCatalog, type BillingCatalogItem } from '../lib/billing';
+import { purchasableBillingCatalog, type BillingCatalogItem } from '../lib/billing';
 import { getSessionFromCookies } from '../lib/workos';
 import { publicBillingPrices } from '../lib/public-billing-prices';
 
@@ -13,7 +13,7 @@ function listPriceFor(item: BillingCatalogItem): string | null {
 }
 
 const catalog = (() => {
-  try { return billingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
+  try { return purchasableBillingCatalog(); } catch { return { subscriptions: [], topUps: [] }; }
 })();
 const hasSubscriptions = catalog.subscriptions.length > 0;
 const priceDisplays = await publicBillingPrices([...catalog.subscriptions, ...catalog.topUps]);
