@@ -2,7 +2,7 @@
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { planDevVersion } = require('./dev-version.cjs');
+const { isBuildRelevantPath, planDevVersion } = require('./dev-version.cjs');
 
 const sha = 'a'.repeat(40);
 const otherSha = 'b'.repeat(40);
@@ -59,6 +59,38 @@ test('repairs an already published build for the same source without rebuilding'
     }),
     { version: '2026.1030.911', build: false },
   );
+});
+
+test('skips non-package changes since the last published build', () => {
+  const release = {
+    tag_name: 'v2026.1030.911-dev',
+    draft: false,
+    prerelease: true,
+  };
+  assert.equal(
+    plan({ releases: [release], hasRelevantChanges: () => false }).build,
+    false,
+  );
+  assert.equal(
+    plan({ releases: [release], hasRelevantChanges: () => true }).build,
+    true,
+  );
+  for (const path of [
+    'README.md',
+    'AGENTS.md',
+    '.agents/skills/a.md',
+    'marketing/index.html',
+    'src/backend/package.json',
+    'src/backend/src/pages/index.astro',
+  ])
+    assert.equal(isBuildRelevantPath(path), false, path);
+  for (const path of [
+    'docs/guide.md',
+    'THIRD_PARTY_NOTICES.md',
+    'src/app/main.ts',
+    'electron-builder.yml',
+  ])
+    assert.equal(isBuildRelevantPath(path), true, path);
 });
 
 test('reuses a matching draft but never reuses another source or an older draft', () => {
