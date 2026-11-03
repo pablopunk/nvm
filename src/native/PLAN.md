@@ -22,8 +22,8 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 
 | # | Decision | Default until the owner says otherwise | Affects |
 |---|---|---|---|
-| D1 | Extension runtime | Yaegi-interpreted Go, in process, with timeouts and panic isolation; WP3.1 spikes subprocess isolation and reports | WP3.* |
-| D2 | AI agent loop | Time-boxed spike first (WP2.4a); default is a native Go loop on `/api/v1/chat/completions`; fall back to a Node `pi` sidecar for the builder only | WP2.4, WP3.9 |
+| D1 | Extension runtime | **Spiked (WP3.1, `docs/extension-runtime-spike.md`):** Yaegi-interpreted Go in a supervised child process (per-call deadline 20/100 ms, kill and restart, address-space cap); sobek JS is the fallback behind the same protocol; in-process Yaegi cannot be interrupted or memory-capped. Final runtime choice at the author-experience gate | WP3.* |
+| D2 | AI agent loop | **Spiked (WP2.4a, `docs/agent-loop-spike.md`):** native Go loop behind `ai.Agent`; the proxy forwards tools and tool-call deltas; owner must check each tier's `api` via `GET /api/v1/active-model` (Responses-format tiers need an adapter); pi sidecar stays a builder-only fallback; pi-in-JS-runtime rejected | WP2.4, WP3.9 |
 | D3 | Backend | Unchanged TypeScript/Astro; Go is a client | WP2.* |
 | D4 | macOS helper | Reuse `src/app/resources/macos-helper/*.swift` as a child process, same CLI contract | WP1.6, WP2.5, WP4.1 |
 | D5 | 1.x state | No migration | WP0.6, WP5.5 |
