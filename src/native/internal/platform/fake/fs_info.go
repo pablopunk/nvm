@@ -14,11 +14,19 @@ type fileInfo struct {
 // Name returns the base name.
 func (i fileInfo) Name() string { return i.name }
 
-// Size returns the content length, zero for folders.
-func (i fileInfo) Size() int64 { return int64(len(i.node.data)) }
+// Size returns the content length, zero for folders, and the target length for symbolic links.
+func (i fileInfo) Size() int64 {
+	if i.node.link != "" {
+		return int64(len(i.node.link))
+	}
+	return int64(len(i.node.data))
+}
 
-// Mode returns the permission bits, with the directory bit for folders.
+// Mode returns the permission bits, with the directory bit for folders and the symlink bit for links.
 func (i fileInfo) Mode() fs.FileMode {
+	if i.node.link != "" {
+		return fs.ModeSymlink | 0o777
+	}
 	if i.node.dir {
 		return fs.ModeDir | i.node.mode.Perm()
 	}

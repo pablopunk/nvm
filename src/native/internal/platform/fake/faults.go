@@ -18,6 +18,35 @@ import "sync"
 type faultSet struct {
 	mu   sync.Mutex
 	next map[string][]error
+	// paths holds errors that fail every call of one operation on one path until cleared.
+	paths map[string]error
+}
+
+// failPath makes every call of op on name return err until failPath is called again with nil.
+func (f *faultSet) failPath(op, name string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := pathFaultKey(op, name)
+	if err == nil {
+		delete(f.paths, key)
+		return
+	}
+	if f.paths == nil {
+		f.paths = map[string]error{}
+	}
+	f.paths[key] = err
+}
+
+// takePath returns the persistent error set for op on name, or nil. Unlike take it does not consume it.
+func (f *faultSet) takePath(op, name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.paths[pathFaultKey(op, name)]
+}
+
+// pathFaultKey joins an operation and its cleaned path into a map key.
+func pathFaultKey(op, name string) string {
+	return op + " " + cleanKey(name)
 }
 
 // failNext queues err for the next call of op. Calls consume queued errors in order.

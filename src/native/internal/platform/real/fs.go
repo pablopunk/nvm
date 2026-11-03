@@ -32,6 +32,14 @@ func (osFS) MkdirAll(name string, perm fs.FileMode) error { return os.MkdirAll(n
 // Stat describes a file or folder.
 func (osFS) Stat(name string) (fs.FileInfo, error) { return os.Stat(name) }
 
+// Lstat describes a file or folder without following a symbolic link.
+func (osFS) Lstat(name string) (fs.FileInfo, error) { return os.Lstat(name) }
+
+// ReadFilePrefix reads at most max leading bytes of a file and reports the file's full size.
+func (osFS) ReadFilePrefix(name string, max int64) ([]byte, int64, error) {
+	return readFilePrefix(name, max)
+}
+
 // ReadDir lists a folder sorted by name.
 func (osFS) ReadDir(name string) ([]fs.DirEntry, error) { return os.ReadDir(name) }
 

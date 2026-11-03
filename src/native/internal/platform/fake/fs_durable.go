@@ -31,6 +31,7 @@ func (f *FS) CreateExclusive(name string, data []byte, perm fs.FileMode) error {
 		return pathError("open", name, fs.ErrExist)
 	}
 	f.nodes[key] = &node{mode: perm.Perm(), data: bytes.Clone(data)}
+	f.kids = nil
 	f.notifyLocked(platform.Event{Op: platform.EventCreate, Path: key})
 	return nil
 }
