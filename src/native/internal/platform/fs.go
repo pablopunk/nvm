@@ -13,6 +13,13 @@ type FS interface {
 	// WriteFile replaces the content of a file, creating it with perm when missing. Callers that need
 	// crash safety write a temporary file and rename it; the port does not promise atomicity.
 	WriteFile(name string, data []byte, perm fs.FileMode) error
+	// CreateExclusive writes a file only when name does not exist yet, creating it with perm. A taken
+	// name returns an error matching fs.ErrExist and changes nothing. It claims a name atomically, as a
+	// single-writer lock needs.
+	CreateExclusive(name string, data []byte, perm fs.FileMode) error
+	// Sync flushes a file's content to stable storage. Some OSes refuse to sync folders; callers treat a
+	// folder sync as best-effort.
+	Sync(name string) error
 	// Rename moves a file or folder, replacing a file at the destination.
 	Rename(oldName, newName string) error
 	// Remove deletes a file or an empty folder. It never moves to the Trash; see Shell.Trash.
