@@ -31,6 +31,7 @@ func (p *App) openLearning() <-chan store.Notice {
 		return nil
 	}
 	mygo.App.OnQuit(func() { _ = s.Close() })
+	p.appStore = s
 
 	learn, err := usage.Open(s, searchClock, logx.Default())
 	if err != nil {

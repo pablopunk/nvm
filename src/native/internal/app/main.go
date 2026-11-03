@@ -14,10 +14,12 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
+	"github.com/pablopunk/nvm/native/internal/store"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -35,20 +37,24 @@ type App struct {
 
 	icons    map[string]*ui.Bitmap
 	md       markdown.Options
-	apps     []mygo.InstalledApp
-	exts     []loadedExt
-	extTrays []*extTray
-	runs     map[string]*chatRun
-	tray     *mygo.Tray
-	clip     *ClipStore
-	snips    *SnippetStore
-	notes    *NoteStore
-	files    *FileIndex
-	chats    *ChatStore
-	emoji    emojiState
-	timer    *Timer
-	learn    *usage.Learner
-	history  *palette.QueryHistory
+	ports    platform.Ports
+	appStore *store.Store
+	appsvc   *appfeat.Services
+	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
+	stopAppPoll func()
+	exts        []loadedExt
+	extTrays    []*extTray
+	runs        map[string]*chatRun
+	tray        *mygo.Tray
+	clip        *ClipStore
+	snips       *SnippetStore
+	notes       *NoteStore
+	files       *FileIndex
+	chats       *ChatStore
+	emoji       emojiState
+	timer       *Timer
+	learn       *usage.Learner
+	history     *palette.QueryHistory
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -67,7 +73,8 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Position:    p.position,
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
-		OnShow:      p.loadApps,
+		OnShow:      p.showApps,
+		OnHide:      p.hideApps,
 		History:     p.history,
 		Learner:     p.learn,
 	})
@@ -77,21 +84,6 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 func (p *App) position(w, h int) (int, int) {
 	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
 	return d.WorkArea.X + (d.WorkArea.Width-w)/2, d.WorkArea.Y + (d.WorkArea.Height-h)/3
-}
-
-// loadApps reads the installed applications in the background and offers them to the root when they arrive.
-func (p *App) loadApps() {
-	go func() {
-		apps, err := mygo.Shell.InstalledApps()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		p.panel.Update(func() {
-			p.apps = apps
-			p.ReloadRows()
-		})
-	}()
 }
 
 func (p *App) ready() {
@@ -104,6 +96,7 @@ func (p *App) ready() {
 	p.files = &FileIndex{}
 	p.emoji.load()
 	notices := p.openLearning()
+	p.startAppServices()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)
 

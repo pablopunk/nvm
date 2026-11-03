@@ -59,6 +59,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
 | WP1.1 Palette core | done | `internal/search` + `internal/palette`; root providers in `providers_wiring.go`; 52/60 frames strict-identical, 8 identical to base render |
 | WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
+| WP1.4 Apps (Linux) | in progress | `features/apps`: index, icons, running status, quit, uninstall library, and palette wiring with Force Quit Apps, Quit All Apps and the uninstall review. Linux J22 passes on the rig. Not done: app icons still use the prototype's synchronous icon path, the uninstall review and confirm goldens, the palette L2 tests, macOS and Windows discovery (macOS is ported and tested with fakes only; Windows is unavailable) |
 | WP1.5 Calculator library | done (library) | wiring in progress (WP1.5b) |
 | WP1.6 Clipboard engine | done (library) | wiring and real OS paste/concealed detection pending (WP1.6b) |
 | WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |

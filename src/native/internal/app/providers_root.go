@@ -5,8 +5,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/egoist/mygo"
-
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
@@ -22,7 +21,7 @@ type rootInput struct {
 	disabled   map[string]bool
 	snippets   []Snippet
 	exts       []loadedExt
-	apps       []mygo.InstalledApp
+	apps       []appfeat.App
 	clips      []ClipEntry
 	chats      []chatHead
 	timerOn    bool
@@ -51,7 +50,7 @@ func (p *App) captureRoot() *rootInput {
 		disabled:   maps.Clone(p.S.Disabled),
 		snippets:   slices.Clone(p.snips.Items),
 		exts:       p.exts,
-		apps:       p.apps,
+		apps:       p.appsSnapshot(),
 		clips:      p.clip.Entries,
 		chats:      chats,
 		timerOn:    p.timer != nil,

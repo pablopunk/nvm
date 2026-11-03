@@ -45,14 +45,14 @@ func TestPortedFrequentFallbackUseDoesNotOvertakeAStrongCommand(t *testing.T) {
 	p = withLearner(p, learn)
 
 	items := rootResultsForTable(p, "apps")
-	command, web := indexOfItem(items, "Quit Applications"), indexOfItem(items, `Search the web for "apps"`)
+	command, web := indexOfItem(items, "Force Quit Apps"), indexOfItem(items, `Search the web for "apps"`)
 	if command < 0 || web < 0 {
 		t.Fatalf("both rows should be listed: command %d, web %d", command, web)
 	}
 	if command > web {
 		t.Fatalf("the frequently used web search (row %d) overtook the command (row %d)", web, command)
 	}
-	if got := items[web].Score; got >= search.Score("Quit Applications", "apps") {
+	if got := items[web].Score; got >= search.Score("Force Quit Apps", "apps") {
 		t.Fatalf("the boosted web search scores %d, which reaches the command's band", got)
 	}
 }

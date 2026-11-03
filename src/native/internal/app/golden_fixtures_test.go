@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -36,16 +36,16 @@ func goldenPalette(t *testing.T) *App {
 			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
 			Disabled: map[string]bool{},
 		},
-		learn: goldenUsage(),
-		clip:  goldenClipboard(t),
-		snips: &SnippetStore{Items: goldenSnippets()},
-		notes: &NoteStore{Items: goldenNotes()},
-		chats: &ChatStore{Chats: goldenChats()},
-		files: &FileIndex{},
-		icons: map[string]*ui.Bitmap{},
-		apps:  goldenApps(),
+		learn:  goldenUsage(),
+		clip:   goldenClipboard(t),
+		snips:  &SnippetStore{Items: goldenSnippets()},
+		notes:  &NoteStore{Items: goldenNotes()},
+		chats:  &ChatStore{Chats: goldenChats()},
+		files:  &FileIndex{},
+		icons:  map[string]*ui.Bitmap{},
+		appsvc: newFixtureAppServices(goldenApps()),
 	}
-	for _, app := range p.apps {
+	for _, app := range p.appsSnapshot() {
 		p.icons[app.Path] = goldenBitmap(t, 56, 56, goldenAppColor(app.Name))
 	}
 	p.emoji.load()
@@ -124,8 +124,8 @@ func goldenClipboard(t *testing.T) *ClipStore {
 	return cs
 }
 
-func goldenApps() []mygo.InstalledApp {
-	return []mygo.InstalledApp{
+func goldenApps() []appfeat.App {
+	return []appfeat.App{
 		{Name: "Calculator", ID: "org.gnome.Calculator.desktop", Path: "/usr/share/applications/org.gnome.Calculator.desktop"},
 		{Name: "Calendar", ID: "org.gnome.Calendar.desktop", Path: "/usr/share/applications/org.gnome.Calendar.desktop"},
 		{Name: "Clocks", ID: "org.gnome.clocks.desktop", Path: "/usr/share/applications/org.gnome.clocks.desktop"},
