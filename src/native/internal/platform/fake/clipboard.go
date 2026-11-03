@@ -61,6 +61,16 @@ func (c *Clipboard) WriteConcealedText(text string) {
 	c.setTextLocked(text, true)
 }
 
+// WriteConcealedImagePNG puts an image on the clipboard marked as concealed.
+func (c *Clipboard) WriteConcealedImagePNG(png []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clearLocked()
+	c.png = bytes.Clone(png)
+	c.concealed = true
+	c.notifyLocked()
+}
+
 // ReadText returns the plain text, or "" when the clipboard holds an image or nothing.
 func (c *Clipboard) ReadText() (string, error) {
 	if err := c.faults.take(OpClipboardReadText); err != nil {

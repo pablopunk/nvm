@@ -201,7 +201,15 @@ func (f *FS) MkdirAll(name string, perm fs.FileMode) error {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.mkdirAllLocked(cleanKey(name))
+	key := cleanKey(name)
+	_, existed := f.nodes[key]
+	if err := f.mkdirAllLocked(key); err != nil {
+		return err
+	}
+	if created := f.nodes[key]; !existed && created != nil {
+		created.mode = fs.ModeDir | perm.Perm()
+	}
+	return nil
 }
 
 // Stat describes a file or folder, following a symbolic link once to its target.
