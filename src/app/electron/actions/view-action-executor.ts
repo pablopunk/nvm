@@ -42,6 +42,7 @@ export function createViewActionExecutor(handlers: ViewActionHandlers) {
     handleShowHideCloseWindow,
     handleCopyImage,
     handleRemoveClipboardHistory,
+    handleLoadClipboardLinkPreview,
     handleTrash,
     handleShellExec,
     handleShellScript,
@@ -107,6 +108,8 @@ export function createViewActionExecutor(handlers: ViewActionHandlers) {
         return handleCopyImage(action);
       case 'removeClipboardHistory':
         return handleRemoveClipboardHistory(action);
+      case 'loadClipboardLinkPreview':
+        return handleLoadClipboardLinkPreview(action);
       case 'trash':
         return handleTrash(action);
       case 'rootView':

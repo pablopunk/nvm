@@ -134,6 +134,27 @@ export function sidePreviewView(ctx: ExtensionContext) {
         },
       }),
       ctx.ui.item({
+        id: 'link',
+        title: 'Link Preview',
+        subtitle: 'Text above, Open Graph style link card below',
+        icon: 'link',
+        detail: {
+          title: 'Link Preview',
+          text: 'https://example.com/articles/side-preview-link-cards',
+          link: {
+            url: 'https://example.com/articles/side-preview-link-cards',
+            status: 'ready',
+            siteName: 'Example',
+            title: 'Side preview link cards',
+            description:
+              'detail.link renders title, description, and image metadata below the preview text.',
+            image: `data:image/svg+xml;utf8,${encodeURIComponent(
+              '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="320"><rect width="640" height="320" fill="#334155"/><circle cx="320" cy="160" r="70" fill="#f59e0b"/></svg>',
+            )}`,
+          },
+        },
+      }),
+      ctx.ui.item({
         id: 'markdown',
         title: 'Markdown Preview',
         subtitle: 'Existing detail markdown remains supported',

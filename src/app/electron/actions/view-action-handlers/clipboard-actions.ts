@@ -19,6 +19,7 @@ export type ClipboardActionHandlerDeps = {
   clipboardPasteText: (action: any) => Promise<void>;
   pasteClipboardAction: (action: any) => Promise<void>;
   removeClipboardHistoryEntries: (action: any) => any;
+  loadClipboardLinkPreview: (action: any) => void;
 };
 
 export function createClipboardActionHandlers(
@@ -31,6 +32,7 @@ export function createClipboardActionHandlers(
     clipboardPasteText,
     pasteClipboardAction,
     removeClipboardHistoryEntries,
+    loadClipboardLinkPreview,
   } = deps;
 
   function desktopAppIdentity(appInfo: any) {
@@ -123,6 +125,10 @@ export function createClipboardActionHandlers(
     return removeClipboardHistoryEntries(action);
   }
 
+  function handleLoadClipboardLinkPreview(action) {
+    loadClipboardLinkPreview(action);
+  }
+
   return {
     handleCopyText,
     handlePasteText,
@@ -131,5 +137,6 @@ export function createClipboardActionHandlers(
     handleTypeText,
     handleCopyImage,
     handleRemoveClipboardHistory,
+    handleLoadClipboardLinkPreview,
   };
 }

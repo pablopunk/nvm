@@ -22,6 +22,7 @@ const HANDLER_BY_ACTION_TYPE = {
   closeWindow: 'handleShowHideCloseWindow',
   copyImage: 'handleCopyImage',
   removeClipboardHistory: 'handleRemoveClipboardHistory',
+  loadClipboardLinkPreview: 'handleLoadClipboardLinkPreview',
   trash: 'handleTrash',
   shellExec: 'handleShellExec',
   shellScript: 'handleShellScript',

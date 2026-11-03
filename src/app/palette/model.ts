@@ -2,12 +2,14 @@ import type { ReactNode } from 'react';
 import type {
   ActionPanelVisibility,
   ExtensionAccessoryTone,
+  ExtensionDetail,
   ExtensionEditorFormat,
   ExtensionFormFieldType,
   ExtensionFormOption,
   ExtensionFormValue,
   ExtensionImage,
   ExtensionItem,
+  ExtensionMetadataItem,
   ExtensionView,
   ExtensionWebviewPermission,
   ForegroundColor,
@@ -147,6 +149,12 @@ export const ACTION_DEFINITIONS = {
   },
   removeClipboardHistory: {
     description: 'Remove clipboard history entries',
+    dismiss: 'manual',
+    loading: 'none',
+    execute: 'main',
+  },
+  loadClipboardLinkPreview: {
+    description: 'Load link preview',
     dismiss: 'manual',
     loading: 'none',
     execute: 'main',
@@ -471,21 +479,10 @@ export interface CommandItemAccessory {
   tooltip?: string;
 }
 export type CommandImage = ExtensionImage;
-export type CommandMetadataItem =
-  | { type?: 'text'; label: string; value: string; copyable?: boolean }
-  | { type: 'link'; label: string; value: string; url: string }
-  | { type: 'tag'; label?: string; value: string; tone?: CommandAccessoryTone }
-  | { type: 'separator' };
-export interface CommandDetail {
-  title?: string;
-  subtitle?: string;
-  text?: string;
-  markdown?: string;
-  metadata?: CommandMetadataItem[];
-  image?: CommandImage;
-  video?: string;
+export type CommandMetadataItem = ExtensionMetadataItem;
+export type CommandDetail = Omit<ExtensionDetail, 'actions'> & {
   actions?: CommandAction[];
-}
+};
 export type CommandItemForeground = ForegroundColor;
 export interface CommandItemAppearance {
   foreground?: CommandItemForeground;
