@@ -57,6 +57,16 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
+| WP1.1 Palette core | done | `internal/search` + `internal/palette`; root providers in `providers_wiring.go`; 52/60 frames strict-identical, 8 identical to base render |
+| WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
+| WP1.5 Calculator library | done (library) | wiring in progress (WP1.5b) |
+| WP1.6 Clipboard engine | done (library) | wiring and real OS paste/concealed detection pending (WP1.6b) |
+| WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |
+| WP1.8 Emoji catalog | done (library) | wiring in progress (WP1.8b) |
+| WP2.1 Backend client | done | live smoke not run; `/api/me` and `/api/v1/models` findings open |
+| WP2.4a Agent loop spike | done | D2: native Go loop; owner checks tier `api` via `active-model` |
+| WP3.1 Extension API + runtime spike | done | D1: supervised child process; Go/Yaegi provisional |
+| WP4.1a Window geometry | done | 324/331 TS cases + 4,120 golden expectations from the TS engine |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 | WP2.1 Backend client | ready for review | `internal/backend`: fake-backed and recorded-contract tests green under `-race`; live smoke (`-tags livesmoke`) written, not run. `/api/me` is cookie-session only and `GET /api/v1/models` is not served by the backend source; both need backend confirmation before the live smoke can pass |
 
