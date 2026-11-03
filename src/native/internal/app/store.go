@@ -49,6 +49,8 @@ type Settings struct {
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
+	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
+	EmojiSkinTone int
 }
 
 type Quicklink struct {

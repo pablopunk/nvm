@@ -823,8 +823,8 @@
     "rows": [
       {
         "kind": "Calculator",
-        "title": "2+2 = 4  (0x4 · 0b100)",
-        "subtitle": "Copy result",
+        "title": "2+2 = 4",
+        "subtitle": "Copy result to clipboard",
         "section": "Top Hit",
         "id": "",
         "icon": "calculator",
@@ -836,6 +836,10 @@
         "actions": [
           {
             "title": "Copy Result",
+            "label": ""
+          },
+          {
+            "title": "Continue Calculation",
             "label": ""
           },
           {
@@ -851,8 +855,8 @@
     "rows": [
       {
         "kind": "Calculator",
-        "title": "12 km = 7.4564543 mi",
-        "subtitle": "Copy result",
+        "title": "12 km to mi = 7.4565 mi",
+        "subtitle": "Copy converted result to clipboard",
         "section": "Top Hit",
         "id": "",
         "icon": "calculator",
@@ -864,6 +868,14 @@
         "actions": [
           {
             "title": "Copy Result",
+            "label": ""
+          },
+          {
+            "title": "Continue Calculation",
+            "label": ""
+          },
+          {
+            "title": "Swap Units",
             "label": ""
           },
           {

@@ -284,7 +284,7 @@ func (p *App) clipItem(e ClipEntry) search.Item {
 		{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
 			h.Hide()
 			if e.Kind == "text" {
-				pasteText(e.Text)
+				p.pasteText(h, e.Text)
 			} else {
 				p.copyClip(e)
 			}
@@ -341,9 +341,20 @@ func (p *App) clipItem(e ClipEntry) search.Item {
 	return it
 }
 
-// pasteText copies text and sends Ctrl+V to whatever had focus before.
-func pasteText(text string) {
-	mygo.Clipboard.WriteText(text)
+// copyText puts text on the clipboard. A failure is shown as a toast.
+func (p *App) copyText(h search.Host, text string) {
+	if err := p.ports.Clipboard.WriteText(text); err != nil {
+		h.Toast("Copy failed: " + err.Error())
+	}
+}
+
+// pasteText copies text and sends Ctrl+V to whatever had focus before. A failed copy is shown as a toast and nothing
+// is pasted.
+func (p *App) pasteText(h search.Host, text string) {
+	if err := p.ports.Clipboard.WriteText(text); err != nil {
+		h.Toast("Paste failed: " + err.Error())
+		return
+	}
 	go func() {
 		time.Sleep(180 * time.Millisecond)
 		if path, err := exec.LookPath("xdotool"); err == nil {
