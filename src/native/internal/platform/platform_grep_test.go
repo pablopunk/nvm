@@ -29,6 +29,9 @@ var allowedImports = map[string]map[string]string{
 	"fixtures": {
 		"net/http": "the fake backend is an http.Handler; fixtures are test and dev data, never production code",
 	},
+	"design": {
+		"github.com/egoist/mygo/ui": "the golden harness renders views with ui.NewTester; it is test tooling that no production code imports",
+	},
 }
 
 // forbiddenImports are packages feature code must reach only through a port. Each entry also matches its
