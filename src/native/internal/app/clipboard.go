@@ -184,8 +184,11 @@ func (cs *ClipStore) preview(e ClipEntry) *ui.Bitmap {
 	return bm
 }
 
+// clock is the instant relative times are measured from. Golden tests replace it with a fixed one.
+var clock = time.Now
+
 func ago(t time.Time) string {
-	d := time.Since(t)
+	d := clock().Sub(t)
 	switch {
 	case d < time.Minute:
 		return "just now"

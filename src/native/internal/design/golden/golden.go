@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -36,6 +37,9 @@ type Options struct {
 	Threshold uint8
 	// Strict demands an exact match: zero tolerance and zero threshold. A one-pixel change fails.
 	Strict bool
+	// Advance moves the fake clock forward after the first frame, then renders again, so that a view that
+	// animates (a reply still fading in, a list scrolling to its end) is compared in its settled state.
+	Advance time.Duration
 }
 
 // outcome reports what check did besides passing or failing.
@@ -150,6 +154,10 @@ func render(view func(c *ui.Context), opts Options) *image.RGBA {
 	tt.SetScale(opts.Scale)
 	tt.SetDark(opts.Dark)
 	tt.Frame()
+	if opts.Advance > 0 {
+		tt.Advance(opts.Advance)
+		tt.Frame()
+	}
 	return tt.Image()
 }
 
