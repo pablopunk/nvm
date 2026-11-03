@@ -57,14 +57,15 @@ type Window struct {
 
 // Node is an element of a window's last frame, the parts of it the journeys match on.
 type Node struct {
-	ID          string   `json:"id"`
-	Role        string   `json:"role"`
-	Key         string   `json:"key"`
-	Label       string   `json:"label"`
-	Value       string   `json:"value"`
-	Placeholder string   `json:"placeholder"`
-	Description string   `json:"description"`
-	States      []string `json:"states"`
+	ID   string `json:"id"`
+	Role string `json:"role"`
+	// Key is the element's key as the app sends it: a string, or a number for list rows keyed by index.
+	Key         json.RawMessage `json:"key"`
+	Label       string          `json:"label"`
+	Value       string          `json:"value"`
+	Placeholder string          `json:"placeholder"`
+	Description string          `json:"description"`
+	States      []string        `json:"states"`
 }
 
 // Tree is the `tree` answer: the elements of one window.
