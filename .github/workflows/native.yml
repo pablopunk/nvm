@@ -1,0 +1,60 @@
+name: Native (Go)
+
+on:
+  pull_request:
+    paths:
+      - 'src/native/**'
+      - '.github/workflows/native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/native/**'
+      - '.github/workflows/native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go static checks and unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Go version comes from go.mod. MyGo builds on Linux with no apt packages:
+      # it reaches GTK and WebKit at runtime through purego, not through cgo headers.
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed for:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+
+      - name: Test with race detector
+        run: go test -race -count=1 ./...
+
+      - name: Vulnerability check
+        # Non-blocking until the first advisory baseline is triaged; then drop continue-on-error.
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
