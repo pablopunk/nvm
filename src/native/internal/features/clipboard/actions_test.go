@@ -101,11 +101,28 @@ func TestRestoreEmptyStateClearsClipboard(t *testing.T) {
 	}
 }
 
-// TestRestoreFilesIsRefusedBeforeWriting: a file list cannot be written yet, so the clipboard is left as it was.
-func TestRestoreFilesIsRefusedBeforeWriting(t *testing.T) {
+// plainClipboard hides the rich formats of a clipboard, as a platform without them does.
+type plainClipboard struct {
+	platform.Clipboard
+}
+
+// TestRestoreFilesWritesTheFileList: a saved file list is put back on a rich clipboard.
+func TestRestoreFilesWritesTheFileList(t *testing.T) {
 	h := newHarness(t)
+	if err := h.actions.RestoreState(ClipboardState{Files: []string{"/a", "/b"}}); err != nil {
+		t.Fatalf("RestoreState = %v", err)
+	}
+	if got, _ := h.clip.ReadFilePaths(); len(got) != 2 || got[0] != "/a" {
+		t.Fatalf("files = %v", got)
+	}
+}
+
+// TestRestoreFilesIsRefusedWithoutRichClipboard: without file support the clipboard is left as it was.
+func TestRestoreFilesIsRefusedWithoutRichClipboard(t *testing.T) {
+	h := newHarness(t)
+	plain := NewActions(plainClipboard{h.clip}, fake.NewPaster(), h.images, h.history, h.watcher)
 	mustWrite(t, h, "keep me")
-	if err := h.actions.RestoreState(ClipboardState{Files: []string{"/a"}, Text: "x"}); !errors.Is(err, platform.ErrUnsupported) {
+	if err := plain.RestoreState(ClipboardState{Files: []string{"/a"}, Text: "x"}); !errors.Is(err, platform.ErrUnsupported) {
 		t.Fatalf("RestoreState = %v, want ErrUnsupported", err)
 	}
 	if text, _ := h.clip.ReadText(); text != "keep me" {
@@ -223,12 +240,14 @@ func TestCopyImageWritesTheStoredPNG(t *testing.T) {
 	}
 }
 
-// TestCopyFilesIsUnsupportedUntilFileWrites: the file-list write is not in the port yet.
-func TestCopyFilesIsUnsupportedUntilFileWrites(t *testing.T) {
+// TestCopyFilesWritesThePathList: a files entry goes back on the clipboard as a file list.
+func TestCopyFilesWritesThePathList(t *testing.T) {
 	h := newHarness(t)
-	err := h.actions.Copy(Entry{ID: FilesID([]string{"/a"}), Kind: KindFiles, Paths: []string{"/a"}})
-	if !errors.Is(err, platform.ErrUnsupported) {
-		t.Fatalf("Copy(files) = %v, want ErrUnsupported", err)
+	if err := h.actions.Copy(Entry{ID: FilesID([]string{"/a"}), Kind: KindFiles, Paths: []string{"/a"}}); err != nil {
+		t.Fatalf("Copy(files) = %v", err)
+	}
+	if got, _ := h.clip.ReadFilePaths(); len(got) != 1 || got[0] != "/a" {
+		t.Fatalf("files = %v", got)
 	}
 }
 

@@ -106,6 +106,9 @@ func (h *History) Remember(e Entry) error {
 		}
 		if old, ok := h.byID[e.ID]; ok {
 			e.Pinned = e.Pinned || old.entry.Pinned
+			if e.LinkPreview == nil {
+				e.LinkPreview = old.entry.LinkPreview
+			}
 			h.dropLocked(map[*record]bool{old: true})
 		}
 		h.prependLocked(e)
@@ -195,6 +198,48 @@ func (h *History) MarkUsed(id string) (bool, error) {
 		return true
 	})
 	return found, err
+}
+
+// SetRetention replaces the retention policy and applies it at once. It returns how many entries it removed.
+func (h *History) SetRetention(policy Retention) (int, error) {
+	removed := 0
+	err := h.mutate(func(now time.Time) bool {
+		h.policy = policy.withDefaults()
+		removed = h.enforceLocked(now)
+		return removed > 0
+	})
+	return removed, err
+}
+
+// PreviewFor returns the link preview saved with the newest entry that has one for url.
+func (h *History) PreviewFor(url string) (LinkPreview, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, r := range h.order {
+		if r.entry.LinkPreview != nil && r.entry.LinkPreview.URL == url {
+			return *r.entry.LinkPreview, true
+		}
+	}
+	return LinkPreview{}, false
+}
+
+// SetPreview saves preview on every entry whose text is the single web address url, so the preview is shown
+// and not fetched again. Entries that are not that address are left alone.
+func (h *History) SetPreview(url string, preview LinkPreview) error {
+	return h.mutate(func(time.Time) bool {
+		changed := false
+		for _, r := range h.order {
+			if SingleWebURL(r.entry.Text) != url {
+				continue
+			}
+			h.refLocked(linkRef(r.entry), -1)
+			saved := preview
+			r.entry.LinkPreview = &saved
+			h.refLocked(linkRef(r.entry), +1)
+			changed = true
+		}
+		return changed
+	})
 }
 
 // Enforce applies retention now, for example after the clock moved, and returns how many entries went.
