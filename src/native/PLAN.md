@@ -56,6 +56,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.6 Store | done | prototype not migrated; lease takeover semantics await review |
 | WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
+| WP1.9 Notes and snippets | ready for review (Linux, L1-L2, L4 smokes) | `features/notes` and `features/snippets` on `internal/store`; 15 of 15 ported 1.x test cases; crash-recovery and two-instance tests; floating windows restored on displays that are connected; J09 and J10 smokes green in the rig on `:86`; real paste is not implemented (copy fallback); macOS and Windows not run |
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
 | WP1.1 Palette core | done | `internal/search` + `internal/palette`; root providers in `providers_wiring.go`; 52/60 frames strict-identical, 8 identical to base render |
 | WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
