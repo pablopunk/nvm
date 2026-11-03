@@ -16,6 +16,7 @@ func NewPorts() platform.Ports {
 		FS:           osFS{},
 		HTTP:         newHTTPClient(),
 		Clipboard:    newClipboard(clock),
+		Paster:       paster{},
 		Shell:        shell{},
 		Screens:      screens{},
 		Notifier:     notifier{},

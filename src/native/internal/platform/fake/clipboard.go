@@ -2,6 +2,7 @@ package fake
 
 import (
 	"bytes"
+	"slices"
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -17,9 +18,10 @@ const (
 	OpClipboardClear      = "Clear"
 )
 
-// Clipboard is an in-memory platform.Clipboard holding one text or one image, as the OS does: writing one
-// replaces the other. Every change sends one value on Changed without blocking; a change that finds the
-// channel full is coalesced with the pending one, as the port allows.
+// Clipboard is an in-memory platform.Clipboard holding one kind of content at a time, as the OS does:
+// writing text, an image, or files replaces what was there. Every change sends one value on Changed
+// without blocking; a change that finds the channel full is coalesced with the pending one, as the port
+// allows. It also implements platform.RichClipboard for HTML, RTF and file lists.
 //
 //	clip := fake.NewClipboard()
 //	clip.WriteConcealedText("hunter2") // a password manager's copy
@@ -28,12 +30,18 @@ type Clipboard struct {
 	mu        sync.Mutex
 	text      string
 	png       []byte
+	html      string
+	rtf       string
+	files     []string
 	concealed bool
 	changed   chan struct{}
 	faults    faultSet
 }
 
-var _ platform.Clipboard = (*Clipboard)(nil)
+var (
+	_ platform.Clipboard     = (*Clipboard)(nil)
+	_ platform.RichClipboard = (*Clipboard)(nil)
+)
 
 // NewClipboard returns an empty clipboard.
 func NewClipboard() *Clipboard {
@@ -51,6 +59,16 @@ func (c *Clipboard) WriteConcealedText(text string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.setTextLocked(text, true)
+}
+
+// WriteConcealedImagePNG puts an image on the clipboard marked as concealed.
+func (c *Clipboard) WriteConcealedImagePNG(png []byte) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clearLocked()
+	c.png = bytes.Clone(png)
+	c.concealed = true
+	c.notifyLocked()
 }
 
 // ReadText returns the plain text, or "" when the clipboard holds an image or nothing.
@@ -94,11 +112,49 @@ func (c *Clipboard) WriteImagePNG(png []byte) error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.text = ""
-	c.concealed = false
+	c.clearLocked()
 	c.png = bytes.Clone(png)
 	c.notifyLocked()
 	return nil
+}
+
+// ReadHTML returns the HTML markup, or "" when the clipboard holds none.
+func (c *Clipboard) ReadHTML() (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.html, nil
+}
+
+// ReadRTF returns the RTF markup, or "" when the clipboard holds none.
+func (c *Clipboard) ReadRTF() (string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.rtf, nil
+}
+
+// ReadFilePaths returns a copy of the file paths on the clipboard, or nil.
+func (c *Clipboard) ReadFilePaths() ([]string, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return slices.Clone(c.files), nil
+}
+
+// WriteRich replaces the clipboard with plain text and HTML markup.
+func (c *Clipboard) WriteRich(text, html string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.setTextLocked(text, false)
+	c.html = html
+	return nil
+}
+
+// SetFilePaths replaces the clipboard with a list of files, as a file manager copy does.
+func (c *Clipboard) SetFilePaths(paths ...string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clearLocked()
+	c.files = slices.Clone(paths)
+	c.notifyLocked()
 }
 
 // Formats lists the content kinds on the clipboard. Empty when the clipboard holds nothing.
@@ -112,8 +168,17 @@ func (c *Clipboard) Formats() ([]platform.ClipboardFormat, error) {
 	if c.text != "" {
 		formats = append(formats, platform.FormatText)
 	}
+	if c.html != "" {
+		formats = append(formats, platform.FormatHTML)
+	}
+	if c.rtf != "" {
+		formats = append(formats, platform.FormatRTF)
+	}
 	if c.png != nil {
 		formats = append(formats, platform.FormatPNG)
+	}
+	if len(c.files) > 0 {
+		formats = append(formats, platform.FormatFiles)
 	}
 	if c.concealed {
 		formats = append(formats, platform.FormatConcealed)
@@ -128,7 +193,7 @@ func (c *Clipboard) Clear() error {
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.text, c.png, c.concealed = "", nil, false
+	c.clearLocked()
 	c.notifyLocked()
 	return nil
 }
@@ -139,11 +204,16 @@ func (c *Clipboard) Changed() <-chan struct{} {
 	return c.changed
 }
 
+// clearLocked empties every format. The caller holds c.mu and notifies afterwards.
+func (c *Clipboard) clearLocked() {
+	c.text, c.png, c.html, c.rtf, c.files, c.concealed = "", nil, "", "", nil, false
+}
+
 // setTextLocked stores text and notifies. The caller holds c.mu.
 func (c *Clipboard) setTextLocked(text string, concealed bool) {
+	c.clearLocked()
 	c.text = text
 	c.concealed = concealed
-	c.png = nil
 	c.notifyLocked()
 }
 

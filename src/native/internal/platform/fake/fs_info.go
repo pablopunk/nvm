@@ -33,8 +33,8 @@ func (i fileInfo) Mode() fs.FileMode {
 	return i.node.mode.Perm()
 }
 
-// ModTime returns the zero time; the fake does not model modification times.
-func (i fileInfo) ModTime() time.Time { return time.Time{} }
+// ModTime returns the time set with SetModTime, or the zero time when none was set.
+func (i fileInfo) ModTime() time.Time { return i.node.mtime }
 
 // IsDir reports whether the node is a folder.
 func (i fileInfo) IsDir() bool { return i.node.dir }
