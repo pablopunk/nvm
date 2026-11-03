@@ -62,6 +62,8 @@ type Palette struct {
 	shownQuery string
 	// pushes counts the views pushed, so an action can tell whether it opened one.
 	pushes int
+	// announced is the selection assistive technology was last told about.
+	announced selection
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.

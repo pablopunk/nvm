@@ -102,6 +102,9 @@ func (p *Palette) listBody(c *ui.Context) {
 		p.chosen = 0
 	}
 	it := p.chosenItem()
+	if it != nil {
+		p.announceSelection(c, it)
+	}
 	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
 		k := design.Tokens(c)
 		quiet := *c.Theme()
@@ -125,6 +128,24 @@ func (p *Palette) listBody(c *ui.Context) {
 			})
 		}
 	})
+}
+
+// selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.
+type selection struct {
+	view   *View
+	query  string
+	chosen int
+}
+
+// announceSelection tells assistive technology the title of the chosen row whenever the choice moves, so a
+// keyboard user hears what is selected (PLAN.md J27). It announces only on a change.
+func (p *Palette) announceSelection(c *ui.Context, it *search.Item) {
+	now := selection{p.shownView, p.shownQuery, p.chosen}
+	if now == p.announced {
+		return
+	}
+	p.announced = now
+	c.Announce(it.Title)
 }
 
 // row draws result i. A section header goes above the first row of each run of one section.
