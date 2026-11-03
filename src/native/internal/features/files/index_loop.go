@@ -56,6 +56,8 @@ type indexLoop struct {
 	ticker   platform.Ticker
 	watches  map[string]context.CancelFunc
 	missing  []string
+	// degraded holds the folders whose watch overflowed; they are only reconciled.
+	degraded map[string]bool
 }
 
 // run is the index loop. It publishes every snapshot, so readers only ever see a complete one. It returns when ctx ends.
@@ -96,6 +98,12 @@ func (ix *Index) run(ctx context.Context) {
 
 // noteEvent records what an event names and arms the debounce window on the first one.
 func (l *indexLoop) noteEvent(ev platform.Event) {
+	if ev.Op == platform.EventOverflow {
+		l.markDegraded(ev.Path)
+		l.pending.full = true
+		l.armDebounce()
+		return
+	}
 	if ev.Op == platform.EventRename && ev.OldPath != "" {
 		l.pending.add(ev.OldPath)
 	}
@@ -103,6 +111,11 @@ func (l *indexLoop) noteEvent(ev platform.Event) {
 	if l.touchesMissingRoot(ev.Path) {
 		l.pending.full = true
 	}
+	l.armDebounce()
+}
+
+// armDebounce starts the debounce window when none is running.
+func (l *indexLoop) armDebounce() {
 	if l.debounce == nil {
 		l.debounce = l.ix.cfg.Clock.After(l.ix.cfg.Debounce)
 	}

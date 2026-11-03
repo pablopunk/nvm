@@ -3,18 +3,24 @@ package files
 import (
 	"context"
 	"path/filepath"
+	"slices"
 
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
+// maxWatchTargets caps the watches one index holds. Roots are few, so the cap is reached only by an index configured with
+// many roots; the folders past it are covered by the periodic reconcile alone.
+const maxWatchTargets = 32
+
 // syncWatches makes the set of watches match the roots: each existing root is watched, and a missing root is watched
 // through its closest existing ancestor, so the event that creates it arrives. Watches no longer wanted are cancelled.
+// A folder whose watch overflowed is not watched again: its changes come from the periodic reconcile.
 func (l *indexLoop) syncWatches() {
 	wanted := map[string]bool{}
 	for _, root := range l.ix.roots {
-		if target := l.watchTargetFor(root); target != "" {
+		if target := l.watchTargetFor(root); target != "" && !l.degraded[target] {
 			wanted[target] = true
 		}
 	}
@@ -24,11 +30,38 @@ func (l *indexLoop) syncWatches() {
 			delete(l.watches, target)
 		}
 	}
-	for target := range wanted {
-		if _, ok := l.watches[target]; !ok {
-			l.watch(target)
+	for _, target := range sortedKeys(wanted) {
+		if _, ok := l.watches[target]; ok {
+			continue
 		}
+		if len(l.watches) >= maxWatchTargets {
+			l.ix.log.Warn("files.watch.limit", logx.F{"maxTargets": maxWatchTargets})
+			return
+		}
+		l.watch(target)
 	}
+}
+
+// sortedKeys returns the keys of set in sorted order, so watches start in the same order every time.
+func sortedKeys(set map[string]bool) []string {
+	keys := make([]string, 0, len(set))
+	for key := range set {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
+// markDegraded records that the watch on target overflowed. The loop keeps the folder out of future watches, so the
+// reconcile scan is the only thing that refreshes it.
+func (l *indexLoop) markDegraded(target string) {
+	if l.degraded == nil {
+		l.degraded = map[string]bool{}
+	}
+	if !l.degraded[target] {
+		l.ix.log.Warn("files.watch.degraded", logx.F{"reason": "entry limit"})
+	}
+	l.degraded[target] = true
 }
 
 // watchTargetFor returns the folder to watch for a root: the root when it exists, otherwise its closest existing

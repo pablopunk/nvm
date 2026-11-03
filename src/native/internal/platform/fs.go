@@ -53,6 +53,9 @@ const (
 	EventWrite  EventOp = "write"
 	EventRemove EventOp = "remove"
 	EventRename EventOp = "rename"
+	// EventOverflow says the watch on Path lost changes it could not report (the OS queue overflowed or the watch
+	// hit its entry limit). The watch closes after it; the consumer must read the whole tree again.
+	EventOverflow EventOp = "overflow"
 )
 
 // Event is one change under a watched folder. OldPath is set for EventRename only.

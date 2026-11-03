@@ -2,6 +2,7 @@ package real
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 
 	"github.com/egoist/mygo"
@@ -12,10 +13,15 @@ import (
 // watchBuffer is how many events may wait for a consumer before the relay blocks on it.
 const watchBuffer = 64
 
+// watchEntryLimit caps the files and folders one watch enrolls: past it MyGo stops the watch with ErrWatchLimit, and
+// the relay reports an overflow so the index falls back to periodic reconciles for that folder. It is MyGo's own
+// default outside macOS, written out so the cap is visible here.
+const watchEntryLimit = 8192
+
 // startWatch watches the tree under name with MyGo and relays its batches as single events. The channel
 // closes when ctx is done or MyGo stops the watch (for example when the watched folder disappears).
 func startWatch(ctx context.Context, name string) (<-chan platform.Event, error) {
-	watcher, err := mygo.WatchFiles(ctx, name, mygo.FileWatchOptions{Recursive: true})
+	watcher, err := mygo.WatchFiles(ctx, name, mygo.FileWatchOptions{Recursive: true, MaxEntries: watchEntryLimit})
 	if err != nil {
 		return nil, err
 	}
@@ -24,13 +30,17 @@ func startWatch(ctx context.Context, name string) (<-chan platform.Event, error)
 	return events, nil
 }
 
-// relayWatchEvents forwards each change until the watch ends, then closes out and the watcher.
+// relayWatchEvents forwards each change until the watch ends, then closes out and the watcher. A watch that stopped
+// at its entry limit first reports an overflow for its folder, so the consumer knows changes were lost.
 func relayWatchEvents(ctx context.Context, watcher *mygo.FileWatcher, root string, out chan<- platform.Event) {
 	defer close(out)
 	defer func() { _ = watcher.Close() }()
 	for {
 		batch, err := watcher.Next(ctx)
 		if err != nil {
+			if errors.Is(err, mygo.ErrWatchLimit) {
+				relayOverflow(ctx, root, out)
+			}
 			return
 		}
 		for _, change := range batch {
@@ -65,4 +75,12 @@ func convertWatchChange(root string, change mygo.FileEvent) (platform.Event, boo
 		return platform.Event{}, false
 	}
 	return event, true
+}
+
+// relayOverflow tells the consumer that a watch lost changes for root, unless the watch was cancelled first.
+func relayOverflow(ctx context.Context, root string, out chan<- platform.Event) {
+	select {
+	case out <- platform.Event{Op: platform.EventOverflow, Path: root, IsDir: true}:
+	case <-ctx.Done():
+	}
 }
