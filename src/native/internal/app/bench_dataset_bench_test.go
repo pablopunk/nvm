@@ -80,7 +80,7 @@ func newBenchPalette(b *testing.B) *App {
 		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
 		snips: &SnippetStore{},
 		chats: &ChatStore{},
-		files: &FileIndex{paths: data.files, done: true},
+		files: newTestFiles(b, b.TempDir(), data.files),
 	}
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())

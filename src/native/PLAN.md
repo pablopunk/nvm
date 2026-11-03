@@ -61,6 +61,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
 | WP1.6 Clipboard engine | done (library) | wiring and real OS paste/concealed detection pending (WP1.6b) |
 | WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |
+| WP1.7b Files wiring | partial (Linux; L1, L2, box checks) | index at launch, root and Files view, previews, thumbnails, icons, drag-out (untested at runtime); open-with, Quick Look, folders, rig J07 not done; macOS/Windows watch unverified |
 | WP2.1 Backend client | done | live smoke not run; `/api/me` and `/api/v1/models` findings open |
 | WP2.4a Agent loop spike | done | D2: native Go loop; owner checks tier `api` via `active-model` |
 | WP3.1 Extension API + runtime spike | done | D1: supervised child process; Go/Yaegi provisional |

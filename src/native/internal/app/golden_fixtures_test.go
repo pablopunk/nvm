@@ -42,12 +42,11 @@ func goldenPalette(t *testing.T) *App {
 		snips: &SnippetStore{Items: goldenSnippets()},
 		notes: &NoteStore{Items: goldenNotes()},
 		chats: &ChatStore{Chats: goldenChats()},
-		files: &FileIndex{},
-		icons: map[string]*ui.Bitmap{},
+		files: newTestFiles(t, "/home/golden", nil),
 		apps:  goldenApps(),
 	}
 	for _, app := range p.apps {
-		p.icons[app.Path] = goldenBitmap(t, 56, 56, goldenAppColor(app.Name))
+		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
 	}
 	p.attachServices(fake.NewSet().Ports(), goldenConfig, time.UTC)
 	p.newPalette(searchClock, true)

@@ -28,12 +28,15 @@ func NewGroup(opts ...Option) *Group {
 func (g *Group) Go(name string, fn func(ctx context.Context) error) {
 	g.wg.Add(1)
 	taskOpts := append(append([]Option{}, g.opts...), WithContext(g.ctx))
-	go track(name, func() {
+	go func() {
+		// Done runs after track has uncounted the goroutine, so Wait returning means Watching().Live is settled.
 		defer g.wg.Done()
-		if err := Run(name, fn, taskOpts...); err != nil {
-			g.fail(err)
-		}
-	})
+		track(name, func() {
+			if err := Run(name, fn, taskOpts...); err != nil {
+				g.fail(err)
+			}
+		})
+	}()
 }
 
 // Wait blocks until every task has returned, releases the group's context and returns the first error.

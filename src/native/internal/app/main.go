@@ -35,7 +35,6 @@ type App struct {
 	panel *mygo.Window
 	S     *Settings
 
-	icons    map[string]*ui.Bitmap
 	md       markdown.Options
 	apps     []mygo.InstalledApp
 	exts     []loadedExt
@@ -45,7 +44,7 @@ type App struct {
 	clip     *ClipStore
 	snips    *SnippetStore
 	notes    *NoteStore
-	files    *FileIndex
+	files    *fileService
 	chats    *ChatStore
 	timer    *Timer
 	learn    *usage.Learner
@@ -77,6 +76,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		OnShow:      p.loadApps,
 		History:     p.history,
 		Learner:     p.learn,
+		DragRow:     dragFileRow,
 	})
 }
 
@@ -102,7 +102,6 @@ func (p *App) loadApps() {
 }
 
 func (p *App) ready() {
-	p.icons = map[string]*ui.Bitmap{}
 	p.S = loadSettings()
 	p.attachServices(real.NewPorts(), configDir(), nil)
 	p.closeStoreOnQuit()
@@ -111,7 +110,6 @@ func (p *App) ready() {
 	p.snips = newSnippetStore()
 	p.notes = newNoteStore()
 	p.chats = newChatStore()
-	p.files = &FileIndex{}
 	notices := p.openLearning()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)
@@ -136,12 +134,7 @@ func (p *App) ready() {
 	p.reloadExtensions()
 	p.setUpTray()
 	p.startClipboardWatcher()
-	go func() {
-		time.Sleep(2 * time.Second)
-		p.files.build()
-		paths, _ := p.files.snapshot()
-		log.Printf("indexed %d files", len(paths))
-	}()
+	p.startFiles()
 	log.Println("ready")
 }
 

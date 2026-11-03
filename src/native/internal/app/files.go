@@ -1,131 +1,197 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/search"
-	"io/fs"
-	"os"
+	"context"
 	"path/filepath"
-	"strings"
+	"strconv"
 	"sync"
+	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/pablopunk/nvm/native/internal/palette"
+
+	"github.com/pablopunk/nvm/native/internal/features/files"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
+	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
-// FileIndex is an in-memory list of file paths under $HOME, built in the background. Its paths are set once,
-// under mu, and never edited, so a provider may search the slice it read with snapshot.
-type FileIndex struct {
-	mu    sync.Mutex
-	paths []string
-	done  bool
+// Sizes of the file service's caches and pools. Icons and thumbnails are small pictures and may be many; previews
+// hold decoded pictures of up to 1024 pixels, so there are few of them.
+const (
+	fileIconEntries    = 400
+	fileThumbEntries   = 400
+	filePreviewEntries = 8
+	fileWorkers        = 2
+	fileQueue          = 256
+	fileProgressTick   = time.Second
+)
+
+// fileDeps are what the file service is built from. The composition root fills it with the real ports; tests fill it
+// with fakes.
+type fileDeps struct {
+	Ports      platform.Ports
+	Home       string
+	Roots      []string
+	Ignore     []string
+	IndexPath  string
+	ThumbDir   string
+	Clipboard  platform.Clipboard
+	CopyFiles  func(paths ...string) error
+	Redraw     func()
+	Background context.Context
+	Logger     *logx.Logger
 }
 
-// snapshot returns the indexed paths and whether the index is built yet.
-func (f *FileIndex) snapshot() ([]string, bool) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.paths, f.done
+// fileService is the Files feature of the app: the index of file names, the pictures the rows and the preview pane
+// draw, and the desktop actions on a file. The index is served from memory and read without locks; everything that
+// costs I/O or decoding runs on the caches' worker pools, so a view never waits for it.
+type fileService struct {
+	ix         *files.Index
+	fsys       platform.FS
+	shell      platform.Shell
+	clock      platform.Clock
+	clipboard  platform.Clipboard
+	copyFiles  func(paths ...string) error
+	home       string
+	thumbDir   string
+	thumbOnce  sync.Once
+	thumbCache *thumbs.Cache
+	thumbErr   error
+	icons      *asyncCache[*ui.Bitmap]
+	thumbs     *asyncCache[*ui.Bitmap]
+	previews   *asyncCache[*filePreview]
+	redraw     func()
+	ctx        context.Context
+	log        *logx.Logger
 }
 
-var skipDirs = map[string]bool{"node_modules": true, "target": true, "vendor": true, "__pycache__": true, "go": true, "venv": true, "dist": true, "build": true}
-
-func (f *FileIndex) build() {
-	home, _ := os.UserHomeDir()
-	var paths []string
-	_ = filepath.WalkDir(home, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		name := d.Name()
-		if path != home && strings.HasPrefix(name, ".") {
-			if d.IsDir() {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if d.IsDir() && skipDirs[name] {
-			return filepath.SkipDir
-		}
-		if rel, _ := filepath.Rel(home, path); strings.Count(rel, string(filepath.Separator)) > 6 {
-			return filepath.SkipDir
-		}
-		if len(paths) >= 60000 {
-			return filepath.SkipAll
-		}
-		if path != home {
-			paths = append(paths, path)
-		}
-		return nil
+// newFileService builds the service without starting anything. Start begins the index and the progress ticker.
+func newFileService(d fileDeps) (*fileService, error) {
+	ctx := d.Background
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	redraw := d.Redraw
+	if redraw == nil {
+		redraw = func() {}
+	}
+	logger := d.Logger
+	if logger == nil {
+		logger = logx.Default()
+	}
+	ix, err := files.New(files.Config{
+		Home:        d.Home,
+		Roots:       d.Roots,
+		Ignore:      d.Ignore,
+		FS:          d.Ports.FS,
+		Clock:       d.Ports.Clock,
+		Logger:      logger,
+		Persistence: indexPersistence(d),
+		OnChange:    redraw,
 	})
-	f.mu.Lock()
-	f.paths, f.done = paths, true
-	f.mu.Unlock()
-}
-
-func (f *FileIndex) search(q string, limit int) []string {
-	paths, _ := f.snapshot()
-	return searchPaths(paths, q, limit)
-}
-
-// searchPaths returns up to limit paths whose base name starts with q, then those that contain it.
-func searchPaths(paths []string, q string, limit int) []string {
-	lq := strings.ToLower(q)
-	var starts, contains []string
-	for _, p := range paths {
-		base := strings.ToLower(filepath.Base(p))
-		switch {
-		case strings.HasPrefix(base, lq):
-			starts = append(starts, p)
-		case strings.Contains(base, lq):
-			contains = append(contains, p)
-		}
-		if len(starts) >= limit {
-			break
-		}
+	if err != nil {
+		return nil, err
 	}
-	return append(starts, contains...)[:min(limit, len(starts)+len(contains))]
+	return &fileService{
+		ix:        ix,
+		fsys:      d.Ports.FS,
+		shell:     d.Ports.Shell,
+		clock:     d.Ports.Clock,
+		clipboard: d.Clipboard,
+		copyFiles: d.CopyFiles,
+		home:      d.Home,
+		thumbDir:  d.ThumbDir,
+		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
+		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
+		previews:  newAsyncCache[*filePreview](ctx, fileWorkers, fileQueue, filePreviewEntries, redraw),
+		redraw:    redraw,
+		ctx:       ctx,
+		log:       logger,
+	}, nil
 }
 
-func (p *App) fileItem(path string) search.Item {
-	home, _ := os.UserHomeDir()
-	dir := strings.Replace(filepath.Dir(path), home, "~", 1)
-	return search.Item{
-		ID: path, Title: filepath.Base(path), Subtitle: dir, IconPath: path,
-		Actions: []search.Action{
-			{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(path) }},
-			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(path) }},
-			{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(path); h.Hide() }},
-			{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
-				if err := mygo.Shell.TrashItem(path); err != nil {
-					h.Toast("Trash failed: " + err.Error())
-				} else {
-					h.Toast("Moved to Trash")
+// indexPersistence stores the snapshot at IndexPath through the file system port, with the atomic write and the size
+// cap of files.CappedFilePersistence. An empty path keeps the index in memory.
+func indexPersistence(d fileDeps) files.Persistence {
+	if d.IndexPath == "" {
+		return nil
+	}
+	return files.CappedFilePersistence{FS: d.Ports.FS, Path: d.IndexPath}
+}
+
+// thumbnails returns the thumbnail cache, opening its folder on first use. The folder scan happens on a worker, never in
+// the start-up path.
+func (s *fileService) thumbnails() (*thumbs.Cache, error) {
+	s.thumbOnce.Do(func() {
+		s.thumbCache, s.thumbErr = thumbs.Open(s.fsys, s.thumbDir, 0)
+	})
+	return s.thumbCache, s.thumbErr
+}
+
+// start begins loading the persisted index and scanning the roots. It returns at once: the index runs on its own
+// goroutine, and the palette is usable before the first scan ends (B3).
+func (s *fileService) start() {
+	if err := s.ix.Start(s.ctx); err != nil {
+		s.log.Warn("files.start-failed", logx.F{"reason": err.Error()})
+		return
+	}
+	safego.Go("files.progress", func(ctx context.Context) {
+		ticks := s.clock.NewTicker(fileProgressTick)
+		defer ticks.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticks.C():
+				if st := s.ix.Status(); st.Scanning || !st.Ready {
+					s.redraw()
 				}
-			}},
-		},
+			}
+		}
+	}, safego.WithContext(s.ctx))
+}
+
+// stop closes the index, which saves the latest snapshot. The app calls it when it quits.
+func (s *fileService) stop() {
+	_ = s.ix.Close()
+}
+
+// statusLabel describes the index in the words of the Files view footer.
+func (s *fileService) statusLabel() string {
+	st := s.ix.Status()
+	switch {
+	case !st.Ready:
+		return "Indexing…"
+	case st.Scanning:
+		return "Indexing… " + strconv.Itoa(int(st.ScannedFiles)) + " files"
+	default:
+		return strconv.Itoa(st.Entries) + " files indexed"
 	}
 }
 
-func (p *App) filesView() *palette.View {
-	return &palette.View{
-		Title: "Search Files", Placeholder: "Search Files", EmptyTitle: "No files found.", EmptySub: "Type a file name.",
-		Status: func() string {
-			if _, done := p.files.snapshot(); !done {
-				return "Indexing…"
-			}
-			paths, _ := p.files.snapshot()
-			return itoa(len(paths)) + " files indexed"
-		},
-		Search: func(q string) []search.Item {
-			if len(q) < 1 {
-				return nil
-			}
-			var out []search.Item
-			for _, path := range p.files.search(q, 40) {
-				out = append(out, p.fileItem(path))
-			}
-			return out
-		},
+// emptyTitle is the empty state of the Files view: while the first index is still loading, it says so instead of
+// claiming there are no files.
+func (s *fileService) emptyTitle() string {
+	if !s.ix.Status().Ready {
+		return "Indexing…"
 	}
+	return "No files found."
+}
+
+// systemIconKey names the icon a path shares with others: files of one extension share an icon, while folders,
+// application bundles and desktop entries have their own.
+func systemIconKey(path string) string {
+	ext := filepath.Ext(path)
+	switch ext {
+	case "", ".app", ".desktop":
+		return "path:" + path
+	default:
+		return "ext:" + ext
+	}
+}
+
+// isPictureName reports whether a name is an image the thumbnail pipeline may render.
+func isPictureName(path string) bool {
+	return files.KindOf(path) == files.KindImage
 }

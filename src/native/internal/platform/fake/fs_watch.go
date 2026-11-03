@@ -59,3 +59,28 @@ func isUnder(key, root string) bool {
 	}
 	return key == root || strings.HasPrefix(key, root+"/")
 }
+
+// OverflowWatches simulates the OS reporting that the watches under name lost changes: each one first receives an
+// EventOverflow naming its folder, then its channel closes while its context is still live, as the real port does
+// when a watch hits its entry limit.
+func (f *FS) OverflowWatches(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := cleanKey(name)
+	kept := f.watchers[:0]
+	for _, w := range f.watchers {
+		if !isUnder(key, w.prefix) && !isUnder(w.prefix, key) {
+			kept = append(kept, w)
+			continue
+		}
+		if !w.closed {
+			w.closed = true
+			select {
+			case w.out <- platform.Event{Op: platform.EventOverflow, Path: w.prefix}:
+			default:
+			}
+			close(w.out)
+		}
+	}
+	f.watchers = kept
+}

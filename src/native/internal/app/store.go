@@ -51,6 +51,10 @@ type Settings struct {
 	LoginAtOpen bool
 	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
 	EmojiSkinTone int
+	// FileRoots are the folders the Files index covers; empty means the standard personal folders.
+	FileRoots []string
+	// FileIgnore adds ignore patterns to the Files index, on top of the defaults.
+	FileIgnore []string
 }
 
 type Quicklink struct {
