@@ -22,6 +22,19 @@ func FitFrame(saved Frame, displays []platform.Display) Frame {
 	}
 }
 
+// DefaultFrame places a note window that has no remembered frame: centered across the work area, a third of the
+// way down, as the palette opens. The default size is the 1.x floating window's, shrunk when the area is smaller.
+func DefaultFrame(area platform.Rect) Frame {
+	width := min(defaultWidth, area.Width)
+	height := min(defaultHeight, area.Height)
+	return Frame{
+		X:      area.X + (area.Width-width)/2,
+		Y:      area.Y + (area.Height-height)/3,
+		Width:  width,
+		Height: height,
+	}
+}
+
 // nearestDisplay returns the display that contains p, or the one whose bounds are nearest to it. Ties keep the
 // order of the displays.
 func nearestDisplay(p platform.Point, displays []platform.Display) platform.Display {

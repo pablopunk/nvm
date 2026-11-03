@@ -80,3 +80,11 @@ func TestFitFrameUsesTheNearestDisplayWhenCenterIsOffEveryDisplay(t *testing.T) 
 		t.Fatalf("FitFrame = %+v, want %+v", got, want)
 	}
 }
+
+// A new floating note is centered across its work area, a third of the way down, and shrinks in a small one.
+func TestDefaultFrameCentersANewNote(t *testing.T) {
+	area := platform.Rect{X: 100, Y: 0, Width: 1920, Height: 1080}
+	mustEqual(t, "centered", DefaultFrame(area), Frame{X: 100 + (1920-640)/2, Y: (1080 - 460) / 3, Width: 640, Height: 460})
+	small := platform.Rect{Width: 500, Height: 300}
+	mustEqual(t, "shrunk", DefaultFrame(small), Frame{X: 0, Y: 0, Width: 500, Height: 300})
+}

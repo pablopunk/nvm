@@ -12,6 +12,12 @@ const (
 	MaxTextBytes = 524_288
 )
 
+// The size of a floating note window when it has no remembered frame: the 1.x floating window's size.
+const (
+	defaultWidth  = 640
+	defaultHeight = 460
+)
+
 // AutosaveDelay is how long the editor waits after the last keystroke before it saves the note.
 const AutosaveDelay = 400 * time.Millisecond
 
