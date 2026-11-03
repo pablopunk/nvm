@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 )
@@ -36,6 +37,12 @@ type Options struct {
 	Threshold uint8
 	// Strict demands an exact match: zero tolerance and zero threshold. A one-pixel change fails.
 	Strict bool
+	// Advance moves the fake clock forward after the first frame, then renders again, so that a view that
+	// animates (a reply still fading in, a list scrolling to its end) is compared in its settled state.
+	Advance time.Duration
+	// Interact drives the view after it settles, then renders again: it moves the pointer to a hover, sets
+	// the window's vibrancy, or moves the focus. The frame it renders is compared like any other.
+	Interact func(tt *ui.Tester)
 }
 
 // outcome reports what check did besides passing or failing.
@@ -111,7 +118,10 @@ func check(name string, view func(c *ui.Context), opts Options, testName string)
 	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
 		return outcome{}, fmt.Errorf("golden name %q must be a plain file name", name)
 	}
-	actual := render(view, opts)
+	actual, err := storedFrame(render(view, opts))
+	if err != nil {
+		return outcome{}, err
+	}
 	path := goldenPath(opts, name)
 	if *update {
 		if err := writePNG(path, actual); err != nil {
@@ -150,6 +160,14 @@ func render(view func(c *ui.Context), opts Options) *image.RGBA {
 	tt.SetScale(opts.Scale)
 	tt.SetDark(opts.Dark)
 	tt.Frame()
+	if opts.Advance > 0 {
+		tt.Advance(opts.Advance)
+		tt.Frame()
+	}
+	if opts.Interact != nil {
+		opts.Interact(tt)
+		tt.Frame()
+	}
 	return tt.Image()
 }
 

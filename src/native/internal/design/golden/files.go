@@ -1,6 +1,7 @@
 package golden
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"image"
@@ -66,10 +67,29 @@ func readPNG(path string) (*image.RGBA, error) {
 	if err != nil {
 		return nil, fmt.Errorf("decode golden %s: %w", path, err)
 	}
-	bounds := decoded.Bounds()
+	return toRGBA(decoded), nil
+}
+
+func toRGBA(img image.Image) *image.RGBA {
+	bounds := img.Bounds()
 	rgba := image.NewRGBA(bounds)
-	draw.Draw(rgba, bounds, decoded, bounds.Min, draw.Src)
-	return rgba, nil
+	draw.Draw(rgba, bounds, img, bounds.Min, draw.Src)
+	return rgba
+}
+
+// storedFrame returns a render as it reads back from its PNG. A PNG keeps translucent pixels un-premultiplied,
+// so a render compared raw with a golden differs from it by rounding wherever a pixel is translucent. Comparing
+// both in the stored form keeps a strict comparison exact.
+func storedFrame(img *image.RGBA) (*image.RGBA, error) {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return nil, fmt.Errorf("encode frame: %w", err)
+	}
+	decoded, err := png.Decode(&buf)
+	if err != nil {
+		return nil, fmt.Errorf("decode frame: %w", err)
+	}
+	return toRGBA(decoded), nil
 }
 
 func writePNG(path string, img *image.RGBA) error {

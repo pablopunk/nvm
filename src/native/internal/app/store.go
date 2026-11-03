@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 )
 
-func configDir() string {
+// configDir is the directory of the app's own files. Golden tests swap it for a fixed path.
+var configDir = defaultConfigDir
+
+func defaultConfigDir() string {
 	home, _ := os.UserHomeDir()
 	d := filepath.Join(home, ".config", "nvm-native")
 	_ = os.MkdirAll(d, 0o755)
