@@ -28,7 +28,6 @@ var benchQueries = []string{"cl", "clip", "show the time"}
 var (
 	benchItems []search.Item
 	benchPaths []string
-	benchSink  int
 )
 
 // benchDataSet is generated once per test binary and shared read-only by the benchmarks.
