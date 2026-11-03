@@ -9,11 +9,8 @@ import {
   clipboardItemSubtitle,
   clipboardItemTitle,
 } from './clipboard-utils';
-import {
-  createLinkPreviewService,
-  fetchHtmlHead,
-  singleWebUrl,
-} from './link-preview';
+import { createLinkPreviewService, singleWebUrl } from './link-preview';
+import { createLinkPreviewFetchers } from './link-preview-fetchers';
 
 export type ClipboardHistoryDeps = {
   // ── State ──────────────────────────────────────────────
@@ -25,6 +22,7 @@ export type ClipboardHistoryDeps = {
   // ── Electron clipboard ─────────────────────────────────
   clipboard: ClipboardApi;
   nativeImage: {
+    createFromBuffer: (buffer: Buffer) => Electron.NativeImage;
     createFromDataURL: (dataUrl: string) => Electron.NativeImage;
     createFromPath: (path: string) => Electron.NativeImage;
     createEmpty: () => Electron.NativeImage;
@@ -61,11 +59,6 @@ export type ClipboardHistoryDeps = {
   sendToRenderer: (channel: string, ...args: unknown[]) => void;
   patchOpenView: (viewId: string, patch: Record<string, unknown>) => void;
   pasteIntoFrontmostApp: (expectedAppId?: string) => MaybePromise<void>;
-
-  // ── Link previews ──────────────────────────────────────
-  fetchHtml?: (
-    url: string,
-  ) => Promise<{ html: string; finalUrl: string } | null>;
 
   // ── Settings ───────────────────────────────────────────
   getSetting: (id: string) => unknown;
@@ -105,7 +98,7 @@ export type ClipboardHistoryDeps = {
 export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   let watcherLastId = '';
   const linkPreviews = createLinkPreviewService({
-    fetchHtml: async (url) => await (deps.fetchHtml ?? fetchHtmlHead)(url),
+    ...createLinkPreviewFetchers(deps),
     onSettled: patchHistoryItemsForUrl,
   });
 

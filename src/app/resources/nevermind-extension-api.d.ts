@@ -748,7 +748,7 @@ export type ExtensionDetailLink = {
   title?: string;
   description?: string;
   siteName?: string;
-  /** Absolute http(s) image URL, usually the page's `og:image`. */
+  /** Image URL or data URL for the card. Hosts that fetch page metadata inline the image as a data URL instead of letting the palette contact the page's origin. */
   image?: string;
 };
 export type ExtensionDetail = {
