@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "data": {
+    "title": "v1 title",
+    "count": 2,
+    "items": ["one"]
+  }
+}
