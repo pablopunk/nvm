@@ -60,7 +60,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP1.1 Palette core | done | `internal/search` + `internal/palette`; root providers in `providers_wiring.go`; 52/60 frames strict-identical, 8 identical to base render |
 | WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
 | WP1.5 Calculator library | done (library) | wiring in progress (WP1.5b) |
-| WP1.6 Clipboard engine | done (library) | wiring and real OS paste/concealed detection pending (WP1.6b) |
+| WP1.6 Clipboard engine | WP1.6b wired; ready for review | engine in the app (store-backed history, watcher, paste, link previews); Linux X11 paste and concealed hint built; macOS paste and markers untested; Windows paste unsupported; J06 and the picture and link tests added; rig re-run pending the box |
 | WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |
 | WP1.8 Emoji catalog | done (library) | wiring in progress (WP1.8b) |
 | WP2.1 Backend client | done | live smoke not run; `/api/me` and `/api/v1/models` findings open |

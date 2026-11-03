@@ -133,7 +133,6 @@ Documented, not hidden. Each item is a place where the code does not yet meet th
 Numeric style literals left in `internal/app` (the color lint passes; these are geometry):
 
 - `ai.go`: 115, 117, 125, 130, 135 (paddings, gaps, sizes)
-- `clipboard.go`: 318, 328 (font sizes)
 - `emoji.go`: 95, 101, 102 (paddings, cell size, radius, glyph size)
 - `forms.go`: 48, 128, 188, 216, 249 (paddings, gaps, font sizes)
 - `palette.go`: 154, 218, 225, 234, 235 (paddings, radius, border, width)
