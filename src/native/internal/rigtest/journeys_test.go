@@ -4,6 +4,7 @@ package rigtest
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -112,6 +113,43 @@ func TestJourneyJ02SearchAndOpenClipboardHistory(t *testing.T) {
 // TestJourneyJ05ClipboardTextAppearsInHistory is the J05 smoke: text set on the clipboard with
 // xclip shows up in Clipboard History. The paste into the frontmost app, pinning, deleting and the
 // restart durability of J05 are not covered yet.
+// concealedSettle is how long J06 waits after a concealed copy, so the watcher (which polls about once a second
+// while the clipboard is idle) has seen it before the next copy replaces it. This is the one wait in the rig
+// journeys, because the rig has no event that says the watcher has polled.
+const concealedSettle = 2 * time.Second
+
+// TestJourneyJ06ConcealedCopyNeverAppearsInHistory copies a password the way a password manager does (the KDE
+// concealed hint on X11) and checks that Clipboard History never shows it: the view is opened, searched for the
+// text, and shows its empty state. The app log must not hold the text either. A normal copy made afterwards does
+// appear, so the empty state is not a broken history. Smoke version of PLAN.md J06: the file on disk and the
+// toasts are not inspected here.
+func TestJourneyJ06ConcealedCopyNeverAppearsInHistory(t *testing.T) {
+	app := Launch(t, Options{})
+	const secret = "canary-secret-123"
+	must(t, app.ClipboardSetConcealed(secret))
+	time.Sleep(concealedSettle)
+	nonce := fmt.Sprintf("rig-clip-%d", time.Now().UnixNano())
+	must(t, app.ClipboardSet(nonce))
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("clipboard"))
+	_, err := app.WaitFor("Clipboard History", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	must(t, app.Type("canary"))
+	_, err = app.WaitFor("No clipboard items found.", elementWait)
+	must(t, err)
+	shoot(t, app, "j06-1-concealed-absent")
+	if strings.Contains(app.Log(), secret) {
+		t.Fatal("the app log holds the concealed text")
+	}
+
+	must(t, app.Key("Escape"))
+	_, err = app.WaitFor(nonce, clipWait)
+	must(t, err)
+	shoot(t, app, "j06-2-normal-copy-present")
+}
+
 func TestJourneyJ05ClipboardTextAppearsInHistory(t *testing.T) {
 	app := Launch(t, Options{})
 	nonce := fmt.Sprintf("rig-clip-%d", time.Now().UnixNano())
