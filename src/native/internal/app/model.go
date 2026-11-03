@@ -11,7 +11,12 @@ type View struct {
 	Title       string
 	TitleFn     func() string
 	Placeholder string
-	Search      func(q string) []search.Item
+	// Search answers a query on the UI thread; it serves the sub-views, which read live state.
+	Search func(q string) []search.Item
+	// Providers answers a query off the UI thread through the view's coordinator. It is called on the UI
+	// thread at the start of each query, to capture what the providers read. It replaces Search.
+	Providers func() []search.Provider
+	coord     *search.Coordinator
 	// Body replaces the result list (chat, editor, emoji grid, forms).
 	Body func(c *ui.Context, p *Palette)
 	// OnSubmit receives the input text when Enter is pressed in a Body view.

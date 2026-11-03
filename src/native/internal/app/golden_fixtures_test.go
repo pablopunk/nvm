@@ -29,6 +29,7 @@ func goldenPalette(t *testing.T) *Palette {
 	t.Setenv("HOME", t.TempDir())
 	swapForGolden(t)
 	p := &Palette{
+		syncSearch: true,
 		S: &Settings{
 			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
 			Usage:    map[string]int{"org.mozilla.firefox": 3, "org.gnome.Terminal.desktop": 1},

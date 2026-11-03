@@ -46,7 +46,8 @@ func (p *Palette) ready() {
 	go func() {
 		time.Sleep(2 * time.Second)
 		p.files.build()
-		log.Printf("indexed %d files", len(p.files.paths))
+		paths, _ := p.files.snapshot()
+		log.Printf("indexed %d files", len(paths))
 	}()
 	log.Println("ready")
 }

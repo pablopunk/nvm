@@ -97,9 +97,13 @@ func fixtureExtensionSearch(q string) []ExtItem {
 	}
 }
 
-// rootResultsForTable is the root search the table exercises. Stage B routes it through the coordinator.
+// rootResultsForTable is the root search the table exercises: a fresh root view, searched synchronously the way
+// the palette searches it.
 func rootResultsForTable(p *Palette, q string) []search.Item {
-	return p.rootSearch(q)
+	p.stack = []*View{p.rootView()}
+	p.query = q
+	p.search()
+	return p.results
 }
 
 // rootTableRows runs the root search for q and reduces each row to its comparable part. Home-relative

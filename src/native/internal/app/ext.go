@@ -82,9 +82,21 @@ func extensionsDir() string {
 	return d
 }
 
+// loadedExt is an extension as loaded from disk. Its functions run on the search goroutines and the tray
+// timers, and the interpreter behind them is not safe for concurrent use, so mu serializes every call.
 type loadedExt struct {
 	Extension
 	File string
+	mu   *sync.Mutex
+}
+
+// guarded runs fn under the extension's lock.
+func (e *loadedExt) guarded(fn func()) {
+	if e.mu != nil {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+	}
+	fn()
 }
 
 func loadExtensions(dir string) []loadedExt {
@@ -101,7 +113,7 @@ func loadExtensions(dir string) []loadedExt {
 			continue
 		}
 		log.Printf("extension loaded: %s (%s)", ext.ID, filepath.Base(f))
-		out = append(out, loadedExt{ext, f})
+		out = append(out, loadedExt{Extension: ext, File: f, mu: &sync.Mutex{}})
 	}
 	return out
 }
@@ -136,7 +148,8 @@ func evalExtension(src string) (ext Extension, err error) {
 	return e, nil
 }
 
-func safeSearch(e Extension, q string) (out []ExtItem) {
+// safeSearch runs the extension's Search for q. A panic is logged and yields no rows.
+func safeSearch(e *loadedExt, q string) (out []ExtItem) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("extension %s search: %v", e.ID, r)
@@ -145,7 +158,8 @@ func safeSearch(e Extension, q string) (out []ExtItem) {
 	if e.Search == nil {
 		return nil
 	}
-	return e.Search(q)
+	e.guarded(func() { out = e.Search(q) })
+	return out
 }
 
 func (p *Palette) reloadExtensions() {
@@ -179,7 +193,9 @@ func (p *Palette) setUpExtensionTrays() {
 					log.Printf("extension %s menubar: %v", e.ID, r)
 				}
 			}()
-			title, rows := e.MenuBar()
+			var title string
+			var rows []MenuRow
+			e.guarded(func() { title, rows = e.MenuBar() })
 			tray.SetTitle(title)
 			var items []*mygo.MenuItem
 			for _, r := range rows {

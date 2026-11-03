@@ -1,8 +1,6 @@
 package app
 
 import (
-	"cmp"
-	"fmt"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"net/url"
 	"os"
@@ -11,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 )
 
 type engine struct{ Key, Name, URL string }
@@ -55,7 +52,8 @@ type command struct {
 	Hidden                                bool
 }
 
-func (p *Palette) commands() []command {
+// commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
+func (p *Palette) commands(timerOn bool) []command {
 	home, _ := os.UserHomeDir()
 	place := func(name string) command {
 		dir := filepath.Join(home, name)
@@ -92,7 +90,7 @@ func (p *Palette) commands() []command {
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
 	}
-	if p.timer != nil {
+	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
 	tones := map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
@@ -106,159 +104,9 @@ func (p *Palette) commands() []command {
 	return cmds
 }
 
-type scored struct {
-	it    search.Item
-	score int
-}
-
-func (p *Palette) rootSearch(q string) []search.Item {
-	lq := strings.ToLower(q)
-	var out []scored
-	push := func(s int, it search.Item) { out = append(out, scored{it, s}) }
-
-	calcShown := false
-	if disp, cp, ok := calcResult(q); ok {
-		calcShown = true
-		push(1000, search.Item{Kind: "Calculator", Title: disp, Subtitle: "Copy result", Icon: "calculator", Tone: "orange", Actions: []search.Action{
-			{Title: "Copy Result", Run: func(h search.Host) { mygo.Clipboard.WriteText(cp); h.Hide() }},
-			{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); pasteText(cp) }},
-		}})
-	}
-	if d, ok := parseTimer(q); ok && d > 0 {
-		push(990, search.Item{Kind: "Timer", Title: "Start timer: " + d.String(), Subtitle: "Shows a countdown in the tray", Icon: "timer", Tone: "orange", Actions: []search.Action{{Title: "Start", Run: func(h search.Host) { p.startTimer(d); h.Hide() }}}})
-	}
-	if kw, rest, ok := strings.Cut(q, " "); ok && strings.TrimSpace(rest) != "" {
-		for _, ql := range append(slices.Clone(p.S.Quicklinks), builtinLinks...) {
-			if strings.EqualFold(kw, ql.Keyword) {
-				push(980, search.Item{Kind: "Quicklinks", Title: fmt.Sprintf("Search %s for “%s”", ql.Name, strings.TrimSpace(rest)), Subtitle: "Quicklink", Icon: "link", Tone: "blue",
-					Actions: []search.Action{{Title: "Open", Run: openURL(ql.URL, strings.TrimSpace(rest))}}})
-			}
-		}
-	}
-	for _, sn := range p.snips.Items {
-		if sn.Keyword != "" && lq != "" && strings.HasPrefix(strings.ToLower(sn.Keyword), lq) {
-			it := p.snippetItem(sn)
-			it.Kind = "Snippets"
-			push(970, it)
-		}
-	}
-	for _, e := range p.exts {
-		if p.S.Disabled[e.ID] {
-			continue
-		}
-		for _, x := range safeSearch(e.Extension, q) {
-			x := x
-			act := search.Action{Title: "Copy", Run: func(h search.Host) { mygo.Clipboard.WriteText(x.Value); h.Hide() }}
-			if x.URL != "" {
-				act = search.Action{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(x.URL) }}
-			}
-			push(960, search.Item{Kind: e.Title, Title: x.Title, Subtitle: x.Subtitle, Icon: "puzzle", Tone: "purple", Actions: []search.Action{act}})
-		}
-	}
-	// commands: ranked by title (and, below, by keywords)
-	for _, cmd := range p.commands() {
-		cmd := cmd
-		it := search.Item{Kind: "Commands", Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []search.Action{{Title: "Open", Run: cmd.Run}}}
-		if lq == "" {
-			if !cmd.Hidden {
-				push(100-cmd.Order, it)
-			}
-			continue
-		}
-		s := search.Score(cmd.Title, lq)
-		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
-			s = 45
-		}
-		if s > 0 {
-			push(s+boost(p, "cmd:"+cmd.Title), it)
-		}
-	}
-	for _, a := range p.apps {
-		a := a
-		s := 0
-		if lq == "" {
-			if p.S.Usage[a.ID] == 0 {
-				continue
-			}
-			s = 60
-		} else if s = search.Score(a.Name, lq); s == 0 {
-			continue
-		}
-		push(s+min(p.S.Usage[a.ID], 9), search.Item{Kind: "Applications", Title: a.Name, IconPath: a.Path, Actions: []search.Action{
-			{Title: "Open Application", Run: func(h search.Host) {
-				h.Hide()
-				p.S.Usage[a.ID]++
-				p.S.save()
-				if err := mygo.Shell.LaunchApp(a); err != nil {
-					h.Toast(err.Error())
-				}
-			}},
-			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(a.Path) }},
-		}})
-	}
-	if len(lq) >= 2 && p.files.done {
-		for i, path := range p.files.search(q, 4) {
-			fi := p.fileItem(path)
-			fi.Kind = "Files"
-			push(75-i, fi)
-		}
-	}
-	if len(lq) >= 3 {
-		n := 0
-		for _, e := range p.clip.Entries {
-			if e.Kind == "text" && strings.Contains(strings.ToLower(e.Text), lq) && n < 2 {
-				ci := p.clipItem(e)
-				ci.Kind = "Clipboard"
-				push(55-n, ci)
-				n++
-			}
-		}
-	}
-	// recent AI conversations
-	nchat := 0
-	for _, ch := range p.chats.Chats {
-		if ch.Builder || ch.Title == "" || nchat >= 4 {
-			continue
-		}
-		ch := ch
-		s := 30
-		if lq != "" {
-			if s = search.Score(ch.Title, lq); s == 0 {
-				continue
-			}
-		}
-		nchat++
-		push(s, search.Item{Kind: "Conversations", Title: "Continue conversation: " + oneLine(ch.Title), Subtitle: "AI conversation", Icon: "message-circle", Tone: "yellow", TintTitle: true,
-			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(ch)) }}}})
-	}
-	// URL, then the query fallbacks (web search + Automate)
-	if q != "" {
-		if u := search.URLFromQuery(q); u != "" {
-			push(100+50, search.Item{Kind: "Web", Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue",
-				Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}})
-		} else if !calcShown {
-			eng := p.engine()
-			push(40, search.Item{Kind: "Search", Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true,
-				Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}})
-			push(10+boost(p, "web:"+q), search.Item{Kind: "Search", Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue",
-				Actions: []search.Action{{Title: "Search the Web", Run: openURL(eng.URL, q)}}})
-		}
-	}
-	slices.SortStableFunc(out, func(a, b scored) int { return cmp.Compare(b.score, a.score) })
-	items := make([]search.Item, 0, len(out))
-	for _, s := range out {
-		items = append(items, s.it)
-		if len(items) >= 40 {
-			break
-		}
-	}
-	return sectioned(items, q != "")
-}
-
-func boost(p *Palette, key string) int { return min(p.S.Usage[key], 8) }
-
+// rootView is the palette's first level: the providers of every source, merged by the coordinator.
 func (p *Palette) rootView() *View {
-	return &View{Title: "Nevermind", Search: p.rootSearch, Hint: "esc Close"}
+	return &View{Title: "Nevermind", Providers: p.rootProviders, Hint: "esc Close"}
 }
 
 // ---- settings ----
@@ -352,41 +200,4 @@ func setAutostart(on bool) {
 	exe, _ := os.Executable()
 	_ = os.MkdirAll(filepath.Dir(autostartPath()), 0o755)
 	_ = os.WriteFile(autostartPath(), []byte("[Desktop Entry]\nType=Application\nName=Nevermind\nExec="+exe+"\nX-GNOME-Autostart-enabled=true\n"), 0o644)
-}
-
-var sectionOrder = []string{"Calculator", "Timer", "Quicklinks", "Snippets", "Commands", "Applications", "Files", "Clipboard", "Conversations", "Web", "Search"}
-
-func sectionRank(kind string) int {
-	if i := slices.Index(sectionOrder, kind); i >= 0 {
-		return i
-	}
-	return 4 // extensions sit with commands
-}
-
-// sectioned labels runs of results like Spotlight: a "Top Hit", then groups by kind.
-func sectioned(items []search.Item, searching bool) []search.Item {
-	if len(items) == 0 {
-		return items
-	}
-	var top []search.Item
-	rest := items
-	if searching {
-		top, rest = items[:1], slices.Clone(items[1:])
-	} else {
-		rest = slices.Clone(items)
-	}
-	slices.SortStableFunc(rest, func(a, b search.Item) int { return cmp.Compare(sectionRank(a.Kind), sectionRank(b.Kind)) })
-	out := make([]search.Item, 0, len(items))
-	for _, it := range top {
-		it.Section = "Top Hit"
-		out = append(out, it)
-	}
-	for _, it := range rest {
-		it.Section = it.Kind
-		if !searching && it.Kind == "Commands" {
-			it.Section = "Suggestions"
-		}
-		out = append(out, it)
-	}
-	return out
 }

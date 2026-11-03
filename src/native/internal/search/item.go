@@ -44,4 +44,7 @@ type Item struct {
 	Actions   []Action
 	Detail    func(c *ui.Context, h Host) // preview pane
 	ID        string
+	// Score ranks the row against the others of its query: the merged results are sorted by it, highest
+	// first, with ties kept in provider order.
+	Score int
 }

@@ -76,12 +76,13 @@ func newBenchPalette(b *testing.B) *Palette {
 	b.Setenv("HOME", b.TempDir())
 	data := benchData()
 	p := &Palette{
-		S:     &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Usage: map[string]int{}, Disabled: map[string]bool{}},
-		apps:  data.apps,
-		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
-		snips: &SnippetStore{},
-		chats: &ChatStore{},
-		files: &FileIndex{paths: data.files, done: true},
+		syncSearch: true,
+		S:          &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Usage: map[string]int{}, Disabled: map[string]bool{}},
+		apps:       data.apps,
+		clip:       &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
+		snips:      &SnippetStore{},
+		chats:      &ChatStore{},
+		files:      &FileIndex{paths: data.files, done: true},
 	}
 	p.stack = []*View{p.rootView()}
 	return p

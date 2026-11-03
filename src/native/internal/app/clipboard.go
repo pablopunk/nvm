@@ -32,6 +32,8 @@ type ClipEntry struct {
 	Pinned bool
 }
 
+// ClipStore is the clipboard history. Entries is replaced, never edited in place: a provider running on
+// another goroutine may hold the slice it captured when its query started.
 type ClipStore struct {
 	Entries  []ClipEntry
 	lastText string
@@ -57,6 +59,17 @@ func newClipStore() *ClipStore {
 }
 
 func (cs *ClipStore) save() { saveJSON("clipboard.json", cs) }
+
+// togglePin flips the pin of the entry with id, building a new slice as the store's rule requires.
+func (cs *ClipStore) togglePin(id string) {
+	entries := slices.Clone(cs.Entries)
+	for i := range entries {
+		if entries[i].ID == id {
+			entries[i].Pinned = !entries[i].Pinned
+		}
+	}
+	cs.Entries = entries
+}
 
 func (p *Palette) startClipboardWatcher() {
 	go func() {
@@ -114,7 +127,7 @@ func (p *Palette) addClip(e ClipEntry) {
 			e.Pinned = true
 		}
 	}
-	cs.Entries = slices.DeleteFunc(cs.Entries, func(x ClipEntry) bool { return x.ID == e.ID })
+	cs.Entries = slices.DeleteFunc(slices.Clone(cs.Entries), func(x ClipEntry) bool { return x.ID == e.ID })
 	cs.Entries = append([]ClipEntry{e}, cs.Entries...)
 	for len(cs.Entries) > p.S.ClipLimit {
 		last := len(cs.Entries) - 1
@@ -138,7 +151,7 @@ func (p *Palette) dropClip(i int) {
 		_ = os.Remove(filepath.Join(imageDir(), e.Image))
 		delete(cs.thumbs, e.ID)
 	}
-	cs.Entries = slices.Delete(cs.Entries, i, i+1)
+	cs.Entries = slices.Delete(slices.Clone(cs.Entries), i, i+1)
 }
 
 func makeThumb(data []byte) *ui.Bitmap {
@@ -276,11 +289,7 @@ func (p *Palette) clipItem(e ClipEntry) search.Item {
 			}
 		}},
 		{Title: pinTitle, Label: "⌃P", Mods: mod, Key: ui.KeyP, Run: func(h search.Host) {
-			for i := range p.clip.Entries {
-				if p.clip.Entries[i].ID == e.ID {
-					p.clip.Entries[i].Pinned = !p.clip.Entries[i].Pinned
-				}
-			}
+			p.clip.togglePin(e.ID)
 			p.clip.save()
 			h.Refresh()
 		}},

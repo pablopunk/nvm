@@ -3,7 +3,6 @@ package app
 import (
 	"fmt"
 	"github.com/pablopunk/nvm/native/internal/search"
-	"log"
 	"os"
 	"strings"
 
@@ -55,6 +54,15 @@ type Palette struct {
 	emoji    emojiState
 	timer    *Timer
 	phIndex  int
+
+	// settled is false while the providers of the shown query are still answering: the list then shows the
+	// rows it has, and no empty state.
+	settled    bool
+	shownView  *View
+	shownQuery string
+	// syncSearch runs the root's providers in the calling goroutine: the goldens and the benchmarks need the
+	// complete rows when a query returns.
+	syncSearch bool
 }
 
 func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
@@ -86,9 +94,7 @@ func (p *Palette) Pop() {
 	if len(p.stack) < 2 {
 		return
 	}
-	if f := p.cur().OnLeave; f != nil {
-		f()
-	}
+	p.leave(p.cur())
 	p.stack = p.stack[:len(p.stack)-1]
 	p.query = ""
 	p.actionsOpen = false
@@ -104,18 +110,29 @@ func (p *Palette) Hide() { p.panel.Hide() }
 func (p *Palette) Refresh() {
 	p.panel.Update(func() {
 		keep := p.chosen
+		p.invalidateRows()
 		p.search()
 		p.choose(keep)
 	})
 }
 
+// search shows the rows of the view on top for the search text. A sub-view searches on the UI thread. The
+// root's providers run on the view's coordinator: rows ready now are shown now, and the others arrive through
+// applySnapshot.
 func (p *Palette) search() {
 	v := p.cur()
-	p.results = nil
-	if v.Search != nil {
-		p.results = v.Search(strings.TrimSpace(p.query))
+	q := strings.TrimSpace(p.query)
+	if v.Providers == nil {
+		var rows []search.Item
+		if v.Search != nil {
+			rows = v.Search(q)
+		}
+		p.showRows(v, q, rows, true)
+		return
 	}
-	p.choose(0)
+	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
+		p.showRows(v, q, snap.Items, snap.Settled)
+	}
 }
 
 func (p *Palette) choose(i int) {
@@ -220,6 +237,9 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 func (p *Palette) listBody(c *ui.Context) {
 	v := p.cur()
 	if len(p.results) == 0 {
+		if !p.settled {
+			return
+		}
 		title, sub := v.EmptyTitle, v.EmptySub
 		if title == "" {
 			title, sub = "No Results", "Try a different search."
@@ -335,46 +355,4 @@ func (p *Palette) actionPanel(c *ui.Context) {
 		rows[i] = design.MenuRow{Title: a.Title, Key: kb(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
 	}
 	design.ActionMenu(c, rows)
-}
-
-// ---- window ----
-
-func (p *Palette) show() {
-	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
-	w, h := p.panel.Size()
-	p.panel.SetPosition(d.WorkArea.X+(d.WorkArea.Width-w)/2, d.WorkArea.Y+(d.WorkArea.Height-h)/3)
-	p.phIndex++
-	for len(p.stack) > 1 {
-		if f := p.cur().OnLeave; f != nil {
-			f()
-		}
-		p.stack = p.stack[:len(p.stack)-1]
-	}
-	p.query = ""
-	p.actionsOpen = false
-	p.search()
-	go func() {
-		apps, err := mygo.Shell.InstalledApps()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		p.panel.Update(func() { p.apps = apps; p.search() })
-	}()
-	p.input.Focus()
-	p.panel.Show()
-}
-
-func (p *Palette) toggle() {
-	if p.panel.IsVisible() {
-		p.panel.Hide()
-	} else {
-		p.show()
-	}
-}
-
-// open shows the palette directly in a sub-view (from the tray or a hotkey).
-func (p *Palette) open(v *View) {
-	p.show()
-	p.Push(v)
 }
