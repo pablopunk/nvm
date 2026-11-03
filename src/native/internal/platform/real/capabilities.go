@@ -12,7 +12,6 @@ import (
 func Capabilities() platform.Capabilities {
 	supported := []platform.Capability{
 		platform.CapabilityAutostart,
-		platform.CapabilityClipboardChanged,
 		platform.CapabilityClipboardImage,
 		platform.CapabilityFileWatch,
 		platform.CapabilityGlobalHotkeys,
@@ -29,6 +28,9 @@ func Capabilities() platform.Capabilities {
 	}
 	if runtime.GOOS == "linux" {
 		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal)
+	}
+	if pasteSupported() {
+		supported = append(supported, platform.CapabilityClipboardPaste)
 	}
 	return platform.NewCapabilities(supported...)
 }

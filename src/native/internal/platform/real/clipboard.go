@@ -1,25 +1,25 @@
 package real
 
 import (
-	"sync"
-
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// clipboard reads and writes the system clipboard through MyGo. Change notification polls the clipboard
-// because MyGo offers no change event; see clipboard_watch.go.
-type clipboard struct {
-	clock     platform.Clock
-	startOnce sync.Once
-	changed   chan struct{}
-}
+// rtfFormat is the RTF target. MyGo names no RTF format of its own, so the raw MIME type is asked for; the
+// Linux backend offers any target the owner advertises, and other backends may return transfer.ErrFormat.
+const rtfFormat transfer.Format = "text/rtf"
 
-// newClipboard returns the production clipboard port. The clock drives change polling.
-func newClipboard(clock platform.Clock) *clipboard {
-	return &clipboard{clock: clock, changed: make(chan struct{}, 1)}
+// clipboard reads and writes the system clipboard through MyGo. It offers no change notification: MyGo has
+// no change event and the watcher polls adaptively (see features/clipboard), so Changed returns nil and the
+// clipboard.changed capability is not reported. HTML, RTF and file lists are read and written through MyGo's
+// portable formats; see rich_clipboard.go.
+type clipboard struct{}
+
+// newClipboard returns the production clipboard port.
+func newClipboard() *clipboard {
+	return &clipboard{}
 }
 
 // ReadText returns the plain text on the clipboard.
@@ -47,15 +47,13 @@ func (c *clipboard) WriteImagePNG(png []byte) error {
 	return mygo.Clipboard.WriteImage(png)
 }
 
-// Formats lists the content kinds currently on the clipboard.
+// Formats lists the content kinds currently on the clipboard. Concealed is reported when the owner
+// advertises one of the concealed markers in its raw format names (see isConcealedClipboard).
 func (c *clipboard) Formats() ([]platform.ClipboardFormat, error) {
 	var formats []platform.ClipboardFormat
 	for _, format := range mygo.Clipboard.Formats() {
-		switch format {
-		case transfer.Text:
-			formats = append(formats, platform.FormatText)
-		case transfer.PNG:
-			formats = append(formats, platform.FormatPNG)
+		if kind, ok := portableFormat(format); ok && !containsFormat(formats, kind) {
+			formats = append(formats, kind)
 		}
 	}
 	if isConcealedClipboard(mygo.Clipboard.AvailableFormats()) {
@@ -64,14 +62,40 @@ func (c *clipboard) Formats() ([]platform.ClipboardFormat, error) {
 	return formats, nil
 }
 
+// portableFormat maps a MyGo format to the kinds the app distinguishes.
+func portableFormat(format transfer.Format) (platform.ClipboardFormat, bool) {
+	switch format {
+	case transfer.Text:
+		return platform.FormatText, true
+	case transfer.PNG:
+		return platform.FormatPNG, true
+	case transfer.HTML:
+		return platform.FormatHTML, true
+	case rtfFormat:
+		return platform.FormatRTF, true
+	case transfer.FileList, transfer.URIList:
+		return platform.FormatFiles, true
+	}
+	return "", false
+}
+
+// containsFormat reports whether list already holds kind.
+func containsFormat(list []platform.ClipboardFormat, kind platform.ClipboardFormat) bool {
+	for _, item := range list {
+		if item == kind {
+			return true
+		}
+	}
+	return false
+}
+
 // Clear empties the clipboard.
 func (c *clipboard) Clear() error {
 	mygo.Clipboard.Clear()
 	return nil
 }
 
-// Changed starts change polling on first use and returns the notification channel.
+// Changed returns nil: this build has no native change notification (see the type comment).
 func (c *clipboard) Changed() <-chan struct{} {
-	c.startOnce.Do(func() { go c.pollChanges() })
-	return c.changed
+	return nil
 }

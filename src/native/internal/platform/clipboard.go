@@ -54,4 +54,6 @@ type RichClipboard interface {
 	// WriteRich replaces the clipboard with plain text and its HTML markup, so apps that understand
 	// HTML keep the formatting and others get the text.
 	WriteRich(text, html string) error
+	// WriteFiles replaces the clipboard with a list of absolute file paths, as a file manager copy does.
+	WriteFiles(paths []string) error
 }
