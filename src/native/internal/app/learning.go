@@ -3,11 +3,8 @@ package app
 import (
 	"fmt"
 
-	"github.com/egoist/mygo"
-
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -22,15 +19,13 @@ type queriesDocument struct {
 // The store is closed when the app quits, which writes what is still pending. If the store cannot be opened,
 // the learning works for this run and is not saved.
 func (p *App) openLearning() <-chan store.Notice {
-	ports := real.NewPorts()
-	s, err := store.Open(ports.FS, searchClock, configDir())
-	if err != nil {
-		logx.Default().Warn("learning is not saved", logx.F{"error": err.Error()})
+	s := p.userStore
+	if s == nil || p.userReadOnly {
+		logx.Default().Warn("learning is not saved", logx.F{"reason": "the store is unavailable or read-only"})
 		p.learn = usage.NewMemory(searchClock)
 		p.history = palette.NewQueryHistory(nil, nil)
 		return nil
 	}
-	mygo.App.OnQuit(func() { _ = s.Close() })
 
 	learn, err := usage.Open(s, searchClock, logx.Default())
 	if err != nil {

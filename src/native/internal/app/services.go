@@ -5,10 +5,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/egoist/mygo"
-
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/emoji"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -49,16 +48,27 @@ func (c rateCache) Save(rates calc.Rates) error {
 func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Location) {
 	p.ports = ports
 	var cache calc.RateCache
-	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir)
-	if err != nil {
+	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning).
+	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
+	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir, store.WithProcesses(ports.Processes))
+	p.userReadOnly = err != nil
+	if p.userReadOnly {
 		log.Println("store: not persisting, the directory is held elsewhere:", err)
-	} else if st, err := store.Open(ports.FS, ports.Clock, dir, store.WithLease(lease)); err != nil {
+	}
+	st, err := store.Open(ports.FS, ports.Clock, dir, store.WithDebounce(notes.DraftDelay), store.WithLease(lease))
+	if err != nil {
 		log.Println("store: open failed, not persisting:", err)
+		if lease != nil {
+			_ = lease.Release()
+		}
 	} else {
-		p.store = st
-		p.recents = store.Doc(st, "emoji-recents.json", 1, func() emojiRecents { return emojiRecents{} })
-		p.rates = store.Doc(st, "rates.json", 1, defaultRateDocument)
-		cache = rateCache{doc: p.rates}
+		p.userStore = st
+		if !p.userReadOnly {
+			p.store = st
+			p.recents = store.Doc(st, "emoji-recents.json", 1, func() emojiRecents { return emojiRecents{} })
+			p.rates = store.Doc(st, "rates.json", 1, defaultRateDocument)
+			cache = rateCache{doc: p.rates}
+		}
 	}
 	rates, err := calc.NewRateService(ports.HTTP, ports.Clock, cache)
 	if err != nil {
@@ -67,16 +77,9 @@ func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Locati
 	p.calc = calc.New(ports.Clock, zone, rates)
 }
 
-// closeStoreOnQuit flushes the documents and releases the lease when the app quits.
-func (p *App) closeStoreOnQuit() {
-	mygo.App.OnWillQuit(func(*mygo.QuitEvent) {
-		if p.store != nil {
-			if err := p.store.Close(); err != nil {
-				log.Println("store close:", err)
-			}
-		}
-	})
-}
+// closeStoreOnQuit is kept for the call order in ready; the store is closed once, by openUserData, after the
+// note windows have closed.
+func (p *App) closeStoreOnQuit() {}
 
 // prepareCatalog builds the emoji search indexes off the UI path, so the first keystroke does not pay for them.
 func prepareCatalog() {

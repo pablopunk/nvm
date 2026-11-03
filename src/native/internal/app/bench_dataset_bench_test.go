@@ -75,10 +75,10 @@ func newBenchPalette(b *testing.B) *App {
 	b.Setenv("HOME", b.TempDir())
 	data := benchData()
 	p := &App{
-		S:     &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
-		apps:  data.apps,
-		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
-		snips: &SnippetStore{},
+		S:    &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
+		apps: data.apps,
+		clip: &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
+
 		chats: &ChatStore{},
 		files: newTestFiles(b, b.TempDir(), data.files),
 	}

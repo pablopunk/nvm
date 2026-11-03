@@ -17,6 +17,7 @@ const (
 	scoreCalculator        = 1000
 	scoreTimer             = 990
 	scoreQuicklink         = 980
+	scoreSnippetExact      = 975
 	scoreSnippet           = 970
 	scoreExtension         = 960
 	scoreFileFirst         = 75
@@ -64,19 +65,10 @@ func quicklinkRows(_ *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// snippetRows matches snippets by keyword prefix; a snippet with no keyword is found by the snippets view.
-func snippetRows(p *App, in *rootInput, q string) []search.Item {
-	lq := strings.ToLower(q)
-	var out []search.Item
-	for _, sn := range in.snippets {
-		if sn.Keyword != "" && lq != "" && strings.HasPrefix(strings.ToLower(sn.Keyword), lq) {
-			it := p.snippetItem(sn)
-			it.Kind = search.KindSnippets
-			it.Score = scoreSnippet
-			out = append(out, it)
-		}
-	}
-	return out
+// snippetRows matches snippets by keyword, exact first and then prefix; a snippet with no keyword is found by the
+// snippets view.
+func snippetRows(p *App, _ *rootInput, q string) []search.Item {
+	return snippetRootRows(p, q)
 }
 
 // extensionRows asks every enabled extension for its rows. Each extension's search runs under its own lock.

@@ -15,6 +15,8 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
+	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -42,8 +44,8 @@ type App struct {
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
 	clip     *ClipStore
-	snips    *SnippetStore
-	notes    *NoteStore
+	snips    *snippets.Store
+	notes    *notes.Store
 	files    *fileService
 	chats    *ChatStore
 	timer    *Timer
@@ -55,6 +57,14 @@ type App struct {
 	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
+
+	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
+	// edited, shared by the palette and the floating windows.
+	userStore    *store.Store
+	userNotices  <-chan store.Notice
+	userReadOnly bool
+	quitting     bool
+	edits        map[string]*noteEdit
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -107,12 +117,12 @@ func (p *App) ready() {
 	p.closeStoreOnQuit()
 	prepareCatalog()
 	p.clip = newClipStore()
-	p.snips = newSnippetStore()
-	p.notes = newNoteStore()
+	p.openUserData()
 	p.chats = newChatStore()
 	notices := p.openLearning()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)
+	p.showUserDataNotices()
 
 	p.panel = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Nevermind", Panel: true, Hidden: true, Frameless: true, Transparent: true,
@@ -120,6 +130,7 @@ func (p *App) ready() {
 		Width: width, Height: height, DisableResize: true, Content: ui.View(p.View),
 	})
 	p.Attach(p.panel)
+	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
 
