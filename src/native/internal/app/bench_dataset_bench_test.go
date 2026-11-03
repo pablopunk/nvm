@@ -78,7 +78,7 @@ func newBenchPalette(b *testing.B) *App {
 		S:     &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
 		apps:  data.apps,
 		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
-		snips: &SnippetStore{},
+
 		chats: &ChatStore{},
 		files: &FileIndex{paths: data.files, done: true},
 	}

@@ -14,10 +14,13 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
+	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
+	"github.com/pablopunk/nvm/native/internal/store"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -41,14 +44,23 @@ type App struct {
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
 	clip     *ClipStore
-	snips    *SnippetStore
-	notes    *NoteStore
+	snips    *snippets.Store
+	notes    *notes.Store
 	files    *FileIndex
 	chats    *ChatStore
 	emoji    emojiState
 	timer    *Timer
 	learn    *usage.Learner
 	history  *palette.QueryHistory
+
+	// ports are the OS intents of this run; userStore holds the notes and snippets, whose notices arrive on
+	// userNotices. edits are the notes being edited, shared by the palette and the floating windows.
+	ports        platform.Ports
+	userStore    *store.Store
+	userNotices  <-chan store.Notice
+	userReadOnly bool
+	quitting     bool
+	edits        map[string]*noteEdit
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -98,14 +110,15 @@ func (p *App) ready() {
 	p.icons = map[string]*ui.Bitmap{}
 	p.S = loadSettings()
 	p.clip = newClipStore()
-	p.snips = newSnippetStore()
-	p.notes = newNoteStore()
+	p.ports = real.NewPorts()
+	p.openUserData()
 	p.chats = newChatStore()
 	p.files = &FileIndex{}
 	p.emoji.load()
 	notices := p.openLearning()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)
+	p.showUserDataNotices()
 
 	p.panel = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Nevermind", Panel: true, Hidden: true, Frameless: true, Transparent: true,
@@ -113,6 +126,7 @@ func (p *App) ready() {
 		Width: width, Height: height, DisableResize: true, Content: ui.View(p.View),
 	})
 	p.Attach(p.panel)
+	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
 

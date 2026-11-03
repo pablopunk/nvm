@@ -20,7 +20,6 @@ type rootInput struct {
 	quicklinks []Quicklink
 	learn      *usage.Learner
 	disabled   map[string]bool
-	snippets   []Snippet
 	exts       []loadedExt
 	apps       []mygo.InstalledApp
 	clips      []ClipEntry
@@ -49,7 +48,6 @@ func (p *App) captureRoot() *rootInput {
 		quicklinks: slices.Clone(p.S.Quicklinks),
 		learn:      p.learn,
 		disabled:   maps.Clone(p.S.Disabled),
-		snippets:   slices.Clone(p.snips.Items),
 		exts:       p.exts,
 		apps:       p.apps,
 		clips:      p.clip.Entries,
