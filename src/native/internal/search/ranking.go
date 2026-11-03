@@ -145,3 +145,37 @@ func URLFromQuery(q string) string {
 	}
 	return ""
 }
+
+// PrioritizedTitleScore is the 1.x action ranking of a title (prioritizedTitleSearchScore in search-utils.ts),
+// on the 1.x scale of ten times this package's bands. It differs from Score in one place: a title that starts
+// with the query scores 950, above a whole-word match inside a longer title (90). The root keeps Score's
+// order, which is the parity contract of the root table; this is the ranking the 1.x action menu uses.
+func PrioritizedTitleScore(title, query string) int {
+	q := strings.ToLower(strings.TrimSpace(query))
+	t := strings.ToLower(strings.TrimSpace(title))
+	if q == "" {
+		return 0
+	}
+	score := ScoreFuzzy(t, q)
+	switch {
+	case score == 100:
+		return 1000
+	case strings.HasPrefix(t, q):
+		return 950
+	case score == 95:
+		return 925
+	case score == 90:
+		return 900
+	case score == 70:
+		return 875
+	case score == 60:
+		return 860
+	case score == 50:
+		return 850
+	case score == 20:
+		return 820
+	case score == 10:
+		return 810
+	}
+	return 0
+}
