@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
 
 // rootInput is what the root's providers read. The palette captures it on the UI thread when a query
@@ -17,7 +18,7 @@ import (
 type rootInput struct {
 	engine     engine
 	quicklinks []Quicklink
-	usage      map[string]int
+	learn      *usage.Learner
 	disabled   map[string]bool
 	snippets   []Snippet
 	exts       []loadedExt
@@ -46,7 +47,7 @@ func (p *App) captureRoot() *rootInput {
 	return &rootInput{
 		engine:     p.engine(),
 		quicklinks: slices.Clone(p.S.Quicklinks),
-		usage:      maps.Clone(p.S.Usage),
+		learn:      p.learn,
 		disabled:   maps.Clone(p.S.Disabled),
 		snippets:   slices.Clone(p.snips.Items),
 		exts:       p.exts,
@@ -72,7 +73,3 @@ func (p *App) rootProviders() []search.Provider {
 	}
 	return out
 }
-
-// boost is the learned weight of a key (an application, a command, a web query): how often it was used,
-// capped so that usage never outranks a better match.
-func boost(in *rootInput, key string) int { return min(in.usage[key], 8) }

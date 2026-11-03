@@ -39,13 +39,13 @@ func saveJSON(name string, v any) {
 	}
 }
 
-// Settings are persisted in settings.json.
+// Settings are persisted in settings.json. What the user chose in the root is not here: it is the usage
+// memory (usage.json) and the query history (queries.json), see learning.go.
 type Settings struct {
 	Hotkey      string
 	Engine      string
 	ClipOff     bool
 	ClipLimit   int
-	Usage       map[string]int
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
@@ -56,11 +56,8 @@ type Quicklink struct {
 }
 
 func loadSettings() *Settings {
-	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200, Usage: map[string]int{}, Disabled: map[string]bool{}}
+	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200, Disabled: map[string]bool{}}
 	loadJSON("settings.json", s)
-	if s.Usage == nil {
-		s.Usage = map[string]int{}
-	}
 	if s.Disabled == nil {
 		s.Disabled = map[string]bool{}
 	}

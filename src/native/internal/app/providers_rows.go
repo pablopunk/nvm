@@ -30,6 +30,9 @@ const (
 	scoreCommandAlias      = 45
 )
 
+// keyWebSearch is the usage key of the web search row. Commands and applications key themselves by title and id.
+const keyWebSearch = "web:search"
+
 // Each row function is one source of the root: it returns the rows for q, or the root rows for "". They run
 // on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
 // which run there.
@@ -114,7 +117,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for _, cmd := range p.commands(in.timerOn) {
 		cmd := cmd
-		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []search.Action{{Title: "Open", Run: cmd.Run, Dismiss: cmd.Dismiss}}}
+		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: cmd.Run, Dismiss: cmd.Dismiss}}}
 		if lq == "" {
 			if !cmd.Hidden {
 				it.Score = scoreCommandSuggestion - cmd.Order
@@ -127,7 +130,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			s = scoreCommandAlias
 		}
 		if s > 0 {
-			it.Score = s + boost(in, "cmd:"+cmd.Title)
+			it.Score = s
 			out = append(out, it)
 		}
 	}
@@ -140,20 +143,19 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for _, a := range in.apps {
 		a := a
+		key := "app:" + a.ID
 		s := 0
 		if lq == "" {
-			if in.usage[a.ID] == 0 {
+			if in.learn.Uses(key) == 0 {
 				continue
 			}
 			s = scoreAppSuggestion
 		} else if s = search.Score(a.Name, lq); s == 0 {
 			continue
 		}
-		out = append(out, search.Item{Kind: search.KindApplications, Title: a.Name, IconPath: a.Path, Score: s + min(in.usage[a.ID], 9), Actions: []search.Action{
+		out = append(out, search.Item{Kind: search.KindApplications, Title: a.Name, IconPath: a.Path, Score: s, LearnKey: key, Actions: []search.Action{
 			{Title: "Open Application", Run: func(h search.Host) {
 				h.Hide()
-				p.S.Usage[a.ID]++
-				p.S.save()
 				if err := mygo.Shell.LaunchApp(a); err != nil {
 					h.Toast(err.Error())
 				}
@@ -237,7 +239,7 @@ func webRows(p *App, in *rootInput, q string) []search.Item {
 	return []search.Item{
 		{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate,
 			Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}},
-		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch + boost(in, "web:"+q),
+		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch,
 			Actions: []search.Action{{Title: "Search the Web", Run: openURL(in.engine.URL, q)}}},
 	}
 }
