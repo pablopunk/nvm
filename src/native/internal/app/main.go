@@ -11,9 +11,79 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
+
+	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
-func (p *Palette) ready() {
+// The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
+const (
+	width, height = 720, 470
+	cornerRadius  = design.PaneRadius
+)
+
+// App is the whole app: the palette shell, the one window it draws in, and the feature state its views and
+// providers read. The shell's methods are promoted, so features call Hide, Push and the rest on the App.
+type App struct {
+	*palette.Palette
+	panel *mygo.Window
+	S     *Settings
+
+	icons    map[string]*ui.Bitmap
+	md       markdown.Options
+	apps     []mygo.InstalledApp
+	exts     []loadedExt
+	extTrays []*extTray
+	runs     map[string]*chatRun
+	tray     *mygo.Tray
+	clip     *ClipStore
+	snips    *SnippetStore
+	notes    *NoteStore
+	files    *FileIndex
+	chats    *ChatStore
+	emoji    emojiState
+	timer    *Timer
+}
+
+// newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
+// without one.
+func (p *App) newPalette(clock platform.Clock, synchronous bool) {
+	p.Palette = palette.New(palette.Options{
+		Root:        p.rootView(),
+		Clock:       clock,
+		Synchronous: synchronous,
+		Position:    p.position,
+		Icon:        p.fileIcon,
+		AskAI:       p.newChatView,
+		OnShow:      p.loadApps,
+	})
+}
+
+// position centers the window a third down the work area of the display under the pointer.
+func (p *App) position(w, h int) (int, int) {
+	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
+	return d.WorkArea.X + (d.WorkArea.Width-w)/2, d.WorkArea.Y + (d.WorkArea.Height-h)/3
+}
+
+// loadApps reads the installed applications in the background and offers them to the root when they arrive.
+func (p *App) loadApps() {
+	go func() {
+		apps, err := mygo.Shell.InstalledApps()
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		p.panel.Update(func() {
+			p.apps = apps
+			p.ReloadRows()
+		})
+	}()
+}
+
+func (p *App) ready() {
 	p.icons = map[string]*ui.Bitmap{}
 	p.S = loadSettings()
 	p.clip = newClipStore()
@@ -22,20 +92,21 @@ func (p *Palette) ready() {
 	p.chats = newChatStore()
 	p.files = &FileIndex{}
 	p.emoji.load()
-	p.stack = []*View{p.rootView()}
+	p.newPalette(searchClock, false)
 
 	p.panel = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Nevermind", Panel: true, Hidden: true, Frameless: true, Transparent: true,
 		Vibrancy: mygo.VibrancyGlass, CornerRadius: cornerRadius,
-		Width: width, Height: height, DisableResize: true, Content: ui.View(p.view),
+		Width: width, Height: height, DisableResize: true, Content: ui.View(p.View),
 	})
-	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.panel.Hide() })
-	p.panel.OnBlur(p.panel.Hide)
+	p.Attach(p.panel)
+	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
+	p.panel.OnBlur(p.Hide)
 
-	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.toggle)
+	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
 	for i := 0; err != nil && i < 8; i++ { // a previous instance may still hold the key
 		time.Sleep(400 * time.Millisecond)
-		err = mygo.GlobalShortcut.Register(p.S.Hotkey, p.toggle)
+		err = mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
 	}
 	if err != nil {
 		log.Println("shortcut", p.S.Hotkey, err)
@@ -46,12 +117,13 @@ func (p *Palette) ready() {
 	go func() {
 		time.Sleep(2 * time.Second)
 		p.files.build()
-		log.Printf("indexed %d files", len(p.files.paths))
+		paths, _ := p.files.snapshot()
+		log.Printf("indexed %d files", len(paths))
 	}()
 	log.Println("ready")
 }
 
-func (p *Palette) setUpTray() {
+func (p *App) setUpTray() {
 	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), ToolTip: "Nevermind"})
 	if err != nil {
 		log.Println("no tray:", err)
@@ -62,16 +134,16 @@ func (p *Palette) setUpTray() {
 		return &mygo.MenuItem{Label: label, Click: func(*mygo.MenuItem, *mygo.Window) { p.panel.Update(f) }}
 	}
 	tray.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		item("Open Nevermind", p.show),
-		item("Clipboard History", func() { p.open(p.clipboardView()) }),
-		item("Quick Notes", func() { p.open(p.notesView()) }),
-		item("Ask AI", func() { p.open(p.newChatView("")) }),
+		item("Open Nevermind", p.Show),
+		item("Clipboard History", func() { p.Open(p.clipboardView()) }),
+		item("Quick Notes", func() { p.Open(p.notesView()) }),
+		item("Ask AI", func() { p.Open(p.newChatView("")) }),
 		mygo.Separator(),
 		{Role: mygo.RoleQuit},
 	}))
 }
 
-func (p *Palette) setTrayTitle(s string) {
+func (p *App) setTrayTitle(s string) {
 	if p.tray != nil {
 		p.tray.SetTitle(s)
 	}
@@ -93,15 +165,18 @@ func trayIcon() []byte {
 	return b.Bytes()
 }
 
+// searchClock measures the search budgets of the running app.
+var searchClock platform.Clock = real.NewPorts().Clock
+
 func Run() {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}
-	p := &Palette{}
+	p := &App{}
 	mygo.App.SetName("Nevermind")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
-	mygo.App.OnSecondInstance(func([]string, string) { p.panel.Update(p.show) })
+	mygo.App.OnSecondInstance(func([]string, string) { p.panel.Update(p.Show) })
 	mygo.App.WhenReady(p.ready)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

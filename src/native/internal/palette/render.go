@@ -1,136 +1,20 @@
-package app
+package palette
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strings"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
-)
-
-const (
-	width, height = cardW, paneH
-	iconSize      = 28
-)
-
-// Palette is the whole app: one panel window, a stack of views, and the feature stores.
-type Palette struct {
-	panel *mygo.Window
-	S     *Settings
-
-	stack   []*View
-	query   string
-	results []Item
-	chosen  int
-	list    ui.ListState
-	input   ui.Handle
-
-	actionsOpen bool
-	actChosen   int
-	actList     ui.ListState
-
-	icons    map[string]*ui.Bitmap
-	toastMsg string
-	md       markdown.Options
-
-	apps     []mygo.InstalledApp
-	exts     []loadedExt
-	extTrays []*extTray
-	runs     map[string]*chatRun
-	tray     *mygo.Tray
-	clip     *ClipStore
-	snips    *SnippetStore
-	notes    *NoteStore
-	files    *FileIndex
-	chats    *ChatStore
-	emoji    emojiState
-	timer    *Timer
-	phIndex  int
-}
-
-func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
-
-func (p *Palette) Push(v *View) {
-	p.stack = append(p.stack, v)
-	p.query = ""
-	p.actionsOpen = false
-	p.search()
-	p.input.Focus()
-}
-
-func (p *Palette) Pop() {
-	if len(p.stack) < 2 {
-		return
-	}
-	if f := p.cur().OnLeave; f != nil {
-		f()
-	}
-	p.stack = p.stack[:len(p.stack)-1]
-	p.query = ""
-	p.actionsOpen = false
-	p.search()
-	p.input.Focus()
-}
-
-func (p *Palette) Toast(msg string) { p.toastMsg = msg }
-
-func (p *Palette) Hide() { p.panel.Hide() }
-
-// Refresh re-runs the current search keeping the cursor, from any goroutine.
-func (p *Palette) Refresh() {
-	p.panel.Update(func() {
-		keep := p.chosen
-		p.search()
-		p.choose(keep)
-	})
-}
-
-func (p *Palette) search() {
-	v := p.cur()
-	p.results = nil
-	if v.Search != nil {
-		p.results = v.Search(strings.TrimSpace(p.query))
-	}
-	p.choose(0)
-}
-
-func (p *Palette) choose(i int) {
-	p.chosen = max(0, min(i, len(p.results)-1))
-	if len(p.results) > 0 {
-		p.list.ScrollIntoView(p.chosen)
-	}
-}
-
-func (p *Palette) chosenItem() *Item {
-	if p.cur().Body != nil || p.chosen < 0 || p.chosen >= len(p.results) {
-		return nil
-	}
-	return &p.results[p.chosen]
-}
-
-func (p *Palette) runDefault() {
-	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
-		it.Actions[0].Run(p)
-	}
-}
-
-// ---- view ----
-
-const (
-	winMargin    = 0
-	cardW        = 720
-	paneH        = 470
-	cornerRadius = design.PaneRadius
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 var rootPlaceholders = []string{"Watcha gonna do?", "I cannot do that... Oh, nevermind.", "Make it happen."}
 
-func (p *Palette) view(c *ui.Context) {
+// View draws the palette in the window. It is the content of the window the host creates.
+func (p *Palette) View(c *ui.Context) {
 	if os.Getenv("NVM_THEME") == "dark" {
 		dark := *ui.DarkTheme()
 		dark.Background = ui.Transparent
@@ -201,6 +85,9 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 func (p *Palette) listBody(c *ui.Context) {
 	v := p.cur()
 	if len(p.results) == 0 {
+		if !p.settled {
+			return
+		}
 		title, sub := v.EmptyTitle, v.EmptySub
 		if title == "" {
 			title, sub = "No Results", "Try a different search."
@@ -215,6 +102,9 @@ func (p *Palette) listBody(c *ui.Context) {
 		p.chosen = 0
 	}
 	it := p.chosenItem()
+	if it != nil {
+		p.announceSelection(c, it)
+	}
 	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
 		k := design.Tokens(c)
 		quiet := *c.Theme()
@@ -240,6 +130,24 @@ func (p *Palette) listBody(c *ui.Context) {
 	})
 }
 
+// selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.
+type selection struct {
+	view   *View
+	query  string
+	chosen int
+}
+
+// announceSelection tells assistive technology the title of the chosen row whenever the choice moves, so a
+// keyboard user hears what is selected (PLAN.md J27). It announces only on a change.
+func (p *Palette) announceSelection(c *ui.Context, it *search.Item) {
+	now := selection{p.shownView, p.shownQuery, p.chosen}
+	if now == p.announced {
+		return
+	}
+	p.announced = now
+	c.Announce(it.Title)
+}
+
 // row draws result i. A section header goes above the first row of each run of one section.
 func (p *Palette) row(c *ui.Context, i int) {
 	it := p.results[i]
@@ -261,29 +169,14 @@ func (p *Palette) row(c *ui.Context, i int) {
 	design.Row(c, data)
 }
 
-// tileData resolves a result's icon: a preview image, else the system icon of its file (decoded once and
-// cached), else the Lucide icon or letters the design tile draws.
-func (p *Palette) tileData(it Item) design.TileData {
+// tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon
+// or letters the design tile draws.
+func (p *Palette) tileData(it search.Item) design.TileData {
 	data := design.TileData{Image: it.Image, Icon: it.Icon, Glyph: it.Glyph}
-	if it.Image == nil && it.IconPath != "" {
-		data.FileIcon = p.icon(it.IconPath)
+	if it.Image == nil && it.IconPath != "" && p.opts.Icon != nil {
+		data.FileIcon = p.opts.Icon(it.IconPath)
 	}
 	return data
-}
-
-func (p *Palette) icon(path string) *ui.Bitmap {
-	if b, ok := p.icons[path]; ok {
-		return b
-	}
-	if len(p.icons) > 400 {
-		p.icons = map[string]*ui.Bitmap{}
-	}
-	var bm *ui.Bitmap
-	if data, err := mygo.Shell.FileIcon(path, iconSize*2); err == nil {
-		bm, _ = ui.DecodeBitmap(data)
-	}
-	p.icons[path] = bm
-	return bm
 }
 
 // footer is the status bar: where you are, and what Enter and the action menu do.
@@ -297,12 +190,12 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	}
 	data := design.FooterData{Name: name}
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
-		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: kb("↵")}
+		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
 		if len(it.Actions) > 1 {
-			data.Secondary = &design.KeyHint{Title: "Actions", Key: kb("⌃K")}
+			data.Secondary = &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
 		}
 	} else if v.Hint != "" {
-		data.Hint = kb(v.Hint)
+		data.Hint = KeyLabel(v.Hint)
 	}
 	design.Footer(c, data)
 }
@@ -313,49 +206,7 @@ func (p *Palette) actionPanel(c *ui.Context) {
 	p.actList.Selected = &p.actChosen
 	rows := make([]design.MenuRow, len(acts))
 	for i, a := range acts {
-		rows[i] = design.MenuRow{Title: a.Title, Key: kb(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
+		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
 	}
 	design.ActionMenu(c, rows)
-}
-
-// ---- window ----
-
-func (p *Palette) show() {
-	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
-	w, h := p.panel.Size()
-	p.panel.SetPosition(d.WorkArea.X+(d.WorkArea.Width-w)/2, d.WorkArea.Y+(d.WorkArea.Height-h)/3)
-	p.phIndex++
-	for len(p.stack) > 1 {
-		if f := p.cur().OnLeave; f != nil {
-			f()
-		}
-		p.stack = p.stack[:len(p.stack)-1]
-	}
-	p.query = ""
-	p.actionsOpen = false
-	p.search()
-	go func() {
-		apps, err := mygo.Shell.InstalledApps()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		p.panel.Update(func() { p.apps = apps; p.search() })
-	}()
-	p.input.Focus()
-	p.panel.Show()
-}
-
-func (p *Palette) toggle() {
-	if p.panel.IsVisible() {
-		p.panel.Hide()
-	} else {
-		p.show()
-	}
-}
-
-// open shows the palette directly in a sub-view (from the tray or a hotkey).
-func (p *Palette) open(v *View) {
-	p.show()
-	p.Push(v)
 }

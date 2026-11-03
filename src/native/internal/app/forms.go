@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // ---- generic form view ----
@@ -24,7 +26,7 @@ type FormField struct {
 }
 
 // formView is a palette sub-view with stacked fields; Ctrl+Enter submits. onSubmit returns an error text or "".
-func (p *Palette) formView(title string, fields []*FormField, onSubmit func(vals []string) string) *View {
+func (p *App) formView(title string, fields []*FormField, onSubmit func(vals []string) string) *palette.View {
 	errText := ""
 	submit := func() {
 		vals := make([]string, len(fields))
@@ -35,16 +37,16 @@ func (p *Palette) formView(title string, fields []*FormField, onSubmit func(vals
 			p.Pop()
 		}
 	}
-	return &View{
+	return &palette.View{
 		Title: title, HideInput: true, Hint: "⌃↵ Save   esc Cancel",
-		OnKey: func(c *ui.Context, p *Palette) bool {
+		OnKey: func(c *ui.Context, h search.Host) bool {
 			if c.Shortcut(mod, ui.KeyEnter) {
 				submit()
 				return true
 			}
 			return false
 		},
-		Body: func(c *ui.Context, p *Palette) {
+		Body: func(c *ui.Context, h search.Host) {
 			ui.Column(c).Padding(18).Gap(10).Grow(1).Children(func() {
 				for i, f := range fields {
 					design.FormField(c, design.FieldData{Label: f.Label, Placeholder: f.Placeholder, Value: &f.Value, Multiline: f.Multiline, Focus: i == 0})
@@ -76,7 +78,7 @@ func newSnippetStore() *SnippetStore {
 
 func (s *SnippetStore) save() { saveJSON("snippets.json", s) }
 
-func (p *Palette) snippetForm(existing *Snippet) *View {
+func (p *App) snippetForm(existing *Snippet) *palette.View {
 	sn := Snippet{}
 	title := "Create Snippet"
 	if existing != nil {
@@ -107,35 +109,35 @@ func (p *Palette) snippetForm(existing *Snippet) *View {
 	})
 }
 
-func (p *Palette) snippetItem(sn Snippet) Item {
+func (p *App) snippetItem(sn Snippet) search.Item {
 	sub := oneLine(sn.Text)
 	if sn.Keyword != "" {
 		sub = sn.Keyword + "  ·  " + sub
 	}
-	return Item{
+	return search.Item{
 		ID: sn.ID, Title: sn.Name, Subtitle: sub, Icon: "type", Tone: "teal",
-		Actions: []Action{
-			{Title: "Paste", Run: func(p *Palette) { p.Hide(); pasteText(sn.Text) }},
-			{Title: "Copy to Clipboard", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(p *Palette) { mygo.Clipboard.WriteText(sn.Text); p.Hide() }},
-			{Title: "Edit", Label: "⌃E", Mods: mod, Key: ui.KeyE, Run: func(p *Palette) { p.Push(p.snippetForm(&sn)) }},
-			{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+		Actions: []search.Action{
+			{Title: "Paste", Run: func(h search.Host) { h.Hide(); pasteText(sn.Text) }},
+			{Title: "Copy to Clipboard", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(sn.Text); h.Hide() }},
+			{Title: "Edit", Label: "⌃E", Mods: mod, Key: ui.KeyE, Run: func(h search.Host) { h.Push(p.snippetForm(&sn)) }},
+			{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 				p.snips.Items = slices.DeleteFunc(p.snips.Items, func(x Snippet) bool { return x.ID == sn.ID })
 				p.snips.save()
-				p.Refresh()
+				h.Refresh()
 			}},
 		},
-		Detail: func(c *ui.Context, p *Palette) {
+		Detail: func(c *ui.Context, h search.Host) {
 			ui.Scroll(c).Grow(1).Children(func() { ui.Text(c, sn.Text).FontSize(12) })
 		},
 	}
 }
 
-func (p *Palette) snippetsView() *View {
-	return &View{
+func (p *App) snippetsView() *palette.View {
+	return &palette.View{
 		Title: "Snippets", Placeholder: "Search Snippets", EmptyTitle: "No snippets yet.", EmptySub: "Create one to paste text quickly.",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{{Title: "Create Snippet", Icon: "plus", Actions: []Action{{Title: "Create", Run: func(p *Palette) { p.Push(p.snippetForm(nil)) }}}}}
+			out := []search.Item{{Title: "Create Snippet", Icon: "plus", Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.snippetForm(nil)) }}}}}
 			for _, sn := range p.snips.Items {
 				if lq == "" || strings.Contains(strings.ToLower(sn.Name+" "+sn.Keyword+" "+sn.Text), lq) {
 					out = append(out, p.snippetItem(sn))
@@ -174,13 +176,13 @@ func noteTitle(n Note) string {
 	return oneLine(l)
 }
 
-func (p *Palette) noteEditor(id string) *View {
+func (p *App) noteEditor(id string) *palette.View {
 	idx := func() int { return slices.IndexFunc(p.notes.Items, func(n Note) bool { return n.ID == id }) }
-	return &View{
+	return &palette.View{
 		Title: "Note", HideInput: true, Hint: "esc Back   autosaves",
 		OnLeave: func() { p.notes.save() },
 		Status:  func() string { return "Saved" },
-		Body: func(c *ui.Context, p *Palette) {
+		Body: func(c *ui.Context, h search.Host) {
 			i := idx()
 			if i < 0 {
 				return
@@ -194,14 +196,14 @@ func (p *Palette) noteEditor(id string) *View {
 	}
 }
 
-func (p *Palette) newNote() {
+func (p *App) newNote() {
 	n := Note{ID: newID("note"), Updated: time.Now()}
 	p.notes.Items = append([]Note{n}, p.notes.Items...)
 	p.notes.save()
 	p.Push(p.noteEditor(n.ID))
 }
 
-func (p *Palette) floatNote(id string) {
+func (p *App) floatNote(id string) {
 	i := slices.IndexFunc(p.notes.Items, func(n Note) bool { return n.ID == id })
 	if i < 0 {
 		return
@@ -222,30 +224,30 @@ func (p *Palette) floatNote(id string) {
 	w.Show()
 }
 
-func (p *Palette) notesView() *View {
-	return &View{
+func (p *App) notesView() *palette.View {
+	return &palette.View{
 		Title: "Quick Notes", Placeholder: "Search Quick Notes",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{{Title: "New Note", Icon: "plus", Actions: []Action{{Title: "Create", Run: func(p *Palette) { p.newNote() }}}}}
+			out := []search.Item{{Title: "New Note", Icon: "plus", Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { p.newNote() }}}}}
 			for _, n := range p.notes.Items {
 				if lq != "" && !strings.Contains(strings.ToLower(n.Text), lq) {
 					continue
 				}
 				n := n
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: n.ID, Title: noteTitle(n), Subtitle: "Edited " + ago(n.Updated), Icon: "sticky-note", Tone: "yellow",
-					Actions: []Action{
-						{Title: "Open", Run: func(p *Palette) { p.Push(p.noteEditor(n.ID)) }},
-						{Title: "Open as Floating Window", Label: "⌃F", Mods: mod, Key: ui.KeyF, Run: func(p *Palette) { p.Hide(); p.floatNote(n.ID) }},
-						{Title: "Copy Text", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(p *Palette) { mygo.Clipboard.WriteText(n.Text); p.Hide() }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+					Actions: []search.Action{
+						{Title: "Open", Run: func(h search.Host) { h.Push(p.noteEditor(n.ID)) }},
+						{Title: "Open as Floating Window", Label: "⌃F", Mods: mod, Key: ui.KeyF, Run: func(h search.Host) { h.Hide(); p.floatNote(n.ID) }},
+						{Title: "Copy Text", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(n.Text); h.Hide() }},
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 							p.notes.Items = slices.DeleteFunc(p.notes.Items, func(x Note) bool { return x.ID == n.ID })
 							p.notes.save()
-							p.Refresh()
+							h.Refresh()
 						}},
 					},
-					Detail: func(c *ui.Context, p *Palette) {
+					Detail: func(c *ui.Context, h search.Host) {
 						ui.Scroll(c).Grow(1).Children(func() { ui.Text(c, n.Text).FontSize(12) })
 					},
 				})
@@ -257,7 +259,7 @@ func (p *Palette) notesView() *View {
 
 // ---- quicklinks ----
 
-func (p *Palette) quicklinkForm() *View {
+func (p *App) quicklinkForm() *palette.View {
 	fields := []*FormField{
 		{Label: "Name", Placeholder: "Hacker News"},
 		{Label: "Keyword", Placeholder: "hn"},

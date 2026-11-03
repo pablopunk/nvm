@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"io"
 	"log"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 type ChatMsg struct{ Role, Content string } // user | assistant | notice
@@ -65,7 +67,7 @@ type chatRun struct {
 
 const baseSystem = "You are Nevermind, an assistant inside a desktop command palette. Be concise and direct; use Markdown."
 
-func (p *Palette) newChatView(first string) *View {
+func (p *App) newChatView(first string) *palette.View {
 	ch := &Chat{ID: newID("chat"), Updated: time.Now()}
 	p.chats.Chats = append([]*Chat{ch}, p.chats.Chats...)
 	v := p.chatView(ch)
@@ -75,7 +77,7 @@ func (p *Palette) newChatView(first string) *View {
 	return v
 }
 
-func (p *Palette) chatView(ch *Chat) *View {
+func (p *App) chatView(ch *Chat) *palette.View {
 	run := &chatRun{chat: ch}
 	run.list.FollowEnd = true
 	if p.runs == nil {
@@ -89,7 +91,7 @@ func (p *Palette) chatView(ch *Chat) *View {
 			title = "Create Extension"
 		}
 	}
-	return &View{
+	return &palette.View{
 		Title: title, Placeholder: chatPlaceholder(ch), TitleFn: func() string {
 			if ch.Title != "" {
 				return ch.Title
@@ -98,18 +100,18 @@ func (p *Palette) chatView(ch *Chat) *View {
 		},
 		OnLeave:  func() { p.chats.save() },
 		OnSubmit: func(q string) { p.sendChat(run, q) },
-		OnKey: func(c *ui.Context, p *Palette) bool {
+		OnKey: func(c *ui.Context, h search.Host) bool {
 			if run.streaming && c.Shortcut(0, ui.KeyEscape) {
 				run.cancel()
 				return true
 			}
 			return false
 		},
-		Body: func(c *ui.Context, p *Palette) { p.transcript(c, run) },
+		Body: func(c *ui.Context, h search.Host) { p.transcript(c, run) },
 	}
 }
 
-func (p *Palette) transcript(c *ui.Context, run *chatRun) {
+func (p *App) transcript(c *ui.Context, run *chatRun) {
 	k := design.Tokens(c)
 	msgs := run.chat.Messages
 	ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
@@ -146,7 +148,7 @@ func (p *Palette) transcript(c *ui.Context, run *chatRun) {
 	})
 }
 
-func (p *Palette) sendChat(run *chatRun, text string) {
+func (p *App) sendChat(run *chatRun, text string) {
 	if run.streaming || strings.TrimSpace(text) == "" {
 		return
 	}
@@ -265,25 +267,25 @@ func streamCompletion(ctx context.Context, msgs []map[string]string, onChunk fun
 	return finish, nil
 }
 
-func (p *Palette) chatHistoryView() *View {
-	return &View{
+func (p *App) chatHistoryView() *palette.View {
+	return &palette.View{
 		Title: "AI Chats", Placeholder: "Search AI Chats",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{{Title: "New Chat", Icon: "plus", Actions: []Action{{Title: "Start", Run: func(p *Palette) { p.Push(p.newChatView("")) }}}}}
+			out := []search.Item{{Title: "New Chat", Icon: "plus", Actions: []search.Action{{Title: "Start", Run: func(h search.Host) { h.Push(p.newChatView("")) }}}}}
 			for _, ch := range p.chats.Chats {
 				if ch.Builder || (lq != "" && !strings.Contains(strings.ToLower(ch.Title), lq)) {
 					continue
 				}
 				ch := ch
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: ch.ID, Title: ch.Title, Subtitle: "AI conversation · " + ago(ch.Updated), Icon: "message-circle", Tone: "yellow", TintTitle: true,
-					Actions: []Action{
-						{Title: "Open", Run: func(p *Palette) { p.Push(p.chatView(ch)) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+					Actions: []search.Action{
+						{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(ch)) }},
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 							p.chats.Chats = slices.DeleteFunc(p.chats.Chats, func(x *Chat) bool { return x.ID == ch.ID })
 							p.chats.save()
-							p.Refresh()
+							h.Refresh()
 						}},
 					},
 				})

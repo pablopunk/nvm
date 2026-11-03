@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"sync"
 	"testing"
 
@@ -25,9 +26,8 @@ var benchQueries = []string{"cl", "clip", "show the time"}
 
 // benchOutputs keeps results alive so the compiler cannot discard the work a benchmark measures.
 var (
-	benchItems []Item
+	benchItems []search.Item
 	benchPaths []string
-	benchSink  int
 )
 
 // benchDataSet is generated once per test binary and shared read-only by the benchmarks.
@@ -70,11 +70,11 @@ func benchClipEntries(entries []fixtures.ClipboardEntry) []ClipEntry {
 // newBenchPalette returns a palette whose stores hold the J29 data set and whose root view is the
 // one the app opens. Settings, image and chat stores read and write under a temporary HOME, so the
 // benchmarks never touch the user's configuration.
-func newBenchPalette(b *testing.B) *Palette {
+func newBenchPalette(b *testing.B) *App {
 	b.Helper()
 	b.Setenv("HOME", b.TempDir())
 	data := benchData()
-	p := &Palette{
+	p := &App{
 		S:     &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Usage: map[string]int{}, Disabled: map[string]bool{}},
 		apps:  data.apps,
 		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
@@ -82,6 +82,7 @@ func newBenchPalette(b *testing.B) *Palette {
 		chats: &ChatStore{},
 		files: &FileIndex{paths: data.files, done: true},
 	}
-	p.stack = []*View{p.rootView()}
+	p.newPalette(searchClock, true)
+	p.SetStack(p.rootView())
 	return p
 }

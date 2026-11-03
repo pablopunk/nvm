@@ -1,4 +1,4 @@
-package app
+package search
 
 import (
 	"regexp"
@@ -6,7 +6,8 @@ import (
 	"unicode"
 )
 
-// Port of src/app/palette/search-ranking.ts: the score bands are the ranking contract.
+// Port of src/app/palette/search-ranking.ts and search-utils.ts: the score bands are the ranking contract.
+// Exported: ScoreFuzzy, Score and URLFromQuery; the rest is the band logic they share.
 
 func words(s string) []string {
 	return strings.FieldsFunc(s, func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsNumber(r) })
@@ -99,8 +100,9 @@ func scoreSequential(text, query string) int {
 	return 20
 }
 
-// scoreFuzzy scores lowercase text against a lowercase, non-empty query.
-func scoreFuzzy(text, query string) int {
+// ScoreFuzzy scores lowercase text against a lowercase, non-empty query: a sequential band when one
+// matches, else 10 when every query character occurs in the text.
+func ScoreFuzzy(text, query string) int {
 	if s := scoreSequential(text, query); s > 0 {
 		return s
 	}
@@ -117,15 +119,16 @@ func scoreFuzzy(text, query string) int {
 	return 10
 }
 
-func score(text, query string) int {
-	return scoreFuzzy(strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query)))
+// Score is ScoreFuzzy for text and query in any case, trimmed of surrounding space.
+func Score(text, query string) int {
+	return ScoreFuzzy(strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query)))
 }
 
 var urlRe = regexp.MustCompile(`(?i)^[\w-]+(\.[\w-]+)+([/:?#].*)?$`)
 var openRe = regexp.MustCompile(`(?i)^open\s+(.+)$`)
 
-// urlFromQuery mirrors getUrlFromQuery in search-utils.ts.
-func urlFromQuery(q string) string {
+// URLFromQuery mirrors getUrlFromQuery in search-utils.ts: the URL a query names, or "" when it names none.
+func URLFromQuery(q string) string {
 	q = strings.TrimSpace(q)
 	if m := openRe.FindStringSubmatch(q); m != nil {
 		q = strings.TrimSpace(m[1])

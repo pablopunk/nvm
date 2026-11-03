@@ -7,6 +7,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 type emojiEntry struct{ Glyph, Name string }
@@ -44,7 +46,7 @@ func (s *emojiState) refilter(q string) {
 	}
 }
 
-func (p *Palette) emojiView() *View {
+func (p *App) emojiView() *palette.View {
 	s := &p.emoji
 	s.lastQ, s.filtered = "\x00", nil
 	pick := func(paste bool) {
@@ -58,7 +60,7 @@ func (p *Palette) emojiView() *View {
 			}
 		}
 	}
-	return &View{
+	return &palette.View{
 		Title: "Emoji & Symbols", Placeholder: "Search Emoji & Symbols",
 		Hint: "↵ Copy   ⌃↵ Paste   ←↑↓→ Move", KeepQuery: true,
 		OnSubmit: func(string) { pick(false) },
@@ -69,7 +71,7 @@ func (p *Palette) emojiView() *View {
 			}
 			return "no match"
 		},
-		OnKey: func(c *ui.Context, p *Palette) bool {
+		OnKey: func(c *ui.Context, h search.Host) bool {
 			switch {
 			case c.Shortcut(0, ui.KeyRight):
 				s.chosen = min(s.chosen+1, len(s.filtered)-1)
@@ -87,9 +89,9 @@ func (p *Palette) emojiView() *View {
 			s.list.ScrollIntoView(s.chosen / emojiCols)
 			return true
 		},
-		Body: func(c *ui.Context, p *Palette) {
+		Body: func(c *ui.Context, h search.Host) {
 			t := design.Tokens(c)
-			s.refilter(p.query)
+			s.refilter(h.Query())
 			rows := (len(s.filtered) + emojiCols - 1) / emojiCols
 			ui.List(c, &s.list, rows, func(r int) {
 				ui.Row(c).Padding(2, 8).Gap(2).Children(func() {

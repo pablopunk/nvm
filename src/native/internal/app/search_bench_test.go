@@ -15,10 +15,9 @@ func BenchmarkRootSearchKeystroke(b *testing.B) {
 		b.Run("query="+query, func(b *testing.B) {
 			b.ReportAllocs()
 			for range b.N {
-				p.query = query
-				p.search()
+				p.SetQuery(query)
 			}
-			benchItems = p.results
+			benchItems = p.Results()
 		})
 	}
 }

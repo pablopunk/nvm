@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,10 +21,10 @@ func extractGo(s string) string {
 	return ms[len(ms)-1][1]
 }
 
-func (p *Palette) builderView() *View { return p.builderViewWith("") }
+func (p *App) builderView() *palette.View { return p.builderViewWith("") }
 
 // builderViewWith opens the extension builder and, given a prompt, sends it at once ("Automate ...").
-func (p *Palette) builderViewWith(prompt string) *View {
+func (p *App) builderViewWith(prompt string) *palette.View {
 	ch := &Chat{ID: newID("builder"), Updated: time.Now(), Builder: true}
 	p.chats.Chats = append([]*Chat{ch}, p.chats.Chats...)
 	v := p.chatView(ch)
@@ -34,11 +35,11 @@ func (p *Palette) builderViewWith(prompt string) *View {
 	return v
 }
 
-func (p *Palette) notice(run *chatRun, text string) {
+func (p *App) notice(run *chatRun, text string) {
 	run.chat.Messages = append(run.chat.Messages, ChatMsg{"notice", text})
 }
 
-func (p *Palette) builderDone(run *chatRun) {
+func (p *App) builderDone(run *chatRun) {
 	last := run.chat.Messages[len(run.chat.Messages)-1].Content
 	code := extractGo(last)
 	if code == "" {

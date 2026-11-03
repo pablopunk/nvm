@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"io"
 	"log"
 	"net/http"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
 )
@@ -81,9 +83,21 @@ func extensionsDir() string {
 	return d
 }
 
+// loadedExt is an extension as loaded from disk. Its functions run on the search goroutines and the tray
+// timers, and the interpreter behind them is not safe for concurrent use, so mu serializes every call.
 type loadedExt struct {
 	Extension
 	File string
+	mu   *sync.Mutex
+}
+
+// guarded runs fn under the extension's lock.
+func (e *loadedExt) guarded(fn func()) {
+	if e.mu != nil {
+		e.mu.Lock()
+		defer e.mu.Unlock()
+	}
+	fn()
 }
 
 func loadExtensions(dir string) []loadedExt {
@@ -100,7 +114,7 @@ func loadExtensions(dir string) []loadedExt {
 			continue
 		}
 		log.Printf("extension loaded: %s (%s)", ext.ID, filepath.Base(f))
-		out = append(out, loadedExt{ext, f})
+		out = append(out, loadedExt{Extension: ext, File: f, mu: &sync.Mutex{}})
 	}
 	return out
 }
@@ -135,7 +149,8 @@ func evalExtension(src string) (ext Extension, err error) {
 	return e, nil
 }
 
-func safeSearch(e Extension, q string) (out []ExtItem) {
+// safeSearch runs the extension's Search for q. A panic is logged and yields no rows.
+func safeSearch(e *loadedExt, q string) (out []ExtItem) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("extension %s search: %v", e.ID, r)
@@ -144,10 +159,11 @@ func safeSearch(e Extension, q string) (out []ExtItem) {
 	if e.Search == nil {
 		return nil
 	}
-	return e.Search(q)
+	e.guarded(func() { out = e.Search(q) })
+	return out
 }
 
-func (p *Palette) reloadExtensions() {
+func (p *App) reloadExtensions() {
 	p.exts = loadExtensions(extensionsDir())
 	p.setUpExtensionTrays()
 }
@@ -155,7 +171,7 @@ func (p *Palette) reloadExtensions() {
 type extTray struct{ stop chan struct{} }
 
 // setUpExtensionTrays gives each extension with a MenuBar its own tray item, refreshed every 10s.
-func (p *Palette) setUpExtensionTrays() {
+func (p *App) setUpExtensionTrays() {
 	for _, t := range p.extTrays {
 		t.stop <- struct{}{}
 	}
@@ -178,7 +194,9 @@ func (p *Palette) setUpExtensionTrays() {
 					log.Printf("extension %s menubar: %v", e.ID, r)
 				}
 			}()
-			title, rows := e.MenuBar()
+			var title string
+			var rows []MenuRow
+			e.guarded(func() { title, rows = e.MenuBar() })
 			tray.SetTitle(title)
 			var items []*mygo.MenuItem
 			for _, r := range rows {
@@ -204,19 +222,19 @@ func (p *Palette) setUpExtensionTrays() {
 	}
 }
 
-func (p *Palette) extensionsView() *View {
-	return &View{
+func (p *App) extensionsView() *palette.View {
+	return &palette.View{
 		Title: "Extensions", Placeholder: "Search Extensions",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{
+			out := []search.Item{
 				{Title: "Create Extension with AI", Subtitle: "Describe it; a Go extension is written, checked and installed", Icon: "zap", Tone: "yellow", Prominent: true,
-					Actions: []Action{{Title: "Create", Run: func(p *Palette) { p.Push(p.builderView()) }}}},
+					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.builderView()) }}}},
 				{Title: "Reload Extensions", Icon: "rotate-ccw", Tone: "gray",
-					Actions: []Action{{Title: "Reload", Run: func(p *Palette) {
+					Actions: []search.Action{{Title: "Reload", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						p.reloadExtensions()
-						p.Toast(fmt.Sprintf("%d extensions loaded", len(p.exts)))
-						p.Refresh()
+						h.Toast(fmt.Sprintf("%d extensions loaded", len(p.exts)))
+						h.Refresh()
 					}}}},
 			}
 			for _, e := range p.exts {
@@ -235,20 +253,20 @@ func (p *Palette) extensionsView() *View {
 				if e.MenuBar != nil {
 					kinds = append(kinds, "menu bar")
 				}
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: e.ID, Title: e.Title, Subtitle: e.ID + " · " + strings.Join(kinds, ", "), Icon: "puzzle", Tone: "purple", Accessory: state,
-					Actions: []Action{
-						{Title: "Toggle Enabled", Run: func(p *Palette) {
+					Actions: []search.Action{
+						{Title: "Toggle Enabled", Dismiss: search.DismissNever, Run: func(h search.Host) {
 							p.S.Disabled[e.ID] = !p.S.Disabled[e.ID]
 							p.S.save()
 							p.setUpExtensionTrays()
-							p.Refresh()
+							h.Refresh()
 						}},
-						{Title: "Show Source in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) { p.Hide(); mygo.Shell.ShowItemInFolder(e.File) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+						{Title: "Show Source in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(e.File) }},
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 							_ = os.Remove(e.File)
 							p.reloadExtensions()
-							p.Refresh()
+							h.Refresh()
 						}},
 					},
 				})
