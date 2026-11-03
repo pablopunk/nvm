@@ -21,6 +21,7 @@ jobs:
     outputs:
       build: ${{ steps.version.outputs.build }}
       source_sha: ${{ steps.version.outputs.sha }}
+      pointer_sha: ${{ steps.version.outputs.pointer_sha }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +29,14 @@ jobs:
           ref: main
           fetch-depth: 0
       - uses: jdx/mise-action@v2
+      - name: Record source for failure diagnosis
+        run: git rev-parse HEAD > dev-build-source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dev-build-source-sha
+          path: dev-build-source-sha.txt
+          if-no-files-found: error
+          retention-days: 30
       - name: Allocate version for source commit
         id: version
         env:
@@ -41,18 +50,10 @@ jobs:
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "build=$build" >> "$GITHUB_OUTPUT"
-      - name: Record source for failure diagnosis
-        if: steps.version.outputs.build == 'true'
-        env:
-          SOURCE_SHA: ${{ steps.version.outputs.sha }}
-        run: printf '%s\n' "$SOURCE_SHA" > dev-build-source-sha.txt
-      - uses: actions/upload-artifact@v4
-        if: steps.version.outputs.build == 'true'
-        with:
-          name: dev-build-source-sha
-          path: dev-build-source-sha.txt
-          if-no-files-found: error
-          retention-days: 30
+          echo "pointer_sha=$(jq -r '.pointerSha // empty' <<< "$plan")" >> "$GITHUB_OUTPUT"
+          if [[ "$build" == 'false' ]]; then
+            echo 'No build-relevant changes; reusing the published dev release.'
+          fi
 
   build-windows:
     name: Build Windows nightly
@@ -442,6 +443,7 @@ jobs:
           mise exec -- node .github/scripts/channel-pointer.cjs dev "$tag" "$SOURCE_SHA"
 
   repair-dev-pointer:
+    name: Ensure existing dev release is available
     needs: plan
     if: needs.plan.outputs.build == 'false'
     runs-on: ubuntu-latest
@@ -452,7 +454,7 @@ jobs:
       contents: write
     env:
       GH_TOKEN: ${{ github.token }}
-      SOURCE_SHA: ${{ needs.plan.outputs.source_sha }}
+      SOURCE_SHA: ${{ needs.plan.outputs.pointer_sha }}
       VERSION: ${{ needs.plan.outputs.version }}
     steps:
       - uses: actions/checkout@v4

@@ -48,7 +48,11 @@ function planDevVersion({
       publishedSha === sourceSha ||
       !hasRelevantChanges(publishedSha, sourceSha)
     )
-      return { version: published.tag_name.slice(1, -4), build: false };
+      return {
+        version: published.tag_name.slice(1, -4),
+        build: false,
+        pointerSha: publishedSha,
+      };
   }
 
   const draft = devReleases.find((release) => release.draft);
