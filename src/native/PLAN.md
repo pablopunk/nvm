@@ -29,6 +29,19 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | D5 | 1.x state | No migration | WP0.6, WP5.5 |
 | D6 | Architecture order | Design the extension API early (WP3.1) and keep providers shaped for it; migrate built-ins at WP3.10 | WP1.*, WP3.* |
 
+### Research addendum (from `docs/mygo-practices.md`, read it before any WP)
+
+`src/native/docs/mygo-practices.md` summarizes what the open-source MyGo apps on the showcase do. Findings that change this plan:
+
+- **Dictation (WP2.6):** MyGo's `audio` package is output only and its permission API covers web pages only, so microphone capture needs a native path (a helper or purego bindings to AVFoundation / WASAPI / PulseAudio). Size goes up and a spike comes first.
+- **Agent and extension runtimes (D1, D2):** two shipped apps embed pure-Go JS engines (Godwit runs its pi agent in `moejs`, mixmusic runs plugins in `sobek`); none uses Yaegi. Both are options for the WP2.4a and WP3.1 spikes, next to the native Go loop and the Node sidecar.
+- **Rig (WP0.3):** MyGo's automation socket drives built apps by element key, and MyGo's own CI runs GUI tests on GitHub's hosted macOS and Windows runners, so a self-hosted runner may not be needed for L5/L6 at first (to verify).
+- **Linux (WP5.4):** `linux.webview: false` removes the WebKitGTK dependency for native-only apps; the tray needs `libayatana-appindicator3`; Wayland global shortcuts need the XDG portal.
+- **Clipboard (WP1.6):** MyGo has no change event and no concealed-type handling; we own both.
+- **Persistence (WP0.6):** Godwit's atomic write and flock lease and mixmusic's "never overwrite a file you cannot decode" store are the references.
+- **Signing (WP5.1):** bundled native libraries must be signed for the hardened runtime and pinned by digest.
+- **Testing:** adopt cloudmusic's `AGENTS.md` test rules (test only what can break, no wall clock).
+
 ---
 
 ## 1. The validation ladder
@@ -454,11 +467,11 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 - **Acceptance:** ported guard tests (same vectors); fake helper tests; macOS runner test with TextEdit.
 - **Rungs:** L1, L2, L5, L6. **UX:** J21. **UI:** indicator goldens (loading, done, failed).
 
-### WP2.6 Dictation  `[L]`
+### WP2.6 Dictation  `[L-XL]`
 - **Goal:** cloud dictation end to end.
 - **Depends on:** WP2.1, WP1.10 (permissions), WP1.6 (paste).
 - **Read first:** `electron/dictation/*`, `extensions/dictation.ts`, `palette/dictation/*`, `palette/indicator/*`, `ipc/dictation-ipc.ts`, `electron/os/system-audio.ts`, MyGo `docs/audio.md`.
-- **Build:** capture with the MyGo audio package, device list and selection, level meter, encoding, upload to `/api/v1/audio`, vocabulary terms (10/30/50), history and recordings store with retention, paste into the frontmost app, indicator window, permission flow.
+- **Build:** microphone capture through a native path (MyGo's `audio` package is output only: spike a helper binary vs purego AVFoundation / WASAPI / PulseAudio first, report before building), device list and selection, level meter, encoding, upload to `/api/v1/audio`, vocabulary terms (10/30/50), history and recordings store with retention, paste into the frontmost app, indicator window, permission flow.
 - **Acceptance:** virtual-mic rig test (PulseAudio loop with a known WAV) on Linux; fake backend; macOS permission prompt flow on the runner; denied and missing-device paths.
 - **Rungs:** L1, L2, L4-L6. **UX:** J20. **UI:** indicator and history goldens.
 
