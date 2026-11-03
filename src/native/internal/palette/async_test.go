@@ -41,10 +41,12 @@ func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 		t.Fatal("the query settled while a provider was still blocked")
 	}
 
-	// The hard budget (100 ms) cuts the provider off long before its two seconds: its rows are dropped, it is
-	// counted as slow, and the query settles without it.
-	clock.Advance(2 * time.Second)
+	// The hard budget (100 ms) cuts the provider off long before its two seconds: it is counted as slow and the
+	// query settles without it. Move the clock past the budget first, then past the provider's own wait, so its
+	// late rows arrive after the cut-off (advancing both at once would let the two race).
+	clock.Advance(150 * time.Millisecond)
 	h.awaitRows(func([]string) bool { return h.p.Settled() })
+	clock.Advance(2 * time.Second)
 	if got := h.titles(); slices.Contains(got, "late") || !slices.Contains(got, "Quick") {
 		t.Fatalf("after the cut-off the rows should be the quick ones only, got %v", got)
 	}
