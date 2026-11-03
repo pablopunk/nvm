@@ -14,10 +14,12 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
+	"github.com/pablopunk/nvm/native/internal/store"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -45,10 +47,15 @@ type App struct {
 	notes    *NoteStore
 	files    *FileIndex
 	chats    *ChatStore
-	emoji    emojiState
 	timer    *Timer
 	learn    *usage.Learner
 	history  *palette.QueryHistory
+
+	ports   platform.Ports
+	store   *store.Store
+	recents *store.Collection[emojiRecents]
+	rates   *store.Collection[rateDocument]
+	calc    *calc.Calculator
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -97,12 +104,14 @@ func (p *App) loadApps() {
 func (p *App) ready() {
 	p.icons = map[string]*ui.Bitmap{}
 	p.S = loadSettings()
+	p.attachServices(real.NewPorts(), configDir(), nil)
+	p.closeStoreOnQuit()
+	prepareCatalog()
 	p.clip = newClipStore()
 	p.snips = newSnippetStore()
 	p.notes = newNoteStore()
 	p.chats = newChatStore()
 	p.files = &FileIndex{}
-	p.emoji.load()
 	notices := p.openLearning()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)

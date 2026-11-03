@@ -59,14 +59,14 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
 | WP1.1 Palette core | done | `internal/search` + `internal/palette`; root providers in `providers_wiring.go`; 52/60 frames strict-identical, 8 identical to base render |
 | WP1.2 Usage learning, query history | done | `search/usage`, history in palette; rig re-verified after merge |
-| WP1.5 Calculator library | done (library) | wiring in progress (WP1.5b) |
 | WP1.6 Clipboard engine | done (library) | wiring and real OS paste/concealed detection pending (WP1.6b) |
 | WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |
-| WP1.8 Emoji catalog | done (library) | wiring in progress (WP1.8b) |
 | WP2.1 Backend client | done | live smoke not run; `/api/me` and `/api/v1/models` findings open |
 | WP2.4a Agent loop spike | done | D2: native Go loop; owner checks tier `api` via `active-model` |
 | WP3.1 Extension API + runtime spike | done | D1: supervised child process; Go/Yaegi provisional |
 | WP4.1a Window geometry | done | 324/331 TS cases + 4,120 golden expectations from the TS engine |
+| WP1.5 Calculator and rates | ready for review | `features/calc` behind the root result row: 1.x actions and order, detail pane, `rates.json` through `internal/store`, background refresh, cache age in the subtitle. L1 and L2 green in the box; rig J03 smoke green. Not verified: macOS and Windows, live rate source |
+| WP1.8 Emoji, symbols, Unicode | ready for review | catalog grid (`palette.Grid`, virtualized), categories with Tab, skin tone from the action menu (remembered in settings), recents in `emoji-recents.json`, Copy, Paste, Copy Unicode, keyboard grid with cell labels and announcements. L2 and goldens green; rig J08 smoke green. Not verified: macOS and Windows |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 | WP2.1 Backend client | ready for review | `internal/backend`: fake-backed and recorded-contract tests green under `-race`; live smoke (`-tags livesmoke`) written, not run. `/api/me` is cookie-session only and `GET /api/v1/models` is not served by the backend source; both need backend confirmation before the live smoke can pass |
 

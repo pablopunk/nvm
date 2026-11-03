@@ -218,9 +218,20 @@ func (p *Palette) Top() *View { return p.cur() }
 // Results returns the rows on screen.
 func (p *Palette) Results() []search.Item { return p.results }
 
+// Chosen returns the index of the row the cursor is on.
+func (p *Palette) Chosen() int { return p.chosen }
+
 func (p *Palette) choose(i int) {
 	p.chosen = max(0, min(i, len(p.results)-1))
 	if len(p.results) > 0 {
-		p.list.ScrollIntoView(p.chosen)
+		p.list.ScrollIntoView(p.rowOf(p.chosen))
 	}
+}
+
+// rowOf returns the list row that holds row i: a grid puts Columns rows on each of its rows.
+func (p *Palette) rowOf(i int) int {
+	if g := p.cur().Grid; g != nil {
+		return i / max(g.Columns, 1)
+	}
+	return i
 }

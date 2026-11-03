@@ -14,11 +14,14 @@ type Options struct {
 type scoredRecord struct {
 	index int
 	score int
+	// named is set when the entry's name is the query itself, as "fire" is for the fire character.
+	named bool
 }
 
 // Search returns the entries matching query, best first. Each field (glyph, name, group, Unicode
-// values, keywords) scores with the shared bands and an entry takes its best field; ties keep catalog
-// order. An empty query lists the category in catalog order without scoring.
+// values, keywords) scores with the shared bands and an entry takes its best field. Ties go to an entry
+// whose name is the query, then keep catalog order. An empty query lists the category in catalog order
+// without scoring.
 func (c *Catalog) Search(query string, opts Options) []Entry {
 	needle := newSearchQuery(normalizeQuery(query))
 	category := c.NormalizeCategory(opts.Category)
@@ -31,6 +34,7 @@ func (c *Catalog) Search(query string, opts Options) []Entry {
 			continue
 		}
 		score := 1
+		named := false
 		if needle.text != "" {
 			if !idx.masks[index].covers(needle.mask) {
 				continue
@@ -40,8 +44,9 @@ func (c *Catalog) Search(query string, opts Options) []Entry {
 			if score == 0 {
 				continue
 			}
+			named = fields[1] == needle.text
 		}
-		matches = append(matches, scoredRecord{index: index, score: score})
+		matches = append(matches, scoredRecord{index: index, score: score, named: named})
 	}
 	if needle.text != "" {
 		slices.SortStableFunc(matches, compareScoredRecords)
@@ -49,8 +54,20 @@ func (c *Catalog) Search(query string, opts Options) []Entry {
 	return entriesOf(matches, opts.Limit)
 }
 
+// compareScoredRecords orders by score, best first. Among equal scores an entry named by the query comes first, so
+// "fire" lists the fire character before a firefighter, which matches only through a keyword.
 func compareScoredRecords(a, b scoredRecord) int {
-	return b.score - a.score
+	if a.score != b.score {
+		return b.score - a.score
+	}
+	return boolRank(b.named) - boolRank(a.named)
+}
+
+func boolRank(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }
 
 func entriesOf(matches []scoredRecord, limit int) []Entry {

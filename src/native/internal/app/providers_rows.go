@@ -37,18 +37,6 @@ const keyWebSearch = "web:search"
 // on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
 // which run there.
 
-// calculatorRows shows the result of a calculation or unit conversion.
-func calculatorRows(_ *App, _ *rootInput, q string) []search.Item {
-	disp, cp, ok := calcResult(q)
-	if !ok {
-		return nil
-	}
-	return []search.Item{{Kind: search.KindCalculator, Title: disp, Subtitle: "Copy result", Icon: "calculator", Tone: "orange", Score: scoreCalculator, Actions: []search.Action{
-		{Title: "Copy Result", Run: func(h search.Host) { mygo.Clipboard.WriteText(cp); h.Hide() }},
-		{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); pasteText(cp) }},
-	}}}
-}
-
 // timerRows offers to start a countdown for "timer 5m" and similar queries.
 func timerRows(p *App, _ *rootInput, q string) []search.Item {
 	d, ok := parseTimer(q)
@@ -233,7 +221,7 @@ func webRows(p *App, in *rootInput, q string) []search.Item {
 		return []search.Item{{Kind: search.KindWeb, Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue", Score: scoreWebURL,
 			Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}}}
 	}
-	if _, _, ok := calcResult(q); ok {
+	if _, ok := p.calc.Query(q); ok {
 		return nil
 	}
 	return []search.Item{

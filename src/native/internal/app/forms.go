@@ -117,7 +117,7 @@ func (p *App) snippetItem(sn Snippet) search.Item {
 	return search.Item{
 		ID: sn.ID, Title: sn.Name, Subtitle: sub, Icon: "type", Tone: "teal",
 		Actions: []search.Action{
-			{Title: "Paste", Run: func(h search.Host) { h.Hide(); pasteText(sn.Text) }},
+			{Title: "Paste", Run: func(h search.Host) { h.Hide(); p.pasteText(h, sn.Text) }},
 			{Title: "Copy to Clipboard", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(sn.Text); h.Hide() }},
 			{Title: "Edit", Label: "⌃E", Mods: mod, Key: ui.KeyE, Run: func(h search.Host) { h.Push(p.snippetForm(&sn)) }},
 			{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {

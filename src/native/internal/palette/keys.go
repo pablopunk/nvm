@@ -54,15 +54,19 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 	if v.Body != nil {
 		return
 	}
-	down, up := c.Shortcut(0, ui.KeyDown), c.Shortcut(0, ui.KeyUp)
-	if p.stepRootHistory(up, down) {
-		return
-	}
-	if down {
-		p.choose(p.chosen + 1)
-	}
-	if up {
-		p.choose(p.chosen - 1)
+	if v.Grid != nil {
+		p.moveGridChoice(c, v.Grid)
+	} else {
+		down, up := c.Shortcut(0, ui.KeyDown), c.Shortcut(0, ui.KeyUp)
+		if p.stepRootHistory(up, down) {
+			return
+		}
+		if down {
+			p.choose(p.chosen + 1)
+		}
+		if up {
+			p.choose(p.chosen - 1)
+		}
 	}
 	if it := p.chosenItem(); it != nil {
 		for _, a := range it.Actions[min(1, len(it.Actions)):] {

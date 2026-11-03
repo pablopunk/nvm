@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -48,7 +49,7 @@ func goldenPalette(t *testing.T) *App {
 	for _, app := range p.apps {
 		p.icons[app.Path] = goldenBitmap(t, 56, 56, goldenAppColor(app.Name))
 	}
-	p.emoji.load()
+	p.attachServices(fake.NewSet().Ports(), goldenConfig, time.UTC)
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")

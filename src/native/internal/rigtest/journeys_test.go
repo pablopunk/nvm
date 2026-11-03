@@ -4,6 +4,7 @@ package rigtest
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -131,4 +132,70 @@ func TestJourneyJ05ClipboardTextAppearsInHistory(t *testing.T) {
 	_, err = app.WaitFor(nonce, clipWait)
 	must(t, err)
 	shoot(t, app, "j05-1-clipboard-history")
+}
+
+// waitClipboard polls the X clipboard until it holds text that satisfies ok, and returns it.
+func waitClipboard(t *testing.T, app *App, ok func(string) bool) string {
+	t.Helper()
+	deadline := time.Now().Add(clipWait)
+	var got string
+	var err error
+	for {
+		got, err = app.ClipboardGet()
+		if err == nil && ok(got) {
+			return got
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("clipboard = %q (err %v) never satisfied the check", got, err)
+		}
+		time.Sleep(pollInterval)
+	}
+}
+
+// TestJourneyJ03CalculatorCopiesTheResult is the J03 smoke: "15% of 240" shows its result, 36, and Enter copies it
+// to the clipboard. Units, currency, paste into the frontmost app and the stale label of J03 are not covered yet.
+func TestJourneyJ03CalculatorCopiesTheResult(t *testing.T) {
+	app := Launch(t, Options{})
+	nonce := fmt.Sprintf("rig-calc-%d", time.Now().UnixNano())
+	must(t, app.ClipboardSet(nonce))
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("15% of 240"))
+	_, err := app.WaitFor("36", elementWait)
+	must(t, err)
+	shoot(t, app, "j03-1-result")
+
+	must(t, app.Key("Return"))
+	got := waitClipboard(t, app, func(s string) bool { return s != nonce })
+	if got != "36" {
+		t.Fatalf("clipboard = %q after Enter on the calculator row, want 36", got)
+	}
+}
+
+// TestJourneyJ08EmojiCopiesAGlyph is the J08 smoke: "emoji" opens Emoji & Symbols, "fire" finds the fire character,
+// and Enter copies it. Skin tones, Unicode values, the keyboard grid and recents of J08 are not covered yet.
+func TestJourneyJ08EmojiCopiesAGlyph(t *testing.T) {
+	app := Launch(t, Options{})
+	nonce := fmt.Sprintf("rig-emoji-%d", time.Now().UnixNano())
+	must(t, app.ClipboardSet(nonce))
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("emoji"))
+	_, err := app.WaitFor("Emoji & Symbols", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Search emoji, symbols, or Unicode values", elementWait)
+	must(t, err)
+
+	must(t, app.Type("fire"))
+	waitSearchValue(t, app, "fire")
+	_, err = app.WaitFor("Fire", elementWait)
+	must(t, err)
+	shoot(t, app, "j08-1-fire")
+
+	must(t, app.Key("Return"))
+	got := waitClipboard(t, app, func(s string) bool { return s != nonce })
+	if got == "" || strings.IndexFunc(got, func(r rune) bool { return r > 0x7f }) < 0 {
+		t.Fatalf("clipboard = %q after Enter on the fire character, want a glyph", got)
+	}
 }

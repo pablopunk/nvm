@@ -81,12 +81,33 @@ func TestPaletteChatStreamingReply(t *testing.T) {
 
 func TestPaletteEmojiGridSelection(t *testing.T) {
 	p := goldenPalette(t)
-	view := p.emojiView()
-	p.SetStack(p.rootView(), view)
-	p.SetQuery("smile")
-	p.emoji.refilter(p.Query())
-	p.emoji.chosen = 3
+	goldenOpen(p, p.emojiView())
+	goldenQuery(p, "smile")
+	p.Choose(3)
 	golden.AssertMatrix(t, "emoji-grid", p.View, paletteGoldens)
+}
+
+func TestPaletteEmojiNoResults(t *testing.T) {
+	p := goldenPalette(t)
+	goldenOpen(p, p.emojiView())
+	goldenQuery(p, "zzqx")
+	golden.AssertMatrix(t, "emoji-no-results", p.View, paletteGoldens)
+}
+
+func TestPaletteEmojiSkinTonePicker(t *testing.T) {
+	p := goldenPalette(t)
+	entry, ok := emojiCatalog.Lookup("emoji:U+1F44B")
+	if !ok {
+		t.Fatal("the catalog has no waving hand")
+	}
+	goldenOpen(p, p.skinToneView(entry))
+	golden.AssertMatrix(t, "emoji-skin-tone", p.View, paletteGoldens)
+}
+
+func TestPaletteCalculatorResult(t *testing.T) {
+	p := goldenPalette(t)
+	goldenQuery(p, "15% of 240 + 3*(2^5)")
+	golden.AssertMatrix(t, "calc-result", p.View, paletteGoldens)
 }
 
 func TestPaletteSettingsList(t *testing.T) {
