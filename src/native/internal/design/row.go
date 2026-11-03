@@ -21,7 +21,8 @@ type RowData struct {
 }
 
 // Row draws one list row: tile, title over subtitle, an accessory at the end. A selected row sits on the warm
-// selection plate with a faint gold edge; a prominent row carries the accent tint, stronger when selected.
+// selection plate with a faint gold edge; a prominent row carries the accent tint, stronger when selected; a
+// plain row under the pointer takes a faint wash, weaker than the selection plate.
 func Row(c *ui.Context, d RowData) {
 	k := Tokens(c)
 	ui.Column(c).Children(func() {
@@ -35,11 +36,14 @@ func Row(c *ui.Context, d RowData) {
 			}
 		}
 		rowEl := ui.Row(c).Padding(5, 8).Gap(10).AlignItems(ui.Center).Radius(12)
-		if d.Prominent && !d.Selected {
-			rowEl.Background(k.AccentSoft)
-		}
-		if d.Selected {
+		hovered := rowEl.Hovered()
+		switch {
+		case d.Selected:
 			SelectedFill(rowEl, k, d.Prominent)
+		case d.Prominent:
+			rowEl.Background(k.AccentSoft)
+		case hovered:
+			rowEl.Background(k.Wash)
 		}
 		tile := d.Tile
 		tile.Title, tile.Tone, tile.Prominent = d.Title, d.Tone, d.Prominent

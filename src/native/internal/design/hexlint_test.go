@@ -13,10 +13,10 @@ import (
 // internalRoot is the internal/ directory as seen from this package, where go test runs.
 const internalRoot = ".."
 
-// colorLiteralExempt are top-level directories under internal/ that may spell colors, with the reason.
+// colorLiteralExempt are top-level directories under internal/ that may spell colors, with the reason. The
+// prototype in internal/app spells none: its colors come from design tokens, so it has no exemption.
 var colorLiteralExempt = map[string]string{
 	"design": "the tokens and their tests live here",
-	"app":    "the prototype keeps its own tokens until WP0.8 moves them into design (burn down in WP0.8)",
 }
 
 var (

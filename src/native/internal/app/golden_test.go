@@ -4,6 +4,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 )
 
@@ -98,4 +100,25 @@ func TestPaletteSearchNoResults(t *testing.T) {
 	goldenOpen(p, p.settingsView())
 	goldenQuery(p, "zzqx")
 	golden.AssertMatrix(t, "no-results", p.view, paletteGoldens)
+}
+
+// shellRightToLeft and shellDoubleZoom render the palette's shell in the reading direction of Arabic and at 200
+// percent text: the two shell smoke tests of the validation protocol.
+var (
+	shellRightToLeft = golden.Options{Group: "palette", Width: width, Height: height, Interact: setRightToLeft}
+	shellDoubleZoom  = golden.Options{Group: "palette", Width: width, Height: height, Interact: setDoubleZoom}
+)
+
+func setRightToLeft(tt *ui.Tester) { tt.SetDirection(ui.RightToLeft) }
+
+func setDoubleZoom(tt *ui.Tester) { tt.SetZoom(2) }
+
+func TestPaletteRootRightToLeft(t *testing.T) {
+	p := goldenPalette(t)
+	golden.AssertMatrix(t, "root-rtl", p.view, shellRightToLeft)
+}
+
+func TestPaletteRootAtDoubleZoom(t *testing.T) {
+	p := goldenPalette(t)
+	golden.AssertMatrix(t, "root-zoom-200", p.view, shellDoubleZoom)
 }

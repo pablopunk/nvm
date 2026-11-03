@@ -40,6 +40,9 @@ type Options struct {
 	// Advance moves the fake clock forward after the first frame, then renders again, so that a view that
 	// animates (a reply still fading in, a list scrolling to its end) is compared in its settled state.
 	Advance time.Duration
+	// Interact drives the view after it settles, then renders again: it moves the pointer to a hover, sets
+	// the window's vibrancy, or moves the focus. The frame it renders is compared like any other.
+	Interact func(tt *ui.Tester)
 }
 
 // outcome reports what check did besides passing or failing.
@@ -159,6 +162,10 @@ func render(view func(c *ui.Context), opts Options) *image.RGBA {
 	tt.Frame()
 	if opts.Advance > 0 {
 		tt.Advance(opts.Advance)
+		tt.Frame()
+	}
+	if opts.Interact != nil {
+		opts.Interact(tt)
 		tt.Frame()
 	}
 	return tt.Image()
