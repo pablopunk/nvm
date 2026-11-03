@@ -143,12 +143,23 @@ func (p *App) settingsView() *palette.View {
 					p.S.save()
 					h.Refresh()
 				}}}},
-				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); h.Refresh() }}}},
+				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipOff = !p.S.ClipOff
+					p.S.save()
+					p.clip.setEnabled(!p.S.ClipOff)
+					h.Refresh()
+				}}, {Title: "Link Previews", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipNoLinks = !p.S.ClipNoLinks
+					p.S.save()
+					p.clip.setLinkPreviews(!p.S.ClipNoLinks)
+					h.Refresh()
+				}}}},
 				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					sizes := []int{50, 200, 500, 1000}
+					sizes := []int{50, 300, 500, 1000}
 					i := slices.Index(sizes, p.S.ClipLimit)
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
+					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
 				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},

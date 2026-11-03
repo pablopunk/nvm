@@ -52,12 +52,12 @@ func (p *App) emojiView() *palette.View {
 	pick := func(paste bool) {
 		if s.chosen < len(s.filtered) {
 			g := s.filtered[s.chosen].Glyph
-			p.Hide()
 			if paste {
-				pasteText(g)
-			} else {
-				mygo.Clipboard.WriteText(g)
+				p.pasteAfterHide(p, textEntry(g))
+				return
 			}
+			p.Hide()
+			mygo.Clipboard.WriteText(g)
 		}
 	}
 	return &palette.View{

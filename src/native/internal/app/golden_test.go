@@ -47,7 +47,7 @@ func TestPaletteClipboardActionMenu(t *testing.T) {
 
 func TestPaletteClipboardEmptyState(t *testing.T) {
 	p := goldenPalette(t)
-	p.clip.Entries = nil
+	p.clip = emptyClipboard(t)
 	goldenOpen(p, p.clipboardView())
 	golden.AssertMatrix(t, "clipboard-empty", p.View, paletteGoldens)
 }

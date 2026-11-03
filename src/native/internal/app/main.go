@@ -40,15 +40,17 @@ type App struct {
 	extTrays []*extTray
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
-	clip     *ClipStore
-	snips    *SnippetStore
-	notes    *NoteStore
-	files    *FileIndex
-	chats    *ChatStore
-	emoji    emojiState
-	timer    *Timer
-	learn    *usage.Learner
-	history  *palette.QueryHistory
+	clip     *clipEngine
+	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
+	paletteHidden chan struct{}
+	snips         *SnippetStore
+	notes         *NoteStore
+	files         *FileIndex
+	chats         *ChatStore
+	emoji         emojiState
+	timer         *Timer
+	learn         *usage.Learner
+	history       *palette.QueryHistory
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -97,7 +99,8 @@ func (p *App) loadApps() {
 func (p *App) ready() {
 	p.icons = map[string]*ui.Bitmap{}
 	p.S = loadSettings()
-	p.clip = newClipStore()
+	p.paletteHidden = make(chan struct{}, 1)
+	p.clip = p.openClipboard()
 	p.snips = newSnippetStore()
 	p.notes = newNoteStore()
 	p.chats = newChatStore()
@@ -115,6 +118,7 @@ func (p *App) ready() {
 	p.Attach(p.panel)
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
+	p.panel.OnHide(p.notePaletteHidden)
 
 	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
 	for i := 0; err != nil && i < 8; i++ { // a previous instance may still hold the key
@@ -126,7 +130,7 @@ func (p *App) ready() {
 	}
 	p.reloadExtensions()
 	p.setUpTray()
-	p.startClipboardWatcher()
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { p.clip.flush() })
 	go func() {
 		time.Sleep(2 * time.Second)
 		p.files.build()

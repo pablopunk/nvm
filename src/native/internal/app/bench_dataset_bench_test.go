@@ -1,16 +1,15 @@
 package app
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"fmt"
-	"github.com/pablopunk/nvm/native/internal/search"
 	"sync"
 	"testing"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
+
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // The J29 data set of PLAN.md section 3.1: 500 applications, 50k files and 5k clipboard items.
@@ -34,7 +33,7 @@ var (
 type benchDataSet struct {
 	apps  []mygo.InstalledApp
 	files []string
-	clips []ClipEntry
+	clips []clipboard.Entry
 }
 
 var benchData = sync.OnceValue(func() benchDataSet {
@@ -49,20 +48,21 @@ var benchData = sync.OnceValue(func() benchDataSet {
 	}
 })
 
-// benchClipEntries converts generated copies into the history the app keeps. Concealed copies are
-// dropped, as the app never records them.
-func benchClipEntries(entries []fixtures.ClipboardEntry) []ClipEntry {
-	out := make([]ClipEntry, 0, len(entries))
+// benchClipEntries converts generated copies into the entries the history keeps, newest first. Concealed copies
+// are dropped, as the app never records them.
+func benchClipEntries(entries []fixtures.ClipboardEntry) []clipboard.Entry {
+	out := make([]clipboard.Entry, 0, len(entries))
 	for i, entry := range entries {
 		if entry.Concealed {
 			continue
 		}
 		if entry.PNG != nil {
-			out = append(out, ClipEntry{ID: fmt.Sprintf("img-%d", i), Kind: "image", Image: fmt.Sprintf("img-%d.png", i), W: 16, H: 16, At: entry.At})
+			out = append(out, clipboard.Entry{ID: fmt.Sprintf("image:%d", i), Kind: clipboard.KindImage, ImageRef: fmt.Sprintf("%040x.png", i), Width: 16, Height: 16, CreatedAt: entry.At})
 			continue
 		}
-		sum := sha1.Sum([]byte(entry.Text))
-		out = append(out, ClipEntry{ID: hex.EncodeToString(sum[:8]), Kind: "text", Text: entry.Text, At: entry.At})
+		if id := clipboard.TextID(entry.Text); id != "" {
+			out = append(out, clipboard.Entry{ID: id, Kind: clipboard.KindText, Text: entry.Text, CreatedAt: entry.At})
+		}
 	}
 	return out
 }
@@ -77,7 +77,7 @@ func newBenchPalette(b *testing.B) *App {
 	p := &App{
 		S:     &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
 		apps:  data.apps,
-		clip:  &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
+		clip:  benchClipboard(b, data.clips),
 		snips: &SnippetStore{},
 		chats: &ChatStore{},
 		files: &FileIndex{paths: data.files, done: true},
