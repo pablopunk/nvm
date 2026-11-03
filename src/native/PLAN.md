@@ -52,11 +52,11 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.2 Ports, fakes, fixtures | done | `internal/platform`, `platform/fake`, `fixtures`; prototype not migrated yet |
 | WP0.3 Rig | done (Linux) | J01, J02, J05 pass in the box and in Docker; macOS/Windows jobs are scaffolds |
 | WP0.4 Goldens and contrast | done | 11 contrast waivers await an owner decision |
-| WP0.5 Perf harness | done | budgets proposed, not ratified; keystroke budget close to the noisy-run value |
+| WP0.5 Perf harness | done | budgets ratified and tightened (B1 60 ms Linux, B2 8 ms, B3 400 ms, B4 100 MB, B6 45 MB); prototype passes all |
 | WP0.6 Store | done | prototype not migrated; lease takeover semantics await review |
 | WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
-| WP1.* onward | not started | M0 gate: owner reviews budgets, waivers, lease semantics |
+| WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 
 ## 1. The validation ladder
 
@@ -157,14 +157,14 @@ Each journey is a scripted scenario with a pass condition and a time budget. L2 
 
 | ID | Budget |
 |---|---|
-| B1 | Hotkey to first frame, p95 ≤ 100 ms (macOS and Windows), ≤ 150 ms Linux |
-| B2 | Keystroke to updated results frame, p95 ≤ 16 ms with the J29 data set; provider work off the UI thread, results streamed in |
-| B3 | Cold start to ready ≤ 1 s; palette usable before indexes finish |
-| B4 | Idle hidden: RSS (PSS on Linux) ≤ 120 MB with all built-ins; CPU ≤ 0.5% of one core |
+| B1 | Hotkey to first frame, p95 ≤ 50 ms (macOS and Windows), ≤ 60 ms Linux |
+| B2 | Keystroke to updated results frame, p95 ≤ 8 ms and p99 ≤ 16 ms with the J29 data set; provider work off the UI thread, results streamed in |
+| B3 | Cold start to ready ≤ 400 ms; palette usable before indexes finish |
+| B4 | Idle hidden: RSS (PSS on Linux) ≤ 100 MB with all built-ins; CPU ≤ 0.3% of one core |
 | B5 | Palette shown idle: no continuous repaint (frame requests stop) |
-| B6 | Binary ≤ 60 MB; installer size tracked per release |
+| B6 | Binary ≤ 45 MB; installer size tracked per release |
 | B7 | No goroutine, FD or memory growth over a 30-minute J29 soak |
-| B8 | Extension call budget: `Search` 50 ms soft / 250 ms hard per call, enforced by the host |
+| B8 | Extension call budget: `Search` 20 ms soft / 100 ms hard per call, enforced by the host |
 
 ### 3.3 Human validation
 

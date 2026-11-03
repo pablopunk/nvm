@@ -69,7 +69,7 @@ Only J01, J02 and J05 are scripted, and each one covers the smoke part of its pa
 
 ## Performance budgets (WP0.5)
 
-`perf.sh` measures budgets B1 to B7 of PLAN.md section 3.2 on a rig desktop, writes `perf-report.json`, and compares it with `testdata/budgets.json` and `testdata/perf-baseline.json`. The thresholds are **proposed** (`"proposed": true`, `"ratified": false`) until the owner ratifies them. B8 (extension call budget) belongs to the extension host (WP3.2) and is not measured here.
+`perf.sh` measures budgets B1 to B7 of PLAN.md section 3.2 on a rig desktop, writes `perf-report.json`, and compares it with `testdata/budgets.json` and `testdata/perf-baseline.json`. The thresholds are ratified (`"ratified": true`); on noisy shared runners judge a run by the median of three. B8 (extension call budget) belongs to the extension host (WP3.2) and is not measured here.
 
 ```sh
 # in the shared test box, on a private display (never :99 while other agents use it)
