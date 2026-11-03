@@ -28,6 +28,11 @@ type Options struct {
 	// Hotkey is written to the isolated settings.json, for a rig that must not share a grab with
 	// another app on the display. Empty keeps the app default, Alt+Shift+Space.
 	Hotkey string
+	// Home is the HOME of this launch, kept by the caller. A second launch with the same Home runs
+	// the app over the state the first one left (J10). Empty gives the launch a fresh HOME.
+	Home string
+	// Run names this launch in the artifacts (app-<Run>.log), for a test that launches more than once.
+	Run string
 }
 
 // App is one launched copy of the app, isolated from the user's and from other launches: its own
@@ -79,7 +84,13 @@ func Launch(t *testing.T, opts Options) *App {
 		done:      make(chan struct{}),
 	}
 	a.logPath = filepath.Join(a.artifacts, "app.log")
+	if opts.Run != "" {
+		a.logPath = filepath.Join(a.artifacts, "app-"+sanitizeName(opts.Run)+".log")
+	}
 	home := filepath.Join(base, "home")
+	if opts.Home != "" {
+		home = opts.Home
+	}
 	runtimeDir := filepath.Join(base, "xdg")
 	for _, dir := range []string{home, runtimeDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
