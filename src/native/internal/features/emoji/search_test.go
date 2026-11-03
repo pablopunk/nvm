@@ -71,7 +71,7 @@ func TestSearchFindsEntriesByNameKeywordCharacterAndUnicode(t *testing.T) {
 		want  string
 	}{
 		{"name", "grinning face", "😀"},
-		{"keyword exact", "smile", "😀"},
+		{"name beats keyword", "smile", "⌣"},
 		{"character", "∞", "∞"},
 		{"unicode value", "U+1F600", "😀"},
 		{"bare hex value", "1f600", "😀"},
@@ -116,6 +116,15 @@ func TestEmptyQueryListsCatalogInOrder(t *testing.T) {
 		if all[index].ID() != results[index].ID() {
 			t.Fatalf("empty query reordered entries at %d", index)
 		}
+	}
+}
+
+// TestSearchPutsTheEntryNamedByTheQueryFirst checks the tie rule: "fire" is also a keyword of the firefighters,
+// which score the same exact band, and the character named fire must still lead.
+func TestSearchPutsTheEntryNamedByTheQueryFirst(t *testing.T) {
+	top := NewCatalog().Search("fire", Options{Limit: 1})
+	if len(top) == 0 || top[0].Name() != "fire" {
+		t.Fatalf("Search(fire) does not start with the fire character: %d results", len(top))
 	}
 }
 
