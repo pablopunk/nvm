@@ -22,7 +22,7 @@ import {
   CommandRow,
   ListView,
   ProgressView,
-} from '../../../src/app/palette/ui';
+} from '../../../../app/palette/ui';
 import type { EXTENSION_SCENES } from './extension-scenes';
 import { tween } from './timeline';
 

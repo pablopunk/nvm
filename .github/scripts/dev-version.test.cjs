@@ -80,6 +80,7 @@ test('skips non-package changes since the last published build', () => {
     'AGENTS.md',
     '.agents/skills/a.md',
     'marketing/index.html',
+    'src/backend/marketing/theme-switcher/src/index.tsx',
     'src/backend/package.json',
     'src/backend/src/pages/index.astro',
     'tests/electron/palette.smoke.spec.ts',
