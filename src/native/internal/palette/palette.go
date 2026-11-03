@@ -40,6 +40,9 @@ type Options struct {
 	History *QueryHistory
 	// Learner ranks and records the rows that carry a LearnKey. Nil disables learning.
 	Learner search.Learner
+	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
+	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
+	DragRow func(c *ui.Context, paths []string, draw func())
 }
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.

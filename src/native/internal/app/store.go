@@ -49,6 +49,10 @@ type Settings struct {
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
+	// FileRoots are the folders the Files index covers; empty means the standard personal folders.
+	FileRoots []string
+	// FileIgnore adds ignore patterns to the Files index, on top of the defaults.
+	FileIgnore []string
 }
 
 type Quicklink struct {

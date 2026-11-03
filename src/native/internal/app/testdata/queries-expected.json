@@ -448,8 +448,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -479,8 +487,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -591,8 +607,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -684,8 +708,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -775,6 +807,45 @@
           {
             "title": "Open",
             "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads",
+        "section": "Files",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },
@@ -1387,8 +1458,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -1418,8 +1497,94 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "release-plan.txt",
+        "subtitle": "~/Documents",
+        "section": "Files",
+        "id": "$HOME/Documents/release-plan.txt",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/release-plan.txt",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads",
+        "section": "Files",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -1738,8 +1903,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -1870,8 +2043,16 @@
             "label": "⌃↵"
           },
           {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
             "title": "Copy Path",
             "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
           },
           {
             "title": "Move to Trash",
@@ -1999,6 +2180,45 @@
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "meeting-notes.md",
+        "subtitle": "~/Documents",
+        "section": "Files",
+        "id": "$HOME/Documents/meeting-notes.md",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/meeting-notes.md",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },

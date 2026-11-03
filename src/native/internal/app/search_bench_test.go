@@ -46,7 +46,7 @@ func BenchmarkFileIndexSearch(b *testing.B) {
 			b.Run(fmt.Sprintf("limit=%d/query=%s", limit, query), func(b *testing.B) {
 				b.ReportAllocs()
 				for range b.N {
-					benchPaths = p.files.search(query, limit)
+					benchPaths = searchFilePaths(p.files, query, limit)
 				}
 			})
 		}

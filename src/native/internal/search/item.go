@@ -52,6 +52,8 @@ type Item struct {
 	Prominent bool   // accent-tinted row (Automate)
 	TintTitle bool   // title in the tone's color
 	IconPath  string // file whose system icon is shown
+	// DragPaths are files the row drags out to other applications. Empty means the row does not drag.
+	DragPaths []string
 	Image     *ui.Bitmap
 	Accessory string
 	Actions   []Action

@@ -166,21 +166,6 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// fileRows shows the best four matches of the file index once two characters are typed.
-func fileRows(p *App, in *rootInput, q string) []search.Item {
-	if len(strings.ToLower(q)) < 2 || !in.filesDone {
-		return nil
-	}
-	var out []search.Item
-	for i, path := range searchPaths(in.files, q, 4) {
-		fi := p.fileItem(path)
-		fi.Kind = search.KindFiles
-		fi.Score = scoreFileFirst - i
-		out = append(out, fi)
-	}
-	return out
-}
-
 // clipboardRows shows the two newest text copies that contain a query of three characters or more.
 func clipboardRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)

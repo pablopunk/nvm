@@ -26,8 +26,6 @@ type rootInput struct {
 	clips      []ClipEntry
 	chats      []chatHead
 	timerOn    bool
-	files      []string
-	filesDone  bool
 }
 
 // chatHead is what the conversation rows read from a chat. The chat itself is opened on the UI thread only.
@@ -43,7 +41,6 @@ func (p *App) captureRoot() *rootInput {
 	for _, ch := range p.chats.Chats {
 		chats = append(chats, chatHead{chat: ch, title: ch.Title, builder: ch.Builder})
 	}
-	paths, done := p.files.snapshot()
 	return &rootInput{
 		engine:     p.engine(),
 		quicklinks: slices.Clone(p.S.Quicklinks),
@@ -55,8 +52,6 @@ func (p *App) captureRoot() *rootInput {
 		clips:      p.clip.Entries,
 		chats:      chats,
 		timerOn:    p.timer != nil,
-		files:      paths,
-		filesDone:  done,
 	}
 }
 
@@ -66,6 +61,10 @@ func (p *App) rootProviders() []search.Provider {
 	in := p.captureRoot()
 	out := make([]search.Provider, 0, len(rootSources))
 	for _, source := range rootSources {
+		if source.provider != nil {
+			out = append(out, source.provider(p))
+			continue
+		}
 		rows := source.rows
 		out = append(out, search.NewRowsProvider(source.id, func(_ context.Context, q string) []search.Item {
 			return rows(p, in, q)

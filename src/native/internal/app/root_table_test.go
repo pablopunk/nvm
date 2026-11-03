@@ -76,13 +76,13 @@ func rootTableFixture(t *testing.T) *App {
 	}
 	p.S.Quicklinks = []Quicklink{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
 	p.exts = []loadedExt{{Extension: Extension{ID: "user.fixture", Title: "Fixture", Search: fixtureExtensionSearch}, File: "fixture.go"}}
-	p.files = &FileIndex{done: true, paths: []string{
+	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),
 		filepath.Join(home, "Desktop", "Settings.png"),
 		filepath.Join(home, "Downloads", "clipboard-export.csv"),
 		filepath.Join(home, "Pictures", "cloud-setup.jpg"),
-	}}
+	})
 	return p
 }
 
