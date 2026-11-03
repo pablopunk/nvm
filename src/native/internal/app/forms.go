@@ -45,24 +45,12 @@ func (p *Palette) formView(title string, fields []*FormField, onSubmit func(vals
 			return false
 		},
 		Body: func(c *ui.Context, p *Palette) {
-			t := design.Tokens(c)
 			ui.Column(c).Padding(18).Gap(10).Grow(1).Children(func() {
 				for i, f := range fields {
-					ui.Text(c, f.Label).FontSize(12).Bold().TextColor(t.Secondary)
-					if f.Multiline {
-						ta := ui.TextArea(c, &f.Value).Grow(1).Placeholder(f.Placeholder).FontSize(13)
-						if i == 0 {
-							ta.AutoFocus()
-						}
-					} else {
-						ti := ui.TextInput(c, &f.Value).Placeholder(f.Placeholder)
-						if i == 0 {
-							ti.AutoFocus()
-						}
-					}
+					design.FormField(c, design.FieldData{Label: f.Label, Placeholder: f.Placeholder, Value: &f.Value, Multiline: f.Multiline, Focus: i == 0})
 				}
 				if errText != "" {
-					ui.Text(c, errText).TextColor(t.Danger).FontSize(12)
+					design.FormError(c, errText)
 				}
 			})
 		},

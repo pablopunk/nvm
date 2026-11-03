@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
 )
@@ -131,19 +130,14 @@ func (p *Palette) transcript(c *ui.Context, run *chatRun) {
 				ui.Column(c).Padding(6, 4).Children(func() {
 					switch m.Role {
 					case "user":
-						ui.Row(c).Children(func() {
-							ui.Spacer(c)
-							ui.Text(c, m.Content).FontSize(13).TextColor(k.Strong).Padding(8, 12).Radius(14).Background(k.Interactive).Border(1, k.EdgeSubtle).InsetShadow(0, 1, 0, 0, k.Hi).MaxWidth(520)
-						})
+						design.UserBubble(c, m.Content)
 					case "notice":
 						ui.Text(c, m.Content).FontSize(12).TextColor(k.Tertiary)
 					default:
 						if m.Content == "" {
 							ui.Spinner(c)
-						} else if run.streaming && i == len(msgs)-1 {
-							markdown.Stream(c, m.Content, &p.md)
 						} else {
-							markdown.View(c, m.Content, &p.md)
+							replyMarkdown(c, m.Content, run.streaming && i == len(msgs)-1, &p.md)
 						}
 					}
 				})
