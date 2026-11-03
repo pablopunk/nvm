@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "decision_model_unavailable",
+    "message": "No decision model is configured."
+  }
+}
