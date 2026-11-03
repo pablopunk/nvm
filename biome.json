@@ -7,7 +7,14 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "includes": ["**", "!backend", "!dist", "!release", "!src/backend", "!src/native"]
+    "includes": [
+      "**",
+      "!backend",
+      "!dist",
+      "!release",
+      "!src/backend",
+      "!src/native"
+    ]
   },
   "formatter": {
     "enabled": true,
