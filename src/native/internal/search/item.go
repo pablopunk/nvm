@@ -60,4 +60,8 @@ type Item struct {
 	// Score ranks the row against the others of its query: the merged results are sorted by it, highest
 	// first, with ties kept in provider order.
 	Score int
+	// LearnKey names the row to the usage learner. The coordinator raises Score by what the user chose for
+	// the key before, and the palette records the key when the row's primary action runs. Empty means the
+	// row is not learned.
+	LearnKey string
 }

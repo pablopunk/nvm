@@ -75,6 +75,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 		p.Pop()
 	}
 	if events.Changed {
+		p.resetRootHistory()
 		p.search()
 	}
 	if events.Submitted {

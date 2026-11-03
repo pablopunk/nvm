@@ -35,6 +35,7 @@ func (p *Palette) coordinator(v *View) *search.Coordinator {
 		v.coord = search.NewCoordinator(search.Options{
 			Clock:       p.opts.Clock,
 			Synchronous: p.opts.Synchronous,
+			Learner:     p.opts.Learner,
 			OnSnapshot: func(s search.Snapshot) {
 				p.win.Update(func() { p.applySnapshot(v, s) })
 			},

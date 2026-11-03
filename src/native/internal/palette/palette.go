@@ -35,6 +35,11 @@ type Options struct {
 	AskAI func(q string) *View
 	// OnShow runs each time the palette is shown, after its state is reset; the host loads what its rows need.
 	OnShow func()
+	// History remembers the queries submitted at the root and recalls them with ArrowUp and ArrowDown. Nil
+	// disables it.
+	History *QueryHistory
+	// Learner ranks and records the rows that carry a LearnKey. Nil disables learning.
+	Learner search.Learner
 }
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.
@@ -98,6 +103,7 @@ func (p *Palette) Show() {
 	p.query = ""
 	p.actionsOpen = false
 	p.shownView = nil
+	p.resetRootHistory()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()

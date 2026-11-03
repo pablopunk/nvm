@@ -11,6 +11,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
 
 // goldenNow is the instant every golden reads as "now", so relative times ("3m ago") never drift.
@@ -32,9 +34,9 @@ func goldenPalette(t *testing.T) *App {
 	p := &App{
 		S: &Settings{
 			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
-			Usage:    map[string]int{"org.mozilla.firefox": 3, "org.gnome.Terminal.desktop": 1},
 			Disabled: map[string]bool{},
 		},
+		learn: goldenUsage(),
 		clip:  goldenClipboard(t),
 		snips: &SnippetStore{Items: goldenSnippets()},
 		notes: &NoteStore{Items: goldenNotes()},
@@ -67,6 +69,17 @@ func swapForGolden(t *testing.T) {
 }
 
 func goldenConfigDirectory() string { return goldenConfig }
+
+// goldenUsage is the learned state the goldens and the root table read: Firefox used three times and Terminal
+// once, so the apps listed at the root are the ones used before. Nothing is written anywhere.
+func goldenUsage() *usage.Learner {
+	learn := usage.NewMemory(fake.NewClock())
+	for range 3 {
+		learn.Record("app:org.mozilla.firefox", "")
+	}
+	learn.Record("app:org.gnome.Terminal.desktop", "")
+	return learn
+}
 
 func goldenClockNow() time.Time { return goldenNow }
 

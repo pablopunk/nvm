@@ -30,11 +30,13 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		return
 	}
 	if len(p.stack) == 1 && p.opts.AskAI != nil && strings.TrimSpace(p.query) != "" && c.Shortcut(0, ui.KeyTab) {
+		p.rememberQuery(p.query)
 		p.push(p.opts.AskAI(strings.TrimSpace(p.query)))
 		return
 	}
 	if c.Shortcut(0, ui.KeyEscape) {
 		switch {
+		case p.restoreRootDraft():
 		case p.query != "":
 			p.query = ""
 			p.search()
@@ -52,10 +54,14 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 	if v.Body != nil {
 		return
 	}
-	if c.Shortcut(0, ui.KeyDown) {
+	down, up := c.Shortcut(0, ui.KeyDown), c.Shortcut(0, ui.KeyUp)
+	if p.stepRootHistory(up, down) {
+		return
+	}
+	if down {
 		p.choose(p.chosen + 1)
 	}
-	if c.Shortcut(0, ui.KeyUp) {
+	if up {
 		p.choose(p.chosen - 1)
 	}
 	if it := p.chosenItem(); it != nil {

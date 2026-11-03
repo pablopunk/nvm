@@ -47,6 +47,9 @@ type Options struct {
 	// OnSnapshot receives every snapshot of an asynchronous query. It runs on a provider's goroutine, never
 	// under the coordinator's lock, so it may hand the snapshot to the UI thread.
 	OnSnapshot func(Snapshot)
+	// Learner raises the score of the rows that carry a LearnKey by what the user chose for them. Nil means
+	// no row is learned.
+	Learner Learner
 }
 
 // ProviderStats counts the calls of one provider over the coordinator's life.
@@ -251,7 +254,7 @@ func (c *Coordinator) deliver(ctx context.Context, gen, idx int, b Batch) {
 		return
 	}
 	s := c.slots[idx]
-	s.items = append(s.items, b.Items...)
+	s.items = append(s.items, c.learned(b.Items, c.query)...)
 	if b.Final {
 		c.finishLocked(s)
 	}

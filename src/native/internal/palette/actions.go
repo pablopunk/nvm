@@ -22,10 +22,18 @@ func (p *Palette) chosenItem() *search.Item {
 	return &p.results[p.chosen]
 }
 
-// runDefault runs the first action of the chosen row: what Enter does.
+// runDefault runs the first action of the chosen row: what Enter does. At the root the query is remembered
+// first, and the row's learn key is recorded with the query after its action has run.
 func (p *Palette) runDefault() {
-	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
-		p.runAction(it.Actions[0])
+	it := p.chosenItem()
+	if it == nil || len(it.Actions) == 0 {
+		return
+	}
+	query, key := strings.TrimSpace(p.query), it.LearnKey
+	p.rememberQuery(query)
+	p.runAction(it.Actions[0])
+	if key != "" && p.opts.Learner != nil {
+		p.opts.Learner.Record(key, query)
 	}
 }
 

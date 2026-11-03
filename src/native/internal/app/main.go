@@ -17,6 +17,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -46,11 +47,19 @@ type App struct {
 	chats    *ChatStore
 	emoji    emojiState
 	timer    *Timer
+	learn    *usage.Learner
+	history  *palette.QueryHistory
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
-// without one.
+// without one. A learner and a history that nothing persists are used when the caller set none.
 func (p *App) newPalette(clock platform.Clock, synchronous bool) {
+	if p.learn == nil {
+		p.learn = usage.NewMemory(clock)
+	}
+	if p.history == nil {
+		p.history = palette.NewQueryHistory(nil, nil)
+	}
 	p.Palette = palette.New(palette.Options{
 		Root:        p.rootView(),
 		Clock:       clock,
@@ -59,6 +68,8 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.loadApps,
+		History:     p.history,
+		Learner:     p.learn,
 	})
 }
 
@@ -92,7 +103,9 @@ func (p *App) ready() {
 	p.chats = newChatStore()
 	p.files = &FileIndex{}
 	p.emoji.load()
+	notices := p.openLearning()
 	p.newPalette(searchClock, false)
+	p.showLearningNotices(notices)
 
 	p.panel = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Nevermind", Panel: true, Hidden: true, Frameless: true, Transparent: true,
