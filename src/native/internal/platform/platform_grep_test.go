@@ -21,6 +21,7 @@ const internalRoot = ".."
 var exemptTrees = map[string]string{
 	"platform": "the ports and their implementations are the only code allowed to touch the OS",
 	"app":      "the prototype; burn down in later work packages (PLAN.md section 5)",
+	"rigtest":  "rig test tooling drives the real OS from tests and is never imported by production code",
 }
 
 // allowedImports are forbidden imports that a top-level directory may still use, with the reason.
