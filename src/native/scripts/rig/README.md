@@ -66,3 +66,46 @@ Each journey test saves `*-palette.png` and `*-desktop.png` per step (names star
 ## What the rig does not cover yet
 
 Only J01, J02 and J05 are scripted, and each one covers the smoke part of its pass condition: no focus restoration, frecency, paste into another app, pinning, or restart durability. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
+
+## Performance budgets (WP0.5)
+
+`perf.sh` measures budgets B1 to B7 of PLAN.md section 3.2 on a rig desktop, writes `perf-report.json`, and compares it with `testdata/budgets.json` and `testdata/perf-baseline.json`. The thresholds are **proposed** (`"proposed": true`, `"ratified": false`) until the owner ratifies them. B8 (extension call budget) belongs to the extension host (WP3.2) and is not measured here.
+
+```sh
+# in the shared test box, on a private display (never :99 while other agents use it)
+scripts/boxgo.sh wp05 'RIG_DISPLAY=:96 RIG_ARTIFACTS=/root/wp/wp05-logs bash scripts/rig/entrypoint.sh bash scripts/rig/perf.sh --soak=2m'
+```
+
+Options: `--soak=<duration>` (default 2m; PLAN's full soak is 30m), `--warn-only` (print violations, exit 0, still write the report), `--write-baseline` (store this run as `testdata/perf-baseline.json`). Exit 1 means a budget was violated (or the measurement itself failed); the table shows each budget, its value, the limit, the status, and the delta from the baseline.
+
+| Budget | Measured as | Where |
+| --- | --- | --- |
+| B1 | Hotkey to first frame, p50/p95 over 20 presses: from the `xdotool key` call (including its spawn) until the automation `windows` answer says visible and `idle` returns (no frame pending). A press repeated after 1 s is counted in the sample. | `perf_measure_test.go` |
+| B2 | Keystroke to updated results, p50/p95 over 30 letters: from the return of `xdotool key` until the palette's result rows (its elements minus the search field) change. The spawn of xdotool is excluded. | `perf_measure_test.go` |
+| B3 | Process start to the `ready` log line, polled every 5 ms. | `perf_test.go` |
+| B4 | CPU of the process tree over 30 s with the palette hidden; PSS summed over the tree at the end. | `perf_measure_test.go` |
+| B5 | CPU of the process tree over 10 s with the palette shown, focused, query empty. The idle answer afterwards is a diagnostic. | `perf_measure_test.go` |
+| B6 | Size of the default build (what ships). The rig build is recorded for information. | `perf_test.go` |
+| B7 | Soak loop (summon, type, clear, dismiss) for `-soak`; counters from the `perfdebug` endpoint after each cycle. Goroutine and FD growth are the difference of medians of the last five samples and of five baseline samples taken after three warm-up cycles. Heap growth is the same on post-collection heap; the rising fraction is the share of samples where the heap went up. | `perf_soak_test.go` |
+
+The J29 data set is seeded into the app's isolated HOME before each launch (`perf_seed_test.go`): 5,000 clipboard items and 50,000 files (the app indexed 54,824 files on the box). The 500 applications are not seeded; the rig desktop's own list is what the palette shows, so application-heavy numbers are only in the Go benchmarks.
+
+The app is built with `-tags automation,perfdebug`. The `perfdebug` tag compiles the counters endpoint (`internal/perf/debug_perfdebug.go`), which listens only on a loopback address given in `NVM_PERF_DEBUG`. Default builds link nothing for it.
+
+The renderer in the report is the one the app logs (`OpenGL draws on the CPU (...)`) when it logs one, and `unknown` otherwise.
+
+### Benchmarks
+
+`scripts/rig/bench-summary.sh [benchtime]` runs the app benchmarks (`internal/app/*_bench_test.go`: ranking over 10k, 50k and 100k names; the root search on the real root view for `cl`, `clip` and `show the time`; the clipboard view's filter over 5k items; the file index over 50k paths) and prints a markdown table for a PR. Run it in the box: `scripts/boxgo.sh wp05 'bash scripts/rig/bench-summary.sh 1s'`. The benchmarks use the same fixture generators as the rig, but the application list is 500 fixtures and the stores are the fixture stores, so they measure search, not rendering, the extension host or the clipboard watcher.
+
+### Comparing and the CI note
+
+`cmd/perfcompare` does the comparison; `perf.sh` calls it. A budget with no measurement fails as `MISSING`. For CI, the intended step is `perf.sh --warn-only` on pull requests that touch `src/native` (on a rig runner, not a maintainer's desktop), with the table posted as a PR comment that shows deltas from the baseline stored on `main`. The workflow change is not in WP0.5; it belongs with the rig job in `native-rig.yml`.
+
+### Limits
+
+- Timing comes from xdotool and the automation socket, which add a few milliseconds of latency of their own. B2 is therefore an upper bound, and B1 includes the xdotool spawn as PLAN's "key press" wording implies.
+- The rig renders with Mesa software GL under Xvfb (llvmpipe). Frame times are not GPU frame times; B5 is about whether frames stop, which holds regardless.
+- Other processes on a shared box change CPU and latency numbers. Run the perf script when the box is quiet, and repeat it before comparing numbers across runs.
+- The first hotkey press after `ready` can be lost; B1 repeats it after one second and counts the repeat, so a lost press shows in the percentiles.
+- macOS and Windows numbers (the 100 ms B1 budget there) are not measured by this harness.
