@@ -1,3 +1,4 @@
 nvm-native
 nvm-clone
 *.test
+/nvm

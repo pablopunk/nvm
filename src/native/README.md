@@ -57,8 +57,8 @@ checks it, errors go back to the model (two retries), and it is installed live. 
 
 ```sh
 cd src/native
-go run .          # Alt+Shift+Space opens the palette
-NVM_THEME=dark go run .   # force the dark theme for previews
+go run ./cmd/nvm          # Alt+Shift+Space opens the palette
+NVM_THEME=dark go run ./cmd/nvm   # force the dark theme for previews
 ```
 
 Config lives in `~/.config/nvm-native/` (`settings.json`, `clipboard.json`, `snippets.json`, `notes.json`,
@@ -86,12 +86,16 @@ microphone/dictation (not ported), window management (macOS-only in the product;
 ## Layout
 
 ```
-main.go        app wiring, window, hotkey, tray
-palette.go     view stack, rendering, keys, action menu
-providers.go   root search, commands, settings
-ranking.go     port of search-ranking.ts
-theme.go depth.go   tokens (from theme.css) and surface helpers
-clipboard.go emoji.go files.go forms.go system.go calc.go   features
-ai.go          chat + extension builder
-ext.go         Yaegi runtime and the `nvm` API
+cmd/nvm/            entry point (calls internal/app.Run)
+internal/app/      the prototype, one package for now (PLAN.md section 5 splits it)
+  main.go           app wiring, window, hotkey, tray
+  palette.go        view stack, rendering, keys, action menu
+  providers.go      root search, commands, settings
+  ranking.go        port of search-ranking.ts
+  theme.go depth.go tokens (from theme.css) and surface helpers
+  clipboard.go emoji.go files.go forms.go system.go calc.go   features
+  ai.go             chat + extension builder
+  ext.go            Yaegi runtime and the `nvm` API
+internal/*/        placeholders for the planned layers (doc.go only)
+internal/layers/   layer order and file-size ratchet tests
 ```

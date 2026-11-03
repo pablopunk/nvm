@@ -1,5 +1,5 @@
 // nvm-clone: Nevermind as a pure-Go MyGo app (native UI, no Node, no webview).
-package main
+package app
 
 import (
 	"bytes"
@@ -93,7 +93,7 @@ func trayIcon() []byte {
 	return b.Bytes()
 }
 
-func main() {
+func Run() {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}

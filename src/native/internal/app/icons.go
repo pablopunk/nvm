@@ -1,4 +1,4 @@
-package main
+package app
 
 // lucide icons (ISC) used by the palette.
 var iconSources = map[string]string{
