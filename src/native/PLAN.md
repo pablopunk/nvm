@@ -44,6 +44,20 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 
 ---
 
+## Progress
+
+| WP | Status | Notes |
+|---|---|---|
+| WP0.1 Workspace, layering, CI | done | single `internal/app` package for the prototype; layer and size guards in `internal/layers` |
+| WP0.2 Ports, fakes, fixtures | done | `internal/platform`, `platform/fake`, `fixtures`; prototype not migrated yet |
+| WP0.3 Rig | done (Linux) | J01, J02, J05 pass in the box and in Docker; macOS/Windows jobs are scaffolds |
+| WP0.4 Goldens and contrast | done | 11 contrast waivers await an owner decision |
+| WP0.5 Perf harness | done | budgets proposed, not ratified; keystroke budget close to the noisy-run value |
+| WP0.6 Store | done | prototype not migrated; lease takeover semantics await review |
+| WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
+| WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
+| WP1.* onward | not started | M0 gate: owner reviews budgets, waivers, lease semantics |
+
 ## 1. The validation ladder
 
 Every WP states which rungs it must pass. Lower rungs are cheap and run on every commit.
