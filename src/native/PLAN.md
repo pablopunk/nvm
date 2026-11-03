@@ -57,6 +57,8 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
+| WP1.5 Calculator and rates | ready for review | `features/calc` behind the root result row: 1.x actions and order, detail pane, `rates.json` through `internal/store`, background refresh, cache age in the subtitle. L1 and L2 green in the box; rig J03 smoke green. Not verified: macOS and Windows, live rate source |
+| WP1.8 Emoji, symbols, Unicode | ready for review | catalog grid (`palette.Grid`, virtualized), categories with Tab, skin tone from the action menu (remembered in settings), recents in `emoji-recents.json`, Copy, Paste, Copy Unicode, keyboard grid with cell labels and announcements. L2 and goldens green; rig J08 smoke green. Not verified: macOS and Windows |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 | WP2.1 Backend client | ready for review | `internal/backend`: fake-backed and recorded-contract tests green under `-race`; live smoke (`-tags livesmoke`) written, not run. `/api/me` is cookie-session only and `GET /api/v1/models` is not served by the backend source; both need backend confirmation before the live smoke can pass |
 
