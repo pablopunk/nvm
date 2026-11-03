@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "unsupported_request_shape",
+    "message": "Multimodal requests are unavailable because this route has no conservative modality-cost bound."
+  }
+}

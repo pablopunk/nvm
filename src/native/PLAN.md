@@ -58,6 +58,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
 | WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
+| WP2.1 Backend client | ready for review | `internal/backend`: fake-backed and recorded-contract tests green under `-race`; live smoke (`-tags livesmoke`) written, not run. `/api/me` is cookie-session only and `GET /api/v1/models` is not served by the backend source; both need backend confirmation before the live smoke can pass |
 
 ## 1. The validation ladder
 
