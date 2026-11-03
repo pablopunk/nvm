@@ -37,6 +37,7 @@ func (f *FS) mkdirAllLocked(key string) error {
 			continue
 		}
 		f.nodes[current] = &node{dir: true, mode: fs.ModeDir | 0o755}
+		f.kids = nil
 	}
 	return nil
 }
@@ -60,19 +61,28 @@ func (f *FS) hasChildLocked(key string) bool {
 	return len(f.childrenLocked(key)) > 0
 }
 
-// childrenLocked lists the direct children of key, sorted. The caller holds f.mu.
+// childrenLocked lists the direct children of key, sorted. The caller holds f.mu. The child index is rebuilt
+// on the first call after the set of paths changes, so a scan of a large tree costs one pass, not one per
+// folder. Returned slices are never modified in place, so callers may keep them after unlocking.
 func (f *FS) childrenLocked(key string) []string {
-	prefix := key + "/"
-	if key == "/" {
-		prefix = "/"
+	if f.kids == nil {
+		f.kids = f.buildChildIndexLocked()
 	}
-	var children []string
+	return f.kids[key]
+}
+
+// buildChildIndexLocked maps every folder to its sorted direct children. The caller holds f.mu.
+func (f *FS) buildChildIndexLocked() map[string][]string {
+	kids := map[string][]string{}
 	for name := range f.nodes {
-		if name == key || !strings.HasPrefix(name, prefix) || strings.Contains(strings.TrimPrefix(name, prefix), "/") {
+		if name == "/" {
 			continue
 		}
-		children = append(children, name)
+		parent := path.Dir(name)
+		kids[parent] = append(kids[parent], name)
 	}
-	slices.Sort(children)
-	return children
+	for parent := range kids {
+		slices.Sort(kids[parent])
+	}
+	return kids
 }

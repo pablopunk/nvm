@@ -24,6 +24,9 @@ const (
 	OpWalk      = "Walk"
 	OpChmod     = "Chmod"
 	OpWatch     = "Watch"
+	OpLstat     = "Lstat"
+	// OpReadFilePrefix is the operation name for FS.ReadFilePrefix.
+	OpReadFilePrefix = "ReadFilePrefix"
 )
 
 // node is one file or folder of the in-memory tree.
@@ -31,6 +34,8 @@ type node struct {
 	dir  bool
 	mode fs.FileMode
 	data []byte
+	// link is the target of a symbolic link node; it is empty for files and folders.
+	link string
 }
 
 // FS is an in-memory platform.FS. Paths are slash-separated and rooted at "/"; a relative name is taken
@@ -50,6 +55,8 @@ type FS struct {
 	faults     faultSet
 	afterWrite func(name string) error
 	watchers   []*fsWatcher
+	// kids indexes the direct children of every folder; nil means it must be rebuilt before use.
+	kids map[string][]string
 }
 
 var _ platform.FS = (*FS)(nil)
@@ -72,6 +79,12 @@ func (f *FS) AfterWrite(hook func(name string) error) {
 	f.afterWrite = hook
 }
 
+// FailPath makes every call of op on name fail with err until FailPath is called again with nil. Operations
+// are the Op constants, for example OpReadDir for a folder that becomes unreadable mid-scan.
+func (f *FS) FailPath(op, name string, err error) {
+	f.faults.failPath(op, name, err)
+}
+
 // Seed creates or replaces a file with data, creating parent folders. It bypasses faults and watchers;
 // use it to set up fixtures before the code under test runs. It panics when a parent is a file.
 func (f *FS) Seed(name string, data []byte) {
@@ -82,6 +95,7 @@ func (f *FS) Seed(name string, data []byte) {
 		panic("fake: seeding " + name + ": " + err.Error())
 	}
 	f.nodes[key] = &node{mode: 0o644, data: bytes.Clone(data)}
+	f.kids = nil
 }
 
 // Paths lists every path in the tree, sorted, including folders. Tests use it for assertions.
@@ -103,6 +117,9 @@ func (f *FS) ReadFile(name string) ([]byte, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.faults.takePath(OpReadFile, name); err != nil {
+		return nil, pathError("open", name, err)
+	}
 	n, err := f.lookupLocked(name)
 	if err != nil {
 		return nil, pathError("open", name, err)
@@ -111,6 +128,28 @@ func (f *FS) ReadFile(name string) ([]byte, error) {
 		return nil, pathError("read", name, errors.New("is a directory"))
 	}
 	return bytes.Clone(n.data), nil
+}
+
+// ReadFilePrefix returns at most max leading bytes of a file and the file's full size. Like the OS, it
+// reports a folder as an error.
+func (f *FS) ReadFilePrefix(name string, max int64) ([]byte, int64, error) {
+	if err := f.faults.take(OpReadFilePrefix); err != nil {
+		return nil, 0, pathError("open", name, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.faults.takePath(OpReadFilePrefix, name); err != nil {
+		return nil, 0, pathError("open", name, err)
+	}
+	n, err := f.lookupLocked(name)
+	if err != nil {
+		return nil, 0, pathError("open", name, err)
+	}
+	if n.dir {
+		return nil, 0, pathError("read", name, errors.New("is a directory"))
+	}
+	size := int64(len(n.data))
+	return bytes.Clone(n.data[:min(max, size)]), size, nil
 }
 
 // WriteFile replaces a file's content. The parent folder must exist.
@@ -134,6 +173,7 @@ func (f *FS) WriteFile(name string, data []byte, perm fs.FileMode) error {
 	op := platform.EventWrite
 	if !exists {
 		op = platform.EventCreate
+		f.kids = nil
 	}
 	hook := f.afterWrite
 	f.notifyLocked(platform.Event{Op: op, Path: key})
@@ -163,6 +203,7 @@ func (f *FS) Rename(oldName, newName string) error {
 		return pathError("rename", newName, errors.New("is a directory"))
 	}
 	f.moveSubtreeLocked(from, to)
+	f.kids = nil
 	f.notifyLocked(platform.Event{Op: platform.EventRename, Path: to, OldPath: from, IsDir: f.nodes[to].dir})
 	return nil
 }
@@ -186,6 +227,7 @@ func (f *FS) Remove(name string) error {
 		return pathError("remove", name, errors.New("directory not empty"))
 	}
 	delete(f.nodes, key)
+	f.kids = nil
 	f.notifyLocked(platform.Event{Op: platform.EventRemove, Path: key, IsDir: n.dir})
 	return nil
 }
@@ -207,9 +249,30 @@ func (f *FS) Stat(name string) (fs.FileInfo, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if err := f.faults.takePath(OpStat, name); err != nil {
+		return nil, pathError("stat", name, err)
+	}
 	n, err := f.lookupLocked(name)
 	if err != nil {
 		return nil, pathError("stat", name, err)
+	}
+	return fileInfo{name: path.Base(cleanKey(name)), node: n}, nil
+}
+
+// Lstat describes a file or folder without following symbolic links. The fake has no link targets to
+// follow, so Lstat and Stat describe the same node; a symbolic link describes itself in both.
+func (f *FS) Lstat(name string) (fs.FileInfo, error) {
+	if err := f.faults.take(OpLstat); err != nil {
+		return nil, pathError("lstat", name, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.faults.takePath(OpLstat, name); err != nil {
+		return nil, pathError("lstat", name, err)
+	}
+	n, err := f.lookupLocked(name)
+	if err != nil {
+		return nil, pathError("lstat", name, err)
 	}
 	return fileInfo{name: path.Base(cleanKey(name)), node: n}, nil
 }
@@ -222,6 +285,9 @@ func (f *FS) ReadDir(name string) ([]fs.DirEntry, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	key := cleanKey(name)
+	if err := f.faults.takePath(OpReadDir, name); err != nil {
+		return nil, pathError("open", name, err)
+	}
 	n, err := f.lookupLocked(key)
 	if err != nil {
 		return nil, pathError("open", name, err)
@@ -275,7 +341,10 @@ func (f *FS) unwatchOnDone(ctx context.Context, w *fsWatcher) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.watchers = slices.DeleteFunc(f.watchers, func(other *fsWatcher) bool { return other == w })
-	close(w.out)
+	if !w.closed {
+		w.closed = true
+		close(w.out)
+	}
 }
 
 // pathError wraps err the way os does, so callers can inspect Op, Path and Err.
