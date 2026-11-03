@@ -740,6 +740,17 @@ export type ExtensionMetadataItem =
       tone?: ExtensionAccessoryTone;
     }
   | { type: 'separator' };
+/** Link card shown under a side-preview detail's text. Hosts fill title, description, and image from the page's Open Graph metadata. */
+export type ExtensionDetailLink = {
+  url: string;
+  /** `loading` shows only the host until metadata arrives; `unavailable` hides the card unless a title is set. */
+  status: 'loading' | 'ready' | 'unavailable';
+  title?: string;
+  description?: string;
+  siteName?: string;
+  /** Image URL or data URL for the card. Hosts that fetch page metadata inline the image as a data URL instead of letting the palette contact the page's origin. */
+  image?: string;
+};
 export type ExtensionDetail = {
   title?: string;
   subtitle?: string;
@@ -750,6 +761,8 @@ export type ExtensionDetail = {
   image?: ExtensionImage;
   /** Video URL rendered in an opt-in side detail/preview pane. */
   video?: string;
+  /** Link card rendered below `text` in side-preview panes. */
+  link?: ExtensionDetailLink;
   actions?: ExtensionAction[];
 };
 export type ExtensionItemAppearance = {

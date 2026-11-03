@@ -1147,8 +1147,8 @@ const { executeViewAction } = createViewActionExecutor({
     paletteWindow,
     clipboardPasteText: (action) => clipboardService.pasteTextAction(action),
     pasteClipboardAction: (action) => pasteClipboardAction(action),
-    removeClipboardHistoryEntries: (action) =>
-      removeClipboardHistoryEntries(action),
+    removeClipboardHistoryEntries,
+    loadClipboardLinkPreview: clipboardService.loadClipboardLinkPreview,
   }),
   ...createWindowActionHandlers({
     extensionWindowManager,

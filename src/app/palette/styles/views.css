@@ -1587,6 +1587,59 @@
   place-items: start;
 }
 
+.sidePreviewWithLink .extensionDetailPreview {
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-content: stretch;
+  place-items: stretch;
+}
+
+.extensionLinkCard {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--edge-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--surface-raised);
+}
+
+.extensionLinkCardImage {
+  display: block;
+  width: 100%;
+  max-height: 160px;
+  object-fit: cover;
+}
+
+.extensionLinkCardBody {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.extensionLinkCardBody small {
+  color: var(--text-muted);
+  font-size: var(--fs-2xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.extensionLinkCardBody strong {
+  color: var(--text-primary);
+  font-size: var(--fs-xs);
+  overflow-wrap: anywhere;
+}
+
+.extensionLinkCardBody p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: var(--fs-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
 .extensionDetailMedia {
   display: block;
   width: 100%;

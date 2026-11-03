@@ -1,4 +1,6 @@
 import type { ClipboardApi, MaybePromise } from '../os/electron-clipboard';
+import { clipboardItemDetail } from './clipboard-item-detail';
+import { clipboardHistoryRemovalActions } from './clipboard-removal-actions';
 import {
   type ClipboardHistoryItem,
   clipboardFilePath,
@@ -7,6 +9,8 @@ import {
   clipboardItemSubtitle,
   clipboardItemTitle,
 } from './clipboard-utils';
+import { createLinkPreviewService, singleWebUrl } from './link-preview';
+import { createLinkPreviewFetchers } from './link-preview-fetchers';
 
 export type ClipboardHistoryDeps = {
   // ── State ──────────────────────────────────────────────
@@ -18,6 +22,7 @@ export type ClipboardHistoryDeps = {
   // ── Electron clipboard ─────────────────────────────────
   clipboard: ClipboardApi;
   nativeImage: {
+    createFromBuffer: (buffer: Buffer) => Electron.NativeImage;
     createFromDataURL: (dataUrl: string) => Electron.NativeImage;
     createFromPath: (path: string) => Electron.NativeImage;
     createEmpty: () => Electron.NativeImage;
@@ -92,6 +97,10 @@ export type ClipboardHistoryDeps = {
 
 export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   let watcherLastId = '';
+  const linkPreviews = createLinkPreviewService({
+    ...createLinkPreviewFetchers(deps),
+    onSettled: patchHistoryItemsForUrl,
+  });
 
   // ── helpers ─────────────────────────────────────────────
 
@@ -397,104 +406,6 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     };
   }
 
-  function clipboardHistoryRemovalAction(
-    range: string,
-    title: string,
-    message: string,
-    itemId = '',
-  ) {
-    return {
-      type: 'removeClipboardHistory',
-      title,
-      clipboardHistoryRange: range,
-      clipboardHistoryItemId: itemId,
-      style: 'destructive',
-      requiresConfirmation: true,
-      confirmLabel: title,
-      confirmMessage: message,
-    };
-  }
-
-  let clipboardHistoryRemovalByTimeActionCache: any;
-
-  function clipboardHistoryRemovalByTimeAction() {
-    if (clipboardHistoryRemovalByTimeActionCache)
-      return clipboardHistoryRemovalByTimeActionCache;
-    const ranges = [
-      {
-        range: 'last-5-minutes',
-        title: '5 Minutes',
-        period: 'the last 5 minutes',
-      },
-      {
-        range: 'last-hour',
-        title: 'Hour',
-        period: 'the last hour',
-      },
-      {
-        range: 'last-day',
-        title: 'Day',
-        period: 'the last day',
-      },
-      {
-        range: 'last-week',
-        title: 'Week',
-        period: 'the last week',
-      },
-    ];
-    clipboardHistoryRemovalByTimeActionCache = {
-      type: 'submenu',
-      title: 'Remove Last...',
-      submenu: {
-        title: 'Remove Last...',
-        sections: [
-          {
-            actions: ranges.map(({ range, title, period }) => ({
-              ...clipboardHistoryRemovalAction(
-                range,
-                title,
-                `Remove clipboard history entries copied in ${period}?`,
-              ),
-              confirmLabel: 'Remove',
-            })),
-          },
-        ],
-      },
-    };
-    return clipboardHistoryRemovalByTimeActionCache;
-  }
-
-  function clipboardHistoryRemovalActions(item: any = null) {
-    if (deps.getHistory().length === 0) return [];
-    if (item?.id)
-      return [
-        clipboardHistoryRemovalAction(
-          'item',
-          'Remove Item',
-          `Remove “${clipboardItemTitle(item)}” from clipboard history?`,
-          item.id,
-        ),
-        clipboardHistoryRemovalByTimeAction(),
-      ];
-    return [
-      clipboardHistoryRemovalAction(
-        'last-hour',
-        'Remove Entries from Last Hour',
-        'Remove clipboard history entries copied in the last hour?',
-      ),
-      clipboardHistoryRemovalAction(
-        'last-day',
-        'Remove Entries from Last Day',
-        'Remove clipboard history entries copied in the last day?',
-      ),
-      clipboardHistoryRemovalAction(
-        'all',
-        'Remove All Entries',
-        'Remove all clipboard history entries?',
-      ),
-    ];
-  }
-
   function clipboardRootItem(item: any) {
     return {
       id: `clipboard:${item.id}`,
@@ -539,24 +450,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
       subtitle: clipboardItemSubtitle(item),
       icon: 'clipboard',
       image: item.thumbnailUrl,
-      detail: isImage
-        ? {
-            title: clipboardItemTitle(item),
-            subtitle: clipboardItemSubtitle(item),
-            image: item.imageDataUrl || item.thumbnailUrl,
-          }
-        : isVideo
-          ? {
-              title: clipboardItemTitle(item),
-              subtitle: clipboardItemSubtitle(item),
-              image: item.thumbnailUrl,
-              video: item.videoUrl,
-            }
-          : {
-              title: clipboardItemTitle(item),
-              subtitle: clipboardItemSubtitle(item),
-              text: item.text,
-            },
+      detail: clipboardItemDetail(item, linkPreviews.peek),
       keywords: [
         item.text || '',
         item.type || '',
@@ -573,11 +467,31 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
           },
           {
             title: 'Manage History',
-            actions: clipboardHistoryRemovalActions(item),
+            actions: clipboardHistoryRemovalActions(
+              deps.getHistory().length,
+              item,
+            ),
           },
         ],
       },
     };
+  }
+
+  function patchHistoryItemsForUrl(url: string) {
+    const items = deps
+      .getHistory()
+      .filter((entry) => singleWebUrl(entry.text) === url)
+      .map(clipboardHistoryItem);
+    if (items.length)
+      deps.patchOpenView('clipboard-history', { mode: 'patch', items });
+  }
+
+  function loadClipboardLinkPreview(action: { selectedItemId?: string }) {
+    const entry = deps
+      .getHistory()
+      .find((item) => `clipboard:${item.id}` === action.selectedItemId);
+    const url = singleWebUrl(entry?.text);
+    if (url) linkPreviews.load(url);
   }
 
   function clipboardHistoryItems() {
@@ -588,13 +502,17 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   }
 
   function clipboardHistoryView() {
-    const actions = clipboardHistoryRemovalActions();
+    const actions = clipboardHistoryRemovalActions(deps.getHistory().length);
     return {
       type: 'list',
       id: 'clipboard-history',
       title: 'Clipboard History',
       presentation: 'side-preview',
       searchBarPlaceholder: 'Search Clipboard History',
+      onSelectionChange: {
+        type: 'loadClipboardLinkPreview',
+        title: 'Load link preview',
+      },
       emptyView: {
         title: 'No clipboard items found.',
         subtitle: 'Copy text or images and they will appear here.',
@@ -988,13 +906,12 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
     clipboardHistoryRemovedMessage,
     removeClipboardHistoryEntries,
     clipboardHistoryView,
+    loadClipboardLinkPreview,
     clipboardHistoryIdForText,
     suppressClipboardHistoryId,
     // UI builders
     clipboardPreviewAction,
     clipboardCopyAction,
-    clipboardHistoryRemovalAction,
-    clipboardHistoryRemovalActions,
     clipboardRootItem,
     clipboardHistoryItem,
     clipboardHistoryItems,
