@@ -1,31 +1,50 @@
-package app
+package palette
 
 import (
-	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"strings"
+
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// searchClock measures the search budgets. The goldens and the benchmarks run synchronously and never wait on it.
-var searchClock platform.Clock = real.NewPorts().Clock
+// The palette is the host every action runs against.
+var _ search.Host = (*Palette)(nil)
+
+// search shows the rows of the view on top for the search text. A sub-view searches on the UI thread. A view
+// with providers runs them on its coordinator: rows that are ready now are shown now, and the others arrive
+// through applySnapshot.
+func (p *Palette) search() {
+	v := p.cur()
+	q := strings.TrimSpace(p.query)
+	if v.Providers == nil {
+		var rows []search.Item
+		if v.Search != nil {
+			rows = v.Search(q)
+		}
+		p.showRows(v, q, rows, true)
+		return
+	}
+	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
+		p.showRows(v, q, snap.Items, snap.Settled)
+	}
+}
 
 // coordinator returns the search coordinator of a view, created on its first query. Its snapshots reach the
 // view through the window, and are dropped unless the view is still the top one.
 func (p *Palette) coordinator(v *View) *search.Coordinator {
 	if v.coord == nil {
 		v.coord = search.NewCoordinator(search.Options{
-			Clock:       searchClock,
-			Synchronous: p.syncSearch,
+			Clock:       p.opts.Clock,
+			Synchronous: p.opts.Synchronous,
 			OnSnapshot: func(s search.Snapshot) {
-				p.panel.Update(func() { p.applySnapshot(v, s) })
+				p.win.Update(func() { p.applySnapshot(v, s) })
 			},
 		})
 	}
 	return v.coord
 }
 
-// applySnapshot shows a snapshot that a provider produced, if it still belongs to the view on top and to the
-// query that is current.
+// applySnapshot shows a snapshot a provider produced, if the view is still on top and the snapshot is the
+// generation of its query that is current.
 func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	if v != p.cur() || s.Gen != v.coord.Gen() {
 		return
@@ -34,7 +53,7 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 }
 
 // showRows shows rows for a view and a query. The cursor moves to the top when the view or the query changed,
-// and stays where it is when the same query is refreshed, as Refresh does.
+// and stays where it is when the same query is refreshed.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled bool) {
 	if p.shownView != v || p.shownQuery != q {
 		p.chosen = 0
@@ -50,15 +69,5 @@ func (p *Palette) invalidateRows() {
 		if v.coord != nil {
 			v.coord.Invalidate()
 		}
-	}
-}
-
-// leave runs a view's OnLeave and stops its searches: nothing it returns is shown again.
-func (p *Palette) leave(v *View) {
-	if f := v.OnLeave; f != nil {
-		f()
-	}
-	if v.coord != nil {
-		v.coord.Cancel()
 	}
 }

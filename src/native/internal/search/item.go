@@ -18,13 +18,26 @@ const (
 	KindSearch        = "Search"
 )
 
+// Dismissal says whether the palette closes once an action has run.
+type Dismissal int
+
+const (
+	// DismissAuto hides the palette after the action, unless the action pushed a view.
+	DismissAuto Dismissal = iota
+	// DismissNever leaves the palette open: the action changed data or the view stack in place.
+	DismissNever
+	// DismissAlways hides the palette after the action, even when the action pushed a view.
+	DismissAlways
+)
+
 // Action is something you can do with a result: the first one runs on Enter, all are in the action menu.
 type Action struct {
-	Title string
-	Mods  ui.Modifiers
-	Key   ui.Key
-	Label string // shortcut as displayed, e.g. "⌃⌫"
-	Run   func(h Host)
+	Title   string
+	Mods    ui.Modifiers
+	Key     ui.Key
+	Label   string // shortcut as displayed, e.g. "⌃⌫"
+	Run     func(h Host)
+	Dismiss Dismissal
 }
 
 // Item is one row in the palette.

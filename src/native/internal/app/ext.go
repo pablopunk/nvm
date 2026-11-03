@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
 )
@@ -162,7 +163,7 @@ func safeSearch(e *loadedExt, q string) (out []ExtItem) {
 	return out
 }
 
-func (p *Palette) reloadExtensions() {
+func (p *App) reloadExtensions() {
 	p.exts = loadExtensions(extensionsDir())
 	p.setUpExtensionTrays()
 }
@@ -170,7 +171,7 @@ func (p *Palette) reloadExtensions() {
 type extTray struct{ stop chan struct{} }
 
 // setUpExtensionTrays gives each extension with a MenuBar its own tray item, refreshed every 10s.
-func (p *Palette) setUpExtensionTrays() {
+func (p *App) setUpExtensionTrays() {
 	for _, t := range p.extTrays {
 		t.stop <- struct{}{}
 	}
@@ -221,8 +222,8 @@ func (p *Palette) setUpExtensionTrays() {
 	}
 }
 
-func (p *Palette) extensionsView() *View {
-	return &View{
+func (p *App) extensionsView() *palette.View {
+	return &palette.View{
 		Title: "Extensions", Placeholder: "Search Extensions",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
@@ -230,7 +231,7 @@ func (p *Palette) extensionsView() *View {
 				{Title: "Create Extension with AI", Subtitle: "Describe it; a Go extension is written, checked and installed", Icon: "zap", Tone: "yellow", Prominent: true,
 					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.builderView()) }}}},
 				{Title: "Reload Extensions", Icon: "rotate-ccw", Tone: "gray",
-					Actions: []search.Action{{Title: "Reload", Run: func(h search.Host) {
+					Actions: []search.Action{{Title: "Reload", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						p.reloadExtensions()
 						h.Toast(fmt.Sprintf("%d extensions loaded", len(p.exts)))
 						h.Refresh()
@@ -255,14 +256,14 @@ func (p *Palette) extensionsView() *View {
 				out = append(out, search.Item{
 					ID: e.ID, Title: e.Title, Subtitle: e.ID + " · " + strings.Join(kinds, ", "), Icon: "puzzle", Tone: "purple", Accessory: state,
 					Actions: []search.Action{
-						{Title: "Toggle Enabled", Run: func(h search.Host) {
+						{Title: "Toggle Enabled", Dismiss: search.DismissNever, Run: func(h search.Host) {
 							p.S.Disabled[e.ID] = !p.S.Disabled[e.ID]
 							p.S.save()
 							p.setUpExtensionTrays()
 							h.Refresh()
 						}},
 						{Title: "Show Source in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(e.File) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 							_ = os.Remove(e.File)
 							p.reloadExtensions()
 							h.Refresh()

@@ -67,7 +67,7 @@ const rootTableFile = "testdata/queries-expected.json"
 
 // rootTableFixture is the palette the table runs against: the golden fixtures plus one quicklink, one
 // extension, and an indexed file tree under the fixture home, so every provider has something to say.
-func rootTableFixture(t *testing.T) *Palette {
+func rootTableFixture(t *testing.T) *App {
 	t.Helper()
 	p := goldenPalette(t)
 	home, err := os.UserHomeDir()
@@ -99,16 +99,15 @@ func fixtureExtensionSearch(q string) []ExtItem {
 
 // rootResultsForTable is the root search the table exercises: a fresh root view, searched synchronously the way
 // the palette searches it.
-func rootResultsForTable(p *Palette, q string) []search.Item {
-	p.stack = []*View{p.rootView()}
-	p.query = q
-	p.search()
-	return p.results
+func rootResultsForTable(p *App, q string) []search.Item {
+	p.SetStack(p.rootView())
+	p.SetQuery(q)
+	return p.Results()
 }
 
 // rootTableRows runs the root search for q and reduces each row to its comparable part. Home-relative
 // paths are rewritten to $HOME, since the fixture home is a temporary directory.
-func rootTableRows(t *testing.T, p *Palette, q string) []rootRow {
+func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 	t.Helper()
 	home, err := os.UserHomeDir()
 	if err != nil {

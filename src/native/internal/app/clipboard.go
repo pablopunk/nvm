@@ -20,6 +20,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 type ClipEntry struct {
@@ -71,7 +72,7 @@ func (cs *ClipStore) togglePin(id string) {
 	cs.Entries = entries
 }
 
-func (p *Palette) startClipboardWatcher() {
+func (p *App) startClipboardWatcher() {
 	go func() {
 		for range time.Tick(800 * time.Millisecond) {
 			if p.S.ClipOff {
@@ -82,7 +83,7 @@ func (p *Palette) startClipboardWatcher() {
 	}()
 }
 
-func (p *Palette) pollClipboard() {
+func (p *App) pollClipboard() {
 	cs := p.clip
 	if slices.Contains(mygo.Clipboard.Formats(), transfer.PNG) {
 		if data := mygo.Clipboard.ReadImage(); len(data) > 0 {
@@ -119,7 +120,7 @@ func (p *Palette) pollClipboard() {
 	})
 }
 
-func (p *Palette) addClip(e ClipEntry) {
+func (p *App) addClip(e ClipEntry) {
 	cs := p.clip
 	e.At = time.Now()
 	for _, old := range cs.Entries {
@@ -137,12 +138,12 @@ func (p *Palette) addClip(e ClipEntry) {
 		p.dropClip(last)
 	}
 	cs.save()
-	if p.panel.IsVisible() && p.cur().Title == "Clipboard History" {
+	if p.panel.IsVisible() && p.Top().Title == "Clipboard History" {
 		p.Refresh()
 	}
 }
 
-func (p *Palette) dropClip(i int) {
+func (p *App) dropClip(i int) {
 	cs := p.clip
 	if i < 0 || i >= len(cs.Entries) {
 		return
@@ -225,7 +226,7 @@ func oneLine(s string) string {
 	return s
 }
 
-func (p *Palette) copyClip(e ClipEntry) {
+func (p *App) copyClip(e ClipEntry) {
 	if e.Kind == "image" {
 		if data, err := os.ReadFile(filepath.Join(imageDir(), e.Image)); err == nil {
 			p.clip.lastImg = e.ID
@@ -237,8 +238,8 @@ func (p *Palette) copyClip(e ClipEntry) {
 	mygo.Clipboard.WriteText(e.Text)
 }
 
-func (p *Palette) clipboardView() *View {
-	return &View{
+func (p *App) clipboardView() *palette.View {
+	return &palette.View{
 		Title: "Clipboard History", Placeholder: "Search Clipboard History", EmptyTitle: "No clipboard items found.", EmptySub: "Copy text or images and they will appear here.",
 		Status: func() string { return fmt.Sprintf("%d items", len(p.clip.Entries)) },
 		Search: func(q string) []search.Item {
@@ -260,7 +261,7 @@ func (p *Palette) clipboardView() *View {
 	}
 }
 
-func (p *Palette) clipItem(e ClipEntry) search.Item {
+func (p *App) clipItem(e ClipEntry) search.Item {
 	it := search.Item{ID: e.ID, Icon: "clipboard", Tone: "blue", TintTitle: true}
 	subKind := "Text"
 	if e.Kind == "image" {
@@ -288,7 +289,7 @@ func (p *Palette) clipItem(e ClipEntry) search.Item {
 				p.copyClip(e)
 			}
 		}},
-		{Title: pinTitle, Label: "⌃P", Mods: mod, Key: ui.KeyP, Run: func(h search.Host) {
+		{Title: pinTitle, Label: "⌃P", Mods: mod, Key: ui.KeyP, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			p.clip.togglePin(e.ID)
 			p.clip.save()
 			h.Refresh()
@@ -300,13 +301,13 @@ func (p *Palette) clipItem(e ClipEntry) search.Item {
 		}})
 	}
 	it.Actions = append(it.Actions,
-		search.Action{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
+		search.Action{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			i := slices.IndexFunc(p.clip.Entries, func(x ClipEntry) bool { return x.ID == e.ID })
 			p.dropClip(i)
 			p.clip.save()
 			h.Refresh()
 		}},
-		search.Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Run: func(h search.Host) {
+		search.Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			for i := len(p.clip.Entries) - 1; i >= 0; i-- {
 				if !p.clip.Entries[i].Pinned {
 					p.dropClip(i)

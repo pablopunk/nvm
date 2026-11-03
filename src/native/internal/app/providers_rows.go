@@ -35,7 +35,7 @@ const (
 // which run there.
 
 // calculatorRows shows the result of a calculation or unit conversion.
-func calculatorRows(_ *Palette, _ *rootInput, q string) []search.Item {
+func calculatorRows(_ *App, _ *rootInput, q string) []search.Item {
 	disp, cp, ok := calcResult(q)
 	if !ok {
 		return nil
@@ -47,7 +47,7 @@ func calculatorRows(_ *Palette, _ *rootInput, q string) []search.Item {
 }
 
 // timerRows offers to start a countdown for "timer 5m" and similar queries.
-func timerRows(p *Palette, _ *rootInput, q string) []search.Item {
+func timerRows(p *App, _ *rootInput, q string) []search.Item {
 	d, ok := parseTimer(q)
 	if !ok || d <= 0 {
 		return nil
@@ -58,7 +58,7 @@ func timerRows(p *Palette, _ *rootInput, q string) []search.Item {
 }
 
 // quicklinkRows answers "keyword search terms" with a search on the quicklink's site.
-func quicklinkRows(_ *Palette, in *rootInput, q string) []search.Item {
+func quicklinkRows(_ *App, in *rootInput, q string) []search.Item {
 	kw, rest, ok := strings.Cut(q, " ")
 	if !ok || strings.TrimSpace(rest) == "" {
 		return nil
@@ -74,7 +74,7 @@ func quicklinkRows(_ *Palette, in *rootInput, q string) []search.Item {
 }
 
 // snippetRows matches snippets by keyword prefix; a snippet with no keyword is found by the snippets view.
-func snippetRows(p *Palette, in *rootInput, q string) []search.Item {
+func snippetRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
 	for _, sn := range in.snippets {
@@ -89,7 +89,7 @@ func snippetRows(p *Palette, in *rootInput, q string) []search.Item {
 }
 
 // extensionRows asks every enabled extension for its rows. Each extension's search runs under its own lock.
-func extensionRows(_ *Palette, in *rootInput, q string) []search.Item {
+func extensionRows(_ *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for i := range in.exts {
 		e := &in.exts[i]
@@ -109,12 +109,12 @@ func extensionRows(_ *Palette, in *rootInput, q string) []search.Item {
 }
 
 // commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
-func commandRows(p *Palette, in *rootInput, q string) []search.Item {
+func commandRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
 	for _, cmd := range p.commands(in.timerOn) {
 		cmd := cmd
-		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []search.Action{{Title: "Open", Run: cmd.Run}}}
+		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []search.Action{{Title: "Open", Run: cmd.Run, Dismiss: cmd.Dismiss}}}
 		if lq == "" {
 			if !cmd.Hidden {
 				it.Score = scoreCommandSuggestion - cmd.Order
@@ -135,7 +135,7 @@ func commandRows(p *Palette, in *rootInput, q string) []search.Item {
 }
 
 // applicationRows matches installed applications by name, and at the root shows the ones used before.
-func applicationRows(p *Palette, in *rootInput, q string) []search.Item {
+func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
 	for _, a := range in.apps {
@@ -165,7 +165,7 @@ func applicationRows(p *Palette, in *rootInput, q string) []search.Item {
 }
 
 // fileRows shows the best four matches of the file index once two characters are typed.
-func fileRows(p *Palette, in *rootInput, q string) []search.Item {
+func fileRows(p *App, in *rootInput, q string) []search.Item {
 	if len(strings.ToLower(q)) < 2 || !in.filesDone {
 		return nil
 	}
@@ -180,7 +180,7 @@ func fileRows(p *Palette, in *rootInput, q string) []search.Item {
 }
 
 // clipboardRows shows the two newest text copies that contain a query of three characters or more.
-func clipboardRows(p *Palette, in *rootInput, q string) []search.Item {
+func clipboardRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	if len(lq) < 3 {
 		return nil
@@ -201,7 +201,7 @@ func clipboardRows(p *Palette, in *rootInput, q string) []search.Item {
 }
 
 // conversationRows shows up to four recent AI conversations, filtered by title when a query is typed.
-func conversationRows(p *Palette, in *rootInput, q string) []search.Item {
+func conversationRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
 	for _, ch := range in.chats {
@@ -223,7 +223,7 @@ func conversationRows(p *Palette, in *rootInput, q string) []search.Item {
 
 // webRows turns a query into a website when it names one, and otherwise offers the two fallbacks: Automate
 // and a web search. Calculations take the place of the fallbacks.
-func webRows(p *Palette, in *rootInput, q string) []search.Item {
+func webRows(p *App, in *rootInput, q string) []search.Item {
 	if q == "" {
 		return nil
 	}

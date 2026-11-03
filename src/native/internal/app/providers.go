@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 type engine struct{ Key, Name, URL string }
@@ -29,7 +30,7 @@ var builtinLinks = []Quicklink{
 	{"Go Packages", "gopkg", "https://pkg.go.dev/search?q={query}"},
 }
 
-func (p *Palette) engine() engine {
+func (p *App) engine() engine {
 	for _, e := range engines {
 		if e.Key == p.S.Engine {
 			return e
@@ -48,12 +49,13 @@ func openURL(tpl, q string) func(h search.Host) {
 type command struct {
 	Title, Keywords, Icon, Subtitle, Tone string
 	Run                                   func(h search.Host)
+	Dismiss                               search.Dismissal
 	Order                                 int
 	Hidden                                bool
 }
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
-func (p *Palette) commands(timerOn bool) []command {
+func (p *App) commands(timerOn bool) []command {
 	home, _ := os.UserHomeDir()
 	place := func(name string) command {
 		dir := filepath.Join(home, name)
@@ -71,20 +73,20 @@ func (p *Palette) commands(timerOn bool) []command {
 		{Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
 		{Title: "Quit Applications", Keywords: "quit kill processes force apps", Icon: "power", Subtitle: "Stop running processes", Run: func(h search.Host) { h.Push(p.processesView()) }},
 		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
-		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Run: func(h search.Host) { p.query = "timer 5m"; p.search() }},
+		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
 		{Title: "Lock Screen", Keywords: "lock screen security", Icon: "lock", Hidden: true, Run: func(h search.Host) { h.Hide(); run("loginctl", "lock-session") }},
 		{Title: "Sleep", Keywords: "sleep suspend", Icon: "moon", Hidden: true, Run: func(h search.Host) { h.Hide(); run("systemctl", "suspend") }},
 		{Title: "Log Out", Keywords: "logout sign out", Icon: "log-out", Hidden: true, Run: func(h search.Host) {
-			h.Push(p.confirmView("Log Out", "End the current session", func() { run("loginctl", "terminate-user", os.Getenv("USER")) }))
+			h.Push(palette.Confirm("Log Out", "End the current session", func() { run("loginctl", "terminate-user", os.Getenv("USER")) }))
 		}},
 		{Title: "Restart", Keywords: "reboot restart", Icon: "rotate-ccw", Hidden: true, Run: func(h search.Host) {
-			h.Push(p.confirmView("Restart", "Reboot this computer", func() { run("systemctl", "reboot") }))
+			h.Push(palette.Confirm("Restart", "Reboot this computer", func() { run("systemctl", "reboot") }))
 		}},
 		{Title: "Shut Down", Keywords: "shutdown power off", Icon: "power", Hidden: true, Run: func(h search.Host) {
-			h.Push(p.confirmView("Shut Down", "Power off this computer", func() { run("systemctl", "poweroff") }))
+			h.Push(palette.Confirm("Shut Down", "Power off this computer", func() { run("systemctl", "poweroff") }))
 		}},
 		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
-			h.Push(p.confirmView("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
+			h.Push(palette.Confirm("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
 		}},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
@@ -105,14 +107,14 @@ func (p *Palette) commands(timerOn bool) []command {
 }
 
 // rootView is the palette's first level: the providers of every source, merged by the coordinator.
-func (p *Palette) rootView() *View {
-	return &View{Title: "Nevermind", Providers: p.rootProviders, Hint: "esc Close"}
+func (p *App) rootView() *palette.View {
+	return &palette.View{Title: "Nevermind", Providers: p.rootProviders, Hint: "esc Close"}
 }
 
 // ---- settings ----
 
-func (p *Palette) settingsView() *View {
-	return &View{
+func (p *App) settingsView() *palette.View {
+	return &palette.View{
 		Title: "Settings", Placeholder: "Search Settings",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
@@ -135,21 +137,21 @@ func (p *Palette) settingsView() *View {
 			}
 			rows := []search.Item{
 				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
-				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Run: func(h search.Host) {
+				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
 					p.S.save()
 					h.Refresh()
 				}}}},
-				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Run: func(h search.Host) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); h.Refresh() }}}},
-				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Run: func(h search.Host) {
+				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); h.Refresh() }}}},
+				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					sizes := []int{50, 200, 500, 1000}
 					i := slices.Index(sizes, p.S.ClipLimit)
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
 					h.Refresh()
 				}}}},
-				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
+				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
 				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
@@ -161,18 +163,18 @@ func (p *Palette) settingsView() *View {
 	}
 }
 
-func (p *Palette) hotkeyView() *View {
-	return &View{
+func (p *App) hotkeyView() *palette.View {
+	return &palette.View{
 		Title: "Hotkey", Placeholder: "Press keys, e.g. Alt+Shift+Space",
 		Search: func(q string) []search.Item {
 			if q == "" {
 				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
 			}
-			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Run: func(h search.Host) {
+			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
 				old := p.S.Hotkey
 				mygo.GlobalShortcut.Unregister(old)
-				if err := mygo.GlobalShortcut.Register(q, p.toggle); err != nil {
-					_ = mygo.GlobalShortcut.Register(old, p.toggle)
+				if err := mygo.GlobalShortcut.Register(q, p.Toggle); err != nil {
+					_ = mygo.GlobalShortcut.Register(old, p.Toggle)
 					h.Toast("Invalid or taken: " + err.Error())
 					return
 				}

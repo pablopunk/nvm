@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // FileIndex is an in-memory list of file paths under $HOME, built in the background. Its paths are set once,
@@ -86,7 +87,7 @@ func searchPaths(paths []string, q string, limit int) []string {
 	return append(starts, contains...)[:min(limit, len(starts)+len(contains))]
 }
 
-func (p *Palette) fileItem(path string) search.Item {
+func (p *App) fileItem(path string) search.Item {
 	home, _ := os.UserHomeDir()
 	dir := strings.Replace(filepath.Dir(path), home, "~", 1)
 	return search.Item{
@@ -95,7 +96,7 @@ func (p *Palette) fileItem(path string) search.Item {
 			{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(path) }},
 			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(path) }},
 			{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(path); h.Hide() }},
-			{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
+			{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 				if err := mygo.Shell.TrashItem(path); err != nil {
 					h.Toast("Trash failed: " + err.Error())
 				} else {
@@ -106,8 +107,8 @@ func (p *Palette) fileItem(path string) search.Item {
 	}
 }
 
-func (p *Palette) filesView() *View {
-	return &View{
+func (p *App) filesView() *palette.View {
+	return &palette.View{
 		Title: "Search Files", Placeholder: "Search Files", EmptyTitle: "No files found.", EmptySub: "Type a file name.",
 		Status: func() string {
 			if _, done := p.files.snapshot(); !done {

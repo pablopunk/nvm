@@ -37,7 +37,7 @@ type chatHead struct {
 }
 
 // captureRoot copies the state the root's providers need. It runs on the UI thread.
-func (p *Palette) captureRoot() *rootInput {
+func (p *App) captureRoot() *rootInput {
 	chats := make([]chatHead, 0, len(p.chats.Chats))
 	for _, ch := range p.chats.Chats {
 		chats = append(chats, chatHead{chat: ch, title: ch.Title, builder: ch.Builder})
@@ -61,7 +61,7 @@ func (p *Palette) captureRoot() *rootInput {
 
 // rootProviders builds the root's providers over a fresh capture of the state. The palette calls it on the UI
 // thread at the start of every query.
-func (p *Palette) rootProviders() []search.Provider {
+func (p *App) rootProviders() []search.Provider {
 	in := p.captureRoot()
 	out := make([]search.Provider, 0, len(rootSources))
 	for _, source := range rootSources {

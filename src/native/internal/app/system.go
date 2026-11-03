@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 func itoa(i int) string { return strconv.Itoa(i) }
@@ -62,8 +63,8 @@ func listProcs() []proc {
 	return out
 }
 
-func (p *Palette) processesView() *View {
-	return &View{
+func (p *App) processesView() *palette.View {
+	return &palette.View{
 		Title: "Quit Applications", Placeholder: "Search Running Processes",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
@@ -95,8 +96,8 @@ func (p *Palette) processesView() *View {
 				out = append(out, search.Item{
 					ID: pr.Name, Title: pr.Name, Subtitle: fmt.Sprintf("%.0f MB resident", float64(pr.RSS)/1024), Icon: "activity", Tone: "red",
 					Actions: []search.Action{
-						{Title: "Quit (SIGTERM)", Run: kill(syscall.SIGTERM)},
-						{Title: "Force Quit (SIGKILL)", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Run: kill(syscall.SIGKILL)},
+						{Title: "Quit (SIGTERM)", Dismiss: search.DismissNever, Run: kill(syscall.SIGTERM)},
+						{Title: "Force Quit (SIGKILL)", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: kill(syscall.SIGKILL)},
 					},
 				})
 				if len(out) >= 60 {
@@ -118,19 +119,7 @@ func run(name string, args ...string) {
 	}()
 }
 
-func (p *Palette) confirmView(title, detail string, do func()) *View {
-	return &View{
-		Title: "Confirm", Placeholder: title + "?", HideInput: false,
-		Search: func(string) []search.Item {
-			return []search.Item{
-				{Title: title, Subtitle: detail, Icon: "check", Tone: "red", Actions: []search.Action{{Title: "Confirm", Run: func(h search.Host) { h.Hide(); do() }}}},
-				{Title: "Cancel", Icon: "x", Actions: []search.Action{{Title: "Cancel", Run: func(h search.Host) { h.Pop() }}}},
-			}
-		},
-	}
-}
-
-func (p *Palette) emptyTrash() {
+func (p *App) emptyTrash() {
 	home, _ := os.UserHomeDir()
 	for _, sub := range []string{"files", "info"} {
 		dir := filepath.Join(home, ".local/share/Trash", sub)
@@ -170,7 +159,7 @@ func parseTimer(q string) (time.Duration, bool) {
 	return time.Duration(v * float64(time.Minute)), true
 }
 
-func (p *Palette) startTimer(d time.Duration) {
+func (p *App) startTimer(d time.Duration) {
 	if p.timer != nil {
 		close(p.timer.stop)
 	}
@@ -201,7 +190,7 @@ func (p *Palette) startTimer(d time.Duration) {
 	}()
 }
 
-func (p *Palette) cancelTimer() {
+func (p *App) cancelTimer() {
 	if p.timer != nil {
 		close(p.timer.stop)
 		p.timer = nil

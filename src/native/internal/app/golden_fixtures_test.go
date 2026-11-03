@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // goldenNow is the instant every golden reads as "now", so relative times ("3m ago") never drift.
@@ -22,14 +23,13 @@ const goldenConfig = "/nvm-fixture/config/nvm-native"
 // memory and fixes the clock and the config directory, so no golden reads or writes the disk or depends
 // on the machine it runs on. It does what ready does for the view (the stack and a first search) and
 // nothing else: no window, hotkey, tray, clipboard watcher or file index.
-func goldenPalette(t *testing.T) *Palette {
+func goldenPalette(t *testing.T) *App {
 	t.Helper()
 	t.Setenv("NVM_THEME", "")
 	t.Setenv("NVM_TOKEN", "")
 	t.Setenv("HOME", t.TempDir())
 	swapForGolden(t)
-	p := &Palette{
-		syncSearch: true,
+	p := &App{
 		S: &Settings{
 			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
 			Usage:    map[string]int{"org.mozilla.firefox": 3, "org.gnome.Terminal.desktop": 1},
@@ -47,8 +47,9 @@ func goldenPalette(t *testing.T) *Palette {
 		p.icons[app.Path] = goldenBitmap(t, 56, 56, goldenAppColor(app.Name))
 	}
 	p.emoji.load()
-	p.stack = []*View{p.rootView()}
-	p.search()
+	p.newPalette(searchClock, true)
+	p.SetStack(p.rootView())
+	p.SetQuery("")
 	return p
 }
 
@@ -141,19 +142,18 @@ func goldenChats() []*Chat {
 }
 
 // goldenQuery sets the query and runs the search, as typing does.
-func goldenQuery(p *Palette, q string) {
-	p.query = q
-	p.search()
+func goldenQuery(p *App, q string) {
+	p.SetQuery(q)
 }
 
 // goldenOpen shows view in a sub-level above the root, as Push does, with an empty query.
-func goldenOpen(p *Palette, view *View) {
-	p.stack = []*View{p.rootView(), view}
+func goldenOpen(p *App, view *palette.View) {
+	p.SetStack(p.rootView(), view)
 	goldenQuery(p, "")
 }
 
 // goldenChatView opens a chat with a fixed transcript. When streaming, the last reply is still arriving.
-func goldenChatView(p *Palette, streaming bool) *View {
+func goldenChatView(p *App, streaming bool) *palette.View {
 	ch := &Chat{
 		ID: "c-stream", Title: "Release notes", Updated: goldenNow,
 		Messages: []ChatMsg{

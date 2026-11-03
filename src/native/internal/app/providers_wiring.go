@@ -5,7 +5,7 @@ import "github.com/pablopunk/nvm/native/internal/search"
 // rootSource is one provider of the root: its ID and the function that computes its rows.
 type rootSource struct {
 	id   string
-	rows func(p *Palette, in *rootInput, q string) []search.Item
+	rows func(p *App, in *rootInput, q string) []search.Item
 }
 
 // rootSources is the root's provider list. The coordinator merges the rows by score, and rows of equal score
