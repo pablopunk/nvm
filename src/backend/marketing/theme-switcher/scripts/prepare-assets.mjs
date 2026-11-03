@@ -12,7 +12,7 @@ const themes = JSON.parse(
 );
 await mkdir(output, { recursive: true });
 await copyFile(
-  new URL('../../../src/backend/public/wordmark.png', import.meta.url),
+  new URL('../../../public/wordmark.png', import.meta.url),
   new URL('wordmark.png', output),
 );
 
@@ -57,7 +57,7 @@ const dockIcons = [
   ],
   [
     'nevermind',
-    new URL('../../../src/backend/public/icon.png', import.meta.url).pathname,
+    new URL('../../../public/icon.png', import.meta.url).pathname,
   ],
 ];
 for (const [id, source] of dockIcons) {

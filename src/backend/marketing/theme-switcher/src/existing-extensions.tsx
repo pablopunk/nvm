@@ -5,7 +5,7 @@ import {
   CommandRow,
   ListView,
   SearchAccessory,
-} from '../../../src/app/palette/ui';
+} from '../../../../app/palette/ui';
 import { CALENDAR_EVENTS, PULL_REQUESTS } from './extension-demo-data';
 import { existingExtensionAt } from './extension-scenes';
 import { tween } from './timeline';

@@ -5,7 +5,7 @@ import { BuiltinFeatures } from './builtin-features';
 import { DICTATION_DURATION, DictationDemo } from './dictation-demo';
 import { ThemeSwitcher } from './theme-switcher';
 import { DURATION, FPS } from './timeline';
-import '../../../src/app/palette/styles.css';
+import '../../../../app/palette/styles.css';
 import './video.css';
 
 function VideoRoot() {

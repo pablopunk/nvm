@@ -2,7 +2,7 @@ import React from 'react';
 import { Command } from 'cmdk';
 import { Clipboard, FileText, Folder, Zap } from 'lucide-react';
 import { AbsoluteFill, Img, staticFile, useCurrentFrame } from 'remotion';
-import { CommandRow, ListView, PreviewView } from '../../../src/app/palette/ui';
+import { CommandRow, ListView, PreviewView } from '../../../../app/palette/ui';
 
 const APPS = [
   { id: 'calendar', title: 'Calendar' },
