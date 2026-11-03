@@ -56,6 +56,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP0.6 Store | done | prototype not migrated; lease takeover semantics await review |
 | WP0.7 Logging, safego, diag | done | prototype goroutines not converted |
 | WP0.8 Design system | done | prototype now renders through `internal/design`; goldens pixel-identical |
+| WP4.1a Window geometry | done (Linux, L1) | `internal/windowmgmt/geometry`: pure layouts, gaps, cycling, exact values, neighbors, display moves, verification; goldens replay the TypeScript engine; engine (4.1b) and UI (4.1c) pending |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 
 ## 1. The validation ladder
