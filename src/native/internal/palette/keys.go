@@ -52,11 +52,10 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 	if v.Body != nil {
 		return
 	}
-	if c.Shortcut(0, ui.KeyDown) {
-		p.choose(p.chosen + 1)
-	}
-	if c.Shortcut(0, ui.KeyUp) {
-		p.choose(p.chosen - 1)
+	if v.Grid != nil {
+		p.moveGridChoice(c, v.Grid)
+	} else {
+		p.moveListChoice(c)
 	}
 	if it := p.chosenItem(); it != nil {
 		for _, a := range it.Actions[min(1, len(it.Actions)):] {
@@ -65,5 +64,15 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 				return
 			}
 		}
+	}
+}
+
+// moveListChoice moves the choice one row with the arrows.
+func (p *Palette) moveListChoice(c *ui.Context) {
+	if c.Shortcut(0, ui.KeyDown) {
+		p.choose(p.chosen + 1)
+	}
+	if c.Shortcut(0, ui.KeyUp) {
+		p.choose(p.chosen - 1)
 	}
 }

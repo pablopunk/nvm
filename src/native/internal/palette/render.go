@@ -95,6 +95,10 @@ func (p *Palette) listBody(c *ui.Context) {
 		design.EmptyState(c, design.EmptyData{Title: title, Subtitle: sub})
 		return
 	}
+	if g := v.Grid; g != nil {
+		p.gridBody(c, g)
+		return
+	}
 	p.list.Selected = &p.chosen
 	p.list.Key = func(i int) any { return fmt.Sprint(i, p.results[i].ID, p.results[i].Title) }
 	p.list.Label = func(i int) string { return p.results[i].Title }
@@ -184,6 +188,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	name := v.Title
 	if v.TitleFn != nil {
 		name = v.TitleFn()
+	}
+	if v.Footer != nil {
+		name = v.Footer(p.chosenItem())
 	}
 	if len(p.stack) == 1 {
 		name = "Nevermind"
