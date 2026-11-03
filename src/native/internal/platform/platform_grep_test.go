@@ -32,6 +32,9 @@ var allowedImports = map[string]map[string]string{
 	"design": {
 		"github.com/egoist/mygo/ui": "the golden harness renders views with ui.NewTester; it is test tooling that no production code imports",
 	},
+	"perf": {
+		"net/http": "the counters endpoint is served only in -tags perfdebug builds on a loopback address; default builds link no listener",
+	},
 }
 
 // forbiddenImports are packages feature code must reach only through a port. Each entry also matches its
