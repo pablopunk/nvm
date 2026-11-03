@@ -35,6 +35,9 @@ type Options struct {
 	AskAI func(q string) *View
 	// OnShow runs each time the palette is shown, after its state is reset; the host loads what its rows need.
 	OnShow func()
+	// OnHide runs each time the palette is hidden, by any route; the host stops what only a visible palette needs.
+	// It may run more than once per show, so it must be idempotent.
+	OnHide func()
 	// History remembers the queries submitted at the root and recalls them with ArrowUp and ArrowDown. Nil
 	// disables it.
 	History *QueryHistory
@@ -118,7 +121,7 @@ func (p *Palette) Show() {
 // Toggle shows the palette when it is hidden and hides it when it is shown: the hotkey's action.
 func (p *Palette) Toggle() {
 	if p.win.IsVisible() {
-		p.win.Hide()
+		p.Hide()
 		return
 	}
 	p.Show()
@@ -130,8 +133,13 @@ func (p *Palette) Open(v *View) {
 	p.push(v)
 }
 
-// Hide closes the palette window.
-func (p *Palette) Hide() { p.win.Hide() }
+// Hide closes the palette window and runs OnHide.
+func (p *Palette) Hide() {
+	p.win.Hide()
+	if p.opts.OnHide != nil {
+		p.opts.OnHide()
+	}
+}
 
 // Toast sets the one-line message shown under the search field on the next frame.
 func (p *Palette) Toast(msg string) { p.toastMsg = msg }

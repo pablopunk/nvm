@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -49,16 +49,16 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
 			Disabled: map[string]bool{},
 		},
-		learn: goldenUsage(),
-		clip:  goldenClipboard(t),
-		snips: userSnippets,
-		notes: userNotes,
-		chats: &ChatStore{Chats: goldenChats()},
-		files: newTestFiles(t, "/home/golden", nil),
-		apps:  goldenApps(),
-		ports: set.Ports(),
+		learn:  goldenUsage(),
+		clip:   goldenClipboard(t),
+		snips:  userSnippets,
+		notes:  userNotes,
+		chats:  &ChatStore{Chats: goldenChats()},
+		files:  newTestFiles(t, "/home/golden", nil),
+		appsvc: newFixtureAppServices(goldenApps()),
+		ports:  set.Ports(),
 	}
-	for _, app := range p.apps {
+	for _, app := range p.appsSnapshot() {
 		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
 	}
 	p.attachServices(fake.NewSet().Ports(), goldenConfig, time.UTC)
@@ -137,8 +137,8 @@ func goldenClipboard(t *testing.T) *ClipStore {
 	return cs
 }
 
-func goldenApps() []mygo.InstalledApp {
-	return []mygo.InstalledApp{
+func goldenApps() []appfeat.App {
+	return []appfeat.App{
 		{Name: "Calculator", ID: "org.gnome.Calculator.desktop", Path: "/usr/share/applications/org.gnome.Calculator.desktop"},
 		{Name: "Calendar", ID: "org.gnome.Calendar.desktop", Path: "/usr/share/applications/org.gnome.Calendar.desktop"},
 		{Name: "Clocks", ID: "org.gnome.clocks.desktop", Path: "/usr/share/applications/org.gnome.clocks.desktop"},

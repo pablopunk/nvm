@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
@@ -38,19 +39,21 @@ type App struct {
 	S     *Settings
 
 	md       markdown.Options
-	apps     []mygo.InstalledApp
 	exts     []loadedExt
 	extTrays []*extTray
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
-	clip     *ClipStore
-	snips    *snippets.Store
-	notes    *notes.Store
-	files    *fileService
-	chats    *ChatStore
-	timer    *Timer
-	learn    *usage.Learner
-	history  *palette.QueryHistory
+	appsvc   *appfeat.Services
+	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
+	stopAppPoll func()
+	clip        *ClipStore
+	snips       *snippets.Store
+	notes       *notes.Store
+	files       *fileService
+	chats       *ChatStore
+	timer       *Timer
+	learn       *usage.Learner
+	history     *palette.QueryHistory
 
 	ports   platform.Ports
 	store   *store.Store
@@ -83,7 +86,8 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Position:    p.position,
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
-		OnShow:      p.loadApps,
+		OnShow:      p.showApps,
+		OnHide:      p.hideApps,
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
@@ -96,21 +100,6 @@ func (p *App) position(w, h int) (int, int) {
 	return d.WorkArea.X + (d.WorkArea.Width-w)/2, d.WorkArea.Y + (d.WorkArea.Height-h)/3
 }
 
-// loadApps reads the installed applications in the background and offers them to the root when they arrive.
-func (p *App) loadApps() {
-	go func() {
-		apps, err := mygo.Shell.InstalledApps()
-		if err != nil {
-			log.Println(err)
-			return
-		}
-		p.panel.Update(func() {
-			p.apps = apps
-			p.ReloadRows()
-		})
-	}()
-}
-
 func (p *App) ready() {
 	p.S = loadSettings()
 	p.attachServices(real.NewPorts(), configDir(), nil)
@@ -120,6 +109,7 @@ func (p *App) ready() {
 	p.openUserData()
 	p.chats = newChatStore()
 	notices := p.openLearning()
+	p.startAppServices()
 	p.newPalette(searchClock, false)
 	p.showLearningNotices(notices)
 	p.showUserDataNotices()

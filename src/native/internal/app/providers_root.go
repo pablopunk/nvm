@@ -5,8 +5,7 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/egoist/mygo"
-
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
@@ -21,7 +20,7 @@ type rootInput struct {
 	learn      *usage.Learner
 	disabled   map[string]bool
 	exts       []loadedExt
-	apps       []mygo.InstalledApp
+	apps       []appfeat.App
 	clips      []ClipEntry
 	chats      []chatHead
 	timerOn    bool
@@ -46,7 +45,7 @@ func (p *App) captureRoot() *rootInput {
 		learn:      p.learn,
 		disabled:   maps.Clone(p.S.Disabled),
 		exts:       p.exts,
-		apps:       p.apps,
+		apps:       p.appsSnapshot(),
 		clips:      p.clip.Entries,
 		chats:      chats,
 		timerOn:    p.timer != nil,

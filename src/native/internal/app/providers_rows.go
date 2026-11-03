@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
-	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -113,35 +112,6 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			it.Score = s
 			out = append(out, it)
 		}
-	}
-	return out
-}
-
-// applicationRows matches installed applications by name, and at the root shows the ones used before.
-func applicationRows(p *App, in *rootInput, q string) []search.Item {
-	lq := strings.ToLower(q)
-	var out []search.Item
-	for _, a := range in.apps {
-		a := a
-		key := "app:" + a.ID
-		s := 0
-		if lq == "" {
-			if in.learn.Uses(key) == 0 {
-				continue
-			}
-			s = scoreAppSuggestion
-		} else if s = search.Score(a.Name, lq); s == 0 {
-			continue
-		}
-		out = append(out, search.Item{Kind: search.KindApplications, Title: a.Name, IconPath: a.Path, Score: s, LearnKey: key, Actions: []search.Action{
-			{Title: "Open Application", Run: func(h search.Host) {
-				h.Hide()
-				if err := mygo.Shell.LaunchApp(a); err != nil {
-					h.Toast(err.Error())
-				}
-			}},
-			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(a.Path) }},
-		}})
 	}
 	return out
 }

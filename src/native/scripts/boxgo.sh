@@ -17,7 +17,7 @@ if [ "${1:-}" = "--get" ]; then
 fi
 slot=$1; shift
 tmp=$(mktemp -d)
-tar czf "$tmp/src.tgz" -C "$root/src/native" --exclude=.git .
+COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/src.tgz" -C "$root/src/native" --exclude=.git --exclude="._*" .
 box exec "$BOX" -- "mkdir -p /root/wp" >/dev/null
 box cp "$tmp/src.tgz" "$BOX:/root/wp/$slot.tgz" >/dev/null
 box exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && export PATH=\$PATH:/usr/local/go/bin && $*"

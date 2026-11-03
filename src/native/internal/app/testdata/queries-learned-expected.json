@@ -137,8 +137,27 @@
       },
       {
         "kind": "Commands",
-        "title": "Quit Applications",
-        "subtitle": "Stop running processes",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit All Apps",
+        "subtitle": "Review and quit running apps",
         "section": "Suggestions",
         "id": "",
         "icon": "power",
@@ -187,12 +206,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calendar",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calendar…",
+            "label": ""
           }
         ]
       },
@@ -210,12 +237,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Terminal",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
           }
         ]
       },
@@ -276,12 +311,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calendar",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calendar…",
+            "label": ""
           }
         ]
       },
@@ -343,25 +386,6 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Quit Applications",
-        "subtitle": "Stop running processes",
-        "section": "Commands",
-        "id": "",
-        "icon": "power",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Applications",
         "title": "Calculator",
         "subtitle": "",
@@ -375,12 +399,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calculator.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calculator",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calculator…",
+            "label": ""
           }
         ]
       },
@@ -480,12 +512,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Terminal",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
           }
         ]
       },
@@ -673,6 +713,25 @@
         "id": "",
         "icon": "puzzle",
         "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "Commands",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

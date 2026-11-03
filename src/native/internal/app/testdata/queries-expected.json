@@ -137,8 +137,27 @@
       },
       {
         "kind": "Commands",
-        "title": "Quit Applications",
-        "subtitle": "Stop running processes",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit All Apps",
+        "subtitle": "Review and quit running apps",
         "section": "Suggestions",
         "id": "",
         "icon": "power",
@@ -187,12 +206,20 @@
         "iconPath": "/usr/share/applications/firefox.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Firefox",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Firefox…",
+            "label": ""
           }
         ]
       },
@@ -210,12 +237,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Terminal",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
           }
         ]
       },
@@ -283,6 +318,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Quit All Apps",
+        "subtitle": "Review and quit running apps",
+        "section": "Commands",
+        "id": "",
+        "icon": "power",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Search Files",
         "subtitle": "Find files in your home folder",
         "section": "Commands",
@@ -308,25 +362,6 @@
         "id": "",
         "icon": "link",
         "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Quit Applications",
-        "subtitle": "Stop running processes",
-        "section": "Commands",
-        "id": "",
-        "icon": "power",
-        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -371,12 +406,20 @@
         "iconPath": "/usr/share/applications/org.gnome.clocks.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Clocks",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Clocks…",
+            "label": ""
           }
         ]
       },
@@ -394,12 +437,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calculator.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calculator",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calculator…",
+            "label": ""
           }
         ]
       },
@@ -417,12 +468,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calendar",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calendar…",
+            "label": ""
           }
         ]
       },
@@ -555,25 +614,6 @@
         "id": "",
         "icon": "clipboard",
         "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Quit Applications",
-        "subtitle": "Stop running processes",
-        "section": "Commands",
-        "id": "",
-        "icon": "power",
-        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -782,12 +822,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Calculator.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Calculator",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calculator…",
+            "label": ""
           }
         ]
       },
@@ -1336,6 +1384,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "Commands",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
         "section": "Commands",
@@ -1699,12 +1766,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Terminal",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
           }
         ]
       },
@@ -1822,12 +1897,20 @@
         "iconPath": "/usr/share/applications/firefox.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Firefox",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Firefox…",
+            "label": ""
           }
         ]
       },
@@ -1839,6 +1922,25 @@
         "id": "",
         "icon": "folder",
         "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "Commands",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -2186,12 +2288,20 @@
         "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
         "actions": [
           {
-            "title": "Open Application",
+            "title": "Open Terminal",
             "label": ""
           },
           {
             "title": "Show in Folder",
             "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
           }
         ]
       },

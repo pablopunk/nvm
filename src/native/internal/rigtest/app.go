@@ -43,6 +43,7 @@ type App struct {
 	display   string
 	hotkey    string
 	base      string
+	home      string
 	socket    string
 	artifacts string
 	logPath   string
@@ -91,6 +92,7 @@ func Launch(t *testing.T, opts Options) *App {
 	if opts.Home != "" {
 		home = opts.Home
 	}
+	a.home = home
 	runtimeDir := filepath.Join(base, "xdg")
 	for _, dir := range []string{home, runtimeDir} {
 		if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -145,14 +147,17 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme string) 
 	for _, kv := range parent {
 		key, _, _ := strings.Cut(kv, "=")
 		switch key {
-		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID":
+		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID":
 			continue
 		}
 		env = append(env, kv)
 	}
+	// XDG_DATA_HOME is the isolated HOME's data folder, so desktop entries and the Trash (which the desktop's trash
+	// implementation writes under it) stay inside the temp HOME, never the user's.
 	env = append(env,
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
+		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
 		"XDG_RUNTIME_DIR="+runtimeDir,
 		"MYGO_AUTOMATION="+socket,
 	)
@@ -231,6 +236,9 @@ func (a *App) KillHard() error {
 
 // Pid is the launched process, for the logs and for KillHard.
 func (a *App) Pid() int { return a.pid }
+
+// Home is the isolated HOME the app runs with. Journeys seed their fixtures under it.
+func (a *App) Home() string { return a.home }
 
 // Log returns the app's log so far (stdout and stderr, file-backed).
 func (a *App) Log() string {

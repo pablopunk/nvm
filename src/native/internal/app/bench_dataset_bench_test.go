@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 )
 
@@ -32,15 +32,15 @@ var (
 
 // benchDataSet is generated once per test binary and shared read-only by the benchmarks.
 type benchDataSet struct {
-	apps  []mygo.InstalledApp
+	apps  []appfeat.App
 	files []string
 	clips []ClipEntry
 }
 
 var benchData = sync.OnceValue(func() benchDataSet {
-	var apps []mygo.InstalledApp
+	var apps []appfeat.App
 	for _, fixture := range fixtures.Apps(benchAppCount) {
-		apps = append(apps, mygo.InstalledApp{Name: fixture.App.Name, ID: fixture.App.ID, Path: fixture.App.Path})
+		apps = append(apps, appfeat.App{Name: fixture.App.Name, ID: fixture.App.ID, Path: fixture.App.Path})
 	}
 	return benchDataSet{
 		apps:  apps,
@@ -75,9 +75,9 @@ func newBenchPalette(b *testing.B) *App {
 	b.Setenv("HOME", b.TempDir())
 	data := benchData()
 	p := &App{
-		S:    &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
-		apps: data.apps,
-		clip: &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
+		S:      &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
+		appsvc: newFixtureAppServices(data.apps),
+		clip:   &ClipStore{Entries: data.clips, thumbs: map[string]*ui.Bitmap{}},
 
 		chats: &ChatStore{},
 		files: newTestFiles(b, b.TempDir(), data.files),
