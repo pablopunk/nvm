@@ -57,7 +57,7 @@ test('repairs an already published build for the same source without rebuilding'
       releases: [release],
       resolveTag: () => sha,
     }),
-    { version: '2026.1030.911', build: false },
+    { version: '2026.1030.911', build: false, pointerSha: sha },
   );
 });
 
@@ -67,9 +67,9 @@ test('skips non-package changes since the last published build', () => {
     draft: false,
     prerelease: true,
   };
-  assert.equal(
-    plan({ releases: [release], hasRelevantChanges: () => false }).build,
-    false,
+  assert.deepEqual(
+    plan({ releases: [release], hasRelevantChanges: () => false }),
+    { version: '2026.1030.911', build: false, pointerSha: otherSha },
   );
   assert.equal(
     plan({ releases: [release], hasRelevantChanges: () => true }).build,
