@@ -21,6 +21,7 @@ func NewPorts() platform.Ports {
 		Screens:      screens{},
 		Notifier:     notifier{},
 		Keychain:     keychain{},
+		DeepLinks:    deepLinks{},
 		Processes:    processes{},
 		Helper:       helper{},
 		Hotkeys:      hotkeys{},
