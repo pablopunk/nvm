@@ -9,6 +9,7 @@ type Set struct {
 	FS           *FS
 	HTTP         *HTTP
 	Clipboard    *Clipboard
+	Paster       *Paster
 	Shell        *Shell
 	Screens      *Screens
 	Notifier     *Notifier
@@ -29,6 +30,7 @@ func NewSet() *Set {
 		FS:           NewFS(),
 		HTTP:         NewHTTP(),
 		Clipboard:    NewClipboard(),
+		Paster:       NewPaster(),
 		Shell:        NewShell(),
 		Screens:      NewScreens(),
 		Notifier:     NewNotifier(),
@@ -50,6 +52,7 @@ func (s *Set) Ports() platform.Ports {
 		FS:           s.FS,
 		HTTP:         s.HTTP,
 		Clipboard:    s.Clipboard,
+		Paster:       s.Paster,
 		Shell:        s.Shell,
 		Screens:      s.Screens,
 		Notifier:     s.Notifier,

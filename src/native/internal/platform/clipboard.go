@@ -9,6 +9,12 @@ const (
 	FormatText ClipboardFormat = "text"
 	// FormatPNG is a PNG image.
 	FormatPNG ClipboardFormat = "image/png"
+	// FormatHTML is HTML markup next to plain text. Read it through RichClipboard.
+	FormatHTML ClipboardFormat = "html"
+	// FormatRTF is RTF markup next to plain text. Read it through RichClipboard.
+	FormatRTF ClipboardFormat = "rtf"
+	// FormatFiles is a list of file paths copied in the file manager. Read it through RichClipboard.
+	FormatFiles ClipboardFormat = "files"
 	// FormatConcealed marks content a password manager or similar tool asked the OS not to record.
 	// Clipboard history must never store or show it.
 	FormatConcealed ClipboardFormat = "concealed"
@@ -33,4 +39,19 @@ type Clipboard interface {
 	// Changed delivers one value per change, coalescing bursts. It returns nil where the
 	// clipboard.changed capability is unsupported; check Capabilities before receiving from it.
 	Changed() <-chan struct{}
+}
+
+// RichClipboard is an optional extension of Clipboard for HTML, RTF and file lists. A clipboard that
+// cannot read or write these formats does not implement it; callers type-assert and treat a missing
+// implementation as "format absent", so plain-text behavior never depends on it.
+type RichClipboard interface {
+	// ReadHTML returns the HTML markup on the clipboard, or "" when there is none.
+	ReadHTML() (string, error)
+	// ReadRTF returns the RTF markup on the clipboard, or "" when there is none.
+	ReadRTF() (string, error)
+	// ReadFilePaths returns the absolute paths of the files on the clipboard, or nil.
+	ReadFilePaths() ([]string, error)
+	// WriteRich replaces the clipboard with plain text and its HTML markup, so apps that understand
+	// HTML keep the formatting and others get the text.
+	WriteRich(text, html string) error
 }

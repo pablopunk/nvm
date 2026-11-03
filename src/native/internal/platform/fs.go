@@ -26,8 +26,11 @@ type FS interface {
 	Remove(name string) error
 	// MkdirAll creates a folder and its parents.
 	MkdirAll(name string, perm fs.FileMode) error
-	// Stat describes a file or folder.
+	// Stat describes a file or folder, following a symbolic link to its target.
 	Stat(name string) (fs.FileInfo, error)
+	// Lstat describes a file or folder without following a symbolic link: a link reports its own mode.
+	// Code that deletes files checks Lstat so a link planted in a folder is never treated as its target.
+	Lstat(name string) (fs.FileInfo, error)
 	// ReadDir lists a folder, sorted by name.
 	ReadDir(name string) ([]fs.DirEntry, error)
 	// Walk visits a tree in lexical order, as filepath.WalkDir does.

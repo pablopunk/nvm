@@ -9,6 +9,7 @@ type Ports struct {
 	FS           FS
 	HTTP         HTTP
 	Clipboard    Clipboard
+	Paster       Paster
 	Shell        Shell
 	Screens      Screens
 	Notifier     Notifier

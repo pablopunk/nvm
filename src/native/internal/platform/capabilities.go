@@ -11,6 +11,7 @@ type Capability string
 const (
 	CapabilityClipboardImage   Capability = "clipboard.image"
 	CapabilityClipboardChanged Capability = "clipboard.changed"
+	CapabilityClipboardPaste   Capability = "clipboard.paste"
 	CapabilityShellReveal      Capability = "shell.reveal"
 	CapabilityShellTrash       Capability = "shell.trash"
 	CapabilityShellApps        Capability = "shell.installedApps"
@@ -31,7 +32,7 @@ const (
 // AllCapabilities lists every capability, sorted by name.
 func AllCapabilities() []Capability {
 	list := []Capability{
-		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage,
+		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
 		CapabilityFileWatch, CapabilityGlobalHotkeys, CapabilityHelperRun, CapabilityKeychain,
 		CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal, CapabilityScreensDisplays,
 		CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep, CapabilityShellReveal,

@@ -8,6 +8,7 @@ import (
 	"path"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -26,16 +27,19 @@ const (
 	OpWatch     = "Watch"
 )
 
-// node is one file or folder of the in-memory tree.
+// node is one file, folder or symbolic link of the in-memory tree. A link has link set to the absolute
+// key of its target and no content.
 type node struct {
-	dir  bool
-	mode fs.FileMode
-	data []byte
+	dir   bool
+	mode  fs.FileMode
+	data  []byte
+	mtime time.Time
+	link  string
 }
 
 // FS is an in-memory platform.FS. Paths are slash-separated and rooted at "/"; a relative name is taken
 // relative to the root. Errors wrap fs.ErrNotExist, fs.ErrExist and friends so errors.Is works as it does
-// for the OS. ModTime is always the zero time.
+// for the OS. ModTime is the zero time unless SetModTime sets it; SeedSymlink models a link.
 //
 // Fault injection: FailNext makes the next call of an operation fail before it changes anything.
 // AfterWrite runs a hook after a WriteFile has been applied; the hook's error is returned to the caller
@@ -200,18 +204,65 @@ func (f *FS) MkdirAll(name string, perm fs.FileMode) error {
 	return f.mkdirAllLocked(cleanKey(name))
 }
 
-// Stat describes a file or folder.
+// Stat describes a file or folder, following a symbolic link once to its target.
 func (f *FS) Stat(name string) (fs.FileInfo, error) {
 	if err := f.faults.take(OpStat); err != nil {
 		return nil, pathError("stat", name, err)
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	n, err := f.lookupLocked(name)
+	key := cleanKey(name)
+	n, err := f.lookupLocked(key)
 	if err != nil {
 		return nil, pathError("stat", name, err)
 	}
-	return fileInfo{name: path.Base(cleanKey(name)), node: n}, nil
+	if n.link != "" {
+		target, err := f.lookupLocked(n.link)
+		if err != nil {
+			return nil, pathError("stat", name, err)
+		}
+		n = target
+	}
+	return fileInfo{name: path.Base(key), node: n}, nil
+}
+
+// Lstat describes a file or folder without following a symbolic link.
+func (f *FS) Lstat(name string) (fs.FileInfo, error) {
+	if err := f.faults.take(OpStat); err != nil {
+		return nil, pathError("lstat", name, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := cleanKey(name)
+	n, err := f.lookupLocked(key)
+	if err != nil {
+		return nil, pathError("lstat", name, err)
+	}
+	return fileInfo{name: path.Base(key), node: n}, nil
+}
+
+// SeedSymlink creates or replaces a symbolic link at name pointing to target, creating parent folders.
+// It bypasses faults and watchers, like Seed. Stat follows the link; Lstat and ReadDir report the link.
+func (f *FS) SeedSymlink(name, target string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := cleanKey(name)
+	if err := f.mkdirAllLocked(path.Dir(key)); err != nil {
+		panic("fake: seeding link " + name + ": " + err.Error())
+	}
+	f.nodes[key] = &node{mode: fs.ModeSymlink | 0o777, link: cleanKey(target)}
+}
+
+// SetModTime sets the modification time reported for name by Stat, Lstat and ReadDir. It panics when name
+// does not exist, because a test that sets the time of a missing file is wrong.
+func (f *FS) SetModTime(name string, mtime time.Time) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n, ok := f.nodes[cleanKey(name)]
+	if !ok {
+		panic("fake: set mod time of missing " + name)
+	}
+	n.mtime = mtime
 }
 
 // ReadDir lists a folder's entries sorted by name.

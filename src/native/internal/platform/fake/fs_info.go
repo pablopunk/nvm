@@ -14,19 +14,22 @@ type fileInfo struct {
 // Name returns the base name.
 func (i fileInfo) Name() string { return i.name }
 
-// Size returns the content length, zero for folders.
+// Size returns the content length, zero for folders and links.
 func (i fileInfo) Size() int64 { return int64(len(i.node.data)) }
 
-// Mode returns the permission bits, with the directory bit for folders.
+// Mode returns the permission bits, with the directory bit for folders and the symlink bit for links.
 func (i fileInfo) Mode() fs.FileMode {
+	if i.node.link != "" {
+		return fs.ModeSymlink | 0o777
+	}
 	if i.node.dir {
 		return fs.ModeDir | i.node.mode.Perm()
 	}
 	return i.node.mode.Perm()
 }
 
-// ModTime returns the zero time; the fake does not model modification times.
-func (i fileInfo) ModTime() time.Time { return time.Time{} }
+// ModTime returns the time set with SetModTime, or the zero time when none was set.
+func (i fileInfo) ModTime() time.Time { return i.node.mtime }
 
 // IsDir reports whether the node is a folder.
 func (i fileInfo) IsDir() bool { return i.node.dir }
