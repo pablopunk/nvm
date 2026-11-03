@@ -29,6 +29,9 @@ var allowedImports = map[string]map[string]string{
 	"fixtures": {
 		"net/http": "the fake backend is an http.Handler; fixtures are test and dev data, never production code",
 	},
+	"perf": {
+		"net/http": "the counters endpoint is served only in -tags perfdebug builds on a loopback address; default builds link no listener",
+	},
 }
 
 // forbiddenImports are packages feature code must reach only through a port. Each entry also matches its
