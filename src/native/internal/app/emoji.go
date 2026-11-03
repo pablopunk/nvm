@@ -363,7 +363,6 @@ type emojiState struct {
 	lastQ    string
 	chosen   int
 	list     ui.ListState
-	row      int
 }
 
 const emojiCols = 12

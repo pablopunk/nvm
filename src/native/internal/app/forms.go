@@ -166,7 +166,6 @@ type Note struct {
 
 type NoteStore struct {
 	Items []Note
-	dirty time.Time
 }
 
 func newNoteStore() *NoteStore {

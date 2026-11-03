@@ -18,8 +18,6 @@ const (
 	iconSize      = 28
 )
 
-var searchIcon = ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>`))
-
 // Palette is the whole app: one panel window, a stack of views, and the feature stores.
 type Palette struct {
 	panel *mygo.Window
@@ -52,7 +50,6 @@ type Palette struct {
 	chats    *ChatStore
 	emoji    emojiState
 	timer    *Timer
-	uses     map[string]int
 	phIndex  int
 }
 

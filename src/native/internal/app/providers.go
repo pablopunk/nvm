@@ -105,26 +105,6 @@ func (p *Palette) commands() []command {
 	return cmds
 }
 
-func rank(name, q string) int {
-	switch {
-	case q == "" || strings.HasPrefix(name, q):
-		return 0
-	case strings.Contains(name, " "+q) || strings.Contains(name, "-"+q):
-		return 1
-	case strings.Contains(name, q):
-		return 2
-	}
-	rest := name
-	for _, r := range q {
-		i := strings.IndexRune(rest, r)
-		if i < 0 {
-			return -1
-		}
-		rest = rest[i+len(string(r)):]
-	}
-	return 3
-}
-
 type scored struct {
 	it    Item
 	score int

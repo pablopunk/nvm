@@ -19,14 +19,6 @@ func etched(c *ui.Context, k *tokens) {
 	ui.Box(c).Height(1).Background(k.hi)
 }
 
-// vetched is the vertical groove.
-func vetched(c *ui.Context, k *tokens) {
-	ui.Row(c).FillHeight().Children(func() {
-		ui.Box(c).Width(1).FillHeight().Background(k.lo)
-		ui.Box(c).Width(1).FillHeight().Background(k.hi)
-	})
-}
-
 // glossy fills a colored control with a vertical sheen, a lit top edge and a soft contact shadow.
 func glossy(e ui.Element, col ui.Color, radius float32, shadow float32) ui.Element {
 	return e.Radius(radius).Gradient(lighten(col, 0.04), col, 180).

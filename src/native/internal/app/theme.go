@@ -31,7 +31,6 @@ func kb(label string) string {
 // tokens are Nevermind's own palette (src/app/palette/styles/theme.css): warm paper surfaces and a
 // gold accent in light, ink blue-grey with the same gold in dark.
 type tokens struct {
-	dark                                    bool
 	bg, surface, border, accent, accentText ui.Color
 	strong, muted, faint                    ui.Color
 	danger, hairline                        ui.Color
