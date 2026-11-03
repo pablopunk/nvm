@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/png"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/pablopunk/nvm/native/internal/design"
 )
 
 type ClipEntry struct {
@@ -305,14 +308,14 @@ func (p *Palette) clipItem(e ClipEntry) Item {
 		}},
 	)
 	it.Detail = func(c *ui.Context, p *Palette) {
-		t := tk(c)
+		t := design.Tokens(c)
 		if e.Kind == "image" {
 			if bm := p.clip.preview(e); bm != nil {
 				ui.Image(c, bm).Fill().Fit(ui.Contain)
 			}
 		} else {
 			ui.Scroll(c).Grow(1).Children(func() {
-				ui.Text(c, e.Text).FontSize(13).TextColor(t.primary)
+				ui.Text(c, e.Text).FontSize(13).TextColor(t.Primary)
 			})
 		}
 		ui.Divider(c)
@@ -322,7 +325,18 @@ func (p *Palette) clipItem(e ClipEntry) Item {
 		} else {
 			info += fmt.Sprintf(" · %d×%d", e.W, e.H)
 		}
-		ui.Text(c, info).FontSize(11).TextColor(t.tertiary)
+		ui.Text(c, info).FontSize(11).TextColor(t.Tertiary)
 	}
 	return it
+}
+
+// pasteText copies text and sends Ctrl+V to whatever had focus before.
+func pasteText(text string) {
+	mygo.Clipboard.WriteText(text)
+	go func() {
+		time.Sleep(180 * time.Millisecond)
+		if path, err := exec.LookPath("xdotool"); err == nil {
+			_ = exec.Command(path, "key", "--clearmodifiers", "ctrl+v").Run()
+		}
+	}()
 }

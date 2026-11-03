@@ -10,6 +10,8 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+
+	"github.com/pablopunk/nvm/native/internal/design"
 )
 
 // ---- generic form view ----
@@ -43,10 +45,10 @@ func (p *Palette) formView(title string, fields []*FormField, onSubmit func(vals
 			return false
 		},
 		Body: func(c *ui.Context, p *Palette) {
-			t := tk(c)
+			t := design.Tokens(c)
 			ui.Column(c).Padding(18).Gap(10).Grow(1).Children(func() {
 				for i, f := range fields {
-					ui.Text(c, f.Label).FontSize(12).Bold().TextColor(t.secondary)
+					ui.Text(c, f.Label).FontSize(12).Bold().TextColor(t.Secondary)
 					if f.Multiline {
 						ta := ui.TextArea(c, &f.Value).Grow(1).Placeholder(f.Placeholder).FontSize(13)
 						if i == 0 {
@@ -60,7 +62,7 @@ func (p *Palette) formView(title string, fields []*FormField, onSubmit func(vals
 					}
 				}
 				if errText != "" {
-					ui.Text(c, errText).TextColor(t.danger).FontSize(12)
+					ui.Text(c, errText).TextColor(t.Danger).FontSize(12)
 				}
 			})
 		},

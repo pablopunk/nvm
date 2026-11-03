@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"os/exec"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
+
+	"github.com/pablopunk/nvm/native/internal/design"
 )
 
 const (
@@ -141,7 +141,7 @@ func (p *Palette) view(c *ui.Context) {
 }
 
 func (p *Palette) viewThemed(c *ui.Context) {
-	k := tk(c)
+	k := design.Tokens(c)
 	v := p.cur()
 	if p.toastMsg != "" {
 		c.Toast(p.toastMsg)
@@ -151,13 +151,13 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	// A system material (macOS glass / Windows acrylic) shows through; elsewhere the pane is
 	// drawn in the theme's colors, slightly see-through where the compositor allows.
-	pane := ui.Column(c).Fill().Radius(cornerRadius).Clip().Border(1, k.edgeStrong).InsetShadow(0, 1, 0, 0, k.hi)
+	pane := ui.Column(c).Fill().Radius(cornerRadius).Clip().Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi)
 	if !c.Vibrancy() {
-		pane.Background(k.bg.Alpha(0.96))
+		pane.Background(k.Bg.Alpha(0.96))
 	}
 	pane.Children(func() {
 		p.searchRow(c, v, k)
-		etched(c, k)
+		design.Etched(c, k)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
 			if v.Body != nil {
 				v.Body(c, p)
@@ -165,7 +165,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 				p.listBody(c, k)
 			}
 		})
-		etched(c, k)
+		design.Etched(c, k)
 		p.footer(c, v, k)
 	})
 	if p.actionsOpen {
@@ -263,16 +263,16 @@ func (p *Palette) actions() []Action {
 }
 
 // keycap draws a key as a small rounded cap, as macOS menus and Raycast do.
-func keycap(c *ui.Context, k *tokens, s string) {
-	ui.Row(c).Padding(1, 6).Radius(5).Background(k.surface).Border(1, k.edgeStrong).InsetShadow(0, 1, 0, 0, k.hi).Center().Children(func() {
-		ui.Text(c, kb(s)).FontSize(11).FontWeight(500).TextColor(k.muted).SingleLine()
+func keycap(c *ui.Context, k *design.TokenSet, s string) {
+	ui.Row(c).Padding(1, 6).Radius(5).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Center().Children(func() {
+		ui.Text(c, kb(s)).FontSize(11).FontWeight(500).TextColor(k.Muted).SingleLine()
 	})
 }
 
 // searchRow is the field at the top of the pane.
-func (p *Palette) searchRow(c *ui.Context, v *View, k *tokens) {
+func (p *Palette) searchRow(c *ui.Context, v *View, k *design.TokenSet) {
 	ui.Row(c).Padding(14, 18).Gap(12).AlignItems(ui.Center).Children(func() {
-		bolt := ui.Icon(c, svgIcon("zap")).FontSize(21).TextColor(k.accent)
+		bolt := ui.Icon(c, design.Icon("zap")).FontSize(21).TextColor(k.Accent)
 		if len(p.stack) > 1 && bolt.Clicked() {
 			p.Pop()
 		}
@@ -281,14 +281,14 @@ func (p *Palette) searchRow(c *ui.Context, v *View, k *tokens) {
 			if v.TitleFn != nil {
 				title = v.TitleFn()
 			}
-			ui.Text(c, title).FontSize(21).TextColor(k.strong).Grow(1).SingleLine()
+			ui.Text(c, title).FontSize(21).TextColor(k.Strong).Grow(1).SingleLine()
 			return
 		}
 		ph := v.Placeholder
 		if ph == "" {
 			ph = rootPlaceholders[p.phIndex%len(rootPlaceholders)]
 		}
-		in := ui.TextInputBase(c, &p.query).Bind(&p.input).Grow(1).FontSize(21).TextColor(k.strong).Placeholder(ph).PlaceholderColor(k.faint).Label("Search")
+		in := ui.TextInputBase(c, &p.query).Bind(&p.input).Grow(1).FontSize(21).TextColor(k.Strong).Placeholder(ph).PlaceholderColor(k.Faint).Label("Search")
 		if in.Changed() {
 			p.search()
 		}
@@ -296,26 +296,26 @@ func (p *Palette) searchRow(c *ui.Context, v *View, k *tokens) {
 			p.onEnter()
 		}
 		if len(p.stack) == 1 && strings.TrimSpace(p.query) != "" {
-			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(3, 8).Radius(6).Background(k.surface).Border(1, k.edgeStrong).InsetShadow(0, 1, 0, 0, k.hi).Children(func() {
-				ui.Icon(c, svgIcon("sparkles")).FontSize(12).TextColor(k.muted)
-				ui.Text(c, "Tab").FontSize(12).FontWeight(600).TextColor(k.muted)
-				ui.Text(c, "to ask AI").FontSize(12).TextColor(k.muted)
+			ui.Row(c).Gap(6).AlignItems(ui.Center).Padding(3, 8).Radius(6).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+				ui.Icon(c, design.Icon("sparkles")).FontSize(12).TextColor(k.Muted)
+				ui.Text(c, "Tab").FontSize(12).FontWeight(600).TextColor(k.Muted)
+				ui.Text(c, "to ask AI").FontSize(12).TextColor(k.Muted)
 			})
 		}
 	})
 }
 
-func (p *Palette) listBody(c *ui.Context, k *tokens) {
+func (p *Palette) listBody(c *ui.Context, k *design.TokenSet) {
 	v := p.cur()
 	if len(p.results) == 0 {
 		ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
-			ui.Icon(c, svgIcon("search")).FontSize(26).TextColor(k.faint)
+			ui.Icon(c, design.Icon("search")).FontSize(26).TextColor(k.Faint)
 			title, sub := v.EmptyTitle, v.EmptySub
 			if title == "" {
 				title, sub = "No Results", "Try a different search."
 			}
-			ui.Text(c, title).FontSize(15).FontWeight(600).TextColor(k.strong)
-			ui.Text(c, sub).FontSize(12).TextColor(k.muted)
+			ui.Text(c, title).FontSize(15).FontWeight(600).TextColor(k.Strong)
+			ui.Text(c, sub).FontSize(12).TextColor(k.Muted)
 		})
 		return
 	}
@@ -329,7 +329,7 @@ func (p *Palette) listBody(c *ui.Context, k *tokens) {
 	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
-		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.strong
+		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
 			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i, k) }).Grow(1).FillHeight().Padding(6)
@@ -342,7 +342,7 @@ func (p *Palette) listBody(c *ui.Context, k *tokens) {
 		}
 		if it != nil && it.Detail != nil {
 			ui.Column(c).Width(320).FillHeight().Padding(8, 8, 8, 2).Children(func() {
-				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.wash).Border(1, k.lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.lo).Children(func() {
+				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.Wash).Border(1, k.Lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.Lo).Children(func() {
 					it.Detail(c, p)
 				})
 			})
@@ -350,25 +350,25 @@ func (p *Palette) listBody(c *ui.Context, k *tokens) {
 	})
 }
 
-func (p *Palette) row(c *ui.Context, i int, k *tokens) {
+func (p *Palette) row(c *ui.Context, i int, k *design.TokenSet) {
 	it := p.results[i]
 	sel := i == p.chosen
 	ui.Column(c).Children(func() {
 		if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
-			ui.Text(c, it.Section).FontSize(11).FontWeight(600).TextColor(k.muted).Padding(8, 10, 4, 10)
+			ui.Text(c, it.Section).FontSize(11).FontWeight(600).TextColor(k.Muted).Padding(8, 10, 4, 10)
 		}
-		title, sub := k.strong, k.tertiary
+		title, sub := k.Strong, k.Tertiary
 		if it.TintTitle || it.Prominent {
-			if col, ok := k.tones[it.Tone]; ok {
+			if col, ok := k.Tones[it.Tone]; ok {
 				title = col
 			}
 		}
 		rowEl := ui.Row(c).Padding(5, 8).Gap(10).AlignItems(ui.Center).Radius(12)
 		if it.Prominent && !sel {
-			rowEl.Background(k.accentSoft)
+			rowEl.Background(k.AccentSoft)
 		}
 		if sel {
-			selectedFill(rowEl, k, it.Prominent)
+			design.SelectedFill(rowEl, k, it.Prominent)
 		}
 		rowEl.Children(func() {
 			p.tile(c, it, k)
@@ -379,17 +379,17 @@ func (p *Palette) row(c *ui.Context, i int, k *tokens) {
 				}
 			})
 			if it.Accessory != "" {
-				ui.Text(c, it.Accessory).FontSize(12).TextColor(k.muted).SingleLine()
+				ui.Text(c, it.Accessory).FontSize(12).TextColor(k.Muted).SingleLine()
 			}
 			if sel && len(it.Actions) > 0 {
-				ui.Icon(c, svgIcon("corner-down-left")).FontSize(13).TextColor(k.muted)
+				ui.Icon(c, design.Icon("corner-down-left")).FontSize(13).TextColor(k.Muted)
 			}
 		})
 	})
 }
 
 // tile is the icon of a row: the file's own icon, or a tinted glyph on a small raised key.
-func (p *Palette) tile(c *ui.Context, it Item, k *tokens) {
+func (p *Palette) tile(c *ui.Context, it Item, k *design.TokenSet) {
 	const size = 32
 	switch {
 	case it.Image != nil:
@@ -401,21 +401,21 @@ func (p *Palette) tile(c *ui.Context, it Item, k *tokens) {
 		}
 		fallthrough
 	default:
-		fg := k.secondary
-		if col, ok := k.tones[it.Tone]; ok {
+		fg := k.Secondary
+		if col, ok := k.Tones[it.Tone]; ok {
 			fg = col
 		}
 		el := ui.Row(c).Size(size, size).Center()
 		if it.Prominent {
-			glossy(el, k.accentFill, 8, 0)
-			fg = k.accentContrast
+			design.Glossy(el, k.AccentFill, 8, 0)
+			fg = k.AccentContrast
 		} else {
-			el.Radius(8).Background(k.interactive).Border(1, k.edgeSubtle).
-				InsetShadow(0, 1, 0, 0, k.hi)
+			el.Radius(8).Background(k.Interactive).Border(1, k.EdgeSubtle).
+				InsetShadow(0, 1, 0, 0, k.Hi)
 		}
 		el.Children(func() {
 			if it.Icon != "" {
-				ui.Icon(c, svgIcon(it.Icon)).FontSize(17).TextColor(fg)
+				ui.Icon(c, design.Icon(it.Icon)).FontSize(17).TextColor(fg)
 				return
 			}
 			g := it.Glyph
@@ -444,9 +444,9 @@ func (p *Palette) icon(path string) *ui.Bitmap {
 }
 
 // footer is the status bar: where you are, and what Enter and the action menu do.
-func (p *Palette) footer(c *ui.Context, v *View, k *tokens) {
-	ui.Row(c).Padding(8, 14).Gap(14).AlignItems(ui.Center).Background(k.wash).Children(func() {
-		ui.Icon(c, svgIcon("zap")).FontSize(14).TextColor(k.muted)
+func (p *Palette) footer(c *ui.Context, v *View, k *design.TokenSet) {
+	ui.Row(c).Padding(8, 14).Gap(14).AlignItems(ui.Center).Background(k.Wash).Children(func() {
+		ui.Icon(c, design.Icon("zap")).FontSize(14).TextColor(k.Muted)
 		name := v.Title
 		if v.TitleFn != nil {
 			name = v.TitleFn()
@@ -454,41 +454,41 @@ func (p *Palette) footer(c *ui.Context, v *View, k *tokens) {
 		if len(p.stack) == 1 {
 			name = "Nevermind"
 		}
-		ui.Text(c, name).FontSize(12).TextColor(k.muted).Grow(1).SingleLine()
+		ui.Text(c, name).FontSize(12).TextColor(k.Muted).Grow(1).SingleLine()
 		if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 			ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, it.Actions[0].Title).FontSize(12).FontWeight(500).TextColor(k.strong)
+				ui.Text(c, it.Actions[0].Title).FontSize(12).FontWeight(500).TextColor(k.Strong)
 				keycap(c, k, "↵")
 			})
 			if len(it.Actions) > 1 {
 				ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-					ui.Text(c, "Actions").FontSize(12).FontWeight(500).TextColor(k.strong)
+					ui.Text(c, "Actions").FontSize(12).FontWeight(500).TextColor(k.Strong)
 					keycap(c, k, "⌃K")
 				})
 			}
 		} else if v.Hint != "" {
-			ui.Text(c, kb(v.Hint)).FontSize(12).TextColor(k.muted)
+			ui.Text(c, kb(v.Hint)).FontSize(12).TextColor(k.Muted)
 		}
 	})
 }
 
 // actionPanel is the action menu, a popover over the pane.
-func (p *Palette) actionPanel(c *ui.Context, k *tokens) {
+func (p *Palette) actionPanel(c *ui.Context, k *design.TokenSet) {
 	acts := p.actions()
 	p.actList.Selected = &p.actChosen
-	ui.Column(c).Absolute().Right(12).Bottom(44).Width(290).Radius(12).Background(k.raised).Border(1, k.edgeStrong).InsetShadow(0, 1, 0, 0, k.hi).Shadow(0, 14, 34, 0, k.shadow).Shadow(0, 2, 6, 0, k.lo).Padding(5).Children(func() {
+	ui.Column(c).Absolute().Right(12).Bottom(44).Width(290).Radius(12).Background(k.Raised).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Shadow(0, 14, 34, 0, k.Shadow).Shadow(0, 2, 6, 0, k.Lo).Padding(5).Children(func() {
 		for i, a := range acts {
-			fg := k.strong
+			fg := k.Strong
 			rowEl := ui.Row(c).Padding(6, 10).Radius(8).AlignItems(ui.Center).Gap(8)
 			if i == p.actChosen {
-				selectedFill(rowEl, k, false)
+				design.SelectedFill(rowEl, k, false)
 			}
 			rowEl.Children(func() {
 				ui.Text(c, a.Title).FontSize(13).TextColor(fg).Grow(1).SingleLine()
 				if a.Label != "" {
-					ui.Text(c, kb(a.Label)).FontSize(11).FontWeight(500).TextColor(k.muted).SingleLine()
+					ui.Text(c, kb(a.Label)).FontSize(11).FontWeight(500).TextColor(k.Muted).SingleLine()
 				} else if i == 0 {
-					ui.Icon(c, svgIcon("corner-down-left")).FontSize(12).TextColor(k.muted)
+					ui.Icon(c, design.Icon("corner-down-left")).FontSize(12).TextColor(k.Muted)
 				}
 			})
 		}
@@ -535,15 +535,4 @@ func (p *Palette) toggle() {
 func (p *Palette) open(v *View) {
 	p.show()
 	p.Push(v)
-}
-
-// pasteText copies text and sends Ctrl+V to whatever had focus before.
-func pasteText(text string) {
-	mygo.Clipboard.WriteText(text)
-	go func() {
-		time.Sleep(180 * time.Millisecond)
-		if path, err := exec.LookPath("xdotool"); err == nil {
-			_ = exec.Command(path, "key", "--clearmodifiers", "ctrl+v").Run()
-		}
-	}()
 }

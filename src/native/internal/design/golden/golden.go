@@ -115,7 +115,10 @@ func check(name string, view func(c *ui.Context), opts Options, testName string)
 	if name == "" || strings.ContainsAny(name, `/\`) || strings.Contains(name, "..") {
 		return outcome{}, fmt.Errorf("golden name %q must be a plain file name", name)
 	}
-	actual := render(view, opts)
+	actual, err := storedFrame(render(view, opts))
+	if err != nil {
+		return outcome{}, err
+	}
 	path := goldenPath(opts, name)
 	if *update {
 		if err := writePNG(path, actual); err != nil {
