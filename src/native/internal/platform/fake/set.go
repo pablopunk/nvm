@@ -1,0 +1,64 @@
+package fake
+
+import "github.com/pablopunk/nvm/native/internal/platform"
+
+// Set bundles one fake per port. Tests build a Set, hand Ports to the code under test, and keep the typed
+// fields to script the world and assert on what the code did.
+type Set struct {
+	Clock        *Clock
+	FS           *FS
+	HTTP         *HTTP
+	Clipboard    *Clipboard
+	Shell        *Shell
+	Screens      *Screens
+	Notifier     *Notifier
+	Keychain     *Keychain
+	Processes    *Processes
+	Helper       *Helper
+	Hotkeys      *Hotkeys
+	Tray         *TrayHost
+	Autostart    *Autostart
+	Capabilities platform.Capabilities
+}
+
+// NewSet returns a complete set of empty fakes that supports every capability. Remove a capability from
+// Capabilities to test the code path where the OS lacks it.
+func NewSet() *Set {
+	return &Set{
+		Clock:        NewClock(),
+		FS:           NewFS(),
+		HTTP:         NewHTTP(),
+		Clipboard:    NewClipboard(),
+		Shell:        NewShell(),
+		Screens:      NewScreens(),
+		Notifier:     NewNotifier(),
+		Keychain:     NewKeychain(),
+		Processes:    NewProcesses(),
+		Helper:       NewHelper(),
+		Hotkeys:      NewHotkeys(),
+		Tray:         NewTrayHost(),
+		Autostart:    NewAutostart(),
+		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
+	}
+}
+
+// Ports returns the platform.Ports view of the set. The result shares state with the set, so changes made
+// through the typed fields are seen by the code under test.
+func (s *Set) Ports() platform.Ports {
+	return platform.Ports{
+		Clock:        s.Clock,
+		FS:           s.FS,
+		HTTP:         s.HTTP,
+		Clipboard:    s.Clipboard,
+		Shell:        s.Shell,
+		Screens:      s.Screens,
+		Notifier:     s.Notifier,
+		Keychain:     s.Keychain,
+		Processes:    s.Processes,
+		Helper:       s.Helper,
+		Hotkeys:      s.Hotkeys,
+		Tray:         s.Tray,
+		Autostart:    s.Autostart,
+		Capabilities: s.Capabilities,
+	}
+}
