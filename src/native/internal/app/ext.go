@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"io"
 	"log"
 	"net/http"
@@ -207,16 +208,16 @@ func (p *Palette) setUpExtensionTrays() {
 func (p *Palette) extensionsView() *View {
 	return &View{
 		Title: "Extensions", Placeholder: "Search Extensions",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{
+			out := []search.Item{
 				{Title: "Create Extension with AI", Subtitle: "Describe it; a Go extension is written, checked and installed", Icon: "zap", Tone: "yellow", Prominent: true,
-					Actions: []Action{{Title: "Create", Run: func(p *Palette) { p.Push(p.builderView()) }}}},
+					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.builderView()) }}}},
 				{Title: "Reload Extensions", Icon: "rotate-ccw", Tone: "gray",
-					Actions: []Action{{Title: "Reload", Run: func(p *Palette) {
+					Actions: []search.Action{{Title: "Reload", Run: func(h search.Host) {
 						p.reloadExtensions()
-						p.Toast(fmt.Sprintf("%d extensions loaded", len(p.exts)))
-						p.Refresh()
+						h.Toast(fmt.Sprintf("%d extensions loaded", len(p.exts)))
+						h.Refresh()
 					}}}},
 			}
 			for _, e := range p.exts {
@@ -235,20 +236,20 @@ func (p *Palette) extensionsView() *View {
 				if e.MenuBar != nil {
 					kinds = append(kinds, "menu bar")
 				}
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: e.ID, Title: e.Title, Subtitle: e.ID + " · " + strings.Join(kinds, ", "), Icon: "puzzle", Tone: "purple", Accessory: state,
-					Actions: []Action{
-						{Title: "Toggle Enabled", Run: func(p *Palette) {
+					Actions: []search.Action{
+						{Title: "Toggle Enabled", Run: func(h search.Host) {
 							p.S.Disabled[e.ID] = !p.S.Disabled[e.ID]
 							p.S.save()
 							p.setUpExtensionTrays()
-							p.Refresh()
+							h.Refresh()
 						}},
-						{Title: "Show Source in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) { p.Hide(); mygo.Shell.ShowItemInFolder(e.File) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+						{Title: "Show Source in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(e.File) }},
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
 							_ = os.Remove(e.File)
 							p.reloadExtensions()
-							p.Refresh()
+							h.Refresh()
 						}},
 					},
 				})

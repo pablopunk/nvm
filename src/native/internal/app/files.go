@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/pablopunk/nvm/native/internal/search"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -67,20 +68,20 @@ func (f *FileIndex) search(q string, limit int) []string {
 	return append(starts, contains...)[:min(limit, len(starts)+len(contains))]
 }
 
-func (p *Palette) fileItem(path string) Item {
+func (p *Palette) fileItem(path string) search.Item {
 	home, _ := os.UserHomeDir()
 	dir := strings.Replace(filepath.Dir(path), home, "~", 1)
-	return Item{
+	return search.Item{
 		ID: path, Title: filepath.Base(path), Subtitle: dir, IconPath: path,
-		Actions: []Action{
-			{Title: "Open", Run: func(p *Palette) { p.Hide(); _ = mygo.Shell.OpenPath(path) }},
-			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) { p.Hide(); mygo.Shell.ShowItemInFolder(path) }},
-			{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(p *Palette) { mygo.Clipboard.WriteText(path); p.Hide() }},
-			{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+		Actions: []search.Action{
+			{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(path) }},
+			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(path) }},
+			{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(path); h.Hide() }},
+			{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
 				if err := mygo.Shell.TrashItem(path); err != nil {
-					p.Toast("Trash failed: " + err.Error())
+					h.Toast("Trash failed: " + err.Error())
 				} else {
-					p.Toast("Moved to Trash")
+					h.Toast("Moved to Trash")
 				}
 			}},
 		},
@@ -96,11 +97,11 @@ func (p *Palette) filesView() *View {
 			}
 			return itoa(len(p.files.paths)) + " files indexed"
 		},
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			if len(q) < 1 {
 				return nil
 			}
-			var out []Item
+			var out []search.Item
 			for _, path := range p.files.search(q, 40) {
 				out = append(out, p.fileItem(path))
 			}

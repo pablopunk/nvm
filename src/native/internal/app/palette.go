@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"log"
 	"os"
 	"strings"
@@ -18,6 +19,9 @@ const (
 	iconSize      = 28
 )
 
+// The palette is the search.Host every action runs against.
+var _ search.Host = (*Palette)(nil)
+
 // Palette is the whole app: one panel window, a stack of views, and the feature stores.
 type Palette struct {
 	panel *mygo.Window
@@ -25,7 +29,7 @@ type Palette struct {
 
 	stack   []*View
 	query   string
-	results []Item
+	results []search.Item
 	chosen  int
 	list    ui.ListState
 	input   ui.Handle
@@ -55,12 +59,27 @@ type Palette struct {
 
 func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 
-func (p *Palette) Push(v *View) {
-	p.stack = append(p.stack, v)
+// Push opens a view above the current one. It implements search.Host, so the argument is the palette's
+// *View; anything else is a programming error.
+func (p *Palette) Push(v any) {
+	view, ok := v.(*View)
+	if !ok {
+		panic("palette: Push wants a *View")
+	}
+	p.stack = append(p.stack, view)
 	p.query = ""
 	p.actionsOpen = false
 	p.search()
 	p.input.Focus()
+}
+
+// Query returns the text of the search field (search.Host).
+func (p *Palette) Query() string { return p.query }
+
+// SetQuery replaces the search text and searches again (search.Host).
+func (p *Palette) SetQuery(q string) {
+	p.query = q
+	p.search()
 }
 
 func (p *Palette) Pop() {
@@ -106,7 +125,7 @@ func (p *Palette) choose(i int) {
 	}
 }
 
-func (p *Palette) chosenItem() *Item {
+func (p *Palette) chosenItem() *search.Item {
 	if p.cur().Body != nil || p.chosen < 0 || p.chosen >= len(p.results) {
 		return nil
 	}
@@ -263,7 +282,7 @@ func (p *Palette) row(c *ui.Context, i int) {
 
 // tileData resolves a result's icon: a preview image, else the system icon of its file (decoded once and
 // cached), else the Lucide icon or letters the design tile draws.
-func (p *Palette) tileData(it Item) design.TileData {
+func (p *Palette) tileData(it search.Item) design.TileData {
 	data := design.TileData{Image: it.Image, Icon: it.Icon, Glyph: it.Glyph}
 	if it.Image == nil && it.IconPath != "" {
 		data.FileIcon = p.icon(it.IconPath)

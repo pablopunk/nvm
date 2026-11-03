@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/pablopunk/nvm/native/internal/search"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -90,7 +91,7 @@ func (p *Palette) onEnter() {
 	}
 }
 
-func (p *Palette) actions() []Action {
+func (p *Palette) actions() []search.Action {
 	if it := p.chosenItem(); it != nil {
 		return it.Actions
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"image"
 	"image/png"
 	"os"
@@ -227,9 +228,9 @@ func (p *Palette) clipboardView() *View {
 	return &View{
 		Title: "Clipboard History", Placeholder: "Search Clipboard History", EmptyTitle: "No clipboard items found.", EmptySub: "Copy text or images and they will appear here.",
 		Status: func() string { return fmt.Sprintf("%d items", len(p.clip.Entries)) },
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			var pinned, rest []Item
+			var pinned, rest []search.Item
 			for _, e := range p.clip.Entries {
 				if lq != "" && (e.Kind != "text" || !strings.Contains(strings.ToLower(e.Text), lq)) {
 					continue
@@ -246,8 +247,8 @@ func (p *Palette) clipboardView() *View {
 	}
 }
 
-func (p *Palette) clipItem(e ClipEntry) Item {
-	it := Item{ID: e.ID, Icon: "clipboard", Tone: "blue", TintTitle: true}
+func (p *Palette) clipItem(e ClipEntry) search.Item {
+	it := search.Item{ID: e.ID, Icon: "clipboard", Tone: "blue", TintTitle: true}
 	subKind := "Text"
 	if e.Kind == "image" {
 		it.Title = fmt.Sprintf("Image  %d×%d", e.W, e.H)
@@ -264,50 +265,50 @@ func (p *Palette) clipItem(e ClipEntry) Item {
 	if e.Pinned {
 		pinTitle = "Unpin"
 	}
-	it.Actions = []Action{
-		{Title: "Copy to Clipboard", Run: func(p *Palette) { p.copyClip(e); p.Hide() }},
-		{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) {
-			p.Hide()
+	it.Actions = []search.Action{
+		{Title: "Copy to Clipboard", Run: func(h search.Host) { p.copyClip(e); h.Hide() }},
+		{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
+			h.Hide()
 			if e.Kind == "text" {
 				pasteText(e.Text)
 			} else {
 				p.copyClip(e)
 			}
 		}},
-		{Title: pinTitle, Label: "⌃P", Mods: mod, Key: ui.KeyP, Run: func(p *Palette) {
+		{Title: pinTitle, Label: "⌃P", Mods: mod, Key: ui.KeyP, Run: func(h search.Host) {
 			for i := range p.clip.Entries {
 				if p.clip.Entries[i].ID == e.ID {
 					p.clip.Entries[i].Pinned = !p.clip.Entries[i].Pinned
 				}
 			}
 			p.clip.save()
-			p.Refresh()
+			h.Refresh()
 		}},
 	}
 	if e.Kind == "text" {
-		it.Actions = append(it.Actions, Action{Title: "Ask AI About This", Label: "⌃J", Mods: mod, Key: ui.KeyJ, Run: func(p *Palette) {
-			p.Push(p.newChatView("Here is some text from my clipboard:\n\n```\n" + e.Text + "\n```\n\nWhat is it? Be brief."))
+		it.Actions = append(it.Actions, search.Action{Title: "Ask AI About This", Label: "⌃J", Mods: mod, Key: ui.KeyJ, Run: func(h search.Host) {
+			h.Push(p.newChatView("Here is some text from my clipboard:\n\n```\n" + e.Text + "\n```\n\nWhat is it? Be brief."))
 		}})
 	}
 	it.Actions = append(it.Actions,
-		Action{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+		search.Action{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
 			i := slices.IndexFunc(p.clip.Entries, func(x ClipEntry) bool { return x.ID == e.ID })
 			p.dropClip(i)
 			p.clip.save()
-			p.Refresh()
+			h.Refresh()
 		}},
-		Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Run: func(p *Palette) {
+		search.Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Run: func(h search.Host) {
 			for i := len(p.clip.Entries) - 1; i >= 0; i-- {
 				if !p.clip.Entries[i].Pinned {
 					p.dropClip(i)
 				}
 			}
 			p.clip.save()
-			p.Refresh()
-			p.Toast("Clipboard history cleared")
+			h.Refresh()
+			h.Toast("Clipboard history cleared")
 		}},
 	)
-	it.Detail = func(c *ui.Context, p *Palette) {
+	it.Detail = func(c *ui.Context, h search.Host) {
 		t := design.Tokens(c)
 		if e.Kind == "image" {
 			if bm := p.clip.preview(e); bm != nil {

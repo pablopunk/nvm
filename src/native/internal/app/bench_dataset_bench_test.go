@@ -4,6 +4,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"sync"
 	"testing"
 
@@ -25,7 +26,7 @@ var benchQueries = []string{"cl", "clip", "show the time"}
 
 // benchOutputs keeps results alive so the compiler cannot discard the work a benchmark measures.
 var (
-	benchItems []Item
+	benchItems []search.Item
 	benchPaths []string
 	benchSink  int
 )

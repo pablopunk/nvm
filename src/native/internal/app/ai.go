@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"io"
 	"log"
 	"net/http"
@@ -268,22 +269,22 @@ func streamCompletion(ctx context.Context, msgs []map[string]string, onChunk fun
 func (p *Palette) chatHistoryView() *View {
 	return &View{
 		Title: "AI Chats", Placeholder: "Search AI Chats",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			out := []Item{{Title: "New Chat", Icon: "plus", Actions: []Action{{Title: "Start", Run: func(p *Palette) { p.Push(p.newChatView("")) }}}}}
+			out := []search.Item{{Title: "New Chat", Icon: "plus", Actions: []search.Action{{Title: "Start", Run: func(h search.Host) { h.Push(p.newChatView("")) }}}}}
 			for _, ch := range p.chats.Chats {
 				if ch.Builder || (lq != "" && !strings.Contains(strings.ToLower(ch.Title), lq)) {
 					continue
 				}
 				ch := ch
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: ch.ID, Title: ch.Title, Subtitle: "AI conversation · " + ago(ch.Updated), Icon: "message-circle", Tone: "yellow", TintTitle: true,
-					Actions: []Action{
-						{Title: "Open", Run: func(p *Palette) { p.Push(p.chatView(ch)) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(p *Palette) {
+					Actions: []search.Action{
+						{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(ch)) }},
+						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
 							p.chats.Chats = slices.DeleteFunc(p.chats.Chats, func(x *Chat) bool { return x.ID == ch.ID })
 							p.chats.save()
-							p.Refresh()
+							h.Refresh()
 						}},
 					},
 				})

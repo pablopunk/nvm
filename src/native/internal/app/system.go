@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -64,16 +65,16 @@ func listProcs() []proc {
 func (p *Palette) processesView() *View {
 	return &View{
 		Title: "Quit Applications", Placeholder: "Search Running Processes",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			var out []Item
+			var out []search.Item
 			for _, pr := range listProcs() {
 				if lq != "" && !strings.Contains(strings.ToLower(pr.Name), lq) {
 					continue
 				}
 				pr := pr
-				kill := func(sig syscall.Signal) func(p *Palette) {
-					return func(p *Palette) {
+				kill := func(sig syscall.Signal) func(h search.Host) {
+					return func(h search.Host) {
 						// all processes of that name owned by the user
 						n := 0
 						ents, _ := os.ReadDir("/proc")
@@ -87,13 +88,13 @@ func (p *Palette) processesView() *View {
 								n++
 							}
 						}
-						p.Toast(fmt.Sprintf("Signalled %d × %s", n, pr.Name))
-						p.Refresh()
+						h.Toast(fmt.Sprintf("Signalled %d × %s", n, pr.Name))
+						h.Refresh()
 					}
 				}
-				out = append(out, Item{
+				out = append(out, search.Item{
 					ID: pr.Name, Title: pr.Name, Subtitle: fmt.Sprintf("%.0f MB resident", float64(pr.RSS)/1024), Icon: "activity", Tone: "red",
-					Actions: []Action{
+					Actions: []search.Action{
 						{Title: "Quit (SIGTERM)", Run: kill(syscall.SIGTERM)},
 						{Title: "Force Quit (SIGKILL)", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Run: kill(syscall.SIGKILL)},
 					},
@@ -120,10 +121,10 @@ func run(name string, args ...string) {
 func (p *Palette) confirmView(title, detail string, do func()) *View {
 	return &View{
 		Title: "Confirm", Placeholder: title + "?", HideInput: false,
-		Search: func(string) []Item {
-			return []Item{
-				{Title: title, Subtitle: detail, Icon: "check", Tone: "red", Actions: []Action{{Title: "Confirm", Run: func(p *Palette) { p.Hide(); do() }}}},
-				{Title: "Cancel", Icon: "x", Actions: []Action{{Title: "Cancel", Run: func(p *Palette) { p.Pop() }}}},
+		Search: func(string) []search.Item {
+			return []search.Item{
+				{Title: title, Subtitle: detail, Icon: "check", Tone: "red", Actions: []search.Action{{Title: "Confirm", Run: func(h search.Host) { h.Hide(); do() }}}},
+				{Title: "Cancel", Icon: "x", Actions: []search.Action{{Title: "Cancel", Run: func(h search.Host) { h.Pop() }}}},
 			}
 		},
 	}

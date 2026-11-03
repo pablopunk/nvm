@@ -3,6 +3,7 @@ package app
 import (
 	"cmp"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -40,16 +41,16 @@ func (p *Palette) engine() engine {
 	return engines[0]
 }
 
-func openURL(tpl, q string) func(p *Palette) {
-	return func(p *Palette) {
-		p.Hide()
+func openURL(tpl, q string) func(h search.Host) {
+	return func(h search.Host) {
+		h.Hide()
 		_ = mygo.Shell.OpenExternal(strings.ReplaceAll(tpl, "{query}", url.QueryEscape(q)))
 	}
 }
 
 type command struct {
 	Title, Keywords, Icon, Subtitle, Tone string
-	Run                                   func(p *Palette)
+	Run                                   func(h search.Host)
 	Order                                 int
 	Hidden                                bool
 }
@@ -58,41 +59,41 @@ func (p *Palette) commands() []command {
 	home, _ := os.UserHomeDir()
 	place := func(name string) command {
 		dir := filepath.Join(home, name)
-		return command{Title: name, Keywords: "open folder places go", Icon: "folder", Subtitle: dir, Hidden: true, Run: func(p *Palette) { p.Hide(); _ = mygo.Shell.OpenPath(dir) }}
+		return command{Title: name, Keywords: "open folder places go", Icon: "folder", Subtitle: dir, Hidden: true, Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(dir) }}
 	}
 	cmds := []command{
-		{Title: "Clipboard History", Keywords: "clipboard paste copy history", Icon: "clipboard", Tone: "blue", Subtitle: "Browse and paste what you copied", Run: func(p *Palette) { p.Push(p.clipboardView()) }},
-		{Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(p *Palette) { p.Push(p.chatHistoryView()) }},
-		{Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(p *Palette) { p.Push(p.emojiView()) }},
-		{Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(p *Palette) { p.Push(p.filesView()) }},
-		{Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(p *Palette) { p.Push(p.notesView()) }},
-		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(p *Palette) { p.newNote() }},
-		{Title: "Snippets", Keywords: "snippets text expand template", Icon: "type", Subtitle: "Saved text you paste often", Run: func(p *Palette) { p.Push(p.snippetsView()) }},
-		{Title: "Create Snippet", Keywords: "snippet new add", Icon: "plus", Hidden: true, Run: func(p *Palette) { p.Push(p.snippetForm(nil)) }},
-		{Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(p *Palette) { p.Push(p.extensionsView()) }},
-		{Title: "Quit Applications", Keywords: "quit kill processes force apps", Icon: "power", Subtitle: "Stop running processes", Run: func(p *Palette) { p.Push(p.processesView()) }},
-		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(p *Palette) { p.Push(p.quicklinkForm()) }},
-		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Run: func(p *Palette) { p.query = "timer 5m"; p.search() }},
-		{Title: "Lock Screen", Keywords: "lock screen security", Icon: "lock", Hidden: true, Run: func(p *Palette) { p.Hide(); run("loginctl", "lock-session") }},
-		{Title: "Sleep", Keywords: "sleep suspend", Icon: "moon", Hidden: true, Run: func(p *Palette) { p.Hide(); run("systemctl", "suspend") }},
-		{Title: "Log Out", Keywords: "logout sign out", Icon: "log-out", Hidden: true, Run: func(p *Palette) {
-			p.Push(p.confirmView("Log Out", "End the current session", func() { run("loginctl", "terminate-user", os.Getenv("USER")) }))
+		{Title: "Clipboard History", Keywords: "clipboard paste copy history", Icon: "clipboard", Tone: "blue", Subtitle: "Browse and paste what you copied", Run: func(h search.Host) { h.Push(p.clipboardView()) }},
+		{Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
+		{Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
+		{Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(h search.Host) { h.Push(p.filesView()) }},
+		{Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
+		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
+		{Title: "Snippets", Keywords: "snippets text expand template", Icon: "type", Subtitle: "Saved text you paste often", Run: func(h search.Host) { h.Push(p.snippetsView()) }},
+		{Title: "Create Snippet", Keywords: "snippet new add", Icon: "plus", Hidden: true, Run: func(h search.Host) { h.Push(p.snippetForm(nil)) }},
+		{Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
+		{Title: "Quit Applications", Keywords: "quit kill processes force apps", Icon: "power", Subtitle: "Stop running processes", Run: func(h search.Host) { h.Push(p.processesView()) }},
+		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
+		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Run: func(h search.Host) { p.query = "timer 5m"; p.search() }},
+		{Title: "Lock Screen", Keywords: "lock screen security", Icon: "lock", Hidden: true, Run: func(h search.Host) { h.Hide(); run("loginctl", "lock-session") }},
+		{Title: "Sleep", Keywords: "sleep suspend", Icon: "moon", Hidden: true, Run: func(h search.Host) { h.Hide(); run("systemctl", "suspend") }},
+		{Title: "Log Out", Keywords: "logout sign out", Icon: "log-out", Hidden: true, Run: func(h search.Host) {
+			h.Push(p.confirmView("Log Out", "End the current session", func() { run("loginctl", "terminate-user", os.Getenv("USER")) }))
 		}},
-		{Title: "Restart", Keywords: "reboot restart", Icon: "rotate-ccw", Hidden: true, Run: func(p *Palette) {
-			p.Push(p.confirmView("Restart", "Reboot this computer", func() { run("systemctl", "reboot") }))
+		{Title: "Restart", Keywords: "reboot restart", Icon: "rotate-ccw", Hidden: true, Run: func(h search.Host) {
+			h.Push(p.confirmView("Restart", "Reboot this computer", func() { run("systemctl", "reboot") }))
 		}},
-		{Title: "Shut Down", Keywords: "shutdown power off", Icon: "power", Hidden: true, Run: func(p *Palette) {
-			p.Push(p.confirmView("Shut Down", "Power off this computer", func() { run("systemctl", "poweroff") }))
+		{Title: "Shut Down", Keywords: "shutdown power off", Icon: "power", Hidden: true, Run: func(h search.Host) {
+			h.Push(p.confirmView("Shut Down", "Power off this computer", func() { run("systemctl", "poweroff") }))
 		}},
-		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(p *Palette) {
-			p.Push(p.confirmView("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
+		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
+			h.Push(p.confirmView("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
 		}},
-		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(p *Palette) { p.Push(p.settingsView()) }},
-		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(p *Palette) { mygo.App.Quit() }},
+		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
+		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
 	}
 	if p.timer != nil {
-		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(p *Palette) { p.cancelTimer(); p.Hide() }})
+		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
 	tones := map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
 		"New Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Quit Applications": "red", "Create Quicklink": "blue",
@@ -106,31 +107,31 @@ func (p *Palette) commands() []command {
 }
 
 type scored struct {
-	it    Item
+	it    search.Item
 	score int
 }
 
-func (p *Palette) rootSearch(q string) []Item {
+func (p *Palette) rootSearch(q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []scored
-	push := func(s int, it Item) { out = append(out, scored{it, s}) }
+	push := func(s int, it search.Item) { out = append(out, scored{it, s}) }
 
 	calcShown := false
 	if disp, cp, ok := calcResult(q); ok {
 		calcShown = true
-		push(1000, Item{Kind: "Calculator", Title: disp, Subtitle: "Copy result", Icon: "calculator", Tone: "orange", Actions: []Action{
-			{Title: "Copy Result", Run: func(p *Palette) { mygo.Clipboard.WriteText(cp); p.Hide() }},
-			{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) { p.Hide(); pasteText(cp) }},
+		push(1000, search.Item{Kind: "Calculator", Title: disp, Subtitle: "Copy result", Icon: "calculator", Tone: "orange", Actions: []search.Action{
+			{Title: "Copy Result", Run: func(h search.Host) { mygo.Clipboard.WriteText(cp); h.Hide() }},
+			{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); pasteText(cp) }},
 		}})
 	}
 	if d, ok := parseTimer(q); ok && d > 0 {
-		push(990, Item{Kind: "Timer", Title: "Start timer: " + d.String(), Subtitle: "Shows a countdown in the tray", Icon: "timer", Tone: "orange", Actions: []Action{{Title: "Start", Run: func(p *Palette) { p.startTimer(d); p.Hide() }}}})
+		push(990, search.Item{Kind: "Timer", Title: "Start timer: " + d.String(), Subtitle: "Shows a countdown in the tray", Icon: "timer", Tone: "orange", Actions: []search.Action{{Title: "Start", Run: func(h search.Host) { p.startTimer(d); h.Hide() }}}})
 	}
 	if kw, rest, ok := strings.Cut(q, " "); ok && strings.TrimSpace(rest) != "" {
 		for _, ql := range append(slices.Clone(p.S.Quicklinks), builtinLinks...) {
 			if strings.EqualFold(kw, ql.Keyword) {
-				push(980, Item{Kind: "Quicklinks", Title: fmt.Sprintf("Search %s for “%s”", ql.Name, strings.TrimSpace(rest)), Subtitle: "Quicklink", Icon: "link", Tone: "blue",
-					Actions: []Action{{Title: "Open", Run: openURL(ql.URL, strings.TrimSpace(rest))}}})
+				push(980, search.Item{Kind: "Quicklinks", Title: fmt.Sprintf("Search %s for “%s”", ql.Name, strings.TrimSpace(rest)), Subtitle: "Quicklink", Icon: "link", Tone: "blue",
+					Actions: []search.Action{{Title: "Open", Run: openURL(ql.URL, strings.TrimSpace(rest))}}})
 			}
 		}
 	}
@@ -147,24 +148,24 @@ func (p *Palette) rootSearch(q string) []Item {
 		}
 		for _, x := range safeSearch(e.Extension, q) {
 			x := x
-			act := Action{Title: "Copy", Run: func(p *Palette) { mygo.Clipboard.WriteText(x.Value); p.Hide() }}
+			act := search.Action{Title: "Copy", Run: func(h search.Host) { mygo.Clipboard.WriteText(x.Value); h.Hide() }}
 			if x.URL != "" {
-				act = Action{Title: "Open", Run: func(p *Palette) { p.Hide(); _ = mygo.Shell.OpenExternal(x.URL) }}
+				act = search.Action{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(x.URL) }}
 			}
-			push(960, Item{Kind: e.Title, Title: x.Title, Subtitle: x.Subtitle, Icon: "puzzle", Tone: "purple", Actions: []Action{act}})
+			push(960, search.Item{Kind: e.Title, Title: x.Title, Subtitle: x.Subtitle, Icon: "puzzle", Tone: "purple", Actions: []search.Action{act}})
 		}
 	}
 	// commands: ranked by title (and, below, by keywords)
 	for _, cmd := range p.commands() {
 		cmd := cmd
-		it := Item{Kind: "Commands", Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []Action{{Title: "Open", Run: cmd.Run}}}
+		it := search.Item{Kind: "Commands", Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, Actions: []search.Action{{Title: "Open", Run: cmd.Run}}}
 		if lq == "" {
 			if !cmd.Hidden {
 				push(100-cmd.Order, it)
 			}
 			continue
 		}
-		s := score(cmd.Title, lq)
+		s := search.Score(cmd.Title, lq)
 		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
 			s = 45
 		}
@@ -180,19 +181,19 @@ func (p *Palette) rootSearch(q string) []Item {
 				continue
 			}
 			s = 60
-		} else if s = score(a.Name, lq); s == 0 {
+		} else if s = search.Score(a.Name, lq); s == 0 {
 			continue
 		}
-		push(s+min(p.S.Usage[a.ID], 9), Item{Kind: "Applications", Title: a.Name, IconPath: a.Path, Actions: []Action{
-			{Title: "Open Application", Run: func(p *Palette) {
-				p.Hide()
+		push(s+min(p.S.Usage[a.ID], 9), search.Item{Kind: "Applications", Title: a.Name, IconPath: a.Path, Actions: []search.Action{
+			{Title: "Open Application", Run: func(h search.Host) {
+				h.Hide()
 				p.S.Usage[a.ID]++
 				p.S.save()
 				if err := mygo.Shell.LaunchApp(a); err != nil {
-					p.Toast(err.Error())
+					h.Toast(err.Error())
 				}
 			}},
-			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(p *Palette) { p.Hide(); mygo.Shell.ShowItemInFolder(a.Path) }},
+			{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(a.Path) }},
 		}})
 	}
 	if len(lq) >= 2 && p.files.done {
@@ -222,29 +223,29 @@ func (p *Palette) rootSearch(q string) []Item {
 		ch := ch
 		s := 30
 		if lq != "" {
-			if s = score(ch.Title, lq); s == 0 {
+			if s = search.Score(ch.Title, lq); s == 0 {
 				continue
 			}
 		}
 		nchat++
-		push(s, Item{Kind: "Conversations", Title: "Continue conversation: " + oneLine(ch.Title), Subtitle: "AI conversation", Icon: "message-circle", Tone: "yellow", TintTitle: true,
-			Actions: []Action{{Title: "Open", Run: func(p *Palette) { p.Push(p.chatView(ch)) }}}})
+		push(s, search.Item{Kind: "Conversations", Title: "Continue conversation: " + oneLine(ch.Title), Subtitle: "AI conversation", Icon: "message-circle", Tone: "yellow", TintTitle: true,
+			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(ch)) }}}})
 	}
 	// URL, then the query fallbacks (web search + Automate)
 	if q != "" {
-		if u := urlFromQuery(q); u != "" {
-			push(100+50, Item{Kind: "Web", Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue",
-				Actions: []Action{{Title: "Open Website", Run: func(p *Palette) { p.Hide(); _ = mygo.Shell.OpenExternal(u) }}}})
+		if u := search.URLFromQuery(q); u != "" {
+			push(100+50, search.Item{Kind: "Web", Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue",
+				Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}})
 		} else if !calcShown {
 			eng := p.engine()
-			push(40, Item{Kind: "Search", Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true,
-				Actions: []Action{{Title: "Automate", Run: func(p *Palette) { p.Push(p.builderViewWith(q)) }}}})
-			push(10+boost(p, "web:"+q), Item{Kind: "Search", Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue",
-				Actions: []Action{{Title: "Search the Web", Run: openURL(eng.URL, q)}}})
+			push(40, search.Item{Kind: "Search", Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true,
+				Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}})
+			push(10+boost(p, "web:"+q), search.Item{Kind: "Search", Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue",
+				Actions: []search.Action{{Title: "Search the Web", Run: openURL(eng.URL, q)}}})
 		}
 	}
 	slices.SortStableFunc(out, func(a, b scored) int { return cmp.Compare(b.score, a.score) })
-	items := make([]Item, 0, len(out))
+	items := make([]search.Item, 0, len(out))
 	for _, s := range out {
 		items = append(items, s.it)
 		if len(items) >= 40 {
@@ -265,7 +266,7 @@ func (p *Palette) rootView() *View {
 func (p *Palette) settingsView() *View {
 	return &View{
 		Title: "Settings", Placeholder: "Search Settings",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
 			auth := "Not signed in"
 			if a := loadAuth(); a != nil {
@@ -284,30 +285,30 @@ func (p *Palette) settingsView() *View {
 			if autostartEnabled() {
 				login = "On"
 			}
-			rows := []Item{
-				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []Action{{Title: "Change…", Run: func(p *Palette) { p.Push(p.hotkeyView()) }}}},
-				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []Action{{Title: "Next Engine", Run: func(p *Palette) {
+			rows := []search.Item{
+				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
+				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
 					p.S.save()
-					p.Refresh()
+					h.Refresh()
 				}}}},
-				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []Action{{Title: "Toggle", Run: func(p *Palette) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); p.Refresh() }}}},
-				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []Action{{Title: "Cycle", Run: func(p *Palette) {
+				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Run: func(h search.Host) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); h.Refresh() }}}},
+				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Run: func(h search.Host) {
 					sizes := []int{50, 200, 500, 1000}
 					i := slices.Index(sizes, p.S.ClipLimit)
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
-					p.Refresh()
+					h.Refresh()
 				}}}},
-				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []Action{{Title: "Toggle", Run: func(p *Palette) { setAutostart(!autostartEnabled()); p.Refresh() }}}},
-				{Title: "Account", Accessory: auth, Icon: "user", Actions: []Action{{Title: "Show Auth File", Run: func(p *Palette) { p.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
-				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []Action{{Title: "Open", Run: func(p *Palette) { p.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
+				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
+				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
+				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
 			if lq == "" {
 				return rows
 			}
-			return slices.DeleteFunc(rows, func(it Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
+			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
 		},
 	}
 }
@@ -315,22 +316,22 @@ func (p *Palette) settingsView() *View {
 func (p *Palette) hotkeyView() *View {
 	return &View{
 		Title: "Hotkey", Placeholder: "Press keys, e.g. Alt+Shift+Space",
-		Search: func(q string) []Item {
+		Search: func(q string) []search.Item {
 			if q == "" {
-				return []Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
+				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
 			}
-			return []Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []Action{{Title: "Save", Run: func(p *Palette) {
+			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Run: func(h search.Host) {
 				old := p.S.Hotkey
 				mygo.GlobalShortcut.Unregister(old)
 				if err := mygo.GlobalShortcut.Register(q, p.toggle); err != nil {
 					_ = mygo.GlobalShortcut.Register(old, p.toggle)
-					p.Toast("Invalid or taken: " + err.Error())
+					h.Toast("Invalid or taken: " + err.Error())
 					return
 				}
 				p.S.Hotkey = q
 				p.S.save()
-				p.Pop()
-				p.Toast("Hotkey set to " + q)
+				h.Pop()
+				h.Toast("Hotkey set to " + q)
 			}}}}}
 		},
 	}
@@ -363,19 +364,19 @@ func sectionRank(kind string) int {
 }
 
 // sectioned labels runs of results like Spotlight: a "Top Hit", then groups by kind.
-func sectioned(items []Item, searching bool) []Item {
+func sectioned(items []search.Item, searching bool) []search.Item {
 	if len(items) == 0 {
 		return items
 	}
-	var top []Item
+	var top []search.Item
 	rest := items
 	if searching {
 		top, rest = items[:1], slices.Clone(items[1:])
 	} else {
 		rest = slices.Clone(items)
 	}
-	slices.SortStableFunc(rest, func(a, b Item) int { return cmp.Compare(sectionRank(a.Kind), sectionRank(b.Kind)) })
-	out := make([]Item, 0, len(items))
+	slices.SortStableFunc(rest, func(a, b search.Item) int { return cmp.Compare(sectionRank(a.Kind), sectionRank(b.Kind)) })
+	out := make([]search.Item, 0, len(items))
 	for _, it := range top {
 		it.Section = "Top Hit"
 		out = append(out, it)
