@@ -4,11 +4,19 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
+)
+
+// BuilderMaxSteps bounds the model steps of a builder turn: reads of the API reference, writes and their fixes. A
+// builder write checks and installs an extension, so it gets a longer tool timeout than a conversation's tools.
+const (
+	BuilderMaxSteps    = 16
+	BuilderToolTimeout = 90 * time.Second
 )
 
 // Options are what the service runs on. Client returns the backend client of the active account, or nil when
@@ -30,8 +38,11 @@ type Options struct {
 	// Preflight runs before each model request, off the UI thread, and a non-nil error ends the request with that
 	// message, as 1.x refuses an AI request the backend will not serve. Nil runs no check.
 	Preflight func(ctx context.Context) error
-	// Tools are what a conversation may call. The extension builder gets none.
+	// Tools are what a conversation may call.
 	Tools Toolset
+	// BuilderTools returns the tools of the builder chat with the id, for one turn. It runs on the UI thread. Nil gives a
+	// builder no tools.
+	BuilderTools func(chatID string) Toolset
 	// Logger receives the turns that fail. Nil means the process logger.
 	Logger *logx.Logger
 }
@@ -51,6 +62,8 @@ type Service struct {
 	models map[Tier]backend.ModelDescriptor
 	// doomed holds the chats removed as soon as their turn settles.
 	doomed map[string]bool
+	// steps holds what each chat is doing outside its reply, such as a builder's check of the extension it wrote.
+	steps map[string]Step
 }
 
 // New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
@@ -62,7 +75,7 @@ func New(opts Options) *Service {
 	if opts.Logger == nil {
 		opts.Logger = logx.Default()
 	}
-	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}}
+	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}, steps: map[string]Step{}}
 	s.Reload()
 	s.settleCutOffTurns()
 	return s
@@ -103,19 +116,12 @@ func (s *Service) Chat(id string) (Chat, bool) {
 	return s.cache.get(id)
 }
 
-// NewChat adds an empty chat of kind that uses tier.
-func (s *Service) NewChat(kind Kind, tier Tier) (Chat, error) {
-	chat, err := s.opts.Store.Create(kind, tier)
-	if err != nil {
-		return Chat{}, err
-	}
-	s.cache.put(chat)
-	return chat, nil
-}
-
 // mutate applies change to the chat with id, in the store and in the cache. The change runs once on each copy,
 // so it must be a pure function of the chat it is given.
 func (s *Service) mutate(id string, change func(*Chat)) error {
+	if draft, ok := s.cache.draft(id); ok {
+		return s.mutateDraft(draft, change)
+	}
 	index := s.cache.indexOf(id)
 	if index < 0 {
 		return ErrNotFound
@@ -139,8 +145,12 @@ func (s *Service) Busy(id string) bool {
 }
 
 // Delete removes a chat. A chat still answering is stopped, and removed once its turn settles, as the desktop app's
-// Remove Chat does.
+// Remove Chat does. An opened chat that was never recorded is only forgotten.
 func (s *Service) Delete(id string) error {
+	if _, ok := s.cache.draft(id); ok {
+		s.cache.dropDraft(id)
+		return nil
+	}
 	if s.Busy(id) {
 		s.doomed[id] = true
 		s.Stop(id)
@@ -173,9 +183,12 @@ func (s *Service) Model(tier Tier) (backend.ModelDescriptor, bool) {
 	return descriptor, ok
 }
 
-// Expire removes the conversations idle past the retention window, except the ones answering now.
+// Expire removes the chats retention removes: the empty ones and the conversations idle past the retention window,
+// except the ones answering now. Opened chats older than the window are forgotten too.
 func (s *Service) Expire() ([]string, error) {
-	removed, err := s.opts.Store.Expire(s.opts.Clock.Now(), s.Busy)
+	now := s.opts.Clock.Now()
+	removed, err := s.opts.Store.Expire(now, s.Busy)
+	s.cache.dropDraftsCreatedBefore(now.Add(-RetentionWindow))
 	s.Reload()
 	return removed, err
 }
@@ -322,29 +335,10 @@ func (s *Service) startTurn(id string) error {
 	if err != nil {
 		return err
 	}
-	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history))
+	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history), chat.Kind, chat.Tier, s.opts.Clock.Now())
 	s.runs[id] = r
 	go s.consume(id, r)
 	return nil
-}
-
-// setupFor is the loop setup of a chat: its model tier and, for conversations, the tools.
-func (s *Service) setupFor(chat Chat) agent.Setup {
-	setup := agent.Setup{
-		Model: &routeModel{
-			client:    s.opts.Client,
-			tier:      chat.Tier,
-			dispatch:  s.opts.Dispatch,
-			note:      s.noteRoute,
-			preflight: s.opts.Preflight,
-		},
-		Clock: s.opts.Clock,
-	}
-	if chat.Kind == KindConversation {
-		setup.Tools = s.opts.Tools.Registry
-		setup.Policy = s.opts.Tools.Policy
-	}
-	return setup
 }
 
 // noteRoute keeps the descriptor a tier resolved to, so the palette can name it. It runs on the UI thread.

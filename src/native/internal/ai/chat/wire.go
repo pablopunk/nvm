@@ -121,6 +121,8 @@ func chunkOf(event backend.Event) (chunk agent.ModelChunk, ok bool, err error) {
 	switch event.Type {
 	case backend.EventContent:
 		return agent.ModelChunk{Text: event.Text}, event.Text != "", nil
+	case backend.EventReasoning:
+		return agent.ModelChunk{Reasoning: event.Text}, event.Text != "", nil
 	case backend.EventToolCallDelta:
 		delta := event.ToolCall
 		return agent.ModelChunk{ToolDelta: &delta}, true, nil

@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -18,9 +20,14 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 }
 `
 
-// replyWithManifest is a finished reply whose manifest text is given as written, so a test can omit a capability.
-func replyWithManifest(manifest, source string) string {
-	return "Here it is.\n\n```json\n" + manifest + "\n```\n\n```go\n" + source + "\n```\n"
+// writeArgsFor returns the write_extension arguments of one manifest text and one main source.
+func writeArgsFor(t *testing.T, manifest, source string) json.RawMessage {
+	t.Helper()
+	args, err := json.Marshal(map[string]any{"manifest": manifest, "source": source})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return args
 }
 
 // TestPromptStatesTheCapabilityRules: the model is told which services need which capability before it writes.
@@ -37,34 +44,25 @@ func TestPromptStatesTheCapabilityRules(t *testing.T) {
 	}
 }
 
-// TestUndeclaredCapabilityGoesBackToTheModelAndIsFixed is the fake-model loop: the first reply calls Shell().AppleScript
-// without declaring system, so it is never checked or installed and the model is told to declare it; the fixed reply
-// installs enabled.
-func TestUndeclaredCapabilityGoesBackToTheModelAndIsFixed(t *testing.T) {
+// TestUndeclaredCapabilityIsRefusedThenInstalledWhenDeclared: the write that calls Shell().AppleScript without declaring
+// system is refused as the tool's error and installs nothing; the same source with system declared installs.
+func TestUndeclaredCapabilityIsRefusedThenInstalledWhenDeclared(t *testing.T) {
 	bare := `{"apiVersion":"1.0","id":"user.system-theme","title":"System Theme"}`
 	declared := `{"apiVersion":"1.0","id":"user.system-theme","title":"System Theme","capabilities":["system"]}`
-	record := chat.Chat{ID: "b1", Kind: chat.KindBuilder, Tier: chat.TierSmart, Messages: []chat.Message{
-		{Author: chat.AuthorUser, Text: "toggle the theme", Status: chat.StatusComplete},
-		{Author: chat.AuthorAssistant, Text: replyWithManifest(bare, appleScriptSource), Status: chat.StatusComplete},
-	}}
-	conversation := newFakeConversation(record)
-	extensions := newFakeExtensions(checkResult{methods: []string{"RunAction"}})
-	workshop, queue := newWorkshopFor(conversation, extensions)
+	extensions := newFakeExtensions()
+	w := New(newFakeConversation(builderChat("b1")), extensions, synchronous)
 
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if extensions.checked != 0 {
-		t.Fatalf("the host loaded a source that calls an undeclared service (%d checks)", extensions.checked)
+	_, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, bare, appleScriptSource))
+	if err == nil || !strings.Contains(err.Error(), `"system"`) {
+		t.Fatalf("err = %v, want the missing system capability", err)
 	}
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], `"system"`) {
-		t.Fatalf("the model was sent %q; want the missing system capability", conversation.sent)
+	if len(extensions.installs) != 0 {
+		t.Fatalf("installs = %v, want none after the refusal", extensions.installs)
 	}
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], replyWithManifest(declared, appleScriptSource))
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if !extensions.enabled["user.system-theme"] {
-		t.Fatal("the fixed extension was not installed enabled")
+	if _, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, declared, appleScriptSource)); err != nil {
+		t.Fatalf("the declared extension should write: %v", err)
+	}
+	if strings.Join(extensions.installs, ",") != "user.system-theme" {
+		t.Fatalf("installs = %v, want user.system-theme", extensions.installs)
 	}
 }

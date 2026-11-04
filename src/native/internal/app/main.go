@@ -96,9 +96,11 @@ type App struct {
 	files          *fileService
 	chats          *chat.Service
 	builder        *builder.Workshop
-	timer          *Timer
-	learn          *usage.Learner
-	history        *palette.QueryHistory
+	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
+	previews map[string]*extensionPreview
+	timer    *Timer
+	learn    *usage.Learner
+	history  *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session
@@ -181,7 +183,16 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Learner:     p.learn,
 		DragRow:     p.dragRow,
 		Feedback:    p.showPaletteFeedback,
+		Resize:      p.resizePalette,
 	})
+}
+
+// resizePalette sizes the palette window for the presentation it shows: the split beside a builder's preview, a side
+// preview, or the default size (palette.Options.Resize).
+func (p *App) resizePalette(width, height int) {
+	if p.panel != nil {
+		p.panel.SetSize(width, height)
+	}
 }
 
 // position places the window on the work area of the display under the pointer. It is nil on a session that

@@ -86,6 +86,10 @@ type View struct {
 	// Primary, for a Body page, is the footer's primary action: the key that does what the page's main control does.
 	// Nil leaves the footer to the Hint.
 	Primary func() *design.KeyHint
+	// Side, when it returns a side, draws that page beside this one as a split: this page's body on one half, the side on
+	// the other (1.x's builder workspace). It is read on each frame, so a view shows a side only in some states, and the
+	// side takes the keys while it has the focus (side.go).
+	Side func() *Side
 	// OnActive reports whether the view is the page on top of a shown palette. It is called when the view is pushed
 	// or covered, when the palette shows or hides, and when the view is the top page at either. A covered or hidden
 	// view must stop what only a visible page may do, such as a camera.

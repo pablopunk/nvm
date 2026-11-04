@@ -3,6 +3,8 @@ package chat
 import (
 	"errors"
 	"slices"
+	"time"
+	"unicode/utf8"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -49,4 +51,34 @@ func cutOff(chat Chat) bool {
 	return Busy(chat) || slices.ContainsFunc(chat.Messages, func(m Message) bool {
 		return m.Author == AuthorTool && toolStillRunning(m.Status)
 	})
+}
+
+// reasoningFields are the log fields of a reasoning phase: the kind and tier of the chat, the step it belongs to and how
+// long it ran. The reasoning text is never logged.
+func reasoningFields(r *run, elapsed time.Duration) logx.F {
+	return logx.F{"chat_kind": string(r.kind), "tier": string(r.tier), "step": r.steps, "duration_ms": elapsed.Milliseconds()}
+}
+
+// logTurnEnd writes the end of a turn to the app log at info: how it ended, how many model steps it used and how long
+// it ran. It never carries the transcript.
+func (s *Service) logTurnEnd(r *run, outcome Outcome) {
+	s.opts.Logger.Info("chat turn ended", logx.F{
+		"chat_kind":   string(r.kind),
+		"tier":        string(r.tier),
+		"ending":      string(outcome.Ending),
+		"steps":       r.steps,
+		"duration_ms": s.opts.Clock.Now().Sub(r.started).Milliseconds(),
+	})
+}
+
+// truncateBytes returns the longest prefix of text that is at most n bytes and ends on a whole rune.
+func truncateBytes(text string, n int) string {
+	if len(text) <= n {
+		return text
+	}
+	cut := n
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
 }

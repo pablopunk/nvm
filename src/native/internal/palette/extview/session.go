@@ -151,7 +151,7 @@ func (s *Session) Palette() *palette.View {
 
 // listPage is the searchable list of items, with its search accessory, its loading state and its close hook.
 func (s *Session) listPage() *palette.View {
-	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder}
+	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder, Presentation: palettePresentation(s.view.Presentation)}
 	page.Search = func(q string) []search.Item {
 		page.SelectID = s.takeSelectID()
 		s.scheduleSearchChange(q)
@@ -163,6 +163,18 @@ func (s *Session) listPage() *palette.View {
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
 	return page
+}
+
+// palettePresentation maps a view's presentation to the palette's. A side-preview list shows the detail of the chosen row
+// beside its rows, and the palette sizes the window for it; a preview view takes the preview size; the rest stack.
+func palettePresentation(presentation api.Presentation) palette.Presentation {
+	switch presentation {
+	case api.PresentSidePreview:
+		return palette.SidePreview
+	case api.PresentPreview:
+		return palette.Preview
+	}
+	return palette.Stacked
 }
 
 func (s *Session) gridPage() *palette.View {

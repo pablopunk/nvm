@@ -225,8 +225,8 @@ func goldenSnippetRecords() []map[string]any {
 func goldenChatService(t *testing.T, set *fake.Set) *chat.Service {
 	t.Helper()
 	set.FS.Seed(goldenData+"/chats.json", goldenEnvelope(t, map[string]any{"chats": []map[string]any{
-		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-5 * time.Hour)},
-		{"id": "c-tokyo", "kind": "conversation", "title": "Time zones", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-26 * time.Hour), "updatedAt": goldenNow.Add(-26 * time.Hour)},
+		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": goldenMessages("Write the release notes."), "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-5 * time.Hour)},
+		{"id": "c-tokyo", "kind": "conversation", "title": "Time zones", "tier": "fast", "messages": goldenMessages("What time zone is Tokyo in?"), "createdAt": goldenNow.Add(-26 * time.Hour), "updatedAt": goldenNow.Add(-26 * time.Hour)},
 	}}))
 	st, err := store.Open(set.FS, set.Clock, goldenData)
 	if err != nil {
@@ -240,6 +240,11 @@ func goldenChatService(t *testing.T, set *fake.Set) *chat.Service {
 		Connected: func() bool { return false },
 		Dispatch:  func(fn func()) { fn() },
 	})
+}
+
+// goldenMessages is the transcript of a seeded chat: one user message. A chat with no message is never recorded.
+func goldenMessages(text string) []any {
+	return []any{map[string]any{"author": "user", "text": text, "status": "complete", "at": goldenNow}}
 }
 
 // goldenQuery sets the query and runs the search, as typing does.

@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design/golden"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // pageGoldens renders a chat page at the palette's size. Each golden is compared in light and dark, at 1x and 2x.
@@ -129,4 +130,47 @@ func TestThinkingGoldens(t *testing.T) {
 		streaming(""))
 	r.open(ChatView(r.deps(), record.ID))
 	golden.AssertMatrix(t, "thinking", r.palette.View, pageGoldens)
+}
+
+// TestReasoningGoldens renders a finished reply whose Thinking block is closed, then the same block opened.
+func TestReasoningGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Plan a trip", chat.TierSmart,
+		user("Plan a three day trip to Lisbon."),
+		reasoned("Day one: the old town. Day two: Sintra. Day three: the coast.", "Weighing a pace of two sights a day against the hills, then the coast."))
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "reasoning-closed", r.palette.View, pageGoldens)
+
+	opened := newPage(r.deps(), record.ID)
+	opened.thinkingOpen[1] = true
+	r.open(opened.view())
+	golden.AssertMatrix(t, "reasoning-open", r.palette.View, pageGoldens)
+}
+
+// TestBuilderWritingGoldens renders a builder turn that wrote its extension: the write's tool row is done, and the
+// check of the extension is the step under the transcript.
+func TestBuilderWritingGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	written := chat.Message{Author: chat.AuthorTool, Status: chat.StatusComplete, At: goldenNow, Text: "Installed and enabled \"Clock\".",
+		Tool: &chat.ToolRun{Name: "write_extension", Label: "Writing extension", Input: "user.clock", Outcome: "Installed and enabled"}}
+	record := r.builderWith("", user("A clock in the palette."), written)
+	r.service.SetStep(record.ID, "Checking…")
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "builder-writing", r.palette.View, streamingGoldens)
+}
+
+// splitGoldens renders a page split beside its preview at the size 1.x gives that window.
+var splitGoldens = golden.Options{Group: "aichat", Width: palette.SplitWidth, Height: palette.SplitHeight}
+
+// TestBuilderPreviewGoldens renders a builder chat with the extension's preview open beside it: the extension's rows are
+// on the right of the transcript, at the split size, and the focused preview shows its edge.
+func TestBuilderPreviewGoldens(t *testing.T) {
+	titles := []string{"Local time", "Today's date"}
+	r, side := previewRigWith(t, &titles)
+	record := r.builderWith("user.clock", user("A clock in the palette."), assistant("Installed the clock. It is not run yet."))
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "builder-preview", r.palette.View, splitGoldens)
+
+	side.Focus()
+	golden.AssertMatrix(t, "builder-preview-focused", r.palette.View, splitGoldens)
 }

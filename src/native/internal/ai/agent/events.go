@@ -15,13 +15,16 @@ const (
 	EventStart     EventKind = "start"
 	EventStep      EventKind = "step"
 	EventDelta     EventKind = "delta"
-	EventCalls     EventKind = "calls"
-	EventToolStart EventKind = "tool_start"
-	EventApproval  EventKind = "approval"
-	EventToolEnd   EventKind = "tool_end"
-	EventError     EventKind = "error"
-	EventAborted   EventKind = "aborted"
-	EventDone      EventKind = "done"
+	EventReasoning EventKind = "reasoning"
+	// EventCallDrafting says the model has started writing the arguments of a tool call. Call names the tool.
+	EventCallDrafting EventKind = "call_drafting"
+	EventCalls        EventKind = "calls"
+	EventToolStart    EventKind = "tool_start"
+	EventApproval     EventKind = "approval"
+	EventToolEnd      EventKind = "tool_end"
+	EventError        EventKind = "error"
+	EventAborted      EventKind = "aborted"
+	EventDone         EventKind = "done"
 )
 
 // CallStatus says how one tool call ended.
@@ -48,7 +51,7 @@ type Event struct {
 	Kind EventKind
 	// Step numbers the model turn of EventStep, from 1.
 	Step int
-	// Text is a piece of reply text, set on EventDelta.
+	// Text is a piece of reply text, set on EventDelta, or of the model's reasoning, set on EventReasoning.
 	Text string
 	// Calls are the tool calls a model turn ended with, on EventCalls.
 	Calls []backend.ToolCall
@@ -71,6 +74,9 @@ var (
 	ErrStepLimit = errors.New("agent: the model used every step without a final answer")
 	// ErrTurnInterrupted is the failure of a turn whose loop stopped without a terminal event.
 	ErrTurnInterrupted = errors.New("agent: the turn stopped unexpectedly")
+	// ErrTurnDeadline is the failure of a turn that ran past its time limit. Time spent waiting for the user's answer to
+	// a tool call does not count.
+	ErrTurnDeadline = errors.New("agent: the turn ran past its time limit")
 )
 
 // Default bounds of a turn. Zero options select them.
@@ -78,4 +84,5 @@ const (
 	DefaultMaxSteps       = 8
 	DefaultToolTimeout    = 30 * time.Second
 	DefaultMaxOutputBytes = 16 * 1024
+	DefaultTurnTimeout    = 10 * time.Minute
 )

@@ -29,4 +29,8 @@ type Deps struct {
 	Review      func(extension string) *palette.View
 	PickImages  func(done func([]chat.Image))
 	PasteImage  func() (image chat.Image, ok bool, err error)
+	// Preview returns the side that shows the extension with the id beside its builder chat: the extension's own view,
+	// which its host refreshes after each write. It is read every frame; nil means the extension has no preview yet.
+	// Nil func means no chat has a preview.
+	Preview func(extension string) *palette.Side
 }

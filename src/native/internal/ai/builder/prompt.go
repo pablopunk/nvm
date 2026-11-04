@@ -8,25 +8,26 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 )
 
-// rulesTemplate is the builder's instruction. ~~~ stands for a Markdown code fence, and API_VERSION for the API
-// version this build implements, so the model never writes a stale one.
-const rulesTemplate = `You write extensions for Nevermind, a desktop command palette. An extension is a folder of two files: a manifest and one Go source file, interpreted at runtime with the API below.
+// rulesTemplate is the builder's instruction. ~~~ stands for a Markdown code fence, and API_VERSION for the API version
+// this build implements, so the model never writes a stale one. The terse API reference follows it in the instructions;
+// read_extension_api returns the prose of the full reference, page by page.
+const rulesTemplate = `You write extensions for Nevermind, a desktop command palette. An extension is a manifest and one Go source file, interpreted at runtime with the typed Nevermind extension API.
+
+Workflow:
+- The typed API reference follows these rules. It names every entry point, type, enum value and function. Call read_extension_api only when a name needs its explanation; it returns the reference with prose, a page at a time.
+- Then call write_extension once with the manifest as a JSON object (apiVersion, id, title, and optionally commandTitles), the complete main.go source, and any extra Go files in files.
+- write_extension checks the extension, installs it and enables it, and returns the result. If it fails, read the error, fix the code and call write_extension again in this turn.
+- When it is installed, reply with one short sentence. Never paste the manifest or the source into the chat.
 
 Rules:
-- Reply with a short sentence, then exactly two code blocks: a ~~~json manifest block, then a ~~~go source block. Nothing after them.
-- Manifest: {"apiVersion":"API_VERSION","id":"user.my-extension","title":"My extension"}. The id is lowercase and dot-separated, and never starts with "nevermind.". A manifest may also set "commandTitles" to rename commands by id; the user renames commands that way, so leave it out unless the user asks for a command's title.
-- Reply with one more ~~~go block labelled with a file name (for example ~~~go helpers.go) only when the source needs a second file; each such file is in package main, and has its own block.
+- Manifest: {"apiVersion":"API_VERSION","id":"user.my-extension","title":"My extension"}. The id is lowercase and dot-separated, and never starts with "nevermind.". Leave commandTitles out unless the user asks to rename a command.
 - Source: main.go, package main, under 200 lines. Import only the standard library and "github.com/pablopunk/nvm/native/internal/ext/api". No goroutines, no cgo, no file or network access unless the API offers it. There is no max builtin; write the comparison out.
 - The reference names types without their package. In source, write each one with the api. prefix (api.Item, api.Action). Use only the names in the reference; do not invent functions, fields or constants.
 - Each entry point is optional. Define the ones the extension needs, with exactly the signatures in the reference.
 - SearchItems runs on every keystroke: return nil unless the query is relevant, and be fast.
 - Only promise behavior the API supports. Keep the id of the extension, and of its commands, stable when you change it.
 
-Example manifest and source, a root row that shows the local time for a query:
-~~~json
-{"apiVersion":"API_VERSION","id":"user.clock","title":"Clock"}
-~~~
-
+Example of a source that shows the local time for a query:
 ~~~go
 package main
 
@@ -46,11 +47,11 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 }
 ~~~`
 
-// instructionsText is the builder's system prompt for a new extension. The API reference is generated from the api
-// package, so the prompt cannot drift from it.
+// instructionsText is the builder's system prompt for a new extension: its rules and the terse API reference, so a
+// typical turn writes its extension without a reading call first.
 var instructionsText = fence(strings.NewReplacer(
 	"API_VERSION", apiVersion(),
-).Replace(rulesTemplate) + "\n\n" + capabilityRulesText() + "\n\n" + apiReference)
+).Replace(rulesTemplate)) + "\n\n" + capabilityRulesText() + "\n\n" + apiReferenceCompact
 
 // capabilityRulesText lists the services that need a capability, from the rules the host checks a reply against.
 func capabilityRulesText() string {

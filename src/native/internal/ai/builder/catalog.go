@@ -48,20 +48,6 @@ func quoteAll(titles []string) []string {
 	return quoted
 }
 
-// alreadyInstalled returns the installed extension a reply names, when the reply carries no code and names one. Such a
-// reply asks the user rather than writing a duplicate, so the chat is left as it is.
-func alreadyInstalled(reply string, installed []Installed) (Installed, bool) {
-	if len(codeBlocks(reply)) > 0 {
-		return Installed{}, false
-	}
-	for _, entry := range installed {
-		if strings.Contains(reply, entry.ID) {
-			return entry, true
-		}
-	}
-	return Installed{}, false
-}
-
 // titleClash returns the installed extension, other than the candidate's own, that already declares a row title the
 // candidate declares too, and that title. Two rows with one title is the duplicate the user would see.
 func titleClash(candidate Candidate, installed []Installed) (Installed, string, bool) {

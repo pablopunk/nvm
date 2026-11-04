@@ -7,9 +7,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 )
 
-// ModelChunk is one streamed piece of a model turn: text, a piece of a tool call, or token usage.
+// ModelChunk is one streamed piece of a model turn: text, a piece of its reasoning, a piece of a tool call, or token
+// usage.
 type ModelChunk struct {
 	Text      string
+	Reasoning string
 	ToolDelta *backend.ToolCallDelta
 	Usage     *Usage
 }

@@ -6,11 +6,9 @@
 package apiref
 
 import (
-	"bytes"
 	"fmt"
 	"go/ast"
 	"go/parser"
-	"go/printer"
 	"go/token"
 	"io/fs"
 	"sort"
@@ -32,6 +30,16 @@ const contextType = "Context"
 // Render returns the reference for the api package whose source files are at the root of sources, as plain text.
 // Output is deterministic: sections and entries are sorted by name.
 func Render(sources fs.FS) (string, error) {
+	return render(sources, false)
+}
+
+// RenderCompact returns the reference without its prose: the same entry points, types, enum values and functions as
+// Render, with names and signatures only. The builder preloads it, so a typical turn needs no reading tool call.
+func RenderCompact(sources fs.FS) (string, error) {
+	return render(sources, true)
+}
+
+func render(sources fs.FS, terse bool) (string, error) {
 	fset := token.NewFileSet()
 	files, err := parseAPIFiles(fset, sources)
 	if err != nil {
@@ -41,6 +49,7 @@ func Render(sources fs.FS) (string, error) {
 		return "", fmt.Errorf("no api package source files")
 	}
 	index := indexPackage(fset, files)
+	index.terse = terse
 	wire := index.reach(append(append([]string{}, entryInterfaces...), rootTypes...), map[string]bool{contextType: true})
 	return index.render(wire, index.services(wire)), nil
 }
@@ -79,6 +88,8 @@ type pkgIndex struct {
 	docs   map[string]string
 	funcs  map[string]*ast.FuncDecl
 	consts map[string][]constValue
+	// terse drops the prose: doc sentences of types, fields, values, functions and interfaces.
+	terse bool
 }
 
 type constValue struct {
@@ -197,181 +208,4 @@ func (index *pkgIndex) referencedTypes(name string) []string {
 		return true
 	})
 	return names
-}
-
-// render writes the entry point section, the wire types with their docs, the Context services as signatures, and the
-// api functions.
-func (index *pkgIndex) render(wire, services []string) string {
-	var b strings.Builder
-	b.WriteString("# Extension API reference\n\n")
-	b.WriteString("Entry points: an extension source defines these top-level functions, each optional, with these signatures.\n\n")
-	for _, iface := range entryInterfaces {
-		index.writeInterfaceMethods(&b, iface)
-	}
-	b.WriteString("\n## Types\n\n")
-	for _, name := range wire {
-		if !isEntryInterface(name) {
-			index.writeType(&b, name, true)
-		}
-	}
-	b.WriteString("## Context services\n\nThe host services a handler reaches through Context. Names and signatures only.\n\n")
-	for _, name := range services {
-		index.writeType(&b, name, false)
-	}
-	b.WriteString("## Functions\n\n")
-	index.writeFunctions(&b)
-	return b.String()
-}
-
-func isEntryInterface(name string) bool {
-	for _, iface := range entryInterfaces {
-		if iface == name {
-			return true
-		}
-	}
-	return false
-}
-
-func (index *pkgIndex) writeInterfaceMethods(b *strings.Builder, name string) {
-	spec, ok := index.types[name]
-	if !ok {
-		return
-	}
-	iface, ok := spec.Type.(*ast.InterfaceType)
-	if !ok {
-		return
-	}
-	fmt.Fprintf(b, "## %s\n\n%s\n\n", name, index.docs[name])
-	for _, field := range iface.Methods.List {
-		for _, method := range field.Names {
-			fmt.Fprintf(b, "- func %s%s\n", method.Name, strings.TrimPrefix(index.exprText(field.Type), "func"))
-		}
-	}
-	b.WriteString("\n")
-}
-
-// writeType writes one type. A full type keeps its first sentences and enum values; a signature-only type keeps the
-// names and types of its members.
-func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
-	spec := index.types[name]
-	fmt.Fprintf(b, "### %s\n\n", name)
-	if doc := index.docs[name]; full && doc != "" {
-		fmt.Fprintf(b, "%s\n\n", firstSentence(doc))
-	}
-	switch t := spec.Type.(type) {
-	case *ast.StructType:
-		index.writeFields(b, t, full)
-	case *ast.InterfaceType:
-		for _, field := range t.Methods.List {
-			for _, method := range field.Names {
-				fmt.Fprintf(b, "- %s%s\n", method.Name, strings.TrimPrefix(index.exprText(field.Type), "func"))
-			}
-		}
-	default:
-		fmt.Fprintf(b, "Type: %s.\n", index.exprText(spec.Type))
-		if full {
-			index.writeConsts(b, name)
-		}
-	}
-	b.WriteString("\n")
-}
-
-func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full bool) {
-	for _, field := range st.Fields.List {
-		doc := commentText(firstNonNil(field.Doc, field.Comment))
-		typeText := index.exprText(field.Type)
-		if len(field.Names) == 0 {
-			fmt.Fprintf(b, "- embeds %s: its fields are part of this type\n", typeText)
-			continue
-		}
-		for _, name := range field.Names {
-			line := fmt.Sprintf("- `%s` (%s)", jsonName(field.Tag, name.Name), typeText)
-			if full && doc != "" {
-				line += ": " + firstSentence(doc)
-			}
-			b.WriteString(line + "\n")
-		}
-	}
-}
-
-// writeConsts lists the values of an enum type, such as ActionKind, in declaration order.
-func (index *pkgIndex) writeConsts(b *strings.Builder, typeName string) {
-	values := index.consts[typeName]
-	if len(values) == 0 {
-		return
-	}
-	b.WriteString("Values:\n")
-	for _, value := range values {
-		line := fmt.Sprintf("- %s = %s", value.name, value.value)
-		if value.doc != "" {
-			line += ": " + value.doc
-		}
-		b.WriteString(line + "\n")
-	}
-}
-
-func (index *pkgIndex) writeFunctions(b *strings.Builder) {
-	names := make([]string, 0, len(index.funcs))
-	for name := range index.funcs {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		decl := index.funcs[name]
-		if doc := commentText(decl.Doc); doc != "" {
-			fmt.Fprintf(b, "- %s%s: %s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), firstSentence(doc))
-		}
-	}
-}
-
-// exprText prints an expression as Go source.
-func (index *pkgIndex) exprText(node ast.Node) string {
-	var buf bytes.Buffer
-	_ = printer.Fprint(&buf, index.fset, node)
-	return buf.String()
-}
-
-// jsonName returns the wire name of a field: its json tag's name, or the Go name when the tag has none.
-func jsonName(tag *ast.BasicLit, goName string) string {
-	if tag == nil {
-		return goName
-	}
-	raw := strings.Trim(tag.Value, "`")
-	const key = `json:"`
-	start := strings.Index(raw, key)
-	if start < 0 {
-		return goName
-	}
-	value := raw[start+len(key):]
-	value = value[:strings.Index(value, `"`)]
-	name, _, _ := strings.Cut(value, ",")
-	if name == "" || name == "-" {
-		return goName
-	}
-	return name
-}
-
-// commentText joins a comment group into one line of prose.
-func commentText(group *ast.CommentGroup) string {
-	if group == nil {
-		return ""
-	}
-	return strings.Join(strings.Fields(group.Text()), " ")
-}
-
-// firstSentence keeps the first sentence of a doc comment, which says what the thing is.
-func firstSentence(doc string) string {
-	if before, _, found := strings.Cut(doc, ". "); found {
-		return before + "."
-	}
-	return doc
-}
-
-func firstNonNil(groups ...*ast.CommentGroup) *ast.CommentGroup {
-	for _, group := range groups {
-		if group != nil {
-			return group
-		}
-	}
-	return nil
 }

@@ -6,11 +6,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 )
 
-// TestReasoningEventsCarryNoReplyText checks reasoning is not reply text: a turn that only reasons has no chunk, so its
-// reply keeps the thinking state until visible text arrives.
-func TestReasoningEventsCarryNoReplyText(t *testing.T) {
+// TestReasoningIsKeptApartFromReplyText checks reasoning is its own chunk: it never adds to the reply text, so a turn
+// that only reasons keeps its reply empty until visible text arrives.
+func TestReasoningIsKeptApartFromReplyText(t *testing.T) {
 	chunk, ok, err := chunkOf(backend.Event{Type: backend.EventReasoning, Text: "weighing the options"})
-	if ok || err != nil || chunk.Text != "" {
-		t.Fatalf("chunkOf(reasoning) = %+v ok=%v err=%v, want no chunk", chunk, ok, err)
+	if !ok || err != nil || chunk.Text != "" || chunk.Reasoning != "weighing the options" {
+		t.Fatalf("chunkOf(reasoning) = %+v ok=%v err=%v, want the reasoning apart from the text", chunk, ok, err)
 	}
 }

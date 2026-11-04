@@ -42,7 +42,11 @@ func (e builderExtensions) Install(id string, files map[string][]byte, enable bo
 	if err != nil {
 		return err
 	}
-	return m.Install(id, files, enable)
+	if err := m.Install(id, files, enable); err != nil {
+		return err
+	}
+	e.app.refreshPreview(id)
+	return nil
 }
 
 // Catalog lists the installed extensions for the builder's prompt. Until the manager has started there are none to list.

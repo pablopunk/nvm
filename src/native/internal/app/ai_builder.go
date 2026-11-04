@@ -17,6 +17,14 @@ func (p *App) newBuilder() *builder.Workshop {
 // builderView opens a new builder chat, where the user describes the extension.
 func (p *App) builderView() *palette.View { return p.builderViewWith("") }
 
+// builderToolset returns the tools of a builder chat for one turn: none until the builder exists.
+func (p *App) builderToolset(chatID string) chat.Toolset {
+	if p.builder == nil {
+		return chat.Toolset{}
+	}
+	return p.builder.Toolset(chatID)
+}
+
 // builderViewWith opens the extension builder and, given a prompt, sends it at once ("Automate ...").
 func (p *App) builderViewWith(prompt string) *palette.View {
 	return p.openChat(chat.KindBuilder, chat.TierSmart, prompt)

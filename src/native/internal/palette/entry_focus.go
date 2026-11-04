@@ -5,6 +5,7 @@ import "github.com/egoist/mygo/ui"
 // focusInput gives the keyboard to the text input of the page on top: the input the page draws itself when it owns
 // one, otherwise the search field. A view that hides its field hands the keyboard to its list once the list is built.
 func (p *Palette) focusInput() {
+	p.cur().sideNow().unfocus()
 	if owned := p.cur().Input; owned != nil {
 		owned.Focus()
 		p.focusList = false

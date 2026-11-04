@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -20,6 +21,9 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 }
 `
 
+// systemThemeManifest is the manifest of a new extension under the id user.system-theme.
+const systemThemeManifest = `{"apiVersion":"1.0","id":"user.system-theme","title":"System Theme"}`
+
 // TestSystemPromptListsTheInstalledExtensions: a new chat sees what is installed, with its id, state and rows, and the
 // rule not to write a duplicate of it.
 func TestSystemPromptListsTheInstalledExtensions(t *testing.T) {
@@ -33,26 +37,19 @@ func TestSystemPromptListsTheInstalledExtensions(t *testing.T) {
 	}
 }
 
-// TestNewExtensionWithAnInstalledRowTitleIsNotInstalled: a model that writes a second "Toggle System Theme" gets no second
-// row. The user is told which extension already has it, and nothing is installed or sent back to the model.
-func TestNewExtensionWithAnInstalledRowTitleIsNotInstalled(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], reply("user.system-theme", duplicateSource))
-	extensions := newFakeExtensions(checkResult{methods: []string{"commands"}})
+// TestNewExtensionWithAnInstalledRowTitleIsRefused: a model that writes a second "Toggle System Theme" gets no second
+// row. The write is refused as the tool's error, naming the extension that has the row, and nothing is installed.
+func TestNewExtensionWithAnInstalledRowTitleIsRefused(t *testing.T) {
+	extensions := newFakeExtensions()
 	extensions.catalog = []Installed{systemThemeInstalled}
-	workshop, _ := newWorkshopFor(conversation, extensions)
+	w := New(newFakeConversation(builderChat("b1")), extensions, synchronous)
 
-	workshop.Settled("b1", finished())
-
-	if _, ok := extensions.installed["user.system-theme"]; ok {
-		t.Fatal("a duplicate row was installed")
+	_, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource))
+	if err == nil || !strings.Contains(err.Error(), "system.toggle-theme") {
+		t.Fatalf("err = %v, want the row clash naming system.toggle-theme", err)
 	}
-	if len(conversation.sent) != 0 {
-		t.Fatalf("the model was sent %q; a title clash asks the user instead", conversation.sent)
-	}
-	last := conversation.notes[len(conversation.notes)-1]
-	if last.Kind != chat.NoticeFailed || !strings.Contains(last.Message, "system.toggle-theme") {
-		t.Fatalf("the last note is %+v; want the clash named", last)
+	if len(extensions.installs) != 0 {
+		t.Fatalf("installs = %v, want none", extensions.installs)
 	}
 }
 
@@ -62,50 +59,14 @@ func TestChatThatEditsItsOwnExtensionKeepsItsRows(t *testing.T) {
 	own := Installed{ID: "user.system-theme", Title: "System Theme", Enabled: true, Titles: []string{"Toggle System Theme"}}
 	record := builderChat("b1")
 	record.Extension = "user.system-theme"
-	conversation := newFakeConversation(record)
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], reply("user.system-theme", duplicateSource))
-	extensions := newFakeExtensions(checkResult{methods: []string{"commands"}})
+	extensions := newFakeExtensions()
 	extensions.catalog = []Installed{own}
-	workshop, queue := newWorkshopFor(conversation, extensions)
+	w := New(newFakeConversation(record), extensions, synchronous)
 
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if !extensions.enabled["user.system-theme"] {
-		t.Fatal("an edit of the chat's own extension was refused for its own row title")
+	if _, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource)); err != nil {
+		t.Fatalf("an edit of the chat's own extension was refused: %v", err)
 	}
-}
-
-// TestReplyThatPointsAtAnInstalledExtensionWritesNothing: a reply with no code that names an installed extension asks the
-// user; the chat is not sent back and nothing is installed.
-func TestReplyThatPointsAtAnInstalledExtensionWritesNothing(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], "system.toggle-theme already does this. Do you want me to change it?")
-	extensions := newFakeExtensions()
-	extensions.catalog = []Installed{systemThemeInstalled}
-	workshop, _ := newWorkshopFor(conversation, extensions)
-
-	workshop.Settled("b1", finished())
-
-	if len(conversation.sent) != 0 || len(extensions.installed) != 0 {
-		t.Fatalf("sent %q, installed %v; want nothing written and the user asked", conversation.sent, extensions.installed)
-	}
-	if last := conversation.notes[len(conversation.notes)-1]; !strings.Contains(last.Message, "system.toggle-theme") {
-		t.Fatalf("the last note is %+v; want the existing extension named", last)
-	}
-}
-
-// TestUnrelatedNoCodeReplyIsStillSentBack: a reply that names nothing installed keeps the bounded fix.
-func TestUnrelatedNoCodeReplyIsStillSentBack(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], "Sorry, I cannot.")
-	extensions := newFakeExtensions()
-	extensions.catalog = []Installed{systemThemeInstalled}
-	workshop, _ := newWorkshopFor(conversation, extensions)
-
-	workshop.Settled("b1", finished())
-
-	if len(conversation.sent) != 1 {
-		t.Fatalf("the model was sent %q; want the block rule", conversation.sent)
+	if strings.Join(extensions.installs, ",") != "user.system-theme" {
+		t.Fatalf("installs = %v, want user.system-theme", extensions.installs)
 	}
 }

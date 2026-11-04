@@ -28,6 +28,7 @@ func (p *Palette) Show() {
 	p.shownView = nil
 	p.resetRootHistory()
 	p.leaveUnsurvivingPages()
+	p.syncPresentation()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
@@ -74,6 +75,7 @@ func (p *Palette) Refresh() {
 	p.win.Update(func() {
 		keep := p.chosen
 		p.invalidateRows()
+		p.syncPresentation()
 		p.search()
 		p.choose(keep)
 	})
@@ -117,6 +119,7 @@ func (p *Palette) push(v *View) {
 	p.query = ""
 	p.actionsOpen = false
 	p.syncActive(covered)
+	p.syncPresentation()
 	p.search()
 	p.focusInput()
 }
@@ -172,6 +175,7 @@ func (p *Palette) Pop() {
 	p.query = ""
 	p.actionsOpen = false
 	p.syncActive(nil)
+	p.syncPresentation()
 	p.search()
 	p.focusInput()
 }

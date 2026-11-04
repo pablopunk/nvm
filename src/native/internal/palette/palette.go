@@ -60,6 +60,9 @@ type Options struct {
 	// dragging it turns into a native drag of the files, and returns that element. The palette takes the element as
 	// the row's click target. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, src DragSource, draw func()) ui.Element
+	// Resize sizes the window for a presentation when the top view asks for another size (see desiredSize). Nil keeps
+	// the window's size.
+	Resize func(width, height int)
 }
 
 // DragSource is the files a row drags out: their paths, and the file whose picture the drag shows. An empty Image
@@ -124,6 +127,8 @@ type Palette struct {
 	// keyboard for the palette (dialog.go); the palette stays open while one does.
 	blurred bool
 	dialogs atomic.Int32
+	// windowWidth and windowHeight are the size the window was last resized to for a presentation (split.go).
+	windowWidth, windowHeight int
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.
