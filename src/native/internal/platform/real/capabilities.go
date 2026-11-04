@@ -30,5 +30,8 @@ func Capabilities() platform.Capabilities {
 	if runtime.GOOS == "linux" {
 		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal)
 	}
+	if windowManagementSupported() {
+		supported = append(supported, platform.CapabilityWindowManagement)
+	}
 	return platform.NewCapabilities(supported...)
 }
