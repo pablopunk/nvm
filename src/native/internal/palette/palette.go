@@ -64,6 +64,8 @@ type Palette struct {
 	chosen     int
 	list       ui.ListState
 	input      ui.Handle
+	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
+	focusList bool
 
 	actionsOpen bool
 	actChosen   int
@@ -135,7 +137,7 @@ func (p *Palette) Show() {
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
 	}
-	p.input.Focus()
+	p.focusSearch()
 	p.win.Show()
 	p.syncActive(nil)
 }
@@ -234,7 +236,7 @@ func (p *Palette) push(v *View) {
 	p.actionsOpen = false
 	p.syncActive(covered)
 	p.search()
-	p.input.Focus()
+	p.focusSearch()
 }
 
 // Visible reports whether the palette window is shown.
@@ -266,7 +268,7 @@ func (p *Palette) Pop() {
 	p.actionsOpen = false
 	p.syncActive(nil)
 	p.search()
-	p.input.Focus()
+	p.focusSearch()
 }
 
 // leaveUnsurvivingPages pops the pages above the topmost page that survives a hide, down to the root when none does.

@@ -128,6 +128,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
 			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
+		p.focusListIfRequested(c)
 		if list.Submitted() {
 			p.runDefault()
 		}
