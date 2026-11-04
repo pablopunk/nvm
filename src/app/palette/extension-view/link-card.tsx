@@ -1,3 +1,4 @@
+import React from 'react';
 import type { ExtensionDetailLink } from '../../resources/nevermind-extension-api';
 
 function hostLabel(url: string) {

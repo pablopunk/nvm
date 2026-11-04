@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
+  ::-webkit-scrollbar { display: none; }
+  video { display: block; width: 100%; height: 100%; object-fit: cover; background: transparent; }
+  video.contain { object-fit: contain; }
+  video.mirrored { transform: scaleX(-1); }
+</style>
+</head>
+<body>
+<video id="feed" autoplay playsinline></video>
+<script>
+(function () {
+  var feed = document.getElementById('feed');
+  var stream = null;
+  var current = null;
+  var seq = 0;
+
+  function report(event, detail) {
+    var body = Object.assign({ seq: ++seq, event: event }, detail || {});
+    document.title = 'nvm-camera:' + JSON.stringify(body);
+  }
+
+  function releaseStream() {
+    if (stream) stream.getTracks().forEach(function (track) { track.stop(); });
+    stream = null;
+    feed.srcObject = null;
+  }
+
+  function videoConstraints(deviceId) {
+    var video = { width: { ideal: 1280 }, height: { ideal: 720 } };
+    if (deviceId) video.deviceId = { exact: deviceId };
+    return { audio: false, video: video };
+  }
+
+  function listDevices() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      report('devices', {
+        devices: devices.filter(function (d) { return d.kind === 'videoinput'; })
+          .map(function (d) { return { deviceId: d.deviceId, label: d.label }; })
+      });
+    }, function () { report('devices', { devices: [] }); });
+  }
+
+  function start(id, deviceId) {
+    current = id;
+    releaseStream();
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      report('error', { id: id, name: 'NotSupportedError', message: '' });
+      return;
+    }
+    navigator.mediaDevices.getUserMedia(videoConstraints(deviceId)).then(function (next) {
+      if (current !== id) {
+        next.getTracks().forEach(function (track) { track.stop(); });
+        return;
+      }
+      stream = next;
+      var track = next.getVideoTracks()[0];
+      if (track) {
+        track.addEventListener('ended', function () {
+          if (stream === next) report('ended', { id: id });
+        });
+      }
+      feed.srcObject = next;
+      var settings = track ? track.getSettings() : {};
+      report('live', { id: id, deviceId: settings.deviceId || '', label: track ? track.label : '' });
+      listDevices();
+      feed.play().catch(function (error) {
+        if (error && error.name === 'AbortError') return;
+        if (current === id) report('playbackError', { id: id });
+      });
+    }, function (error) {
+      if (current === id) {
+        report('error', { id: id, name: (error && error.name) || '', message: (error && error.message) || '' });
+      }
+    });
+  }
+
+  function stop() {
+    current = null;
+    releaseStream();
+  }
+
+  function configure(options) {
+    feed.muted = options.muted !== false;
+    feed.controls = Boolean(options.controls);
+    feed.className = (options.mirrored ? 'mirrored ' : '') + (options.framing === 'contain' ? 'contain' : '');
+  }
+
+  feed.addEventListener('playing', function () {
+    if (current !== null) report('playing', { id: current });
+  });
+  feed.addEventListener('error', function () {
+    if (current !== null && stream) report('playbackError', { id: current });
+  });
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) {
+    navigator.mediaDevices.addEventListener('devicechange', listDevices);
+  }
+
+  window.nvmCamera = {
+    command: function (command) {
+      if (command.op === 'start') start(command.id, command.deviceId || '');
+      else if (command.op === 'stop') stop();
+      else if (command.op === 'configure') configure(command.options);
+      else if (command.op === 'devices') listDevices();
+    }
+  };
+  configure(__CONFIG__);
+})();
+</script>
+</body>
+</html>

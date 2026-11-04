@@ -1,0 +1,97 @@
+package app
+
+import (
+	"context"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
+	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/safego"
+)
+
+// dictationTranscriber is the service's backend port. It sends through the account session's client.
+type dictationTranscriber struct {
+	session *auth.Session
+}
+
+// Transcribe sends one WebM segment.
+func (t dictationTranscriber) Transcribe(ctx context.Context, segment dict.Segment) (string, error) {
+	return t.session.Client().Transcribe(ctx, backend.TranscriptionRequest{
+		OperationID:    segment.OperationID,
+		CancellationID: segment.CancellationID,
+		Prepared:       segment.Prepared,
+		Audio:          segment.File,
+	})
+}
+
+// Prepare checks admission for operationID ahead of the recording's end.
+func (t dictationTranscriber) Prepare(ctx context.Context, operationID string) error {
+	return t.session.Client().PrepareTranscription(ctx, operationID)
+}
+
+// CancelPreparation releases the admission for operationID.
+func (t dictationTranscriber) CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error {
+	return t.session.Client().CancelTranscriptionPreparation(ctx, operationID, userCancelled)
+}
+
+// appDictationAccount adapts the app's account session to the flow's account port.
+type appDictationAccount struct {
+	app *App
+}
+
+// SignedIn reports whether the account session is connected to a backend.
+func (a appDictationAccount) SignedIn() bool {
+	return a.app.account != nil && a.app.account.Snapshot().Connected
+}
+
+// Transcriber returns the backend port over the account session.
+func (a appDictationAccount) Transcriber() dict.Transcriber {
+	return dictationTranscriber{session: a.app.account}
+}
+
+// NoteError records a spend-cap refusal on the account so the account view explains it.
+func (a appDictationAccount) NoteError(err error) {
+	if a.app.account != nil {
+		a.app.account.NoteError(err)
+	}
+}
+
+// dictationFlowFor returns the app's dictation flow, created on first use from the platform ports. It runs on the UI
+// thread, so the lazy creation needs no lock.
+func (p *App) dictationFlowFor() *dictationFlow {
+	if p.dictation == nil {
+		p.dictation = newDictationFlow(p.dictationDeps())
+	}
+	return p.dictation
+}
+
+// dictationDeps wires the flow to the app: UI work goes through the palette's redraw, background work to supervised
+// goroutines, and timers fire back on the UI thread.
+func (p *App) dictationDeps() dictationDeps {
+	return dictationDeps{
+		Microphone:    p.ports.Microphone,
+		Codec:         p.ports.Opus,
+		Clipboard:     p.ports.Clipboard,
+		Paster:        p.ports.Paster,
+		Account:       appDictationAccount{app: p},
+		Settings:      p.dictationSettings,
+		Panel:         &dictationWindow{app: p},
+		Dispatch:      p.redraw,
+		Background:    supervisedDictation,
+		After:         p.dictationAfter,
+		PaletteHidden: p.notePaletteHidden,
+		Toast:         p.toastFromBackground,
+		RestoreDelay:  dictationRestoreDelay,
+		OnDevices:     p.Refresh,
+	}
+}
+
+func supervisedDictation(name string, fn func()) {
+	safego.Go(name, func(context.Context) { fn() })
+}
+
+// dictationAfter runs fn on the UI thread after d.
+func (p *App) dictationAfter(d time.Duration, fn func()) {
+	time.AfterFunc(d, func() { p.redraw(fn) })
+}

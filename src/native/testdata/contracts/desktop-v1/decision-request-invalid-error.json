@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "invalid_decision_request",
+    "message": "questions.0.options: Choice options must be unique"
+  }
+}

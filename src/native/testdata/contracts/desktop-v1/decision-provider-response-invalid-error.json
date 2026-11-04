@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "decision_provider_response_invalid",
+    "message": "The decision model returned an invalid answer. Try again."
+  }
+}

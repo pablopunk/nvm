@@ -1,0 +1,123 @@
+name: Native (Go)
+
+on:
+  pull_request:
+    paths:
+      - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
+      - '.github/workflows/native.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
+      - '.github/workflows/native.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  go:
+    name: Go static checks and unit tests
+    runs-on: ubuntu-latest
+    # The goldens are rendered with the system fonts, so the job runs on the same Debian release and font packages as
+    # the shared test box and the rig image; on the runner's own Ubuntu fonts the emoji glyphs differ.
+    container:
+      image: debian:13
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Install build tools and golden fonts
+        working-directory: /
+        run: |
+          apt-get update
+          # MyGo draws text through Pango and GTK, loaded at run time with purego, so the goldens need the same
+          # runtime libraries as the rig image (scripts/rig/Dockerfile) and the test box, not only the fonts.
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git curl tar gcc libc6-dev fontconfig \
+            fonts-dejavu fonts-liberation fonts-noto-color-emoji fonts-urw-base35 \
+            libgtk-3-0t64 libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libatk1.0-0t64 \
+            libepoxy0 libgdk-pixbuf-2.0-0 librsvg2-2 libsecret-1-0 libayatana-appindicator3-1 \
+            libdbusmenu-gtk3-4 libgtk-layer-shell0 libwebkit2gtk-4.1-0
+
+      # The checkout is owned by another user inside the container; Go's VCS stamping needs git to trust it.
+      - name: Trust the checkout
+        working-directory: /
+        run: git config --global --add safe.directory '*'
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The Go version comes from go.mod. MyGo builds on Linux with no apt packages:
+      # it reaches GTK and WebKit at runtime through purego, not through cgo headers.
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Check formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt needed for:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Staticcheck
+        run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+
+      - name: Test with race detector
+        run: go test -race -count=1 -timeout 25m ./...
+
+      # A golden that differs leaves the actual and diff PNGs under testdata/golden/_failures; keep them for review.
+      - name: Upload golden failures
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: golden-failures
+          path: src/native/**/testdata/golden/_failures/
+          if-no-files-found: ignore
+
+      - name: Vulnerability check
+        # Non-blocking until the first advisory baseline is triaged; then drop continue-on-error.
+        continue-on-error: true
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  # The Go app must run on macOS and Windows, not only compile there. Goldens are compared only on Linux (the
+  # golden package skips them elsewhere), so this job runs vet and the rest of the test suite on each OS.
+  cross-os:
+    name: Go vet and tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 -timeout 40m ./...

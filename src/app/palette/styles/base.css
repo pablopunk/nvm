@@ -30,7 +30,8 @@ a[href] {
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
-[cmdk-input]:focus-visible {
+[cmdk-input]:focus-visible,
+[tabindex="-1"]:focus-visible {
   outline: none;
 }
 

@@ -1,0 +1,362 @@
+name: Native packages
+
+# Builds the Go app (src/native) into installable packages on each OS. Signing and notarization run only when the
+# existing Apple and Windows secrets exist; without them the packages are unsigned and the run says so. A pull request
+# never notarizes; a workflow_dispatch run with secrets does. Release flags (releaseBuild) need release=true.
+
+on:
+  pull_request:
+    paths:
+      - 'src/native/**'
+      - 'src/app/resources/macos-helper/**'
+      - '.github/workflows/native-package.yml'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version stamped into the packages (blank keeps src/native/mygo.json)
+        required: false
+        type: string
+      release:
+        description: Link the release flags into these builds (releaseBuild, analytics endpoint)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-package-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: macOS ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: arm64, runner: macos-latest }
+          - { arch: amd64, runner: macos-15-intel }
+    env:
+      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
+      UPDATE_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Decide signing and notarization
+        id: decide
+        env:
+          HAS_CERTIFICATE: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
+          HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+        run: |
+          sign=false
+          notarize=false
+          if [ "$HAS_CERTIFICATE" = true ]; then sign=true; fi
+          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then notarize=true; fi
+          echo "sign=$sign" >> "$GITHUB_OUTPUT"
+          echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
+
+      - name: Build the natives for this Mac
+        working-directory: src/native
+        run: |
+          bash scripts/natives/build-libopus.sh
+          bash scripts/natives/build-macos-helper.sh
+
+      - name: Import the signing certificate
+        if: steps.decide.outputs.sign == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          keychain="$RUNNER_TEMP/build.keychain-db"
+          password="$(openssl rand -base64 24)"
+          certificate="$RUNNER_TEMP/certificate.p12"
+          echo "$MACOS_CERT_P12_BASE64" | base64 --decode > "$certificate"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$certificate" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain" >/dev/null
+          existing=()
+          while IFS= read -r listed; do
+            existing+=("$(sed -E 's/^[[:space:]]*"(.*)"[[:space:]]*$/\1/' <<<"$listed")")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${existing[@]}"
+          rm -f "$certificate"
+          echo "SIGNING_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+
+      - name: Resolve the Developer ID identity
+        if: steps.decide.outputs.sign == 'true'
+        run: |
+          set -euo pipefail
+          identity="$(security find-identity -v -p codesigning "$SIGNING_KEYCHAIN" \
+            | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -n 1)"
+          if [ -z "$identity" ]; then
+            echo "The imported certificate has no Developer ID Application identity." >&2
+            exit 1
+          fi
+          echo "SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
+
+      - name: Store the notary credentials
+        if: steps.decide.outputs.notarize == 'true'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          xcrun notarytool store-credentials nvm-notary --keychain "$SIGNING_KEYCHAIN" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_SPECIFIC_PASSWORD" >/dev/null
+          echo "NOTARY_PROFILE=nvm-notary" >> "$GITHUB_ENV"
+          echo "NOTARY_KEYCHAIN=$SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
+
+      - name: Stamp the package settings
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
+          bash scripts/packaging/stamp-mygo-config.sh
+
+      - name: Build and package
+        working-directory: src/native
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}"
+
+      - name: Verify the link flags and the signature
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          bash scripts/packaging/verify-package.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$RELEASE"
+          if [ "${{ steps.decide.outputs.sign }}" = true ]; then
+            codesign --verify --deep --strict --verbose=2 "dist/darwin-${{ matrix.arch }}/Nevermind Next.app"
+          fi
+          if [ "${{ steps.decide.outputs.notarize }}" = true ]; then
+            xcrun stapler validate "dist/darwin-${{ matrix.arch }}/nevermind-next-"*.dmg
+          fi
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
+            bash scripts/packaging/verify-updates.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$UPDATE_PUBLIC_KEY"
+          fi
+
+      - name: Note the update feed
+        env:
+          HAS_UPDATE_SIGNING: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ] && [ "$HAS_UPDATE_SIGNING" = true ]; then
+            echo "macOS ${{ matrix.arch }}: the update feed is on and its files are signed with NATIVE_UPDATE_PRIVATE_KEY." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "macOS ${{ matrix.arch }}: no update feed. Set NATIVE_UPDATE_PUBLIC_KEY (variable), NATIVE_UPDATE_PRIVATE_KEY (secret) and dispatch a release run to publish one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checksums
+        working-directory: src/native/dist/darwin-${{ matrix.arch }}
+        run: shasum -a 256 ./*.dmg > SHA256SUMS
+
+      - name: Note the signing state
+        run: |
+          if [ "${{ steps.decide.outputs.sign }}" = true ]; then
+            echo "macOS ${{ matrix.arch }}: signed${{ steps.decide.outputs.notarize == 'true' && ' and notarized' || ', not notarized (pull request or no notary secrets)' }}." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "macOS ${{ matrix.arch }}: UNSIGNED. Ad hoc signed; Gatekeeper blocks it on other Macs. Add the MACOS_CERT_* and APPLE_* secrets to sign it." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-macos-${{ matrix.arch }}
+          path: |
+            src/native/dist/darwin-${{ matrix.arch }}/*.dmg
+            src/native/dist/darwin-${{ matrix.arch }}/update-*.json
+            src/native/dist/darwin-${{ matrix.arch }}/*.tar.gz
+            src/native/dist/darwin-${{ matrix.arch }}/*.delta
+          if-no-files-found: error
+          retention-days: 14
+
+  linux:
+    name: Linux ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: amd64, runner: ubuntu-latest }
+          - { arch: arm64, runner: ubuntu-24.04-arm }
+    env:
+      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
+      UPDATE_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Build libopus for this machine
+        working-directory: src/native
+        run: bash scripts/natives/build-libopus.sh
+
+      - name: Stamp the package settings
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
+          bash scripts/packaging/stamp-mygo-config.sh
+
+      - name: Build and package
+        working-directory: src/native
+        env:
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: go tool mygo build -platform "linux/${{ matrix.arch }}"
+
+      - name: Verify the link flags and the archive
+        working-directory: src/native/dist/linux-${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          ../../scripts/packaging/verify-package.sh ./nevermind-next "$RELEASE"
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
+            ../../scripts/packaging/verify-updates.sh ./nevermind-next "$UPDATE_PUBLIC_KEY"
+          fi
+          tar -tzf nevermind-next-*-linux-${{ matrix.arch }}.tar.gz
+          dpkg-deb --info nevermind-next_*_${{ matrix.arch }}.deb
+          dpkg-deb --contents nevermind-next_*_${{ matrix.arch }}.deb
+
+      - name: Note the update feed
+        env:
+          HAS_UPDATE_SIGNING: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ] && [ "$HAS_UPDATE_SIGNING" = true ]; then
+            echo "Linux ${{ matrix.arch }}: the update feed is on and its files are signed with NATIVE_UPDATE_PRIVATE_KEY." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Linux ${{ matrix.arch }}: no update feed. Set NATIVE_UPDATE_PUBLIC_KEY (variable), NATIVE_UPDATE_PRIVATE_KEY (secret) and dispatch a release run to publish one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checksums
+        working-directory: src/native/dist/linux-${{ matrix.arch }}
+        run: sha256sum ./*.tar.gz ./*.deb > SHA256SUMS
+
+      - name: Note the signing state
+        run: |
+          echo "Linux ${{ matrix.arch }}: archives and the .deb are not signed; there is no Linux signing secret." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-${{ matrix.arch }}
+          path: src/native/dist/linux-${{ matrix.arch }}/*
+          if-no-files-found: error
+          retention-days: 14
+
+  windows:
+    name: Windows amd64
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
+      VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
+      UPDATE_PUBLIC_KEY: ${{ vars.NATIVE_UPDATE_PUBLIC_KEY }}
+      UPDATE_REPOSITORY: ${{ github.repository }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Install NSIS and osslsigncode
+        run: sudo apt-get update && sudo apt-get install -y nsis osslsigncode
+
+      - name: Decide signing
+        id: decide
+        env:
+          HAS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE != '' && secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+        run: echo "sign=$HAS_CERTIFICATE" >> "$GITHUB_OUTPUT"
+
+      - name: Write the code signing certificate
+        if: steps.decide.outputs.sign == 'true'
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+        run: |
+          set -euo pipefail
+          echo "$WINDOWS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/code-signing.pfx"
+          echo "WINDOWS_CERTIFICATE_FILE=$RUNNER_TEMP/code-signing.pfx" >> "$GITHUB_ENV"
+
+      - name: Stamp the package settings
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
+          bash scripts/packaging/stamp-mygo-config.sh
+
+      - name: Build and package
+        working-directory: src/native
+        env:
+          MYGO_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: go tool mygo build -platform windows/amd64
+
+      - name: Check the update key is linked
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
+            bash scripts/packaging/verify-updates.sh "dist/windows-amd64/Nevermind Next.exe" "$UPDATE_PUBLIC_KEY"
+          fi
+
+      - name: Note the link flags
+        working-directory: src/native
+        run: |
+          echo "Windows amd64: linked with the same MYGO_LDFLAGS as the verified builds. The GUI executable is not run on this runner, so its flags are not checked here." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Note the update feed
+        env:
+          HAS_UPDATE_SIGNING: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY != '' }}
+        run: |
+          if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ] && [ "$HAS_UPDATE_SIGNING" = true ]; then
+            echo "Windows amd64: the update feed is on and its files are signed with NATIVE_UPDATE_PRIVATE_KEY." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Windows amd64: no update feed. Set NATIVE_UPDATE_PUBLIC_KEY (variable), NATIVE_UPDATE_PRIVATE_KEY (secret) and dispatch a release run to publish one." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Checksums
+        working-directory: src/native/dist/windows-amd64
+        run: sha256sum ./*.exe > SHA256SUMS
+
+      - name: Note the signing state
+        run: |
+          if [ "${{ steps.decide.outputs.sign }}" = true ]; then
+            echo "Windows amd64: signed with the code signing certificate." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Windows amd64: UNSIGNED. SmartScreen warns users. Add the WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD secrets to sign it." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-windows-amd64
+          path: src/native/dist/windows-amd64/*
+          if-no-files-found: error
+          retention-days: 14

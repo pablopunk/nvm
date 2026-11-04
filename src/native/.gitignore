@@ -1,0 +1,6 @@
+nvm-native
+nvm-clone
+*.test
+/nvm
+/dist/
+/resources/

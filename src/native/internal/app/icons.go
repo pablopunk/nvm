@@ -1,0 +1,12 @@
+package app
+
+import "github.com/egoist/mygo/ui"
+
+// iconSize is the point size of a row's system icon. The picture is asked for at twice that size, for the display scale.
+const iconSize = 28
+
+// fileIcon returns the picture a row shows for path: a thumbnail for an image once it is ready, otherwise the system
+// icon of the path's kind. It never blocks; a miss queues the load and the redraw that follows shows the result.
+func (p *App) fileIcon(path string) *ui.Bitmap {
+	return p.files.rowPicture(path)
+}
