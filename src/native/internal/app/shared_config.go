@@ -39,6 +39,19 @@ func (p *App) diagnosticsOff() bool {
 	return errorReporting != nil && !*errorReporting
 }
 
+// menuBarIconStyle is the menuBarIconStyle setting as config.json holds it. A missing key, or a file that cannot be
+// read, leaves the menu bar on its default style.
+func (p *App) menuBarIconStyle() string {
+	if p.sharedConfig == nil {
+		return ""
+	}
+	doc, err := p.sharedConfig.Load()
+	if err != nil {
+		return ""
+	}
+	return doc.Settings().MenuBarIconStyle
+}
+
 func (p *App) setDiagnosticsOff(off bool) error {
 	if p.sharedConfig == nil {
 		return errNoSharedConfig

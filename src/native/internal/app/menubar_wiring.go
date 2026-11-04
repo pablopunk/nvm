@@ -16,7 +16,12 @@ import (
 // status item. A platform without a tray host runs the app without an item; the palette still opens by its shortcut.
 func (p *App) setUpMenubar() {
 	p.menubarJobs = menubar.NewScheduler(p.ports.Clock, p.onUI)
-	item, err := menubar.New(menubar.Options{Host: p.ports.Tray, OnUI: p.onUI, Actions: p.menubarActions()})
+	item, err := menubar.New(menubar.Options{
+		Host:      p.ports.Tray,
+		OnUI:      p.onUI,
+		Actions:   p.menubarActions(),
+		IconStyle: p.menuBarIconStyle(),
+	})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
 	} else {
