@@ -90,6 +90,10 @@ func (c hostContext) Network() api.Network {
 	return remoteNetwork{link: c.link}
 }
 
+func (c hostContext) Views() api.Views {
+	return remoteViews{link: c.link}
+}
+
 func (c hostContext) memo() memoCore {
 	return memoCore{kv: storageKV{link: c.link}, clock: c.clock, flights: c.flights}
 }

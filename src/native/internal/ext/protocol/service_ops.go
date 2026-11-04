@@ -22,6 +22,8 @@ const (
 	OpSave        = "save"
 	OpCommit      = "commit"
 	OpDiscard     = "discard"
+
+	OpRefreshMenuBar = "refreshMenuBar"
 )
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.

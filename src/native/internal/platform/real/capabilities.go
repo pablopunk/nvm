@@ -45,6 +45,9 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if pasteSupported() {
 		supported = append(supported, platform.CapabilityClipboardPaste)
 	}
+	if selectionCopySupported(goos, getenv, hasTool) {
+		supported = append(supported, platform.CapabilitySelectionCopy)
+	}
 	if !isWaylandSession(goos, getenv) {
 		supported = append(supported, platform.CapabilityWindowPlacement)
 	}
@@ -60,7 +63,21 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
 		supported = append(supported, platform.CapabilityMicrophone)
 	}
+	supported = append(supported, textCapabilities(goos, hasTool)...)
 	return platform.NewCapabilities(supported...)
+}
+
+// textCapabilities lists the text intents of an OS. Reading text is on macOS (the Vision framework) and on Linux when
+// Tesseract is installed; the screen can be captured only on macOS, so screen text is macOS only.
+func textCapabilities(goos string, hasTool func(string) bool) []platform.Capability {
+	var supported []platform.Capability
+	if goos == "darwin" || (goos == "linux" && hasTool(tesseractBinary)) {
+		supported = append(supported, platform.CapabilityTextRecognize)
+	}
+	if goos == "darwin" {
+		supported = append(supported, platform.CapabilityScreenCapture)
+	}
+	return supported
 }
 
 // isWaylandSession reports whether the desktop is a Wayland session on Linux. A Wayland client cannot place
@@ -77,4 +94,16 @@ func isWaylandSession(goos string, getenv func(string) string) bool {
 // restores the focused window. Wayland and other systems have no such tool here.
 func isX11FocusSession(goos string, getenv func(string) string) bool {
 	return goos == "linux" && !isWaylandSession(goos, getenv)
+}
+
+// selectionCopySupported reports whether the copy gesture can run: on Linux the X11 session with xdotool (the same
+// rule as paste), on macOS always (the osascript gesture is marked UNTESTED until the L5 run), and nowhere else.
+func selectionCopySupported(goos string, getenv func(string) string, hasTool func(string) bool) bool {
+	switch goos {
+	case "linux":
+		return isX11FocusSession(goos, getenv) && hasTool("xdotool")
+	case "darwin":
+		return true
+	}
+	return false
 }

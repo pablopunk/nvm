@@ -3,6 +3,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -35,5 +36,31 @@ func TestAutomationBuildWithoutABackendStaysOffProduction(t *testing.T) {
 	}
 	if got := session.Snapshot().BaseURL; got != rigUnreachableOrigin {
 		t.Fatalf("rig build without a backend uses %q, want %q", got, rigUnreachableOrigin)
+	}
+}
+
+// An automation build stays on the rig's backend: Settings > Backend and deep links cannot move the session to another
+// origin, and a refused switch changes nothing.
+func TestAutomationBuildRefusesToSwitchBackend(t *testing.T) {
+	const rigOrigin = "http://127.0.0.1:4555"
+	t.Setenv(rigBackendEnv, rigOrigin)
+	session, err := auth.New((&App{}).accountDeps(fake.NewSet().Ports(), nil))
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	switches := []struct {
+		kind   backend.EnvironmentKind
+		origin string
+	}{
+		{backend.EnvironmentProduction, ""},
+		{backend.EnvironmentCustom, "http://127.0.0.1:4556"},
+	}
+	for _, sw := range switches {
+		if err := session.SwitchEnvironment(sw.kind, sw.origin); !errors.Is(err, auth.ErrEnvironmentPinned) {
+			t.Fatalf("switch to %s: err %v, want ErrEnvironmentPinned", sw.kind, err)
+		}
+	}
+	if snapshot := session.Snapshot(); snapshot.BaseURL != rigOrigin || snapshot.Environment != backend.EnvironmentDevelopment {
+		t.Fatalf("refused switches moved the rig build to %s %q", snapshot.Environment, snapshot.BaseURL)
 	}
 }

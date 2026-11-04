@@ -27,7 +27,7 @@ func (p *App) extensionManager() *manager.Manager {
 // startExtensions builds the manager from the extensions folder and publishes it. It runs on its own goroutine:
 // scanning the folder and starting enabled children never waits the palette's first paint.
 func (p *App) startExtensions() {
-	m, err := newExtensionManager()
+	m, err := newExtensionManager(p.refreshMenuBar)
 	if err != nil {
 		log.Println("extensions:", err)
 		return
@@ -36,7 +36,7 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
-func newExtensionManager() (*manager.Manager, error) {
+func newExtensionManager(menuBarRefresh func(extensionID string)) (*manager.Manager, error) {
 	ports := real.NewPorts()
 	exe, err := os.Executable()
 	if err != nil {
@@ -56,8 +56,9 @@ func newExtensionManager() (*manager.Manager, error) {
 		Clipboard: ports.Clipboard,
 		Logs:      logx.Default(),
 	}, extensionsDir(), enablement.Open(state), manager.Options{
-		Executable: exe,
-		DataRoot:   filepath.Join(configDir(), "extension-data"),
+		Executable:     exe,
+		DataRoot:       filepath.Join(configDir(), "extension-data"),
+		MenuBarRefresh: menuBarRefresh,
 	})
 }
 

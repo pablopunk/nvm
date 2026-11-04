@@ -59,7 +59,7 @@ func convertMenuItems(items []platform.MenuItem) []*mygo.MenuItem {
 // convertMenuItem maps one row, wiring its action to MyGo's click callback.
 func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 	action := item.Action
-	return &mygo.MenuItem{
+	converted := &mygo.MenuItem{
 		ID:       item.ID,
 		Label:    item.Label,
 		Disabled: item.Disabled,
@@ -69,4 +69,8 @@ func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 			}
 		},
 	}
+	if len(item.Submenu) > 0 {
+		converted.Submenu = convertMenuItems(item.Submenu)
+	}
+	return converted
 }

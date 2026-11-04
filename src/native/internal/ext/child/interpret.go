@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
@@ -25,6 +26,9 @@ var entryPoints = map[string]string{
 	protocol.MethodSearch:   "SearchItems",
 	protocol.MethodRun:      "RunAction",
 	protocol.MethodLoad:     "LoadItems",
+
+	protocol.MethodMenuBars:        "MenuBars",
+	protocol.MethodMenuBarTriggers: "MenuBarTriggers",
 }
 
 // extension is one interpreted extension: the functions it declares and the services it may use.
@@ -79,6 +83,16 @@ func lookupEntryPoints(i *interp.Interpreter) map[string]reflect.Value {
 		functions[method] = value
 	}
 	return functions
+}
+
+// declaredMethods lists the protocol methods the loaded source implements, in a stable order.
+func (e *extension) declaredMethods() []string {
+	methods := make([]string, 0, len(e.functions))
+	for method := range e.functions {
+		methods = append(methods, method)
+	}
+	sort.Strings(methods)
+	return methods
 }
 
 // invoke calls one entry point. It returns the results without a trailing error, and that error separately.

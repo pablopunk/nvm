@@ -16,6 +16,7 @@ type Ports struct {
 	Resolver     Resolver
 	Clipboard    Clipboard
 	Paster       Paster
+	SelectedText SelectedText
 	Shell        Shell
 	Screens      Screens
 	Notifier     Notifier
@@ -36,4 +37,7 @@ type Ports struct {
 	Opus       OpusCodec
 	// FileDialog shows the operating system's file and folder choosers for extension form fields.
 	FileDialog FileDialog
+	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
+	Text    TextRecognizer
+	Capture ScreenCapturer
 }
