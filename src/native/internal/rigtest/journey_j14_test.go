@@ -10,7 +10,8 @@ import (
 // J14 (PLAN.md 3.1): Automate writes an extension, checks it, and installs it off. The fake backend first answers with a
 // source that does not compile; the host sends the compile error back, the model's second reply compiles, and the
 // chat says the extension is installed but off. The user presses Control+E, turns it on in the review, and the
-// extension's root row shows on the root. Editing and the failure path after the retries are not covered here.
+// extension's root row shows on the root. Editing is TestJourneyJ14EditChangesAnExtensionAndShowsTheNewRow; the
+// failure path after the retries is not covered.
 
 const (
 	builderRequest     = "make a clock"
