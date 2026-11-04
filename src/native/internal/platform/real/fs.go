@@ -35,6 +35,9 @@ func (osFS) Stat(name string) (fs.FileInfo, error) { return os.Stat(name) }
 // Lstat describes a file or folder without following a symbolic link.
 func (osFS) Lstat(name string) (fs.FileInfo, error) { return os.Lstat(name) }
 
+// EvalSymlinks returns name with its symbolic links resolved.
+func (osFS) EvalSymlinks(name string) (string, error) { return filepath.EvalSymlinks(name) }
+
 // ReadFilePrefix reads at most max leading bytes of a file and reports the file's full size.
 func (osFS) ReadFilePrefix(name string, max int64) ([]byte, int64, error) {
 	return readFilePrefix(name, max)
