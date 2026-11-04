@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/submit"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -56,7 +57,7 @@ func (p *App) githubStatus() submit.Status {
 
 func (p *App) githubProbeState() *githubProbe {
 	if p.github == nil {
-		p.github = &githubProbe{run: submit.Exec}
+		p.github = &githubProbe{run: real.GitHubCLI}
 	}
 	return p.github
 }

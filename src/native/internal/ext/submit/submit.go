@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 )
 
@@ -43,12 +42,6 @@ type File struct {
 type Extension struct {
 	ID, Title string
 	Files     []File
-}
-
-// Exec runs the GitHub CLI from the PATH.
-func Exec(args ...string) (string, error) {
-	out, err := exec.Command("gh", args...).Output()
-	return string(out), err
 }
 
 // Probe reports whether the CLI is installed and signed in. Signed in is checked only when it is installed.
