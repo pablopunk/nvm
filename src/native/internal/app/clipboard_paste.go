@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -11,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // clipPasteName names the paste goroutine for panic reporting.
@@ -76,7 +78,7 @@ func pasteFailedFeedback(title string, err error) palette.Feedback {
 func pasteFailureMessage(err error) string {
 	switch {
 	case errors.Is(err, platform.ErrUnsupported):
-		return "Paste is not available on this system yet. The item is on the clipboard; press " + shortcutLabelOf("Control+V") + " to paste it."
+		return "Paste is not available on this system yet. The item is on the clipboard; press " + shortcuts.Label("Control+V", runtime.GOOS) + " to paste it."
 	case errors.Is(err, platform.ErrConflict):
 		return "The focused app changed, so nothing was pasted."
 	case errors.Is(err, platform.ErrDenied):

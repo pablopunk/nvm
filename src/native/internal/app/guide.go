@@ -78,7 +78,7 @@ func (p *App) guideView() *palette.View {
 // guideShortcutLabel is the palette shortcut the guide's shortcut row names, as the user sees it, or "" when none is
 // bound. It reads the live binding: the shortcut the user changed in the recorder is the one the guide shows.
 func (p *App) guideShortcutLabel() string {
-	return shortcutLabelOf(p.shortcutsManager().PaletteAccelerator())
+	return p.shortcutLabelOf(p.shortcutsManager().PaletteAccelerator())
 }
 
 // guideItem maps one guide row onto a palette row. Information rows have no action.

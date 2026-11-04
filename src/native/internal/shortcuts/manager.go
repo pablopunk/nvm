@@ -104,7 +104,7 @@ func (m *Manager) Reserved(accelerator string) bool {
 	return accelerator != "" && (accelerator == status.Accelerator || accelerator == status.Recovery)
 }
 
-// Entries lists the rows of the Keyboard Shortcuts list. An unavailable palette shortcut says so under its row.
+// Entries lists the rows of the Keyboard Shortcuts list.
 func (m *Manager) Entries() []Entry {
 	inactive := maps.Clone(m.inactive)
 	if status := m.summon.Status(); status.Unavailable() {

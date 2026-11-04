@@ -21,6 +21,7 @@ func sharedConfigApp(t *testing.T) (*App, *fake.FS) {
 	}
 	p.sharedConfig = portable.Open(files, sharedFixtureConfig)
 	p.shortcutMgr = nil
+	p.hyper = nil
 	return p, files
 }
 
@@ -87,8 +88,10 @@ func TestOneXShortcutsAppearAsBoundRowsInTwoOh(t *testing.T) {
 	for _, entry := range p.shortcutsManager().Entries() {
 		accelerators[entry.ActionID] = entry.Accelerator
 	}
+	if got := p.shortcutsManager().PaletteAccelerator(); got != "Command+Space" {
+		t.Fatalf("palette = %q; want Command+Space", got)
+	}
 	want := map[string]string{
-		"palette":                     "Command+Space",
 		"app:/Applications/Slack.app": "Command+Control+Alt+D",
 		"command:dictate":             "Command+Control+Alt+V",
 		"command:emoji-symbols":       "Command+Shift+E",

@@ -80,7 +80,7 @@ func TestRootCommandRowOffersSetAndRemoveKeyboardShortcut(t *testing.T) {
 	if got, want := searchActionTitles(row.Actions), []string{"Open", setShortcutTitle, removeShortcutTitle}; !slices.Equal(got, want) {
 		t.Fatalf("bound actions = %v, want %v", got, want)
 	}
-	if row.Accessory != shortcutLabelOf("Command+Alt+V") {
+	if row.Accessory != p.shortcutLabelOf("Command+Alt+V") {
 		t.Fatalf("accessory = %q, want the bound shortcut", row.Accessory)
 	}
 }
@@ -111,7 +111,7 @@ func TestCommandKSetShortcutRecordsAndBindsFromTheRootRow(t *testing.T) {
 	if got := p.Top().Title; got != rootViewTitle {
 		t.Fatalf("after saving the top view = %q, want the root", got)
 	}
-	if row := searchedClipboardCommandRow(t, p); row.Accessory != shortcutLabelOf("Command+Alt+V") {
+	if row := searchedClipboardCommandRow(t, p); row.Accessory != p.shortcutLabelOf("Command+Alt+V") {
 		t.Fatalf("row accessory = %q after saving", row.Accessory)
 	}
 }

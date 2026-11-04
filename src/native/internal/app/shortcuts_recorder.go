@@ -9,18 +9,28 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-// shortcutRecorder holds the shortcut the last key press made for entry, until Enter saves it.
+// shortcutRecorder holds the shortcut the last key press made for entry, until Enter saves it. A hyper recorder takes
+// modifiers alone, as 1.x does for the Hyper key; keyed is set once a key joins them, and then held modifiers stop
+// changing the recording.
 type shortcutRecorder struct {
 	entry       shortcuts.Entry
 	accelerator string
 	focus       ui.Handle
+	labels      shortcuts.Labeler
+	hyper       bool
+	keyed       bool
+	held        shortcuts.Modifiers
 }
 
-// shortcutRecorderView records the next key press as the shortcut of entry. Enter saves it and Escape goes back. The
-// bindings are released while it is open, so its keys reach it rather than running the actions they name.
+// shortcutRecorderView records the next key press as the shortcut of entry. Enter saves it and Escape goes back.
 func (p *App) shortcutRecorderView(entry shortcuts.Entry) *palette.View {
+	return p.recorderView(&shortcutRecorder{entry: entry, labels: p.labeler()})
+}
+
+// recorderView is the recorder page over recorder. The bindings are released while it is open, so its keys reach it
+// rather than running the actions they name.
+func (p *App) recorderView(recorder *shortcutRecorder) *palette.View {
 	manager := p.shortcutsManager()
-	recorder := &shortcutRecorder{entry: entry}
 	manager.Suspend()
 	return &palette.View{
 		Title:     "Record Shortcut",
@@ -54,15 +64,19 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 		h.Toast("Press a keyboard shortcut first")
 		return
 	}
+	if recorder.hyper {
+		p.saveHyperKey(h, recorder.accelerator)
+		return
+	}
 	manager := p.shortcutsManager()
 	if recorder.entry.ActionID == shortcuts.PaletteID {
 		change, err := manager.SetPalette(recorder.accelerator)
 		if err != nil {
-			h.Toast(paletteChangeFailureMessage(err, shortcutLabelOf(recorder.accelerator), shortcutLabelOf(manager.PaletteAccelerator())))
+			h.Toast(paletteChangeFailureMessage(err, recorder.labels.Label(recorder.accelerator), recorder.labels.Label(manager.PaletteAccelerator())))
 			return
 		}
 		h.Pop()
-		h.Toast(paletteChangeMessage(change))
+		h.Toast(p.paletteChangeMessage(change))
 		return
 	}
 	if err := manager.SetAction(recorder.entry.ActionID, recorder.accelerator); err != nil {
@@ -70,7 +84,7 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 		return
 	}
 	h.Pop()
-	h.Toast("Shortcut set: " + shortcutLabelOf(recorder.accelerator))
+	h.Toast("Shortcut set: " + recorder.labels.Label(recorder.accelerator))
 }
 
 // draw shows the recorded shortcut as keycaps, or asks for one. The element takes the keys while it is focused. The
@@ -78,12 +92,15 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 // does not have it.
 func (r *shortcutRecorder) draw(c *ui.Context) {
 	k := design.Tokens(c)
+	if r.hyper {
+		r.holdModifiers(recordedModifiers(c.Modifiers()))
+	}
 	ui.Column(c).Bind(&r.focus).Focusable().HandleInput(r.handleInput).Padding(24).Gap(14).Center().Children(func() {
 		if r.accelerator == "" {
 			if held := shortcuts.ModifierNames(recordedModifiers(c.Modifiers())); len(held) > 0 {
 				ui.Row(c).Gap(6).Center().Children(func() {
 					for _, name := range held {
-						design.Keycap(c, shortcutLabelOf(name))
+						design.Keycap(c, r.labels.Label(name))
 					}
 				})
 				ui.Text(c, "Press a key with them").FontSize(11).TextColor(k.Muted)
@@ -94,8 +111,8 @@ func (r *shortcutRecorder) draw(c *ui.Context) {
 			return
 		}
 		ui.Row(c).Gap(6).Center().Children(func() {
-			for _, part := range shortcuts.Parts(r.accelerator) {
-				design.Keycap(c, shortcutLabelOf(part))
+			for _, cap := range r.labels.Keycaps(r.accelerator) {
+				design.Keycap(c, cap)
 			}
 		})
 		ui.Text(c, "Save shortcut for “"+r.entry.Title+"”").FontSize(11).TextColor(k.Muted)
@@ -118,9 +135,19 @@ func (r *shortcutRecorder) handleInput(ev ui.InputEvent) bool {
 		return false
 	}
 	if accelerator := shortcuts.Capture(recordedModifiers(ev.Mods), palette.KeyName(key)); accelerator != "" {
-		r.accelerator = accelerator
+		r.accelerator, r.keyed = accelerator, true
 	}
 	return true
+}
+
+// holdModifiers records the modifiers held as the hyper key: each one pressed joins the recording. Modifier presses
+// reach the view as modifier changes, not as key presses, so the frame reads them.
+func (r *shortcutRecorder) holdModifiers(mods shortcuts.Modifiers) {
+	if r.keyed {
+		return
+	}
+	r.held = r.held.Or(mods)
+	r.accelerator = shortcuts.ModifiersAccelerator(r.held)
 }
 
 // recordedModifiers names the held modifiers the way accelerators do: Super is Command on every platform.

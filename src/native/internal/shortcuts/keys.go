@@ -7,6 +7,21 @@ type Modifiers struct {
 	Command, Control, Alt, Shift bool
 }
 
+// Or returns the modifiers held in either set.
+func (m Modifiers) Or(other Modifiers) Modifiers {
+	return Modifiers{
+		Command: m.Command || other.Command,
+		Control: m.Control || other.Control,
+		Alt:     m.Alt || other.Alt,
+		Shift:   m.Shift || other.Shift,
+	}
+}
+
+// ModifiersAccelerator spells modifiers with no key, such as Command+Control+Alt, which is how the Hyper key is stored.
+func ModifiersAccelerator(mods Modifiers) string {
+	return strings.Join(ModifierNames(mods), "+")
+}
+
 // Capture turns a key press into the accelerator the recorder stores, with the modifiers in canonical order before
 // the key. key is the key's name, as the palette spells it (A, 5, Space, Up, F5). It returns "" for a press that is
 // not a shortcut: no key, or a key without a modifier, unless the key is a function key or an arrow.

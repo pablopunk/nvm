@@ -22,7 +22,7 @@ func (p *App) withShortcutActions(it search.Item, actionID string, bound map[str
 	}
 	accelerator := bound[actionID]
 	if accelerator != "" && it.Accessory == "" {
-		it.Accessory = shortcutLabelOf(accelerator)
+		it.Accessory = p.shortcutLabelOf(accelerator)
 	}
 	entry := shortcuts.Entry{ActionID: actionID, Title: it.Title, Accelerator: accelerator}
 	actions := append(slices.Clip(it.Actions), search.Action{Title: setShortcutTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {

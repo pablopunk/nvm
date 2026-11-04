@@ -33,13 +33,14 @@ func (s *Session) actionAt(itemID string, index int, action api.Action) search.A
 // action maps one wire action to a palette action, with the accelerator the action names. key names the row that owns
 // the action, for run handles.
 func (s *Session) action(action api.Action, key string) search.Action {
-	return withShortcut(s.actionBody(action, key), action.Shortcut)
+	return s.withShortcut(s.actionBody(action, key), action.Shortcut)
 }
 
-// withShortcut gives a palette action the keys of an accelerator. An accelerator that does not parse is ignored.
-func withShortcut(action search.Action, accelerator string) search.Action {
+// withShortcut gives a palette action the keys of an accelerator, and the label the palette shows for them. An
+// accelerator that does not parse is ignored.
+func (s *Session) withShortcut(action search.Action, accelerator string) search.Action {
 	if mods, key, ok := parseShortcut(accelerator); ok {
-		action.Mods, action.Key, action.Label = mods, key, shortcutLabel(accelerator)
+		action.Mods, action.Key, action.Label = mods, key, shortcutLabel(accelerator, s.hyperKey())
 	}
 	return action
 }

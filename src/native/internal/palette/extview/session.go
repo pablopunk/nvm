@@ -39,6 +39,8 @@ type Deps struct {
 	Clock     platform.Clock
 	Cache     Cache
 	OnUI      func(fn func())
+	// HyperKey is the Hyper key that shortcut labels show as ✦. It is asked on each label. Nil shows none.
+	HyperKey func() string
 	// Dialog shows the native file and folder choosers for path fields. Nil makes those fields report unavailable.
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.

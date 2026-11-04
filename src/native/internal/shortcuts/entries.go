@@ -9,8 +9,9 @@ import (
 // PaletteID is the action ID of the palette hotkey, the row that changes the shortcut that opens Nevermind.
 const PaletteID = "palette"
 
-// PaletteTitle is the title of the palette hotkey's row.
-const PaletteTitle = "Palette Hotkey"
+// PaletteTitle names the palette hotkey in its recorder, as 1.x does. The palette hotkey is not a row of the list: it
+// changes in Settings.
+const PaletteTitle = "Set Nevermind shortcut"
 
 // Action is an action the user can give a shortcut: its stable ID, and the title the list shows.
 type Action struct {
@@ -29,10 +30,10 @@ type Entry struct {
 	Removable   bool
 }
 
-// Entries lists the palette hotkey and every command or declared action, sorted by title. Each action shows the
-// shortcut that applies to it: the user's choice, else its declared shortcut unless the user removed that.
+// Entries lists every command or declared action, sorted by title. Each action shows the shortcut that applies to it:
+// the user's choice, else its declared shortcut unless the user removed that.
 func Entries(doc Document, commands []Action, declared []Declared, inactive map[string]string) []Entry {
-	entries := []Entry{{ActionID: PaletteID, Title: PaletteTitle, Accelerator: doc.Palette, Source: SourceUser}}
+	var entries []Entry
 	declaredByID := map[string]Declared{}
 	for _, item := range declared {
 		declaredByID[item.ActionID] = item

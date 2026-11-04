@@ -9,7 +9,7 @@ func TestGuideShortcutRowReadsTheLivePaletteShortcut(t *testing.T) {
 	if _, err := p.shortcutsManager().SetPalette("Command+Alt+K"); err != nil {
 		t.Fatal(err)
 	}
-	want := shortcutLabelOf("Command+Alt+K")
+	want := p.shortcutLabelOf("Command+Alt+K")
 	if got := p.guideShortcutLabel(); got != want || got == "" {
 		t.Fatalf("the guide names %q after the user set Command+Alt+K, want %q", got, want)
 	}

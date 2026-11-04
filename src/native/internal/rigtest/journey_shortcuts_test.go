@@ -22,7 +22,7 @@ func TestJourneyJ11ChangePaletteHotkey(t *testing.T) {
 	shoot(t, app, "j11-1-recorder-open")
 
 	must(t, app.PressHotkey("Control+Shift+Space"))
-	_, err = app.WaitFor("Save shortcut for “Palette Hotkey”", elementWait)
+	_, err = app.WaitFor("Save shortcut for “Set Nevermind shortcut”", elementWait)
 	must(t, err)
 	shoot(t, app, "j11-2-recorded")
 

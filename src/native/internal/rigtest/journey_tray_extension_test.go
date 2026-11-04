@@ -75,7 +75,7 @@ func TestJourneyTrayAppItemSettingsRowOpensSettings(t *testing.T) {
 	must(t, err)
 	rows := waitForMenuRows(t, app, item, menuPath, "Settings…")
 	must(t, app.clickMenuRow(item, menuPath, rows["Settings…"]))
-	_, err = app.WaitFor("Palette Hotkey", trayWait)
+	_, err = app.WaitFor("Open Nevermind Shortcut", trayWait)
 	must(t, err)
 }
 
