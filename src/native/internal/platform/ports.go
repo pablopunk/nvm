@@ -34,4 +34,6 @@ type Ports struct {
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone
 	Opus       OpusCodec
+	// FileDialog shows the operating system's file and folder choosers for extension form fields.
+	FileDialog FileDialog
 }
