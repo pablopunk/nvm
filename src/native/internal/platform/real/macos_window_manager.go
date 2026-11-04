@@ -16,6 +16,9 @@ const macosHelperName = "macos-selected-text"
 // macosCallTimeout bounds one helper call, as the Electron window manager does.
 const macosCallTimeout = 5 * time.Second
 
+// accessRequestSubcommand is the helper subcommand that shows the Accessibility prompt.
+const accessRequestSubcommand = "request-access"
+
 // helperUnreadable is the copy when the helper's answer is not an envelope.
 const helperUnreadable = "The window helper returned an unreadable response."
 
@@ -64,6 +67,36 @@ func (m macHelper) run(ctx context.Context, args ...string) (swifthelper.Envelop
 		return swifthelper.Envelope{}, &platform.WindowError{Code: platform.WindowErrorFailed, Message: helperUnreadable}
 	}
 	return envelope, nil
+}
+
+// accessState asks the helper whether Accessibility is granted, without a prompt. Anything but a clear answer is an
+// error.
+func (m macHelper) accessState(ctx context.Context) (platform.WindowAccess, error) {
+	envelope, err := m.run(ctx, "permissions")
+	if err != nil {
+		return platform.WindowAccessUnknown, err
+	}
+	switch envelope.Code {
+	case swifthelper.CodeOK:
+		return platform.WindowAccessAllowed, nil
+	case swifthelper.CodeDenied:
+		return platform.WindowAccessDenied, nil
+	}
+	return platform.WindowAccessUnknown, &platform.WindowError{Code: platform.WindowErrorFailed, Message: envelope.Message}
+}
+
+// requestAccess asks the helper to show the system's Accessibility prompt. Granted or refused, the prompt has been
+// shown; only a helper that cannot answer is an error.
+func (m macHelper) requestAccess(ctx context.Context) error {
+	envelope, err := m.run(ctx, accessRequestSubcommand)
+	if err != nil {
+		return err
+	}
+	switch envelope.Code {
+	case swifthelper.CodeOK, swifthelper.CodeDenied:
+		return nil
+	}
+	return &platform.WindowError{Code: platform.WindowErrorFailed, Message: envelope.Message}
 }
 
 // call runs a helper call whose data decodes into T.
