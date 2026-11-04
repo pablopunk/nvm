@@ -30,7 +30,8 @@ var allowedImports = map[string]map[string]string{
 		"net/http": "the fake backend is an http.Handler; fixtures are test and dev data, never production code",
 	},
 	"design": {
-		"github.com/egoist/mygo/ui": "the golden harness renders views with ui.NewTester; it is test tooling that no production code imports",
+		"github.com/egoist/mygo/ui":          "the golden harness renders views with ui.NewTester; it is test tooling that no production code imports",
+		"github.com/egoist/mygo/ui/richtext": "the Markdown editor draws with MyGo's rich text editor; richtext holds no window or OS service",
 	},
 	"perf": {
 		"net/http": "the counters endpoint is served only in -tags perfdebug builds on a loopback address; default builds link no listener",
