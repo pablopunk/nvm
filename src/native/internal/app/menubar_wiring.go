@@ -21,6 +21,7 @@ func (p *App) setUpMenubar() {
 		OnUI:      p.onUI,
 		Actions:   p.menubarActions(),
 		IconStyle: p.menuBarIconStyle(),
+		Menu:      p.menubarMenu(),
 	})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
@@ -42,6 +43,7 @@ func (p *App) startExtensionItems() {
 			OpenURL:        func(url string) { _ = mygo.Shell.OpenExternal(url) },
 			CopyText:       func(text string) { mygo.Clipboard.WriteText(text) },
 			ShowExtensions: func(string) { p.Open(p.extensionsView()); p.focusPanel() },
+			Popover:        popoverHost{p: p},
 		},
 	})
 	p.menubarItems.Store(service)
@@ -82,7 +84,9 @@ func (e extensionMenuBars) MenuBarExtensions() []extitems.Extension {
 	}
 	var listed []extitems.Extension
 	for _, ext := range m.MenuBarExtensions() {
-		listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		if e.p.visibility.shown(ext.ID) {
+			listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		}
 	}
 	return listed
 }
@@ -112,7 +116,7 @@ func (e extensionMenuBars) Run(ctx context.Context, id string, in api.Invocation
 func (p *App) menubarActions() menubar.Actions {
 	return menubar.Actions{
 		Open:            func() { p.Show(); p.focusPanel() },
-		CheckForUpdates: func() { p.checkForUpdates(p.notifyUpdate) },
+		CheckForUpdates: p.openUpdatesAndCheck,
 		Settings:        func() { p.Open(p.settingsView()); p.focusPanel() },
 		Quit:            p.requestQuit,
 	}

@@ -73,16 +73,23 @@ func (s *fakeSource) Run(_ context.Context, _ string, in api.Invocation) (api.Re
 }
 
 type harness struct {
-	t      *testing.T
-	clock  *fake.Clock
-	tray   *fake.TrayHost
-	sched  *menubar.Scheduler
-	source *fakeSource
-	svc    *Service
-	opened chan string
+	t        *testing.T
+	clock    *fake.Clock
+	tray     *fake.TrayHost
+	sched    *menubar.Scheduler
+	source   *fakeSource
+	svc      *Service
+	opened   chan string
+	popovers *recordedPopovers
 }
 
 func newHarness(t *testing.T) *harness {
+	t.Helper()
+	return newHarnessFor(t, "darwin")
+}
+
+// newHarnessFor is newHarness drawing the items for goos.
+func newHarnessFor(t *testing.T, goos string) *harness {
 	t.Helper()
 	clock := fake.NewClock()
 	tray := fake.NewTrayHost()
@@ -93,7 +100,7 @@ func newHarness(t *testing.T) *harness {
 		triggers: []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}},
 		runs:     make(chan api.Invocation, 8),
 	}
-	h := &harness{t: t, clock: clock, tray: tray, sched: sched, source: source, opened: make(chan string, 4)}
+	h := &harness{t: t, clock: clock, tray: tray, sched: sched, source: source, opened: make(chan string, 4), popovers: &recordedPopovers{}}
 	h.svc = New(Options{
 		Host:      tray,
 		Scheduler: sched,
@@ -102,8 +109,10 @@ func newHarness(t *testing.T) *harness {
 		Hooks: Hooks{
 			OpenURL:        func(url string) { h.opened <- url },
 			ShowExtensions: func(id string) { h.opened <- "extensions:" + id },
+			Popover:        h.popovers,
 		},
 		Logs: quietLogs(t, clock),
+		GOOS: goos,
 	})
 	h.svc.Start()
 	h.settle()
@@ -254,7 +263,7 @@ func TestFailureWithoutAnyGoodRenderStillShowsAnItem(t *testing.T) {
 	tray := fake.NewTrayHost()
 	sched := menubar.NewScheduler(clock, serialUI())
 	source := &fakeSource{ids: []string{"acme.menubar"}, failure: &api.Failure{Code: api.CodeInternal, Message: "never rendered"}, runs: make(chan api.Invocation, 1)}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()
@@ -332,7 +341,7 @@ func TestUnavailableTriggerIsDisabledAndTheItemStillShows(t *testing.T) {
 		triggers: []api.Trigger{{Type: api.TriggerWake}},
 		runs:     make(chan api.Invocation, 1),
 	}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()
@@ -352,7 +361,7 @@ func TestTrayFailureLeavesTheServiceRunning(t *testing.T) {
 	tray.FailNext(fake.OpTrayNewTray, errors.New("no tray host"))
 	sched := menubar.NewScheduler(clock, serialUI())
 	source := &fakeSource{ids: []string{"acme.menubar"}, bars: []api.MenuBar{clockBar("x")}, runs: make(chan api.Invocation, 1)}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()

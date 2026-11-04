@@ -40,7 +40,7 @@ func labels(items []platform.MenuItem) []string {
 
 func TestMenuKeepsTheOneXOrder(t *testing.T) {
 	want := []string{"Open Nevermind", "-", "Check for Updates…", "Settings…", "-", "Quit Nevermind"}
-	got := labels(Rows(Actions{}, nil))
+	got := labels(Rows(Actions{}, nil, Menu{}))
 	if !slices.Equal(got, want) {
 		t.Fatalf("menu = %q, want %q", got, want)
 	}
@@ -99,7 +99,7 @@ func TestRowsRunThroughTheUIThreadDispatcher(t *testing.T) {
 		fn()
 	}
 	rec := &recorder{}
-	rows := Rows(rec.actions(), onUI)
+	rows := Rows(rec.actions(), onUI, Menu{})
 	for _, row := range rows {
 		if row.Separator {
 			continue
@@ -112,7 +112,7 @@ func TestRowsRunThroughTheUIThreadDispatcher(t *testing.T) {
 }
 
 func TestNilActionsLeaveRowsWithoutAnAction(t *testing.T) {
-	for _, row := range Rows(Actions{}, func(fn func()) { fn() }) {
+	for _, row := range Rows(Actions{}, func(fn func()) { fn() }, Menu{}) {
 		if !row.Separator && row.Action != nil {
 			t.Fatalf("row %q has an action without one being set", row.Label)
 		}

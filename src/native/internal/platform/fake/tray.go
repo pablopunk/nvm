@@ -66,9 +66,81 @@ type Tray struct {
 	appearance []func()
 	items      []platform.MenuItem
 	closed     bool
+	primary    func()
+	secondary  func()
+	popUps     [][]platform.MenuItem
+	popovers   []*Popover
 }
 
 var _ platform.Tray = (*Tray)(nil)
+
+// OnPrimaryClick records fn, which Click runs while the item has no menu.
+func (t *Tray) OnPrimaryClick(fn func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.primary = fn
+}
+
+// OnSecondaryClick records fn, which RightClick runs.
+func (t *Tray) OnSecondaryClick(fn func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.secondary = fn
+}
+
+// PopUpMenu records the rows shown as a context menu. Nothing is recorded for no rows.
+func (t *Tray) PopUpMenu(items []platform.MenuItem) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(items) > 0 && !t.closed {
+		t.popUps = append(t.popUps, slices.Clone(items))
+	}
+}
+
+// OpenPopover makes a hidden popover of the given size. The content is not used by the fake.
+func (t *Tray) OpenPopover(opts platform.PopoverOptions, _ any) (platform.Popover, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	popover := &Popover{options: opts}
+	t.popovers = append(t.popovers, popover)
+	return popover, nil
+}
+
+// Popovers returns the popovers opened on the item, in order.
+func (t *Tray) Popovers() []*Popover {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]*Popover(nil), t.popovers...)
+}
+
+// PopUps returns the context menus shown, in order.
+func (t *Tray) PopUps() [][]platform.MenuItem {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.Clone(t.popUps)
+}
+
+// Click runs the primary click handler, as a click on the icon does. It does nothing while the item has an attached
+// menu, which the OS shows instead.
+func (t *Tray) Click() {
+	t.mu.Lock()
+	fn := t.primary
+	attached := len(t.items) > 0
+	t.mu.Unlock()
+	if fn != nil && !attached {
+		fn()
+	}
+}
+
+// RightClick runs the secondary click handler, as a right click on the icon does.
+func (t *Tray) RightClick() {
+	t.mu.Lock()
+	fn := t.secondary
+	t.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
 
 // Options returns the options the item was created with.
 func (t *Tray) Options() platform.TrayOptions {

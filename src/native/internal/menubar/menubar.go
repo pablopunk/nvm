@@ -34,28 +34,47 @@ type Options struct {
 	Actions   Actions
 	OnUI      func(fn func())
 	IconStyle string
+	Menu      Menu
 }
 
 // Item is one menu bar or tray item. A nil *Item ignores every call, so features need no check when no tray exists.
 // Its glyph follows the bar: it is drawn again when the bar turns dark or light.
 type Item struct {
 	tray platform.Tray
+	goos string
+	// glyph names the extension glyph an item draws instead of an app style; empty for the app's own item.
+	glyph string
 
-	mu    sync.Mutex
-	style string
-	title string
+	mu      sync.Mutex
+	style   string
+	title   string
+	rows    []platform.MenuItem
+	primary func()
 }
 
 // NewItem creates an item over host, with its glyph drawn in style (see ChooseIcon). A host that cannot make one
 // returns its error, and the caller runs without it.
 func NewItem(host platform.TrayHost, options platform.TrayOptions, style string) (*Item, error) {
-	item := &Item{style: NormalizeIconStyle(style), title: options.Title}
-	options.Title = TitleFor(item.style, runtime.GOOS, options.Title)
+	return newItem(host, options, &Item{style: NormalizeIconStyle(style), goos: runtime.GOOS})
+}
+
+// NewGlyphItem creates an item that draws the extension glyph named glyph on goos, with its title and tooltip as
+// StatusText lays them out for goos.
+func NewGlyphItem(host platform.TrayHost, options platform.TrayOptions, glyph, goos string) (*Item, error) {
+	options.Title, options.ToolTip = StatusText(goos, options.Title, options.ToolTip)
+	return newItem(host, options, &Item{style: DefaultIconStyle, goos: goos, glyph: glyph})
+}
+
+func newItem(host platform.TrayHost, options platform.TrayOptions, item *Item) (*Item, error) {
+	item.title = options.Title
+	options.Title = TitleFor(item.style, item.goos, options.Title)
 	tray, err := host.NewTray(options)
 	if err != nil {
 		return nil, err
 	}
 	item.tray = tray
+	tray.OnPrimaryClick(item.primaryClicked)
+	tray.OnSecondaryClick(item.secondaryClicked)
 	if err := item.applyIcon(); err != nil {
 		tray.Close()
 		return nil, err
@@ -71,7 +90,7 @@ func New(opts Options) (*Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	item.SetMenu(Rows(opts.Actions, opts.OnUI))
+	item.SetMenu(Rows(opts.Actions, opts.OnUI, opts.Menu))
 	return item, nil
 }
 
@@ -99,12 +118,67 @@ func (m *Item) SetIconStyle(style string) error {
 	return m.applyIcon()
 }
 
-// SetMenu replaces the menu shown on click. An empty list removes it.
+// SetMenu replaces the menu the item shows on click. An empty list removes it.
 func (m *Item) SetMenu(rows []platform.MenuItem) {
 	if m == nil {
 		return
 	}
+	m.mu.Lock()
+	m.rows = rows
+	m.mu.Unlock()
+	m.applyMenu()
+}
+
+// Tray is the platform item the menu bar item wraps, for the popovers an extension opens under it.
+func (m *Item) Tray() platform.Tray {
+	if m == nil {
+		return nil
+	}
+	return m.tray
+}
+
+// SetPrimaryAction makes a click on the icon run fn, as an extension popover opens, and moves the menu to a right
+// click. Nil puts the menu back on the click.
+func (m *Item) SetPrimaryAction(fn func()) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.primary = fn
+	m.mu.Unlock()
+	m.applyMenu()
+}
+
+// applyMenu attaches the menu to the icon, unless a primary action owns the click.
+func (m *Item) applyMenu() {
+	m.mu.Lock()
+	rows, primary := m.rows, m.primary
+	m.mu.Unlock()
+	if primary != nil {
+		m.tray.SetMenu(nil)
+		return
+	}
 	m.tray.SetMenu(rows)
+}
+
+// primaryClicked runs the primary action, if one is set. The platform calls it on its own thread.
+func (m *Item) primaryClicked() {
+	m.mu.Lock()
+	fn := m.primary
+	m.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// secondaryClicked shows the menu at the pointer while a primary action owns the click.
+func (m *Item) secondaryClicked() {
+	m.mu.Lock()
+	rows, primary := m.rows, m.primary
+	m.mu.Unlock()
+	if primary != nil {
+		m.tray.PopUpMenu(rows)
+	}
 }
 
 // Close removes the item from the menu bar or tray.
@@ -126,46 +200,21 @@ func (m *Item) snapshot() (style, title string) {
 // applyIcon draws the item's glyph for the bar as it is now.
 func (m *Item) applyIcon() error {
 	style, _ := m.snapshot()
-	choice := ChooseIcon(style, runtime.GOOS, m.tray.Dark())
+	dark := m.tray.Dark()
+	choice := ChooseIcon(style, m.goos, dark)
+	if m.glyph != "" {
+		choice = ChooseGlyph(m.glyph, m.goos, dark)
+	}
 	return m.tray.SetIcon(choice.PNG, choice.Template)
 }
 
 // renderTitle shows the title the current style gives it.
 func (m *Item) renderTitle() {
 	style, title := m.snapshot()
-	m.tray.SetTitle(TitleFor(style, runtime.GOOS, title))
+	m.tray.SetTitle(TitleFor(style, m.goos, title))
 }
 
 // refreshIcon redraws the glyph when the bar's appearance changes. The OS calls it without a caller to report to.
 func (m *Item) refreshIcon() {
 	_ = m.applyIcon()
-}
-
-// Rows is the menu, in the order the 1.x menu bar shows it: Open, a divider, updates and settings, a divider, Quit.
-// Each action runs on the UI thread when onUI is set, and directly otherwise.
-func Rows(a Actions, onUI func(fn func())) []platform.MenuItem {
-	return []platform.MenuItem{
-		row("open", "Open Nevermind", a.Open, onUI),
-		{Separator: true},
-		row("check-updates", "Check for Updates…", a.CheckForUpdates, onUI),
-		row("settings", "Settings…", a.Settings, onUI),
-		{Separator: true},
-		row("quit", "Quit Nevermind", a.Quit, onUI),
-	}
-}
-
-// row is one menu entry whose click runs fn on the UI thread.
-func row(id, label string, fn func(), onUI func(fn func())) platform.MenuItem {
-	return platform.MenuItem{ID: id, Label: label, Action: UIAction(fn, onUI)}
-}
-
-// UIAction wraps fn so it runs through onUI. A nil fn stays nil, which the port treats as no action.
-func UIAction(fn func(), onUI func(fn func())) func() {
-	if fn == nil {
-		return nil
-	}
-	if onUI == nil {
-		return fn
-	}
-	return func() { onUI(fn) }
 }

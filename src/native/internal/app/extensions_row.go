@@ -43,6 +43,9 @@ func extensionRowActions(p *App, ctl extensionController, l manager.Listing) []s
 			setExtensionEnabled(ctl, l.ID, false, h)
 		}})
 	}
+	if l.Enabled && p.declaresMenuBar(l.ID) {
+		actions = append(actions, p.menuBarVisibilityAction(l.ID))
+	}
 	return append(actions,
 		search.Action{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
 			h.Hide()

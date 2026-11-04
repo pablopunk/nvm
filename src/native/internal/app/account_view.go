@@ -65,8 +65,7 @@ func (p *App) accountActions() palaccount.Actions {
 	session := p.account
 	return palaccount.Actions{
 		StartSignIn: func(h search.Host) {
-			reportIfFailed(h, session.StartSignIn())
-			h.Refresh()
+			p.startCheckedSignIn(h, session.StartSignIn)
 		},
 		CancelSignIn: func(h search.Host) {
 			session.CancelSignIn()
@@ -126,4 +125,19 @@ func reportIfFailed(h search.Host, err error) {
 	if err != nil {
 		h.Toast(err.Error())
 	}
+}
+
+// startCheckedSignIn checks that the backend accepts this client before the sign-in starts, as 1.x does. The check fetches the
+// manifest, so it runs off the UI thread, and the sign-in starts or the refusal shows when it answers.
+func (p *App) startCheckedSignIn(h search.Host, start func() error) {
+	go func() {
+		err := p.checkCompatibility(context.Background())
+		p.onUI(func() {
+			if err == nil {
+				err = start()
+			}
+			reportIfFailed(h, err)
+			h.Refresh()
+		})
+	}()
 }

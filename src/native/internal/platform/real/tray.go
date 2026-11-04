@@ -1,7 +1,10 @@
 package real
 
 import (
+	"fmt"
+
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -55,6 +58,43 @@ func (t *nativeTray) OnAppearanceChange(fn func()) {
 	t.tray.OnAppearanceChange(fn)
 }
 
+// OnPrimaryClick forwards MyGo's click, which fires while the icon has no menu.
+func (t *nativeTray) OnPrimaryClick(fn func()) {
+	t.tray.OnClick(fn)
+}
+
+// OnSecondaryClick forwards MyGo's right click.
+func (t *nativeTray) OnSecondaryClick(fn func()) {
+	t.tray.OnRightClick(fn)
+}
+
+// PopUpMenu pops the rows up at the pointer, as the menu of a right click.
+func (t *nativeTray) PopUpMenu(items []platform.MenuItem) {
+	if len(items) == 0 {
+		return
+	}
+	mygo.NewMenu(convertMenuItems(items)).Popup(nil)
+}
+
+// OpenPopover creates the popover as a MyGo flyout under the icon: on macOS an NSPopover that closes as the user clicks
+// elsewhere, and elsewhere a focusable flyout that closes the same way. The content is the ui.View of the palette.
+func (t *nativeTray) OpenPopover(opts platform.PopoverOptions, content any) (platform.Popover, error) {
+	view, ok := content.(*ui.Content)
+	if !ok {
+		return nil, fmt.Errorf("popover content is %T, want the native UI of a ui.View", content)
+	}
+	return mygo.NewFlyout(mygo.FlyoutOptions{
+		Tray:      t.tray,
+		Placement: mygo.PlacementBottom,
+		Width:     opts.Width,
+		Height:    opts.Height,
+		Focusable: true,
+		Popover:   true,
+		Hidden:    true,
+		Content:   view,
+	}), nil
+}
+
 // Close removes the item from the menu bar or tray.
 func (t *nativeTray) Close() {
 	t.tray.Destroy()
@@ -74,21 +114,40 @@ func convertMenuItems(items []platform.MenuItem) []*mygo.MenuItem {
 	return converted
 }
 
-// convertMenuItem maps one row, wiring its action to MyGo's click callback.
+// convertMenuItem maps one row, wiring its action to MyGo's click callback. An icon MyGo cannot decode is left out,
+// so the row shows its label alone.
 func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 	action := item.Action
 	converted := &mygo.MenuItem{
-		ID:       item.ID,
-		Label:    item.Label,
-		Disabled: item.Disabled,
+		ID:          item.ID,
+		Label:       item.Label,
+		Disabled:    item.Disabled,
+		Accelerator: item.Accelerator,
+		Icon:        convertMenuIcon(item.Icon),
 		Click: func(*mygo.MenuItem, *mygo.Window) {
 			if action != nil {
 				action()
 			}
 		},
 	}
+	if item.Checkable {
+		converted.Type = mygo.MenuItemCheckbox
+		converted.Checked = item.Checked
+	}
 	if len(item.Submenu) > 0 {
 		converted.Submenu = convertMenuItems(item.Submenu)
+	}
+	return converted
+}
+
+// convertMenuIcon maps a row's icon to MyGo's, or nil when there is none or MyGo cannot decode it.
+func convertMenuIcon(icon *platform.MenuIcon) *mygo.MenuIcon {
+	if icon == nil {
+		return nil
+	}
+	converted, err := mygo.NewMenuIcon(icon.PNG, icon.Template)
+	if err != nil {
+		return nil
 	}
 	return converted
 }

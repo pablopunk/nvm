@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/updates"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -59,27 +58,18 @@ func (p *App) updatesView() *palette.View {
 	})
 }
 
-// menubarUpdateRow is the menu's update row while an update is found, downloading or ready.
-func (p *App) menubarUpdateRow() *menubar.UpdateRow {
-	state := p.updateSnapshot().State
-	switch state.Status {
-	case update.StatusAvailable, update.StatusDownloading:
-		return &menubar.UpdateRow{Label: update.Message(state)}
-	case update.StatusDownloaded:
-		return &menubar.UpdateRow{Label: "Restart to Update to " + state.LatestVersion, Action: func() { _ = p.restartToUpdate() }}
-	}
-	return nil
-}
-
 // updateRootRows shows an update that is found, downloading or ready at the root, above the commands, where the person
 // is about to search. A failed install is shown too, so a refused update is never silent; a failed check is not, because
 // an offline laptop would show it at every launch. The rows stay out of the way of queries that do not name updates.
 func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	state := p.updateSnapshot().State
-	if !rootShowsUpdate(state) {
+	if !queryNamesUpdates(q) {
 		return nil
 	}
-	if lq := strings.ToLower(strings.TrimSpace(q)); lq != "" && !strings.HasPrefix("update", lq) && !strings.Contains("nevermind update", lq) {
+	if p.compat.rejectsClient() {
+		return []search.Item{p.compatibilityRootItem(state)}
+	}
+	if !rootShowsUpdate(state) {
 		return nil
 	}
 	item := search.Item{Kind: search.KindCommands, Title: update.Message(state), Subtitle: "Nevermind updates", Icon: "rotate-ccw",
@@ -93,6 +83,12 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 		}}}
 	}
 	return []search.Item{item}
+}
+
+// queryNamesUpdates reports whether an empty query, or one that starts the word update, keeps the update rows on the root.
+func queryNamesUpdates(q string) bool {
+	lq := strings.ToLower(strings.TrimSpace(q))
+	return lq == "" || strings.HasPrefix("update", lq) || strings.Contains("nevermind update", lq)
 }
 
 // rootUpdateScore is the update prompt's score, as 1.x's update prompt has it: above every other root row.
