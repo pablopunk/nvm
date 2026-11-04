@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,8 +18,9 @@ var j15Extensions = []struct{ id, query, title string }{
 }
 
 // TestJourneyJ15BrokenExtensionsDoNotStopThePalette is J15: a child that panics, one that hangs and one that floods
-// its answer are enabled with the good one. Each broken extension shows a failed row with its reason, the good
-// extension keeps answering, and typing still updates the results on every keystroke.
+// its answer are enabled with the good one. Failed rows stay out of unrelated searches and appear, with their reason,
+// only for a query that names the broken extension. The good extension keeps answering, and typing still updates the
+// results on every keystroke.
 // Not covered by the rig yet: the memory limit (acme.bomb), the restart and disable-after-repeated-failures path,
 // and the ordering of the rows (the rig checks presence only).
 func TestJourneyJ15BrokenExtensionsDoNotStopThePalette(t *testing.T) {
@@ -43,33 +45,55 @@ func TestJourneyJ15BrokenExtensionsDoNotStopThePalette(t *testing.T) {
 	waitForRow(t, app, "alpha", clipWait)
 	t.Logf("good row shown after typing alpha, with broken extensions enabled: %s", time.Since(started).Round(time.Millisecond))
 
-	for _, title := range []string{"Crashing fixture is not responding", "Hanging fixture is not responding", "Flooding fixture is not responding"} {
-		_, err := app.WaitFor(title, elementWait)
+	assertNoLabelContaining(t, app, "is not responding")
+	shoot(t, app, "j15-1-good-row-without-failed-rows")
+
+	// A failed extension shows its pointer row only when the query names it. The crashing one's reason is its panic;
+	// the hanging and flooding ones are checked by title, because their subtitle is the reason of the first failure.
+	reasons := map[string]string{"acme.crash": "panic: crash fixture"}
+	for _, ext := range j15Extensions[1:] {
+		clearSearch(t, app)
+		must(t, app.Type(ext.query))
+		_, err := app.WaitFor(ext.title+" is not responding", elementWait)
 		must(t, err)
+		if reason, ok := reasons[ext.id]; ok {
+			_, err = app.WaitFor(reason, elementWait)
+			must(t, err)
+		}
 	}
-	_, err := app.WaitFor("panic: crash fixture", elementWait)
-	must(t, err)
-	// After its first failure a child answers "not running: failed", so that is the reason the palette shows for the
-	// hanging and flooding extensions. The first failure's own reason (no answer in time, line limit) is not kept.
-	_, err = app.WaitFor("not running: failed", elementWait)
-	must(t, err)
-	shoot(t, app, "j15-1-good-row-and-failed-rows")
+	shoot(t, app, "j15-2-named-failed-rows-with-reasons")
+	clearSearch(t, app)
+	must(t, app.Type("alpha"))
+	waitForRow(t, app, "alpha", elementWait)
 
 	must(t, app.Type("zzz"))
 	waitSearchValue(t, app, "alphazzz")
 	assertNoRow(t, app, "alpha")
-	shoot(t, app, "j15-2-typing-updates-while-broken")
+	shoot(t, app, "j15-3-typing-updates-while-broken")
 
 	for range 3 {
 		must(t, app.Key("BackSpace"))
 	}
 	waitSearchValue(t, app, "alpha")
 	waitForRow(t, app, "alpha", elementWait)
-	shoot(t, app, "j15-3-typing-restores-good-row")
+	shoot(t, app, "j15-4-typing-restores-good-row")
 
 	if app.isExited() {
 		t.Fatalf("the app exited during J15; see %s", app.logPath)
 	}
 	clearSearch(t, app)
 	must(t, app.DismissWithEscape())
+}
+
+// assertNoLabelContaining fails when any palette label contains text. Failed rows carry the extension's title in their
+// label, so the check finds them for any extension.
+func assertNoLabelContaining(t *testing.T, app *App, text string) {
+	t.Helper()
+	tree, err := app.Tree()
+	must(t, err)
+	for _, node := range tree.Nodes {
+		if strings.Contains(node.Label, text) {
+			t.Fatalf("the palette shows a row labelled %q; it must not for this query", node.Label)
+		}
+	}
 }

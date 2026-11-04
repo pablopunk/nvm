@@ -27,6 +27,8 @@ type Ports struct {
 	Focus        Focus
 	Tray         TrayHost
 	Autostart    Autostart
+	System       System
+	Permissions  Permissions
 	Windows      WindowManager
 	Capabilities Capabilities
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.

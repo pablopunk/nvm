@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -42,7 +43,10 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	t.Helper()
 	t.Setenv("NVM_THEME", "")
 	t.Setenv("NVM_TOKEN", "")
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
 	swapForGolden(t)
 	set := fake.NewSet()
 	userNotes, userSnippets := goldenUserData(t, set, withConflict)
@@ -79,7 +83,8 @@ func goldenAppColor(name string) color.NRGBA {
 func swapForGolden(t *testing.T) {
 	t.Helper()
 	previousConfig, previousClock := configDir, clock
-	configDir, clock = goldenConfigDirectory, goldenClockNow
+	dir := t.TempDir()
+	configDir, clock = func() string { return dir }, goldenClockNow
 	t.Cleanup(func() { configDir, clock = previousConfig, previousClock })
 }
 

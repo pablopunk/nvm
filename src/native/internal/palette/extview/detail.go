@@ -1,0 +1,64 @@
+package extview
+
+import (
+	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/markdown"
+
+	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/search"
+)
+
+// detailPane is the inspector beside the list for an item that has a detail. A nil detail has no pane.
+func (s *Session) detailPane(detail *api.Detail) func(c *ui.Context, h search.Host) {
+	if detail == nil {
+		return nil
+	}
+	return func(c *ui.Context, _ search.Host) { drawDetail(c, *detail, s.markdown) }
+}
+
+// drawDetail shows a detail's title, subtitle, body (Markdown first, then plain text) and metadata rows, in that order.
+func drawDetail(c *ui.Context, detail api.Detail, md *markdown.Options) {
+	t := design.Tokens(c)
+	ui.Scroll(c).Grow(1).Children(func() {
+		ui.Column(c).Gap(8).Children(func() {
+			if detail.Title != "" {
+				ui.Text(c, detail.Title).FontSize(13).TextColor(t.Strong)
+			}
+			if detail.Subtitle != "" {
+				ui.Text(c, detail.Subtitle).FontSize(11).TextColor(t.Tertiary)
+			}
+			drawDetailBody(c, detail, md)
+			for _, row := range detail.Metadata {
+				drawMetadata(c, row)
+			}
+		})
+	})
+}
+
+func drawDetailBody(c *ui.Context, detail api.Detail, md *markdown.Options) {
+	t := design.Tokens(c)
+	switch {
+	case detail.Markdown != "":
+		markdown.View(c, detail.Markdown, md)
+	case detail.Text != "":
+		ui.Text(c, detail.Text).FontSize(11).TextColor(t.Primary)
+	}
+}
+
+// drawMetadata draws one labelled row. A separator is a divider; a link keeps its URL as its value.
+func drawMetadata(c *ui.Context, row api.Metadata) {
+	t := design.Tokens(c)
+	if row.Kind == api.MetadataSeparator {
+		ui.Divider(c)
+		return
+	}
+	if row.Label != "" {
+		ui.Text(c, row.Label).FontSize(11).TextColor(t.Tertiary)
+	}
+	value := row.Value
+	if row.Kind == api.MetadataLink && row.URL != "" && value == "" {
+		value = row.URL
+	}
+	ui.Text(c, value).FontSize(11).TextColor(t.Secondary)
+}

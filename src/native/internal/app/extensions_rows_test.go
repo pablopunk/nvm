@@ -19,15 +19,35 @@ func collectExtensionRows(t *testing.T, p *App, q string) []search.Item {
 	return rows
 }
 
-func TestFailedExtensionYieldsAFailedRow(t *testing.T) {
+func TestFailedExtensionShowsAPointerRowOnlyWhenTheQueryNamesIt(t *testing.T) {
 	m := newFixtureManager(t, "acme.syntax")
 	waitForState(t, m, "acme.syntax", supervisor.StateBroken)
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	row := findRowTitled(t, collectExtensionRows(t, p, "alpha"), "Broken source fixture is not responding")
+	for _, row := range collectExtensionRows(t, p, "alpha") {
+		if row.Accessory == "Failed" {
+			t.Fatalf("query that does not name the extension showed failed row %q", row.Title)
+		}
+	}
+	row := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
 	if row.Accessory != "Failed" || !strings.Contains(row.Subtitle, "does not load") {
 		t.Fatalf("failed row = accessory %q subtitle %q, want Failed with the reason", row.Accessory, row.Subtitle)
+	}
+}
+
+func TestFailedExtensionNeverShowsAtTheRootOrAboveRealRows(t *testing.T) {
+	m := newFixtureManager(t, "acme.syntax")
+	waitForState(t, m, "acme.syntax", supervisor.StateBroken)
+	p := &App{}
+	p.exts.mgr.Store(m)
+
+	if rows := extensionProvider(p).Root(context.Background()); len(rows) != 0 {
+		t.Fatalf("root rows for a failed extension = %d, want none", len(rows))
+	}
+	pointer := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
+	if pointer.Score >= scoreWebSearch {
+		t.Fatalf("failed row score %d must rank below the web search fallback (%d)", pointer.Score, scoreWebSearch)
 	}
 }
 

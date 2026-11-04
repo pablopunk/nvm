@@ -127,9 +127,11 @@ func (a *App) start(t *testing.T, bin, home, runtimeDir, theme string) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_ = os.Remove(a.systemLog())
 	cmd := exec.Command(bin)
 	cmd.Dir = home
-	cmd.Env = launchEnvironment(os.Environ(), home, runtimeDir, a.socket, theme)
+	cmd.Env = append(launchEnvironment(os.Environ(), home, runtimeDir, a.socket, theme),
+		"NVM_RIG_SYSTEM_LOG="+a.systemLog())
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -144,6 +146,11 @@ func (a *App) start(t *testing.T, bin, home, runtimeDir, theme string) {
 		_ = cmd.Wait()
 		close(a.done)
 	}()
+}
+
+// systemLog is the file the app records its system commands in: each launch starts with none.
+func (a *App) systemLog() string {
+	return filepath.Join(a.artifacts, "system-calls.log")
 }
 
 // launchEnvironment replaces the variables that decide where the app keeps its state, and keeps
