@@ -36,7 +36,7 @@ func (b *Backend) serveChat(w http.ResponseWriter, r *http.Request, body string,
 		return
 	}
 	reply, delay := b.streamSettings()
-	writeStream(w, r, chatFrames(mode, reply), delay)
+	b.countStream(writeStream(w, r, chatFrames(mode, reply), delay))
 }
 
 // chatFrames returns the SSE frames of one chat reply in mode.
@@ -52,20 +52,40 @@ func chatFrames(mode FailureMode, reply string) []string {
 }
 
 // writeStream sends the frames one at a time, flushing each, and waits delay between them. It stops early when the
-// client goes away, so a stopped reply is not written on.
-func writeStream(w http.ResponseWriter, r *http.Request, frames []string, delay time.Duration) {
+// client goes away, so a stopped reply is not written on. It reports whether every frame was sent.
+func writeStream(w http.ResponseWriter, r *http.Request, frames []string, delay time.Duration) bool {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.WriteHeader(http.StatusOK)
 	flusher, _ := w.(http.Flusher)
 	for i, frame := range frames {
 		if i > 0 && delay > 0 && !waitWhileConnected(r, delay) {
-			return
+			return false
 		}
 		_, _ = io.WriteString(w, frame)
 		if flusher != nil {
 			flusher.Flush()
 		}
 	}
+	return true
+}
+
+// countStream records how a chat stream ended: completed when every frame was sent, abandoned when the client left.
+func (b *Backend) countStream(completed bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if completed {
+		b.completedStreams++
+	} else {
+		b.abandonedStreams++
+	}
+}
+
+// StreamOutcomes returns how many chat streams were sent to the end and how many the client abandoned, such as
+// when a reply is stopped with Escape.
+func (b *Backend) StreamOutcomes() (completed, abandoned int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.completedStreams, b.abandonedStreams
 }
 
 // waitWhileConnected waits d and reports whether the client is still connected afterwards.

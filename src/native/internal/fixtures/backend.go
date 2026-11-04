@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // FailureMode selects how the fake backend answers. HTTP errors apply to every /api route; the two stream
@@ -53,18 +56,29 @@ type Backend struct {
 	reply       string
 	chunkDelay  time.Duration
 	device      *deviceSignIns
+	clock       platform.Clock
+
+	completedStreams int
+	abandonedStreams int
 }
 
 var _ http.Handler = (*Backend)(nil)
 
-// NewBackend returns a healthy backend that has received no requests.
+// NewBackend returns a healthy backend on the fixture clock, which starts at the fixture epoch, so its timestamps are
+// stable in golden files and tests. A rig that drives a real app uses NewBackendWithClock with a real clock.
 func NewBackend() *Backend {
+	return NewBackendWithClock(fake.NewClock())
+}
+
+// NewBackendWithClock returns a healthy backend that reads time from clock, for the expiry of sign-in codes.
+func NewBackendWithClock(clock platform.Clock) *Backend {
 	return &Backend{
 		mode:        ModeHealthy,
 		hanging:     make(chan struct{}, 16),
 		activeModel: ActiveModelBody,
 		reply:       FixtureReply,
 		device:      newDeviceSignIns(),
+		clock:       clock,
 	}
 }
 

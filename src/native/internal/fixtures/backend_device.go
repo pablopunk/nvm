@@ -134,7 +134,7 @@ func (d *deviceSignIns) latestCode() string {
 // ApproveDeviceCode approves a pending device code, as the approving browser session would. It fails for codes that
 // are unknown, expired, used or already approved.
 func (b *Backend) ApproveDeviceCode(code string) error {
-	return b.device.approve(code, time.Now())
+	return b.device.approve(code, b.clock.Now())
 }
 
 // LatestDeviceCode returns the code of the most recent sign-in, or "" when none has started.
@@ -143,7 +143,7 @@ func (b *Backend) LatestDeviceCode() string {
 }
 
 func (b *Backend) serveDeviceInitiate(w http.ResponseWriter, r *http.Request) {
-	code, expiresAt := b.device.issue(time.Now())
+	code, expiresAt := b.device.issue(b.clock.Now())
 	verifyURL := "http://" + r.Host + "/auth/device?code=" + url.QueryEscape(code)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"code":           code,
@@ -159,7 +159,7 @@ func (b *Backend) serveDeviceExchange(w http.ResponseWriter, body string) {
 		writeBody(w, http.StatusBadRequest, "application/json", InvalidRequestBody)
 		return
 	}
-	switch b.device.exchange(code, time.Now()) {
+	switch b.device.exchange(code, b.clock.Now()) {
 	case exchangePending:
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pending"})
 	case exchangeApproved:
