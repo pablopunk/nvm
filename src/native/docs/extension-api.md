@@ -313,7 +313,7 @@ The palette-first rule stands: prefer `Input().Prompt` for two or three short va
 
 Background mode per command: `view` (default), `noView`, `background`. The host owns scheduling, enablement, no-overlap, backoff and diagnostics. A background command never shows the palette.
 
-`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`), and `StartedAtMs`.
+`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`, `once` for a scheduled run, section 32), and `StartedAtMs`.
 
 ## 10. Menu bar
 
@@ -1207,3 +1207,17 @@ Code: `internal/ext/builtins/snippets`. The app's native snippet views, rows, fo
 - **API added.** `ColorTeal`, the teal foreground the native snippet rows used; `System().HasCapability("clipboard.paste")`, the name the host answers for the paste gesture.
 - **Differences from the native views.** The form is the palette's row form, not a stacked form: each field is a row, and a refused save shows its message in the palette's feedback instead of under the fields. The list filters its rows by title, subtitle, keyword and alias, as every extension list does, so the Create Snippet row filters too. The detail pane shows the placeholders as a labelled row under the text rather than a footer.
 - **Tests.** Unit: `internal/ext/builtins/snippets` covers the rows, paste, copy, validation, keyword uniqueness, storage and legacy answers. Goldens: `snippets-list`, `snippet-form` and `material-snippet-form` now render through the built-in; the three were regenerated for the row form and the detail row. The root and learned tables are unchanged.
+
+## 32. One-shot runs and the timers built-in (dogfood batch 3b)
+
+Code: `Context().Scheduler()` (`internal/ext/api/scheduler.go`), served by `internal/ext/services/schedule.go` and run by the manager's `runScheduled`; the built-in is `internal/ext/builtins/timers`.
+
+- **Primitive.** `Scheduler().Once(key, at, ref)` runs the extension's own action `ref` at the time `at`, under `key`. A second `Once` under the same key replaces the pending run, so a timer restart replaces the one before. `Cancel(key)` drops it and reports whether one was pending; `Pending(key)` reports when it is due. A time already past runs at once. Keys are at most 64 bytes, and 16 runs may be pending per extension; scheduling is rate limited to 60 a minute. The run arrives as a normal action with `Launch.Reason` and `Launch.Event` both `once`.
+- **Lifetime.** A pending run lives in the app's memory, as the 2.0 timer was: it is not kept across a restart, and it is dropped when the extension is reloaded or disabled. Nothing waits for its result; a run that fails is logged.
+- **Why not a trigger.** `Trigger` declares fixed schedules on a command or a menu bar item. A timer's time is known only when the user starts it, so the primitive is a call. Interval and startup triggers are unchanged.
+- **Timers built-in.** `nevermind.timers` keeps no state of its own. Start Timer is a search-only command that sets the query to `timer 5m`; `timer 5m`, `countdown 90s` and the like at the root start one (a row with the native score and kind). Cancel Timer is listed only while a timer runs, because `Commands` is read on every search. The menu bar shows the time left as its own item, rendered each second while the item exists and removed when the time is up, and the finish shows the notification "Timer finished" with the duration.
+- **Diff from the native timer.** The countdown is an extension menu bar item, not the title of the app's own status item, so it sits beside that item. The app's own item no longer carries a title. Starting and cancelling a timer refresh the menu bar at once. A notification the system refuses does not fail the finish, as before.
+- **API added.** `Context.Scheduler()`, `Scheduler`, `MaxScheduledRuns`, `ScheduleKeyLimit`, `ValidateScheduleKey`, `Launch.Reason` `once`, and the `once`, `cancel` and `pending` operations of the scheduler service.
+- **Fixture.** `acme.schedule` (`internal/ext/testdata/extensions/acme.schedule`) arms, cancels and reports a run through the search box, through a child process. `internal/ext/manager/schedule_test.go` runs it: a due run calls the action, and a cancelled run never does.
+- **Tests.** `internal/ext/services/schedule_test.go` runs the book on the fake clock: due time, cancel, replacement, past times, the limits, the key rules, close and the rate limit. `internal/ext/builtins/timers` covers the duration parsing, the root row, the commands, the countdown, cancel and finish on a fake scheduler. The root and learned tables and the goldens are unchanged.
+

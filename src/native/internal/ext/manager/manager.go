@@ -183,6 +183,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		entries:         map[string]*entry{},
 		legacyStatePath: opts.LegacyStatePath,
 	}
+	m.serviceDeps.RunScheduled = m.runScheduled
 	m.registerBuiltIns(opts.BuiltIns)
 	if err := m.Refresh(); err != nil {
 		return nil, err

@@ -168,6 +168,7 @@ func init() {
 		"MaskNone":                      reflect.ValueOf(api.MaskNone),
 		"MaskRounded":                   reflect.ValueOf(api.MaskRounded),
 		"MaxRunningPaths":               reflect.ValueOf(constant.MakeFromLiteral("30", token.INT, 0)),
+		"MaxScheduledRuns":              reflect.ValueOf(constant.MakeFromLiteral("16", token.INT, 0)),
 		"MenuBarIcons":                  reflect.ValueOf(&api.MenuBarIcons).Elem(),
 		"MenuIconDefault":               reflect.ValueOf(api.MenuIconDefault),
 		"MetadataLink":                  reflect.ValueOf(api.MetadataLink),
@@ -211,6 +212,7 @@ func init() {
 		"RevealPath":                    reflect.ValueOf(api.RevealPath),
 		"RootView":                      reflect.ValueOf(api.RootView),
 		"Run":                           reflect.ValueOf(api.Run),
+		"ScheduleKeyLimit":              reflect.ValueOf(constant.MakeFromLiteral("64", token.INT, 0)),
 		"Section":                       reflect.ValueOf(api.Section),
 		"SelectionAllowed":              reflect.ValueOf(api.SelectionAllowed),
 		"SelectionDenied":               reflect.ValueOf(api.SelectionDenied),
@@ -248,6 +250,7 @@ func init() {
 		"TriggerWake":                   reflect.ValueOf(api.TriggerWake),
 		"TypeText":                      reflect.ValueOf(api.TypeText),
 		"ValidateFieldValue":            reflect.ValueOf(api.ValidateFieldValue),
+		"ValidateScheduleKey":           reflect.ValueOf(api.ValidateScheduleKey),
 		"ViewCamera":                    reflect.ValueOf(api.ViewCamera),
 		"ViewChat":                      reflect.ValueOf(api.ViewChat),
 		"ViewCollection":                reflect.ValueOf(api.ViewCollection),
@@ -412,6 +415,7 @@ func init() {
 		"Result":                  reflect.ValueOf((*api.Result)(nil)),
 		"RootProvider":            reflect.ValueOf((*api.RootProvider)(nil)),
 		"Rules":                   reflect.ValueOf((*api.Rules)(nil)),
+		"Scheduler":               reflect.ValueOf((*api.Scheduler)(nil)),
 		"SearchAccessory":         reflect.ValueOf((*api.SearchAccessory)(nil)),
 		"SearchAccessoryOption":   reflect.ValueOf((*api.SearchAccessoryOption)(nil)),
 		"SearchProvider":          reflect.ValueOf((*api.SearchProvider)(nil)),
@@ -498,6 +502,7 @@ func init() {
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
+		"_Scheduler":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Scheduler)(nil)),
 		"_SearchProvider":    reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider)(nil)),
 		"_Secrets":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Secrets)(nil)),
 		"_Selection":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Selection)(nil)),
@@ -818,6 +823,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WNetwork    func() api.Network
 	WOCR        func() api.OCR
 	WOwnership  func() api.Ownership
+	WScheduler  func() api.Scheduler
 	WSecrets    func() api.Secrets
 	WSettings   func() api.Settings
 	WShortcuts  func() api.Shortcuts
@@ -886,6 +892,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) OCR() api.OCR
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Ownership() api.Ownership {
 	return W.WOwnership()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Scheduler() api.Scheduler {
+	return W.WScheduler()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Secrets() api.Secrets {
 	return W.WSecrets()
@@ -1254,6 +1263,24 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider) RootItems(ctx api.Context) ([]api.Item, error) {
 	return W.WRootItems(ctx)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler is an interface wrapper for Scheduler type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler struct {
+	IValue   interface{}
+	WCancel  func(key string) (bool, error)
+	WOnce    func(key string, at time.Time, ref api.ActionRef) error
+	WPending func(key string) (time.Time, bool, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Cancel(key string) (bool, error) {
+	return W.WCancel(key)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Once(key string, at time.Time, ref api.ActionRef) error {
+	return W.WOnce(key, at, ref)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Pending(key string) (time.Time, bool, error) {
+	return W.WPending(key)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider is an interface wrapper for SearchProvider type
