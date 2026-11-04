@@ -12,8 +12,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// HistoryView lists the conversations, most recent first, with a row that starts a new one. The list is answered
-// from the store each time the palette searches, so it always shows what is saved.
+// HistoryView lists the AI chats, conversations and builder chats alike, most recent first, with a row that starts a new
+// conversation. The list is answered from the store each time the palette searches, so it always shows what is saved.
 func HistoryView(deps Deps) *palette.View {
 	return &palette.View{
 		Title:       "AI Chats",
@@ -24,23 +24,23 @@ func HistoryView(deps Deps) *palette.View {
 	}
 }
 
-// historyRows is the list for query q: the new-chat row, then each conversation whose title contains q.
+// historyRows is the list for query q: the new-chat row, then each listed chat whose title contains q.
 func historyRows(deps Deps, q string) []search.Item {
 	query := strings.ToLower(strings.TrimSpace(q))
 	items := []search.Item{{Title: "New Chat", Icon: "plus", Actions: []search.Action{
 		{Title: "Start", Run: func(h search.Host) { h.Push(newChat(deps)) }},
 	}}}
 	for _, record := range deps.Service.Chats() {
-		if record.Kind != chat.KindConversation || (query != "" && !strings.Contains(strings.ToLower(record.Title), query)) {
+		if !chat.Listed(record.Kind) || (query != "" && !strings.Contains(strings.ToLower(record.Title), query)) {
 			continue
 		}
-		items = append(items, conversationRow(deps, record))
+		items = append(items, chatRow(deps, record))
 	}
 	return items
 }
 
-// conversationRow is the list row of one saved conversation: opening it, or deleting it when it is not answering.
-func conversationRow(deps Deps, record chat.Chat) search.Item {
+// chatRow is the list row of one saved chat: opening it, or deleting it when it is not answering.
+func chatRow(deps Deps, record chat.Chat) search.Item {
 	id := record.ID
 	title := record.Title
 	if title == "" {
@@ -49,8 +49,8 @@ func conversationRow(deps Deps, record chat.Chat) search.Item {
 	return search.Item{
 		ID:        id,
 		Title:     title,
-		Subtitle:  "AI conversation · " + ago(deps.Now(), record.UpdatedAt),
-		Icon:      "message-circle",
+		Subtitle:  kindLabel(record.Kind) + " · " + ago(deps.Now(), record.UpdatedAt),
+		Icon:      ChatIcon(record.Kind),
 		Tone:      "yellow",
 		TintTitle: true,
 		Actions: []search.Action{
