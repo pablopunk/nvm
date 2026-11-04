@@ -64,9 +64,9 @@ func (p *page) copyMessageAction() search.Action {
 	return search.Action{Title: "Copy Message", Dismiss: search.DismissNever, Run: p.copyLastMessage}
 }
 
-// stopAction stops the reply in flight, as Escape does.
+// stopAction stops the reply in flight, as the composer's Stop control does.
 func (p *page) stopAction() search.Action {
-	return search.Action{Title: "Stop", Label: "Esc", Dismiss: search.DismissNever, Run: func(search.Host) {
+	return search.Action{Title: "Stop", Dismiss: search.DismissNever, Run: func(search.Host) {
 		p.deps.Service.Stop(p.id)
 	}}
 }

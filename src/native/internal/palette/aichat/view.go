@@ -40,7 +40,6 @@ func (p *page) view() *palette.View {
 		Input:        &p.input,
 		Actions:      p.chatActions,
 		Primary:      p.primaryKey,
-		OnEscape:     p.escape,
 		SurvivesHide: true,
 	}
 }
@@ -79,7 +78,7 @@ func (p *page) primaryKey() *design.KeyHint {
 	case chat.AwaitingAnswer(record):
 		return &design.KeyHint{Title: "Allow", Key: palette.KeyLabel("↵")}
 	case p.deps.Service.Busy(p.id):
-		return &design.KeyHint{Title: "Stop", Key: palette.KeyLabel("Esc")}
+		return &design.KeyHint{Title: "Stop"}
 	}
 	return &design.KeyHint{Title: "Send", Key: palette.KeyLabel("↵")}
 }

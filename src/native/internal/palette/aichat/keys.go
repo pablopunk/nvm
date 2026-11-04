@@ -9,7 +9,7 @@ import (
 
 // Copy for the palette's answers to actions and refusals. Each names the state and says what happened.
 const (
-	toastStillAnswering  = "This chat is still answering. Stop it with Escape first."
+	toastStillAnswering  = "This chat is still answering. Stop the reply first."
 	toastNothingToAsk    = "There is no question to ask again yet."
 	toastCopied          = "Copied the last reply."
 	toastCopiedMessage   = "Copied the last message."
@@ -18,16 +18,6 @@ const (
 	toastFailed          = "That did not work. Try again."
 	toastNothingToReview = "This extension is not installed any more."
 )
-
-// escape stops a reply in flight. With no reply in flight it reports false, and the palette goes back as it does on
-// any page, as Electron's popExtensionView does.
-func (p *page) escape() bool {
-	if !p.deps.Service.Busy(p.id) {
-		return false
-	}
-	p.deps.Service.Stop(p.id)
-	return true
-}
 
 // review opens the review of the extension this builder chat wrote, on top of the chat, so Escape returns to it.
 func (p *page) review(h search.Host) {

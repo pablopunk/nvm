@@ -97,3 +97,23 @@ func TestRefusedSendKeepsTheTypedText(t *testing.T) {
 		t.Fatalf("composer = %q after a refused send, want the text kept", p.draft)
 	}
 }
+
+// TestEscapeKeepsTheComposerText checks Escape leaves the chat without clearing what is typed in the composer, as the
+// desktop app's Escape does.
+func TestEscapeKeepsTheComposerText(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("", chat.TierFast)
+	p := newPage(r.deps(), record.ID)
+	r.open(p.view())
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	tt.Type("keep me")
+	tt.Key(0, ui.KeyEscape)
+	if r.palette.Top() != r.root {
+		t.Fatal("Escape should go back to the root")
+	}
+	if p.draft != "keep me" {
+		t.Fatalf("composer = %q after Escape, want the text kept", p.draft)
+	}
+}

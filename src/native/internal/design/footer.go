@@ -5,7 +5,7 @@ import "github.com/egoist/mygo/ui"
 // KeyHint is an action named with the key that runs it, as the footer shows it.
 type KeyHint struct {
 	Title string
-	// Key is the key's label, already spelled for the platform.
+	// Key is the key's label, already spelled for the platform. Empty draws the title alone.
 	Key string
 }
 
@@ -42,6 +42,8 @@ func keyHint(c *ui.Context, hint *KeyHint) {
 	k := Tokens(c)
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(k.Strong)
-		Keycap(c, hint.Key)
+		if hint.Key != "" {
+			Keycap(c, hint.Key)
+		}
 	})
 }

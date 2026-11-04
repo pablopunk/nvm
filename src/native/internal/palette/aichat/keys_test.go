@@ -66,9 +66,9 @@ func lastReply(record chat.Chat) string {
 	return text
 }
 
-// TestEscapeStopsTheReplyAndKeepsThePage types a question, lets the first words of the answer arrive, and presses
-// Escape. The reply stops with the words it had, and the palette stays on the chat instead of closing it.
-func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
+// TestEscapeLeavesTheChatAndLeavesTheReplyRunning types a question, lets the first words of the answer arrive, and
+// presses Escape. As in the desktop app, Escape goes back and does not stop the reply: only the Stop control does.
+func TestEscapeLeavesTheChatAndLeavesTheReplyRunning(t *testing.T) {
 	transport := fixtures.NewStreamingTransport()
 	r := newRig(t, streamingClient(t, transport))
 	record := r.chatWith("", chat.TierFast)
@@ -85,18 +85,11 @@ func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
 	r.awaitReplyText(record.ID, "Once upon")
 
 	tt.Key(0, ui.KeyEscape)
-	r.awaitIdle(record.ID)
-	if r.palette.Top() != view {
-		t.Fatal("Escape during a reply should stop it and keep the chat open")
-	}
-	messages := mustChat(t, r, record.ID).Messages
-	if len(messages) != 2 || messages[1].Text != "Once upon" || messages[1].Status != chat.StatusStopped {
-		t.Fatalf("transcript = %+v, want the partial reply marked stopped", messages)
-	}
-
-	tt.Key(0, ui.KeyEscape)
 	if r.palette.Top() != r.root {
-		t.Fatal("with the reply stopped, Escape should go back to the root")
+		t.Fatal("Escape during a reply should go back to the root")
+	}
+	if !r.service.Busy(record.ID) {
+		t.Fatal("Escape stopped the reply; only the Stop control should")
 	}
 }
 
