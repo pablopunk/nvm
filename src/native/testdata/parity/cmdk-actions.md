@@ -19,13 +19,13 @@ Order is fixed by `getOptionActionRows` (App.tsx:4526). Rows follow the primary 
 | G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | n/a in 2.0: every row with preview content has its own Preview action (files, clipboard) |
 | G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | n/a (file rows have Preview Contents; Quick Look is missing, see F3) |
 | G5 | App.tsx:4567 | customizable rows | Set alias | none | G1 condition | done (`shortcut_row_actions.go`, `palette/aliasview`) |
-| G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | missing |
-| G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | missing |
-| G8 | App.tsx:4591 | generated extension rows | Submit as PR | none | G6 condition and GitHub CLI installed; disabled with "Requires GitHub CLI (gh auth login)" until authed | missing |
-| G9 | App.tsx:4602 | file-backed extension rows | Tweak with AI | none | G7 condition | missing |
-| G10 | App.tsx:4610 | rows with a defaultActionId | Override with AI | none | `defaultActionId` (built-in with AI override) | missing (AI override not in 2.0) |
-| G11 | App.tsx:4618 | overridden rows | Restore original | none | `isOverridden` | missing |
-| G12 | App.tsx:4626 | AI chat rows and removable rows | Remove action | none | kind ai-chat, or `removable`; confirm: "Delete “<title>” from Nevermind" with Remove action / Cancel (App.tsx:3985-4000) | missing as "Remove action" (2.0 has Delete on extension rows and chats) |
+| G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | disabled with "Duplicate is not in 2.0 yet" (extension_authoring.go) |
+| G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | disabled with "Rename is not in 2.0 yet" (extension_authoring.go) |
+| G8 | App.tsx:4591 | generated extension rows | Submit as PR | none | G6 condition and GitHub CLI installed; disabled with "Requires GitHub CLI (gh auth login)" until authed | disabled with "Submit as PR is not in 2.0 yet" when gh is installed (extension_authoring.go) |
+| G9 | App.tsx:4602 | file-backed extension rows | Tweak with AI | none | G7 condition | done: opens the builder chat bound to the extension (builderEditView) |
+| G10 | App.tsx:4610 | rows with a defaultActionId | Override with AI | none | `defaultActionId` (built-in with AI override) | not shown: no source sets defaultActionId, so 1.x never shows it; n/a |
+| G11 | App.tsx:4618 | overridden rows | Restore original | none | `isOverridden` | not shown: overrides cannot be created in 1.x, so the condition is unreachable; n/a |
+| G12 | App.tsx:4626 | AI chat rows and removable rows | Remove action | none | kind ai-chat, or `removable`; confirm: "Delete “<title>” from Nevermind" with Remove action / Cancel (App.tsx:3985-4000) | done for builder-made extension rows: confirmation, then the extension is uninstalled |
 
 Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias for “<title>”" (App.tsx:2789). Rows: "Save alias “<query>”" when the query is new (subtitle "Make “<title>” appear for this phrase"); one row per saved alias ("Remove this alias", Enter removes it); "Done" (subtitle "<n> aliases saved" or "Close without changes"). Aliases are stored in config.json `aliases` keyed by action ID (portable-config-schema.ts:13, 73). Aliases match root search (action-ranker.ts:19, action-ranking.ts:43) and are not drawn on the row.
 
@@ -51,7 +51,7 @@ Total for an app row in 1.x: Open, Uninstall (when supported), Set keyboard shor
 | F1 | files.ts:33 | Open <name> (primary) | Enter | always | done |
 | F2 | files.ts:9 | Preview Contents | ⌘Y | non-media file (`previewFile`) | done (2.0 label ⌃Y, the platform's modifier label convention) |
 | F2b | files.ts:9 | Preview | ⌘Y | image or video file | done |
-| F3 | files.ts:25 | Quick Look (macOS; "Preview File" elsewhere, only with the quick-look capability) | none | `quick-look` capability | missing: the Go Shell port has no Quick Look call yet |
+| F3 | files.ts:25 | Quick Look (macOS; "Preview File" elsewhere, only with the quick-look capability) | none | `quick-look` capability | done on macOS (shell.quickLook, from views-parity d2b7dec3) |
 | F4 | os.ts:410 | Show in Finder (macOS) / Show in File Explorer / Show in File Manager | none | always | done (`revealTitle`) |
 | — | (none) | Copy Path, Copy File, Move to Trash | | 1.x has none on file rows | extra: removed from the menu |
 | — | G3, G4 | generic Preview and Preview File | | suppressed by F2/F3 | n/a |
@@ -68,8 +68,8 @@ File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 | C4 | clipboard-removal-actions.ts:1-140, clipboard-history.ts:469 | Manage History section: Remove Item | none | entry present; destructive, confirm "Remove “<title>” from clipboard history?" | done |
 | C5 | clipboard-removal-actions.ts:50 | Remove Last... (submenu): 5 Minutes, Hour, Day, Week | none | entry present | done |
 | C6 | clipboard-removal-actions.ts:124-139 | (history level, Clipboard History view) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | none | history not empty | removed from the entry menu; the view-level set is not changed by this pass |
-| — | none | Pin, Unpin | | 1.x has none | extra, kept: PLAN J05 asks for pin (owner decision) |
-| — | none | Ask AI, Clear All Unpinned | | 1.x has none | extra: removed from the entry menu |
+| — | none | Pin, Unpin | | 1.x has none | removed (owner decision) |
+| — | none | Ask AI, Clear All Unpinned | | 1.x has none | removed from the entry menu |
 
 Clipboard entries have no keyboard shortcut or alias in 1.x.
 
@@ -89,10 +89,10 @@ Commands are durable actions (`commandFromItem`, extension-action-builders.ts:2)
 
 | Command | 1.x file:line | Kind | 1.x primary title | 2.0 status |
 |---|---|---|---|---|
-| Lock Screen | system.ts:10 | extension-action | Lock Screen | done (stable ID `command:lock-screen`) |
+| Lock Screen | system.ts:10 | extension-action | Lock Screen | done (stable ID `command:lock-screen`; alias matches) |
 | Sleep | system.ts:19 | extension-action | Sleep | done (stable ID) |
-| Restart Computer | system.ts:28 | extension-action | Restart Computer | partial: primary titled Restart Computer, row title still Restart |
-| System Settings (Windows Settings on Windows) | system.ts:37, os.ts:395 | extension-action | System Settings | missing as a root row (2.0 System Settings is the syspanes built-in, with no stable ID yet) |
+| Restart Computer | system.ts:28 | extension-action | Restart Computer | done (row and primary titled Restart Computer) |
+| System Settings (Windows Settings on Windows) | system.ts:37, os.ts:395 | extension-action | System Settings | done (stable ID `command:system-settings`) |
 | Quit Nevermind | system.ts:48 | extension-action | Quit Nevermind | done (stable ID `command:quit-nevermind`) |
 | Open Downloads | system.ts:103 (placesItems) | extension-action | Open Downloads | done (stable ID `command:place-downloads`; row title is the folder name) |
 | Open Documents | system.ts:103 | extension-action | Open Documents | done (stable ID) |
@@ -144,19 +144,19 @@ No 1.x counterpart. Snippets, quicklinks and "Start timer" are 2.0 features (the
 
 ## C. Counts
 
-Counted over the rows above (A: generic G1-G12; B: per kind). Statuses refer to this change.
+Counted over the rows above, after this change.
 
-| Group | 1.x actions | done | partial or traced | missing | extra (removed or kept) | n/a |
-|---|---|---|---|---|---|---|
-| Generic G1-G12 | 12 | 3 (G1, G2, G5) | 0 | 7 (G6-G12: Duplicate, Rename, Submit as PR, Tweak with AI, Override with AI, Restore original, Remove action) | 0 | 2 (G3, G4) |
-| Applications B1 | 3 (Open, Uninstall, alias sub-flow) | 4 with the generic set | 0 | 0 | 4 removed (Show in Folder, Copy Path, Quit, Force Quit) | 0 |
-| Files B2 | 4 | 3 | 0 | 1 (Quick Look) | 3 removed (Copy Path, Copy File, Move to Trash) | 0 |
-| Clipboard entries B3 | 5 (+ 3 view-level) | 4 | 2 | 0 | 2 kept (Pin, Unpin), 2 removed (Ask AI, Clear All Unpinned) | 0 |
-| Calculator B4 | 5 | 5 | 0 | 0 | 0 | 0 |
-| Commands and built-ins B5 | per command | system and places done with stable IDs | 1 (System Settings root row) | 1 | 0 | 0 |
-| Extension rows B6 | 3 cases | 0 | 0 | all authoring actions (G6-G12) | 0 | 0 |
-| AI chats B7 | 3 | 1 | 2 | 0 | 0 | 0 |
-| Snippets, quicklinks, timers B8 | 0 | 0 | 0 | 0 | 0 | 3 features, all 2.0 only |
+| Group | 1.x actions | done | disabled with reason | n/a (not shown in 1.x) | removed from 2.0 |
+|---|---|---|---|---|---|
+| Generic G1-G12 | 12 | 5 (G1, G2, G5, G9, G12 for builder rows) | 3 (G6, G7, G8) | 4 (G3, G4 covered by own Preview; G10, G11 unreachable) | 0 |
+| Applications B1 | 2 + alias | 3 (Open, Uninstall, shortcut and alias) | 0 | 0 | 4 (Show in Folder, Copy Path, Quit, Force Quit) |
+| Files B2 | 4 | 4 on macOS, 3 elsewhere (Quick Look is macOS only) | 0 | 0 | 3 (Copy Path, Copy File, Move to Trash) |
+| Clipboard entries B3 | 5 | 5 | 0 | 0 | 4 (Pin, Unpin, Ask AI, Clear All Unpinned) |
+| Calculator B4 | 5 | 5 | 0 | 0 | 0 |
+| Commands and built-ins B5 | per command | done with stable IDs and alias matching | 0 | 0 | 0 |
+| Extension rows B6 | 3 cases | authoring group | 3 | 0 | 0 |
+| AI chats B7 | 3 | 1 | 0 | 0 | 0 |
+| Snippets, quicklinks, timers B8 | 0 | 0 | 0 | 0 | n/a, 2.0 only |
 
-Not in this pass: alias matching for the built-in system and places rows and for extension rows (they match by title in
-their own search), the extension authoring group, Quick Look, and the AI override group.
+Not done: Duplicate, Rename and Submit as PR are disabled, not implemented. The AI override group is not shown
+because 1.x never shows it.
