@@ -45,6 +45,10 @@ const (
 	CapabilitySelectionCopy    Capability = "selection.copy"
 	CapabilityWebView          Capability = "webview.embedded"
 	CapabilityCameraPreview    Capability = "camera.preview"
+	CapabilityKeyboardTypeText Capability = "keyboard.type-text"
+	CapabilityAppRunning       Capability = "apps.running"
+	CapabilityAppQuit          Capability = "apps.quit"
+	CapabilityAppHide          Capability = "apps.hide"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -58,7 +62,7 @@ func AllCapabilities() []Capability {
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
-		CapabilityWebView, CapabilityCameraPreview,
+		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
 	}
 	slices.Sort(list)
 	return list

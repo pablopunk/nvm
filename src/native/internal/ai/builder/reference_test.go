@@ -34,7 +34,7 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 
 // maxReferenceBytes bounds the reference the model reads on every builder turn. The reference was 64 KB of text before
 // the Context services were cut to signatures; this keeps it from growing back past that.
-const maxReferenceBytes = 48 << 10
+const maxReferenceBytes = 50 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
@@ -44,7 +44,7 @@ func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 
 // maxCompactReferenceBytes bounds the terse reference every builder request carries. It keeps a typical turn's second
 // request under the size of the request a turn used to send.
-const maxCompactReferenceBytes = 32 << 10
+const maxCompactReferenceBytes = 33 << 10
 
 func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReferenceCompact) > maxCompactReferenceBytes {

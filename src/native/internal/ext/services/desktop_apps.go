@@ -37,6 +37,16 @@ func (h *Handler) serveDesktopApps(ctx context.Context, call protocol.ServiceCal
 		return h.appIcon(call.Args)
 	case protocol.OpFrontmost:
 		return h.frontmostApp(ctx)
+	case protocol.OpRunning:
+		return h.runningPaths(call.Args)
+	case protocol.OpQuit:
+		return h.quitApp(call.Args, false)
+	case protocol.OpForceQuit:
+		return h.quitApp(call.Args, true)
+	case protocol.OpQuitAll:
+		return h.quitAllApps()
+	case protocol.OpHideApp:
+		return nil, h.hideApp(call.Args)
 	}
 	return nil, invalid("desktop.apps has no operation %q", call.Op)
 }

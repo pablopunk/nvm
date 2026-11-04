@@ -50,22 +50,29 @@ func (p *App) waitPaletteHidden(ctx context.Context) error {
 // pasteActionTitle is the title of the paste action that copies, emoji and snippets offer. The HUD names a paste by it.
 const pasteActionTitle = "Paste"
 
-// pasteAfterHide hides the palette and pastes e into the app that had focus, for the action titled title. Stale hide
-// signals are dropped first, so the paste waits for this hide. The paste runs on its own goroutine, because it waits
-// for the hide the UI thread is in the middle of.
+// pasteAfterHide hides the palette and pastes e into the app that had focus, for the action titled title.
 func (p *App) pasteAfterHide(h search.Host, title string, e clipboard.Entry) {
+	clip := p.clip
+	p.hideThenRun(h, title, "Pasted", func() error { return clip.paste(e) }, func(err error) palette.Feedback {
+		return pasteFailedFeedback(title, err)
+	})
+}
+
+// hideThenRun hides the palette, then runs run on its own goroutine once the palette has hidden, so the keys of a paste
+// reach the app that had focus. Stale hide signals are dropped first, so run waits for this hide. A failure shows the
+// feedback fail builds; success shows done under title.
+func (p *App) hideThenRun(h search.Host, title, done string, run func() error, fail func(error) palette.Feedback) {
 	select {
 	case <-p.paletteHidden:
 	default:
 	}
 	h.Hide()
-	clip := p.clip
 	safego.Go(clipPasteName, func(context.Context) {
-		if err := clip.paste(e); err != nil {
-			p.feedbackFromBackground(pasteFailedFeedback(title, err))
+		if err := run(); err != nil {
+			p.feedbackFromBackground(fail(err))
 			return
 		}
-		p.redraw(func() { p.showFeedback(title, "Pasted", feedback.ToneDefault) })
+		p.redraw(func() { p.showFeedback(title, done, feedback.ToneDefault) })
 	})
 }
 

@@ -50,10 +50,10 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 		platform.CapabilityTrayMenu,
 	}
 	if goos == "linux" {
-		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal)
+		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal, platform.CapabilityAppRunning, platform.CapabilityAppQuit)
 	}
 	if goos == "darwin" {
-		supported = append(supported, platform.CapabilityShellQuickLook)
+		supported = append(supported, platform.CapabilityShellQuickLook, platform.CapabilityKeyboardTypeText, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppHide)
 	}
 	if notificationsCapable(goos) {
 		supported = append(supported, platform.CapabilityNotifications)

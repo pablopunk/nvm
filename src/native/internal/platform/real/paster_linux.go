@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -63,4 +64,9 @@ func frontmostAppID(ctx context.Context, helper platform.Helper, _ int) (string,
 		return "", platform.ErrUnsupported
 	}
 	return runXdotool(ctx, helper, "getactivewindow", "getwindowclassname")
+}
+
+// typeGesture reports that typing is unavailable on Linux: keyboard.type-text is macOS only, as in 1.x.
+func typeGesture(context.Context, platform.Helper, string, string, time.Duration) error {
+	return platform.ErrUnsupported
 }

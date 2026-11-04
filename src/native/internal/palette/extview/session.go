@@ -24,10 +24,11 @@ type Deps struct {
 	Load      func(extID, loader string, done func([]api.Item, *api.Failure))
 	LoadImage func(ref string, done func(*ui.Bitmap))
 	OpenURL   func(url string)
-	// CopyText writes text to the clipboard and reports a failure as a toast on h. PasteText pastes text into the app
-	// in front, hiding the palette first. Nil makes the action report unavailable.
-	CopyText  func(h search.Host, text string)
-	PasteText func(h search.Host, title, text string)
+	// CopyText writes text to the clipboard and reports a failure as a toast on h. Paste sends a paste or typing action to
+	// the app in front, through the services of extension extID, and hides the palette first. Nil makes those actions
+	// report unavailable.
+	CopyText func(h search.Host, text string)
+	Paste    func(h search.Host, extID string, action api.Action)
 	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
 	// system action report unavailable.
 	OpenSettingsPane func(id string)

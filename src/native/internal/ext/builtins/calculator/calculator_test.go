@@ -163,10 +163,18 @@ func TestRateRefreshIsSkippedWithoutAQueuedPair(t *testing.T) {
 	}
 }
 
-func TestManifestDeclaresTheNetworkCapability(t *testing.T) {
+// TestManifestDeclaresTheNetworkAndPasteCapabilities: rates need the network, and Paste Result needs the clipboard and the
+// keyboard, the same declarations a folder extension makes for the same actions.
+func TestManifestDeclaresTheNetworkAndPasteCapabilities(t *testing.T) {
 	manifest := New(nil, time.UTC).Manifest()
-	if len(manifest.Capabilities) != 1 || manifest.Capabilities[0] != api.CapabilityNetwork {
-		t.Fatalf("capabilities = %v, want network", manifest.Capabilities)
+	want := []api.Capability{api.CapabilityNetwork, api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard}
+	if len(manifest.Capabilities) != len(want) {
+		t.Fatalf("capabilities = %v, want %v", manifest.Capabilities, want)
+	}
+	for i := range want {
+		if manifest.Capabilities[i] != want[i] {
+			t.Fatalf("capabilities = %v, want %v", manifest.Capabilities, want)
+		}
 	}
 	if _, err := json.Marshal(manifest); err != nil {
 		t.Fatal(err)

@@ -5,14 +5,14 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
-// remoteKeyboard sends the undo gesture to the host. Typing text is not served yet, so TypeText reports unsupported.
+// remoteKeyboard types text and sends the undo gesture through the host.
 type remoteKeyboard struct {
 	api.Keyboard
 	link *hostLink
 }
 
-func (k remoteKeyboard) TypeText(string, api.TypeOptions) error {
-	return unsupported("ctx.desktop.keyboard.typeText")
+func (k remoteKeyboard) TypeText(text string, options api.TypeOptions) error {
+	return k.link.Call(protocol.ServiceDesktopKeyboard, protocol.OpTypeText, protocol.TypeTextArgs{Text: text, Options: options}, nil)
 }
 
 func (k remoteKeyboard) Undo() error {

@@ -37,14 +37,14 @@ const (
 	ActionSetQuery      ActionKind = "set-query"
 	// ActionAccount runs an account operation the host owns, such as sign-in.
 	ActionAccount ActionKind = "account"
-	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
+	// ActionRecordPaletteShortcut opens the host's shortcut recorder.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
 	// shows "This action is not available yet" when it runs.
 	ActionUnavailable ActionKind = "unavailable"
 )
 
-// AccountSignIn is the account op that starts the sign-in flow.
+// AccountSignIn starts the sign-in flow.
 const AccountSignIn = "sign-in"
 
 // Op values for the kinds that have sub-operations.
@@ -82,6 +82,7 @@ type Action struct {
 	Setting string            `json:"setting,omitempty"`
 	Content *ClipboardContent `json:"content,omitempty"`
 	Paste   *PasteOptions     `json:"paste,omitempty"`
+	Typing  *TypeOptions      `json:"typing,omitempty"`
 	Shell   *ShellCommand     `json:"shell,omitempty"`
 	View    *View             `json:"view,omitempty"`
 	Window  *WindowRef        `json:"window,omitempty"`
@@ -187,9 +188,7 @@ func (a Action) validateDeclarative() error {
 			return errors.New("path or url is required")
 		}
 	case ActionPaste:
-		if a.Content == nil || !oneOf(a.Content.Type, "text", "html", "image", "files") {
-			return errors.New("content with type text, html, image or files is required")
-		}
+		return validatePasteContent(a.Content)
 	case ActionTrash:
 		if len(a.Paths) == 0 {
 			return errors.New("paths are required")
@@ -247,6 +246,24 @@ func validateWindowAction(a Action) error {
 	}
 	if a.Window == nil || (a.Window.ID == "" && a.Window.View == nil) {
 		return errors.New("window id or view is required")
+	}
+	return nil
+}
+
+// validatePasteContent checks the clipboard content a paste action carries: its type, and the field that type needs.
+func validatePasteContent(content *ClipboardContent) error {
+	if content == nil || !oneOf(content.Type, "text", "html", "image", "files") {
+		return errors.New("content with type text, html, image or files is required")
+	}
+	switch content.Type {
+	case "image":
+		if content.ImageDataURL == "" && content.ImagePath == "" {
+			return errors.New("image content needs imageDataUrl or imagePath")
+		}
+	case "files":
+		if len(content.Paths) == 0 {
+			return errors.New("files content needs paths")
+		}
 	}
 	return nil
 }

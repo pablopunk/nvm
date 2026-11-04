@@ -63,6 +63,10 @@ type Ports struct {
 	AI *extai.Service
 	// Selection reads, replaces and undoes the selected text of extensions. Nil makes ctx.desktop.selection unavailable.
 	Selection services.SelectionEngine
+	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil makes them unavailable.
+	Apps services.AppLifecycle
+	// Paste sends the paste and typing actions of extensions to the app in front. Nil makes them unavailable.
+	Paste services.PasteEngine
 	// Notify shows a failure of an extension's action to the user, such as a refused AppleScript. Nil logs only.
 	Notify services.NotifyFunc
 }
@@ -167,6 +171,8 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Indicators:   ports.Indicators,
 			AI:           ports.AI,
 			Selection:    ports.Selection,
+			Paste:        ports.Paste,
+			Apps:         ports.Apps,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
 			Notify:       ports.Notify,

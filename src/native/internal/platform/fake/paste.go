@@ -3,6 +3,7 @@ package fake
 import (
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -23,6 +24,7 @@ type Paster struct {
 	mu        sync.Mutex
 	requests  []string
 	undos     []string
+	typed     []string
 	frontmost string
 	faults    faultSet
 }
@@ -91,3 +93,26 @@ func (p *Paster) FrontmostAppID() (string, error) {
 	defer p.mu.Unlock()
 	return p.frontmost, nil
 }
+
+// OpTypeIntoFrontmost is the operation name accepted by Paster.FailNext.
+const OpTypeIntoFrontmost = "TypeIntoFrontmost"
+
+// TypeIntoFrontmost records the typed text and returns nil, or the injected fault.
+func (p *Paster) TypeIntoFrontmost(_, text string, _ time.Duration) error {
+	if err := p.faults.take(OpTypeIntoFrontmost); err != nil {
+		return err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.typed = append(p.typed, text)
+	return nil
+}
+
+// Typed returns a copy of every text the paster was asked to type, in order.
+func (p *Paster) Typed() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return slices.Clone(p.typed)
+}
+
+var _ platform.Typist = (*Paster)(nil)

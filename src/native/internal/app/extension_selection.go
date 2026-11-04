@@ -1,14 +1,13 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/features/selection"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // extensionSelection is the selected-text engine extensions use, over the app's clipboard, selection and paste ports.
 // Its source is the window the palette was summoned from, so the keyboard goes back to the app the text came from.
-func (p *App) extensionSelection() services.SelectionEngine {
+func (p *App) extensionSelection() *selection.Engine {
 	return selection.New(selection.Deps{
 		Clock:        p.ports.Clock,
 		Clipboard:    p.ports.Clipboard,

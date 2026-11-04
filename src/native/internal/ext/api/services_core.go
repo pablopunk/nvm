@@ -180,7 +180,7 @@ type ShortcutRecord struct {
 	Title       string `json:"title"`
 	Subtitle    string `json:"subtitle,omitempty"`
 	Accelerator string `json:"accelerator"`
-	// Label is the accelerator as the user reads it on this platform, such as ⌘⌥K. It is empty when none is bound.
+	// Label is the accelerator as the platform spells it, such as ⌘⌥K; empty when none is bound.
 	Label  string `json:"label,omitempty"`
 	Scope  string `json:"scope"`
 	Source string `json:"source"` // user or extension
@@ -193,8 +193,7 @@ type Shortcuts interface {
 	Palette() ShortcutRecord
 }
 
-// Account reads whether the palette is signed in to a Nevermind account. Signing in is the ActionAccount action with the
-// sign-in op, which the host runs; the credentials never reach an extension.
+// Account reports whether the palette is signed in. Credentials never reach an extension.
 type Account interface {
 	SignedIn() bool
 }

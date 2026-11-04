@@ -9,7 +9,9 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -52,7 +54,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		},
 		OpenURL:               func(url string) { _ = mygo.Shell.OpenExternal(url) },
 		CopyText:              func(h search.Host, text string) { p.copyText(h, text) },
-		PasteText:             func(h search.Host, title, text string) { p.pasteAfterHide(h, title, textEntry(text)) },
+		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
 		SignIn:                p.signInFromRoot,
@@ -88,3 +90,19 @@ var extensionSnapshots = extview.NewMemoryCache()
 
 // extensionCameras keeps the camera each camera view chose for the life of the process, as the snapshots do.
 var extensionCameras = extview.NewMemoryCameras()
+
+// pasteFromExtension hides the palette, then has the extension's services send the paste or typing action to the app
+// in front, off the UI thread. The HUD says Pasted or Typed, or the reason the action could not run.
+func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string, action api.Action) {
+	title := action.Title
+	if title == "" {
+		title = pasteActionTitle
+	}
+	done := "Pasted"
+	if action.Kind == api.ActionTypeText {
+		done = "Typed"
+	}
+	p.hideThenRun(h, title, done, func() error { return m.PerformPaste(extID, action) }, func(err error) palette.Feedback {
+		return palette.Feedback{Title: title, Message: err.Error(), Tone: feedback.ToneError}
+	})
+}
