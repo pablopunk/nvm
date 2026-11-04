@@ -203,6 +203,18 @@ func TestOversizedResultIsAFailureNotAPartialRead(t *testing.T) {
 	waitState(t, r, StateFailed)
 }
 
+func TestFloodingResultIsAFailureNotAPartialRead(t *testing.T) {
+	r := newRuntime(t, "acme.flood", nil)
+	defer r.Stop()
+	startAndWait(t, r)
+	_, err := callSearch(t, r, "x")
+	callErr := callError(t, err)
+	if !strings.Contains(callErr.Failure.Message, "line limit") {
+		t.Fatalf("failure = %+v; want the line limit", callErr.Failure)
+	}
+	waitState(t, r, StateFailed)
+}
+
 func TestSlowInitDoesNotBlockTheHostPastTheStartTimeout(t *testing.T) {
 	r := newRuntime(t, "acme.initspin", func(c *Config) { c.StartTimeout = 300 * time.Millisecond })
 	defer r.Stop()
