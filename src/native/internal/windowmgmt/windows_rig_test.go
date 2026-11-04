@@ -5,6 +5,8 @@ package windowmgmt
 import (
 	"context"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -39,6 +41,7 @@ func TestRigMovesAProbeWindowOnX11(t *testing.T) {
 	work := displays[0].WorkArea
 	left := mustRigResult(t, service, probe.Handle, "left-half")
 	requireRigFrame(t, "left half", left.Frame, geometry.Rect{X: work.X, Y: work.Y, Width: work.Width / 2, Height: work.Height})
+	captureRigDesktop(t, "left-half.png")
 
 	right := mustRigResult(t, service, probe.Handle, "right-half")
 	requireRigFrame(t, "right half", right.Frame, geometry.Rect{X: work.X + work.Width/2, Y: work.Y, Width: work.Width / 2, Height: work.Height})
@@ -48,6 +51,18 @@ func TestRigMovesAProbeWindowOnX11(t *testing.T) {
 	}
 	restored := mustRigRestore(t, service, probe.Handle)
 	requireRigFrame(t, "restored", restored.Frame, probe.Frame)
+}
+
+// captureRigDesktop saves the whole desktop into RIG_ARTIFACTS, when set, so a PR can show the layout.
+func captureRigDesktop(t *testing.T, name string) {
+	t.Helper()
+	dir := os.Getenv("RIG_ARTIFACTS")
+	if dir == "" {
+		return
+	}
+	if output, err := exec.Command("import", "-window", "root", filepath.Join(dir, name)).CombinedOutput(); err != nil {
+		t.Fatalf("screenshot %s: %v: %s", name, err, output)
+	}
 }
 
 func mustRigResult(t *testing.T, service *Service, handle, preset string) Result {
