@@ -3,7 +3,6 @@ package child
 import (
 	"errors"
 	"fmt"
-	"os"
 	"reflect"
 	"sort"
 
@@ -40,11 +39,11 @@ type extension struct {
 // load interprets the extension source at path. Extension code runs here, at load, inside the child; the host
 // has already reviewed extension.json.
 func load(path string, identity api.Identity, clock platform.Clock, link *hostLink) (*extension, error) {
-	source, err := os.ReadFile(path)
+	source, err := loadSource(path)
 	if err != nil {
-		return nil, fmt.Errorf("read extension source: %w", err)
+		return nil, err
 	}
-	i, err := evalExtension(string(source))
+	i, err := evalExtension(source)
 	if err != nil {
 		return nil, err
 	}
