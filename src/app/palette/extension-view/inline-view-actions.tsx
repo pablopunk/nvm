@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import type { CommandView } from '../model';
 import type { ExtensionViewRendererProps } from './extension-view';
 
