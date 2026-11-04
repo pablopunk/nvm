@@ -139,8 +139,6 @@ func (b *Backend) serveRoute(w http.ResponseWriter, r *http.Request, body string
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == ChatCompletionsPath:
 		b.serveChat(w, r, body, mode)
-	case r.Method == http.MethodGet && r.URL.Path == ModelsPath:
-		writeBody(w, http.StatusOK, "application/json", ModelsBody)
 	case r.Method == http.MethodGet && r.URL.Path == ActiveModelPath:
 		writeBody(w, http.StatusOK, "application/json", b.currentActiveModel())
 	case r.Method == http.MethodGet && r.URL.Path == MePath:
@@ -201,7 +199,7 @@ func (b *Backend) record(r *http.Request, body string) {
 // isBackendRoute reports whether the request targets a route the fake implements at all.
 func isBackendRoute(r *http.Request) bool {
 	switch r.URL.Path {
-	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath, DeviceInitiatePath, DeviceExchangePath,
+	case ChatCompletionsPath, ActiveModelPath, MePath, DeviceInitiatePath, DeviceExchangePath,
 		DeviceApprovePath, TranscriptionsPath, TranscriptionPreparationPath, DecisionsPath:
 		return true
 	default:

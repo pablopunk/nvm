@@ -71,11 +71,11 @@ func TestLiveSmoke(t *testing.T) {
 	}
 	t.Logf("account: plan %s, balance %d", account.Plan, account.Balance)
 
-	models, err := client.Models(ctx)
+	route, err := client.ActiveModel(ctx, ActiveModelQuery{})
 	if err != nil {
-		t.Fatalf("Models: %v", err)
+		t.Fatalf("ActiveModel: %v", err)
 	}
-	t.Logf("models: %d listed", len(models))
+	t.Logf("active model: %s (%s)", route.ID, route.API)
 
 	stream, err := client.ChatStream(ctx, ChatRequest{Messages: userMessages("Reply with one word."), MaxTokens: 20})
 	if err != nil {

@@ -77,7 +77,7 @@ func TestFailureModesReturnExactStatusAndBody(t *testing.T) {
 
 			for _, route := range []struct{ method, path string }{
 				{http.MethodPost, ChatCompletionsPath},
-				{http.MethodGet, ModelsPath},
+				{http.MethodGet, ActiveModelPath},
 				{http.MethodGet, MePath},
 			} {
 				status, header, body := doThroughPort(t, set, context.Background(), route.method, route.path, chatRequestBody)
@@ -191,8 +191,8 @@ func TestHealthyRoutesReturnFixtureJSON(t *testing.T) {
 	backend := NewBackend()
 	set := fake.NewSet()
 	set.HTTP.Handle(backend)
-	if _, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, ModelsPath, ""); body != ModelsBody {
-		t.Fatalf("models body = %q", body)
+	if _, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, ActiveModelPath, ""); body != ActiveModelBody {
+		t.Fatalf("active-model body = %q", body)
 	}
 	if _, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, MePath, ""); body != MeBody {
 		t.Fatalf("me body = %q", body)
