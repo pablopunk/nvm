@@ -14,11 +14,13 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
+	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -76,6 +78,11 @@ type App struct {
 	edits        map[string]*noteEdit
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
+	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
+	dictation       *dict.Service
+	dictationWindow *mygo.Window
+	dictationView   palindicator.State
+	dictationEpoch  int
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
