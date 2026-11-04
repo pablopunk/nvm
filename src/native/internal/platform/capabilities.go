@@ -43,14 +43,12 @@ const (
 func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
-		CapabilityFileWatch, CapabilityGlobalHotkeys, CapabilityHelperRun, CapabilityKeychain,
-		CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal, CapabilityScreensDisplays,
-		CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep, CapabilityShellReveal,
-		CapabilityShellTrash, CapabilitySystemEmptyTrash, CapabilitySystemLock, CapabilitySystemLogOut,
-		CapabilitySystemRestart, CapabilitySystemSettings, CapabilitySystemShutDown, CapabilitySystemSleep,
-		CapabilityTrayMenu,
-		CapabilityShellTrash, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
-		CapabilityFocusReturn,
+		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
+		CapabilityKeychain, CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal,
+		CapabilityScreensDisplays, CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep,
+		CapabilityShellReveal, CapabilityShellTrash, CapabilitySystemEmptyTrash, CapabilitySystemLock,
+		CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings, CapabilitySystemShutDown,
+		CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
 	}
 	slices.Sort(list)
 	return list
