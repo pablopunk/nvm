@@ -5,10 +5,11 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // testHome is the home folder every test uses. Tests never read the real home folder.
-const testHome = "/home/me"
+var testHome = testpath.Abs("home", "me")
 
 // testDebounce is the debounce window tests configure. The fake clock advances by it to apply pending events.
 const testDebounce = 100 * time.Millisecond

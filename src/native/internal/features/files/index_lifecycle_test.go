@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -14,6 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
@@ -89,7 +91,7 @@ func checkOneWholeBatch(snap *Snapshot, perBatch int) error {
 // it named has returned.
 func TestCloseLeavesNoIndexGoroutines(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, docs+"/a.pdf")
+	seedFiles(fsys, filepath.Join(docs, "a.pdf"))
 	store := &MemoryPersistence{}
 	ix, changes := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{docs}, Persistence: store})
 	startIndex(t, ix, changes)
@@ -128,10 +130,10 @@ func TestNewRejectsConfigurationsThatCannotIndex(t *testing.T) {
 // file is left behind.
 func TestFilePersistenceWritesAtomicallyThroughTheFSPort(t *testing.T) {
 	fsys := fake.NewFS()
-	if err := fsys.MkdirAll("/state", 0o755); err != nil {
+	if err := fsys.MkdirAll(testpath.Abs("state"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	store := FilePersistence{FS: fsys, Path: "/state/files.idx"}
+	store := FilePersistence{FS: fsys, Path: testpath.Abs("state", "files.idx")}
 	if _, err := store.Load(); err == nil {
 		t.Fatal("loading before any save must fail")
 	}
@@ -180,10 +182,10 @@ func TestAnEventRereadsOnlyTheFileItNames(t *testing.T) {
 	startIndex(t, ix, changes)
 	counting.lstats.Store(0)
 
-	if err := inner.WriteFile(docs+"/new.txt", []byte("x"), 0o644); err != nil {
+	if err := inner.WriteFile(filepath.Join(docs, "new.txt"), []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	settle(t, clock, changes, hasFiles(ix, docs+"/new.txt"))
+	settle(t, clock, changes, hasFiles(ix, filepath.Join(docs, "new.txt")))
 	if got := counting.lstats.Load(); got != 1 {
 		t.Fatalf("one created file cost %d metadata reads, want 1", got)
 	}

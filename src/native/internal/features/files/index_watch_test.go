@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -12,13 +13,13 @@ import (
 // under a missing folder is watched at the nearest folder that exists, and an existing root is watched itself.
 func TestWatchTargetIsTheClosestExistingAncestor(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, testHome+"/Pictures/x.png")
-	ix, _ := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{testHome + "/Work/Documents"}})
+	seedFiles(fsys, filepath.Join(testHome, "Pictures/x.png"))
+	ix, _ := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{filepath.Join(testHome, "Work/Documents")}})
 	l := &indexLoop{ix: ix, ctx: context.Background(), watches: map[string]context.CancelFunc{}}
-	if got := l.watchTargetFor(testHome + "/Work/Documents"); got != testHome {
+	if got := l.watchTargetFor(filepath.Join(testHome, "Work/Documents")); got != testHome {
 		t.Fatalf("watch target for a root under a missing folder = %q, want %q", got, testHome)
 	}
-	if got := l.watchTargetFor(testHome + "/Pictures"); got != testHome+"/Pictures" {
+	if got := l.watchTargetFor(filepath.Join(testHome, "Pictures")); got != filepath.Join(testHome, "Pictures") {
 		t.Fatalf("watch target for an existing root = %q, want the root itself", got)
 	}
 }
@@ -27,7 +28,7 @@ func TestWatchTargetIsTheClosestExistingAncestor(t *testing.T) {
 // missing root is watched through its parent, and once it exists the parent's watch is dropped.
 func TestWatchesFollowRootsThatAppearAndDisappear(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, testHome+"/Pictures/x.png")
+	seedFiles(fsys, filepath.Join(testHome, "Pictures/x.png"))
 	ix, _ := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{docs}})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
