@@ -9,18 +9,18 @@ import (
 )
 
 // TestExtensionRowWithoutAnAuthorOffersRenameAndTweak checks an installed extension the builder did not make: 1.x
-// offers Rename and Tweak with AI for any file-backed extension, and Duplicate and Remove action only for generated ones.
+// offers Rename and Tweak with AI for any file-backed extension, and Duplicate, Submit as PR and Remove action only for
+// generated ones. Each one that is listed runs.
 func TestExtensionRowWithoutAnAuthorOffersRenameAndTweak(t *testing.T) {
 	p := goldenPalette(t)
 	actions := p.extensionAuthoringActions("acme.notes", "Notes")
 	if got, want := searchActionTitles(actions), []string{renameTitle, tweakWithAITitle}; !slices.Equal(got, want) {
 		t.Fatalf("authoring actions = %v, want %v", got, want)
 	}
-	if actions[0].Disabled != renameUnavailable {
-		t.Fatalf("Rename disabled reason = %q, want %q", actions[0].Disabled, renameUnavailable)
-	}
-	if actions[1].Disabled != "" {
-		t.Fatal("Tweak with AI is disabled; it opens the builder chat")
+	for _, a := range actions {
+		if a.Disabled != "" {
+			t.Fatalf("%s is disabled (%q); 1.x shows it enabled", a.Title, a.Disabled)
+		}
 	}
 }
 
