@@ -66,10 +66,10 @@ func serveDecisions(w http.ResponseWriter, r *http.Request) {
 func pleadingWire(q backend.DecisionQuestion) map[string]any {
 	switch q.Type {
 	case "predicate":
-		p := pleadingLikelihood(q.Question)
+		p := pleadingLikelihood(q.Question, "Pleading Face")
 		return map[string]any{"type": "predicate", "value": p >= 0.5, "probability": p}
 	default:
-		return map[string]any{"type": "choice", "value": "none of these", "probabilities": pleadingChoices(q.Options)}
+		return map[string]any{"type": "choice", "value": "none of these", "probabilities": pleadingChoices(q.Options, "Pleading Face")}
 	}
 }
 

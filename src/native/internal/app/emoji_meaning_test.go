@@ -18,6 +18,16 @@ import (
 type pleadingModel struct {
 	calls   int
 	failure error
+	// match names the character the model finds; empty means the pleading face.
+	match string
+}
+
+// target is the label the model's match is written with.
+func (m *pleadingModel) target() string {
+	if m.match == "" {
+		return "Pleading Face"
+	}
+	return m.match
 }
 
 func (m *pleadingModel) Decisions(_ context.Context, req backend.DecisionRequest) (backend.DecisionResult, error) {
@@ -29,28 +39,28 @@ func (m *pleadingModel) Decisions(_ context.Context, req backend.DecisionRequest
 	for _, q := range req.Questions {
 		switch q.Type {
 		case "predicate":
-			answers[q.ID] = backend.DecisionAnswer{Type: "predicate", Probability: pleadingLikelihood(q.Question)}
+			answers[q.ID] = backend.DecisionAnswer{Type: "predicate", Probability: pleadingLikelihood(q.Question, m.target())}
 		case "choice":
-			answers[q.ID] = backend.DecisionAnswer{Type: "choice", Choice: "none of these", Probabilities: pleadingChoices(q.Options)}
+			answers[q.ID] = backend.DecisionAnswer{Type: "choice", Choice: "none of these", Probabilities: pleadingChoices(q.Options, m.target())}
 		}
 	}
 	return backend.DecisionResult{ID: "dec", Model: "test", Answers: answers}, nil
 }
 
 // pleadingLikelihood is the yes probability of a predicate: groups and the pleading face are likely, the rest not.
-func pleadingLikelihood(question string) float64 {
-	if strings.Contains(question, "Pleading Face") || strings.Contains(question, "category") {
+func pleadingLikelihood(question, target string) float64 {
+	if strings.Contains(question, target) || strings.Contains(question, "category") {
 		return 0.9
 	}
 	return 0.1
 }
 
 // pleadingChoices ranks the pleading face first among the options of a choice question.
-func pleadingChoices(options []string) map[string]float64 {
+func pleadingChoices(options []string, target string) map[string]float64 {
 	probabilities := make(map[string]float64, len(options))
 	for _, option := range options {
 		probabilities[option] = 0
-		if strings.Contains(option, "Pleading Face") {
+		if strings.Contains(option, target) {
 			probabilities[option] = 0.9
 		}
 	}
