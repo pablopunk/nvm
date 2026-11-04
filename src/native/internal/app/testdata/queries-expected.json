@@ -1559,7 +1559,7 @@
       },
       {
         "kind": "Commands",
-        "title": "Restart",
+        "title": "Restart Computer",
         "subtitle": "Restart this computer",
         "section": "Commands",
         "id": "",
@@ -1998,6 +1998,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Empty Trash",
         "subtitle": "Permanently delete trashed files",
         "section": "Commands",
@@ -2231,7 +2250,7 @@
       {
         "kind": "Clipboard",
         "title": "Meeting notes: ship the design package by Friday and review the goldens …",
-        "subtitle": "Copied 2h ago · Text",
+        "subtitle": "Copied Nov 3, 8:00 AM",
         "section": "Clipboard",
         "id": "clipboard:e-notes",
         "icon": "clipboard",
@@ -2246,7 +2265,11 @@
             "label": ""
           },
           {
-            "title": "Paste",
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Paste Text",
             "label": "⌃↵"
           },
           {

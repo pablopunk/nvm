@@ -687,6 +687,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Empty Trash",
         "subtitle": "Permanently delete trashed files",
         "section": "Commands",
@@ -977,7 +996,7 @@
       },
       {
         "kind": "Commands",
-        "title": "Restart",
+        "title": "Restart Computer",
         "subtitle": "Restart this computer",
         "section": "Commands",
         "id": "",

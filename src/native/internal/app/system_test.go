@@ -27,16 +27,18 @@ func systemRow(t *testing.T, p *App, title string) search.Item {
 	return findRowTitled(t, commandRows(p, &rootInput{}, strings.ToLower(title)), title)
 }
 
-// TestRestartAsksBeforeItRestarts pushes a confirmation for a destructive command and runs nothing until the user
-// confirms.
-func TestRestartAsksBeforeItRestarts(t *testing.T) {
+// TestRestartComputerRunsAtOnceAsIn1x: Restart Computer has no confirmation, as 1.x: Enter restarts the computer.
+func TestRestartComputerRunsAtOnceAsIn1x(t *testing.T) {
 	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
-	if title := p.Top().Title; title != "Confirm" {
-		t.Fatalf("top view = %q, want the confirmation", title)
+	p.Attach(&testWindow{})
+	system := fakeSystem(t, p)
+	row := systemRow(t, p, "Restart Computer")
+	if row.Subtitle != "Restart this computer" {
+		t.Fatalf("subtitle = %q", row.Subtitle)
 	}
-	if calls := fakeSystem(t, p).Calls(); len(calls) != 0 {
-		t.Fatalf("Restart ran before confirmation: %+v", calls)
+	row.Actions[0].Run(p)
+	if call := awaitValue(t, system.Events(), "the restart call"); call.Op != fake.OpSystemRestart {
+		t.Fatalf("call = %+v, want Restart", call)
 	}
 }
 
@@ -111,12 +113,6 @@ func TestPaletteOSPermissions(t *testing.T) {
 	states.SetState(platform.PermissionCamera, platform.PermissionAllowed)
 	goldenOpen(p, p.permissionsView())
 	golden.AssertMatrix(t, "os-permissions", p.View, systemGoldens)
-}
-
-func TestPaletteRestartConfirmation(t *testing.T) {
-	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
-	golden.AssertMatrix(t, "system-confirm", p.View, systemGoldens)
 }
 
 func TestPaletteGettingStartedGuide(t *testing.T) {
