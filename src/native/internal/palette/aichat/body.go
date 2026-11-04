@@ -8,7 +8,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// body draws the transcript above the model pill. An empty chat says what it is for, or that sign-in comes first.
+// body draws the transcript above the model pill. With no account connected the sign-in gate replaces it, as the
+// Electron chat does; an empty chat says what it is for.
 func (p *page) body(c *ui.Context, h search.Host) {
 	p.host = h
 	record, ok := p.deps.Service.Chat(p.id)
@@ -16,6 +17,12 @@ func (p *page) body(c *ui.Context, h search.Host) {
 		return
 	}
 	k := design.Tokens(c)
+	if !p.deps.SignedIn() {
+		ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
+			signInGate(c, p.deps.SignIn(), k)
+		})
+		return
+	}
 	ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
 		if len(record.Messages) == 0 {
 			emptyTranscript(c, p.deps, record, k)
@@ -35,9 +42,6 @@ func emptyTranscript(c *ui.Context, deps Deps, record chat.Chat, k *design.Token
 	text := "Ask anything. Replies stream in as Markdown."
 	if record.Kind == chat.KindBuilder {
 		text = "Describe what you want; the model writes a Go extension, it is checked and installed."
-	}
-	if !deps.SignedIn() {
-		text = "Not signed in: sign in from Nevermind Account to chat with AI."
 	}
 	ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
 		ui.Text(c, text).FontSize(13).TextColor(k.Tertiary)

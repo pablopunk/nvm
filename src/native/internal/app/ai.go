@@ -80,12 +80,14 @@ func (p *App) systemPromptFor(c chat.Chat) string {
 // chatDeps is what the chat pages draw from and act through.
 func (p *App) chatDeps() aichat.Deps {
 	return aichat.Deps{
-		Service:  p.chats,
-		Reply:    p.drawReply,
-		Copy:     p.copyChatReply,
-		SignedIn: p.signedIn,
-		Now:      time.Now,
-		Review:   p.builderReview,
+		Service:     p.chats,
+		Reply:       p.drawReply,
+		Copy:        p.copyChatReply,
+		SignedIn:    p.signedIn,
+		SignIn:      p.signInState,
+		StartSignIn: p.startSignIn,
+		Now:         time.Now,
+		Review:      p.builderReview,
 	}
 }
 

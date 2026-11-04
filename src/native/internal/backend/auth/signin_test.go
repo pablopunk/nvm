@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/store"
 )
 
 // TestSignInApprovalConnectsTheAccountAndStoresTheToken walks the device flow to approval: the code and page are
@@ -209,5 +210,23 @@ func TestSignInSurvivesARestart(t *testing.T) {
 	snapshot := restarted.Snapshot()
 	if !snapshot.Connected || snapshot.Email != "pat@example.test" {
 		t.Fatalf("after restart = %+v, want the connected account", snapshot)
+	}
+}
+
+// TestApprovedSignInReachesDiskBeforeTheStoreFlushes opens the account document from disk while the running store
+// has not flushed. The connection is there at once, so a kill right after approval keeps the sign-in.
+func TestApprovedSignInReachesDiskBeforeTheStoreFlushes(t *testing.T) {
+	r := newRig(t, rigOptions{})
+	r.signIn()
+	onDisk, err := store.Open(r.set.FS, fake.NewClock(), "/config")
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	profile, err := ProfileDocument(onDisk).Load()
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if _, ok := profile.Connections["https://api.nvm.fyi"]; !ok {
+		t.Fatalf("the account document on disk = %+v, want the signed-in account before any flush", profile)
 	}
 }

@@ -71,8 +71,12 @@ func placeholderFor(service *chat.Service, id string) string {
 }
 
 // submit sends the typed text as the next message. Enter on an empty input allows a tool call that waits for the user.
-// A refusal is said on the palette, not in the transcript.
+// With no account connected, Enter starts the sign-in instead. A refusal is said on the palette, not in the transcript.
 func (p *page) submit(text string) {
+	if !p.deps.SignedIn() {
+		p.startSignIn()
+		return
+	}
 	if text == "" && p.deps.Service.Awaiting(p.id) {
 		p.report(p.deps.Service.Decide(p.id, true))
 		return
@@ -85,12 +89,21 @@ func (p *page) submit(text string) {
 func (p *page) footerHint() string {
 	record, ok := p.deps.Service.Chat(p.id)
 	switch {
+	case !p.deps.SignedIn():
+		return signInHint
 	case ok && chat.AwaitingAnswer(record):
 		return awaitingHint
 	case ok && record.Extension != "":
 		return reviewHint
 	}
 	return hint
+}
+
+// startSignIn begins the sign-in the gate offers and toasts why it could not start.
+func (p *page) startSignIn() {
+	if err := p.deps.StartSignIn(); err != nil && p.host != nil {
+		p.host.Toast(signInRefusal(err))
+	}
 }
 
 // report toasts a refusal the transcript does not show. A nil error is silent.

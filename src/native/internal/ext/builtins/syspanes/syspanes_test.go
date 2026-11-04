@@ -52,6 +52,22 @@ func TestQueryMatchesPaneTitlesAndOpensThePane(t *testing.T) {
 	}
 }
 
+// TestAliasesFindThePaneTheElectronAppFinds checks the names the Electron app matches a pane by, which its titles do
+// not contain: "iCloud" finds Apple Account and "Wireless" finds Wi-Fi.
+func TestAliasesFindThePaneTheElectronAppFinds(t *testing.T) {
+	panes := []api.SettingsPane{
+		{ID: "com.apple.systempreferences.AppleIDSettings", Title: "Apple Account"},
+		{ID: "com.apple.wifi-settings-extension", Title: "Wi-Fi"},
+		{ID: "com.apple.Sound-Settings.extension", Title: "Sound"},
+	}
+	for query, want := range map[string]string{"icloud": "Apple Account", "wireless": "Wi-Fi", "apple id": "Apple Account"} {
+		items, err := Extension{}.SearchItems(fakeContext{panes: panes}, query)
+		if err != nil || len(items) != 1 || items[0].Title != want {
+			t.Errorf("query %q: items = %+v, err %v; want only %s", query, items, err, want)
+		}
+	}
+}
+
 func TestNoPanesWhenTheOSHasNone(t *testing.T) {
 	items, err := Extension{}.SearchItems(fakeContext{}, "sound")
 	if err != nil || len(items) != 0 {

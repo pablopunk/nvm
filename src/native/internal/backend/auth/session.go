@@ -192,14 +192,19 @@ func (s *Session) Credentials() (origin string, token backend.Token, ok bool) {
 	return origin, token, err == nil
 }
 
-// persistLocked applies change to the in-memory profile and to the account document. It must run with s.mu held,
-// and change must be pure, since it runs on both copies. A failed write is logged; the session keeps its state.
+// persistLocked applies change to the in-memory profile and writes the account document at once, so a sign-in
+// survives a kill that comes before the store's debounce. It must run with s.mu held, and change must be pure, since
+// it runs on both copies. A failed write is logged; the session keeps its state.
 func (s *Session) persistLocked(change func(*Profile)) {
 	change(&s.profile)
 	if s.deps.Profile == nil {
 		return
 	}
 	if err := s.deps.Profile.Update(change); err != nil {
+		s.deps.Logger.Warn("auth.profile_save_failed", logx.F{"error": err.Error()})
+		return
+	}
+	if err := s.deps.Profile.Flush(); err != nil {
 		s.deps.Logger.Warn("auth.profile_save_failed", logx.F{"error": err.Error()})
 	}
 }

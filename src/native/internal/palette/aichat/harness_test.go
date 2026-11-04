@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -51,6 +52,10 @@ type rig struct {
 	root    *palette.View
 	copied  []string
 	signed  bool
+	sign    auth.SignInState
+
+	signInStarts int
+	startErr     error
 
 	mu     sync.Mutex
 	queued []func()
@@ -138,7 +143,12 @@ func (r *rig) deps() Deps {
 		Reply:    drawReply,
 		Copy:     func(text string) { r.copied = append(r.copied, text) },
 		SignedIn: func() bool { return r.signed },
-		Now:      func() time.Time { return goldenNow },
+		SignIn:   func() auth.SignInState { return r.sign },
+		StartSignIn: func() error {
+			r.signInStarts++
+			return r.startErr
+		},
+		Now: func() time.Time { return goldenNow },
 	}
 }
 
