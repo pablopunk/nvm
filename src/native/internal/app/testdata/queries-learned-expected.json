@@ -775,36 +775,6 @@
             "label": ""
           }
         ]
-<<<<<<< HEAD
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictate",
-        "subtitle": "Start or stop cloud voice dictation",
-        "section": "",
-        "id": "",
-        "icon": "mic",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Dictate",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-=======
->>>>>>> native/ai-fix-text
       }
     ]
   },

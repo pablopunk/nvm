@@ -775,36 +775,6 @@
             "label": ""
           }
         ]
-<<<<<<< HEAD
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictation History",
-        "subtitle": "Browse and copy previous dictations",
-        "section": "",
-        "id": "",
-        "icon": "history",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Dictation History",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-=======
->>>>>>> native/ai-fix-text
       }
     ]
   },
