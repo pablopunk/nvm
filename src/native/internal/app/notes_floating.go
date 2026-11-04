@@ -112,9 +112,12 @@ func (p *App) floatingNoteClosed(edit *noteEdit) {
 	p.releaseEdit(edit)
 }
 
-// floatingNoteWindow is the content of a floating window, themed with Nevermind's tokens.
+// floatingNoteWindow is the content of a floating window. It is themed with Nevermind's tokens, and it keeps a row
+// clear for the window controls that sit over a hidden title bar: the text under them is otherwise hidden.
 func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
 	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Children(func() {
+		bar := c.TitleBar()
+		ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right, 0, bar.Left).DragWindow()
 		floatingNoteBody(c, edit)
 	})
 }
