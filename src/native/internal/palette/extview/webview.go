@@ -13,6 +13,7 @@ import (
 func (s *Session) openWebview() {
 	spec := s.view.Webview
 	page, err := s.openPage(platform.WebPageSpec{
+		Background:   pageBackground(),
 		Grant:        webviewGrant(spec.Permissions),
 		Navigate:     webviewNavigationAllowed,
 		OpenExternal: externalOpener(s.deps.OpenURL),

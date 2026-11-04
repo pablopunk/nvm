@@ -84,6 +84,7 @@ func (s *Session) openCamera() {
 	cam.engine.state.Status = cameraIdle
 	s.camera = cam
 	page, err := s.openPage(platform.WebPageSpec{
+		Background:   pageBackground(),
 		Grant:        webviewGrant([]api.WebviewPermission{api.WebviewCamera}),
 		Navigate:     webviewNavigationAllowed,
 		OpenExternal: externalOpener(s.deps.OpenURL),

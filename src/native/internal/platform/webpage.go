@@ -15,6 +15,8 @@ type WebPages interface {
 
 // WebPageSpec configures one page. A nil callback denies (Grant, Navigate) or ignores (OpenExternal, Title).
 type WebPageSpec struct {
+	// Background is the CSS color the page fills with until it paints; light-dark(light, dark) follows the appearance.
+	Background string
 	// Grant decides a request for the named permissions, such as "camera" or "microphone". The request is
 	// granted only when Grant returns true for all of them.
 	Grant func(kinds []string) bool

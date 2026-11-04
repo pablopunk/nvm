@@ -153,13 +153,13 @@ func TestDeniedSystemAccessStopsBeforeAnyDeviceIsRequested(t *testing.T) {
 // TestCameraErrorsMapToReadableCopy proves each DOM error name gets its copy, and an unknown one shows its message.
 func TestCameraErrorsMapToReadableCopy(t *testing.T) {
 	cases := map[string]string{
-		"NotAllowedError":        "Camera access is denied. Allow Nevermind in system privacy settings.",
-		"NotReadableError":       "The camera is busy. Close other apps using it, then reopen this view.",
-		"NotFoundError":          "The camera is not available. Check that it is connected, or choose another camera.",
-		"OverconstrainedError":   "The camera is not available. Check that it is connected, or choose another camera.",
-		"NotSupportedError":      "This system web view cannot use the camera.",
-		"AbortError":             "Camera unavailable.",
-		"TypeError":              "Camera unavailable.",
+		"NotAllowedError":      "Camera access is denied. Allow Nevermind in system privacy settings.",
+		"NotReadableError":     "The camera is busy. Close other apps using it, then reopen this view.",
+		"NotFoundError":        "The camera is not available. Check that it is connected, or choose another camera.",
+		"OverconstrainedError": "The camera is not available. Check that it is connected, or choose another camera.",
+		"NotSupportedError":    "This system web view cannot use the camera.",
+		"AbortError":           "Camera unavailable.",
+		"TypeError":            "Camera unavailable.",
 	}
 	for name, want := range cases {
 		if got := cameraErrorMessage(name, ""); got != want {

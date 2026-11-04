@@ -65,3 +65,11 @@ func TestCSSColorWritesOpaqueAsHexAndTranslucentAsRGBA(t *testing.T) {
 		t.Errorf("translucent = %q", got)
 	}
 }
+
+// TestPageBackgroundIsThePaletteSurfaceInBothAppearances proves a page fills with the palette surface, so the view
+// looks like the palette while the page has not painted.
+func TestPageBackgroundIsThePaletteSurfaceInBothAppearances(t *testing.T) {
+	if got := pageBackground(); got != "light-dark(#f5f2eb, #1a1f28)" {
+		t.Fatalf("pageBackground() = %q", got)
+	}
+}

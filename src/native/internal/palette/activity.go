@@ -6,7 +6,7 @@ func (p *Palette) syncActive(covered *View) {
 	if covered != nil && covered != p.cur() {
 		notifyActive(covered, false)
 	}
-	notifyActive(p.cur(), p.win.IsVisible())
+	notifyActive(p.cur(), p.win != nil && p.win.IsVisible())
 }
 
 func notifyActive(v *View, active bool) {

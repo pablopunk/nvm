@@ -52,6 +52,11 @@ func webviewThemeDeclarations(dark bool) []string {
 	return declarations
 }
 
+// pageBackground is the palette surface in both appearances: the color a page fills with until it paints its own.
+func pageBackground() string {
+	return "light-dark(" + cssColor(design.TokensFor(false).Bg) + ", " + cssColor(design.TokensFor(true).Bg) + ")"
+}
+
 // cssColor writes a palette color as CSS: hex when opaque, rgba otherwise.
 func cssColor(c ui.Color) string {
 	if c.A == 255 {

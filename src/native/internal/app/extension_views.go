@@ -49,8 +49,8 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(bitmap) })
 			}()
 		},
-		OpenURL:  func(url string) { _ = mygo.Shell.OpenExternal(url) },
-		CopyText: func(text string) { mygo.Clipboard.WriteText(text) },
+		OpenURL:     func(url string) { _ = mygo.Shell.OpenExternal(url) },
+		CopyText:    func(text string) { mygo.Clipboard.WriteText(text) },
 		Files:       ports.FS,
 		Clock:       ports.Clock,
 		Cache:       extensionSnapshots,

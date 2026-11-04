@@ -9,9 +9,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// pageBackground is the palette's surface in both appearances, which a page fills itself with until it paints its own.
-const pageBackground = "light-dark(#f5f2eb, #1a1f28)"
-
 // errNoWindow is returned while the app has no window to put a page in yet.
 var errNoWindow = errors.New("web pages need the palette window, which is not open yet")
 
@@ -47,7 +44,7 @@ func (w webPages) Open(spec platform.WebPageSpec) (platform.WebPage, error) {
 	}
 	view, err := win.NewWebView(mygo.WebViewOptions{
 		Page:            mygo.PageOptions{Untrusted: true},
-		BackgroundColor: pageBackground,
+		BackgroundColor: spec.Background,
 	})
 	if err != nil {
 		return nil, err

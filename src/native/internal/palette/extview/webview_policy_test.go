@@ -10,21 +10,21 @@ import (
 // TestWebviewNavigationTable proves an untrusted page stays in its own document: any other URL goes to the system.
 func TestWebviewNavigationTable(t *testing.T) {
 	cases := map[string]bool{
-		"about:blank":                 true,
-		"about:blank#section":         true,
-		"https://page.nvm.invalid/":   true,
-		"https://page.nvm.invalid":    true,
-		"https://page.nvm.invalid/#x": true,
-		"https://page.nvm.invalid/x":  false,
+		"about:blank":                         true,
+		"about:blank#section":                 true,
+		"https://page.nvm.invalid/":           true,
+		"https://page.nvm.invalid":            true,
+		"https://page.nvm.invalid/#x":         true,
+		"https://page.nvm.invalid/x":          false,
 		"https://page.nvm.invalid.evil.test/": false,
-		"about:blankx":                false,
-		"https://example.test/":       false,
-		"http://example.test/":        false,
-		"file:///etc/passwd":          false,
-		"javascript:alert(1)":         false,
-		"data:text/html,<p>hi</p>":    false,
-		"blob:https://example.test/x": false,
-		"":                            false,
+		"about:blankx":                        false,
+		"https://example.test/":               false,
+		"http://example.test/":                false,
+		"file:///etc/passwd":                  false,
+		"javascript:alert(1)":                 false,
+		"data:text/html,<p>hi</p>":            false,
+		"blob:https://example.test/x":         false,
+		"":                                    false,
 	}
 	for url, want := range cases {
 		if got := webviewNavigationAllowed(url); got != want {
