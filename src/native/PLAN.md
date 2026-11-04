@@ -72,6 +72,7 @@ If you are an agent picking up a WP: read sections 0 to 4, then your WP, then on
 | WP1.8 Emoji, symbols, Unicode | ready for review | catalog grid (`palette.Grid`, virtualized), categories with Tab, skin tone from the action menu (remembered in settings), recents in `emoji-recents.json`, Copy, Paste, Copy Unicode, keyboard grid with cell labels and announcements. L2 and goldens green; rig J08 smoke green. Not verified: macOS and Windows |
 | WP1.* onward | in progress | M0 gate passed by owner direction to continue autonomously; open owner items: contrast waivers, lease takeover semantics |
 | WP2.1 Backend client | ready for review | `internal/backend`: fake-backed and recorded-contract tests green under `-race`; live smoke (`-tags livesmoke`) written, not run. `/api/me` is cookie-session only and `GET /api/v1/models` is not served by the backend source; both need backend confirmation before the live smoke can pass |
+| WP2.2 Sign-in, keychain, deep links, account view | ready for review (Linux: L1, L2, L3 goldens, `-race`, darwin and windows builds; L4-L6 and live sign-in not run) | `internal/backend/auth` (device and `nvm://` sign-in, one keychain token per origin, sign-out with revocation first, environment switch, BYO key, spend-cap notice), `internal/palette/account` (44 goldens), `platform.DeepLinks` port, prototype `auth.json` replaced. Backend `/api/me` is cookie-only, so plan shows only if the backend accepts bearer tokens; macOS deep links need `urlSchemes` in mygo.config.ts (WP5.x) |
 
 ## 1. The validation ladder
 
