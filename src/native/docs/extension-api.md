@@ -205,7 +205,8 @@ type Item struct {
     Disabled, Contextual bool             // Contextual wraps full-contrast guidance text
     Detail              *Detail           // side or bottom inspector, and the inline preview (Cmd+Y)
     Shortcut            string            // local, shown while selected
-    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"
+    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"; left out while an AnswersQuery row shows
+    AnswersQuery        bool              // search-only: answers the query outright (a calculation); drops the QueryFallback rows
     Score               float64
     LastUsedMs          int64
 }
@@ -215,7 +216,7 @@ Shapes used inside items:
 
 - `Image`: `Src`, or `Light` and `Dark`, plus `Fallback`, `Alt`, `Fit`, `Shape`, `Tint`, `Mask`. One shape only; the TypeScript accepted a string or an object.
 - `Accessory`: `Text`, `Icon`, `Tone`, `Tooltip`. Tones: default, muted, accent, success, warning, danger.
-- `Detail`: title, subtitle, text, markdown, metadata rows, image, video, link card, actions.
+- `Detail`: title, subtitle, text, markdown, facts (label over large value, section 26), metadata rows, image, video, link card, actions.
 - `Metadata.Kind`: text, link, tag, separator. Only the fields the kind reads are validated.
 - `LinkCard`: host-filled from Open Graph; status loading, ready or unavailable.
 - `FileRef`: path, name, display path, URLs, kind, extension, MIME, size, dimensions and timestamps in epoch milliseconds (one encoding).
@@ -336,7 +337,7 @@ Rules:
 | `Windows` | `Create`, `Show`, `Hide`, `Toggle`, `Close` | Each returns an `Action`. |
 | `Navigation` | `Root`, `Push`, `Replace`, `Pop`, `Run` | Return `Result` values. Interfaces so tests can fake a Context. |
 | `Input` | `Prompt` | Returns an `Action` that collects fields one at a time. |
-| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar` | The visible view and the menu bar. |
+| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar`, `RefreshSearch(query)` | The visible view, the menu bar, and the palette's search for a query (section 26). |
 
 Go-specific decisions behind the table:
 
@@ -1031,7 +1032,7 @@ Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<n
 - **Host-only item fields.** `Item.Section` (the root section a row is listed under) and `Item.LearnKey` (the usage learner's key) are honoured for built-ins only. `Appearance.Foreground` sets the row tone for a built-in; a built-in row with no foreground has no tone.
 - **System services.** `System().SettingsPanes()` lists the OS settings panes. The `open-system-settings` system action opens one by id. `System().Places()` lists the standard folders of the home folder (Downloads, Documents, Desktop, Pictures), resolved through the platform's `Home()`; an `OpenPath` action opens one.
 
-Built-ins moved so far: System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). The rest of the WP3.10 list is not yet moved. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
+Built-ins moved so far (all five planned for M3): the calculator (`nevermind.calculator`, section 26), System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). Emoji, web search and getting started are not built-ins yet, and the native views (Clipboard History, Snippets, Settings and others) stay native. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
 
 Declarative host operations that the palette performs itself (a built-in or a folder extension alike): `set-query` (search again, palette open), `open-path` and `reveal-path` (palette hides, the path opens or is selected), and `system` ops (`lock-screen`, `sleep`, `restart`, `shut-down`, `log-out`, `empty-trash`, `quit`, `open-system-settings`). A `Confirmation` asks first. A system op runs off the UI thread; a failure shows as a toast.
 
@@ -1087,3 +1088,14 @@ Code: `internal/ai/extai` (the calls, attachments and decisions, no per-extensio
 - **Limits.** 4 open streams per extension. Attachments: at most 8 per call (a decision refuses more); text is cut at 80,000 characters; an image is at most 8 MiB for a prompt and 2 MiB decoded for a decision (PNG, JPEG or WebP).
 - **Not served yet.** `selectedText` and `selectedFiles` answer unavailable: the host has no selection port that reads the source app's selection for an extension, and no Finder selection port.
 - **Tests.** L1: `internal/ai/extai` (ask, stream, tier header, not signed in, timeout, attachments, decisions) and `internal/ext/services/ai_test.go` (refusal, quota, sign-out, stream events and abort, sessions, timeout, attachment capabilities). L2: `internal/ext/supervisor/ai_test.go` runs the `acme.ai` fixture in a child process against the fake backend.
+## 26. Calculator built-in, search refresh and query answers (WP3.10)
+
+Code: `internal/ext/builtins/calculator` (the built-in), `internal/features/calc` (the library: `RateService`, `RateFetcher`, `Calculator.WithClock`), `internal/search/merge.go` (`withoutQueryFallbacks`), `internal/palette/search_refresh.go` (`RefreshSearch`).
+
+- **Answers and fallbacks.** An item with `AnswersQuery` answers the query. While any answer is in the merged rows, every row with `QueryFallback` (web search, Automate) is left out, from any source. Until every provider has answered, fallback rows are held back, so an answer that arrives a moment later does not make a fallback flash. Both fields are honoured for folder extensions as well as built-ins.
+- **Search refresh.** `Views().RefreshSearch(query)` asks the palette to search again for `query` after a short debounce (30 ms). It returns at once. The search runs only when the palette is open and still shows that query; an empty query is the root. A background source calls it when its data arrives, for example a rate quote.
+- **Detail facts.** `Detail.Facts` draws labelled values, a small label over a large value, in a column. The calculator's detail lines are facts, so its pane matches the native one (golden `calc-result`). Detail panes now show on search and root rows of every extension, not only in views.
+- **Paste.** `paste-text` runs on the host: the palette hides, the text is written to the clipboard and pasted into the app in front, as the native Paste Result does. The host does not restore the clipboard afterwards, so `PasteOptions.RestoreClipboard` has no effect yet. `copy-text` shows a failed copy as a toast.
+- **Calculator rates.** The built-in fetches exchange rates through `Network()`, so the public-address policy and the request limits (5 s, 64 KiB) apply. Its quotes are kept in `rates.json` in the app's store, through a rate cache the composition root passes in. That port is host-only: a folder extension cannot reach `rates.json`, and it is the one host-only input a built-in takes besides its context. The built-in declares the `network` capability. Calendar answers are dated by the context's clock, and the zone database is shared across calls.
+- **Native parity.** The calculator row is ranked 1000 with the `Calculator` section, orange tone and the calculator icon. Its actions are Copy Result (primary), Continue Calculation and Swap Units (search again, palette open), Copy Unformatted Result (only when formatting changed the value) and Paste Result (`CommandOrControl+Enter`).
+

@@ -34,6 +34,7 @@ func drawDetail(c *ui.Context, detail api.Detail, md *markdown.Options, image *u
 				ui.Text(c, detail.Subtitle).FontSize(11).TextColor(t.Tertiary)
 			}
 			drawDetailBody(c, detail, md)
+			drawFacts(c, detail.Facts)
 			if detail.Video != "" {
 				ui.Text(c, "Video is not drawn in this build.").FontSize(11).TextColor(t.Tertiary)
 			}
@@ -41,6 +42,28 @@ func drawDetail(c *ui.Context, detail api.Detail, md *markdown.Options, image *u
 				drawMetadata(c, row)
 			}
 		})
+	})
+}
+
+// DetailFor is the detail pane of a row that is not in a view: a root row or a search row of extension extID. Nil when
+// the item has no detail.
+func DetailFor(deps Deps, extID string, detail *api.Detail) func(c *ui.Context, h search.Host) {
+	return NewSession(deps, extID, api.View{}).detailPane(detail)
+}
+
+// drawFacts draws the facts of a detail as a column of labels over large values, the layout of a calculator answer.
+func drawFacts(c *ui.Context, facts []api.Fact) {
+	if len(facts) == 0 {
+		return
+	}
+	t := design.Tokens(c)
+	ui.Column(c).Gap(10).Children(func() {
+		for _, fact := range facts {
+			ui.Column(c).Gap(2).Children(func() {
+				ui.Text(c, fact.Label).FontSize(11).TextColor(t.Muted)
+				ui.Text(c, fact.Value).FontSize(13).TextColor(t.Strong)
+			})
+		}
 	})
 }
 

@@ -21,3 +21,8 @@ func (v remoteViews) Invalidate() {}
 func (v remoteViews) RefreshMenuBar() {
 	_ = v.link.Call(protocol.ServiceViews, protocol.OpRefreshMenuBar, nil, nil)
 }
+
+// RefreshSearch asks the host to search again for query. The host answers at once.
+func (v remoteViews) RefreshSearch(query string) {
+	_ = v.link.Call(protocol.ServiceViews, protocol.OpRefreshSearch, protocol.SearchRefreshArgs{Query: query}, nil)
+}

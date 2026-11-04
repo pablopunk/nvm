@@ -43,7 +43,7 @@ func (l *invokeLog) deps(files *fake.FS) Deps {
 			done(l.results[in.Ref.ID], l.failure)
 		},
 		OpenURL:  func(string) {},
-		CopyText: func(string) {},
+		CopyText: func(search.Host, string) {},
 		Files:    files,
 	}
 }

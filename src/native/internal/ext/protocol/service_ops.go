@@ -28,9 +28,10 @@ const (
 	OpReadImage  = "read-image"
 	OpWriteImage = "write-image"
 
-	OpShow   = "show"
-	OpUpdate = "update"
-	OpHide   = "hide"
+	OpShow          = "show"
+	OpUpdate        = "update"
+	OpHide          = "hide"
+	OpRefreshSearch = "refreshSearch"
 )
 
 // IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
@@ -41,6 +42,11 @@ type IndicatorHideArgs struct {
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.
 type KeyArgs struct {
 	Key string `json:"key"`
+}
+
+// SearchRefreshArgs names the search query a refresh is for.
+type SearchRefreshArgs struct {
+	Query string `json:"query"`
 }
 
 // KeyValueArgs stores one JSON value under a key, secret name or setting id.

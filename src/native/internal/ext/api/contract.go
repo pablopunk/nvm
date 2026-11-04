@@ -102,6 +102,10 @@ type Views interface {
 	Invalidate()
 	// RefreshMenuBar re-renders this extension's menu bar items.
 	RefreshMenuBar()
+	// RefreshSearch asks the host to search again for query when the palette still shows it; an empty query is the
+	// root. The call returns at once. The host shares one search among the requests that arrive together, and does
+	// nothing for a query the palette no longer shows, so a background source can call it whenever its data arrives.
+	RefreshSearch(query string)
 }
 
 // Navigation builds results that change the palette stack. The host implements them so that tests

@@ -3,20 +3,27 @@ package app
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
+	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
+	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
-// root and the palette through the same manager as folder extensions.
-func builtInExtensions() []api.Extension {
-	return []api.Extension{syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{}}
+// root and the palette through the same manager as folder extensions. The calculator keeps its exchange rates in
+// rates, and computes calendar answers in zone.
+func builtInExtensions(rates calc.RateCache, zone *time.Location) []api.Extension {
+	return []api.Extension{
+		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
+		calculatorbuiltin.New(rates, zone),
+	}
 }
 
 // commandPlacedBuiltIns are the built-ins whose rows the command list places among the native commands (see

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
@@ -70,7 +71,7 @@ func TestRateServiceServesFreshCacheWithoutNetwork(t *testing.T) {
 	if !ok || got.Raw != "8 GBP" || got.Stale {
 		t.Fatalf("Query = %+v, ok %v; want fresh 8 GBP", got, ok)
 	}
-	if err := c.Refresh(context.Background()); err != nil {
+	if err := c.Refresh(context.Background(), clock, fetchFrom(h)); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	if n := len(h.Requests()); n != 0 {
@@ -98,7 +99,7 @@ func TestRateServiceServesStaleQuoteOfflineAndLabelsIt(t *testing.T) {
 	if !strings.HasSuffix(got.Subtitle, "· 3d old") {
 		t.Fatalf("Subtitle = %q, want the 3d old label", got.Subtitle)
 	}
-	if err := c.Refresh(context.Background()); err == nil {
+	if err := c.Refresh(context.Background(), clock, fetchFrom(h)); err == nil {
 		t.Fatal("Refresh returned nil while offline")
 	}
 	if cache.saves != 0 {
@@ -136,7 +137,7 @@ func TestRateServiceRefreshStoresQuoteAndSavesCache(t *testing.T) {
 	if _, ok := c.Query("10 usd in gbp"); ok {
 		t.Fatal("Query answered without a quote")
 	}
-	if err := c.Refresh(context.Background()); err != nil {
+	if err := c.Refresh(context.Background(), clock, fetchFrom(h)); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	requests := h.Requests()
@@ -163,7 +164,7 @@ func TestRateServiceKeepsOldQuoteWhenSourceFails(t *testing.T) {
 	c := New(clock, time.UTC, rates)
 
 	c.Query("10 usd in gbp")
-	err := c.Refresh(context.Background())
+	err := c.Refresh(context.Background(), clock, fetchFrom(h))
 	if err == nil || !strings.Contains(err.Error(), "HTTP 500") {
 		t.Fatalf("Refresh error = %v, want HTTP 500", err)
 	}
@@ -188,10 +189,10 @@ func TestRateServiceUnknownCurrencyIsNotRetriedUntilAskedAgain(t *testing.T) {
 	if _, ok := c.Query("10 abc in usd"); ok {
 		t.Fatal("Query answered an unknown currency")
 	}
-	if err := c.Refresh(context.Background()); err == nil {
+	if err := c.Refresh(context.Background(), clock, fetchFrom(h)); err == nil {
 		t.Fatal("Refresh of an unknown currency returned nil")
 	}
-	if err := c.Refresh(context.Background()); err != nil {
+	if err := c.Refresh(context.Background(), clock, fetchFrom(h)); err != nil {
 		t.Fatalf("second Refresh without a query: %v", err)
 	}
 	if n := len(h.Requests()); n != 1 {
@@ -213,7 +214,7 @@ func TestRateServiceInvertsReverseQuote(t *testing.T) {
 func TestRateServiceLoadFailureStartsEmptyAndReportsIt(t *testing.T) {
 	clock := clockAt(testNow)
 	cache := &memCache{loadErr: errors.New("corrupt file")}
-	rates, err := NewRateService(fake.NewHTTP(), clock, cache)
+	rates, err := NewRateService(cache)
 	if err == nil || !strings.Contains(err.Error(), "corrupt file") {
 		t.Fatalf("NewRateService error = %v", err)
 	}
@@ -225,37 +226,28 @@ func TestRateServiceLoadFailureStartsEmptyAndReportsIt(t *testing.T) {
 	}
 }
 
-// TestRateServiceRequestTimeoutRunsOnTheClock checks a hung request is cancelled when the clock passes the timeout,
-// not when wall time passes.
-func TestRateServiceRequestTimeoutRunsOnTheClock(t *testing.T) {
-	clock := clockAt(testNow)
-	rates := mustRateService(t, blockingHTTP{}, clock, nil)
-	c := New(clock, time.UTC, rates)
-	c.Query("10 usd in gbp")
-
-	done := make(chan error, 1)
-	go func() { done <- c.Refresh(context.Background()) }()
-	clock.AwaitTimers(1)
-	clock.Advance(rateRequestTimeout)
-	if err := <-done; err == nil || !errors.Is(err, context.Canceled) {
-		t.Fatalf("Refresh error = %v, want the cancelled request", err)
-	}
-}
-
 // TestRateServiceRefreshIsSkippedWhenAlreadyRunning checks a second refresh started during the first returns at once.
 func TestRateServiceRefreshIsSkippedWhenAlreadyRunning(t *testing.T) {
 	clock := clockAt(testNow)
-	rates := mustRateService(t, blockingHTTP{}, clock, nil)
+	rates := mustRateService(t, fake.NewHTTP(), clock, nil)
 	c := New(clock, time.UTC, rates)
 	c.Query("10 usd in gbp")
+	release := make(chan struct{})
+	hung := func(ctx context.Context, _ string) (int, []byte, error) {
+		<-release
+		return 0, nil, context.Canceled
+	}
 
 	done := make(chan error, 1)
-	go func() { done <- c.Refresh(context.Background()) }()
-	clock.AwaitTimers(1)
-	if err := c.Refresh(context.Background()); err != nil {
+	go func() { done <- c.Refresh(context.Background(), clock, hung) }()
+	for rates.refreshing.TryLock() {
+		rates.refreshing.Unlock()
+		time.Sleep(time.Millisecond)
+	}
+	if err := c.Refresh(context.Background(), clock, hung); err != nil {
 		t.Fatalf("overlapping Refresh = %v, want nil", err)
 	}
-	clock.Advance(rateRequestTimeout)
+	close(release)
 	<-done
 }
 
@@ -269,8 +261,17 @@ func TestCalculatorWithoutRatesAnswersOnlyOffline(t *testing.T) {
 	if _, ok := c.Query("10 usd in gbp"); ok {
 		t.Fatal("currency answered without a rate service")
 	}
-	if err := c.Refresh(context.Background()); err != nil {
+	if err := c.Refresh(context.Background(), clockAt(testNow), fetchFrom(blockingHTTP{})); err != nil {
 		t.Fatalf("Refresh without rates: %v", err)
+	}
+}
+
+// fetchFrom serves a rate request from the fake HTTP client h, through the same exchange the host runs.
+func fetchFrom(h interface {
+	Do(*http.Request) (*http.Response, error)
+}) RateFetcher {
+	return func(ctx context.Context, address string) (int, []byte, error) {
+		return platform.Fetch(ctx, h, address, RateBodyLimit)
 	}
 }
 
@@ -279,7 +280,7 @@ func mustRateService(t *testing.T, h interface {
 	Do(*http.Request) (*http.Response, error)
 }, clock *fake.Clock, cache RateCache) *RateService {
 	t.Helper()
-	rates, err := NewRateService(h, clock, cache)
+	rates, err := NewRateService(cache)
 	if err != nil {
 		t.Fatalf("NewRateService: %v", err)
 	}

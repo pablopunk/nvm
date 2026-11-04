@@ -91,8 +91,9 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		DataRoot:       filepath.Join(dataDir(), "extension-data"),
 		Home:           userHomeDir(),
 		MenuBarRefresh: p.refreshMenuBar,
+		SearchRefresh:  func(_, query string) { p.RefreshSearch(query) },
 		OnChange:       p.extensionsStateChanged,
-		BuiltIns:       builtInExtensions(),
+		BuiltIns:       builtInExtensions(p.rateCache, p.zone),
 		AIQuota:        p.aiQuotas(),
 	})
 }
