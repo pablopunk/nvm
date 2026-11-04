@@ -169,6 +169,7 @@ func TestDataLoaderRunsInTheChildAndCanBeCached(t *testing.T) {
 func TestHostileExtensionHitsEveryLimitAndKeepsAnswering(t *testing.T) {
 	requireUnixProcesses(t)
 	rig := newServicesRig(t)
+	rig.deps.Clock = fake.NewClock()
 	r := servicedRuntime(t, "acme.hostile", rig, fixtureManifest("acme.hostile"))
 	want := map[string]string{
 		"quota":      "quota written=1000 quota=true",
