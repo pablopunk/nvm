@@ -140,7 +140,8 @@ func TestDictationPastesConcealedTextAfterThePaletteHidesAndRestoresTheClipboard
 	if text, _ := h.set.Clipboard.ReadText(); text != "before" {
 		t.Fatalf("clipboard after the paste = %q, want the previous text restored", text)
 	}
-	want := []string{"show:waiting", "show:listening", "show:transcribing", "hide"}
+	// The device is named once the device list is read, so the waiting state shows twice.
+	want := []string{"show:waiting", "show:waiting", "show:listening", "show:transcribing", "hide"}
 	if !equalStrings(h.panel.eventList(), want) {
 		t.Fatalf("indicator events = %v, want %v", h.panel.eventList(), want)
 	}

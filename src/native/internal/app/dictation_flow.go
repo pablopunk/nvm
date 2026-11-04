@@ -130,11 +130,12 @@ func (f *dictationFlow) Start() {
 		return
 	}
 	f.epoch++
-	f.show(waitingState())
+	f.show(waitingState(""))
 	deviceID := f.deps.Settings().DeviceID
 	f.deps.Background("dictation.start", func() {
 		f.target = f.foregroundTarget()
 		f.beginMute()
+		f.showDeviceWait(deviceID)
 		err := f.service.Start(deviceID)
 		if err != nil {
 			f.restoreMute()
@@ -194,33 +195,6 @@ func (f *dictationFlow) Cancel() {
 	f.service.Cancel()
 	f.hide()
 	f.deps.Background("dictation.unmute", f.restoreMute)
-}
-
-// beginMute silences the output for the dictation. A mute that fails is logged, and the dictation goes on audible.
-func (f *dictationFlow) beginMute() {
-	if f.deps.Mute == nil {
-		return
-	}
-	lease, err := f.deps.Mute.Begin()
-	if err != nil {
-		f.warn("dictation.mute-failed", err)
-		return
-	}
-	f.muteMu.Lock()
-	defer f.muteMu.Unlock()
-	f.lease = lease
-}
-
-// restoreMute gives the output back its state from before the dictation. It runs when the dictation stops, is
-// cancelled or fails, and only the first call does anything.
-func (f *dictationFlow) restoreMute() {
-	f.muteMu.Lock()
-	lease := f.lease
-	f.lease = nil
-	f.muteMu.Unlock()
-	if err := lease.Restore(); err != nil {
-		f.warn("dictation.unmute-failed", err)
-	}
 }
 
 // Press runs the indicator button the user pressed.
@@ -348,9 +322,32 @@ func (f *dictationFlow) hideAfter(epoch int, d time.Duration) {
 	})
 }
 
-// waitingState is the indicator while the microphone opens: it can still be cancelled.
-func waitingState() palindicator.State {
-	return palindicator.State{Mode: palindicator.ModeWaitingForMicrophone, Control: palindicator.ControlCancel}
+// waitingState is the indicator while the microphone opens: it can still be cancelled, and names the device when the
+// name is known.
+func waitingState(device string) palindicator.State {
+	state := palindicator.State{Mode: palindicator.ModeWaitingForMicrophone, Control: palindicator.ControlCancel}
+	if device != "" {
+		state.Detail = "Waiting for " + device
+	}
+	return state
+}
+
+// showDeviceWait names the device the dictation waits for, once the device list is read. It runs in the background
+// and shows the change on the UI thread, only while the indicator still waits.
+func (f *dictationFlow) showDeviceWait(deviceID string) {
+	devices, err := f.deps.Microphone.Devices()
+	if err != nil {
+		return
+	}
+	title := dict.DeviceTitle(devices, deviceID)
+	if title == "" {
+		return
+	}
+	f.deps.Dispatch(func() {
+		if f.open && f.state.Mode == palindicator.ModeWaitingForMicrophone {
+			f.show(waitingState(title))
+		}
+	})
 }
 
 // listeningState is the indicator while the microphone records at level: it can be cancelled.

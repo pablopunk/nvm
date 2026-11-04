@@ -37,7 +37,8 @@ const (
 )
 
 // State is what one indicator frame draws. Level is the meter's value from 0 to 1, read only in ModeListening.
-// Detail is the failure in words the user can act on, read only in ModeFailed. Control is the button the frame shows.
+// Detail is the failure in words the user can act on, read only in ModeFailed, and the device being waited for in
+// ModeWaitingForMicrophone. Control is the button the frame shows.
 type State struct {
 	Mode    Mode
 	Level   float64
@@ -123,6 +124,9 @@ func Subtitle(s State) string {
 	case ModeListening:
 		return "Listening"
 	case ModeWaitingForMicrophone:
+		if s.Detail != "" {
+			return s.Detail
+		}
 		return "Waiting for microphone"
 	case ModeTranscribing:
 		return "Transcribing"

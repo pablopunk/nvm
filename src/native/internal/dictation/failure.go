@@ -30,6 +30,9 @@ func FailureMessage(err error) string {
 	if notice, ok := auth.SpendCapNoticeFromError(err); ok {
 		return notice.Message
 	}
+	if errors.Is(err, ErrNotReady) {
+		return "The microphone did not start picking up sound. Check that it is connected, then try again."
+	}
 	if message, ok := microphoneFailureMessage(err); ok {
 		return message
 	}

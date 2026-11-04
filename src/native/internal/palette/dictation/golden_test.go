@@ -25,6 +25,7 @@ var indicatorStates = []struct {
 	{"indicator-failed-long-detail", State{Mode: ModeFailed, Detail: "Not enough credits for API dictation. Add credits or try again later."}},
 	{"indicator-failed-full-message", State{Mode: ModeFailed, Detail: "This recording exceeds the 30-credit per-request limit. Split it into shorter clips and retry, or record the rest in a separate dictation so each part stays under the limit."}},
 	{"indicator-cleaning", State{Mode: ModeCleaning}},
+	{"indicator-waiting-device", State{Mode: ModeWaitingForMicrophone, Detail: "Waiting for AirPods Pro", Control: ControlCancel}},
 	{"indicator-listening-cancel", State{Mode: ModeListening, Level: 0.4, Control: ControlCancel}},
 	{"indicator-waiting-microphone-cancel", State{Mode: ModeWaitingForMicrophone, Control: ControlCancel}},
 	{"indicator-failed-microphone-settings", State{Mode: ModeFailed, Detail: "Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.", Control: ControlMicrophoneSettings}},

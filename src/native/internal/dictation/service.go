@@ -9,6 +9,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -31,7 +32,11 @@ var (
 	ErrCancelled    = errors.New("dictation was cancelled")
 	ErrCodec        = errors.New("dictation needs the Opus codec")
 	ErrNoRecordings = errors.New("dictation has no recording store")
+	ErrNotReady     = errors.New("dictation microphone did not become ready")
 )
+
+// defaultReadyTimeout bounds the wait for a Bluetooth microphone to start picking up sound.
+const defaultReadyTimeout = 7 * time.Second
 
 // Config holds the ports a Service runs on. OnLevel receives the meter level about every 100 ms while recording,
 // from the capture goroutine, so it must only hand the value to the UI. Background runs the backend calls that
@@ -46,6 +51,8 @@ type Config struct {
 	Warn        func(event string, fields map[string]any)
 	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
 	Recorder Recorder
+	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
+	ReadyTimeout time.Duration
 }
 
 // Snapshot is what the indicator draws: the phase and the level of the last captured frames.
@@ -87,8 +94,9 @@ func (s *Service) Snapshot() Snapshot {
 }
 
 // Start prepares the backend, opens deviceID (or the default device when it is "") and starts capturing. It returns
-// once the stream is open, so a missing or refused microphone is reported here and not later. A Cancel while the
-// microphone is still opening ends the start with ErrCancelled, and the stream that opened late is closed.
+// once the stream is open, so a missing or refused microphone is reported here and not later. A Bluetooth microphone
+// also has to start delivering sound first (ErrNotReady when it does not), so its first words are not lost. A Cancel
+// while the microphone is still opening ends the start with ErrCancelled, and the stream that opened late is closed.
 func (s *Service) Start(deviceID string) error {
 	s.mu.Lock()
 	if s.phase != PhaseIdle {
@@ -101,12 +109,16 @@ func (s *Service) Start(deviceID string) error {
 	s.starting = op
 	s.mu.Unlock()
 
+	if s.needsReadiness(deviceID) {
+		op.ready = make(chan struct{})
+		op.tracker = &readinessTracker{}
+	}
 	s.prepare(op)
 	stream, encoder, err := s.openCapture(op.ctx, deviceID)
 
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.starting != op {
+		s.mu.Unlock()
 		if err == nil {
 			_ = stream.Close()
 			_ = encoder.Close()
@@ -117,12 +129,17 @@ func (s *Service) Start(deviceID string) error {
 	if err != nil {
 		s.releasePreparation(op, false)
 		s.phase = PhaseIdle
+		s.mu.Unlock()
 		return err
 	}
 	op.stream, op.encoder = stream, encoder
 	s.cur = op
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
-	return nil
+	s.mu.Unlock()
+	if op.ready == nil {
+		return nil
+	}
+	return s.awaitReady(op)
 }
 
 // openCapture opens the microphone and the encoder for one dictation. Either failure closes what was opened.
