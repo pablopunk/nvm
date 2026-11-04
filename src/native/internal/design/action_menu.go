@@ -15,15 +15,31 @@ type MenuRow struct {
 	Subtitle string
 }
 
-// ActionMenu draws the action menu of a row (Ctrl+K) as a popover over the pane. Each action is a row; the
-// selected one sits on the selection plate; its shortcut or return glyph sits at the end.
-func ActionMenu(c *ui.Context, rows []MenuRow) {
+// MenuEvents is what the pointer did on an ActionMenu this frame: the row clicked and the row under the pointer, each
+// -1 when none.
+type MenuEvents struct {
+	Clicked int
+	Hovered int
+}
+
+// ActionMenu draws the action menu of a row (Ctrl+K) as a popover over the pane. Each action is a row; the selected one
+// sits on the selection plate, a row under the pointer takes the wash of a list row, and the shortcut or return glyph sits
+// at the end. It reports the row the pointer clicked or rests on, so the palette can run or choose it.
+func ActionMenu(c *ui.Context, rows []MenuRow) MenuEvents {
 	k := Tokens(c)
+	events := MenuEvents{Clicked: -1, Hovered: -1}
 	Popover(c, ActionPlacement, func() {
-		for _, r := range rows {
+		for i, r := range rows {
 			rowEl := PlatePadding(ui.Row(c).Radius(8).AlignItems(ui.Center).Gap(8), r.Selected, 6, 10)
-			if r.Selected {
+			hovered := rowEl.Hovered()
+			switch {
+			case r.Selected:
 				SelectedFill(rowEl, k, false)
+			case hovered:
+				rowEl.Background(k.Wash)
+			}
+			if hovered {
+				events.Hovered = i
 			}
 			rowEl.Children(func() {
 				if r.Subtitle != "" {
@@ -38,8 +54,12 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 					ui.Icon(c, Icon("corner-down-left")).FontSize(12).TextColor(k.Muted)
 				}
 			})
+			if rowEl.Clicked() {
+				events.Clicked = i
+			}
 		}
 	})
+	return events
 }
 
 // disabledRowContent draws a disabled menu row as 1.x does: the title muted, and the reason beneath it.

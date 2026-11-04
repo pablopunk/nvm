@@ -27,6 +27,12 @@ const (
 	KindProofread    Kind = "proofread"
 )
 
+// Listed reports whether a chat of kind appears in the AI Chats list and the root's continue rows. A proofread is the
+// work of one command, so the desktop app never lists it either.
+func Listed(kind Kind) bool {
+	return kind == KindConversation || kind == KindBuilder
+}
+
 // Author says who wrote a message. Notices are in the transcript so that a refusal stays visible after a restart, and a
 // tool entry is one call the assistant made, shown as an activity row.
 type Author string
@@ -74,6 +80,7 @@ type Message struct {
 	Notice *Notice            `json:"notice,omitempty"`
 	Calls  []backend.ToolCall `json:"calls,omitempty"`
 	Tool   *ToolRun           `json:"tool,omitempty"`
+	Images []Image            `json:"images,omitempty"`
 	At     time.Time          `json:"at"`
 }
 

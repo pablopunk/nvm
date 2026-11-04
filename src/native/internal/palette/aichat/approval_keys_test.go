@@ -3,7 +3,6 @@ package aichat
 import (
 	"context"
 	"encoding/json"
-	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -96,8 +95,8 @@ func registryOf(t *testing.T, tools ...agent.Tool) *agent.Registry {
 	return registry
 }
 
-// TestEnterAllowsTheWaitingCallAndTheFooterSaysSo checks that Enter on an empty input allows a waiting call, and that
-// the footer names the keys while it waits.
+// TestEnterAllowsTheWaitingCallAndTheFooterSaysSo checks that Enter on an empty composer allows a waiting call, that the
+// footer's primary action says Allow while it waits, and that the action menu offers Refuse.
 func TestEnterAllowsTheWaitingCallAndTheFooterSaysSo(t *testing.T) {
 	var runs atomic.Int32
 	model := fixtures.NewScriptedBackend(
@@ -105,17 +104,30 @@ func TestEnterAllowsTheWaitingCallAndTheFooterSaysSo(t *testing.T) {
 		fixtures.TextReply("Deleted it."),
 	)
 	r, record, view, tt := startDelete(t, &runs, model)
-	if hint := view.HintFn(); !strings.Contains(hint, "allow") || !strings.Contains(hint, "refuse") {
-		t.Fatalf("footer while waiting = %q", hint)
+	if primary := view.Primary(); primary.Title != "Allow" {
+		t.Fatalf("footer while waiting = %q, want Allow", primary.Title)
+	}
+	if !menuHasTitle(view, "Refuse") {
+		t.Fatal("the action menu does not offer Refuse while a call waits")
 	}
 	tt.Key(0, ui.KeyEnter)
 	r.awaitIdle(record.ID)
 	if runs.Load() != 1 {
 		t.Fatalf("tool runs = %d after Enter, want 1", runs.Load())
 	}
-	if view.HintFn() != hint {
-		t.Fatalf("footer after the answer = %q, want the chat's own", view.HintFn())
+	if primary := view.Primary(); primary.Title != "Send" {
+		t.Fatalf("footer after the answer = %q, want Send", primary.Title)
 	}
+}
+
+// menuHasTitle reports whether the action menu of view has an action titled title.
+func menuHasTitle(view *palette.View, title string) bool {
+	for _, a := range view.Actions() {
+		if a.Title == title {
+			return true
+		}
+	}
+	return false
 }
 
 // TestCommandDRefusesTheWaitingCall checks that Command with D refuses the waiting call, so nothing runs and the reply

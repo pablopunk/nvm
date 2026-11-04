@@ -29,7 +29,7 @@ var indicatorStatuses = []struct {
 	{"indicator-no-changes", commands.Status{Title: commands.FixTitle, Subtitle: "No changes needed", Tone: commands.ToneSuccess}},
 	{"indicator-triage", commands.Status{Title: commands.TriageTitle, Subtitle: "bug report · urgency 4/5 · needs reply", Tone: commands.ToneSuccess}},
 	{"indicator-failed-short", commands.Status{Title: commands.FixTitle, Subtitle: "Sign in to use AI commands.", Tone: commands.ToneError}},
-	{"indicator-failed-long", commands.Status{Title: commands.ClassifyTitle, Subtitle: "That image is too large to classify. Copy a smaller one and try again from the palette", Tone: commands.ToneError}},
+	{"indicator-failed-long", commands.Status{Title: commands.ClassifyTitle, Subtitle: "That image is too large to classify. Choose a smaller one and try again from the palette", Tone: commands.ToneError}},
 }
 
 // TestIndicatorGoldens renders every indicator status in light and dark at 1x and 2x, at the height the panel gives it.

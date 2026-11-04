@@ -28,9 +28,9 @@ func (r *rig) builderWith(extension string, messages ...chat.Message) chat.Chat 
 	return record
 }
 
-// installedNotice is the note a builder writes after it installs an extension off.
+// installedNotice is the note a builder writes after it installs an extension enabled.
 func installedNotice() chat.Notice {
-	return chat.Notice{Kind: chat.NoticeNote, Title: "Extension", Message: "“Clock” is installed but off. Press ⌘E to review it and turn it on."}
+	return chat.Notice{Kind: chat.NoticeNote, Title: "Extension", Message: "“Clock” is installed and enabled."}
 }
 
 // TestReviewKeyOpensTheExtensionReview checks ⌘E pushes the review of the extension the builder chat wrote, above the
@@ -82,8 +82,8 @@ func TestReviewKeyWithoutAnExtensionDoesNothing(t *testing.T) {
 	}
 }
 
-// TestBuilderInstalledGoldens renders a builder chat that installed an extension off: the review hint in the footer
-// and the note that says how to turn it on.
+// TestBuilderInstalledGoldens renders a builder chat that installed an extension enabled: the review hint in the footer
+// and the note that says it is on.
 func TestBuilderInstalledGoldens(t *testing.T) {
 	r := newRig(t, nil)
 	record := r.builderWith("user.clock",

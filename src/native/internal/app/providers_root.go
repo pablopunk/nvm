@@ -32,11 +32,11 @@ type rootInput struct {
 	aliases map[string][]string
 }
 
-// chatHead is what the conversation rows read from a chat: its id, its title and whether it is a builder chat.
+// chatHead is what the conversation rows read from a chat: its id, its kind and its title.
 type chatHead struct {
-	id      string
-	title   string
-	builder bool
+	id    string
+	kind  chat.Kind
+	title string
 }
 
 // captureRoot copies the state the root's providers need. It runs on the UI thread.
@@ -85,7 +85,7 @@ func (p *App) chatHeads() []chatHead {
 	records := p.chats.Chats()
 	heads := make([]chatHead, 0, len(records))
 	for _, record := range records {
-		heads = append(heads, chatHead{id: record.ID, title: record.Title, builder: record.Kind == chat.KindBuilder})
+		heads = append(heads, chatHead{id: record.ID, kind: record.Kind, title: record.Title})
 	}
 	return heads
 }

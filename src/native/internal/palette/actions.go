@@ -6,10 +6,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// actions returns the actions of the chosen row, or nil when there is no row to act on.
+// actions returns the actions of the chosen row, or of the page on top when it is a Body page with a menu, or nil.
 func (p *Palette) actions() []search.Action {
 	if it := p.chosenItem(); it != nil {
 		return it.Actions
+	}
+	if v := p.cur(); v.Actions != nil {
+		return v.Actions()
 	}
 	return nil
 }
@@ -65,14 +68,7 @@ func (p *Palette) onEnter() {
 	v := p.cur()
 	switch {
 	case p.actionsOpen:
-		acts := p.actions()
-		if p.actChosen < len(acts) && acts[p.actChosen].Disabled != "" {
-			return
-		}
-		p.actionsOpen = false
-		if p.actChosen < len(acts) {
-			p.runAction(acts[p.actChosen])
-		}
+		p.runMenuAction(p.actChosen)
 	case v.Body != nil:
 		if v.OnSubmit != nil {
 			q := strings.TrimSpace(p.query)
@@ -83,5 +79,17 @@ func (p *Palette) onEnter() {
 		}
 	default:
 		p.runDefault()
+	}
+}
+
+// runMenuAction closes the action menu and runs its action at index i, when there is one.
+func (p *Palette) runMenuAction(i int) {
+	acts := p.actions()
+	if i >= 0 && i < len(acts) && acts[i].Disabled != "" {
+		return
+	}
+	p.actionsOpen = false
+	if i >= 0 && i < len(acts) {
+		p.runAction(acts[i])
 	}
 }

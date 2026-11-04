@@ -36,6 +36,9 @@ func (p *App) startJobs() {
 	if p.clip != nil {
 		p.registerHostJob(hostjobs.ClipboardImageCleanup(p.clip.images, p.clip.history))
 	}
+	if p.chats != nil {
+		p.registerHostJob(hostjobs.AIConversationCleanup(p.sweepAIConversations))
+	}
 	home, _ := os.UserHomeDir()
 	triggerCfg := extjobs.Config{Host: p.extensionTriggerHost, Registry: sched, Files: p.ports.FS, Home: home}
 	if p.ports.Windows != nil {

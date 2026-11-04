@@ -180,13 +180,13 @@ func TestTriageShowsTheAnswers(t *testing.T) {
 	}
 }
 
-// TestClassifyPresentsTheCategoryOfTheClipboardImage sends the clipboard image and presents the category, which Copy
-// takes.
-func TestClassifyPresentsTheCategoryOfTheClipboardImage(t *testing.T) {
+// TestClassifyPresentsTheCategoryOfTheChosenImage sends the picture the user chose, typed by its extension, and presents
+// the category, which Copy takes.
+func TestClassifyPresentsTheCategoryOfTheChosenImage(t *testing.T) {
 	h := newHarness(t)
-	h.set.Clipboard.WriteImagePNG(pngOfSize(64))
+	h.set.FS.Seed("/pics/cat.jpg", pngOfSize(64))
 
-	h.service.ClassifyClipboardImage()
+	h.service.ClassifyImageFile("/pics/cat.jpg")
 	result := h.waitForPresented()
 	if result.Title != "Image Classification" || result.Text() != "photograph" {
 		t.Fatalf("result = %q / %q, want the category", result.Title, result.Text())
@@ -194,16 +194,19 @@ func TestClassifyPresentsTheCategoryOfTheClipboardImage(t *testing.T) {
 	if result.Replace != nil {
 		t.Fatal("a classification cannot replace the selection")
 	}
+	if body := h.backend.Requests()[0].Body; !strings.Contains(body, `"mediaType":"image/jpeg"`) {
+		t.Fatalf("request body does not carry the jpeg media type: %.200s", body)
+	}
 	result.Copy(result.Text())
 	if text, _ := h.set.Clipboard.ReadText(); text != "photograph" {
 		t.Fatalf("clipboard after Copy = %q", text)
 	}
 }
 
-// TestClassifyNeedsAnImage and TestClassifyRefusesLargeImages cover the two refusals before any model call.
-func TestClassifyNeedsAnImage(t *testing.T) {
+// TestClassifyNeedsAReadableImage and TestClassifyRefusesLargeImages cover the refusals before any model call.
+func TestClassifyNeedsAReadableImage(t *testing.T) {
 	h := newHarness(t)
-	h.service.ClassifyClipboardImage()
+	h.service.ClassifyImageFile("/pics/missing.png")
 	h.await("the missing-image status", func() bool {
 		return len(h.surface.statuses) > 0 && h.surface.last(t).Subtitle == errNoImage.Error()
 	})
@@ -212,10 +215,22 @@ func TestClassifyNeedsAnImage(t *testing.T) {
 	}
 }
 
+func TestClassifyRefusesOtherFormats(t *testing.T) {
+	h := newHarness(t)
+	h.set.FS.Seed("/pics/anim.gif", pngOfSize(64))
+	h.service.ClassifyImageFile("/pics/anim.gif")
+	h.await("the unsupported-format status", func() bool {
+		return len(h.surface.statuses) > 0 && h.surface.last(t).Subtitle == errNoImage.Error()
+	})
+	if got := len(h.backend.Requests()); got != 0 {
+		t.Fatalf("backend requests = %d, want none for a gif", got)
+	}
+}
+
 func TestClassifyRefusesLargeImages(t *testing.T) {
 	h := newHarness(t)
-	h.set.Clipboard.WriteImagePNG(pngOfSize(MaximumImageBytes + 1))
-	h.service.ClassifyClipboardImage()
+	h.set.FS.Seed("/pics/big.png", pngOfSize(MaximumImageBytes+1))
+	h.service.ClassifyImageFile("/pics/big.png")
 	h.await("the too-large status", func() bool {
 		return len(h.surface.statuses) > 0 && h.surface.last(t).Subtitle == errImageTooLarge.Error()
 	})

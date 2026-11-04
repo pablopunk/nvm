@@ -66,9 +66,9 @@ func lastReply(record chat.Chat) string {
 	return text
 }
 
-// TestEscapeStopsTheReplyAndKeepsThePage types a question, lets the first words of the answer arrive, and presses
-// Escape. The reply stops with the words it had, and the palette stays on the chat instead of closing it.
-func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
+// TestEscapeLeavesTheChatAndLeavesTheReplyRunning types a question, lets the first words of the answer arrive, and
+// presses Escape. As in the desktop app, Escape goes back and does not stop the reply: only the Stop control does.
+func TestEscapeLeavesTheChatAndLeavesTheReplyRunning(t *testing.T) {
 	transport := fixtures.NewStreamingTransport()
 	r := newRig(t, streamingClient(t, transport))
 	record := r.chatWith("", chat.TierFast)
@@ -85,18 +85,11 @@ func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
 	r.awaitReplyText(record.ID, "Once upon")
 
 	tt.Key(0, ui.KeyEscape)
-	r.awaitIdle(record.ID)
-	if r.palette.Top() != view {
-		t.Fatal("Escape during a reply should stop it and keep the chat open")
-	}
-	messages := mustChat(t, r, record.ID).Messages
-	if len(messages) != 2 || messages[1].Text != "Once upon" || messages[1].Status != chat.StatusStopped {
-		t.Fatalf("transcript = %+v, want the partial reply marked stopped", messages)
-	}
-
-	tt.Key(0, ui.KeyEscape)
 	if r.palette.Top() != r.root {
-		t.Fatal("with the reply stopped, Escape should go back to the root")
+		t.Fatal("Escape during a reply should go back to the root")
+	}
+	if !r.service.Busy(record.ID) {
+		t.Fatal("Escape stopped the reply; only the Stop control should")
 	}
 }
 
@@ -213,4 +206,130 @@ func contains(titles []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// TestStopButtonShowsWhileAReplyStreams checks the Stop control is on the page while a reply streams, and that a click
+// stops the reply and takes the control away.
+func TestStopButtonShowsWhileAReplyStreams(t *testing.T) {
+	transport := fixtures.NewStreamingTransport()
+	r := newRig(t, streamingClient(t, transport))
+	record := r.chatWith("Counting", chat.TierFast)
+	r.palette.Show()
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+	if contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop is on the page before a reply starts")
+	}
+
+	tt.Type("count to ten")
+	tt.Key(0, ui.KeyEnter)
+	reply := awaitReply(t, transport)
+	writeFrame(t, reply, fixtures.StreamFrames("One, two", 24)[0])
+	r.awaitReplyText(record.ID, "One, two")
+	tt.Frame()
+	if !contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop is not on the page while the reply streams")
+	}
+
+	if err := tt.Click("Stop"); err != nil {
+		t.Fatalf("click Stop: %v", err)
+	}
+	r.awaitIdle(record.ID)
+	tt.Frame()
+	if contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop stays on the page after the reply stopped")
+	}
+}
+
+// TestTierPickerSwitchesTheTierOnClick checks a click on the tier picker moves the chat to the other tier, and that a
+// click while a reply streams keeps the tier and says why.
+func TestTierPickerSwitchesTheTierOnClick(t *testing.T) {
+	transport := fixtures.NewStreamingTransport()
+	r := newRig(t, streamingClient(t, transport))
+	record := r.chatWith("Tiers", chat.TierFast)
+	r.palette.Show()
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	if err := tt.Click("Fast ⌄"); err != nil {
+		t.Fatalf("click the tier picker: %v", err)
+	}
+	if got := mustChat(t, r, record.ID).Tier; got != chat.TierSmart {
+		t.Fatalf("tier = %s after a click, want smart", got)
+	}
+
+	if err := r.service.Send(record.ID, "hello"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	reply := awaitReply(t, transport)
+	writeFrame(t, reply, fixtures.StreamFrames("Hi", 24)[0])
+	r.awaitReplyText(record.ID, "Hi")
+	tt.Frame()
+	if err := tt.Click("Smart ⌄"); err != nil {
+		t.Fatalf("click the tier picker while busy: %v", err)
+	}
+	if got := mustChat(t, r, record.ID).Tier; got != chat.TierSmart {
+		t.Fatalf("tier = %s while a reply streams, want it unchanged", got)
+	}
+}
+
+// TestRemovingAChatAsksFirstAndCancelKeepsIt checks Delete on a listed chat opens the question, Cancel keeps the chat,
+// and the removal goes through once it is confirmed. The row's Delete is picked from its action menu.
+func TestRemovingAChatAsksFirstAndCancelKeepsIt(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Keep or drop", chat.TierFast, user("hello"))
+	r.palette.Show()
+	r.open(HistoryView(r.deps()))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	chooseDelete(r, tt)
+	if r.palette.Top().Title != "Confirm" {
+		t.Fatalf("top page = %q after Delete, want the confirmation", r.palette.Top().Title)
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := r.service.Chat(record.ID); !ok {
+		t.Fatal("Cancel removed the chat")
+	}
+	if r.palette.Top().Title == "Confirm" {
+		t.Fatal("Cancel should go back to the list")
+	}
+
+	chooseDelete(r, tt)
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := r.service.Chat(record.ID); ok {
+		t.Fatal("confirming the removal kept the chat")
+	}
+}
+
+// chooseDelete selects the first chat row and runs its Delete from the action menu.
+func chooseDelete(r *rig, tt *ui.Tester) {
+	r.palette.Choose(1)
+	r.palette.OpenActionMenu(1)
+	tt.Key(0, ui.KeyEnter)
+}
+
+// TestRemovingABusyChatStopsItThenRemovesIt checks Remove Chat on a chat whose reply is in flight stops the reply and
+// removes the chat once the turn settles.
+func TestRemovingABusyChatStopsItThenRemovesIt(t *testing.T) {
+	transport := fixtures.NewStreamingTransport()
+	r := newRig(t, streamingClient(t, transport))
+	record := r.chatWith("Busy", chat.TierFast)
+	if err := r.service.Send(record.ID, "tell me more"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	reply := awaitReply(t, transport)
+	writeFrame(t, reply, fixtures.StreamFrames("Sure", 24)[0])
+	r.awaitReplyText(record.ID, "Sure")
+
+	if err := r.service.Delete(record.ID); err != nil {
+		t.Fatalf("Delete of a busy chat: %v", err)
+	}
+	r.awaitIdle(record.ID)
+	if _, ok := r.service.Chat(record.ID); ok {
+		t.Fatal("the busy chat was not removed once its turn settled")
+	}
 }

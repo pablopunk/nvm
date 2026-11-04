@@ -56,6 +56,7 @@ const (
 	copyFailed           = "The reply failed. Ask again, or try later."
 	copyEmptyReply       = "The model sent no text. Ask again."
 	copyStepLimit        = "The reply used every step without a final answer. Ask again to keep going."
+	copyPricing          = "Nevermind cannot price the selected AI model right now, so this request was not sent. Try again later or choose another model."
 )
 
 // SignInNotice is the notice shown when a turn starts without a connected account.
@@ -98,7 +99,9 @@ func noticeForCode(typed *backend.Error, partial string) (Notice, bool) {
 		return Notice{Kind: NoticeTooLarge, Title: "Chat too long", Message: copyTooLarge}, true
 	case "unsupported_request_shape":
 		return Notice{Kind: NoticeRequestShape, Title: "Request not supported", Message: backend.UserMessage(typed)}, true
-	case "pricing_unavailable", "model_not_configured":
+	case "pricing_unavailable":
+		return Notice{Kind: NoticeModelUnavailable, Title: "AI model unavailable", Message: copyPricing}, true
+	case "model_not_configured":
 		return Notice{Kind: NoticeModelUnavailable, Title: "Model unavailable", Message: backend.UserMessage(typed)}, true
 	}
 	return Notice{}, false

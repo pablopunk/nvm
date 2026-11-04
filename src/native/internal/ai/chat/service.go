@@ -49,6 +49,8 @@ type Service struct {
 	cache  cache
 	runs   map[string]*run
 	models map[Tier]backend.ModelDescriptor
+	// doomed holds the chats removed as soon as their turn settles.
+	doomed map[string]bool
 }
 
 // New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
@@ -60,7 +62,7 @@ func New(opts Options) *Service {
 	if opts.Logger == nil {
 		opts.Logger = logx.Default()
 	}
-	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
+	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}}
 	s.Reload()
 	s.settleCutOffTurns()
 	return s
@@ -136,15 +138,24 @@ func (s *Service) Busy(id string) bool {
 	return ok
 }
 
-// Delete removes a chat that is not answering.
+// Delete removes a chat. A chat still answering is stopped, and removed once its turn settles, as the desktop app's
+// Remove Chat does.
 func (s *Service) Delete(id string) error {
 	if s.Busy(id) {
-		return ErrBusy
+		s.doomed[id] = true
+		s.Stop(id)
+		return nil
 	}
+	return s.remove(id)
+}
+
+// remove deletes the chat from the store and the cache.
+func (s *Service) remove(id string) error {
 	if err := s.opts.Store.Remove(id); err != nil {
 		return err
 	}
 	s.cache.drop(id)
+	delete(s.doomed, id)
 	return nil
 }
 
@@ -172,17 +183,24 @@ func (s *Service) Expire() ([]string, error) {
 // Send adds text as the user's message and starts a reply. Without a connected account the message is kept and a
 // sign-in notice follows it, so the transcript shows what happened.
 func (s *Service) Send(id, text string) error {
+	return s.SendWithImages(id, text, nil)
+}
+
+// SendWithImages is Send with pictures the message carries. A message may be pictures alone.
+func (s *Service) SendWithImages(id, text string, images []Image) error {
 	text = strings.TrimSpace(text)
 	switch {
-	case text == "":
+	case text == "" && len(images) == 0:
 		return ErrEmpty
 	case s.Busy(id):
 		return ErrBusy
 	}
 	err := s.mutate(id, func(c *Chat) {
-		c.Messages = append(c.Messages, s.message(AuthorUser, text, StatusComplete))
+		message := s.message(AuthorUser, text, StatusComplete)
+		message.Images = images
+		c.Messages = append(c.Messages, message)
 		if c.Title == "" {
-			c.Title = TitleFor(text)
+			c.Title = TitleFor(titleText(text))
 		}
 	})
 	if err != nil {
@@ -354,4 +372,12 @@ func truncateAfterLastUser(c *Chat) bool {
 		}
 	}
 	return false
+}
+
+// titleText is the text a chat is titled from: its message, or a name for a message of pictures alone.
+func titleText(text string) string {
+	if text == "" {
+		return "Image"
+	}
+	return text
 }

@@ -1,6 +1,8 @@
 package aichat
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -12,7 +14,12 @@ import (
 func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
 	switch m.Author {
 	case chat.AuthorUser:
-		design.UserBubble(c, m.Text)
+		if len(m.Images) > 0 {
+			messagePictures(c, m.Images)
+		}
+		if m.Text != "" {
+			design.UserBubble(c, m.Text)
+		}
 	case chat.AuthorNotice:
 		noticeCard(c, *m.Notice)
 	case chat.AuthorTool:
@@ -24,13 +31,14 @@ func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
 	}
 }
 
-// reply draws an assistant entry. A reply that has not arrived yet shows a spinner; a reply that stopped says so.
+// reply draws an assistant entry. A reply with no visible text yet shows the thinking state; a reply that stopped says
+// so.
 func reply(c *ui.Context, deps Deps, m chat.Message, last bool) {
 	k := design.Tokens(c)
 	streaming := m.Status == chat.StatusStreaming
-	if m.Text == "" {
+	if strings.TrimSpace(m.Text) == "" {
 		if streaming {
-			ui.Spinner(c)
+			thinking(c, k)
 		}
 		return
 	}
@@ -38,6 +46,15 @@ func reply(c *ui.Context, deps Deps, m chat.Message, last bool) {
 	if m.Status == chat.StatusStopped {
 		ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 	}
+}
+
+// thinking is the state of a reply that has no visible text yet, while the model works. It names the state only; the
+// model's reasoning is not shown, as in the desktop app, which glows the same word in the accent color.
+func thinking(c *ui.Context, k *design.TokenSet) {
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		ui.Spinner(c)
+		ui.Text(c, "Thinking").FontSize(13).FontWeight(500).TextColor(k.Accent)
+	})
 }
 
 // noticeCard draws a notice: its title, then the words that say what to do next.

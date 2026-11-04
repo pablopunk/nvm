@@ -14,7 +14,7 @@ import (
 const (
 	FixTitle      = "Fix Selected Text with AI"
 	TriageTitle   = "Triage Selected Text with AI"
-	ClassifyTitle = "Classify Clipboard Image with AI"
+	ClassifyTitle = "Classify Image with AI"
 )
 
 // Dismissal delays: a result the user should read stays longer than a failure's one-line copy would need.
@@ -45,6 +45,7 @@ type Surface interface {
 type Options struct {
 	Clock        platform.Clock
 	Clipboard    platform.Clipboard
+	Files        platform.FS
 	SelectedText platform.SelectedText
 	Paster       platform.Paster
 	Focus        platform.Focus
@@ -205,31 +206,33 @@ func (s *Service) triageRead(text string, err error) {
 	}, triageTimeout)
 }
 
-// ClassifyClipboardImage classifies the image on the clipboard and presents the category, which Copy takes.
-func (s *Service) ClassifyClipboardImage() {
+// ClassifyImageFile classifies the picture file at path, which the user chose, and presents the category, which Copy
+// takes.
+func (s *Service) ClassifyImageFile(path string) {
 	if !s.opts.Connected() {
 		s.fail(ClassifyTitle, errNotSignedIn)
 		return
 	}
 	s.show(Status{Title: ClassifyTitle, Subtitle: "Reading Image", Tone: ToneLoading})
 	s.opts.Background("ai-commands.classify.read", func() {
-		png, err := s.opts.Clipboard.ReadImagePNG()
-		s.opts.Dispatch(func() { s.classifyRead(png, err) })
+		data, err := s.opts.Files.ReadFile(path)
+		s.opts.Dispatch(func() { s.classifyRead(path, data, err) })
 	})
 }
 
-// classifyRead sends the image a clipboard read returned to the decision route.
-func (s *Service) classifyRead(png []byte, err error) {
+// classifyRead sends the picture a file read returned to the decision route, typed by its extension.
+func (s *Service) classifyRead(path string, data []byte, err error) {
+	mediaType := mediaTypeOf(path)
 	switch {
-	case err != nil:
+	case err != nil || mediaType == "":
 		s.fail(ClassifyTitle, errNoImage)
 		return
-	case len(png) > MaximumImageBytes:
+	case len(data) > MaximumImageBytes:
 		s.fail(ClassifyTitle, errImageTooLarge)
 		return
 	}
 	s.show(Status{Title: ClassifyTitle, Subtitle: "Classifying", Tone: ToneLoading})
-	request := backend.DecisionRequest{Input: classifyInput, Images: []backend.DecisionImage{pngImage(png)}, Questions: ClassifyQuestions}
+	request := backend.DecisionRequest{Input: classifyInput, Images: []backend.DecisionImage{imageOf(mediaType, data)}, Questions: ClassifyQuestions}
 	s.decide(ClassifyTitle, request, func(result backend.DecisionResult) {
 		s.presentCategory(result)
 	}, classifyTimeout)

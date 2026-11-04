@@ -1,6 +1,6 @@
 // Package builder is the extension builder: a chat on the smart tier whose replies are a manifest and one Go source
 // file. The builder checks a reply before anything is installed, sends the reasons back to the model a bounded number
-// of times, installs the extension off, and binds the chat to it, so the user reviews it before it runs.
+// of times, installs the extension enabled, and binds the chat to it.
 //
 // Layer: ai. It imports the chat service, the extension api types and the standard library; the extension manager
 // is reached through the Extensions port, which the composition root fills.

@@ -8,8 +8,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// body draws the transcript above the model pill. With no account connected the sign-in gate replaces it, as the
-// Electron chat does; an empty chat says what it is for.
+// body draws the transcript above the composer on the pane's own surface. With no account connected the sign-in gate
+// replaces both, as the Electron chat does.
 func (p *page) body(c *ui.Context, h search.Host) {
 	p.host = h
 	record, ok := p.deps.Service.Chat(p.id)
@@ -23,40 +23,21 @@ func (p *page) body(c *ui.Context, h search.Host) {
 		})
 		return
 	}
-	ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
-		if len(record.Messages) == 0 {
-			emptyTranscript(c, p.deps, record, k)
-		} else {
-			ui.List(c, &p.list, len(record.Messages), func(i int) {
-				ui.Column(c).Padding(6, 4).Children(func() {
-					renderMessage(c, p.deps, record.Messages[i], i == len(record.Messages)-1)
-				})
-			}).Grow(1)
-		}
-		modelPill(c, record)
+	ui.Column(c).Grow(1).MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
+		transcript(c, p, record)
+		composerRow(c, p, record, h)
 	})
 }
 
-// emptyTranscript is the hint shown in a chat with no messages.
-func emptyTranscript(c *ui.Context, deps Deps, record chat.Chat, k *design.TokenSet) {
-	text := "Ask anything. Replies stream in as Markdown."
-	if record.Kind == chat.KindBuilder {
-		text = "Describe what you want; the model writes a Go extension, it is checked and installed."
+// transcript is the scrolling list of messages, which follows the newest one. An empty chat is blank.
+func transcript(c *ui.Context, p *page, record chat.Chat) {
+	if len(record.Messages) == 0 {
+		ui.Column(c).Grow(1)
+		return
 	}
-	ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
-		ui.Text(c, text).FontSize(13).TextColor(k.Tertiary)
-	})
-}
-
-// modelPill names the tier the next reply uses. The backend's model and route names are never shown.
-func modelPill(c *ui.Context, record chat.Chat) {
-	design.Chip(c, design.ChipData{Icon: "sparkles", Bold: tierLabel(record.Tier)})
-}
-
-// tierLabel is the word the pill shows for a tier.
-func tierLabel(tier chat.Tier) string {
-	if tier == chat.TierSmart {
-		return "Smart"
-	}
-	return "Fast"
+	ui.List(c, &p.list, len(record.Messages), func(i int) {
+		ui.Column(c).Padding(6, 4).Children(func() {
+			renderMessage(c, p.deps, record.Messages[i], i == len(record.Messages)-1)
+		})
+	}).Grow(1)
 }

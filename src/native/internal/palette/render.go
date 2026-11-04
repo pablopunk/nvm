@@ -25,9 +25,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
-		p.searchRow(c, v)
-		p.noticeRow(c)
-		design.Etched(c)
+		p.header(c, v)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
 			if v.Body != nil {
 				v.Body(c, p)
@@ -41,6 +39,18 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	if p.actionsOpen {
 		p.actionPanel(c)
 	}
+}
+
+// header is the top of the pane: the search field and the notices under it. A page that draws its own input has no
+// search field, only the notices.
+func (p *Palette) header(c *ui.Context, v *View) {
+	if v.Input != nil {
+		p.noticeRow(c)
+		return
+	}
+	p.searchRow(c, v)
+	p.noticeRow(c)
+	design.Etched(c)
 }
 
 // searchRow is the field at the top of the pane; the design package draws it and reports what happened.
@@ -212,12 +222,30 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
 		if len(it.Actions) > 1 {
-			data.Secondary = &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
+			data.Secondary = actionsKeyHint()
 		}
+	} else if v.Body != nil && (v.Primary != nil || len(p.actions()) > 0) {
+		p.bodyFooterKeys(v, &data)
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
 	}
 	design.Footer(c, data)
+}
+
+// bodyFooterKeys says what the primary control of a Body page does and that its action menu opens with Command-K, as
+// a list's footer does for its rows.
+func (p *Palette) bodyFooterKeys(v *View, data *design.FooterData) {
+	if v.Primary != nil {
+		data.Primary = v.Primary()
+	}
+	if len(p.actions()) > 0 {
+		data.Secondary = actionsKeyHint()
+	}
+}
+
+// actionsKeyHint is the footer's "Actions" entry: the key that opens the action menu.
+func actionsKeyHint() *design.KeyHint {
+	return &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
 }
 
 // actionPanel is the action menu, a popover over the pane.
@@ -229,7 +257,13 @@ func (p *Palette) actionPanel(c *ui.Context) {
 		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen,
 			Disabled: a.Disabled != "", Subtitle: a.Disabled}
 	}
-	design.ActionMenu(c, rows)
+	events := design.ActionMenu(c, rows)
+	if events.Hovered >= 0 {
+		p.actChosen = events.Hovered
+	}
+	if events.Clicked >= 0 {
+		p.runMenuAction(events.Clicked)
+	}
 }
 
 // accessoryLabel is the picker's text, or "" when the view has no picker.
