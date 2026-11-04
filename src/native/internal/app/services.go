@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -13,7 +12,6 @@ import (
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -46,13 +44,13 @@ func (c rateCache) Save(rates calc.Rates) error {
 	return c.doc.Update(func(v *rateDocument) { v.Rates = rates })
 }
 
-// attachServices gives the app its ports and its persisted documents, and builds the calculator over them. The
-// documents live in dir; zone is where calendar answers are computed (nil means the machine's zone). When this
+// attachServices gives the app its ports and its persisted documents, and builds the calculator over them. goos is
+// the operating system whose labels and panes the system features show. The documents live in dir; zone is where calendar answers are computed (nil means the machine's zone). When this
 // instance cannot take the directory's lease, nothing is persisted and the features run from memory: a second
 // writer could overwrite the first.
-func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Location) {
+func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.Location) {
 	p.ports = ports
-	p.systemSvc = newSystemServices(ports)
+	p.systemSvc = newSystemServices(ports, goos)
 	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
 	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
@@ -85,15 +83,15 @@ func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Locati
 	p.calc = calc.New(ports.Clock, zone, rates)
 }
 
-// newSystemServices builds the OS capability services over the ports. The home folder is the process's, and the
-// settings label is the one the OS uses.
-func newSystemServices(ports platform.Ports) *systemfeat.Services {
+// newSystemServices builds the OS capability services over the ports for goos. The home folder is the process's, and
+// the settings label is the one goos uses.
+func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
 	home, _ := os.UserHomeDir()
 	return systemfeat.NewServices(systemfeat.Options{
 		Ports:         ports,
-		Platform:      runtime.GOOS,
+		Platform:      goos,
 		Home:          home,
-		SettingsTitle: real.SettingsTitle(),
+		SettingsTitle: platform.SettingsTitleFor(goos),
 	})
 }
 

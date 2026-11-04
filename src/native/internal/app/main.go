@@ -3,6 +3,7 @@ package app
 
 import (
 	"log"
+	"runtime"
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
@@ -159,7 +160,7 @@ func (p *App) ready() {
 	p.paletteHidden = make(chan struct{}, 1)
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
-	p.attachServices(ports, configDir(), nil)
+	p.attachServices(ports, runtime.GOOS, configDir(), nil)
 	p.attachWindows()
 	p.attachDeepLinks()
 	p.closeStoreOnQuit()

@@ -26,6 +26,10 @@ import (
 // goldenNow is the instant every golden reads as "now", so relative times ("3m ago") never drift.
 var goldenNow = time.Date(2026, time.November, 3, 10, 0, 0, 0, time.UTC)
 
+// goldenOS is the operating system the goldens and the root table record: the Linux desktop. The OS-owned labels and
+// panes follow it rather than the machine running the test, so the recorded rows hold on macOS and Windows too.
+const goldenOS = "linux"
+
 // goldenConfig is the config directory the goldens show. Nothing is written there: no fixture saves.
 const goldenConfig = "/nvm-fixture/config/nvm-native"
 
@@ -64,7 +68,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	for _, app := range p.appsSnapshot() {
 		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
 	}
-	p.attachServices(fake.NewSet().Ports(), goldenConfig, time.UTC)
+	p.attachServices(fake.NewSet().Ports(), goldenOS, goldenConfig, time.UTC)
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")
