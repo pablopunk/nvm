@@ -35,16 +35,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		return
 	}
 	if c.Shortcut(0, ui.KeyEscape) {
-		switch {
-		case p.restoreRootDraft():
-		case p.query != "":
-			p.query = ""
-			p.search()
-		case len(p.stack) > 1:
-			p.Pop()
-		default:
-			p.Hide()
-		}
+		p.escape(v)
 		return
 	}
 	if p.query == "" && len(p.stack) > 1 && !v.HideInput && v.Body == nil && c.Shortcut(0, ui.KeyBackspace) {
@@ -75,5 +66,22 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 				return
 			}
 		}
+	}
+}
+
+// escape is the palette's Escape, in the order the contract fixes: the root's query walk ends, then the page may use
+// the key, then the query clears, then a pushed page is left, and at the root the palette hides. Checking Shortcut
+// consumes the key, so the page is asked only once the key is known to be pressed.
+func (p *Palette) escape(v *View) {
+	switch {
+	case p.restoreRootDraft():
+	case v.OnEscape != nil && v.OnEscape():
+	case p.query != "":
+		p.query = ""
+		p.search()
+	case len(p.stack) > 1:
+		p.Pop()
+	default:
+		p.Hide()
 	}
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -21,8 +22,8 @@ type keyToken string
 
 func (t keyToken) Get() (string, error) { return string(t), nil }
 
-// streamingClient is a backend client whose chat replies the test writes by hand.
-func streamingClient(t *testing.T, transport *fixtures.StreamingTransport) *backend.Client {
+// streamingClient is a backend client whose chat replies the test writes by hand, or whose answers the transport makes.
+func streamingClient(t *testing.T, transport platform.HTTP) *backend.Client {
 	t.Helper()
 	set := fake.NewSet()
 	logger, err := logx.New(set.FS, set.Clock, "/logs", logx.Options{FlushInterval: time.Second, Level: logx.Debug})
@@ -91,6 +92,28 @@ func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
 	messages := mustChat(t, r, record.ID).Messages
 	if len(messages) != 2 || messages[1].Text != "Once upon" || messages[1].Status != chat.StatusStopped {
 		t.Fatalf("transcript = %+v, want the partial reply marked stopped", messages)
+	}
+
+	tt.Key(0, ui.KeyEscape)
+	if r.palette.Top() != r.root {
+		t.Fatal("with the reply stopped, Escape should go back to the root")
+	}
+}
+
+// TestEscapeOnAnIdleChatGoesBack checks that Escape pops a chat with no reply in flight, as Electron's
+// popExtensionView does. The chat page used to take the key as a stop request even with nothing to stop, and
+// the palette never saw it.
+func TestEscapeOnAnIdleChatGoesBack(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Idle", chat.TierFast, user("q"), assistant("a"))
+	r.palette.Show()
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	tt.Key(0, ui.KeyEscape)
+	if r.palette.Top() != r.root {
+		t.Fatal("Escape on an idle chat should go back to the root")
 	}
 }
 

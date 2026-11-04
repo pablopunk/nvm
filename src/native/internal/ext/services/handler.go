@@ -56,6 +56,9 @@ type Deps struct {
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
+	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
+	// returns before the items change. Nil makes the request a no-op.
+	MenuBarRefresh func(extensionID string)
 }
 
 // documents are the extension's files: one store folder holds all of them.
@@ -167,6 +170,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveSystem(call)
 	case protocol.ServiceShortcuts:
 		return h.serveShortcuts(call)
+	case protocol.ServiceViews:
+		return h.serveViews(call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

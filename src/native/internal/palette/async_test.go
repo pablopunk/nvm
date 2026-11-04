@@ -44,8 +44,7 @@ func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 	// The hard budget (100 ms) cuts the provider off long before its two seconds: it is counted as slow and the
 	// query settles without it. Move the clock past the budget first, then past the provider's own wait, so its
 	// late rows arrive after the cut-off (advancing both at once would let the two race).
-	clock.Advance(150 * time.Millisecond)
-	h.awaitRows(func([]string) bool { return h.p.Settled() })
+	advanceUntilSettled(t, h, clock, time.Second)
 	clock.Advance(2 * time.Second)
 	if got := h.titles(); slices.Contains(got, "late") || !slices.Contains(got, "Quick") {
 		t.Fatalf("after the cut-off the rows should be the quick ones only, got %v", got)
@@ -132,5 +131,30 @@ func TestSelectionIsAnnouncedAndEveryRowIsLabeled(t *testing.T) {
 		if _, ok := h.tt.Find(title); !ok {
 			t.Fatalf("row %q has no label for assistive technology", title)
 		}
+	}
+}
+
+// advanceUntilSettled moves the fake clock in small steps until the query settles, up to limit. Typing starts a new
+// query generation whose budget timers are armed by their own goroutines, so a single jump could land before they
+// exist and never reach their deadline; stepping lets every generation's timers fire in order.
+func advanceUntilSettled(t *testing.T, h *harness, clock *fake.Clock, limit time.Duration) {
+	t.Helper()
+	const step = 10 * time.Millisecond
+	for moved := time.Duration(0); moved < limit; moved += step {
+		h.win.drain()
+		h.tt.Frame()
+		if h.p.Settled() {
+			return
+		}
+		clock.Advance(step)
+		select {
+		case <-h.win.notify:
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	h.win.drain()
+	h.tt.Frame()
+	if !h.p.Settled() {
+		t.Fatalf("the query did not settle within %v of fake time", limit)
 	}
 }

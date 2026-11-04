@@ -16,6 +16,7 @@ type Ports struct {
 	Resolver     Resolver
 	Clipboard    Clipboard
 	Paster       Paster
+	SelectedText SelectedText
 	Shell        Shell
 	Screens      Screens
 	Notifier     Notifier

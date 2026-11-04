@@ -110,7 +110,8 @@ func (p *Palette) SetStack(views ...*View) {
 
 func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 
-// Show shows the palette on the first level with every search reset, then runs OnShow.
+// Show shows the palette with every search reset, on the root or on the chat page that survived the last hide, then
+// runs OnShow.
 func (p *Palette) Show() {
 	if !p.win.IsVisible() {
 		p.captureFocus()
@@ -122,15 +123,12 @@ func (p *Palette) Show() {
 		p.win.SetPosition(x, y)
 	}
 	p.phIndex++
-	for len(p.stack) > 1 {
-		p.leave(p.cur())
-		p.stack = p.stack[:len(p.stack)-1]
-	}
 	p.query = ""
 	p.actionsOpen = false
 	p.shownView = nil
 	p.resetRootHistory()
 	p.dropToasts()
+	p.leaveUnsurvivingPages()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
@@ -154,7 +152,7 @@ func (p *Palette) Open(v *View) {
 	p.push(v)
 }
 
-// Hide closes the palette window and runs OnHide.
+// Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
 	p.dropToasts()
 	p.win.Hide()
@@ -181,6 +179,20 @@ func (p *Palette) dropToasts() {
 // Refresh runs the current search again and keeps the cursor where it is. It is safe from any goroutine.
 func (p *Palette) Refresh() {
 	p.win.Update(func() {
+		keep := p.chosen
+		p.invalidateRows()
+		p.search()
+		p.choose(keep)
+	})
+}
+
+// RefreshTop runs the search again when the top view satisfies pred and the palette is shown. It is safe from any
+// goroutine, so state that changes in the background redraws an open view without the user reopening it.
+func (p *Palette) RefreshTop(pred func(*View) bool) {
+	p.win.Update(func() {
+		if !p.win.IsVisible() || !pred(p.cur()) {
+			return
+		}
 		keep := p.chosen
 		p.invalidateRows()
 		p.search()
@@ -231,6 +243,16 @@ func (p *Palette) Pop() {
 	p.actionsOpen = false
 	p.search()
 	p.input.Focus()
+}
+
+// leaveUnsurvivingPages pops the pages above the topmost page that survives a hide, down to the root when none does.
+// It runs when the palette shows, as Electron's onShown does: Electron's hidePanes keeps the last live AI chat the same
+// way and clears the rest.
+func (p *Palette) leaveUnsurvivingPages() {
+	for len(p.stack) > 1 && !p.cur().SurvivesHide {
+		p.leave(p.cur())
+		p.stack = p.stack[:len(p.stack)-1]
+	}
 }
 
 // leave runs a view's OnLeave and stops its searches: nothing it returns is shown again.

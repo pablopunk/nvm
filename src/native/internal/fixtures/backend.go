@@ -48,15 +48,17 @@ type BackendRequest struct {
 //	set.HTTP.Handle(backend)
 //	backend.SetMode(fixtures.ModeInsufficientCredits)
 type Backend struct {
-	mu          sync.Mutex
-	mode        FailureMode
-	requests    []BackendRequest
-	hanging     chan struct{}
-	activeModel string
-	reply       string
-	chunkDelay  time.Duration
-	device      *deviceSignIns
-	clock       platform.Clock
+	mu           sync.Mutex
+	mode         FailureMode
+	requests     []BackendRequest
+	hanging      chan struct{}
+	activeModel  string
+	reply        string
+	script       []ScriptedReply
+	decisionBody string
+	chunkDelay   time.Duration
+	device       *deviceSignIns
+	clock        platform.Clock
 
 	completedStreams int
 	abandonedStreams int
@@ -151,6 +153,8 @@ func (b *Backend) serveRoute(w http.ResponseWriter, r *http.Request, body string
 		b.serveDeviceApprove(w, body)
 	case r.Method == http.MethodPost && r.URL.Path == TranscriptionsPath:
 		writeBody(w, http.StatusOK, "application/json", TranscriptionBody)
+	case r.Method == http.MethodPost && r.URL.Path == DecisionsPath:
+		b.serveDecision(w, body)
 	case r.URL.Path == TranscriptionPreparationPath && (r.Method == http.MethodPost || r.Method == http.MethodDelete):
 		writeBody(w, http.StatusOK, "application/json", OperationBody)
 	default:
@@ -198,7 +202,7 @@ func (b *Backend) record(r *http.Request, body string) {
 func isBackendRoute(r *http.Request) bool {
 	switch r.URL.Path {
 	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath, DeviceInitiatePath, DeviceExchangePath,
-		DeviceApprovePath, TranscriptionsPath, TranscriptionPreparationPath:
+		DeviceApprovePath, TranscriptionsPath, TranscriptionPreparationPath, DecisionsPath:
 		return true
 	default:
 		return false

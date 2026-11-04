@@ -54,6 +54,11 @@ type Options struct {
 	Budgets       map[string]supervisor.Budget
 	// DataRoot holds one data folder per extension, named after its id.
 	DataRoot string
+	// OnChange runs after any extension's runtime changes state, so a view showing it can redraw. It runs on its
+	// own goroutine and must not block.
+	OnChange func()
+	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
+	MenuBarRefresh func(extensionID string)
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
@@ -93,15 +98,18 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			MemoryLimit:   opts.MemoryLimit,
 			ResidentLimit: opts.ResidentLimit,
 			Budgets:       opts.Budgets,
+			OnStateChange: opts.OnChange,
+			Log:           ports.Logs,
 		},
 		serviceDeps: services.Deps{
-			Files:     ports.Files,
-			Clock:     ports.Clock,
-			DataRoot:  opts.DataRoot,
-			Keychain:  ports.Keychain,
-			Network:   ports.Network,
-			Clipboard: ports.Clipboard,
-			Logs:      ports.Logs,
+			Files:          ports.Files,
+			Clock:          ports.Clock,
+			DataRoot:       opts.DataRoot,
+			Keychain:       ports.Keychain,
+			Network:        ports.Network,
+			Clipboard:      ports.Clipboard,
+			Logs:           ports.Logs,
+			MenuBarRefresh: opts.MenuBarRefresh,
 
 			Shell:        ports.Shell,
 			Capabilities: ports.Capabilities,

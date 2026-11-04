@@ -13,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -70,8 +71,10 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		OCR:          ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
 		History:      p.extensionHistory,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
-		Executable: exe,
-		DataRoot:   filepath.Join(configDir(), "extension-data"),
+		Executable:     exe,
+		DataRoot:       filepath.Join(configDir(), "extension-data"),
+		MenuBarRefresh: p.refreshMenuBar,
+		OnChange:       p.extensionsStateChanged,
 	})
 }
 
@@ -94,6 +97,14 @@ func (p *App) extensionHistory() *clipboard.History {
 		return nil
 	}
 	return p.clip.history
+}
+
+// extensionsStateChanged redraws the Extensions list when it is the view on top, so a child that finishes starting
+// shows as Running without the user reopening the list, and asks the menu bar to reconcile its items with the new
+// state. It runs on the goroutine that changed the state.
+func (p *App) extensionsStateChanged() {
+	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
+	p.syncMenuBarItems()
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

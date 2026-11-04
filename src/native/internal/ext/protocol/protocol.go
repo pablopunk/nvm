@@ -18,6 +18,9 @@ const (
 	MethodSearch   = "search"   // SearchProvider.SearchItems, with Query
 	MethodRun      = "run"      // ActionHandler.RunAction, with Invocation
 	MethodLoad     = "load"     // DataLoader.LoadItems, with Invocation.Ref.ID as the loader
+
+	MethodMenuBars        = "menubars"         // MenuBarProvider.MenuBars
+	MethodMenuBarTriggers = "menubar-triggers" // MenuBarProvider.MenuBarTriggers
 )
 
 // Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the
@@ -29,6 +32,7 @@ const (
 	ServiceLogs     = "logs"
 	ServiceText     = "text"
 	ServiceNetwork  = "network"
+	ServiceViews    = "views"
 )
 
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the
@@ -44,6 +48,8 @@ const MaxLineBytes = 1 << 20
 type Ready struct {
 	OK      bool         `json:"ok"`
 	Failure *api.Failure `json:"failure,omitempty"`
+	// Methods lists the protocol methods the source implements, so the host knows a provider exists without a call.
+	Methods []string `json:"methods,omitempty"`
 }
 
 // Request is one call from the host. ID is echoed in the response, so a late answer is never mistaken

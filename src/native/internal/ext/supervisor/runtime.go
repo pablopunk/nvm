@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -80,6 +81,17 @@ func (r *Runtime) Reset() {
 	r.notifyLocked()
 }
 
+// Provides reports whether the running child declared the protocol method. A runtime that is not running provides
+// nothing: its declarations are read again when it starts.
+func (r *Runtime) Provides(method string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.child == nil {
+		return false
+	}
+	return slices.Contains(r.child.methods, method)
+}
+
 // Status returns the current state, the reason for a failed, broken or disabled state, and recent diagnostics.
 func (r *Runtime) Status() Status {
 	r.mu.Lock()
@@ -115,10 +127,13 @@ func (r *Runtime) WaitFor(ctx context.Context, pred func(Status) bool) error {
 	}
 }
 
-// notifyLocked wakes every WaitFor caller. The caller holds r.mu and has changed the state.
+// notifyLocked wakes every WaitFor caller and the state hook. The caller holds r.mu and has changed the state.
 func (r *Runtime) notifyLocked() {
 	close(r.changed)
 	r.changed = make(chan struct{})
+	if r.cfg.OnStateChange != nil {
+		go r.cfg.OnStateChange()
+	}
 }
 
 // Call sends one request and returns the child's response. A child-side failure comes back inside the

@@ -59,6 +59,7 @@ func Indicator(c *ui.Context, s State) {
 		tone = k.Danger
 		subtitleColor = k.Danger
 	}
+	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
 		ui.Row(c).Grow(1).Padding(10, 14).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, design.Icon("mic")).FontSize(16).TextColor(tone)

@@ -30,3 +30,17 @@ func TestDefaultBuildIgnoresTheRigBackendOverride(t *testing.T) {
 		t.Fatal("default build accepted a loopback backend")
 	}
 }
+
+// A default build can still switch to production: the rig's pin is only set in automation builds.
+func TestDefaultBuildCanSwitchToProduction(t *testing.T) {
+	t.Setenv("NVM_RIG_BACKEND", "")
+	deps := (&App{}).accountDeps(fake.NewSet().Ports(), nil)
+	deps.OnChange = nil
+	session, err := auth.New(deps)
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	if err := session.SwitchEnvironment(backend.EnvironmentProduction, ""); err != nil {
+		t.Fatalf("default build switch to production: %v", err)
+	}
+}
