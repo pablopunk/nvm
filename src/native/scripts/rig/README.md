@@ -65,7 +65,7 @@ Each journey test saves `*-palette.png` and `*-desktop.png` per step (names star
 
 ## What the rig does not cover yet
 
-Only J01, J02 and J05 are scripted, and each one covers the smoke part of its pass condition: no focus restoration, frecency, paste into another app, pinning, or restart durability. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
+Scripted journeys are J01, J02, J03, J05, J06, J08, J09, J10, J15, J16 and J22. Each covers the smoke part of its pass condition. Not covered: no focus restoration, frecency, paste into another app, pinning, or restart durability. J15 checks the failed rows and the reasons the palette shows, but after a child's first failure the reason is the generic `not running: failed`, and J15 does not check the first failure's own reason. J16 covers a folder dropped before launch, not one dropped while the app runs. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
 
 ## Performance budgets (WP0.5)
 
