@@ -49,6 +49,8 @@ type App struct {
 	*palette.Palette
 	panel *mygo.Window
 	S     *Settings
+	// goos is the operating system whose labels and commands the app shows; the goldens pin the recorded one.
+	goos string
 
 	md   markdown.Options
 	exts extensionHost

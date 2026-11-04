@@ -6,8 +6,6 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo"
-
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // startFiles builds the Files feature from the settings and starts it. The index loads its saved copy and scans the
@@ -15,7 +13,7 @@ import (
 // window and the shortcut exist, so a redraw has a window to draw in.
 func (p *App) startFiles() {
 	home, _ := os.UserHomeDir()
-	ports := real.NewPorts()
+	ports := p.ports
 	svc, err := newFileService(fileDeps{
 		Ports:     ports,
 		Home:      home,

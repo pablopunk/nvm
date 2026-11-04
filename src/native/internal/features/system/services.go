@@ -18,7 +18,7 @@ type Options struct {
 	SettingsTitle string
 }
 
-// Services runs system commands and reads what the palette shows about the system. Commands and PermissionRows
+// Services runs system commands and reads what the palette shows about the system. PermissionRows
 // answer from the capabilities and the ports without blocking; Run and RequestPermission may block and belong
 // off the UI thread.
 type Services struct {
@@ -36,11 +36,6 @@ func NewServices(o Options) *Services {
 	return &Services{ports: o.Ports, goos: o.Platform, home: o.Home, settingsTitle: o.SettingsTitle}
 }
 
-// Commands lists the commands the system supports.
-func (s *Services) Commands() []Command {
-	return Commands(s.ports.Capabilities, s.settingsTitle)
-}
-
 // Places lists the home folders the palette offers.
 func (s *Services) Places() []Place {
 	return Places(s.home)
@@ -51,7 +46,12 @@ func (s *Services) OpenPlace(place Place) error {
 	return s.ports.Shell.OpenPath(place.Path)
 }
 
-// Run performs a command. Destructive commands must be confirmed by the caller first; Run itself never asks.
+// CommandTitle names a command for a failure sentence, with the OS label of the settings command.
+func (s *Services) CommandTitle(id CommandID) string {
+	return Title(id, s.settingsTitle)
+}
+
+// Run performs a command. Destructive commands must be confirmed by the extension that asks first; Run itself never asks.
 func (s *Services) Run(id CommandID) error {
 	system := s.ports.System
 	switch id {

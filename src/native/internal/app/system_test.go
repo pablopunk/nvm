@@ -6,9 +6,9 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
-	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // fakeSystem returns the palette's system fake, which the golden palette wires in.
@@ -21,23 +21,17 @@ func fakeSystem(t *testing.T, p *App) *fake.System {
 	return system
 }
 
-// commandNamed finds a palette command by its title.
-func commandNamed(t *testing.T, p *App, title string) command {
+// systemRow finds the root row of a system command by its title, the way the palette finds it.
+func systemRow(t *testing.T, p *App, title string) search.Item {
 	t.Helper()
-	for _, c := range p.commands(false) {
-		if c.Title == title {
-			return c
-		}
-	}
-	t.Fatalf("no palette command named %q", title)
-	return command{}
+	return findRowTitled(t, commandRows(p, &rootInput{}, strings.ToLower(title)), title)
 }
 
 // TestRestartAsksBeforeItRestarts pushes a confirmation for a destructive command and runs nothing until the user
 // confirms.
 func TestRestartAsksBeforeItRestarts(t *testing.T) {
 	p := goldenPalette(t)
-	commandNamed(t, p, "Restart").Run(p)
+	systemRow(t, p, "Restart").Actions[0].Run(p)
 	if title := p.Top().Title; title != "Confirm" {
 		t.Fatalf("top view = %q, want the confirmation", title)
 	}
@@ -50,23 +44,11 @@ func TestRestartAsksBeforeItRestarts(t *testing.T) {
 func TestSystemCommandRunsOffTheUIThread(t *testing.T) {
 	p := goldenPalette(t)
 	system := fakeSystem(t, p)
-	p.runSystemCommand(systemCommandNamed(t, p, "Sleep"))
+	p.runSystemOp("sleep", func(string) {})
 	call := awaitValue(t, system.Events(), "the sleep call")
 	if call.Op != fake.OpSystemSleep {
 		t.Fatalf("call = %+v, want Sleep", call)
 	}
-}
-
-// systemCommandNamed returns the feature command with a title, as the palette's own command was built from it.
-func systemCommandNamed(t *testing.T, p *App, title string) systemfeat.Command {
-	t.Helper()
-	for _, c := range p.systemSvc.Commands() {
-		if c.Title == title {
-			return c
-		}
-	}
-	t.Fatalf("no system command named %q", title)
-	return systemfeat.Command{}
 }
 
 // TestFailedSystemCommandsSayWhy explains an unsupported command plainly and keeps the OS reason otherwise.
@@ -74,8 +56,7 @@ func TestFailedSystemCommandsSayWhy(t *testing.T) {
 	if got := describeSystemFailure("Lock Screen", platform.ErrUnsupported); got != "Lock Screen is not available on this system." {
 		t.Fatalf("unsupported = %q", got)
 	}
-	got := describeSystemFailure("Sleep", errors.New("exit status 1"))
-	if got != "Could not run sleep: exit status 1" {
+	if got := describeSystemFailure("Sleep", errors.New("exit status 1")); got != "Could not run sleep: exit status 1" {
 		t.Fatalf("failure = %q", got)
 	}
 }
@@ -134,7 +115,7 @@ func TestPaletteOSPermissions(t *testing.T) {
 
 func TestPaletteRestartConfirmation(t *testing.T) {
 	p := goldenPalette(t)
-	commandNamed(t, p, "Restart").Run(p)
+	systemRow(t, p, "Restart").Actions[0].Run(p)
 	golden.AssertMatrix(t, "system-confirm", p.View, systemGoldens)
 }
 

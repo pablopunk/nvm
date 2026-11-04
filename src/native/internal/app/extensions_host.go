@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -45,8 +44,10 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
+// newExtensionManager builds the manager over the app's one port set, so extensions see the same capabilities and
+// system port as the palette does (the automation build swaps both in appPorts).
 func (p *App) newExtensionManager() (*manager.Manager, error) {
-	ports := real.NewPorts()
+	ports := p.ports
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
@@ -67,7 +68,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 
 		Shell:         ports.Shell,
 		Capabilities:  ports.Capabilities,
-		OS:            runtime.GOOS,
+		OS:            p.goos,
 		Windows:       p.extensionWindows(),
 		Shortcuts:     p.extensionShortcuts(),
 		OCR:           ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),

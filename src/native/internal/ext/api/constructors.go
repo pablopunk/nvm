@@ -34,6 +34,17 @@ func PasteText(title, text string) Action {
 	return Action{Kind: ActionPasteText, Title: title, Text: text, Paste: &PasteOptions{RestoreClipboard: true}}
 }
 
+// SetQuery replaces the palette's search text and searches again, keeping the palette open.
+func SetQuery(title, query string) Action {
+	return Action{Kind: ActionSetQuery, Title: title, Query: query}
+}
+
+// SystemOp runs one OS command such as "lock-screen" or "empty-trash" on the host. Destructive ones ask first when
+// the action carries a Confirmation.
+func SystemOp(title, op string) Action {
+	return Action{Kind: ActionSystem, Title: title, Op: op}
+}
+
 // PushView drills into a child view; Escape returns to the parent.
 func PushView(title string, view View) Action {
 	return Action{Kind: ActionPushView, Title: title, View: &view}

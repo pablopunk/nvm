@@ -76,7 +76,11 @@ func snippetRows(p *App, _ *rootInput, q string) []search.Item {
 func commandRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
-	for _, cmd := range p.commands(in.timerOn) {
+	for _, cmd := range p.commandSlots(in.timerOn) {
+		if isBuiltInSlot(cmd) {
+			out = append(out, builtInRows(p, cmd.builtIn, q)...)
+			continue
+		}
 		cmd := cmd
 		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
 		if lq == "" {

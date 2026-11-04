@@ -50,6 +50,7 @@ func (c rateCache) Save(rates calc.Rates) error {
 // writer could overwrite the first.
 func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.Location) {
 	p.ports = ports
+	p.goos = goos
 	p.systemSvc = newSystemServices(ports, goos)
 	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
@@ -91,7 +92,7 @@ func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
 		Ports:         ports,
 		Platform:      goos,
 		Home:          home,
-		SettingsTitle: platform.SettingsTitleFor(goos),
+		SettingsTitle: platform.ShellLabelsFor(goos).SettingsCommand,
 	})
 }
 

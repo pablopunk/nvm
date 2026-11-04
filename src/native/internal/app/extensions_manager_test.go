@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -35,9 +36,11 @@ func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 	}
 	m, err := manager.New(manager.Ports{
 		Files: ports.FS, Clock: ports.Clock, Worker: real.NewWorker(), Processes: ports.Processes,
+		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
+		BuiltIns:   builtInExtensions(),
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},

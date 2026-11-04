@@ -76,8 +76,19 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		if pane := action.Setting; action.Op == "open-system-settings" && s.deps.OpenSettingsPane != nil {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
 		}
+		return s.hostOperation(action, title)
+	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery:
+		return s.hostOperation(action, title)
 	}
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
+}
+
+// hostOperation is a declarative action the host performs itself. It runs through the route, so a Confirmation asks
+// first, as it does for a run action.
+func (s *Session) hostOperation(action api.Action, title string) search.Action {
+	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
+		s.runRoute(h, route{extID: s.extID, action: action})
+	}}
 }
 
 const unavailableMessage = "This action is not available yet"
@@ -121,7 +132,12 @@ func (s *Session) runRoute(h search.Host, r route) {
 }
 
 // invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
+// A declarative action is performed by the host instead, with no extension call.
 func (s *Session) invoke(h search.Host, r route) {
+	if r.action.Kind != api.ActionRun {
+		s.runDeclared(h, r.action)
+		return
+	}
 	if s.deps.Invoke == nil || r.action.Ref == nil {
 		h.Toast(unavailableMessage)
 		return
@@ -179,7 +195,7 @@ func (s *Session) confirmPage(r route) *palette.View {
 		Search: func(string) []search.Item {
 			return []search.Item{
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: "red", Actions: []search.Action{
-					{Title: label, Dismiss: search.DismissNever, Run: func(h search.Host) {
+					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
 						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action)})
 					}},

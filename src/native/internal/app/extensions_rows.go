@@ -47,6 +47,9 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 		out = append(out, matchingCommandRows(e.p, m, result, q)...)
 	}
 	for _, result := range m.Search(ctx, q) {
+		if isCommandPlacedBuiltIn(result.ExtensionID) {
+			continue // listed by commandRows, at the place of its command
+		}
 		out = append(out, searchRowsFor(e.p, m, q, result)...)
 	}
 	emit(search.Batch{Items: out, Final: true})

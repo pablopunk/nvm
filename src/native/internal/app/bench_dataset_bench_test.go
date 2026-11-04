@@ -10,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -83,6 +84,8 @@ func newBenchPalette(b *testing.B) *App {
 
 		files: newTestFiles(b, b.TempDir(), data.files),
 	}
+	p.ports = fake.NewSet().Ports()
+	p.systemSvc = newSystemServices(p.ports, goldenOS)
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	return p

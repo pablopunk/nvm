@@ -106,8 +106,3 @@ func (c *clipPictures) load(name string) (*ui.Bitmap, error) {
 	}
 	return c.decode(data)
 }
-
-// seed puts a decoded picture in the cache without a decode, for fixtures and goldens.
-func (c *clipPictures) seed(name string, bitmap *ui.Bitmap) {
-	c.ready[name] = bitmap
-}

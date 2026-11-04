@@ -19,7 +19,7 @@ const extensionRunTimeout = 10 * time.Second
 // extensionViewDeps are the services of extension views: an action runs on the manager's supervised child, and its
 // result returns to the UI thread, where the palette applies it.
 func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
-	ports := real.NewPorts()
+	ports := p.ports
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			go func() {
@@ -52,6 +52,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		OpenURL:          func(url string) { _ = mygo.Shell.OpenExternal(url) },
 		CopyText:         func(text string) { mygo.Clipboard.WriteText(text) },
 		OpenSettingsPane: p.openSystemPaneByID,
+		OpenPath:         func(path string) { _ = ports.Shell.OpenPath(path) },
+		RevealPath:       func(path string) { _ = ports.Shell.Reveal(path) },
+		RunSystem:        p.runSystemOp,
 		Files:            ports.FS,
 		Clock:            ports.Clock,
 		Cache:            extensionSnapshots,
