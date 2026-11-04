@@ -183,7 +183,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceDesktopApps:
 		return h.serveDesktopApps(call)
 	case protocol.ServiceDesktopFiles:
-		return h.serveDesktopFiles(call)
+		return h.serveDesktopFiles(ctx, call)
 	case protocol.ServiceDesktopShell:
 		return h.serveDesktopShell(ctx, call)
 	case protocol.ServiceDesktopWindows:

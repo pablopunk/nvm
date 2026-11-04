@@ -109,3 +109,15 @@ type ImageResult struct {
 	DataURL string `json:"dataUrl,omitempty"`
 	Found   bool   `json:"found"`
 }
+
+// FindArgs names the folders of one walk and its options.
+type FindArgs struct {
+	Roots   []string        `json:"roots"`
+	Options api.FindOptions `json:"options"`
+}
+
+// ThumbnailResult is a picture of a file as a PNG data URL, or Found false when the file has no picture.
+type ThumbnailResult struct {
+	URL   string `json:"url,omitempty"`
+	Found bool   `json:"found"`
+}

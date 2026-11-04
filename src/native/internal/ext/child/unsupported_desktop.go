@@ -42,14 +42,6 @@ func (remoteApps) Frontmost() (api.App, error) {
 	return api.App{}, unsupported("ctx.desktop.apps.frontmost")
 }
 
-func (remoteFiles) Find([]string, api.FindOptions) ([]api.FileRef, error) {
-	return nil, unsupported("ctx.desktop.files.find")
-}
-
-func (remoteFiles) OpenWithApps(string) ([]api.App, error) {
-	return nil, unsupported("ctx.desktop.files.openWithApps")
-}
-
 func (remoteFiles) QuickLook(string) error { return unsupported("ctx.desktop.files.quickLook") }
 
 func (remoteFiles) ReadText(string) (string, error) {
@@ -62,14 +54,6 @@ func (remoteFiles) WriteText(string, string, bool) (api.FileRef, error) {
 
 // DisplayPath returns the path unchanged: the host shows paths as they are until it serves its own display names.
 func (remoteFiles) DisplayPath(path string) string { return path }
-
-func (remoteFiles) FileURL(string) string { return "" }
-
-func (remoteFiles) Thumbnail(string) (string, bool) { return "", false }
-
-func (remoteFiles) Metadata(string) (api.FileRef, error) {
-	return api.FileRef{}, unsupported("ctx.desktop.files.metadata")
-}
 
 func (remoteFiles) IndexedRoots() []string { return nil }
 

@@ -43,4 +43,9 @@ const (
 	OpScript        = "script"
 	OpAppleScript   = "apple-script"
 	OpWhich         = "which"
+	OpFind          = "find"
+	OpThumbnail     = "thumbnail"
+	OpMetadata      = "metadata"
+	OpFileURL       = "file-url"
+	OpOpenWithApps  = "open-with-apps"
 )

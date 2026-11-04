@@ -6,8 +6,8 @@ import (
 )
 
 // remoteDesktop is the desktop surface the host serves. The sub-surfaces the host does not serve yet (keyboard,
-// selection, files beyond open and reveal, and the rest of the window API) are the embedded nil interfaces: calling
-// one reports an internal failure with a reference, as every unwired service does.
+// selection, and the rest of the window API) are the embedded nil interfaces: calling one reports an internal failure
+// with a reference, as every unwired service does.
 type remoteDesktop struct {
 	api.Desktop
 	link *hostLink
@@ -85,20 +85,6 @@ func (a remoteApps) Icon(path string) (string, bool, error) {
 	var icon protocol.IconResult
 	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpIcon, protocol.PathArgs{Path: path}, &icon)
 	return icon.DataURL, icon.Found, err
-}
-
-// remoteFiles opens and reveals files and folders in other apps.
-type remoteFiles struct {
-	api.Files
-	link *hostLink
-}
-
-func (f remoteFiles) Open(path string) error {
-	return f.link.Call(protocol.ServiceDesktopFiles, protocol.OpOpen, protocol.PathArgs{Path: path}, nil)
-}
-
-func (f remoteFiles) Reveal(path string) error {
-	return f.link.Call(protocol.ServiceDesktopFiles, protocol.OpReveal, protocol.PathArgs{Path: path}, nil)
 }
 
 // remoteWindowManagement lists displays and windows and places or focuses listed windows. Layouts other than
