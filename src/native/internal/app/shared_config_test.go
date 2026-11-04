@@ -20,6 +20,7 @@ func sharedConfigApp(t *testing.T) (*App, *fake.FS) {
 		t.Fatal(err)
 	}
 	p.sharedConfig = portable.Open(files, sharedFixtureConfig)
+	p.shortcutMgr = nil
 	return p, files
 }
 
@@ -53,5 +54,48 @@ func TestUpdateChannelIsSavedInConfigJSON(t *testing.T) {
 	}
 	if channels.Channel() != update.ChannelNightly {
 		t.Fatal("the channel did not read back as nightly")
+	}
+}
+
+// oneXSharedConfig is a config.json 1.x wrote: the palette, and shortcuts for apps, dictation, emoji and window layouts.
+const oneXSharedConfig = `{
+  "version": 1,
+  "settings": {
+    "paletteHotkey": "Command+Space",
+    "hyperKey": "Command+Control+Alt",
+    "errorReporting": true,
+    "updateChannel": "dev",
+    "menuBarIconStyle": "bolt-outline"
+  },
+  "shortcuts": {
+    "extension-root:nevermind.apps:app:/Applications/Slack.app": "Command+Control+Alt+D",
+    "extension-root:nevermind.dictation:dictation": "Command+Control+Alt+V",
+    "extension:nevermind.emoji-symbols:emoji-symbols": "Command+Shift+E"
+  },
+  "ai": {
+    "defaultModel": "smart"
+  }
+}
+`
+
+func TestOneXShortcutsAppearAsBoundRowsInTwoOh(t *testing.T) {
+	p, files := sharedConfigApp(t)
+	if err := files.WriteFile(sharedFixtureConfig, []byte(oneXSharedConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	accelerators := map[string]string{}
+	for _, entry := range p.shortcutsManager().Entries() {
+		accelerators[entry.ActionID] = entry.Accelerator
+	}
+	want := map[string]string{
+		"palette":                     "Command+Space",
+		"app:/Applications/Slack.app": "Command+Control+Alt+D",
+		"command:Dictate":             "Command+Control+Alt+V",
+		"command:Emoji & Symbols":     "Command+Shift+E",
+	}
+	for actionID, accelerator := range want {
+		if got := accelerators[actionID]; got != accelerator {
+			t.Errorf("%s = %q; want %q", actionID, got, accelerator)
+		}
 	}
 }

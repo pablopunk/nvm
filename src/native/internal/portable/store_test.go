@@ -196,3 +196,24 @@ func TestDanglingLinkIsNeverWritten(t *testing.T) {
 		t.Errorf("Update over a dangling link = %v; want ErrDanglingLink", err)
 	}
 }
+
+func TestSettingsReadTheSharedKeysAndLeaveMissingOnesEmpty(t *testing.T) {
+	doc, err := parseDocument([]byte(oneXSample))
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := doc.Settings()
+	if settings.PaletteHotkey != "Command+Space" || settings.HyperKey != "Command+Control+Alt" || settings.UpdateChannel != "dev" || settings.MenuBarIconStyle != "bolt-outline" || settings.AIDefaultModel != "smart" {
+		t.Errorf("settings = %+v", settings)
+	}
+	if settings.ErrorReporting == nil || !*settings.ErrorReporting {
+		t.Errorf("errorReporting = %v; want true", settings.ErrorReporting)
+	}
+	empty, err := parseDocument([]byte(`{"version":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := empty.Settings(); got.ErrorReporting != nil || got.PaletteHotkey != "" {
+		t.Errorf("missing keys read as %+v", got)
+	}
+}

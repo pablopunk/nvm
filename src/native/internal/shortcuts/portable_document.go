@@ -46,7 +46,7 @@ func paletteChanged(before, after string) bool {
 
 func documentOf(stored portable.Document) Document {
 	doc := DefaultDocument("")
-	doc.Palette, _ = stored.String("settings", "paletteHotkey")
+	doc.Palette = stored.Settings().PaletteHotkey
 	for _, key := range stored.Keys("shortcuts") {
 		actionID, bound := ActionIDOf(key)
 		if !bound {

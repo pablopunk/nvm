@@ -35,8 +35,8 @@ func (p *App) diagnosticsOff() bool {
 	if err != nil {
 		return false
 	}
-	errorReporting, present := doc.Bool("settings", "errorReporting")
-	return present && !errorReporting
+	errorReporting := doc.Settings().ErrorReporting
+	return errorReporting != nil && !*errorReporting
 }
 
 func (p *App) setDiagnosticsOff(off bool) error {
@@ -68,8 +68,7 @@ func (c *updateChannels) Channel() update.Channel {
 	if err != nil {
 		return update.ChannelStable
 	}
-	value, _ := doc.String("settings", "updateChannel")
-	return update.ParseChannel(value)
+	return update.ParseChannel(doc.Settings().UpdateChannel)
 }
 
 // SetChannel saves the channel.
