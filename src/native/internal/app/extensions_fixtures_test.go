@@ -56,7 +56,7 @@ type viewHost struct {
 // Pop counts the returns from a view.
 func (h *viewHost) Pop() { h.pops++ }
 
-const fixtureExtensionsDir = "/nvm-fixture/config/nvm-native/extensions"
+const fixtureExtensionsDir = "/nvm-fixture/shared/nevermind/extensions"
 
 func fixtureDir(id string) string { return fixtureExtensionsDir + "/" + id }
 

@@ -1,15 +1,14 @@
 package app
 
 import (
+	"log"
 	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
-	"github.com/pablopunk/nvm/native/internal/store"
 )
-
-const shortcutsFile = "shortcuts.json"
 
 // shortcutsManager returns the app's shortcut manager, creating it on first use.
 func (p *App) shortcutsManager() *shortcuts.Manager {
@@ -26,21 +25,20 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
+		Describe:  shortcuts.DescribeApp,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,
 	}
 }
 
-// shortcutsDocument stores the choices in shortcuts.json. The palette key of a fresh install is the one the settings
-// hold, so a Hotkey already chosen in settings.json carries over.
+// shortcutsDocument keeps the shortcuts in config.json, under the keys 1.x uses. Without a config store it keeps them
+// for the process.
 func (p *App) shortcutsDocument() shortcuts.Persistence {
-	legacyPalette := p.S.Hotkey
-	defaults := func() shortcuts.Document { return shortcuts.DefaultDocument(legacyPalette) }
-	if p.userStore == nil || p.userReadOnly {
-		return shortcuts.NewMemoryDocument(defaults())
+	if p.sharedConfig == nil {
+		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(shortcuts.DefaultPalette))
 	}
-	return store.Doc(p.userStore, shortcutsFile, 1, defaults)
+	return shortcuts.NewPortableDocument(p.sharedConfig)
 }
 
 // shortcutCommands lists the commands that take a shortcut: the root commands that are visible.
@@ -61,9 +59,14 @@ func shortcutCommandID(title string) string {
 	return "command:" + title
 }
 
-// runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does.
+// runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does. An app
+// shortcut opens its app without the palette.
 func (p *App) runShortcutCommand(actionID string) {
 	if windows.RunShortcut(p.windowDeps(), actionID) {
+		return
+	}
+	if path, ok := shortcuts.AppPathOf(actionID); ok {
+		p.launchShortcutApp(path)
 		return
 	}
 	for _, cmd := range p.commands(false) {
@@ -72,6 +75,13 @@ func (p *App) runShortcutCommand(actionID string) {
 			p.trackedRun(cmd)(search.Host(p))
 			return
 		}
+	}
+}
+
+func (p *App) launchShortcutApp(path string) {
+	name, _ := shortcuts.DescribeApp(shortcuts.AppActionID(path))
+	if err := p.ports.Shell.LaunchApp(platform.App{Name: name, Path: path}); err != nil {
+		log.Println("shortcut app:", err)
 	}
 }
 

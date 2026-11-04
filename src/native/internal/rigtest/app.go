@@ -11,6 +11,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 )
 
 const (
@@ -25,7 +27,7 @@ const (
 type Options struct {
 	// Theme is NVM_THEME ("dark" forces the dark palette). Empty keeps the light default.
 	Theme string
-	// Hotkey is written to the isolated settings.json, for a rig that must not share a grab with
+	// Hotkey is written to the isolated config.json, for a rig that must not share a grab with
 	// another app on the display. Empty keeps the app default, Alt+Shift+Space.
 	Hotkey string
 	// Home is the HOME of this launch, kept by the caller. A second launch with the same Home runs
@@ -190,13 +192,19 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 	return env
 }
 
+// rigDataDir is the machine-local folder under home: the Linux user-data folder, which the rig reaches through XDG_DATA_HOME.
+func rigDataDir(home string) string {
+	return filepath.Join(home, ".local", "share", "nevermind-next")
+}
+
+// writeHotkeySettings writes the palette shortcut to the isolated config.json, the file 2.0 reads it from.
 func writeHotkeySettings(home, hotkey string) error {
-	dir := filepath.Join(home, ".config", "nvm-native")
+	dir := folders.Shared(home)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	data := fmt.Sprintf("{\"Hotkey\": %q}\n", hotkey)
-	return os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0o600)
+	data := fmt.Sprintf("{\n  \"version\": 1,\n  \"settings\": {\n    \"paletteHotkey\": %q\n  }\n}\n", hotkey)
+	return os.WriteFile(filepath.Join(dir, folders.PortableConfigName), []byte(data), 0o600)
 }
 
 // waitReady polls the app log for the "ready" line and fails early on a hotkey registration error

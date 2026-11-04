@@ -25,6 +25,7 @@ const (
 var layerRank = map[string]int{
 	"internal/platform":   0,
 	"internal/store":      1,
+	"internal/portable":   1,
 	"internal/logx":       1,
 	"internal/safego":     1,
 	"internal/design":     2,

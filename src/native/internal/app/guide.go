@@ -65,7 +65,7 @@ func (p *App) guideView() *palette.View {
 	return &palette.View{
 		Title: "Getting Started", Placeholder: "Search tips",
 		Search: func(string) []search.Item {
-			rows := settingsfeat.GuideRows(p.S.Hotkey)
+			rows := settingsfeat.GuideRows(p.shortcutsManager().PaletteAccelerator())
 			items := make([]search.Item, 0, len(rows))
 			for _, row := range rows {
 				items = append(items, p.guideItem(row))

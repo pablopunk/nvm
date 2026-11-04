@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 	"image"
 	"image/color"
 	"image/png"
@@ -31,8 +32,8 @@ var goldenNow = time.Date(2026, time.November, 3, 10, 0, 0, 0, time.UTC)
 // panes follow it rather than the machine running the test, so the recorded rows hold on macOS and Windows too.
 const goldenOS = "linux"
 
-// goldenConfig is the config directory the goldens show. Nothing is written there: no fixture saves.
-const goldenConfig = "/nvm-fixture/config/nvm-native"
+// goldenData is the machine-local folder the goldens show. Nothing is written there: no fixture saves.
+const goldenData = "/nvm-fixture/data/nevermind-next"
 
 // goldenPalette returns the palette built from fixtures alone. It holds the stores, apps and icons in
 // memory and fixes the clock and the config directory, so no golden reads or writes the disk or depends
@@ -64,7 +65,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	userNotes, userSnippets := goldenUserData(t, set, withConflict)
 	p := &App{
 		S: &Settings{
-			Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200,
+			Engine: "google", ClipLimit: 200,
 			Disabled: map[string]bool{},
 		},
 		learn:  goldenUsage(),
@@ -81,7 +82,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	}
 	services := fake.NewSet()
 	services.System.SetHome(goldenHome(t))
-	p.attachServices(services.Ports(), goldenOS, goldenConfig, time.UTC)
+	p.attachServices(services.Ports(), goldenOS, goldenData, time.UTC)
 	p.exts.mgr.Store(newFixtureManager(t))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
@@ -105,20 +106,21 @@ func isolateUserFolders(tb testing.TB, home string) {
 	tb.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
 }
 
-// swapForGolden gives the test a temporary HOME and points configDir and clock at their fixtures for the rest of
-// the test. The config folder sits at the same place under every temporary HOME, so what a golden shows of it
-// ("~/.config/nvm-native") never depends on the run.
+// swapForGolden gives the test a temporary HOME and points the local and shared folders and clock at their fixtures for
+// the rest of the test. Both folders sit at the same place under every temporary HOME, so what a golden shows of them
+// ("~/.config/nevermind") never depends on the run.
 func swapForGolden(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
 	isolateUserFolders(t, home)
-	previousConfig, previousClock := configDir, clock
-	dir := filepath.Join(home, ".config", "nvm-native")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	previousData, previousShared, previousClock := dataDir, sharedDir, clock
+	data := filepath.Join(home, ".local", "share", appFolderSlug)
+	shared := folders.Shared(home)
+	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	configDir, clock = func() string { return dir }, goldenClockNow
-	t.Cleanup(func() { configDir, clock = previousConfig, previousClock })
+	dataDir, sharedDir, clock = func() string { return data }, func() string { return shared }, goldenClockNow
+	t.Cleanup(func() { dataDir, sharedDir, clock = previousData, previousShared, previousClock })
 }
 
 // goldenUsage is the learned state the goldens and the root table read: Firefox used three times and Terminal
@@ -174,7 +176,7 @@ func goldenApps() []appfeat.App {
 // older version, so opening that note raises the conflict.
 func goldenUserData(t *testing.T, set *fake.Set, withConflict bool) (*notes.Store, *snippets.Store) {
 	t.Helper()
-	dir := goldenConfig
+	dir := goldenData
 	set.FS.Seed(dir+"/notes.json", goldenEnvelope(t, map[string]any{"notes": goldenNoteRecords()}))
 	set.FS.Seed(dir+"/snippets.json", goldenEnvelope(t, map[string]any{"snippets": goldenSnippetRecords()}))
 	if withConflict {
@@ -222,11 +224,11 @@ func goldenSnippetRecords() []map[string]any {
 // goldenChatService is the chat service over the two fixture chats the root's rows show.
 func goldenChatService(t *testing.T, set *fake.Set) *chat.Service {
 	t.Helper()
-	set.FS.Seed(goldenConfig+"/chats.json", goldenEnvelope(t, map[string]any{"chats": []map[string]any{
+	set.FS.Seed(goldenData+"/chats.json", goldenEnvelope(t, map[string]any{"chats": []map[string]any{
 		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-5 * time.Hour)},
 		{"id": "c-tokyo", "kind": "conversation", "title": "Time zones", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-26 * time.Hour), "updatedAt": goldenNow.Add(-26 * time.Hour)},
 	}}))
-	st, err := store.Open(set.FS, set.Clock, goldenConfig)
+	st, err := store.Open(set.FS, set.Clock, goldenData)
 	if err != nil {
 		t.Fatal(err)
 	}

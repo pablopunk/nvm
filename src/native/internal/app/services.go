@@ -11,6 +11,7 @@ import (
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/portable"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -75,6 +76,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 			cache = rateCache{doc: p.rates}
 		}
 	}
+	p.sharedConfig = portable.Open(ports.FS, sharedConfigPath())
 	p.attachAccount(ports, st)
 	rates, err := calc.NewRateService(ports.HTTP, ports.Clock, cache)
 	if err != nil {

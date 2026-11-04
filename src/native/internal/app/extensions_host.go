@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 	"log"
 	"os"
 	"path/filepath"
@@ -52,7 +53,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(configDir(), "extension-state"))
+	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(dataDir(), "extension-state"))
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +79,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Places:        p.systemPlaces,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
-		DataRoot:       filepath.Join(configDir(), "extension-data"),
+		DataRoot:       filepath.Join(dataDir(), "extension-data"),
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
@@ -171,7 +172,7 @@ func awaitQuestion(ctx context.Context, onUI func(func()), pal questionPresenter
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.
 func extensionsDir() string {
-	d := filepath.Join(configDir(), "extensions")
+	d := filepath.Join(sharedDir(), folders.ExtensionsName)
 	_ = os.MkdirAll(d, 0o755)
 	return d
 }

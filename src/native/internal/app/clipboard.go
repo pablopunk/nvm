@@ -174,7 +174,7 @@ func (p *App) openClipboard() *clipEngine {
 	}
 	e := newClipEngine(clipDeps{
 		ports:   p.ports,
-		dir:     configDir(),
+		dir:     dataDir(),
 		limit:   p.S.ClipLimit,
 		store:   st,
 		redraw:  p.redraw,
