@@ -110,19 +110,52 @@ func (p *App) extensionsStateChanged() {
 	p.syncMenuBarItems()
 }
 
-// askExtensionConfirmation shows a destructive extension call's question in the palette and waits for the answer. It
-// runs on the extension's goroutine and pushes the view on the UI thread. Escape gives no answer, so the wait ends
-// with the confirmation timeout and the call is cancelled.
+// questionPresenter is the part of the palette a host question needs: it shows the palette when it is hidden, puts
+// the question on top, and takes the question away again.
+type questionPresenter interface {
+	Visible() bool
+	Show()
+	Hide()
+	Push(v any)
+	PopIf(v *palette.View) bool
+}
+
+// askExtensionConfirmation puts a destructive extension call's question on the palette and waits for the answer. It
+// runs on the extension's goroutine; every palette change happens on the UI thread.
 func (p *App) askExtensionConfirmation(ctx context.Context, question services.Question) (bool, error) {
+	return awaitQuestion(ctx, p.onUI, p, question)
+}
+
+// awaitQuestion shows question above the palette's current page and returns the answer. A hidden palette is shown for
+// the question and hidden again afterwards; a visible one keeps its page. A question whose context ends, such as a
+// stopped extension, is taken off the palette and refused.
+func awaitQuestion(ctx context.Context, onUI func(func()), pal questionPresenter, question services.Question) (bool, error) {
 	answers := make(chan bool, 1)
 	detail := fmt.Sprintf("Requested by %s. This cannot be undone.", question.Extension)
-	p.onUI(func() {
-		p.Push(palette.Decide(question.Action, detail, func(confirmed bool) { answers <- confirmed }))
+	var view *palette.View
+	var wasVisible bool
+	onUI(func() {
+		wasVisible = pal.Visible()
+		if !wasVisible {
+			pal.Show()
+		}
+		view = palette.Decide(question.Action, detail, func(confirmed bool) { answers <- confirmed })
+		pal.Push(view)
 	})
+	restore := func() {
+		onUI(func() {
+			if !wasVisible && pal.Visible() {
+				pal.Hide()
+			}
+		})
+	}
 	select {
 	case confirmed := <-answers:
+		restore()
 		return confirmed, nil
 	case <-ctx.Done():
+		onUI(func() { pal.PopIf(view) })
+		restore()
 		return false, ctx.Err()
 	}
 }
