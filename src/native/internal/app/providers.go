@@ -47,11 +47,16 @@ func openURL(tpl, q string) func(h search.Host) {
 }
 
 type command struct {
+	// ID names the command for shortcut bindings. Commands without a shortcut leave it empty.
+	ID                                    string
 	Title, Keywords, Icon, Subtitle, Tone string
-	Run                                   func(h search.Host)
-	Dismiss                               search.Dismissal
-	Order                                 int
-	Hidden                                bool
+	// PhraseMatch limits the title match to phrases and word prefixes, so a long list of commands does not answer
+	// every query with scattered letters. Keywords still match as aliases.
+	PhraseMatch bool
+	Run         func(h search.Host)
+	Dismiss     search.Dismissal
+	Order       int
+	Hidden      bool
 }
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
@@ -94,6 +99,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
 	}
+	cmds = append(cmds, p.windowCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
