@@ -1,11 +1,11 @@
 package manager
 
 import (
+	"context"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-
 )
 
 // goodSource is a source that compiles against the api symbols and implements a root row.
@@ -90,4 +90,21 @@ func (h *harness) listingFor(id string) Listing {
 	}
 	h.t.Fatalf("no listing for %s", id)
 	return Listing{}
+}
+
+// TestDisabledInstallContributesNoCommandsOrSearchRows: an extension installed off has no root commands and no search
+// rows, which is what the palette's root and search show.
+func TestDisabledInstallContributesNoCommandsOrSearchRows(t *testing.T) {
+	h := newHarness(t)
+	if err := h.m.Install("acme.good", fixtureContents(t, "acme.good"), false); err != nil {
+		t.Fatal(err)
+	}
+	for _, result := range h.m.Commands(context.Background()) {
+		if result.ExtensionID == "acme.good" {
+			t.Fatalf("a disabled extension declared commands: %+v", result)
+		}
+	}
+	if result := resultFor(h.search("alpha"), "acme.good"); result != nil {
+		t.Fatalf("a disabled extension answered search: %+v", result)
+	}
 }

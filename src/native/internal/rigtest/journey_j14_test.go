@@ -56,9 +56,7 @@ func TestJourneyJ14AutomateBuildsReviewsEnablesAndRunsAnExtension(t *testing.T) 
 	_, err = app.WaitFor(builderNotice, builderWait)
 	must(t, err)
 	shoot(t, app, "j14-2-installed-off")
-	if paletteShows(t, app, builderRootRow) {
-		t.Fatal("the extension's row shows before it is turned on")
-	}
+	assertNoRow(t, app, builderRootRow)
 
 	must(t, app.Key("ctrl+e"))
 	_, err = app.WaitFor(builderReviewTitle, elementWait)
