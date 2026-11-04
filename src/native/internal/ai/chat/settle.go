@@ -11,6 +11,10 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 	if s.runs[id] == r {
 		delete(s.runs, id)
 	}
+	if s.doomed[id] {
+		_ = s.remove(id)
+		return
+	}
 	if outcome.Ending == EndFinished && s.lastReplyEmpty(id) {
 		outcome = failed(ErrEmptyReply)
 	}

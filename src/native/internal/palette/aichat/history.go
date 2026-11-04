@@ -42,13 +42,9 @@ func historyRows(deps Deps, q string) []search.Item {
 // chatRow is the list row of one saved chat: opening it, or deleting it when it is not answering.
 func chatRow(deps Deps, record chat.Chat) search.Item {
 	id := record.ID
-	title := record.Title
-	if title == "" {
-		title = "AI Chat"
-	}
 	return search.Item{
 		ID:        id,
-		Title:     title,
+		Title:     chatTitle(record),
 		Subtitle:  kindLabel(record.Kind) + " · " + ago(deps.Now(), record.UpdatedAt),
 		Icon:      ChatIcon(record.Kind),
 		Tone:      "yellow",
@@ -56,13 +52,7 @@ func chatRow(deps Deps, record chat.Chat) search.Item {
 		Actions: []search.Action{
 			{Title: "Open", Run: func(h search.Host) { h.Push(ChatView(deps, id)) }},
 			{Title: "Delete", Label: "⌃⌫", Mods: palette.Mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever,
-				Run: func(h search.Host) {
-					if err := deps.Service.Delete(id); err != nil {
-						h.Toast(refusalCopy(err))
-						return
-					}
-					h.Refresh()
-				}},
+				Run: func(h search.Host) { h.Push(removeConfirm(deps, record)) }},
 		},
 	}
 }

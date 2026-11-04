@@ -281,3 +281,62 @@ func TestTierPickerSwitchesTheTierOnClick(t *testing.T) {
 		t.Fatalf("tier = %s while a reply streams, want it unchanged", got)
 	}
 }
+
+// TestRemovingAChatAsksFirstAndCancelKeepsIt checks Delete on a listed chat opens the question, Cancel keeps the chat,
+// and the removal goes through once it is confirmed. The row's Delete is picked from its action menu.
+func TestRemovingAChatAsksFirstAndCancelKeepsIt(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Keep or drop", chat.TierFast, user("hello"))
+	r.palette.Show()
+	r.open(HistoryView(r.deps()))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	chooseDelete(r, tt)
+	if r.palette.Top().Title != "Confirm" {
+		t.Fatalf("top page = %q after Delete, want the confirmation", r.palette.Top().Title)
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := r.service.Chat(record.ID); !ok {
+		t.Fatal("Cancel removed the chat")
+	}
+	if r.palette.Top().Title == "Confirm" {
+		t.Fatal("Cancel should go back to the list")
+	}
+
+	chooseDelete(r, tt)
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := r.service.Chat(record.ID); ok {
+		t.Fatal("confirming the removal kept the chat")
+	}
+}
+
+// chooseDelete selects the first chat row and runs its Delete from the action menu.
+func chooseDelete(r *rig, tt *ui.Tester) {
+	r.palette.Choose(1)
+	r.palette.OpenActionMenu(1)
+	tt.Key(0, ui.KeyEnter)
+}
+
+// TestRemovingABusyChatStopsItThenRemovesIt checks Remove Chat on a chat whose reply is in flight stops the reply and
+// removes the chat once the turn settles.
+func TestRemovingABusyChatStopsItThenRemovesIt(t *testing.T) {
+	transport := fixtures.NewStreamingTransport()
+	r := newRig(t, streamingClient(t, transport))
+	record := r.chatWith("Busy", chat.TierFast)
+	if err := r.service.Send(record.ID, "tell me more"); err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	reply := awaitReply(t, transport)
+	writeFrame(t, reply, fixtures.StreamFrames("Sure", 24)[0])
+	r.awaitReplyText(record.ID, "Sure")
+
+	if err := r.service.Delete(record.ID); err != nil {
+		t.Fatalf("Delete of a busy chat: %v", err)
+	}
+	r.awaitIdle(record.ID)
+	if _, ok := r.service.Chat(record.ID); ok {
+		t.Fatal("the busy chat was not removed once its turn settled")
+	}
+}

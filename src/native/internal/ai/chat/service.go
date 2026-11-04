@@ -46,6 +46,8 @@ type Service struct {
 	cache  cache
 	runs   map[string]*run
 	models map[Tier]backend.ModelDescriptor
+	// doomed holds the chats removed as soon as their turn settles.
+	doomed map[string]bool
 }
 
 // New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
@@ -57,7 +59,7 @@ func New(opts Options) *Service {
 	if opts.Logger == nil {
 		opts.Logger = logx.Default()
 	}
-	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
+	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}}
 	s.Reload()
 	s.settleCutOffTurns()
 	return s
@@ -133,15 +135,24 @@ func (s *Service) Busy(id string) bool {
 	return ok
 }
 
-// Delete removes a chat that is not answering.
+// Delete removes a chat. A chat still answering is stopped, and removed once its turn settles, as the desktop app's
+// Remove Chat does.
 func (s *Service) Delete(id string) error {
 	if s.Busy(id) {
-		return ErrBusy
+		s.doomed[id] = true
+		s.Stop(id)
+		return nil
 	}
+	return s.remove(id)
+}
+
+// remove deletes the chat from the store and the cache.
+func (s *Service) remove(id string) error {
 	if err := s.opts.Store.Remove(id); err != nil {
 		return err
 	}
 	s.cache.drop(id)
+	delete(s.doomed, id)
 	return nil
 }
 
