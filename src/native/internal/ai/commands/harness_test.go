@@ -115,6 +115,7 @@ func (h *harness) build(transport platform.HTTP) {
 	h.service = NewService(Options{
 		Clock:        h.set.Clock,
 		Clipboard:    h.set.Clipboard,
+		Files:        h.set.FS,
 		SelectedText: h.set.SelectedText,
 		Paster:       h.set.Paster,
 		Focus:        h.set.Focus,

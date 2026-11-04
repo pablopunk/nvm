@@ -20,6 +20,7 @@ func (p *App) attachAICommands() {
 	p.aiCommands = commands.NewService(commands.Options{
 		Clock:        searchClock,
 		Clipboard:    p.ports.Clipboard,
+		Files:        p.ports.FS,
 		SelectedText: p.ports.SelectedText,
 		Paster:       p.ports.Paster,
 		Focus:        p.focusOption(),
@@ -94,10 +95,36 @@ func (p *App) aiCommandRows() []command {
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Fix) }},
 		{Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Triage) }},
-		{Title: commands.ClassifyTitle, Keywords: "classify image picture screenshot photograph ai", Icon: "image", Subtitle: "Copy an image, then identify its category",
-			Run: func(h search.Host) { h.Hide(); p.aiCommands.ClassifyClipboardImage() }},
+		{Title: commands.ClassifyTitle, Keywords: "classify image picture screenshot photograph ai", Icon: "image", Subtitle: "Choose an image and identify its category",
+			Run: func(h search.Host) { p.chooseImageToClassify(h) }},
 	}
 }
+
+// chooseImageToClassify hides the palette and opens the operating system's chooser for one picture; the picture the
+// user chose is classified. The chooser blocks, so it runs off the UI thread. A canceled chooser changes nothing.
+func (p *App) chooseImageToClassify(h search.Host) {
+	h.Hide()
+	dialog := p.ports.FileDialog
+	if dialog == nil {
+		p.Toast(chooserUnavailable)
+		return
+	}
+	request := platform.ChooseRequest{Title: commands.ClassifyTitle, ButtonLabel: "Classify Image", Extensions: []string{"png", "jpg", "jpeg"}, FilterName: "Images"}
+	safego.Go("ai-commands.classify.choose", func(context.Context) {
+		paths, err := dialog.Choose(request)
+		p.onUI(func() {
+			switch {
+			case err != nil:
+				p.Toast(chooserUnavailable)
+			case len(paths) > 0:
+				p.aiCommands.ClassifyImageFile(paths[0])
+			}
+		})
+	})
+}
+
+// chooserUnavailable is the line shown when the operating system's chooser cannot open.
+const chooserUnavailable = "The file dialog could not open"
 
 // runSelectionCommand hides the palette, which gives the keyboard back to the app the selection is in, and starts the
 // command on that app. The app is read before the hide, while the palette still knows it.
