@@ -86,6 +86,16 @@ func (s *Summon) Start(accelerator string) Status {
 	return s.Status()
 }
 
+// Suspend releases the shortcut and stops its retries while a recorder takes the keys. The status is kept, so the
+// next Start binds the configured accelerator again.
+func (s *Summon) Suspend() {
+	s.mu.Lock()
+	s.generation++
+	status := s.status
+	s.mu.Unlock()
+	s.release(status)
+}
+
 // Change moves the shortcut to accelerator (empty to set none). It is all or nothing: on failure the previous
 // accelerator is bound again and the status does not change, and the error wraps platform.ErrConflict.
 func (s *Summon) Change(accelerator string) error {

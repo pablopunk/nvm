@@ -48,7 +48,7 @@ func TestAppRowsShowRunningStateAndQuitActions(t *testing.T) {
 		t.Fatalf("idle row = %+v", rows[1])
 	}
 	force := rows[0].Actions[4]
-	if !force.Destructive || force.Confirm != "Force Quit Notes?" || force.ConfirmMessage != "Force quit Notes? Unsaved data may be lost." {
+	if !force.Destructive || force.Confirm != "Force Quit Notes" || force.ConfirmMessage != "Force quit Notes? Unsaved data may be lost." {
 		t.Fatalf("force quit = %+v", force)
 	}
 }

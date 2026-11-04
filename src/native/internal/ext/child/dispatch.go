@@ -34,36 +34,31 @@ func (e *extension) answer(req protocol.Request) (response protocol.Response) {
 	return response
 }
 
-// dispatch maps a method to its extension method and returns the JSON of the result.
+// dispatch maps a method to its entry point and returns the JSON of the result.
 func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 	switch req.Method {
 	case protocol.MethodCommands:
-		return e.encode(protocol.MethodCommands, e.callContext(api.LaunchContext{}))
+		return e.encode(protocol.MethodCommands, e.contextArgument(api.LaunchContext{}))
 	case protocol.MethodRoot:
-		return e.encode(protocol.MethodRoot, e.callContext(api.LaunchContext{}))
+		return e.encode(protocol.MethodRoot, e.contextArgument(api.LaunchContext{}))
 	case protocol.MethodSearch:
-		return e.encode(protocol.MethodSearch, e.callContext(api.LaunchContext{}), reflect.ValueOf(req.Query))
+		return e.encode(protocol.MethodSearch, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(req.Query))
 	case protocol.MethodRun:
 		return e.runAction(req.Invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }
 
-// runAction passes the invocation to RunAction as a plain JSON value, so extension source never imports the
-// host's types.
+// runAction passes the invocation to RunAction as the api.Invocation value it declares.
 func (e *extension) runAction(invocation *api.Invocation) (json.RawMessage, error) {
 	in := api.Invocation{}
 	if invocation != nil {
 		in = *invocation
 	}
-	plain, err := plainValue(in)
-	if err != nil {
-		return nil, err
-	}
-	return e.encode(protocol.MethodRun, e.callContext(in.Launch), reflect.ValueOf(plain))
+	return e.encode(protocol.MethodRun, e.contextArgument(in.Launch), reflect.ValueOf(in))
 }
 
-// encode calls a method and marshals its first result. Results are JSON before they leave the child, so
+// encode calls an entry point and marshals its first result. Results are JSON before they leave the child, so
 // the host validates wire data and never sees interpreter values.
 func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessage, error) {
 	out, err := e.invoke(method, args...)
@@ -78,19 +73,6 @@ func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessag
 		return nil, fmt.Errorf("%s returned data that cannot be encoded: %w", method, err)
 	}
 	return data, nil
-}
-
-// plainValue round-trips v through JSON into the generic shape extension source reads.
-func plainValue(v any) (map[string]any, error) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return nil, err
-	}
-	var plain map[string]any
-	if err := json.Unmarshal(data, &plain); err != nil {
-		return nil, err
-	}
-	return plain, nil
 }
 
 // panicFailure reports a recovered panic. The message names the panic and never the arguments; the reference

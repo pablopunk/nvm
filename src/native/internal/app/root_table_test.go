@@ -75,7 +75,6 @@ func rootTableFixture(t *testing.T) *App {
 		t.Fatal(err)
 	}
 	p.S.Quicklinks = []Quicklink{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
-	p.exts = []loadedExt{{Extension: Extension{ID: "user.fixture", Title: "Fixture", Search: fixtureExtensionSearch}, File: "fixture.go"}}
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),
@@ -84,17 +83,6 @@ func rootTableFixture(t *testing.T) *App {
 		filepath.Join(home, "Pictures", "cloud-setup.jpg"),
 	})
 	return p
-}
-
-// fixtureExtensionSearch answers queries that mention the word "fix" with two rows, and nothing else.
-func fixtureExtensionSearch(q string) []ExtItem {
-	if !strings.Contains(strings.ToLower(q), "fix") {
-		return nil
-	}
-	return []ExtItem{
-		{Title: "Fix result for " + q, Subtitle: "fixture", Value: "fixed"},
-		{Title: "Fixture docs", Subtitle: "fixture", URL: "https://example.com/fixture"},
-	}
 }
 
 // rootResultsForTable is the root search the table exercises: a fresh root view, searched synchronously the way

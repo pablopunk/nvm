@@ -3,23 +3,19 @@ package app
 import (
 	"fmt"
 	"log"
-	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-// startSummon binds the palette's shortcut. When it stays unbound, the palette opens once at launch, as the
-// Electron app does, so the user is never left without a way in.
-func (p *App) startSummon() {
-	p.summon = shortcuts.NewSummon(shortcuts.SummonOptions{
-		Hotkeys:  p.ports.Hotkeys,
-		Clock:    p.ports.Clock,
-		GOOS:     runtime.GOOS,
-		Toggle:   p.Toggle,
-		OnChange: func(st shortcuts.Status) { p.panel.Update(func() { p.summonChanged(st) }) },
-	})
-	p.summonChanged(p.summon.Start(p.S.Hotkey))
+// notifySummon delivers a status change of the palette shortcut. Retries arrive on a background goroutine, so the
+// banner is drawn on the window's thread; before the window exists the change is shown directly.
+func (p *App) notifySummon(st shortcuts.Status) {
+	if p.panel == nil {
+		p.summonChanged(st)
+		return
+	}
+	p.panel.Update(func() { p.summonChanged(st) })
 }
 
 // summonChanged shows the status banner and, the first time the shortcut is known to be unavailable, the palette.
@@ -35,9 +31,10 @@ func (p *App) summonChanged(st shortcuts.Status) {
 	}
 }
 
-// showSummonNotice shows the banner for st, or clears it when the shortcut works.
+// showSummonNotice shows the banner for st, or clears it when the shortcut works. Its action opens the palette
+// shortcut recorder, the one place the shortcut is changed.
 func (p *App) showSummonNotice(st shortcuts.Status) {
-	copy, show := shortcuts.SummonNotice(st, func(accelerator string) string { return accelerator })
+	copy, show := shortcuts.SummonNotice(st, shortcutLabelOf)
 	if !show {
 		p.SetNotice(nil)
 		return
@@ -48,11 +45,11 @@ func (p *App) showSummonNotice(st shortcuts.Status) {
 		Detail:      copy.Detail,
 		ActionLabel: copy.ActionLabel,
 		Alert:       copy.Alert,
-		Action:      func() { p.Push(p.hotkeyView()) },
+		Action:      func() { p.Push(p.paletteRecorderView()) },
 	})
 }
 
-// changeHotkeyMessage says why a new shortcut was not saved. Summon.Change binds the previous one again first.
+// changeHotkeyMessage says why a new palette shortcut was not saved. The previous one stays bound.
 func changeHotkeyMessage(attempt, kept string) string {
 	return fmt.Sprintf("“%s” is taken by another app or is not a shortcut. %s stays.", attempt, kept)
 }

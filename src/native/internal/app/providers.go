@@ -47,11 +47,16 @@ func openURL(tpl, q string) func(h search.Host) {
 }
 
 type command struct {
+	// ID names the command for shortcut bindings. Commands without a shortcut leave it empty.
+	ID                                    string
 	Title, Keywords, Icon, Subtitle, Tone string
-	Run                                   func(h search.Host)
-	Dismiss                               search.Dismissal
-	Order                                 int
-	Hidden                                bool
+	// PhraseMatch limits the title match to phrases and word prefixes, so a long list of commands does not answer
+	// every query with scattered letters. Keywords still match as aliases.
+	PhraseMatch bool
+	Run         func(h search.Host)
+	Dismiss     search.Dismissal
+	Order       int
+	Hidden      bool
 }
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
@@ -90,10 +95,12 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
 			h.Push(palette.Confirm("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
 		}},
+		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
 	}
+	cmds = append(cmds, p.windowCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
@@ -129,7 +136,7 @@ func (p *App) settingsView() *palette.View {
 				login = "On"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
+				{Title: "Palette Hotkey", Accessory: shortcutLabelOf(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
@@ -163,27 +170,6 @@ func (p *App) settingsView() *palette.View {
 				return rows
 			}
 			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
-		},
-	}
-}
-
-func (p *App) hotkeyView() *palette.View {
-	return &palette.View{
-		Title: "Hotkey", Placeholder: "Press keys, e.g. Alt+Shift+Space",
-		Search: func(q string) []search.Item {
-			if q == "" {
-				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
-			}
-			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
-				if err := p.summon.Change(q); err != nil {
-					h.Toast(changeHotkeyMessage(q, p.S.Hotkey))
-					return
-				}
-				p.S.Hotkey = q
-				p.S.save()
-				h.Pop()
-				h.Toast("Hotkey set to " + q)
-			}}}}}
 		},
 	}
 }

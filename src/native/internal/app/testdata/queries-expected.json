@@ -175,6 +175,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
         "section": "Suggestions",
@@ -1207,48 +1226,10 @@
     "query": "fixture",
     "rows": [
       {
-        "kind": "Fixture",
-        "title": "Fix result for fixture",
-        "subtitle": "fixture",
-        "section": "Top Hit",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Copy",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Fixture",
-        "title": "Fixture docs",
-        "subtitle": "fixture",
-        "section": "Fixture",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Search",
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "Top Hit",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1292,6 +1273,25 @@
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
         "section": "Top Hit",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "Commands",
         "id": "",
         "icon": "settings",
         "tone": "",
@@ -1447,6 +1447,25 @@
         "id": "",
         "icon": "trash-2",
         "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Commands",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

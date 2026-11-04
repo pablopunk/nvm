@@ -175,6 +175,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
         "section": "Suggestions",
@@ -324,6 +343,25 @@
           },
           {
             "title": "Uninstall Calendar…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Maximize Height",
+        "subtitle": "Window Management",
+        "section": "Commands",
+        "id": "",
+        "icon": "move-vertical",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
             "label": ""
           }
         ]
@@ -650,6 +688,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "Commands",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Commands",
@@ -789,6 +846,25 @@
         "id": "",
         "icon": "trash-2",
         "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Commands",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

@@ -16,23 +16,19 @@ func (s *fileService) actionsFor(r files.Result) []search.Action {
 	path := r.Path
 	return []search.Action{
 		{Title: "Open", Run: func(h search.Host) {
-			h.Hide()
-			s.report(h, files.OpenPath(s.shell, path))
+			hideOrReport(h, files.OpenPath(s.shell, path))
 		}},
 		{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
-			h.Hide()
-			s.report(h, files.Reveal(s.shell, path))
+			hideOrReport(h, files.Reveal(s.shell, path))
 		}},
 		{Title: "Preview", Label: "⌃Y", Mods: mod, Key: ui.KeyY, Run: func(h search.Host) {
 			h.Push(s.previewView(r))
 		}},
 		{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) {
-			h.Hide()
-			s.report(h, s.clipboard.WriteText(path))
+			hideOrReport(h, s.clipboard.WriteText(path))
 		}},
 		{Title: "Copy File", Label: "⌃⇧C", Mods: mod | ui.Shift, Key: ui.KeyC, Run: func(h search.Host) {
-			h.Hide()
-			s.report(h, s.copyFiles(path))
+			hideOrReport(h, s.copyFiles(path))
 		}},
 		{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
 			h.Push(palette.Confirm("Move to Trash", r.Name, func() {
@@ -41,14 +37,6 @@ func (s *fileService) actionsFor(r files.Result) []search.Action {
 				}
 			}))
 		}},
-	}
-}
-
-// report shows an action's error in the palette. An action that hid the palette first has its message shown the next
-// time the palette opens, which is the best the palette can do without a native dialog.
-func (s *fileService) report(h search.Host, err error) {
-	if err != nil {
-		h.Toast(err.Error())
 	}
 }
 

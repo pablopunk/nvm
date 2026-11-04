@@ -25,6 +25,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
+	"github.com/pablopunk/nvm/native/internal/windowmgmt"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -40,17 +41,17 @@ type App struct {
 	panel *mygo.Window
 	S     *Settings
 
-	md       markdown.Options
-	exts     []loadedExt
-	extTrays []*extTray
-	tray     *mygo.Tray
-	summon   *shortcuts.Summon
-	appsvc   *appfeat.Services
+	md     markdown.Options
+	exts   extensionHost
+	tray   *mygo.Tray
+	summon *shortcuts.Summon
+	appsvc *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
 	paletteHidden chan struct{}
+	shortcutMgr   *shortcuts.Manager
 	snips         *snippets.Store
 	notes         *notes.Store
 	files         *fileService
@@ -76,6 +77,10 @@ type App struct {
 	edits        map[string]*noteEdit
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
+
+	windows        *windowmgmt.Service
+	windowSettings *windowmgmt.SettingsStore
+	focusCapture   paletteFocusCapture
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -92,10 +97,11 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Clock:       clock,
 		Synchronous: synchronous,
 		Position:    p.placementOption(),
+		Focus:       p.focusOption(),
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
-		OnShow:      p.showApps,
-		OnHide:      p.hideApps,
+		OnShow:      p.onPaletteShown,
+		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
@@ -121,6 +127,7 @@ func (p *App) ready() {
 	p.S = loadSettings()
 	p.paletteHidden = make(chan struct{}, 1)
 	p.attachServices(p.appPorts(), configDir(), nil)
+	p.attachWindows()
 	p.attachDeepLinks()
 	p.closeStoreOnQuit()
 	prepareCatalog()
@@ -145,11 +152,11 @@ func (p *App) ready() {
 	p.Attach(p.panel)
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
-	p.panel.OnBlur(p.Hide)
+	p.panel.OnBlur(p.DismissOnBlur)
 	p.panel.OnHide(p.notePaletteHidden)
 
-	p.startSummon()
-	p.reloadExtensions()
+	p.startShortcuts()
+	go p.startExtensions()
 	p.setUpTray()
 	p.startFiles()
 	log.Println("ready")

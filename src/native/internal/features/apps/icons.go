@@ -142,21 +142,28 @@ func (s *Icons) drain(_ context.Context) {
 		img, err := s.load(path)
 
 		s.mu.Lock()
-		s.loading--
 		if err == nil {
 			s.memory[path] = img
 			delete(s.failedAt, path)
 		} else {
 			s.failedAt[path] = s.opts.Clock.Now()
 		}
-		s.idle.Broadcast()
 		s.mu.Unlock()
 		if err != nil {
 			s.reportError(path, err)
 		} else if s.opts.Ready != nil {
 			s.opts.Ready(path)
 		}
+		s.finishLoading()
 	}
+}
+
+// finishLoading marks one load done after its callback ran, so WaitIdle never returns before Ready or Error.
+func (s *Icons) finishLoading() {
+	s.mu.Lock()
+	s.loading--
+	s.idle.Broadcast()
+	s.mu.Unlock()
 }
 
 func (s *Icons) reportError(path string, err error) {

@@ -2,6 +2,7 @@ package real
 
 import (
 	"os"
+	"os/exec"
 	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -11,11 +12,17 @@ import (
 // on macOS, Windows and Linux; the verified matrix lives in the rig reports, not here. Process listing
 // and signalling exist on Linux only until macOS and Windows get implementations.
 func Capabilities() platform.Capabilities {
-	return capabilitiesFor(runtime.GOOS, os.Getenv)
+	return capabilitiesFor(runtime.GOOS, os.Getenv, hasTool)
 }
 
-// capabilitiesFor is Capabilities for a named OS and environment, so the session rules are testable.
-func capabilitiesFor(goos string, getenv func(string) string) platform.Capabilities {
+// hasTool reports whether an executable of that name is on the PATH.
+func hasTool(name string) bool {
+	_, err := exec.LookPath(name)
+	return err == nil
+}
+
+// capabilitiesFor is Capabilities for a named OS, environment and set of tools, so the session rules are testable.
+func capabilitiesFor(goos string, getenv func(string) string, hasTool func(string) bool) platform.Capabilities {
 	supported := []platform.Capability{
 		platform.CapabilityAutostart,
 		platform.CapabilityClipboardImage,
@@ -44,6 +51,9 @@ func capabilitiesFor(goos string, getenv func(string) string) platform.Capabilit
 	if windowManagementSupported() {
 		supported = append(supported, platform.CapabilityWindowManagement)
 	}
+	if isX11FocusSession(goos, getenv) && hasTool("xdotool") {
+		supported = append(supported, platform.CapabilityFocusReturn)
+	}
 	return platform.NewCapabilities(supported...)
 }
 
@@ -55,4 +65,10 @@ func isWaylandSession(goos string, getenv func(string) string) bool {
 		return false
 	}
 	return getenv("XDG_SESSION_TYPE") == "wayland" || getenv("WAYLAND_DISPLAY") != ""
+}
+
+// isX11FocusSession reports whether the focus port can work: an X11 session on Linux, where xdotool reads and
+// restores the focused window. Wayland and other systems have no such tool here.
+func isX11FocusSession(goos string, getenv func(string) string) bool {
+	return goos == "linux" && !isWaylandSession(goos, getenv)
 }

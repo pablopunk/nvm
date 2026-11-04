@@ -11,11 +11,14 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// entryPoints names the top-level function each protocol method calls in extension source. The interpreter does
-// not expose methods of interpreted struct values through reflection, so entry points are functions looked up
-// by name at load time. A missing entry point means the extension does not provide that capability.
+// entryPoints names the top-level function each protocol method calls in extension source. The functions have
+// the signatures of the api interfaces they implement (CommandProvider, RootProvider, SearchProvider,
+// ActionHandler). The interpreter does not expose methods of interpreted struct values through reflection, so
+// entry points are looked up by name at load time. A missing entry point means the extension does not provide
+// that capability.
 var entryPoints = map[string]string{
 	protocol.MethodCommands: "Commands",
 	protocol.MethodRoot:     "RootItems",
@@ -23,15 +26,15 @@ var entryPoints = map[string]string{
 	protocol.MethodRun:      "RunAction",
 }
 
-// extension is one interpreted extension: the functions it declares and the identity the host gave it.
+// extension is one interpreted extension: the functions it declares and the services it may use.
 type extension struct {
 	functions map[string]reflect.Value
-	identity  api.Identity
+	base      hostContext
 }
 
 // load interprets the extension source at path. Extension code runs here, at load, inside the child; the host
 // has already reviewed extension.json.
-func load(path string, identity api.Identity) (*extension, error) {
+func load(path string, identity api.Identity, clock platform.Clock) (*extension, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read extension source: %w", err)
@@ -40,11 +43,11 @@ func load(path string, identity api.Identity) (*extension, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &extension{functions: lookupEntryPoints(i), identity: identity}, nil
+	return &extension{functions: lookupEntryPoints(i), base: newHostContext(identity, clock)}, nil
 }
 
-// evalExtension runs the source in a fresh interpreter. A panic raised while the interpreter loads the source,
-// such as one from package initialisation, becomes an error.
+// evalExtension runs the source in a fresh interpreter that knows the standard library and the api package. A
+// panic raised while the interpreter loads the source, such as one from package initialisation, becomes an error.
 func evalExtension(source string) (i *interp.Interpreter, err error) {
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -53,6 +56,9 @@ func evalExtension(source string) (i *interp.Interpreter, err error) {
 	}()
 	i = interp.New(interp.Options{})
 	if err := i.Use(stdlib.Symbols); err != nil {
+		return nil, err
+	}
+	if err := i.Use(Symbols); err != nil {
 		return nil, err
 	}
 	if _, err := i.Eval(source); err != nil {
@@ -96,12 +102,10 @@ func (e *extension) invoke(name string, args ...reflect.Value) ([]reflect.Value,
 	return out, nil
 }
 
-// callContext is the first argument of every entry point. It is a plain map, so extension source needs no import
-// of the host's packages: today it carries the identity and the launch reason.
-func (e *extension) callContext(launch api.LaunchContext) reflect.Value {
-	return reflect.ValueOf(map[string]any{
-		"id":     e.identity.ID,
-		"title":  e.identity.Title,
-		"reason": launch.Reason,
-	})
+// contextArgument is the api.Context passed as the first argument of every entry point, carrying the launch
+// reason of this call.
+func (e *extension) contextArgument(launch api.LaunchContext) reflect.Value {
+	ctx := e.base
+	ctx.launch = launch
+	return reflect.ValueOf(ctx)
 }

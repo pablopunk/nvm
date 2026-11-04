@@ -1,0 +1,90 @@
+package app
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ext/bundle"
+	"github.com/pablopunk/nvm/native/internal/ext/enablement"
+	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/store"
+)
+
+const fixtureWaitTimeout = 20 * time.Second
+
+// newFixtureManager opens a manager on a temp folder with a real store, and installs the named fixtures enabled.
+// Their children are this test binary (see TestMain).
+func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
+	t.Helper()
+	dir := t.TempDir()
+	ports := real.NewPorts()
+	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(dir, "state"))
+	if err != nil {
+		t.Fatalf("store.Open: %v", err)
+	}
+	t.Cleanup(func() { _ = state.Close() })
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("executable: %v", err)
+	}
+	m, err := manager.New(manager.Ports{
+		Files: ports.FS, Clock: ports.Clock, Worker: real.NewWorker(), Processes: ports.Processes,
+	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
+		Executable: exe,
+		Budgets: map[string]supervisor.Budget{
+			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
+		},
+	})
+	if err != nil {
+		t.Fatalf("manager.New: %v", err)
+	}
+	t.Cleanup(m.Close)
+	for _, id := range enabled {
+		if err := m.Install(id, fixtureFiles(t, id), true); err != nil {
+			t.Fatalf("install %s: %v", id, err)
+		}
+	}
+	return m
+}
+
+// fixtureFiles reads an extension folder from the extension fixtures.
+func fixtureFiles(t *testing.T, id string) map[string][]byte {
+	t.Helper()
+	dir := filepath.Join("..", "ext", "testdata", "extensions", id)
+	files := map[string][]byte{}
+	for _, name := range []string{bundle.ManifestFile, bundle.SourceFile} {
+		data, err := os.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatalf("read %s of %s: %v", name, id, err)
+		}
+		files[name] = data
+	}
+	return files
+}
+
+// waitForState blocks until extension id reports the state want, or fails the test.
+func waitForState(t *testing.T, m *manager.Manager, id string, want supervisor.State) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), fixtureWaitTimeout)
+	defer cancel()
+	if err := m.WaitFor(ctx, id, func(s supervisor.Status) bool { return s.State == want }); err != nil {
+		t.Fatalf("waiting for %s to be %s: %v", id, want, err)
+	}
+}
+
+func listingFor(t *testing.T, m *manager.Manager, id string) manager.Listing {
+	t.Helper()
+	for _, l := range m.List() {
+		if l.ID == id {
+			return l
+		}
+	}
+	t.Fatalf("no listing for %s", id)
+	return manager.Listing{}
+}
