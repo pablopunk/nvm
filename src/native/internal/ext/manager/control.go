@@ -35,7 +35,9 @@ func (m *Manager) List() []Listing {
 	defer m.mu.Unlock()
 	listings := make([]Listing, 0, len(m.entries))
 	for _, key := range m.sortedKeysLocked() {
-		listings = append(listings, m.listingLocked(key, m.entries[key]))
+		if e := m.entries[key]; !e.builtin {
+			listings = append(listings, m.listingLocked(key, e))
+		}
 	}
 	return listings
 }
@@ -69,6 +71,9 @@ func (m *Manager) Source(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if e.builtin {
+		return "", ErrBuiltIn
+	}
 	return string(e.bundle.Source), nil
 }
 
@@ -91,6 +96,9 @@ func (m *Manager) Enable(id string) error {
 	if err != nil {
 		return err
 	}
+	if e.builtin {
+		return ErrBuiltIn
+	}
 	if err := m.enabled.SetEnabled(id, true); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
@@ -109,6 +117,9 @@ func (m *Manager) Disable(id string) error {
 	e, err := m.findLocked(id)
 	if err != nil {
 		return err
+	}
+	if e.builtin {
+		return ErrBuiltIn
 	}
 	if err := m.enabled.SetEnabled(id, false); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
@@ -151,6 +162,9 @@ func (m *Manager) Uninstall(id string) error {
 	e, err := m.findLocked(id)
 	if err != nil {
 		return err
+	}
+	if e.builtin {
+		return ErrBuiltIn
 	}
 	stopEntry(e)
 	if err := install.Uninstall(m.ports.Files, m.ports.Clock, m.root, filepath.Base(e.bundle.Dir)); err != nil {

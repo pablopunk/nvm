@@ -23,7 +23,7 @@ func (m *Manager) MenuBarExtensions() []MenuBarExtension {
 	var listed []MenuBarExtension
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
-		if e.runtime != nil && m.isEnabled(e.bundle.Manifest.ID) && e.runtime.Provides(protocol.MethodMenuBars) {
+		if e.runtime != nil && m.isRunnable(e) && e.runtime.Provides(protocol.MethodMenuBars) {
 			listed = append(listed, MenuBarExtension{ID: e.bundle.Manifest.ID, Revision: e.bundle.Hash})
 		}
 	}

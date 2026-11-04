@@ -20,7 +20,7 @@ func (e *extension) answer(req protocol.Request) (response protocol.Response) {
 	response.ID = req.ID
 	defer func() {
 		if recovered := recover(); recovered != nil {
-			response = protocol.Response{ID: req.ID, Failure: panicFailure(recovered)}
+			response = protocol.Response{ID: req.ID, Failure: PanicFailure(recovered)}
 		}
 	}()
 	data, err := e.dispatch(req)
@@ -90,9 +90,9 @@ func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessag
 	return data, nil
 }
 
-// panicFailure reports a recovered panic. The message names the panic and never the arguments; the reference
+// PanicFailure reports a recovered panic. The message names the panic and never the arguments; the reference
 // is random so a support request can name one incident.
-func panicFailure(recovered any) *api.Failure {
+func PanicFailure(recovered any) *api.Failure {
 	return &api.Failure{
 		Code:      api.CodeInternal,
 		Message:   truncate(fmt.Sprintf("extension panicked: %v", recovered)),

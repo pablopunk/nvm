@@ -20,10 +20,16 @@ type hostLink struct {
 	nextID  uint64
 	pending map[uint64]chan protocol.ServiceReply
 	closed  bool
+	// direct answers calls in the host process instead of the stdin and stdout exchange. Built-in extensions use it.
+	direct func(protocol.ServiceCall) protocol.ServiceReply
 }
 
 func newHostLink(out io.Writer) *hostLink {
 	return &hostLink{out: out, pending: map[uint64]chan protocol.ServiceReply{}}
+}
+
+func newDirectLink(serve func(protocol.ServiceCall) protocol.ServiceReply) *hostLink {
+	return &hostLink{pending: map[uint64]chan protocol.ServiceReply{}, direct: serve}
 }
 
 // send writes one JSON value as one protocol line.
@@ -40,15 +46,9 @@ func (l *hostLink) Call(service, op string, args any, into any) error {
 	if err != nil {
 		return fmt.Errorf("%s.%s: arguments cannot be encoded: %w", service, op, api.ErrInvalidInput)
 	}
-	id, reply, err := l.register()
+	answer, err := l.exchange(service, op, raw)
 	if err != nil {
 		return err
-	}
-	defer l.forget(id)
-	l.send(protocol.ServiceCall{CallID: id, Service: service, Op: op, Args: raw})
-	answer, open := <-reply
-	if !open {
-		return fmt.Errorf("%s.%s: the host closed the extension connection: %w", service, op, api.ErrNotAvailable)
 	}
 	if answer.Failure != nil {
 		return failureError(answer.Failure)
@@ -59,6 +59,24 @@ func (l *hostLink) Call(service, op string, args any, into any) error {
 		}
 	}
 	return nil
+}
+
+// exchange sends one service call and waits for its reply. A direct link answers on the calling goroutine.
+func (l *hostLink) exchange(service, op string, raw json.RawMessage) (protocol.ServiceReply, error) {
+	if l.direct != nil {
+		return l.direct(protocol.ServiceCall{Service: service, Op: op, Args: raw}), nil
+	}
+	id, reply, err := l.register()
+	if err != nil {
+		return protocol.ServiceReply{}, err
+	}
+	defer l.forget(id)
+	l.send(protocol.ServiceCall{CallID: id, Service: service, Op: op, Args: raw})
+	answer, open := <-reply
+	if !open {
+		return protocol.ServiceReply{}, fmt.Errorf("%s.%s: the host closed the extension connection: %w", service, op, api.ErrNotAvailable)
+	}
+	return answer, nil
 }
 
 func marshalArgs(args any) (json.RawMessage, error) {

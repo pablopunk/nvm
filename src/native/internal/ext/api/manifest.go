@@ -86,13 +86,26 @@ func (m Manifest) UnknownCapabilities() []Capability {
 }
 
 // Validate checks the manifest shape and API compatibility. It does not reject unknown
-// capability names; see UnknownCapabilities.
+// capability names; see UnknownCapabilities. Folder extensions may not use the reserved prefix.
 func (m Manifest) Validate() error {
-	if len(m.ID) > maxExtensionIDLength || !extensionIDPattern.MatchString(m.ID) {
-		return fmt.Errorf("extension id %q must be lowercase dot-separated segments such as acme.world-clock", m.ID)
-	}
 	if strings.HasPrefix(m.ID, reservedIDPrefix) {
 		return fmt.Errorf("extension id %q uses the reserved %q prefix", m.ID, reservedIDPrefix)
+	}
+	return m.validateShape()
+}
+
+// ValidateBuiltIn checks a manifest compiled into Nevermind. It is Validate without the reserved prefix rule,
+// which exists to keep folder extensions out of the built-in namespace.
+func (m Manifest) ValidateBuiltIn() error {
+	if !strings.HasPrefix(m.ID, reservedIDPrefix) {
+		return fmt.Errorf("built-in extension id %q must use the %q prefix", m.ID, reservedIDPrefix)
+	}
+	return m.validateShape()
+}
+
+func (m Manifest) validateShape() error {
+	if len(m.ID) > maxExtensionIDLength || !extensionIDPattern.MatchString(m.ID) {
+		return fmt.Errorf("extension id %q must be lowercase dot-separated segments such as acme.world-clock", m.ID)
 	}
 	if strings.TrimSpace(m.Title) == "" {
 		return errors.New("extension title is required")

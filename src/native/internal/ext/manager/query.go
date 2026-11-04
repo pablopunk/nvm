@@ -62,7 +62,7 @@ func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResu
 type runtimeTarget struct {
 	id      string
 	title   string
-	runtime *supervisor.Runtime
+	runtime runner
 }
 
 // targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
@@ -74,7 +74,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 	var targets []runtimeTarget
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
-		if e.runtime != nil && m.isEnabled(e.bundle.Manifest.ID) && offersMethod(e.runtime, e.runtime.Status().State, method) {
+		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
 			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, runtime: e.runtime})
 		}
 	}
@@ -83,7 +83,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 
 // offersMethod is true when a running child declares method, and when the runtime is not running at all: then the
 // call answers with why it is not running, which is how a failed extension shows its pointer row.
-func offersMethod(runtime *supervisor.Runtime, state supervisor.State, method string) bool {
+func offersMethod(runtime runner, state supervisor.State, method string) bool {
 	return isAnswerable(state) && (state != supervisor.StateRunning || runtime.Provides(method))
 }
 
@@ -138,7 +138,7 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	return result, nil, nil
 }
 
-func (m *Manager) runtimeFor(id string) (*supervisor.Runtime, error) {
+func (m *Manager) runtimeFor(id string) (runner, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	e, err := m.findLocked(id)
