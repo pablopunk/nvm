@@ -199,8 +199,8 @@ func TestFileActionsDriveTheDesktop(t *testing.T) {
 	fakeShell := svc.shell.(*fake.Shell)
 	clip := svc.clipboard.(*fake.Clipboard)
 	target := fixturePaths()[0]
-	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: "~/Documents/report-2024.pdf"})
-	if row.Title != "report-2024.pdf" || row.Subtitle != "~/Documents" {
+	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf")})
+	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents") {
 		t.Fatalf("row = %q / %q", row.Title, row.Subtitle)
 	}
 

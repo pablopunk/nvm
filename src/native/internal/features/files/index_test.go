@@ -144,7 +144,7 @@ func TestBurstOfChangesConvergesAfterAFullScan(t *testing.T) {
 
 	var created []string
 	for i := range 30 {
-		p := fmt.Sprintf("%s/burst-%02d.txt", docs, i)
+		p := filepath.Join(docs, fmt.Sprintf("burst-%02d.txt", i))
 		if err := fsys.WriteFile(p, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}

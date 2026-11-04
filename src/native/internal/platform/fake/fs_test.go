@@ -194,7 +194,7 @@ func TestWatchReportsChangesUnderFolderUntilCancelled(t *testing.T) {
 		t.Fatalf("WriteFile inside: %v", err)
 	}
 	got := <-events
-	want := platform.Event{Op: platform.EventCreate, Path: "/proj/a.txt"}
+	want := platform.Event{Op: platform.EventCreate, Path: filepath.FromSlash("/proj/a.txt")}
 	if got != want {
 		t.Fatalf("first event = %+v, want %+v (events outside the folder are not reported)", got, want)
 	}
