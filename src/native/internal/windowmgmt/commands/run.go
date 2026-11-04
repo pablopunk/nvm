@@ -24,6 +24,13 @@ func (r Runner) Execute(ctx context.Context, cmd Command, inv windowmgmt.Invocat
 	if !ok {
 		return ""
 	}
+	return r.ExecuteLayout(ctx, layout, inv)
+}
+
+// ExecuteLayout places the target of inv with an explicit layout, such as an exact move or resize, using the user's
+// gap settings.
+func (r Runner) ExecuteLayout(ctx context.Context, layout geometry.Layout, inv windowmgmt.Invocation) string {
+	settings := r.Settings()
 	result, err := r.Engine.Apply(ctx, layout, geometry.OptionsFromSettings(settings), inv)
 	return outcomeMessage(result, err)
 }

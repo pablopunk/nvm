@@ -74,6 +74,9 @@ type Palette struct {
 	notice      *Notice
 	// returnTo is the window the keyboard goes back to when the palette hides, captured when it was shown.
 	returnTo *platform.FocusTarget
+	// summoned is the window that had the keyboard before the palette was last shown. Unlike returnTo it survives the
+	// hide, because an action that chooses where the keyboard goes clears returnTo first.
+	summoned *platform.FocusTarget
 	// shows counts the times the palette was shown, so a delayed dismissal can tell it was shown again.
 	shows int
 	// announcedNotice is the alert assistive technology was last told about.
