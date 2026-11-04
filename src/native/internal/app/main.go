@@ -95,6 +95,7 @@ type App struct {
 	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
+	menuOS  string // the platform the menu bar draws its rows for; empty means the platform the app runs on
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.

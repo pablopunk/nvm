@@ -3,7 +3,6 @@ package app
 import (
 	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/updates"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -57,18 +56,6 @@ func (p *App) updatesView() *palette.View {
 		Restart:       p.restartToUpdate,
 		ToggleChannel: p.toggleUpdateChannel,
 	})
-}
-
-// menubarUpdateRow is the menu's update row while an update is found, downloading or ready.
-func (p *App) menubarUpdateRow() *menubar.UpdateRow {
-	state := p.updateSnapshot().State
-	switch state.Status {
-	case update.StatusAvailable, update.StatusDownloading:
-		return &menubar.UpdateRow{Label: update.Message(state)}
-	case update.StatusDownloaded:
-		return &menubar.UpdateRow{Label: "Restart to Update to " + state.LatestVersion, Action: func() { _ = p.restartToUpdate() }}
-	}
-	return nil
 }
 
 // updateRootRows shows an update that is found, downloading or ready at the root, above the commands, where the person

@@ -6,7 +6,6 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/update"
@@ -39,12 +38,6 @@ func (p *App) checkForUpdates(report func(msg string)) {
 	})
 }
 
-// notifyUpdate shows a check's answer as a desktop notification, for checks started from the menu bar while the
-// palette is hidden.
-func (p *App) notifyUpdate(msg string) {
-	p.notifySystem("Nevermind", msg)
-}
-
 // restartToUpdate restarts the app into the downloaded update, or says why it cannot.
 func (p *App) restartToUpdate() error {
 	if p.updates == nil {
@@ -55,8 +48,6 @@ func (p *App) restartToUpdate() error {
 
 // refreshUpdateSurfaces redraws what shows the update: the menu bar's update row and the open palette.
 func (p *App) refreshUpdateSurfaces() {
-	if p.menubar != nil {
-		p.menubar.SetMenu(menubar.RowsWithUpdate(p.menubarActions(), p.onUI, p.menubarUpdateRow()))
-	}
+	p.refreshMenubarMenu()
 	p.Refresh()
 }

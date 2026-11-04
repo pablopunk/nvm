@@ -21,6 +21,7 @@ func (p *App) setUpMenubar() {
 		OnUI:      p.onUI,
 		Actions:   p.menubarActions(),
 		IconStyle: p.menuBarIconStyle(),
+		Menu:      p.menubarMenu(),
 	})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
@@ -112,7 +113,7 @@ func (e extensionMenuBars) Run(ctx context.Context, id string, in api.Invocation
 func (p *App) menubarActions() menubar.Actions {
 	return menubar.Actions{
 		Open:            func() { p.Show(); p.focusPanel() },
-		CheckForUpdates: func() { p.checkForUpdates(p.notifyUpdate) },
+		CheckForUpdates: p.openUpdatesAndCheck,
 		Settings:        func() { p.Open(p.settingsView()); p.focusPanel() },
 		Quit:            p.requestQuit,
 	}

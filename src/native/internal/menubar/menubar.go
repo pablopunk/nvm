@@ -34,6 +34,7 @@ type Options struct {
 	Actions   Actions
 	OnUI      func(fn func())
 	IconStyle string
+	Menu      Menu
 }
 
 // Item is one menu bar or tray item. A nil *Item ignores every call, so features need no check when no tray exists.
@@ -71,7 +72,7 @@ func New(opts Options) (*Item, error) {
 	if err != nil {
 		return nil, err
 	}
-	item.SetMenu(Rows(opts.Actions, opts.OnUI))
+	item.SetMenu(Rows(opts.Actions, opts.OnUI, opts.Menu))
 	return item, nil
 }
 
@@ -139,33 +140,4 @@ func (m *Item) renderTitle() {
 // refreshIcon redraws the glyph when the bar's appearance changes. The OS calls it without a caller to report to.
 func (m *Item) refreshIcon() {
 	_ = m.applyIcon()
-}
-
-// Rows is the menu, in the order the 1.x menu bar shows it: Open, a divider, updates and settings, a divider, Quit.
-// Each action runs on the UI thread when onUI is set, and directly otherwise.
-func Rows(a Actions, onUI func(fn func())) []platform.MenuItem {
-	return []platform.MenuItem{
-		row("open", "Open Nevermind", a.Open, onUI),
-		{Separator: true},
-		row("check-updates", "Check for Updates…", a.CheckForUpdates, onUI),
-		row("settings", "Settings…", a.Settings, onUI),
-		{Separator: true},
-		row("quit", "Quit Nevermind", a.Quit, onUI),
-	}
-}
-
-// row is one menu entry whose click runs fn on the UI thread.
-func row(id, label string, fn func(), onUI func(fn func())) platform.MenuItem {
-	return platform.MenuItem{ID: id, Label: label, Action: UIAction(fn, onUI)}
-}
-
-// UIAction wraps fn so it runs through onUI. A nil fn stays nil, which the port treats as no action.
-func UIAction(fn func(), onUI func(fn func())) func() {
-	if fn == nil {
-		return nil
-	}
-	if onUI == nil {
-		return fn
-	}
-	return func() { onUI(fn) }
 }

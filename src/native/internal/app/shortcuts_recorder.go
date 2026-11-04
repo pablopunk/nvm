@@ -61,6 +61,7 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 			h.Toast(paletteChangeFailureMessage(err, shortcutLabelOf(recorder.accelerator), shortcutLabelOf(manager.PaletteAccelerator())))
 			return
 		}
+		p.refreshMenubarMenu()
 		h.Pop()
 		h.Toast(paletteChangeMessage(change))
 		return
