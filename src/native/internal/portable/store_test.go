@@ -203,7 +203,7 @@ func TestSettingsReadTheSharedKeysAndLeaveMissingOnesEmpty(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := doc.Settings()
-	if settings.PaletteHotkey != "Command+Space" || settings.HyperKey != "Command+Control+Alt" || settings.UpdateChannel != "dev" || settings.MenuBarIconStyle != "bolt-outline" || settings.AIDefaultModel != "smart" {
+	if settings.PaletteHotkey != "Command+Space" || settings.HyperKey == nil || *settings.HyperKey != "Command+Control+Alt" || settings.UpdateChannel != "dev" || settings.MenuBarIconStyle != "bolt-outline" || settings.AIDefaultModel != "smart" {
 		t.Errorf("settings = %+v", settings)
 	}
 	if settings.ErrorReporting == nil || !*settings.ErrorReporting {
@@ -213,7 +213,7 @@ func TestSettingsReadTheSharedKeysAndLeaveMissingOnesEmpty(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := empty.Settings(); got.ErrorReporting != nil || got.PaletteHotkey != "" {
+	if got := empty.Settings(); got.ErrorReporting != nil || got.HyperKey != nil || got.PaletteHotkey != "" {
 		t.Errorf("missing keys read as %+v", got)
 	}
 }
