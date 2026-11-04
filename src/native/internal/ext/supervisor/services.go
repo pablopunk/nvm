@@ -26,8 +26,8 @@ func serviceCallFrom(line lineResult, open bool) (protocol.ServiceCall, bool) {
 
 // answerService runs one service call and writes its reply to the child. The services get the request's hard
 // budget as their deadline, so a slow service ends with the call instead of outliving it.
-func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget) error {
-	ctx, cancel := context.WithTimeout(context.Background(), budget.Hard)
+func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget, method string) (waited bool, err error) {
+	ctx, cancel := context.WithTimeout(protocol.WithRequestMethod(context.Background(), method), budget.Hard)
 	defer cancel()
 	reply := r.serveCall(ctx, call)
 	reply.ReplyTo = call.CallID
@@ -36,9 +36,9 @@ func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, 
 		line = []byte(fmt.Sprintf(`{"replyTo":%d,"failure":{"code":"internal","message":"reply cannot be encoded"}}`, call.CallID))
 	}
 	if err := child.proc.WriteLine(line); err != nil {
-		return r.failChild(child, api.CodeInternal, "cannot answer a service call: "+err.Error())
+		return reply.WaitedForUser, r.failChild(child, api.CodeInternal, "cannot answer a service call: "+err.Error())
 	}
-	return nil
+	return reply.WaitedForUser, nil
 }
 
 // serveCall dispatches to the handler, or refuses the call when the runtime has none.

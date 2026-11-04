@@ -16,6 +16,8 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -40,6 +42,22 @@ type Deps struct {
 	Clipboard platform.Clipboard
 	// Logs receives extension records. Nil means the process logger.
 	Logs *logx.Logger
+	// OS is the host's operating system name, reported by the system service.
+	OS string
+	// Capabilities are the host's platform capabilities; the system service and the OCR service read them.
+	Capabilities platform.Capabilities
+	// Shell opens paths and links, lists and launches apps and reads app icons. Nil answers unavailable.
+	Shell platform.Shell
+	// Windows lists and places windows through the window engine. Nil answers unavailable.
+	Windows WindowEngine
+	// Shortcuts reads the shortcut table. Nil answers unavailable.
+	Shortcuts ShortcutTable
+	// OCR reads text from images and the screen. Nil answers unavailable.
+	OCR *ocr.Service
+	// History returns the clipboard history, or nil while it is still starting.
+	History func() *clipboard.History
+	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
+	Confirm ConfirmFunc
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
@@ -63,6 +81,9 @@ type Handler struct {
 	logger       *logx.Logger
 	fetches      *rateLimiter
 	logWrites    *rateLimiter
+	actions      *rateLimiter
+	ocrReads     *rateLimiter
+	screenReads  *rateLimiter
 	openOnce     sync.Once
 	openErr      error
 	closeOnce    sync.Once
@@ -87,6 +108,9 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		logger:       logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
 		fetches:      newRateLimiter(deps.Clock, fetchesPerMinute),
 		logWrites:    newRateLimiter(deps.Clock, logWritesPerMinute),
+		actions:      newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		ocrReads:     newRateLimiter(deps.Clock, ocrReadsPerMinute),
+		screenReads:  newRateLimiter(deps.Clock, screenReadsPerMinute),
 	}
 }
 
@@ -105,6 +129,13 @@ func (h *Handler) Close() error {
 
 // Serve answers one call. It never panics on a bad argument: every failure is a Failure in the reply.
 func (h *Handler) Serve(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
+	marker := &waitMark{}
+	reply := h.serveMarked(context.WithValue(ctx, waitMarkKey{}, marker), call)
+	reply.WaitedForUser = marker.waited
+	return reply
+}
+
+func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
 	result, err := h.dispatch(ctx, call)
 	if err != nil {
 		failure := failureOf(err)
@@ -133,6 +164,24 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveNetwork(ctx, call)
 	case protocol.ServiceDrafts:
 		return h.serveDrafts(call)
+	case protocol.ServiceDesktopClipboard:
+		return h.serveDesktopClipboard(call)
+	case protocol.ServiceDesktopApps:
+		return h.serveDesktopApps(call)
+	case protocol.ServiceDesktopFiles:
+		return h.serveDesktopFiles(call)
+	case protocol.ServiceDesktopShell:
+		return h.serveDesktopShell(call)
+	case protocol.ServiceDesktopWindows:
+		return h.serveDesktopWindows(ctx, call)
+	case protocol.ServiceClipboardHistory:
+		return h.serveClipboardHistory(ctx, call)
+	case protocol.ServiceOCR:
+		return h.serveOCR(ctx, call)
+	case protocol.ServiceSystem:
+		return h.serveSystem(call)
+	case protocol.ServiceShortcuts:
+		return h.serveShortcuts(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	}

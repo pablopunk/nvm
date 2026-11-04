@@ -84,6 +84,9 @@ type ServiceReply struct {
 	ReplyTo uint64          `json:"replyTo"`
 	Data    json.RawMessage `json:"data,omitempty"`
 	Failure *api.Failure    `json:"failure,omitempty"`
+	// WaitedForUser is set by the host and never sent: the call waited for a palette answer, so the request budget
+	// restarts after it.
+	WaitedForUser bool `json:"-"`
 }
 
 // ParseServiceCall reports whether a child line is a service call and returns it.

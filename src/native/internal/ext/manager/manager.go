@@ -17,6 +17,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/install"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -33,6 +35,15 @@ type Ports struct {
 	Network   platform.HTTP
 	Clipboard platform.Clipboard
 	Logs      *logx.Logger
+	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
+	Shell        platform.Shell
+	Capabilities platform.Capabilities
+	OS           string
+	Windows      services.WindowEngine
+	Shortcuts    services.ShortcutTable
+	OCR          *ocr.Service
+	History      func() *clipboard.History
+	Confirm      services.ConfirmFunc
 }
 
 // Options tune the child processes of every extension.
@@ -100,6 +111,15 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Clipboard:      ports.Clipboard,
 			Logs:           ports.Logs,
 			MenuBarRefresh: opts.MenuBarRefresh,
+
+			Shell:        ports.Shell,
+			Capabilities: ports.Capabilities,
+			OS:           ports.OS,
+			Windows:      ports.Windows,
+			Shortcuts:    ports.Shortcuts,
+			OCR:          ports.OCR,
+			History:      ports.History,
+			Confirm:      ports.Confirm,
 		},
 		entries: map[string]*entry{},
 	}
