@@ -39,7 +39,8 @@ var allowedImports = map[string]map[string]string{
 		"github.com/egoist/mygo/ui": "an Item carries a ui.Bitmap and a Detail closure that draws with ui.Context; the import is ui only, never mygo itself",
 	},
 	"palette": {
-		"github.com/egoist/mygo/ui": "the palette shell builds ui views and lists (ui.View, ui.ListState, ui.Handle); the import is ui only, the window and OS services stay in app",
+		"github.com/egoist/mygo/ui":          "the palette shell builds ui views and lists (ui.View, ui.ListState, ui.Handle); the import is ui only, the window and OS services stay in app",
+		"github.com/egoist/mygo/ui/markdown": "extension views draw Markdown with the same renderer as chat replies; the import is ui/markdown only and holds no window or OS service",
 	},
 }
 
