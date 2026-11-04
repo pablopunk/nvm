@@ -114,6 +114,34 @@ func (c hostContext) Indicators() api.Indicators {
 	return remoteIndicators{link: c.link}
 }
 
+func (c hostContext) AI() api.AI {
+	return unsupportedAI{}
+}
+
+func (c hostContext) AIBuilder() api.AIBuilder {
+	return unsupportedAIBuilder{}
+}
+
+func (c hostContext) Ownership() api.Ownership {
+	return unsupportedOwnership{}
+}
+
+func (c hostContext) Dictation() api.Dictation {
+	return unsupportedDictation{}
+}
+
+func (c hostContext) Updates() api.Updates {
+	return unsupportedUpdates{}
+}
+
+func (c hostContext) Windows() api.Windows {
+	return childWindows{}
+}
+
+func (c hostContext) Navigation() api.Navigation {
+	return childNavigation{}
+}
+
 func (c hostContext) Views() api.Views {
 	return remoteViews{link: c.link}
 }
