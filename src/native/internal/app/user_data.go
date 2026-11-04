@@ -6,7 +6,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/logx"
-	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
@@ -17,6 +16,7 @@ func (p *App) openUserData() {
 	st := p.userStore
 	if st == nil {
 		logx.Default().Warn("notes and snippets are unavailable", logx.F{"reason": "the store did not open"})
+		p.installFailureReporting(nil)
 		return
 	}
 	if p.userReadOnly {
@@ -30,23 +30,7 @@ func (p *App) openUserData() {
 		p.closeEdits()
 		_ = st.Close()
 	})
-	installCrashFlush(st)
-}
-
-// installCrashFlush makes a panic in a background call write the unsaved drafts first. The safego reporter is the
-// composition root's hook for failures, so it is installed here, once, with the clock the app uses.
-func installCrashFlush(st *store.Store) {
-	flushOnPanic := st.InstallCrashFlush()
-	safego.SetDefaults(safego.Defaults{
-		Clock: searchClock,
-		Reporter: safego.ReporterFunc(func(f safego.Failure) string {
-			if f.Panic {
-				flushOnPanic()
-			}
-			logx.Default().Warn("background call failed", logx.F{"name": f.Name, "attempt": f.Attempt, "panic": f.Panic})
-			return ""
-		}),
-	})
+	p.installFailureReporting(st.InstallCrashFlush())
 }
 
 // showUserDataNotices tells the user, without blocking, about notes or snippets that were set aside, and that

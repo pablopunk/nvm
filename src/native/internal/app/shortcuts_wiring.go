@@ -69,7 +69,7 @@ func (p *App) runShortcutCommand(actionID string) {
 	for _, cmd := range p.commands(false) {
 		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
 			p.Show()
-			cmd.Run(search.Host(p))
+			p.trackedRun(cmd)(search.Host(p))
 			return
 		}
 	}

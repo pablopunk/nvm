@@ -231,6 +231,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Firefox",
         "subtitle": "",
@@ -1384,6 +1403,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Show Recent Errors",
+        "subtitle": "Find and copy safe error references",
+        "section": "Commands",
+        "id": "",
+        "icon": "circle-alert",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Quick Notes",
         "subtitle": "Jot something down",
         "section": "Commands",
@@ -1503,6 +1541,25 @@
         "section": "Commands",
         "id": "",
         "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -1898,6 +1955,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
+        "section": "Commands",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
@@ -2200,6 +2276,25 @@
         "accessory": "",
         "prominent": false,
         "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
         "iconPath": "",
         "actions": [
           {

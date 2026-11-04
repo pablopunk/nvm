@@ -39,6 +39,7 @@ var layerRank = map[string]int{
 	"internal/dictation":  7,
 	"internal/update":     7,
 	"internal/diag":       7,
+	"internal/menubar":    7,
 	"internal/palette":    8,
 	appKey:                9,
 	cmdKey:                10,
