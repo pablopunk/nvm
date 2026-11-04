@@ -1008,10 +1008,10 @@ Menu bar items are the host's status items, made through `platform.TrayHost` by 
 - **Limits.** Titles are shortened to 24 characters; sections to eight, rows to 40 per section, submenus one level deep; text to 120 characters. An invalid action drops only its row. Normalization issues are logged, not shown.
 - **Rows.** Titled sections show a disabled header and are split by dividers. A row with an action runs it; `OpenURL` and `CopyText` are host operations; a row with no runnable action is disabled. Run actions run off the UI thread and their results are logged: a menu cannot host a view, so an action that returns one is reported.
 - **Not rendered yet.** Popovers (the host logs that the menu is used instead), row subtitles, checkmarks, row shortcuts, and per-row icons. Icons are the app's placeholder disc until the icon set ships (WP5.1). A tooltip or icon change makes a new item.
-- **Triggers not served yet.** `files.changed`, `clipboard.changed`, `app.frontmost.changed`, `wake` and `login` are disabled with a logged diagnostic until the trigger host (WP3.6) serves them. The startup delay is ignored: the first render is immediate.
+- **Triggers not served yet.** `files.changed`, `clipboard.changed`, `app.frontmost.changed`, `wake` and `login` on a menu bar item are disabled with a logged diagnostic: the trigger host (section 20) runs commands, not menu bar items, yet. The startup delay is ignored: the first render is immediate.
 - **No menu-open refresh.** The platform port has no open event, so a render is never triggered by a click on the item.
 - **Views.** `Views().RefreshMenuBar()` is served. `Views().Refresh()` and `Views().Invalidate()` are palette operations: in a menu bar render they return an empty action and do nothing.
-- **Shared scheduler.** The app's timer title is a job on the same scheduler (`internal/menubar/schedule.go`): one render per second, budgeted, never overlapping, cancelled when the timer ends.
+- **Own scheduler.** The app's timer title and the menu bar items use `internal/menubar`'s scheduler, not `internal/jobs`, by design: renders apply on the UI thread, the timer renders every second, and renders are not persisted, listed or halted. No job exists in both, so there is one scheduler per kind of work.
 - **Fixture.** `internal/ext/testdata/extensions/acme.menubar` declares two items, a submenu, failing and recovering actions, and a refresh call. The manager tests and the rig journeys use it.
 
 ## 20. Triggers and background jobs as built (WP3.6)
@@ -1019,7 +1019,7 @@ Menu bar items are the host's status items, made through `platform.TrayHost` by 
 Code: `internal/jobs` (scheduler, persisted state, wake detection), `internal/jobs/extjobs` (extension triggers and folder watches), `internal/jobs/hostjobs` (host jobs), `internal/palette/background` (the Background Tasks page). The API types in section 9 are unchanged; the host runs them.
 
 - **One scheduler.** Host jobs and extension commands are jobs on the same scheduler, so the Background Tasks page lists both. A job's ID is `extension.<extension id>.<command id>` for extensions.
-- **Triggers.** `startup`, `interval` (first run after `delayMs`, else one period), `files.changed` (folder watches, filtered by hidden, extension, kind and ignore on the file name), `clipboard.changed`, `wake` and `login`. `app.frontmost.changed` is not run yet: the trigger is left out and the rest of the command still runs.
+- **Triggers.** `startup`, `interval` (first run after `delayMs`, else one period), `files.changed` (folder watches, filtered by hidden, extension, kind and ignore on the file name), `clipboard.changed`, `app.frontmost.changed`, `wake` and `login`. The frontmost trigger is served by a host job, `frontmost.poll`, that reads the front app every 5 s. It is registered only while an enabled command declares the trigger, and it emits once per change of front app.
 - **Which commands become jobs.** A command with a trigger the host runs, or a `background` or `noView` mode, becomes a job. A `view` command without triggers stays a palette command.
 - **Runs.** One run at a time per job. A period that falls due during a run is dropped; an event that arrives during a run runs once after it, with the merged payload. A run has a timeout (one minute by default); its context is cancelled when the timeout passes, and the job stays busy until its function returns.
 - **Failures.** A failed run starts an exponential backoff (30 s, doubling to 15 min). Three failures within a minute halt the job until the user enables it again. The halt reason is shown in the palette and survives a restart.
@@ -1029,5 +1029,7 @@ Code: `internal/jobs` (scheduler, persisted state, wake detection), `internal/jo
 - **State.** Enabled choices, halt reasons and the last 20 runs of each job are saved in `jobs.json` in the user store. Without a writable store the state lasts for the session.
 - **Host jobs migrated.** The clipboard image cleanup (`clipboard.images.gc`) runs hourly, 30 seconds after launch, as the 1.x job did. Its sweep is the feature's own; the job only schedules it.
 - **Extension sync.** The `extensions.triggers` host job re-reads the running extensions' commands at startup, after an extension is enabled, disabled, removed or reloaded, and every 15 seconds. An extension that does not answer keeps its jobs; one that stops loses them and its folder watches.
-- **Not done.** `app.frontmost.changed` (needs a frontmost poll that runs only while subscribed, as 1.x did); live refresh of the Background Tasks page while it is open; a rig journey for triggers (J18).
+- **Live page.** An open Background Tasks page re-runs its search whenever a job changes, and stops when the palette leaves it.
+- **Rig.** J18 (`acme.triggers`) checks that one change, one burst of files and one clipboard copy each make one run.
+- **Not done.** Menu bar items do not get these triggers yet (section 19); the no-overlap guarantee is covered by unit tests only.
 
