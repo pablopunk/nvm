@@ -13,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // stubWindows is a window engine with one display and one window, so the placement path can be asserted.
@@ -132,11 +133,12 @@ type plainClipboard struct{ platform.Clipboard }
 
 func TestAppsLaunchOnlyTheInstalledIndex(t *testing.T) {
 	host, deps := newDesktopHost(t)
-	host.shell.SetApps([]platform.App{{Name: "Notes", ID: "com.example.notes", Path: "/Applications/Notes.app"}}, nil)
+	notes := testpath.Abs("Applications", "Notes.app")
+	host.shell.SetApps([]platform.App{{Name: "Notes", ID: "com.example.notes", Path: notes}}, nil)
 	h := desktopHandler(t, deps, api.CapabilityDesktopApps)
-	requireCode(t, serveRun(t, h, protocol.ServiceDesktopApps, protocol.OpLaunch, protocol.PathArgs{Path: "/usr/bin/evil"}), api.CodeNotFound, "installed app")
-	mustOK(t, serveRun(t, h, protocol.ServiceDesktopApps, protocol.OpLaunch, protocol.PathArgs{Path: "/Applications/Notes.app"}))
-	if calls := host.shell.Calls(); len(calls) == 0 || calls[len(calls)-1].Arg != "/Applications/Notes.app" {
+	requireCode(t, serveRun(t, h, protocol.ServiceDesktopApps, protocol.OpLaunch, protocol.PathArgs{Path: testpath.Abs("usr", "bin", "evil")}), api.CodeNotFound, "installed app")
+	mustOK(t, serveRun(t, h, protocol.ServiceDesktopApps, protocol.OpLaunch, protocol.PathArgs{Path: notes}))
+	if calls := host.shell.Calls(); len(calls) == 0 || calls[len(calls)-1].Arg != notes {
 		t.Fatalf("launch calls %+v", calls)
 	}
 }
