@@ -7,10 +7,13 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/features/files"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -66,6 +69,10 @@ func menuCases(t *testing.T) []menuCase {
 		{kind: "folder", row: func(t *testing.T) search.Item {
 			return rootRowNamed(t, "Downloads")
 		}, menu: []string{"Open Downloads", setShortcutTitle, setAliasTitle}},
+		{kind: "AI chat", name: "Trip ideas", row: func(t *testing.T) search.Item {
+			deps := aichat.Deps{Now: func() time.Time { return time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC) }}
+			return aichat.ConversationRow(deps, chat.Chat{ID: "chat-trip", Title: "Trip ideas", UpdatedAt: time.Date(2026, 11, 4, 11, 0, 0, 0, time.UTC)})
+		}, menu: []string{"Open", "Remove action"}},
 		{kind: "extension command", row: func(t *testing.T) search.Item {
 			return extensionCommandRow(t, goldenPalette(t), "")
 		}, menu: []string{"New Note", setShortcutTitle, setAliasTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
