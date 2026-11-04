@@ -37,6 +37,7 @@ func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 		Files: ports.FS, Clock: ports.Clock, Worker: real.NewWorker(), Processes: ports.Processes,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
+		DataRoot:   filepath.Join(dir, "extension-data"),
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},

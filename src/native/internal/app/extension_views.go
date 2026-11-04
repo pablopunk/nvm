@@ -54,6 +54,8 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Files:    ports.FS,
 		Clock:    ports.Clock,
 		Cache:    extensionSnapshots,
+		Dialog:   ports.FileDialog,
+		Drafts:   m,
 	}
 }
 
