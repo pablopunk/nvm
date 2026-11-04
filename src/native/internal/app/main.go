@@ -51,6 +51,7 @@ type App struct {
 	clip        *clipEngine
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
 	paletteHidden chan struct{}
+	shortcutMgr   *shortcuts.Manager
 	snips         *snippets.Store
 	notes         *notes.Store
 	files         *fileService
@@ -94,7 +95,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.showApps,
-		OnHide:      p.hideApps,
+		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
@@ -147,7 +148,7 @@ func (p *App) ready() {
 	p.panel.OnBlur(p.Hide)
 	p.panel.OnHide(p.notePaletteHidden)
 
-	p.startSummon()
+	p.startShortcuts()
 	p.reloadExtensions()
 	p.setUpTray()
 	p.startFiles()
