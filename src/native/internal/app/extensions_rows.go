@@ -2,16 +2,12 @@ package app
 
 import (
 	"context"
-	"time"
 
-	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-// extensionRunTimeout bounds one action an extension runs from the palette. Actions run off the UI thread.
-const extensionRunTimeout = 10 * time.Second
 
 // extensionSearch is the root's extension source: rows from every running extension's SearchItems, and the
 // durable commands the extensions declare. Each extension answers within its own budget (see package manager),
@@ -73,7 +69,7 @@ func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult) []
 		out = append(out, search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
-			Actions: []search.Action{runAction(p, m, result.ExtensionID, api.ActionRef{ID: command.ID}, "Run")},
+			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, "Run", nil))},
 		})
 	}
 	return out
@@ -85,51 +81,12 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		Score: scoreExtension,
 	}
 	if item.Primary != nil {
-		row.Actions = append(row.Actions, paletteAction(p, m, extID, *item.Primary))
+		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, *item.Primary))
 	}
 	for _, action := range item.Actions {
-		row.Actions = append(row.Actions, paletteAction(p, m, extID, action))
+		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, action))
 	}
 	return row
-}
-
-// paletteAction maps one wire action to a palette action. Only run executes extension code; the others are
-// host operations on the data the action carries.
-func paletteAction(p *App, m *manager.Manager, extID string, action api.Action) search.Action {
-	title := action.Title
-	switch {
-	case action.Kind == api.ActionRun && action.Ref != nil:
-		return runAction(p, m, extID, *action.Ref, orDefault(title, "Run"))
-	case action.Kind == api.ActionOpenURL && action.URL != "":
-		url := action.URL
-		return search.Action{Title: orDefault(title, "Open"), Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(url) }}
-	case action.Kind == api.ActionCopyText:
-		text := action.Text
-		return search.Action{Title: orDefault(title, "Copy"), Run: func(h search.Host) { mygo.Clipboard.WriteText(text); h.Hide() }}
-	}
-	return search.Action{Title: orDefault(title, string(action.Kind)), Run: func(h search.Host) { h.Toast("This action is not available yet") }}
-}
-
-// runAction runs an extension's action off the UI thread and shows any failure as a toast. Result navigation
-// is not applied yet; the action's effect is what the extension does.
-func runAction(p *App, m *manager.Manager, extID string, ref api.ActionRef, title string) search.Action {
-	return search.Action{Title: title, Run: func(h search.Host) {
-		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
-			defer cancel()
-			_, failure, err := m.Run(ctx, extID, api.Invocation{Ref: ref})
-			message := ""
-			switch {
-			case err != nil:
-				message = err.Error()
-			case failure != nil:
-				message = failure.Message
-			}
-			if message != "" && p.panel != nil {
-				p.panel.Update(func() { h.Toast(message) })
-			}
-		}()
-	}}
 }
 
 func iconOr(icon, fallback string) string {
