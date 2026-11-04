@@ -9,7 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/update"
-	"github.com/pablopunk/nvm/native/internal/update/mygoengine"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // attachUpdater builds the update service over MyGo's signed updater and starts its schedule. A build that MyGo was not
@@ -17,7 +17,7 @@ import (
 // palette on the UI thread.
 func (p *App) attachUpdater() {
 	p.updates = update.NewService(update.Options{
-		Engine:   mygoengine.New(),
+		Engine:   real.NewSelfUpdater(),
 		Clock:    p.ports.Clock,
 		Channels: newUpdateChannels(p),
 		Current:  mygo.App.Version(),
