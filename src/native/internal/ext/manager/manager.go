@@ -46,6 +46,8 @@ type Ports struct {
 	Windows      services.WindowEngine
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
+	// Notifier shows the notifications of the system service. Nil answers unavailable.
+	Notifier platform.Notifier
 	Shortcuts services.ShortcutTable
 	OCR       *ocr.Service
 	History   func() *clipboard.History
@@ -142,6 +144,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OS:           ports.OS,
 			Windows:      ports.Windows,
 			Frontmost:    ports.Frontmost,
+			Notifier:     ports.Notifier,
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,

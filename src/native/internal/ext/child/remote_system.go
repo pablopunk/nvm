@@ -41,6 +41,11 @@ func (s remoteSystem) Places() []api.Place {
 	return places
 }
 
+// Notify asks the host to show a notification. The host refuses it when the extension did not declare system.
+func (s remoteSystem) Notify(title, body string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpNotify, protocol.NotifyArgs{Title: title, Body: body}, nil)
+}
+
 // remoteShortcuts reads the shortcut table. A failed exchange reads as an empty table.
 type remoteShortcuts struct {
 	link *hostLink

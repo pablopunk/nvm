@@ -36,6 +36,7 @@ const (
 	OpLabels        = "labels"
 	OpSettingsPanes = "settings-panes"
 	OpPlaces        = "places"
+	OpNotify        = "notify"
 	OpPalette       = "palette"
 	OpImage         = "image"
 	OpScreen        = "screen"

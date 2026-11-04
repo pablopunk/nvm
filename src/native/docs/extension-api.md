@@ -328,7 +328,7 @@ Rules:
 | `Dictation` | `Status`, `APIAvailable`, `Devices`, `Start`, `Stop`, `Cancel` | Audio never reaches extension code. |
 | `Shortcuts` | `List`, `Palette` | Reads only; registration goes through `Command.GlobalShortcut`. |
 | `Indicators` | `Show`, `Update`, `Hide` | Passive, never takes focus. Added in this revision. |
-| `System` | `OS`, `HasCapability`, `Labels` | Use `HasCapability` to omit rows, not to duplicate platform checks. |
+| `System` | `OS`, `HasCapability`, `Labels`, `SettingsPanes`, `Places`, `Notify` | Use `HasCapability` to omit rows, not to duplicate platform checks. `Notify` needs `system`. |
 | `Updates` | `State` | Actions do the work. |
 | `AI` | `IsAvailable`, `Decide`, `Ask`, `Stream`, `Prepare`, `Attachments`, `Session` | Tiers `smart` and `fast`; no model ids. Stream delivers events on a channel. Served, section 25. |
 | `AIBuilder` | chat and tweak helpers | Host-only (built-in `nevermind.*`). |
@@ -986,7 +986,7 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
 | `ocr` | `image`, `screen`, `region` | `ocr` |
 | `shortcuts` | `list`, `palette` (read only) | `shortcuts` |
-| `system` | `os`, `hasCapability`, `labels` | none: read-only metadata, as storage needs none |
+| `system` | `os`, `hasCapability`, `labels`, `settingsPanes`, `places` (read only), `notify` | none for the read calls; `notify` needs `system` |
 
 Decisions behind the table:
 
@@ -998,6 +998,7 @@ Decisions behind the table:
 - **History images stay on the host.** An image entry carries its type only; no bytes or paths leave the host.
 - **Rates.** Opens, launches, frontmost reads, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
 - **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
+- **Notifications have a title and a body, and no click action.** The Electron extension API had none, so there is nothing to match. `notify` needs the `system` declaration, the host's `notifications.show` capability and a rate limit of 10 a minute. A title of 1 to 120 characters and a body of up to 500 are accepted. A refusal by the user or the OS is `permission`; a system without notifications answers unavailable.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
 Not built yet: keyboard typing, selection, clipboard formats other than text, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.

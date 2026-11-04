@@ -66,7 +66,8 @@ func newDesktopRig(t *testing.T) desktopRig {
 	rig.deps.History = func() *clipboard.History { return history }
 	rig.deps.OS = "linux"
 	rig.deps.Frontmost = fixedFrontmost{}
-	rig.deps.Capabilities = platform.NewCapabilities(platform.CapabilityWindowManagement, platform.CapabilityTextRecognize, platform.CapabilityFrontmostApp)
+	rig.deps.Notifier = fake.NewNotifier()
+	rig.deps.Capabilities = platform.NewCapabilities(platform.CapabilityWindowManagement, platform.CapabilityTextRecognize, platform.CapabilityFrontmostApp, platform.CapabilityNotifications)
 	return desktopRig{servicesRig: rig, shell: shell, clipboard: clipboardPort}
 }
 
@@ -76,7 +77,7 @@ func TestDesktopFixtureUsesEveryDesktopServiceThroughTheChild(t *testing.T) {
 	rig := newDesktopRig(t)
 	manifest := fixtureManifest("acme.desktop",
 		api.CapabilityDesktopClipboard, api.CapabilityDesktopApps, api.CapabilityDesktopFiles,
-		api.CapabilityWindowManagement, api.CapabilityClipboardHistory, api.CapabilityOCR, api.CapabilityShortcuts)
+		api.CapabilityWindowManagement, api.CapabilityClipboardHistory, api.CapabilityOCR, api.CapabilityShortcuts, api.CapabilitySystem)
 	r := servicedRuntime(t, "acme.desktop", rig.servicesRig, manifest)
 
 	want := map[string]string{
@@ -84,6 +85,7 @@ func TestDesktopFixtureUsesEveryDesktopServiceThroughTheChild(t *testing.T) {
 		"windows":   "windows listed=1",
 		"apps":      "apps listed=true",
 		"frontmost": "frontmost named=true",
+		"notify":    "notify shown=true",
 		"history":   "history entries=0",
 		"shortcuts": "shortcuts palette=Command+Alt+K",
 		"system":    "system os=linux ocr=true",

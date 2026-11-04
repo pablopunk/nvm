@@ -62,6 +62,8 @@ type Deps struct {
 	Windows WindowEngine
 	// Frontmost names the app in front. Nil answers unavailable.
 	Frontmost FrontmostSource
+	// Notifier shows operating-system notifications. Nil answers unavailable.
+	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
 	Shortcuts ShortcutTable
 	// Indicators draws the passive indicators. Nil answers unavailable.
@@ -101,6 +103,7 @@ type Handler struct {
 	fetches          *rateLimiter
 	logWrites        *rateLimiter
 	actions          *rateLimiter
+	notifications    *rateLimiter
 	processes        *rateLimiter
 	indicatorUpdates *rateLimiter
 	ocrReads         *rateLimiter
@@ -132,6 +135,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		fetches:          newRateLimiter(deps.Clock, fetchesPerMinute),
 		logWrites:        newRateLimiter(deps.Clock, logWritesPerMinute),
 		actions:          newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		notifications:    newRateLimiter(deps.Clock, notificationsPerMinute),
 		processes:        newRateLimiter(deps.Clock, processRunsPerMinute),
 		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
 		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
