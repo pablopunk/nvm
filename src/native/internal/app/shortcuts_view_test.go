@@ -11,7 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-var clipboardEntry = shortcuts.Entry{ActionID: shortcutCommandID("Clipboard History"), Title: "Clipboard History"}
+var clipboardEntry = shortcuts.Entry{ActionID: shortcuts.CommandClipboardHistory, Title: "Clipboard History"}
 
 // goldenShortcutsList is the Keyboard Shortcuts list over the root: Clipboard History has a shortcut, and Quick Notes
 // asked for one the OS refused.
@@ -22,9 +22,9 @@ func goldenShortcutsList(t *testing.T) *App {
 	if _, err := manager.SetPalette("Alt+Shift+Space"); err != nil {
 		t.Fatal(err)
 	}
-	mustSetShortcut(t, manager, shortcutCommandID("Clipboard History"), "Command+Alt+V")
+	mustSetShortcut(t, manager, shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
-	mustSetShortcut(t, manager, shortcutCommandID("Quick Notes"), "Command+Alt+N")
+	mustSetShortcut(t, manager, shortcuts.CommandQuickNotes, "Command+Alt+N")
 	goldenOpen(p, p.keyboardShortcutsView())
 	return p
 }

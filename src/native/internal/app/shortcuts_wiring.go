@@ -45,18 +45,14 @@ func (p *App) shortcutsDocument() shortcuts.Persistence {
 func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
 	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden {
-			actions = append(actions, shortcuts.Action{ID: shortcutCommandID(cmd.Title), Title: cmd.Title})
+		if !cmd.Hidden && cmd.ID != "" {
+			actions = append(actions, shortcuts.Action{ID: cmd.ID, Title: cmd.Title})
 		}
 	}
 	if p.windowManagementEnabled() {
 		actions = append(actions, windows.ShortcutActions()...)
 	}
 	return actions
-}
-
-func shortcutCommandID(title string) string {
-	return "command:" + title
 }
 
 // runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does. An app
@@ -70,7 +66,7 @@ func (p *App) runShortcutCommand(actionID string) {
 		return
 	}
 	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
+		if !cmd.Hidden && cmd.ID == actionID {
 			p.Show()
 			p.trackedRun(cmd)(search.Host(p))
 			return

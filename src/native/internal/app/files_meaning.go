@@ -5,6 +5,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/meaningfiles"
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // meaningLocalLimit is how many name matches the Find Files by Meaning view keeps, as the Electron feature does.
@@ -20,6 +21,7 @@ func (p *App) meaningFilesCommands() []command {
 		return nil
 	}
 	return []command{{
+		ID:       shortcuts.CommandFindFilesByMeaning,
 		Title:    "Find Files by Meaning",
 		Keywords: "files find meaning describe semantic ai locate",
 		Icon:     "sparkles",

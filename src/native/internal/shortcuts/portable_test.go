@@ -31,11 +31,11 @@ const oneXShortcuts = `{
 func TestOneXKeysBindAsTheirTwoOhActions(t *testing.T) {
 	tests := map[string]string{
 		"extension-root:nevermind.apps:app:/Applications/Slack.app": "app:/Applications/Slack.app",
-		"extension-root:nevermind.dictation:dictation":              "command:Dictate",
+		"extension-root:nevermind.dictation:dictation":              CommandDictate,
 		"extension-action:window-management:layout.left-half":       "window.left-half",
 		"extension-action:window-management:layout.focus-right":     "window.focus-right",
-		"extension:nevermind.emoji-symbols:emoji-symbols":           "command:Emoji & Symbols",
-		"command:Clipboard History":                                 "command:Clipboard History",
+		"extension:nevermind.emoji-symbols:emoji-symbols":           CommandEmojiSymbols,
+		"command:snippets": CommandSnippets,
 	}
 	for key, want := range tests {
 		got, bound := ActionIDOf(key)
