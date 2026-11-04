@@ -41,3 +41,16 @@ func TestNoticeForMapsEveryFailureToItsOwnNotice(t *testing.T) {
 		})
 	}
 }
+
+// TestPricingUnavailableUsesTheDesktopCopy checks a model that cannot be priced says what Electron says, whatever the
+// server's message.
+func TestPricingUnavailableUsesTheDesktopCopy(t *testing.T) {
+	notice := NoticeFor(&backend.Error{Kind: backend.KindRejected, Status: 503, Code: "pricing_unavailable", Message: "server text"}, "")
+	if notice.Title != "AI model unavailable" {
+		t.Fatalf("title = %q, want the desktop title", notice.Title)
+	}
+	want := "Nevermind cannot price the selected AI model right now, so this request was not sent. Try again later or choose another model."
+	if notice.Message != want {
+		t.Fatalf("message = %q, want the desktop copy", notice.Message)
+	}
+}
