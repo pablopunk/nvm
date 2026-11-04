@@ -32,5 +32,6 @@ func TestJourneyJ25FirstRunGuideBecomesHelp(t *testing.T) {
 	_, err = app.WaitFor("Help", elementWait)
 	must(t, err)
 	shoot(t, app, "j25-3-help")
+	clearSearch(t, app)
 	must(t, app.DismissWithEscape())
 }
