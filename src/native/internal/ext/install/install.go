@@ -28,18 +28,33 @@ const (
 // Install writes files as the extension id under root. The files must include extension.json and main.go,
 // and the manifest must load cleanly with exactly this id. A failed install changes nothing visible.
 func Install(files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) error {
+	staging, _, err := Stage(files, clock, root, id, contents)
+	if err != nil {
+		return err
+	}
+	return swapIn(files, clock, root, id, staging)
+}
+
+// Stage writes files into a hidden staging folder and checks that they load as id. It returns the staging folder
+// and its loaded bundle. The caller publishes it with Install's swap or removes it with Discard. Nothing visible changes.
+func Stage(files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) (string, bundle.Bundle, error) {
 	nonce := strconv.FormatInt(clock.Now().UnixNano(), 36)
 	staging := filepath.Join(root, stagingPrefix+id+"-"+nonce)
 	if err := writeFolder(files, staging, contents); err != nil {
 		_ = removeTree(files, staging)
-		return err
+		return "", bundle.Bundle{}, err
 	}
 	staged := bundle.Load(files, staging)
 	if err := checkStaged(staged, id); err != nil {
 		_ = removeTree(files, staging)
-		return err
+		return "", bundle.Bundle{}, err
 	}
-	return swapIn(files, clock, root, id, staging)
+	return staging, staged, nil
+}
+
+// Discard removes a staging folder that will not be published. A missing folder is not an error.
+func Discard(files platform.FS, staging string) error {
+	return removeTree(files, staging)
 }
 
 // Uninstall removes the extension folder id. A missing folder is not an error.

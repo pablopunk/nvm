@@ -72,6 +72,17 @@ func (m *Manager) Source(id string) (string, error) {
 	return string(e.bundle.Source), nil
 }
 
+// Definition returns the manifest and source of an installed extension: the version an AI chat edits.
+func (m *Manager) Definition(id string) (api.Manifest, string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	if err != nil {
+		return api.Manifest{}, "", err
+	}
+	return e.bundle.Manifest, string(e.bundle.Source), nil
+}
+
 // Enable turns an extension on and starts it. A disabled-by-failure extension is reset first.
 func (m *Manager) Enable(id string) error {
 	m.mu.Lock()
@@ -106,20 +117,31 @@ func (m *Manager) Disable(id string) error {
 	return nil
 }
 
-// Install writes an extension folder atomically and reloads it. A new extension is enabled only when the caller
-// says so: dropped-in files default to off.
+// Install writes an extension folder atomically and reloads it. The enabled state is set to enable, so a new
+// version of an enabled extension is off until its owner reviews it again: dropped-in files default to off.
 func (m *Manager) Install(id string, contents map[string][]byte, enable bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := install.Install(m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
 		return err
 	}
-	if enable {
-		if err := m.enabled.SetEnabled(id, true); err != nil {
-			return fmt.Errorf("save enabled state: %w", err)
-		}
+	if err := m.enabled.SetEnabled(id, enable); err != nil {
+		return fmt.Errorf("save enabled state: %w", err)
 	}
 	return m.reloadLocked()
+}
+
+// Check runs the candidate files the way a child would load them, without publishing anything. It returns the
+// protocol methods the source implements, or why it does not load, including the Yaegi compile errors. The
+// staging folder is removed on every path.
+func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error) {
+	staging, staged, err := install.Stage(m.ports.Files, m.ports.Clock, m.root, id, contents)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = install.Discard(m.ports.Files, staging) }()
+	identity := api.Identity{ID: id, Title: staged.Manifest.Title}
+	return supervisor.ProbeSource(m.config, identity, filepath.Join(staging, bundle.SourceFile))
 }
 
 // Uninstall stops the extension, removes its folder and forgets its enabled state.

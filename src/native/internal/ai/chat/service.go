@@ -22,8 +22,8 @@ type Options struct {
 	Dispatch func(fn func())
 	// NoteError sees every error that ends a turn, so the account can show a spend-cap notice.
 	NoteError func(err error)
-	// SystemPrompt returns the instruction a chat of kind starts with. Nil means the conversation prompt.
-	SystemPrompt func(kind Kind) string
+	// SystemPrompt returns the instruction a chat starts with, read at every turn. Nil means the conversation prompt.
+	SystemPrompt func(chat Chat) string
 	// OnSettled runs on the UI thread after a turn settles and its transcript is saved.
 	OnSettled func(chatID string, outcome Outcome)
 	// Tools are what a conversation may call. The extension builder gets none.
@@ -48,7 +48,7 @@ type Service struct {
 // New returns a service over opts. Expired conversations are removed by Expire, which the caller runs at start.
 func New(opts Options) *Service {
 	if opts.SystemPrompt == nil {
-		opts.SystemPrompt = func(Kind) string { return ConversationSystemPrompt }
+		opts.SystemPrompt = func(Chat) string { return ConversationSystemPrompt }
 	}
 	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
 	s.Reload()
@@ -180,6 +180,26 @@ func (s *Service) Send(id, text string) error {
 	return s.startTurn(id)
 }
 
+// Bind records that the chat of kind builder writes or edits the extension id. It refuses a busy chat, since the
+// instruction of its next turn depends on the binding.
+func (s *Service) Bind(id, extension string) error {
+	if s.Busy(id) {
+		return ErrBusy
+	}
+	return s.mutate(id, func(c *Chat) { c.Extension = extension })
+}
+
+// Owners returns the builder chats bound to the extension id, most recently changed first.
+func (s *Service) Owners(extension string) []Chat {
+	var owners []Chat
+	for _, chat := range s.Chats() {
+		if chat.Kind == KindBuilder && chat.Extension == extension {
+			owners = append(owners, chat)
+		}
+	}
+	return owners
+}
+
 // Note adds an informational notice to the transcript, such as the outcome of an action the chat started.
 func (s *Service) Note(id string, notice Notice) error {
 	return s.mutate(id, func(c *Chat) {
@@ -266,7 +286,7 @@ func (s *Service) startTurn(id string) error {
 			c.Messages = append(c.Messages, s.noticeMessage(SignInNotice()))
 		})
 	}
-	history := Request(s.opts.SystemPrompt(chat.Kind), chat)
+	history := Request(s.opts.SystemPrompt(chat), chat)
 	err := s.mutate(id, func(c *Chat) {
 		c.Messages = append(c.Messages, s.message(AuthorAssistant, "", StatusStreaming))
 	})

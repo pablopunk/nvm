@@ -48,7 +48,35 @@ func load(path string, identity api.Identity, clock platform.Clock, link *hostLi
 	if err != nil {
 		return nil, err
 	}
-	return &extension{functions: lookupEntryPoints(i), base: newHostContext(identity, clock, link)}, nil
+	functions := lookupEntryPoints(i)
+	if err := checkEntryPointArities(functions); err != nil {
+		return nil, err
+	}
+	return &extension{functions: functions, base: newHostContext(identity, clock, link)}, nil
+}
+
+// entryPointArities is the argument and result count of each entry point's signature. A source whose function has
+// another count would fail at its first call, so it is refused at load with the name of the function.
+var entryPointArities = map[string][2]int{
+	protocol.MethodCommands:        {1, 2},
+	protocol.MethodRoot:            {1, 2},
+	protocol.MethodSearch:          {2, 2},
+	protocol.MethodRun:             {2, 2},
+	protocol.MethodLoad:            {2, 2},
+	protocol.MethodMenuBars:        {1, 2},
+	protocol.MethodMenuBarTriggers: {0, 1},
+}
+
+// checkEntryPointArities reports the first entry point whose parameter or result count is not the api signature.
+func checkEntryPointArities(functions map[string]reflect.Value) error {
+	for method, function := range functions {
+		want := entryPointArities[method]
+		if function.Type().NumIn() != want[0] || function.Type().NumOut() != want[1] {
+			return fmt.Errorf("%s has the wrong signature: it takes %d arguments and returns %d values, want %d and %d (see the API reference)",
+				entryPoints[method], function.Type().NumIn(), function.Type().NumOut(), want[0], want[1])
+		}
+	}
+	return nil
 }
 
 // evalExtension runs the source in a fresh interpreter that knows the standard library and the api package. A

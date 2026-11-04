@@ -76,12 +76,14 @@ type Message struct {
 	At     time.Time          `json:"at"`
 }
 
-// Chat is one conversation: its kind and tier, its transcript and when it was last changed.
+// Chat is one conversation: its kind and tier, its transcript and when it was last changed. A builder chat names the
+// extension it wrote or edits in Extension; that binding is the chat's ownership of the extension.
 type Chat struct {
 	ID        string    `json:"id"`
 	Kind      Kind      `json:"kind"`
 	Title     string    `json:"title"`
 	Tier      Tier      `json:"tier"`
+	Extension string    `json:"extension,omitempty"`
 	Messages  []Message `json:"messages"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`

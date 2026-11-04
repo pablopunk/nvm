@@ -14,6 +14,15 @@ func (b *Backend) SetReply(text string) {
 	b.reply = text
 }
 
+// QueueReplies makes the next chat streams answer with texts, in order, before the reply set by SetReply. A chat
+// request after the queue is empty gets the SetReply text again. A scripted builder conversation queues its
+// replies this way, the bad source first and the fixed one after.
+func (b *Backend) QueueReplies(texts ...string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.queued = append(b.queued, texts...)
+}
+
 // SetChunkDelay paces each chat stream: every frame after the first waits d after the one before it, so a test can
 // stop a reply while it is still arriving. Zero, the default, streams the whole reply at once.
 func (b *Backend) SetChunkDelay(d time.Duration) {
@@ -22,11 +31,17 @@ func (b *Backend) SetChunkDelay(d time.Duration) {
 	b.chunkDelay = d
 }
 
-// streamSettings returns the reply text and the pacing of the next chat stream.
+// streamSettings returns the reply text and the pacing of the next chat stream. The next queued reply, when there is
+// one, is taken off the queue.
 func (b *Backend) streamSettings() (string, time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.reply, b.chunkDelay
+	reply := b.reply
+	if len(b.queued) > 0 {
+		reply = b.queued[0]
+		b.queued = b.queued[1:]
+	}
+	return reply, b.chunkDelay
 }
 
 // serveChat answers a chat completion: a stream of the reply text, or one of the stream failure modes.
