@@ -58,6 +58,8 @@ type FS struct {
 	faults     faultSet
 	afterWrite func(name string) error
 	watchers   []*fsWatcher
+	// watchEntryLimit is how many entries a watch may enroll; zero means no limit. See SetWatchEntryLimit.
+	watchEntryLimit int
 	// kids indexes the direct children of every folder; nil means it must be rebuilt before use.
 	kids map[string][]string
 }
@@ -358,24 +360,6 @@ func (f *FS) Chmod(name string, mode fs.FileMode) error {
 	}
 	n.mode = mode.Perm()
 	return nil
-}
-
-// Watch reports changes at or under name until ctx is done, then closes the channel. Events that do not
-// fit the buffer are dropped, as the port allows.
-func (f *FS) Watch(ctx context.Context, name string) (<-chan platform.Event, error) {
-	if err := f.faults.take(OpWatch); err != nil {
-		return nil, pathError("watch", name, err)
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key := cleanKey(name)
-	if _, err := f.lookupLocked(key); err != nil {
-		return nil, pathError("watch", name, err)
-	}
-	w := &fsWatcher{prefix: key, root: watchSpelling(name, key), out: make(chan platform.Event, watcherBuffer)}
-	f.watchers = append(f.watchers, w)
-	go f.unwatchOnDone(ctx, w)
-	return w.out, nil
 }
 
 // unwatchOnDone detaches a watcher and closes its channel when ctx ends.

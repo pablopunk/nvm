@@ -3,6 +3,7 @@ package real
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 
 	"github.com/egoist/mygo"
@@ -13,16 +14,16 @@ import (
 // watchBuffer is how many events may wait for a consumer before the relay blocks on it.
 const watchBuffer = 64
 
-// watchEntryLimit caps the files and folders one watch enrolls: past it MyGo stops the watch with ErrWatchLimit, and
-// the relay reports an overflow so the index falls back to periodic reconciles for that folder. It is MyGo's own
-// default outside macOS, written out so the cap is visible here.
-const watchEntryLimit = 8192
-
-// startWatch watches the tree under name with MyGo and relays its batches as single events. The channel
-// closes when ctx is done or MyGo stops the watch (for example when the watched folder disappears).
-func startWatch(ctx context.Context, name string) (<-chan platform.Event, error) {
-	watcher, err := mygo.WatchFiles(ctx, name, mygo.FileWatchOptions{Recursive: true, MaxEntries: watchEntryLimit})
+// startWatch watches the tree under name with MyGo, without the entries skip returns true for, and relays its batches
+// as single events. The entry limit is MyGo's default for the platform: a macOS watch keeps a larger snapshot because
+// one FSEvents stream covers the whole tree. The channel closes when ctx is done or MyGo stops the watch (for example
+// when the watched folder disappears).
+func startWatch(ctx context.Context, name string, skip func(rel string, isDir bool) bool) (<-chan platform.Event, error) {
+	watcher, err := mygo.WatchFiles(ctx, name, mygo.FileWatchOptions{Recursive: true, Ignore: skip})
 	if err != nil {
+		if errors.Is(err, mygo.ErrWatchLimit) {
+			return nil, fmt.Errorf("%w: %w", platform.ErrWatchLimit, err)
+		}
 		return nil, err
 	}
 	events := make(chan platform.Event, watchBuffer)

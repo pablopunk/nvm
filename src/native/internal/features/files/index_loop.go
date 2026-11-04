@@ -58,6 +58,10 @@ type indexLoop struct {
 	missing  []string
 	// degraded holds the folders whose watch overflowed; they are only reconciled.
 	degraded map[string]bool
+	// unwatchable holds the folders that fit no watch under the entry limit; they are only reconciled.
+	unwatchable map[string]bool
+	// levels holds, per root, the depth its watch last settled on under the entry limit.
+	levels map[string]int
 }
 
 // run is the index loop. It publishes every snapshot, so readers only ever see a complete one. It returns when ctx ends.
