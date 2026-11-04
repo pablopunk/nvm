@@ -74,7 +74,7 @@ func (s *Service) readTargetWindow(ctx context.Context, target Target, windowKey
 }
 
 func rejectionFailure(record platform.WindowRecord, target Target, allowFullScreen bool) *Failure {
-	sameApp := record.BundleID == target.BundleID
+	sameApp := record.PID == target.PID
 	switch geometry.RejectTargetWindow(windowFrameOf(record), sameApp, allowFullScreen) {
 	case geometry.RejectTargetChanged:
 		return newFailure(ReasonTargetLost, geometry.MessageTargetWindowChanged)

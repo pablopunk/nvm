@@ -81,7 +81,7 @@ type App struct {
 
 	windows        *windowmgmt.Service
 	windowSettings *windowmgmt.SettingsStore
-	focusCapture   paletteFocusCapture
+	windowFocus    windowSummon
 	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
 	dictation       *dict.Service
 	dictationWindow *mygo.Window

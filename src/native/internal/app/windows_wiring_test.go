@@ -48,7 +48,7 @@ func TestWindowCommandsAreListedWhereTheSystemManagesWindows(t *testing.T) {
 func TestPaletteHandsFocusBackToTheWindowItWasSummonedFrom(t *testing.T) {
 	p := goldenPalette(t)
 	p.attachWindows()
-	palette := &shownWindow{visible: true}
+	palette := &shownWindow{}
 	p.Attach(palette)
 	windows := p.ports.Windows.(*fake.WindowManager)
 	summoned := windows.AddWindow(fake.SimWindow{PID: 42, BundleID: "app.notes", AppName: "Notes", Title: "Notes",
@@ -56,11 +56,13 @@ func TestPaletteHandsFocusBackToTheWindowItWasSummonedFrom(t *testing.T) {
 	other := windows.AddWindow(fake.SimWindow{PID: 77, BundleID: "app.other", AppName: "Other", Title: "Other",
 		Frame: platform.WindowFrame{X: 400, Y: 10, Width: 300, Height: 300}})
 	windows.Focus(summoned)
-	p.captureWindowFocus()
+	focus := p.ports.Focus.(*fake.Focus)
+	focus.SetActive(platform.FocusTarget{Window: "42-window", PID: 42})
+	p.Show()
 
-	target, known := p.PaletteFocusTarget()
-	if !known || target.PID != 42 {
-		t.Fatalf("captured target = %+v (known %v), want the notes app", target, known)
+	target, ok := p.windowTarget()
+	if !ok || target.PID != 42 {
+		t.Fatalf("command target = %+v (known %v), want the notes app", target, ok)
 	}
 	windows.Focus(other)
 	if !p.HidePaletteAndRestoreFocus(context.Background(), target) {
@@ -69,8 +71,42 @@ func TestPaletteHandsFocusBackToTheWindowItWasSummonedFrom(t *testing.T) {
 	if palette.IsVisible() {
 		t.Error("the palette is still visible after the hand-back")
 	}
-	front, found, _ := windows.Frontmost(context.Background())
-	if !found || front.PID != target.PID {
-		t.Errorf("front app = %+v, want the notes app", front)
+	restored := focus.Restored()
+	if len(restored) == 0 {
+		t.Fatal("nothing was restored")
 	}
+	for _, target := range restored {
+		if target.Window != "42-window" {
+			t.Errorf("restored %+v, want only the summoned window", target)
+		}
+	}
+}
+
+func TestSummonCapturesNothingOfItsOwnWhereThePaletteHasAFocusPort(t *testing.T) {
+	p := goldenPalette(t)
+	p.attachWindows()
+	p.Attach(&shownWindow{})
+	p.ports.Windows.(*fake.WindowManager).AddWindow(fake.SimWindow{PID: 9, BundleID: "app.x", AppName: "X", Title: "X",
+		Frame: platform.WindowFrame{Width: 100, Height: 100}})
+	p.onPaletteShown()
+	if p.windowFocus.load().known {
+		t.Fatal("the window commands captured a second target on a palette summon")
+	}
+}
+
+func TestShortcutsListWindowCommandsAndBindThemLikeAnyAction(t *testing.T) {
+	p := goldenPalette(t)
+	p.attachWindows()
+	if err := p.shortcutsManager().SetAction("window.left-half", "Control+Alt+Left"); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range p.shortcutsManager().Entries() {
+		if entry.ActionID == "window.left-half" {
+			if entry.Title != "Left Half" || entry.Accelerator != "Control+Alt+Left" {
+				t.Fatalf("entry = %+v, want Left Half on Control+Alt+Left", entry)
+			}
+			return
+		}
+	}
+	t.Fatal("the Keyboard Shortcuts list has no Left Half row")
 }

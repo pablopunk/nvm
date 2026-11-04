@@ -1,15 +1,28 @@
 package palette
 
+import "github.com/pablopunk/nvm/native/internal/platform"
+
 // captureFocus remembers the window that had the keyboard before the palette takes it. Nothing is remembered when
 // the host has no focus port or no window has the keyboard.
 func (p *Palette) captureFocus() {
 	p.returnTo = nil
+	p.summoned = nil
 	if p.opts.Focus == nil {
 		return
 	}
 	if target, err := p.opts.Focus.Active(); err == nil {
 		p.returnTo = &target
+		p.summoned = &target
 	}
+}
+
+// Summoned returns the window that had the keyboard before the palette was last shown, when one was captured. It
+// is the palette's single capture of the previous window: commands that act on that window read it here.
+func (p *Palette) Summoned() (platform.FocusTarget, bool) {
+	if p.summoned == nil {
+		return platform.FocusTarget{}, false
+	}
+	return *p.summoned, true
 }
 
 // returnFocus gives the keyboard back to the window captured on show. A window that has gone has nowhere to
