@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/install"
+	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 )
 
@@ -143,14 +144,18 @@ func (m *Manager) Install(id string, contents map[string][]byte, enable bool) er
 }
 
 // Check runs the candidate files the way a child would load them, without publishing anything. It returns the
-// protocol methods the source implements, or why it does not load, including the Yaegi compile errors. The
-// staging folder is removed on every path.
+// protocol methods the source implements, or why it does not load, including the Yaegi compile errors. A source
+// that calls a service its manifest does not declare is refused before it loads, since the host would refuse
+// that call at run time. The staging folder is removed on every path.
 func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error) {
 	staging, staged, err := install.Stage(m.ports.Files, m.ports.Clock, m.root, id, contents)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = install.Discard(m.ports.Files, staging) }()
+	if missing := sourcecheck.UndeclaredUses(staged.Manifest, contents); len(missing) > 0 {
+		return nil, errors.New(sourcecheck.Explain(missing))
+	}
 	identity := api.Identity{ID: id, Title: staged.Manifest.Title}
 	return supervisor.ProbeSource(m.config, identity, filepath.Join(staging, bundle.SourceFile))
 }

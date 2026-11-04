@@ -7,6 +7,7 @@ import (
 	"log"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 )
 
 // MaxFixAttempts bounds how many times a rejected reply goes back to the model. A chat gets this many fixes after its
@@ -85,8 +86,12 @@ func (w *Workshop) build(chatID string, candidate Candidate) {
 	w.dispatch(func() { w.finish(chatID, candidate, err) })
 }
 
-// verify loads the candidate in a child process: it must compile and implement at least one entry point.
+// verify refuses a candidate that calls a service its manifest does not declare, then loads the candidate in a child
+// process: it must compile and implement at least one entry point.
 func (w *Workshop) verify(candidate Candidate) error {
+	if missing := sourcecheck.UndeclaredUses(candidate.Manifest, candidate.SourceFiles()); len(missing) > 0 {
+		return errors.New(sourcecheck.Explain(missing))
+	}
 	methods, err := w.extensions.Check(candidate.Manifest.ID, candidate.Files())
 	if err != nil {
 		return err

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 )
 
 // goodSource is a source that compiles against the api symbols and implements a root row.
@@ -117,5 +119,25 @@ func TestDisabledInstallContributesNoCommandsOrSearchRows(t *testing.T) {
 	}
 	if result := resultFor(h.search("alpha"), "acme.good"); result != nil {
 		t.Fatalf("a disabled extension answered search: %+v", result)
+	}
+}
+
+// TestCheckRefusesAScriptWhoseCapabilityIsUndeclared is the owner's refusal before it reaches a child: a theme toggle
+// that runs AppleScript without declaring system is refused with the capability it needs, and the same source loads
+// once system is declared.
+func TestCheckRefusesAScriptWhoseCapabilityIsUndeclared(t *testing.T) {
+	h := newHarness(t)
+	undeclared := fixtureContents(t, "acme.theme")
+	undeclared[bundle.ManifestFile] = []byte(`{"apiVersion":"1.0","id":"user.system-theme","title":"System Theme"}`)
+	_, err := h.m.Check("user.system-theme", undeclared)
+	if err == nil || !strings.Contains(err.Error(), `"system" capability`) {
+		t.Fatalf("Check error = %v; want the system capability named", err)
+	}
+	methods, err := h.m.Check("acme.theme", fixtureContents(t, "acme.theme"))
+	if err != nil {
+		t.Fatalf("the declared version failed the check: %v", err)
+	}
+	if !slices.Contains(methods, "commands") || !slices.Contains(methods, "run") {
+		t.Fatalf("methods = %v; want the commands and run entry points", methods)
 	}
 }
