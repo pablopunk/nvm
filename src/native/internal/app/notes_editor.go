@@ -83,7 +83,7 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 	}
 	edit.editors++
 	view := &palette.View{
-		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃F Float window",
+		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes   ⌃F Float window",
 		TitleFn: func() string { return notes.Title(edit.text) },
 		OnLeave: func() {
 			edit.editors--
@@ -122,6 +122,9 @@ func (p *App) noteEditorKeys(c *ui.Context, h search.Host, edit *noteEdit) bool 
 		h.Push(p.conflictView(edit))
 	case c.Shortcut(mod, ui.KeyN):
 		p.openNewNote(h)
+	case c.Shortcut(mod, ui.KeyO):
+		h.Pop()
+		h.Push(p.notesView())
 	case c.Shortcut(mod, ui.KeyF):
 		h.Hide()
 		p.openFloatingNote(edit.id)
@@ -156,8 +159,8 @@ func (p *App) conflictView(edit *noteEdit) *palette.View {
 				{Title: "Keep saved version", Subtitle: "Saved " + notes.RelativeTime(now, conflict.Saved.UpdatedAt), Icon: "file-text", Tone: "blue", Actions: []search.Action{
 					{Title: "Keep saved version", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepSaved) }},
 				}},
-				{Title: "Keep draft", Subtitle: "Unsaved text, edited " + notes.RelativeTime(now, conflict.Draft.Edited), Icon: "sticky-note", Tone: "yellow", Actions: []search.Action{
-					{Title: "Keep draft", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepDraft) }},
+				{Title: "Restore unsaved changes", Subtitle: "Unsaved text, edited " + notes.RelativeTime(now, conflict.Draft.Edited), Icon: "sticky-note", Tone: "yellow", Actions: []search.Action{
+					{Title: "Restore unsaved changes", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepDraft) }},
 				}},
 				{Title: "Resolve unsaved changes", Subtitle: fmt.Sprintf("Compare: %s added, %s removed", plural(summary.Added, "line"), plural(summary.Removed, "line")), Icon: "scan-text", Tone: "blue", Actions: []search.Action{
 					{Title: "Compare", Run: func(h search.Host) { h.Push(p.conflictDiffView(edit)) }},

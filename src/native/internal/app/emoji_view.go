@@ -72,7 +72,7 @@ func (p *App) emojiView() *palette.View {
 	return &palette.View{
 		Title:       "Emoji & Symbols",
 		Placeholder: "Search emoji, symbols, or Unicode values",
-		Hint:        "↵ Copy   ⌃↵ Paste   ⇥ Category",
+		Hint:        p.emojiHint(),
 		EmptyTitle:  "No matching characters",
 		EmptySub:    "Try a name, keyword, character, or Unicode value.",
 		Limit:       emojiRowLimit,
@@ -87,6 +87,14 @@ func (p *App) emojiView() *palette.View {
 			Cell:       drawEmojiCell,
 		},
 	}
+}
+
+// emojiHint names the keys of the picker: Enter pastes where the platform can, and copies otherwise.
+func (p *App) emojiHint() string {
+	if p.canPaste() {
+		return "↵ Paste   ⌃↵ Copy   ⇥ Category"
+	}
+	return "↵ Copy   ⇥ Category"
 }
 
 // drawEmojiCell draws the character of a cell. The palette draws the plate, the selection and the label.

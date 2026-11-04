@@ -9,7 +9,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -67,16 +66,15 @@ func (p *App) clipItems(q string, limit int) []search.Item {
 	return out
 }
 
-// clipItem is one history entry as a palette row: its 1.x title, a subtitle that says when it was copied and what
-// it is, the copy action on Enter, and the detail pane. Actions run by entry ID and look the entry up when they
-// run, so a row never acts on a stale copy.
+// clipItem is one history entry as a palette row: its 1.x title and subtitle, the copy action on Enter, and the
+// detail pane. Actions run by entry ID and look the entry up when they run, so a row never acts on a stale copy.
 func (p *App) clipItem(e clipboard.Entry, historyLen int) search.Item {
 	row := clipboard.BuildRow(e, historyLen)
 	it := search.Item{
 		ID:        row.ID,
 		Kind:      search.KindClipboard,
 		Title:     row.Title,
-		Subtitle:  "Copied " + ago(e.CreatedAt) + " · " + clipKindLabel(e.Kind),
+		Subtitle:  row.Subtitle,
 		Icon:      clipIcon(e.Kind),
 		Tone:      "blue",
 		TintTitle: true,
@@ -87,17 +85,6 @@ func (p *App) clipItem(e clipboard.Entry, historyLen int) search.Item {
 		it.Accessory = "Pinned"
 	}
 	return it
-}
-
-// clipKindLabel names what an entry holds, for the subtitle.
-func clipKindLabel(kind clipboard.Kind) string {
-	switch kind {
-	case clipboard.KindImage:
-		return "Image"
-	case clipboard.KindFiles:
-		return "Files"
-	}
-	return "Text"
 }
 
 // clipIcon is the Lucide icon of an entry's kind.
@@ -111,16 +98,12 @@ func clipIcon(kind clipboard.Kind) string {
 	return clipIconUnit
 }
 
-// clipActions is the action list of a row, in the order the menu shows: copy (Enter), paste (when the platform
-// can), pin or unpin, ask AI for text, the removal actions, and the history-wide clears. Paste is omitted where
-// the capability is missing rather than shown broken.
+// clipActions is the action list of a row, in the order the menu shows: copy (Enter, so it is first), then preview
+// and paste text, ask AI and pin or unpin, the removal actions, and the history-wide clears.
 func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) []search.Action {
 	id := e.ID
 	actions := []search.Action{{Title: row.Primary.Title, Dismiss: search.DismissNever, Run: func(h search.Host) { p.runClipCopy(h, id) }}}
-	if p.clip.caps.Supported(platform.CapabilityClipboardPaste) {
-		actions = append(actions, search.Action{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Dismiss: search.DismissNever,
-			Run: func(h search.Host) { p.runClipPaste(h, id) }})
-	}
+	actions = append(actions, p.clipRowActions(e, row)...)
 	for _, extra := range clipboard.RowExtraActions(e) {
 		actions = append(actions, p.clipExtraAction(extra, e))
 	}
@@ -234,16 +217,6 @@ func (p *App) runClipCopy(h search.Host, id string) {
 		return
 	}
 	h.Hide()
-}
-
-// runClipPaste pastes an entry into the app that had focus.
-func (p *App) runClipPaste(h search.Host, id string) {
-	entry, ok := p.clip.history.Get(id)
-	if !ok {
-		h.Toast("That item is no longer in clipboard history.")
-		return
-	}
-	p.pasteAfterHide(h, entry)
 }
 
 // clipChangeMessage says why a change to the history was refused.

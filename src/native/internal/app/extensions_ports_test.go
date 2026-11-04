@@ -28,10 +28,10 @@ func appWithCapabilities(t *testing.T, names ...platform.Capability) *App {
 func TestBuiltInCommandsFollowTheAppsCapabilities(t *testing.T) {
 	without := appWithCapabilities(t, platform.CapabilitySystemSleep)
 	for _, row := range commandRows(without, &rootInput{}, "restart") {
-		if row.Title == "Restart" {
+		if row.Title == "Restart Computer" {
 			t.Fatal("Restart shown without its capability")
 		}
 	}
 	with := appWithCapabilities(t, platform.CapabilitySystemSleep, platform.CapabilitySystemRestart)
-	findRowTitled(t, commandRows(with, &rootInput{}, "restart"), "Restart")
+	findRowTitled(t, commandRows(with, &rootInput{}, "restart"), "Restart Computer")
 }

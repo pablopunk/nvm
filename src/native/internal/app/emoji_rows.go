@@ -58,21 +58,13 @@ func recentFirst(recent, entries []emoji.Entry) []emoji.Entry {
 	return out
 }
 
-// emojiItem is the row of one character. Copy is the first action, so Enter copies; Paste is Ctrl+Enter, and the
-// action menu holds Copy Unicode and, for characters with variants, the skin tone.
+// emojiItem is the row of one character. Enter runs the first action: Paste where the platform can paste, else Copy.
 func (p *App) emojiItem(e emoji.Entry, tone emoji.SkinTone, score int) search.Item {
 	glyph := e.Glyph()
 	if e.SupportsSkinTone() {
 		glyph = e.WithSkinTone(tone)
 	}
-	actions := []search.Action{
-		{Title: "Copy", Run: func(h search.Host) { p.emitEmoji(h, e, glyph, false) }},
-		{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.emitEmoji(h, e, glyph, true) }},
-		{Title: "Copy Unicode", Run: func(h search.Host) { p.copyText(h, e.Codepoints()) }},
-	}
-	if e.SupportsSkinTone() {
-		actions = append(actions, search.Action{Title: "Skin Tone…", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.skinToneView(e)) }})
-	}
+	actions := p.emojiActions(e, glyph)
 	return search.Item{
 		Kind:     emojiKind(e),
 		Title:    e.Title(),
@@ -82,6 +74,22 @@ func (p *App) emojiItem(e emoji.Entry, tone emoji.SkinTone, score int) search.It
 		Score:    score,
 		Actions:  actions,
 	}
+}
+
+// emojiActions are the actions of a character in the order the menu shows them, as 1.x builds them. Paste comes first
+// and Enter runs it when the platform can paste; Copy is then the second action, on Ctrl+Enter. Without paste, Copy
+// is first. Copy Unicode and, for characters with variants, the skin tone follow.
+func (p *App) emojiActions(e emoji.Entry, glyph string) []search.Action {
+	var actions []search.Action
+	if p.canPaste() {
+		actions = append(actions, search.Action{Title: "Paste " + e.Title(), Run: func(h search.Host) { p.emitEmoji(h, e, glyph, true) }})
+	}
+	actions = append(actions, search.Action{Title: "Copy " + e.Title(), Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.emitEmoji(h, e, glyph, false) }})
+	if e.SupportsSkinTone() {
+		actions = append(actions, search.Action{Title: "Skin Tone…", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.skinToneView(e)) }})
+	}
+	return append(actions, search.Action{Title: "Copy Unicode", Label: "⌃⇧⌥C", Mods: mod | ui.Shift | ui.Alt, Key: ui.KeyC,
+		Run: func(h search.Host) { p.copyText(h, e.Codepoints()) }})
 }
 
 // emojiKind names what a catalog entry is, for the row's kind.

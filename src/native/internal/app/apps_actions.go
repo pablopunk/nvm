@@ -15,6 +15,9 @@ import (
 
 // quitApps asks each app to quit, or force quits it, then reports the outcome on the UI thread.
 func (p *App) quitApps(list []apps.App, force bool) {
+	if len(list) == 0 {
+		return
+	}
 	safego.Go("apps.quit", func(context.Context) {
 		messages := make([]string, 0, len(list))
 		for _, a := range list {

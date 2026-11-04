@@ -157,7 +157,7 @@ func diffTrees(before, after map[string]string) (removed, added, changed []strin
 }
 
 // TestJourneyJ22QuitAndUninstallFakeApp is J22: the running fake app shows as running, Force Quit Apps quits it
-// (SIGTERM, the process exits), and the uninstall review lists only its entry and its own data folder; confirming
+// (the process exits), and the uninstall review lists only its entry and its own data folder; confirming
 // moves exactly those into the temp Trash and nothing else under HOME changes.
 // Not covered by the rig: a real GUI application, Quit All Apps, the keyboard-only pass, macOS and Windows
 // discovery (those are untested), and the escalation to SIGKILL after the grace period.
@@ -175,7 +175,7 @@ func TestJourneyJ22QuitAndUninstallFakeApp(t *testing.T) {
 	must(t, err)
 	shoot(t, app, "j22-1-running")
 
-	// Quit through Force Quit Apps: the first row's primary action is Quit, which sends SIGTERM only.
+	// Force quit through Force Quit Apps: Enter asks for the Force Quit confirmation, and the confirmation force quits.
 	must(t, app.Key("Escape"))
 	must(t, app.Type("force quit"))
 	_, err = app.WaitFor("Force Quit Apps", elementWait)
@@ -187,12 +187,15 @@ func TestJourneyJ22QuitAndUninstallFakeApp(t *testing.T) {
 	must(t, err)
 	shoot(t, app, "j22-2-force-quit-view")
 	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Force Quit", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
 	select {
 	case <-exited:
 	case <-time.After(sleeperExitWait):
-		t.Fatalf("%s is still running %s after Quit was chosen", fakeAppName, sleeperExitWait)
+		t.Fatalf("%s is still running %s after Force Quit was confirmed", fakeAppName, sleeperExitWait)
 	}
-	t.Logf("%s exited after Quit", fakeAppName)
+	t.Logf("%s exited after Force Quit", fakeAppName)
 
 	// Uninstall through the action menu of the (now idle) app's row.
 	must(t, app.Key("Escape"))

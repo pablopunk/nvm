@@ -48,19 +48,23 @@ func TestAppRowsShowRunningStateAndQuitActions(t *testing.T) {
 		t.Fatalf("idle row = %+v", rows[1])
 	}
 	force := rows[0].Actions[4]
-	if !force.Destructive || force.Confirm != "Force Quit Notes" || force.ConfirmMessage != "Force quit Notes? Unsaved data may be lost." {
+	if !force.Destructive || force.Confirm != "Force Quit" || force.ConfirmMessage != "Force quit Notes? Unsaved data may be lost." {
 		t.Fatalf("force quit = %+v", force)
 	}
 }
 
-// The Force Quit Apps view lists only the running apps, each with Quit and Force Quit.
-func TestForceQuitRowsListOnlyRunningApps(t *testing.T) {
+// The Force Quit Apps view lists only the running apps. Each row's only action is the force quit, which Enter runs,
+// and it carries the 1.x subtitle.
+func TestForceQuitRowsListOnlyRunningAppsAndForceQuitFirst(t *testing.T) {
 	list := []App{{Name: "Notes", Path: "/Applications/Notes.app"}, {Name: "Mail", Path: "/Applications/Mail.app"}}
 	rows := ForceQuitRows(list, map[string]bool{"/Applications/Mail.app": true})
 	if len(rows) != 1 || rows[0].Title != "Mail" {
 		t.Fatalf("rows = %+v", rows)
 	}
-	if len(rows[0].Actions) != 2 || rows[0].Actions[0].Kind != ActionQuit || rows[0].Actions[1].Kind != ActionForceQuit {
+	if rows[0].Subtitle != "Force quit this application" {
+		t.Fatalf("subtitle = %q", rows[0].Subtitle)
+	}
+	if len(rows[0].Actions) != 1 || rows[0].Actions[0].Kind != ActionForceQuit || rows[0].Actions[0].Confirm != "Force Quit" {
 		t.Fatalf("actions = %+v", rows[0].Actions)
 	}
 	if empty := ForceQuitRows(list, map[string]bool{}); len(empty) != 0 {

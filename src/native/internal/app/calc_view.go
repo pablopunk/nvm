@@ -32,14 +32,16 @@ func calculatorRows(p *App, _ *rootInput, q string) []search.Item {
 // calcItem builds the result row of one calculator answer.
 func calcItem(p *App, r calc.Result) search.Item {
 	actions := []search.Action{{Title: "Copy Result", Run: func(h search.Host) { p.copyText(h, r.Copy) }}}
-	actions = append(actions, search.Action{Title: "Continue Calculation", Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery(r.Raw) }})
+	actions = append(actions, search.Action{Title: "Continue Calculation", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Dismiss: search.DismissNever,
+		Run: func(h search.Host) { h.SetQuery(r.Raw) }})
 	if r.SwapQuery != "" {
-		actions = append(actions, search.Action{Title: "Swap Units", Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery(r.SwapQuery) }})
+		actions = append(actions, search.Action{Title: "Swap Units", Label: "⌃⇧↵", Mods: mod | ui.Shift, Key: ui.KeyEnter, Dismiss: search.DismissNever,
+			Run: func(h search.Host) { h.SetQuery(r.SwapQuery) }})
 	}
 	if r.Raw != r.Display {
 		actions = append(actions, search.Action{Title: "Copy Unformatted Result", Run: func(h search.Host) { p.copyText(h, r.Raw) }})
 	}
-	actions = append(actions, search.Action{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.pasteAfterHide(h, textEntry(r.Copy)) }})
+	actions = append(actions, search.Action{Title: "Paste Result", Run: func(h search.Host) { p.pasteAfterHide(h, textEntry(r.Copy)) }})
 	return search.Item{
 		Kind: search.KindCalculator, Title: r.Title, Subtitle: r.Subtitle, Icon: "calculator", Tone: "orange",
 		Score: scoreCalculator, Detail: calcDetail(r.Detail), Actions: actions,

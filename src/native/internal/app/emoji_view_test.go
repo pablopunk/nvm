@@ -1,12 +1,14 @@
 package app
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/features/emoji"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // emojiGlyphs is the set of every glyph the catalog holds, for counting the cells a frame draws.
@@ -39,7 +41,7 @@ func TestEmojiCopyPutsTheGlyphOnTheClipboard(t *testing.T) {
 	p := goldenPalette(t)
 	openEmojiPicker(p)
 	goldenQuery(p, "fire")
-	actionTitled(t, itemTitled(t, p, "Fire"), "Copy").Run(p)
+	actionTitled(t, itemTitled(t, p, "Fire"), "Copy Fire").Run(p)
 	got, _ := p.ports.Clipboard.ReadText()
 	if got != "🔥" {
 		t.Fatalf("clipboard = %q, want the fire glyph", got)
@@ -91,10 +93,10 @@ func TestEmojiRecentsLeadTheGridInTheOrderUsed(t *testing.T) {
 	p := goldenPalette(t)
 	openEmojiPicker(p)
 	goldenQuery(p, "fire")
-	actionTitled(t, itemTitled(t, p, "Fire"), "Copy").Run(p)
+	actionTitled(t, itemTitled(t, p, "Fire"), "Copy Fire").Run(p)
 	openEmojiPicker(p)
 	goldenQuery(p, "grinning")
-	actionTitled(t, itemTitled(t, p, "Grinning Face"), "Copy").Run(p)
+	actionTitled(t, itemTitled(t, p, "Grinning Face"), "Copy Grinning Face").Run(p)
 
 	openEmojiPicker(p)
 	rows := p.Results()
@@ -218,4 +220,38 @@ func contains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// TestEmojiEnterPastesWhenThePlatformCanPaste: with paste available, the first action is Paste and Copy is Ctrl+Enter,
+// as 1.x lists them.
+func TestEmojiEnterPastesWhenThePlatformCanPaste(t *testing.T) {
+	p := goldenPalette(t)
+	openEmojiPicker(p)
+	goldenQuery(p, "fire")
+	fire := itemTitled(t, p, "Fire")
+	if fire.Actions[0].Title != "Paste Fire" || fire.Actions[1].Title != "Copy Fire" || fire.Actions[1].Label != "⌃↵" {
+		t.Fatalf("actions = %v", actionTitles(fire.Actions))
+	}
+}
+
+// TestEmojiEnterCopiesWhenThePlatformCannotPaste: without the paste capability, Copy is the first action and no
+// paste is offered.
+func TestEmojiEnterCopiesWhenThePlatformCannotPaste(t *testing.T) {
+	p := goldenPalette(t)
+	var withoutPaste []platform.Capability
+	for _, c := range platform.AllCapabilities() {
+		if c != platform.CapabilityClipboardPaste {
+			withoutPaste = append(withoutPaste, c)
+		}
+	}
+	p.ports.Capabilities = platform.NewCapabilities(withoutPaste...)
+	openEmojiPicker(p)
+	goldenQuery(p, "fire")
+	fire := itemTitled(t, p, "Fire")
+	if fire.Actions[0].Title != "Copy Fire" || slices.Contains(actionTitles(fire.Actions), "Paste Fire") {
+		t.Fatalf("actions = %v", actionTitles(fire.Actions))
+	}
+	if hint := p.Top().Hint; hint != "↵ Copy   ⇥ Category" {
+		t.Fatalf("hint = %q", hint)
+	}
 }

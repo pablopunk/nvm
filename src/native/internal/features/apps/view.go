@@ -84,13 +84,16 @@ func forceQuitAction(name string) Action {
 		Kind:           ActionForceQuit,
 		Title:          "Force Quit " + name,
 		Destructive:    true,
-		Confirm:        "Force Quit " + name,
+		Confirm:        "Force Quit",
 		ConfirmMessage: "Force quit " + name + "? Unsaved data may be lost.",
 	}
 }
 
-// ForceQuitRows lists the running apps of the index, for the Force Quit Apps view. Each row offers Quit and Force
-// Quit; nothing else.
+// ForceQuitSubtitle is the line under each app of the Force Quit Apps view.
+const ForceQuitSubtitle = "Force quit this application"
+
+// ForceQuitRows lists the running apps of the index, for the Force Quit Apps view. Enter is the only action, and it is
+// the force quit with its confirmation, as in 1.x.
 func ForceQuitRows(list []App, running map[string]bool) []Row {
 	var rows []Row
 	for _, app := range list {
@@ -100,13 +103,10 @@ func ForceQuitRows(list []App, running map[string]bool) []Row {
 		rows = append(rows, Row{
 			ID:       "force-quit:" + app.Path,
 			Title:    app.Name,
-			Subtitle: RunningSubtitle,
+			Subtitle: ForceQuitSubtitle,
 			Path:     app.Path,
 			Running:  true,
-			Actions: []Action{
-				{Kind: ActionQuit, Title: "Quit " + app.Name},
-				forceQuitAction(app.Name),
-			},
+			Actions:  []Action{forceQuitAction(app.Name)},
 		})
 	}
 	return rows

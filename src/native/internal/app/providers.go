@@ -90,14 +90,15 @@ func leadingCommands(p *App) []command {
 		{ID: shortcuts.CommandEmojiSymbols, Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
 		{ID: shortcuts.CommandSearchFiles, Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(h search.Host) { h.Push(p.filesView()) }},
 		{ID: shortcuts.CommandQuickNotes, Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
+		{Title: "Toggle Floating Notes", Keywords: "notes note float floating window sticky toggle", Icon: "sticky-note", Subtitle: "Show or hide your floating Markdown notes", Hidden: true, Run: func(h search.Host) { h.Hide(); p.toggleFloatingNotes() }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
 		{ID: shortcuts.CommandNewFloatingNote, Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
 		{ID: shortcuts.CommandDictate, Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.dictationFlowFor().Toggle() }},
 		{ID: shortcuts.CommandSnippets, Title: "Snippets", Keywords: "snippets text expand template", Icon: "type", Subtitle: "Saved text you paste often", Run: func(h search.Host) { h.Push(p.snippetsView()) }},
 		{Title: "Create Snippet", Keywords: "snippet new add", Icon: "plus", Hidden: true, Run: func(h search.Host) { h.Push(p.snippetForm(nil)) }},
 		{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
-		{ID: shortcuts.CommandForceQuitApps, Title: "Force Quit Apps", Keywords: "force quit kill processes apps running", Icon: "stop-circle", Subtitle: "Quit or force quit running apps", Run: func(h search.Host) { h.Push(p.forceQuitView()) }},
-		{ID: shortcuts.CommandQuitAllApps, Title: "Quit All Apps", Keywords: "quit all apps close everything", Icon: "power", Subtitle: "Review and quit running apps", Run: func(h search.Host) { h.Push(p.quitAllView()) }},
+		{ID: shortcuts.CommandForceQuitApps, Title: "Force Quit Apps", Keywords: "force quit kill processes apps running", Icon: "stop-circle", Subtitle: "Force quit running applications", Run: func(h search.Host) { h.Push(p.forceQuitView()) }},
+		{ID: shortcuts.CommandQuitAllApps, Title: "Quit All Apps", Keywords: "quit all apps close everything", Icon: "power", Subtitle: "Closes all visible GUI applications", Run: func(h search.Host) { h.Push(p.quitAllConfirm()) }},
 		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
 		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
 	}
@@ -134,7 +135,7 @@ func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
 var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
-	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
+	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Toggle Floating Notes": "yellow", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
 	"Start Timer": "orange", "Cancel Timer": "orange",
 	commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
 

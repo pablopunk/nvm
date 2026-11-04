@@ -7,7 +7,9 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // testWindow is the palette's window in app tests. Updates run at once, and hides are counted.
@@ -87,10 +89,10 @@ func TestClipboardHistoryRowsUse1xTitlesAndCopyFirst(t *testing.T) {
 		t.Fatalf("rows = %v", rowTitles(p))
 	}
 	rebase := rows[1]
-	if rebase.Title != goldenRebaseTitle || rebase.Subtitle != "Copied 3m ago · Text" {
+	if rebase.Title != goldenRebaseTitle || !strings.HasPrefix(rebase.Subtitle, "Copied ") || strings.Contains(rebase.Subtitle, "ago") {
 		t.Fatalf("row = %q / %q", rebase.Title, rebase.Subtitle)
 	}
-	if rows[2].Subtitle != "Copied 40m ago · Image" || rows[2].Icon != "image" {
+	if !strings.HasPrefix(rows[2].Subtitle, "Image copied ") || rows[2].Icon != "image" {
 		t.Fatalf("image row = %q / %q", rows[2].Subtitle, rows[2].Icon)
 	}
 	if rebase.Actions[0].Title != "Copy Text" {
@@ -201,7 +203,7 @@ func TestClipboardActionMenuOffersTheRowActions(t *testing.T) {
 	for _, a := range p.Results()[1].Actions {
 		titles = append(titles, a.Title)
 	}
-	for _, want := range []string{"Copy Text", "Paste", "Pin", "Ask AI", "Remove Item", "Remove Last...", "Clear All Unpinned"} {
+	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Pin", "Ask AI", "Remove Item", "Remove Last...", "Clear All Unpinned"} {
 		if !slices.Contains(titles, want) {
 			t.Fatalf("actions = %v, missing %q", titles, want)
 		}
@@ -237,11 +239,11 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	openClipboardView(p)
 	tt.Frame()
 	topOfList(tt)
-	// The action menu opens on Copy; for a pinned text row the order is Copy, Paste, Ask AI, Unpin, Remove Item,
-	// so Remove Item is four rows down.
+	// The action menu opens on Copy; for a pinned text row the order is Copy, Preview, Paste Text, Ask AI, Unpin,
+	// Remove Item, so Remove Item is five rows down.
 	tt.Key(mod, ui.KeyK)
 	tt.Frame()
-	for range 4 {
+	for range 5 {
 		tt.Key(0, ui.KeyDown)
 		tt.Frame()
 	}
@@ -273,4 +275,44 @@ func TestClipboardRowsAreAnnouncedAndLabelled(t *testing.T) {
 	if got := tt.Announcements(); !slices.Contains(got, goldenRebaseTitle) {
 		t.Fatalf("announcements = %v; moving down should announce the second row", got)
 	}
+}
+
+// TestPasteTextIsOfferedOnlyForTextEntries: Paste Text follows the 1.x rule, text only. An image row has no paste action,
+// and the text row's Preview comes right after Copy.
+func TestPasteTextIsOfferedOnlyForTextEntries(t *testing.T) {
+	p, _, _ := seededClipPalette(t)
+	rebase := p.Results()[1].Actions
+	if rebase[0].Title != "Copy Text" || rebase[1].Title != "Preview" || rebase[1].Label != "⌃Y" || rebase[2].Title != "Paste Text" {
+		t.Fatalf("text row actions = %v", actionTitles(rebase))
+	}
+	if image := actionTitles(p.Results()[2].Actions); slices.Contains(image, "Paste Text") || !slices.Contains(image, "Preview") {
+		t.Fatalf("image row actions = %v", image)
+	}
+}
+
+// TestPreviewOpensTheEntryFullPalette: Preview pushes the entry as a view of its own, titled like the row.
+func TestPreviewOpensTheEntryFullPalette(t *testing.T) {
+	p, _, _ := seededClipPalette(t)
+	actionTitled(t, p.Results()[1], "Preview").Run(p)
+	if top := p.Top(); top.Title != goldenRebaseTitle || !top.HideInput || top.Body == nil {
+		t.Fatalf("preview view = %q, hideInput %v", top.Title, top.HideInput)
+	}
+}
+
+// TestPlainTextOfKeepsTheEntryAndDropsItsMarkup: the text paste works on the text of the entry under its own ID, so the
+// paste is recorded against the history entry.
+func TestPlainTextOfKeepsTheEntryAndDropsItsMarkup(t *testing.T) {
+	html := clipboard.Entry{ID: "e-html", Kind: clipboard.KindHTML, Text: "bold text", Original: "<b>bold text</b>"}
+	plain := plainTextOf(html)
+	if plain.ID != "e-html" || plain.Kind != clipboard.KindText || plain.Text != "bold text" || plain.Original != "" {
+		t.Fatalf("plain = %+v", plain)
+	}
+}
+
+func actionTitles(actions []search.Action) []string {
+	titles := make([]string, 0, len(actions))
+	for _, a := range actions {
+		titles = append(titles, a.Title)
+	}
+	return titles
 }

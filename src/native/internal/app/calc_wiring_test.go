@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -119,4 +121,42 @@ func seedRates(t *testing.T, set *fake.Set, dir string, rates calc.Rates) {
 	if err := st.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// TestCalculatorKeysFollow1x: Continue Calculation is Command+Enter and Swap Units is Command+Shift+Enter; Paste Result
+// has no key, as in 1.x. Continue puts the raw expression back in the search field and keeps the palette open.
+func TestCalculatorKeysFollow1x(t *testing.T) {
+	p := goldenPalette(t)
+	goldenQuery(p, "10 ft in m")
+	calcRow := findResultOfKind(t, p, search.KindCalculator)
+	cont := actionTitled(t, calcRow, "Continue Calculation")
+	if cont.Label != "⌃↵" || cont.Mods != mod || cont.Key != ui.KeyEnter || cont.Dismiss != search.DismissNever {
+		t.Fatalf("continue = %+v", cont)
+	}
+	if swap := actionTitled(t, calcRow, "Swap Units"); swap.Label != "⌃⇧↵" || swap.Mods != mod|ui.Shift || swap.Key != ui.KeyEnter {
+		t.Fatalf("swap = %+v", swap)
+	}
+	if paste := actionTitled(t, calcRow, "Paste Result"); paste.Label != "" || paste.Key != 0 {
+		t.Fatalf("paste result is bound to %q", paste.Label)
+	}
+	answer, ok := p.calc.Query("10 ft in m")
+	if !ok {
+		t.Fatal("the calculator does not answer 10 ft in m")
+	}
+	cont.Run(p)
+	if p.Query() != answer.Raw {
+		t.Fatalf("continue left the query %q, want %q", p.Query(), answer.Raw)
+	}
+}
+
+// findResultOfKind returns the first row of the palette of kind, failing the test when there is none.
+func findResultOfKind(t *testing.T, p *App, kind string) search.Item {
+	t.Helper()
+	for _, it := range p.Results() {
+		if it.Kind == kind {
+			return it
+		}
+	}
+	t.Fatalf("no %s row among %v", kind, rowTitles(p))
+	return search.Item{}
 }
