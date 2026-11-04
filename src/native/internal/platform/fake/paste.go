@@ -17,9 +17,10 @@ const OpPasteIntoFrontmost = "PasteIntoFrontmost"
 //	_ = paster.PasteIntoFrontmost("com.apple.TextEdit")
 //	paster.Requests() // []string{"com.apple.TextEdit"}
 type Paster struct {
-	mu       sync.Mutex
-	requests []string
-	faults   faultSet
+	mu        sync.Mutex
+	requests  []string
+	frontmost string
+	faults    faultSet
 }
 
 var _ platform.Paster = (*Paster)(nil)
@@ -50,4 +51,21 @@ func (p *Paster) Requests() []string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	return slices.Clone(p.requests)
+}
+
+// SetFrontmost sets the identity FrontmostAppID reports.
+func (p *Paster) SetFrontmost(appID string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.frontmost = appID
+}
+
+// FrontmostAppID returns the identity set with SetFrontmost, or the injected fault.
+func (p *Paster) FrontmostAppID() (string, error) {
+	if err := p.faults.take("FrontmostAppID"); err != nil {
+		return "", err
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.frontmost, nil
 }

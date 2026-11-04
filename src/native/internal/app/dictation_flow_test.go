@@ -10,120 +10,12 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/audiomute"
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
-
-// fakeDictationAccount is a signed-in or signed-out account that records the refusals the flow notes on it.
-type fakeDictationAccount struct {
-	signedIn    bool
-	transcriber dict.Transcriber
-	notes       []error
-}
-
-func (a *fakeDictationAccount) SignedIn() bool                { return a.signedIn }
-func (a *fakeDictationAccount) Transcriber() dict.Transcriber { return a.transcriber }
-func (a *fakeDictationAccount) NoteError(err error)           { a.notes = append(a.notes, err) }
-
-// fakeDictationPanel records every indicator change in order. It is safe to read while a capture goroutine reports
-// levels, which is what the real panel's UI thread does too.
-type fakeDictationPanel struct {
-	mu     sync.Mutex
-	events []string
-	states []palindicator.State
-}
-
-func (p *fakeDictationPanel) Show(state palindicator.State) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.states = append(p.states, state)
-	p.events = append(p.events, "show:"+modeName(state.Mode))
-}
-
-func (p *fakeDictationPanel) Hide() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	p.events = append(p.events, "hide")
-}
-
-func (p *fakeDictationPanel) eventList() []string {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]string(nil), p.events...)
-}
-
-func (p *fakeDictationPanel) stateList() []palindicator.State {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return append([]palindicator.State(nil), p.states...)
-}
-
-func (p *fakeDictationPanel) last() palindicator.State {
-	states := p.stateList()
-	if len(states) == 0 {
-		return palindicator.State{}
-	}
-	return states[len(states)-1]
-}
-
-func modeName(mode palindicator.Mode) string {
-	return []string{"listening", "waiting", "transcribing", "no-speech", "failed"}[mode]
-}
-
-// fakeDictationTranscriber answers each segment with the next scripted text, or fails with err.
-type fakeDictationTranscriber struct {
-	texts    []string
-	err      error
-	segments []dict.Segment
-	released []bool
-}
-
-func (t *fakeDictationTranscriber) Prepare(context.Context, string) error { return nil }
-
-func (t *fakeDictationTranscriber) Transcribe(_ context.Context, segment dict.Segment) (string, error) {
-	t.segments = append(t.segments, segment)
-	if t.err != nil {
-		return "", t.err
-	}
-	text := t.texts[0]
-	t.texts = t.texts[1:]
-	return text, nil
-}
-
-func (t *fakeDictationTranscriber) CancelPreparation(_ context.Context, _ string, userCancelled bool) error {
-	t.released = append(t.released, userCancelled)
-	return nil
-}
-
-// pasteRecord is what the paste port saw: how many palette hides had happened, and what the clipboard held.
-type pasteRecord struct {
-	hidden    int
-	concealed bool
-	text      string
-}
-
-// orderedPaster records each paste with the state the palette and clipboard were in when the keys were sent.
-type orderedPaster struct {
-	harness *dictationHarness
-}
-
-func (p orderedPaster) PasteIntoFrontmost(string) error {
-	h := p.harness
-	formats, _ := h.set.Clipboard.Formats()
-	text, _ := h.set.Clipboard.ReadText()
-	h.pastes = append(h.pastes, pasteRecord{hidden: h.hidden, concealed: hasConcealed(formats), text: text})
-	return h.pasteErr
-}
-
-func hasConcealed(formats []platform.ClipboardFormat) bool {
-	for _, format := range formats {
-		if format == platform.FormatConcealed {
-			return true
-		}
-	}
-	return false
-}
 
 // dictationHarness runs a dictationFlow over fakes. Dispatch, Background and the restore delay are inline, so each
 // call returns with its whole effect applied; timers are collected and fired by the test.
@@ -141,6 +33,19 @@ type dictationHarness struct {
 	pasteErr    error
 	toasts      []string
 	timers      []func()
+	frontmost   string
+	// frontmostErr is what FrontmostAppID returns; the zero value means the app is known.
+	frontmostErr error
+	warned       []string
+	settingsOpen int
+	settingsErr  error
+	// completer answers the AI cleanup prompt; nil means the model is not reachable.
+	completer cleanup.Completer
+	// screenText reads the screen; nil means the screen cannot be read. screenReads counts the readings.
+	screenText  func(ctx context.Context) (string, error)
+	screenReads int
+	// recordings keeps each dictation's audio, as the app's store does.
+	recordings memoryRecordings
 }
 
 func newDictationHarness(t *testing.T) *dictationHarness {
@@ -149,6 +54,7 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 		set:         fake.NewSet(),
 		panel:       &fakeDictationPanel{},
 		transcriber: &fakeDictationTranscriber{},
+		recordings:  memoryRecordings{saved: map[string][][]byte{}},
 	}
 	h.set.Clipboard.WriteText("before")
 	h.account = &fakeDictationAccount{signedIn: true, transcriber: h.transcriber}
@@ -165,7 +71,27 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 		After:         func(_ time.Duration, fn func()) { h.timers = append(h.timers, fn) },
 		PaletteHidden: func() { h.hidden++ },
 		Toast:         func(msg string) { h.toasts = append(h.toasts, msg) },
-		OnDevices:     func() {},
+		Warn:          func(event string, _ map[string]any) { h.warned = append(h.warned, event) },
+		OpenMicrophoneSettings: func() error {
+			h.settingsOpen++
+			return h.settingsErr
+		},
+		Complete: func(ctx context.Context, system, user string) (string, error) {
+			if h.completer == nil {
+				return "", errors.New("no model")
+			}
+			return h.completer(ctx, system, user)
+		},
+		Recorder: h.recordings,
+		Mute:     audiomute.New(h.set.OutputMute, &memoryMuteJournal{}),
+		ScreenText: func(ctx context.Context) (string, error) {
+			h.screenReads++
+			if h.screenText == nil {
+				return "", errors.New("no screen")
+			}
+			return h.screenText(ctx)
+		},
+		OnDevices: func() {},
 	})
 	return h
 }
@@ -185,9 +111,11 @@ func dictationSpeech(seconds float64, level int16) []int16 {
 	return samples
 }
 
+// speak queues one frame of speech. A frame is too short to emit a meter level, so the capture goroutine never reports
+// to the test thread while a test drives the flow directly; the transcript is scripted, so its length is not needed.
 func (h *dictationHarness) speak(text string) {
 	h.transcriber.texts = append(h.transcriber.texts, text)
-	h.set.Microphone.Queue(dictationSpeech(0.5, 9000)...)
+	h.set.Microphone.Queue(dictationSpeech(dict.FrameMillis/1000.0, 9000)...)
 }
 
 func TestDictationPastesConcealedTextAfterThePaletteHidesAndRestoresTheClipboard(t *testing.T) {
@@ -212,7 +140,8 @@ func TestDictationPastesConcealedTextAfterThePaletteHidesAndRestoresTheClipboard
 	if text, _ := h.set.Clipboard.ReadText(); text != "before" {
 		t.Fatalf("clipboard after the paste = %q, want the previous text restored", text)
 	}
-	want := []string{"show:waiting", "show:listening", "show:transcribing", "hide"}
+	// The device is named once the device list is read, so the waiting state shows twice.
+	want := []string{"show:waiting", "show:waiting", "show:listening", "show:transcribing", "hide"}
 	if !equalStrings(h.panel.eventList(), want) {
 		t.Fatalf("indicator events = %v, want %v", h.panel.eventList(), want)
 	}
@@ -339,7 +268,7 @@ func TestAPasteThatTheOSRefusesLeavesTheTextForAManualPaste(t *testing.T) {
 	h.flow.Toggle()
 	h.flow.Toggle()
 
-	if want := pasteFailureMessage(platform.ErrUnsupported); len(h.toasts) != 1 || h.toasts[0] != want {
+	if want := dictationPasteMessage(platform.ErrUnsupported); len(h.toasts) != 1 || h.toasts[0] != want {
 		t.Fatalf("toasts = %v, want %q", h.toasts, want)
 	}
 	if text, _ := h.set.Clipboard.ReadText(); text != "manual" {

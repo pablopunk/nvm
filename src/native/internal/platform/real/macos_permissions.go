@@ -6,10 +6,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// macPermissions reads and requests the macOS privacy permissions the window helper can check. Accessibility is the
-// only one wired: the others stay unsupported, so their rows open the settings pane as before.
+// macPermissions reads and requests the macOS privacy permissions the helper can check: Accessibility through the
+// window helper and the microphone through its microphone commands. The others stay unsupported, so their rows open
+// the settings pane as before.
 type macPermissions struct {
 	access macHelper
+	mic    macMicrophone
 }
 
 var _ platform.Permissions = macPermissions{}
@@ -17,6 +19,9 @@ var _ platform.Permissions = macPermissions{}
 // State reports whether Accessibility is granted, without showing a prompt. A helper that cannot answer is an error,
 // so the row says it could not check access.
 func (p macPermissions) State(kind platform.PermissionKind) (platform.PermissionState, error) {
+	if kind == platform.PermissionMicrophone {
+		return p.mic.State()
+	}
 	if kind != platform.PermissionAccessibility {
 		return platform.PermissionUnknown, platform.ErrUnsupported
 	}
@@ -32,6 +37,10 @@ func (p macPermissions) State(kind platform.PermissionKind) (platform.Permission
 // Request shows the system's Accessibility prompt. The user grants access in System Settings, so a refusal is not an
 // error here; the settings list reads the state again.
 func (p macPermissions) Request(kind platform.PermissionKind) error {
+	if kind == platform.PermissionMicrophone {
+		_, err := p.mic.Request()
+		return err
+	}
 	if kind != platform.PermissionAccessibility {
 		return platform.ErrUnsupported
 	}

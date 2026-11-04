@@ -13,6 +13,7 @@ const (
 	CommandQuickNotes         = "command:quick-notes"
 	CommandNewFloatingNote    = "command:new-floating-note"
 	CommandDictate            = "command:dictate"
+	CommandDictationHistory   = "command:dictation-history"
 	CommandSnippets           = "command:snippets"
 	CommandExtensions         = "command:extensions"
 	CommandForceQuitApps      = "command:force-quit-apps"
@@ -50,6 +51,7 @@ var builtInCommandKeys = map[string]string{
 	CommandQuickNotes:         "extension:nevermind.floating-notes:floating-notes",
 	CommandNewFloatingNote:    "extension:nevermind.floating-notes:new-floating-note",
 	CommandDictate:            "extension-root:nevermind.dictation:dictation",
+	CommandDictationHistory:   "extension-root:nevermind.dictation:dictation-history",
 	CommandExtensions:         "extension:nevermind.extensions:extensions",
 	CommandForceQuitApps:      "extension:nevermind.apps:force-quit-apps",
 	CommandKeyboardShortcuts:  "extension:nevermind.shortcuts:keyboard-shortcuts",

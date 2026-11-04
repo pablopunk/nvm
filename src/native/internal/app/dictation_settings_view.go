@@ -1,6 +1,11 @@
 package app
 
 import (
+	"slices"
+	"strconv"
+
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -12,7 +17,7 @@ func (p *App) dictationSettingsView() *palette.View {
 		Placeholder: "Filter dictation options",
 		Search: func(q string) []search.Item {
 			settings := p.dictationSettings()
-			return []search.Item{
+			return append([]search.Item{
 				{
 					Title:     "Microphone",
 					Subtitle:  "Device that records your voice",
@@ -32,7 +37,17 @@ func (p *App) dictationSettingsView() *palette.View {
 						h.Refresh()
 					}}},
 				},
-			}
+				p.cleanupWithAIRow(settings),
+				{
+					Title:     "Custom dictionary",
+					Subtitle:  "Preferred terms and spellings for AI cleanup",
+					Icon:      "type",
+					Accessory: termCountLabel(len(cleanup.DictionaryTerms(settings.Dictionary))),
+					Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) {
+						h.Push(p.dictionaryView())
+					}}},
+				},
+			}, p.screenContextRows(settings)...)
 		},
 	}
 }
@@ -80,4 +95,76 @@ func onOff(on bool) string {
 		return "On"
 	}
 	return "Off"
+}
+
+// cleanupWithAIRow is the AI cleanup switch. It needs a signed-in account, so a switch pressed while signed out says so.
+func (p *App) cleanupWithAIRow(settings dictationSettings) search.Item {
+	signedIn := p.accountSignedIn()
+	subtitle := "Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting."
+	if !signedIn {
+		subtitle = "Sign in to Nevermind to use AI cleaning."
+	}
+	return search.Item{
+		Title:     "Clean with AI",
+		Subtitle:  subtitle,
+		Icon:      "sparkles",
+		Accessory: onOff(signedIn && settings.CleanupWithAI),
+		Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if !signedIn {
+				h.Toast("Sign in to Nevermind to use AI cleaning.")
+				return
+			}
+			p.setDictationSettings(func(s *dictationSettings) { s.CleanupWithAI = !s.CleanupWithAI })
+			h.Refresh()
+		}}},
+	}
+}
+
+// accountSignedIn reports whether the account is connected to a backend.
+func (p *App) accountSignedIn() bool {
+	return p.account != nil && p.account.Snapshot().Connected
+}
+
+func termCountLabel(count int) string {
+	if count == 1 {
+		return "1 term"
+	}
+	return strconv.Itoa(count) + " terms"
+}
+
+// screenContextRows are the screen settings. They are offered only where the OS can read the screen.
+func (p *App) screenContextRows(settings dictationSettings) []search.Item {
+	if !ocr.Availability(p.ports.Capabilities).Screen {
+		return nil
+	}
+	limit := cleanup.NormalizeScreenTermLimit(settings.ScreenTermLimit)
+	return []search.Item{
+		{
+			Title:     "Use screen text",
+			Subtitle:  "Read words from the screen to fix names and terms. Off unless you turn it on.",
+			Icon:      "monitor",
+			Accessory: onOff(settings.UseScreenContext),
+			Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				p.setDictationSettings(func(s *dictationSettings) { s.UseScreenContext = !s.UseScreenContext })
+				h.Refresh()
+			}}},
+		},
+		{
+			Title:     "Screen term limit",
+			Subtitle:  "How many words from the screen the cleanup may use",
+			Icon:      "hash",
+			Accessory: termCountLabel(limit),
+			Actions: []search.Action{{Title: "Next", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				p.setDictationSettings(func(s *dictationSettings) { s.ScreenTermLimit = nextScreenTermLimit(limit) })
+				h.Refresh()
+			}}},
+		},
+	}
+}
+
+// nextScreenTermLimit returns the size after limit in the order the settings offer, wrapping at the end.
+func nextScreenTermLimit(limit int) int {
+	sizes := cleanup.ScreenTermLimits
+	index := slices.Index(sizes, limit)
+	return sizes[(index+1)%len(sizes)]
 }

@@ -122,6 +122,7 @@ type App struct {
 	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
 	dictation       *dictationFlow
 	dictationPref   dictationPrefs
+	transcripts     transcriptStore
 	dictationWindow *mygo.Window
 	dictationView   palindicator.State
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
@@ -179,6 +180,7 @@ func (p *App) ready() {
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
+	p.recoverDictationMute()
 	p.attachWindows()
 	p.attachDeepLinks()
 	prepareCatalog()

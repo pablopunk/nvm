@@ -1,6 +1,8 @@
 package app
 
 import (
+	"path/filepath"
+
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -8,10 +10,23 @@ import (
 // dictationSettingsFile holds the dictation choices in the user's store.
 const dictationSettingsFile = "dictation.json"
 
+// dictationRecordingsFolder holds the audio of dictations whose text is not in yet, inside the data folder.
+const dictationRecordingsFolder = "dictation-recordings"
+
+// dictationRecordingsDir is the folder the unfinished dictations are kept in.
+func dictationRecordingsDir() string {
+	return filepath.Join(dataDir(), dictationRecordingsFolder)
+}
+
 // dictationSettings are the choices the Dictation Settings view edits. DeviceID "" is the system default microphone.
 type dictationSettings struct {
 	DeviceID        string `json:"deviceId"`
 	CopyToClipboard bool   `json:"copyToClipboard"`
+	CleanupWithAI   bool   `json:"cleanupWithAi"`
+	Dictionary      string `json:"dictionary"`
+	// UseScreenContext reads the words on screen for the cleanup prompt; ScreenTermLimit is how many of them it names.
+	UseScreenContext bool `json:"useScreenContext"`
+	ScreenTermLimit  int  `json:"screenTermLimit"`
 }
 
 // dictationPrefs reads and changes the settings. The store keeps them on disk; without a writable store they last

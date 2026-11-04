@@ -40,4 +40,6 @@ type Ports struct {
 	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
 	Text    TextRecognizer
 	Capture ScreenCapturer
+	// OutputMute mutes the speakers while a dictation records. Only the dictation's audio mute uses it.
+	OutputMute OutputMuter
 }

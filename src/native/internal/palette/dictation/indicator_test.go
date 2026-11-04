@@ -25,3 +25,21 @@ func TestSubtitleKeepsTheWholeFailureMessage(t *testing.T) {
 		t.Fatalf("Subtitle = %q, want the full message", got)
 	}
 }
+
+func TestAButtonAddsARowToTheHeight(t *testing.T) {
+	if got := Height(State{Mode: ModeListening, Control: ControlCancel}); got != BaseHeight+controlRowHeight {
+		t.Fatalf("listening with cancel height = %d, want the base plus the button row", got)
+	}
+	if got := Height(State{Mode: ModeFailed, Detail: "Sign in.", Control: ControlMicrophoneSettings}); got != BaseHeight+controlRowHeight {
+		t.Fatalf("failure with a button height = %d, want the base plus the button row", got)
+	}
+}
+
+func TestTheWaitingSubtitleNamesTheDeviceWhenItIsKnown(t *testing.T) {
+	if got := Subtitle(State{Mode: ModeWaitingForMicrophone, Detail: "Waiting for AirPods Pro"}); got != "Waiting for AirPods Pro" {
+		t.Fatalf("Subtitle = %q, want the device name", got)
+	}
+	if got := Subtitle(State{Mode: ModeWaitingForMicrophone}); got != "Waiting for microphone" {
+		t.Fatalf("Subtitle without a device = %q", got)
+	}
+}

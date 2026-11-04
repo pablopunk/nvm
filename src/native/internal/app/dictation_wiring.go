@@ -2,11 +2,17 @@ package app
 
 import (
 	"context"
+	"os"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
@@ -82,8 +88,19 @@ func (p *App) dictationDeps() dictationDeps {
 		After:         p.dictationAfter,
 		PaletteHidden: p.notePaletteHidden,
 		Toast:         p.toastFromBackground,
-		RestoreDelay:  dictationRestoreDelay,
-		OnDevices:     p.Refresh,
+		Warn: func(event string, fields map[string]any) {
+			logx.Default().Warn(event, logx.F(fields))
+		},
+		OpenMicrophoneSettings: func() error {
+			return p.ports.System.OpenSettings(systemfeat.PrivacyPaneID, "Microphone")
+		},
+		Complete:     p.dictationCompleter(),
+		ScreenText:   p.dictationScreenText,
+		Recorder:     p.dictationRecorder(),
+		Remember:     p.rememberDictation,
+		Mute:         p.dictationMuter(),
+		RestoreDelay: dictationRestoreDelay,
+		OnDevices:    p.Refresh,
 	}
 }
 
@@ -94,4 +111,54 @@ func supervisedDictation(name string, fn func()) {
 // dictationAfter runs fn on the UI thread after d.
 func (p *App) dictationAfter(d time.Duration, fn func()) {
 	time.AfterFunc(d, func() { p.redraw(fn) })
+}
+
+// dictationCompleter answers the AI cleanup prompt on the fast model through the account's client. A signed-out
+// account is refused before any text is sent.
+func (p *App) dictationCompleter() cleanup.Completer {
+	return func(ctx context.Context, system, user string) (string, error) {
+		if p.account == nil || !p.account.Snapshot().Connected {
+			return "", chat.ErrNotSignedIn
+		}
+		return chat.Complete(ctx, backendCompletions{client: p.account.Client()}, system, user)
+	}
+}
+
+// backendCompletions adapts the backend client to the one-shot completion's source.
+type backendCompletions struct {
+	client *backend.Client
+}
+
+// ActiveModel reads the route for the query.
+func (b backendCompletions) ActiveModel(ctx context.Context, query backend.ActiveModelQuery) (backend.ModelDescriptor, error) {
+	return b.client.ActiveModel(ctx, query)
+}
+
+// ChatStream opens the streamed reply for req.
+func (b backendCompletions) ChatStream(ctx context.Context, req backend.ChatRequest) (chat.EventStream, error) {
+	stream, err := b.client.ChatStream(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
+}
+
+// dictationScreenText reads the text the screen shows, through the same OCR service the extensions use.
+func (p *App) dictationScreenText(ctx context.Context) (string, error) {
+	service := ocr.New(ocr.Deps{Text: p.ports.Text, Capture: p.ports.Capture, FS: p.ports.FS, TempDir: os.TempDir()})
+	result, err := service.Screen(ctx, ocr.Options{})
+	return result.Text, err
+}
+
+// dictationRecorder keeps dictation audio in the data folder, so a failed dictation can be transcribed again. A store
+// that is read only keeps nothing; the interface is nil then, so the service keeps no audio.
+func (p *App) dictationRecorder() dict.Recorder {
+	if p.userReadOnly {
+		return nil
+	}
+	store := p.dictationRecordingStore()
+	if store == nil {
+		return nil
+	}
+	return store
 }

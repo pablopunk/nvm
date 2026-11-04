@@ -60,3 +60,12 @@ func parseLsappinfoApp(output string) (platform.WindowApp, bool) {
 	}
 	return platform.WindowApp{PID: pid, BundleID: bundleID}, true
 }
+
+// frontmostIdentityOf is the paste identity of the app Launch Services named: its bundle ID, or "" when no app is in
+// front or Nevermind (process ownPID) is, since the keyboard then belongs to the palette rather than a target.
+func frontmostIdentityOf(app platform.WindowApp, found bool, ownPID int) string {
+	if !found || app.PID == ownPID {
+		return ""
+	}
+	return app.BundleID
+}

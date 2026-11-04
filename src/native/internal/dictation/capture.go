@@ -26,6 +26,9 @@ type operation struct {
 	segments   [][][]byte
 	failure    error
 	onLevel    func(float64)
+	// ready is closed once the readiness tracker hears the device; tracker is nil when the device needs no wait.
+	ready   chan struct{}
+	tracker *readinessTracker
 }
 
 // capture reads the microphone until the stream ends, frames its samples, encodes each frame and cuts the packets
@@ -67,6 +70,7 @@ func (op *operation) addFrame(frame []int16) bool {
 	}
 	op.current = append(op.current, packet)
 	op.frames++
+	op.noteFrame(frame)
 	if op.onLevel != nil && op.frames%levelEveryFrames == 0 {
 		op.onLevel(Level(frame))
 	}
@@ -74,6 +78,17 @@ func (op *operation) addFrame(frame []int16) bool {
 		op.closeSegment()
 	}
 	return true
+}
+
+// noteFrame feeds the readiness tracker of a device that needs one, and closes ready once the device is heard.
+func (op *operation) noteFrame(frame []int16) {
+	if op.tracker == nil {
+		return
+	}
+	if op.tracker.consume(float64(op.frames*FrameMillis), hasSound(frame)) {
+		op.tracker = nil
+		close(op.ready)
+	}
 }
 
 // closeSegment moves the packets collected so far into a finished segment.
