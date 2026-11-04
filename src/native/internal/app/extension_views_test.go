@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/egoist/mygo/ui"
+
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -31,9 +33,17 @@ func syncViewDeps(m *manager.Manager) extview.Deps {
 			}
 			done(result, failure)
 		},
-		OpenURL:  func(string) {},
-		CopyText: func(string) {},
-		Files:    real.NewPorts().FS,
+		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
+			items, failure, err := m.Load(context.Background(), extID, loader)
+			if err != nil {
+				failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
+			}
+			done(items, failure)
+		},
+		LoadImage: func(ref string, done func(*ui.Bitmap)) { done(loadExtensionBitmap(real.NewPorts().FS, ref)) },
+		OpenURL:   func(string) {},
+		CopyText:  func(string) {},
+		Files:     real.NewPorts().FS,
 	}
 }
 

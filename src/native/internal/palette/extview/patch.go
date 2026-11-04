@@ -9,6 +9,9 @@ func (s *Session) Apply(patch api.ViewPatch) {
 	if patch.IsLoading != nil {
 		s.loading = *patch.IsLoading
 	}
+	if patch.SelectedItemID != "" {
+		s.selectID = patch.SelectedItemID
+	}
 	if len(s.sections) > 0 {
 		for i := range s.sections {
 			s.sections[i].Items = applyPatch(s.sections[i].Items, patch)

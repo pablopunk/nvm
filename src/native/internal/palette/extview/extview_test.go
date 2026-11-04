@@ -287,3 +287,6 @@ func TestUnsupportedViewKindSaysSo(t *testing.T) {
 }
 
 func ptrAction(a api.Action) *api.Action { return &a }
+
+// Root has nothing to leave in this test host.
+func (h *fakeHost) Root() {}

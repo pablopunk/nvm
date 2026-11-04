@@ -22,11 +22,25 @@ const (
 // filePreviewPage previews a file the host reads, never the extension. The read is bounded to the leading bytes,
 // so opening the page does not wait on a large file.
 func (s *Session) filePreviewPage() *palette.View {
-	source := s.fileMarkdown(s.view.File.File)
+	file := s.view.File.File
+	if file.Kind == "image" {
+		s.requestImage(file.Path)
+	}
+	source := s.fileMarkdown(file)
 	return &palette.View{
 		Title: s.view.Title, HideInput: true,
 		Body: func(c *ui.Context, _ search.Host) {
-			ui.Scroll(c).Grow(1).Children(func() { drawMarkdown(c, source, s.markdown) })
+			ui.Scroll(c).Grow(1).Children(func() {
+				if bm := s.images[file.Path]; file.Kind == "image" && bm != nil {
+					ui.Image(c, bm).Grow(1)
+					return
+				}
+				if file.Kind == "image" {
+					drawPlainText(c, "Loading the image…")
+					return
+				}
+				drawMarkdown(c, source, s.markdown)
+			})
 		},
 	}
 }
