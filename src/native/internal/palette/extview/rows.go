@@ -25,6 +25,7 @@ func (s *Session) row(item api.Item) search.Item {
 		Detail:    s.detailPane(item.Detail),
 		Image:     s.bitmap(item.Image),
 		Disabled:  item.Disabled, Contextual: item.Contextual,
+		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
 	}
 	if item.Detail != nil {
 		s.bitmap(item.Detail.Image)

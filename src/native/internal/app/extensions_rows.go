@@ -116,7 +116,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {
 	row := search.Item{
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
-		Score: scoreExtension,
+		Score: scoreExtension, DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
 	}
 	if m.IsBuiltIn(extID) {
 		row.ID = item.ID
