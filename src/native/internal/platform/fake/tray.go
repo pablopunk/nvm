@@ -54,13 +54,18 @@ func (h *TrayHost) Trays() []*Tray {
 	return slices.Clone(h.trays)
 }
 
-// Tray is a fake menu bar item that records its title, menu and closed state.
+// Tray is a fake menu bar item that records its title, icon, menu and closed state. Its bar is light until
+// SetDark, and SetDark's appearance change runs once ChangeAppearance is called, as the OS would.
 type Tray struct {
-	mu      sync.Mutex
-	options platform.TrayOptions
-	title   string
-	items   []platform.MenuItem
-	closed  bool
+	mu         sync.Mutex
+	options    platform.TrayOptions
+	title      string
+	icon       []byte
+	template   bool
+	dark       bool
+	appearance []func()
+	items      []platform.MenuItem
+	closed     bool
 }
 
 var _ platform.Tray = (*Tray)(nil)
@@ -85,6 +90,55 @@ func (t *Tray) SetMenu(items []platform.MenuItem) {
 	defer t.mu.Unlock()
 	if !t.closed {
 		t.items = slices.Clone(items)
+	}
+}
+
+// SetIcon records the PNG and whether it is a template. An empty PNG leaves the icon as it is.
+func (t *Tray) SetIcon(png []byte, template bool) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.closed && len(png) > 0 {
+		t.icon, t.template = slices.Clone(png), template
+	}
+	return nil
+}
+
+// Icon returns the PNG last set and whether it is a template icon.
+func (t *Tray) Icon() ([]byte, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return slices.Clone(t.icon), t.template
+}
+
+// Dark reports the bar's appearance set with SetDark.
+func (t *Tray) Dark() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.dark
+}
+
+// SetDark sets whether the bar reads as dark; the appearance callbacks run on ChangeAppearance.
+func (t *Tray) SetDark(dark bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.dark = dark
+}
+
+// OnAppearanceChange records fn to run on ChangeAppearance.
+func (t *Tray) OnAppearanceChange(fn func()) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.appearance = append(t.appearance, fn)
+}
+
+// ChangeAppearance runs the appearance callbacks, as the OS does when the bar turns dark or light. They run
+// without the lock held, so they may call back into the item.
+func (t *Tray) ChangeAppearance() {
+	t.mu.Lock()
+	callbacks := slices.Clone(t.appearance)
+	t.mu.Unlock()
+	for _, fn := range callbacks {
+		fn()
 	}
 }
 

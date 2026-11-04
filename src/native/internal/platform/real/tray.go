@@ -9,9 +9,9 @@ import (
 // trayHost creates tray items through MyGo.
 type trayHost struct{}
 
-// NewTray creates a tray item with its title, tooltip and icon.
+// NewTray creates a tray item with its title and tooltip. Its icon is set afterwards with SetIcon.
 func (trayHost) NewTray(opts platform.TrayOptions) (platform.Tray, error) {
-	tray, err := mygo.NewTray(mygo.TrayOptions{ID: opts.ID, Title: opts.Title, ToolTip: opts.ToolTip, Icon: opts.Icon})
+	tray, err := mygo.NewTray(mygo.TrayOptions{ID: opts.ID, Title: opts.Title, ToolTip: opts.ToolTip})
 	if err != nil {
 		return nil, err
 	}
@@ -35,6 +35,24 @@ func (t *nativeTray) SetMenu(items []platform.MenuItem) {
 		return
 	}
 	t.tray.SetMenu(mygo.NewMenu(convertMenuItems(items)))
+}
+
+// SetIcon sets the PNG icon; MyGo tints a template icon to the menu bar on macOS.
+func (t *nativeTray) SetIcon(png []byte, template bool) error {
+	if len(png) == 0 {
+		return nil
+	}
+	return t.tray.SetIcon(png, template)
+}
+
+// Dark reports whether the bar the icon sits on is dark.
+func (t *nativeTray) Dark() bool {
+	return barIsDark(t.tray)
+}
+
+// OnAppearanceChange forwards MyGo's appearance callback.
+func (t *nativeTray) OnAppearanceChange(fn func()) {
+	t.tray.OnAppearanceChange(fn)
 }
 
 // Close removes the item from the menu bar or tray.

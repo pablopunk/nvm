@@ -244,8 +244,8 @@ func (s *Service) showBar(ext *extension, bar api.MenuBar) {
 	}
 	if current == nil {
 		item, err := menubar.NewItem(s.opts.Host, platform.TrayOptions{
-			ID: "ext:" + ext.id + ":" + bar.ID, Title: bar.Title, ToolTip: bar.Tooltip, Icon: menubar.Icon(),
-		})
+			ID: "ext:" + ext.id + ":" + bar.ID, Title: bar.Title, ToolTip: bar.Tooltip,
+		}, menubar.DefaultIconStyle)
 		if err != nil {
 			s.logs().Warn("menu bar item unavailable", fieldsOf(ext.id, err.Error()))
 			return

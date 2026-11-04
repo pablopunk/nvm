@@ -9,7 +9,12 @@
 // Layer: service tier (with jobs, shortcuts, windowmgmt, dictation, update and diag). It imports platform only.
 package menubar
 
-import "github.com/pablopunk/nvm/native/internal/platform"
+import (
+	"runtime"
+	"sync"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+)
 
 // Tooltip is the text the app's item shows when the pointer rests on it.
 const Tooltip = "Nevermind"
@@ -22,31 +27,47 @@ type Actions struct {
 	Quit            func()
 }
 
-// Options wire the app's item. OnUI runs a function on the UI thread; rows call their action through it.
+// Options wire the app's item. OnUI runs a function on the UI thread; rows call their action through it. IconStyle
+// is the menuBarIconStyle setting; empty or unknown draws DefaultIconStyle.
 type Options struct {
-	Host    platform.TrayHost
-	Actions Actions
-	OnUI    func(fn func())
+	Host      platform.TrayHost
+	Actions   Actions
+	OnUI      func(fn func())
+	IconStyle string
 }
 
 // Item is one menu bar or tray item. A nil *Item ignores every call, so features need no check when no tray exists.
+// Its glyph follows the bar: it is drawn again when the bar turns dark or light.
 type Item struct {
 	tray platform.Tray
+
+	mu    sync.Mutex
+	style string
+	title string
 }
 
-// NewItem creates an item over host. A host that cannot make one returns its error, and the caller runs without it.
-func NewItem(host platform.TrayHost, options platform.TrayOptions) (*Item, error) {
+// NewItem creates an item over host, with its glyph drawn in style (see ChooseIcon). A host that cannot make one
+// returns its error, and the caller runs without it.
+func NewItem(host platform.TrayHost, options platform.TrayOptions, style string) (*Item, error) {
+	item := &Item{style: NormalizeIconStyle(style), title: options.Title}
+	options.Title = TitleFor(item.style, runtime.GOOS, options.Title)
 	tray, err := host.NewTray(options)
 	if err != nil {
 		return nil, err
 	}
-	return &Item{tray: tray}, nil
+	item.tray = tray
+	if err := item.applyIcon(); err != nil {
+		tray.Close()
+		return nil, err
+	}
+	tray.OnAppearanceChange(item.refreshIcon)
+	return item, nil
 }
 
 // New creates the app's item with its icon and menu. A host that cannot make an item returns its error, and the app
 // runs without a menu bar item.
 func New(opts Options) (*Item, error) {
-	item, err := NewItem(opts.Host, platform.TrayOptions{ID: "nevermind", ToolTip: Tooltip, Icon: Icon()})
+	item, err := NewItem(opts.Host, platform.TrayOptions{ID: "nevermind", ToolTip: Tooltip}, opts.IconStyle)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +80,23 @@ func (m *Item) SetTitle(title string) {
 	if m == nil {
 		return
 	}
-	m.tray.SetTitle(title)
+	m.mu.Lock()
+	m.title = title
+	m.mu.Unlock()
+	m.renderTitle()
+}
+
+// SetIconStyle changes the glyph to style, as the menuBarIconStyle setting does. An empty or unknown style draws
+// DefaultIconStyle.
+func (m *Item) SetIconStyle(style string) error {
+	if m == nil {
+		return nil
+	}
+	m.mu.Lock()
+	m.style = NormalizeIconStyle(style)
+	m.mu.Unlock()
+	m.renderTitle()
+	return m.applyIcon()
 }
 
 // SetMenu replaces the menu shown on click. An empty list removes it.
@@ -76,6 +113,32 @@ func (m *Item) Close() {
 		return
 	}
 	m.tray.Close()
+}
+
+// snapshot reads the style and title under the lock. The tray is called without it: the bar's callbacks arrive on
+// the main thread and read the style too.
+func (m *Item) snapshot() (style, title string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.style, m.title
+}
+
+// applyIcon draws the item's glyph for the bar as it is now.
+func (m *Item) applyIcon() error {
+	style, _ := m.snapshot()
+	choice := ChooseIcon(style, runtime.GOOS, m.tray.Dark())
+	return m.tray.SetIcon(choice.PNG, choice.Template)
+}
+
+// renderTitle shows the title the current style gives it.
+func (m *Item) renderTitle() {
+	style, title := m.snapshot()
+	m.tray.SetTitle(TitleFor(style, runtime.GOOS, title))
+}
+
+// refreshIcon redraws the glyph when the bar's appearance changes. The OS calls it without a caller to report to.
+func (m *Item) refreshIcon() {
+	_ = m.applyIcon()
 }
 
 // Rows is the menu, in the order the 1.x menu bar shows it: Open, a divider, updates and settings, a divider, Quit.
