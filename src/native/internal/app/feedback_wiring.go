@@ -17,8 +17,12 @@ func (p *App) feedbackMessage(message string) {
 	p.showFeedback("Nevermind", message)
 }
 
-// showFeedback shows title and message in the HUD. It runs on the UI thread.
+// showFeedback shows title and message in the HUD. It runs on the UI thread. Without the app's window, which only the
+// goldens and tests have, there is no display to show it on, so nothing is shown.
 func (p *App) showFeedback(title, message string) {
+	if p.panel == nil {
+		return
+	}
 	if p.hud == nil {
 		p.hud = feedback.New(p.hudPanel, searchClock, p.hudPosition)
 	}
