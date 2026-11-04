@@ -74,6 +74,8 @@ type Palette struct {
 	chosen     int
 	list       ui.ListState
 	input      ui.Handle
+	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
+	focusList bool
 
 	actionsOpen bool
 	actChosen   int
@@ -389,11 +391,14 @@ func (p *Palette) enabledNear(i, requested int) int {
 }
 
 // focusInput gives the keyboard to the text input of the page on top: the input the page draws itself when it owns
-// one, otherwise the search field.
+// one, otherwise the search field. A view that hides its field hands the keyboard to its list once the list is built.
 func (p *Palette) focusInput() {
 	if owned := p.cur().Input; owned != nil {
 		owned.Focus()
+		p.focusList = false
 		return
 	}
 	p.input.Focus()
+	v := p.cur()
+	p.focusList = v.HideInput && v.Body == nil
 }

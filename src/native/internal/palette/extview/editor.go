@@ -18,6 +18,7 @@ type editorState struct {
 	sess        *Session
 	page        *palette.View
 	text        string
+	countedText string
 	placeholder string
 	readOnly    bool
 	status      string
@@ -57,7 +58,7 @@ func (s *Session) multilineEditor(field api.Field, text string, done func(h sear
 }
 
 func newEditorState(s *Session, title, text, placeholder string, readOnly bool) *editorState {
-	ed := &editorState{sess: s, text: text, placeholder: placeholder, readOnly: readOnly}
+	ed := &editorState{sess: s, text: text, countedText: text, placeholder: placeholder, readOnly: readOnly}
 	ed.page = &palette.View{
 		Title: title, HideInput: true, Hint: editorHint(),
 		OnKey:   ed.key,
@@ -71,12 +72,25 @@ func newEditorState(s *Session, title, text, placeholder string, readOnly bool) 
 func (ed *editorState) body(c *ui.Context, _ search.Host) {
 	t := design.Tokens(c)
 	ui.Column(c).Grow(1).Children(func() {
-		area := ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
-		if area.Changed() {
-			ed.edited()
-		}
+		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
+		ed.noticeTextChange()
 		ui.Text(c, ed.statusLine()).FontSize(11).TextColor(t.Tertiary).Margin(12)
 	})
+}
+
+// noticeTextChange counts every change of the text as an edit, however the text area reports it.
+func (ed *editorState) noticeTextChange() {
+	if ed.text == ed.countedText {
+		return
+	}
+	ed.countedText = ed.text
+	ed.edited()
+}
+
+// setText replaces the text with one the program chose, such as a recovered draft. That is not an edit, so the next
+// noticeTextChange does not count it.
+func (ed *editorState) setText(text string) {
+	ed.text, ed.countedText = text, text
 }
 
 func (ed *editorState) statusLine() string {
@@ -150,10 +164,15 @@ func (ed *editorState) flush() {
 	if track == nil || !track.dirty || track.blocked || store == nil {
 		return
 	}
+	edits := ed.edits
 	args := protocol.DraftSaveArgs{Key: track.options.Key, Version: track.options.Version, Content: ed.text}
 	if err := store.SaveDraft(ed.sess.extID, args); err != nil {
 		ed.status = "The draft could not be saved; retrying"
 		ed.armTimer()
+		return
+	}
+	// The store's write runs the UI loop, so a key can land during it; that edit stays dirty and keeps its timer.
+	if ed.edits != edits {
 		return
 	}
 	track.dirty = false
@@ -175,7 +194,7 @@ func (ed *editorState) attachDraft(options api.DraftOptions) {
 		ed.status = "The draft could not be read; it will not be overwritten"
 	case !lookup.Found:
 	case lookup.Draft.Version == options.Version:
-		ed.text = lookup.Draft.Content
+		ed.setText(lookup.Draft.Content)
 		ed.status = "Recovered unsaved text"
 	default:
 		ed.resolveConflict(lookup.Draft)
@@ -220,10 +239,10 @@ func (ed *editorState) applyConflict(result api.Result, failure *api.Failure, st
 			return
 		}
 	case "restore-old":
-		ed.text = stored.Content
+		ed.setText(stored.Content)
 		track.dirty = true
 	case "migrate":
-		ed.text = result.Draft.Content
+		ed.setText(result.Draft.Content)
 		track.dirty = true
 	default:
 		ed.status = "The draft conflict has an unknown resolution"
