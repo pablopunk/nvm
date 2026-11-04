@@ -748,7 +748,7 @@ test('clipboardHistoryView returns view with items', () => {
   assert.equal(view.presentation, 'side-preview');
   assert.ok(Array.isArray(view.items));
   assert.equal(view.items.length, 1);
-  assert.equal(view.items[0].detail.text, 'hello');
+  assert.equal((view.items[0].detail as { text?: string }).text, 'hello');
 });
 
 test('clipboardHistoryView shows empty state when no history', () => {
@@ -759,6 +759,14 @@ test('clipboardHistoryView shows empty state when no history', () => {
   assert.equal(view.items.length, 0);
   assert.ok(view.emptyView);
   assert.equal(view.emptyView.title, 'No clipboard items found.');
+});
+
+test('clipboardHistoryView keeps removal actions out of empty search results', () => {
+  const { clipboardHistory } = createFakes();
+
+  const view = clipboardHistory.clipboardHistoryView();
+
+  assert.equal(view.actionPanelVisibility, 'menu');
 });
 
 // ═══════════════════════════════════════════════════════════
