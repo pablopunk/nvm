@@ -3,6 +3,7 @@ package search
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
@@ -66,4 +67,54 @@ func statsOf(t *testing.T, c *Coordinator, id string) ProviderStats {
 	}
 	t.Fatalf("no statistics for provider %q", id)
 	return ProviderStats{}
+}
+
+// budgetedBlocking is a provider that answers only when its context ends and declares its own budget.
+type budgetedBlocking struct {
+	id     string
+	budget Budget
+}
+
+func (p budgetedBlocking) ID() string { return p.id }
+
+func (p budgetedBlocking) Budget() Budget { return p.budget }
+
+func (p budgetedBlocking) Root(ctx context.Context) []Item {
+	<-ctx.Done()
+	return nil
+}
+
+func (p budgetedBlocking) Search(ctx context.Context, _ string, _ func(Batch)) {
+	<-ctx.Done()
+}
+
+// TestDeclaredBudgetReplacesTheLocalHardBudget checks that a provider that declares a longer budget is not cut off at
+// the local hard budget, and is cut off at its own.
+func TestDeclaredBudgetReplacesTheLocalHardBudget(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot})
+	remote := budgetedBlocking{id: "remote", budget: Budget{Soft: time.Second, Hard: 30 * time.Second}}
+	c.Query("q", []Provider{remote})
+
+	clock.AwaitTimers(3)
+	clock.Advance(HardBudget)
+	if slow := statsOf(t, c, "remote").Slow; slow != 0 {
+		t.Fatalf("remote provider cut off at the local budget: slow = %d", slow)
+	}
+	clock.Advance(remote.budget.Hard - HardBudget)
+	sink.untilSettled(t, c.Gen())
+	if slow := statsOf(t, c, "remote").Slow; slow != 1 {
+		t.Fatalf("remote provider slow count = %d, want 1 after its own budget", slow)
+	}
+}
+
+// TestProvidersWithoutADeclaredBudgetUseTheDefault checks the default budget is the local one.
+func TestProvidersWithoutADeclaredBudgetUseTheDefault(t *testing.T) {
+	if got := budgetOf(blockingProvider("local")); got != DefaultBudget {
+		t.Fatalf("budget = %+v, want the default %+v", got, DefaultBudget)
+	}
+	if DefaultBudget.Hard != HardBudget || DefaultBudget.Soft != SoftBudget {
+		t.Fatalf("default budget %+v does not match the PLAN.md limits", DefaultBudget)
+	}
 }
