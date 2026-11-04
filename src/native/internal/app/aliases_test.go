@@ -73,3 +73,16 @@ func TestAliasDoesNotMatchAnotherRowsTitle(t *testing.T) {
 		}
 	}
 }
+
+// TestAliasFindsAnExtensionCommandRow saves an alias of an extension command and finds the command by it: its title does not
+// match the phrase, so only the alias can find it.
+func TestAliasFindsAnExtensionCommandRow(t *testing.T) {
+	p := goldenPalette(t)
+	if err := p.aliasStore().Add("extension:acme.notes:new", "zq jot"); err != nil {
+		t.Fatal(err)
+	}
+	row := extensionCommandRow(t, p, "zq jot")
+	if row.Title != "New Note" {
+		t.Fatalf("row = %q, want New Note", row.Title)
+	}
+}

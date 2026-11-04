@@ -106,7 +106,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		row := p.withShortcutActions(search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
-			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, "Run", nil))},
+			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, command.Title, nil))},
 		}, actionID, bound)
 		out = append(out, p.withAuthoringActions(row, result.ExtensionID))
 	}
