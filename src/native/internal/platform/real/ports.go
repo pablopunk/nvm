@@ -40,5 +40,6 @@ func NewPorts() platform.Ports {
 		FileDialog:   fileDialog{},
 		Text:         newTextRecognizer(helper{}),
 		Capture:      newScreenCapturer(helper{}),
+		OutputMute:   newOutputMute(helper{}),
 	}
 }

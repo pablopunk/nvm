@@ -98,6 +98,7 @@ func (p *App) dictationDeps() dictationDeps {
 		ScreenText:   p.dictationScreenText,
 		Recorder:     p.dictationRecorder(),
 		Remember:     p.rememberDictation,
+		Mute:         p.dictationMuter(),
 		RestoreDelay: dictationRestoreDelay,
 		OnDevices:    p.Refresh,
 	}

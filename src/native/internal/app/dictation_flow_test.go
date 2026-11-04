@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/audiomute"
 	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -82,6 +83,7 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 			return h.completer(ctx, system, user)
 		},
 		Recorder: h.recordings,
+		Mute:     audiomute.New(h.set.OutputMute, &memoryMuteJournal{}),
 		ScreenText: func(ctx context.Context) (string, error) {
 			h.screenReads++
 			if h.screenText == nil {

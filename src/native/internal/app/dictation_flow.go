@@ -3,9 +3,11 @@ package app
 import (
 	"context"
 	"errors"
+	"sync"
 	"time"
 
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/audiomute"
 	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -65,7 +67,9 @@ type dictationDeps struct {
 	// Recorder keeps the audio of each dictation until its text is in. Nil keeps none.
 	Recorder dict.Recorder
 	// Remember adds a finished dictation's text to the history.
-	Remember     func(text string)
+	Remember func(text string)
+	// Mute silences the speakers while a dictation records. Nil leaves the output alone.
+	Mute         *audiomute.Muter
 	RestoreDelay time.Duration
 	OnDevices    func()
 }
@@ -85,6 +89,9 @@ type dictationFlow struct {
 	// only while that app is in front.
 	target  string
 	devices []platform.MicrophoneDevice
+	// muteMu guards lease, the output mute of the dictation in progress.
+	muteMu sync.Mutex
+	lease  *audiomute.Lease
 }
 
 // newDictationFlow returns an idle flow over deps.
@@ -127,7 +134,11 @@ func (f *dictationFlow) Start() {
 	deviceID := f.deps.Settings().DeviceID
 	f.deps.Background("dictation.start", func() {
 		f.target = f.foregroundTarget()
+		f.beginMute()
 		err := f.service.Start(deviceID)
+		if err != nil {
+			f.restoreMute()
+		}
 		f.deps.Dispatch(func() {
 			if err != nil {
 				f.fail(err)
@@ -157,6 +168,7 @@ func (f *dictationFlow) Stop() {
 	settings := f.deps.Settings()
 	screen := f.screenTermsFor(settings)
 	f.deps.Background("dictation.stop", func() {
+		f.restoreMute()
 		transcript, err := f.service.Stop()
 		if err != nil {
 			f.deps.Dispatch(func() { f.fail(err) })
@@ -181,6 +193,34 @@ func (f *dictationFlow) Cancel() {
 	}
 	f.service.Cancel()
 	f.hide()
+	f.deps.Background("dictation.unmute", f.restoreMute)
+}
+
+// beginMute silences the output for the dictation. A mute that fails is logged, and the dictation goes on audible.
+func (f *dictationFlow) beginMute() {
+	if f.deps.Mute == nil {
+		return
+	}
+	lease, err := f.deps.Mute.Begin()
+	if err != nil {
+		f.warn("dictation.mute-failed", err)
+		return
+	}
+	f.muteMu.Lock()
+	defer f.muteMu.Unlock()
+	f.lease = lease
+}
+
+// restoreMute gives the output back its state from before the dictation. It runs when the dictation stops, is
+// cancelled or fails, and only the first call does anything.
+func (f *dictationFlow) restoreMute() {
+	f.muteMu.Lock()
+	lease := f.lease
+	f.lease = nil
+	f.muteMu.Unlock()
+	if err := lease.Restore(); err != nil {
+		f.warn("dictation.unmute-failed", err)
+	}
 }
 
 // Press runs the indicator button the user pressed.

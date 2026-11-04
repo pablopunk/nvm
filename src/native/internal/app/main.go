@@ -169,6 +169,7 @@ func (p *App) ready() {
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
+	p.recoverDictationMute()
 	p.attachWindows()
 	p.attachDeepLinks()
 	prepareCatalog()

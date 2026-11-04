@@ -124,3 +124,25 @@ func hasConcealed(formats []platform.ClipboardFormat) bool {
 	}
 	return false
 }
+
+// memoryMuteJournal keeps the mute journal in memory for the flow tests.
+type memoryMuteJournal struct {
+	entry *bool
+}
+
+func (j *memoryMuteJournal) Save(wasMuted bool) error {
+	j.entry = &wasMuted
+	return nil
+}
+
+func (j *memoryMuteJournal) Load() (bool, bool, error) {
+	if j.entry == nil {
+		return false, false, nil
+	}
+	return *j.entry, true, nil
+}
+
+func (j *memoryMuteJournal) Clear() error {
+	j.entry = nil
+	return nil
+}

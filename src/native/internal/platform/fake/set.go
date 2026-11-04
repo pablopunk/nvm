@@ -32,6 +32,7 @@ type Set struct {
 	FileDialog   *FileDialog
 	Text         *TextRecognizer
 	Capture      *ScreenCapturer
+	OutputMute   *OutputMute
 	Capabilities platform.Capabilities
 }
 
@@ -67,6 +68,7 @@ func NewSet() *Set {
 		FileDialog:   NewFileDialog(),
 		Text:         NewTextRecognizer(),
 		Capture:      NewScreenCapturer(),
+		OutputMute:   NewOutputMute(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -102,6 +104,7 @@ func (s *Set) Ports() platform.Ports {
 		FileDialog:   s.FileDialog,
 		Text:         s.Text,
 		Capture:      s.Capture,
+		OutputMute:   s.OutputMute,
 		Capabilities: s.Capabilities,
 	}
 }
