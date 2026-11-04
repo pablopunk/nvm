@@ -42,7 +42,7 @@ func (p *App) checkForUpdates(report func(msg string)) {
 // notifyUpdate shows a check's answer as a desktop notification, for checks started from the menu bar while the
 // palette is hidden.
 func (p *App) notifyUpdate(msg string) {
-	_ = p.ports.Notifier.Show("Nevermind", msg)
+	p.notifySystem("Nevermind", msg)
 }
 
 // restartToUpdate restarts the app into the downloaded update, or says why it cannot.
