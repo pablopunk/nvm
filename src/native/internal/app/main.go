@@ -38,12 +38,11 @@ type App struct {
 	panel *mygo.Window
 	S     *Settings
 
-	md       markdown.Options
-	exts     []loadedExt
-	extTrays []*extTray
-	runs     map[string]*chatRun
-	tray     *mygo.Tray
-	appsvc   *appfeat.Services
+	md     markdown.Options
+	exts   extensionHost
+	runs   map[string]*chatRun
+	tray   *mygo.Tray
+	appsvc *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
@@ -140,7 +139,7 @@ func (p *App) ready() {
 	if err != nil {
 		log.Println("shortcut", p.S.Hotkey, err)
 	}
-	p.reloadExtensions()
+	go p.startExtensions()
 	p.setUpTray()
 	p.startFiles()
 	log.Println("ready")

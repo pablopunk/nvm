@@ -71,26 +71,6 @@ func snippetRows(p *App, _ *rootInput, q string) []search.Item {
 	return snippetRootRows(p, q)
 }
 
-// extensionRows asks every enabled extension for its rows. Each extension's search runs under its own lock.
-func extensionRows(_ *App, in *rootInput, q string) []search.Item {
-	var out []search.Item
-	for i := range in.exts {
-		e := &in.exts[i]
-		if in.disabled[e.ID] {
-			continue
-		}
-		for _, x := range safeSearch(e, q) {
-			x := x
-			act := search.Action{Title: "Copy", Run: func(h search.Host) { mygo.Clipboard.WriteText(x.Value); h.Hide() }}
-			if x.URL != "" {
-				act = search.Action{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(x.URL) }}
-			}
-			out = append(out, search.Item{Kind: e.Title, Title: x.Title, Subtitle: x.Subtitle, Icon: "puzzle", Tone: "purple", Score: scoreExtension, Actions: []search.Action{act}})
-		}
-	}
-	return out
-}
-
 // commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
 func commandRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
