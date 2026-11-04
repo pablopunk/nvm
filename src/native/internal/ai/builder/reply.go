@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -11,30 +13,43 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 )
 
-// Candidate is an extension the model proposed: the manifest it wrote, as text and decoded, and its source.
+// maxExtraSources bounds the Go files a reply may add beside main.go.
+const maxExtraSources = 16
+
+// extraSourceName is a plain Go file name, such as helpers.go. Test files and folders are not extension sources.
+var extraSourceName = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_-]*\.go$`)
+
+// Candidate is an extension the model proposed: the manifest it wrote, as text and decoded, and its sources. Source
+// is main.go; Sources holds any other Go files of the folder, by name.
 type Candidate struct {
 	Manifest     api.Manifest
 	ManifestText string
 	Source       string
+	Sources      map[string]string
 }
 
-// Files returns the two files of the extension folder.
+// Files returns every file of the extension folder: the manifest, main.go and each other Go file.
 func (c Candidate) Files() map[string][]byte {
-	return map[string][]byte{
+	files := map[string][]byte{
 		bundle.ManifestFile: []byte(c.ManifestText),
 		bundle.SourceFile:   []byte(c.Source),
 	}
+	for name, text := range c.Sources {
+		files[name] = []byte(text)
+	}
+	return files
 }
 
 // ErrNoBlocks is the failure of a reply without both code blocks.
 var ErrNoBlocks = errors.New("the reply needs one ```json manifest block and one ```go source block")
 
-// ParseReply reads the last manifest and the last source block of a reply and checks the manifest. The source is
-// checked later, by the extension host, so this reads the reply only.
+// ParseReply reads the last manifest and the last main source block of a reply, checks the manifest, and keeps each
+// named Go block (```go helpers.go) as an extra file. The source is checked later, by the extension host, so this
+// reads the reply only.
 func ParseReply(text string) (Candidate, error) {
 	blocks := codeBlocks(text)
 	manifestText := lastBlockIn(blocks, "json")
-	source := lastBlockIn(blocks, "go", "golang")
+	source := lastMainSource(blocks)
 	if manifestText == "" || source == "" {
 		return Candidate{}, ErrNoBlocks
 	}
@@ -45,13 +60,51 @@ func ParseReply(text string) (Candidate, error) {
 	if err := manifest.Validate(); err != nil {
 		return Candidate{}, fmt.Errorf("the manifest is invalid: %w", err)
 	}
-	return Candidate{Manifest: manifest, ManifestText: manifestText, Source: source}, nil
+	extras, err := namedSources(blocks)
+	if err != nil {
+		return Candidate{}, err
+	}
+	return Candidate{Manifest: manifest, ManifestText: manifestText, Source: source, Sources: extras}, nil
 }
 
-// codeBlock is one fenced block of a reply: its language tag and its body.
+// codeBlock is one fenced block of a reply: its language tag, the file name written after the tag (if any) and its
+// body.
 type codeBlock struct {
 	lang string
+	name string
 	body string
+}
+
+// lastMainSource is the body of the last Go block that is main.go: one that names no file or names main.go.
+func lastMainSource(blocks []codeBlock) string {
+	for i := len(blocks) - 1; i >= 0; i-- {
+		if isGoBlock(blocks[i]) && (blocks[i].name == "" || blocks[i].name == bundle.SourceFile) {
+			return blocks[i].body
+		}
+	}
+	return ""
+}
+
+func isGoBlock(block codeBlock) bool {
+	return block.lang == "go" || block.lang == "golang"
+}
+
+// namedSources maps each Go block that names a file to its body. A name that is not a plain .go file name is refused.
+func namedSources(blocks []codeBlock) (map[string]string, error) {
+	sources := map[string]string{}
+	for _, block := range blocks {
+		if !isGoBlock(block) || block.name == "" || block.name == bundle.SourceFile {
+			continue
+		}
+		if !extraSourceName.MatchString(block.name) || strings.HasSuffix(block.name, "_test.go") {
+			return nil, fmt.Errorf("the source file name %q must be a plain .go name such as helpers.go", block.name)
+		}
+		sources[block.name] = block.body
+	}
+	if len(sources) > maxExtraSources {
+		return nil, fmt.Errorf("a reply may add at most %d Go files beside main.go", maxExtraSources)
+	}
+	return maps.Clone(sources), nil
 }
 
 // codeBlocks splits a reply into its fenced blocks. A fence closes on a line of its own, so two blocks in a row never
@@ -64,7 +117,7 @@ func codeBlocks(text string) []codeBlock {
 		trimmed := strings.TrimSpace(line)
 		switch {
 		case current == nil && strings.HasPrefix(trimmed, "```"):
-			current = &codeBlock{lang: strings.ToLower(strings.TrimSpace(strings.TrimPrefix(trimmed, "```")))}
+			current = newCodeBlock(strings.TrimSpace(strings.TrimPrefix(trimmed, "```")))
 			body.Reset()
 		case current != nil && trimmed == "```":
 			current.body = body.String()
@@ -76,6 +129,19 @@ func codeBlocks(text string) []codeBlock {
 		}
 	}
 	return blocks
+}
+
+// newCodeBlock reads a fence's info string: the language, then an optional file name. Only the language is lower-cased.
+func newCodeBlock(info string) *codeBlock {
+	words := strings.Fields(info)
+	block := &codeBlock{}
+	if len(words) > 0 {
+		block.lang = strings.ToLower(words[0])
+	}
+	if len(words) > 1 {
+		block.name = words[1]
+	}
+	return block
 }
 
 // lastBlockIn returns the body of the last block whose language is one of langs, or "" when there is none.
