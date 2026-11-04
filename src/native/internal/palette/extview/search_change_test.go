@@ -18,6 +18,9 @@ type searchRig struct {
 	asked   []string
 	answers map[string][]string
 	failure *api.Failure
+	// hold keeps each answer until releaseHeld, so a test sees the batch while the handler runs.
+	hold bool
+	held []func()
 }
 
 func newSearchRig(t *testing.T, view api.View, answers map[string][]string) *searchRig {
@@ -26,11 +29,12 @@ func newSearchRig(t *testing.T, view api.View, answers map[string][]string) *sea
 	deps := Deps{
 		Invoke: func(_ string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			rig.asked = append(rig.asked, in.Value)
-			if rig.failure != nil {
-				done(api.Result{}, rig.failure)
+			answer := func() { rig.answerWith(in.Value, done) }
+			if rig.hold {
+				rig.held = append(rig.held, answer)
 				return
 			}
-			done(api.Result{Patch: &api.ViewPatch{SearchResultIds: rig.answers[in.Value]}}, nil)
+			answer()
 		},
 		OnUI:  rig.ui.post,
 		Clock: rig.clock,
@@ -38,6 +42,29 @@ func newSearchRig(t *testing.T, view api.View, answers map[string][]string) *sea
 	rig.session = NewSession(deps, "acme.views", view)
 	rig.session.Open(rig.host)
 	return rig
+}
+
+// answerWith calls done as the handler answers text: with its failure when one is set, else with the ids for text.
+func (r *searchRig) answerWith(text string, done func(api.Result, *api.Failure)) {
+	if r.failure != nil {
+		done(api.Result{}, r.failure)
+		return
+	}
+	done(api.Result{Patch: &api.ViewPatch{SearchResultIds: r.answers[text]}}, nil)
+}
+
+// releaseHeld answers every held call, oldest first.
+func (r *searchRig) releaseHeld() {
+	held := r.held
+	r.held = nil
+	for _, answer := range held {
+		answer()
+	}
+}
+
+// pendingNow reports whether the view's second batch is shown as loading.
+func (r *searchRig) pendingNow() bool {
+	return r.session.Palette().Pending()
 }
 
 // rest moves the clock past the debounce and runs the callbacks that the timers posted, as the UI thread would.
@@ -169,5 +196,85 @@ func TestSearchChangeNeedsAClockToDebounce(t *testing.T) {
 	session.Palette().Search("ca")
 	if asked != 0 {
 		t.Fatalf("asked = %d, want no call without a clock to debounce on", asked)
+	}
+}
+
+// TestTheSecondBatchIsLoadingOnlyWhileTheHandlerRuns checks the batch is pending from the moment its call starts, after
+// the pause, until the answer lands.
+func TestTheSecondBatchIsLoadingOnlyWhileTheHandlerRuns(t *testing.T) {
+	rig := newSearchRig(t, searchView(true, catItems...), map[string][]string{"ca": {"tiger"}})
+	rig.hold = true
+	rig.session.Palette().Search("ca")
+	if rig.pendingNow() {
+		t.Fatal("the batch is loading before the text rested")
+	}
+	rig.rest(1)
+	if !rig.pendingNow() {
+		t.Fatal("the batch is not loading while the handler runs")
+	}
+	rig.releaseHeld()
+	if rig.pendingNow() {
+		t.Fatal("the batch still loads after the answer")
+	}
+	if got := rowTitles(rig.session.Palette().Search("ca")); len(got) != 2 || got[1] != "Tiger" {
+		t.Fatalf("rows = %v, want the answer shown in place of the placeholder", got)
+	}
+}
+
+// TestAFailedOrEmptyBatchEndsLoadingWithoutRows checks a failed call and an empty answer both end the loading state
+// and leave the local matches alone.
+func TestAFailedOrEmptyBatchEndsLoadingWithoutRows(t *testing.T) {
+	for name, configure := range map[string]func(*searchRig){
+		"failure": func(r *searchRig) { r.failure = &api.Failure{Code: api.CodeInternal, Message: "busy"} },
+		"empty":   func(r *searchRig) { r.answers["ca"] = nil },
+	} {
+		t.Run(name, func(t *testing.T) {
+			rig := newSearchRig(t, searchView(true, catItems...), map[string][]string{"ca": {"tiger"}})
+			configure(rig)
+			rig.hold = true
+			rig.session.Palette().Search("ca")
+			rig.rest(1)
+			if !rig.pendingNow() {
+				t.Fatal("the batch is not loading while the handler runs")
+			}
+			rig.releaseHeld()
+			if rig.pendingNow() {
+				t.Fatal("the loading state stayed after the call ended")
+			}
+			if got := rowTitles(rig.session.Palette().Search("ca")); len(got) != 1 || got[0] != "Cat" {
+				t.Fatalf("rows = %v, want the local match only", got)
+			}
+		})
+	}
+}
+
+// TestTypingANewTextCancelsTheLoadingBatchAndRestartsIt checks a new text ends the loading state at once, drops the
+// answer for the text left, and asks again after its own pause.
+func TestTypingANewTextCancelsTheLoadingBatchAndRestartsIt(t *testing.T) {
+	rig := newSearchRig(t, searchView(true, catItems...), map[string][]string{"ca": {"tiger"}, "cat": {"whale"}})
+	rig.hold = true
+	rig.session.Palette().Search("ca")
+	rig.rest(1)
+	if !rig.pendingNow() {
+		t.Fatal("the batch is not loading for ca")
+	}
+	rig.session.Palette().Search("cat")
+	if rig.pendingNow() {
+		t.Fatal("typing a new text left the old batch loading")
+	}
+	rig.releaseHeld()
+	if rig.pendingNow() {
+		t.Fatal("the answer for the text left turned loading back on")
+	}
+	if got := rowTitles(rig.session.Palette().Search("cat")); len(got) != 1 || got[0] != "Cat" {
+		t.Fatalf("rows for cat = %v, want the local match before its own answer", got)
+	}
+	rig.rest(1)
+	if !rig.pendingNow() || len(rig.asked) != 2 || rig.asked[1] != "cat" {
+		t.Fatalf("asked = %v, want cat asked after its pause and loading", rig.asked)
+	}
+	rig.releaseHeld()
+	if got := rowTitles(rig.session.Palette().Search("cat")); len(got) != 2 || got[1] != "Whale" {
+		t.Fatalf("rows for cat = %v, want Whale from the answer to cat", got)
 	}
 }

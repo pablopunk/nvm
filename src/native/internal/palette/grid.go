@@ -14,6 +14,10 @@ const gridPageRows = 5
 // gridCellRadius is the corner radius of a cell's plate.
 const gridCellRadius = 10
 
+// gridLoadingCells is how many placeholder cells follow the results while a second batch is arriving. They sit in the
+// slots after the last result, so the results never move when the batch lands.
+const gridLoadingCells = 3
+
 // gridBody draws the rows of a grid view as cells, Columns to a row. The list builds only the rows on screen,
 // so a grid of thousands of rows costs what its visible rows cost.
 func (p *Palette) gridBody(c *ui.Context, g *Grid) {
@@ -22,13 +26,14 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 	}
 	p.list.Selected, p.list.Key, p.list.Label = nil, gridRowKey, nil
 	cols := max(g.Columns, 1)
-	rows := (len(p.results) + cols - 1) / cols
+	slots := p.gridSlots(p.loadingMore())
+	rows := (slots + cols - 1) / cols
 	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed = ui.Transparent, ui.Transparent, ui.Transparent
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			ui.List(c, &p.list, rows, func(r int) { p.gridRow(c, g, r) }).Grow(1).FillHeight().Padding(6)
+			ui.List(c, &p.list, rows, func(r int) { p.gridRow(c, g, r, slots) }).Grow(1).FillHeight().Padding(6)
 		})
 	})
 	if p.chosen < 0 && len(p.results) > 0 {
@@ -42,19 +47,35 @@ func gridRowKey(row int) any {
 	return strconv.Itoa(row)
 }
 
+// gridSlots is how many cells the grid lays out: one per result, and the loading placeholders while a batch arrives.
+func (p *Palette) gridSlots(loading bool) int {
+	if loading {
+		return len(p.results) + gridLoadingCells
+	}
+	return len(p.results)
+}
+
 // gridRow draws one row of cells. Every row has Columns slots, so the cells of a short last row keep the columns
-// of the rows above; the slots past the last result are empty and share the width the same way.
-func (p *Palette) gridRow(c *ui.Context, g *Grid, row int) {
+// of the rows above; the slots past the last result are placeholders while a batch arrives, and empty otherwise.
+func (p *Palette) gridRow(c *ui.Context, g *Grid, row, slots int) {
 	cols := max(g.Columns, 1)
 	ui.Row(c).Gap(2).Padding(2, 8).Children(func() {
 		for i := row * cols; i < (row+1)*cols; i++ {
-			if i < len(p.results) {
+			switch {
+			case i < len(p.results):
 				p.gridCell(c, g, i)
-				continue
+			case i < slots:
+				p.gridLoadingCell(c, g)
+			default:
+				ui.Row(c).Grow(1).Height(g.CellHeight)
 			}
-			ui.Row(c).Grow(1).Height(g.CellHeight)
 		}
 	})
+}
+
+// gridLoadingCell draws a placeholder cell. It has no label, plate or click: the choice never reaches it.
+func (p *Palette) gridLoadingCell(c *ui.Context, g *Grid) {
+	ui.Row(c).Grow(1).Height(g.CellHeight).Center().Children(func() { design.LoadingCell(c) })
 }
 
 // gridCell draws result i as a cell: the plate of the cursor or the pointer, the content Grid.Cell draws, and

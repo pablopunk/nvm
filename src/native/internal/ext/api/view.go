@@ -76,7 +76,8 @@ type View struct {
 	MaxVisibleItems   int              `json:"maxVisibleItems,omitempty"`
 	OnSelectionChange *ActionRef       `json:"onSelectionChange,omitempty"`
 	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch's SearchResultIds are a
-	// second batch of item ids, shown after the local matches. Only list and grid views carry it.
+	// second batch of item ids, shown after the local matches. While the call runs the host shows the batch as loading
+	// after the rows, with no field to set. Only list and grid views carry it.
 	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
 
 	Actions               []Action        `json:"actions,omitempty"`

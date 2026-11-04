@@ -99,7 +99,8 @@ func (p *Palette) listBody(c *ui.Context) {
 	p.interact.pressing, p.interact.pressingNow = p.interact.pressingNow, false
 	p.interact.clickedThisFrame = false
 	v := p.cur()
-	if len(p.results) == 0 {
+	loading := p.loadingMore()
+	if len(p.results) == 0 && !loading {
 		if !p.settled {
 			return
 		}
@@ -115,8 +116,11 @@ func (p *Palette) listBody(c *ui.Context) {
 		return
 	}
 	p.list.Selected = &p.chosen
-	p.list.Key = func(i int) any { return fmt.Sprint(i, p.results[i].ID, p.results[i].Title) }
-	p.list.Label = func(i int) string { return p.results[i].Title }
+	if len(p.results) == 0 {
+		p.list.Selected = nil
+	}
+	p.list.Key = func(i int) any { return listRowKey(p.results, i) }
+	p.list.Label = func(i int) string { return listRowLabel(p.results, i) }
 	if p.chosen < 0 {
 		p.chosen = 0
 	}
@@ -131,7 +135,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i) }).Grow(1).FillHeight().Padding(6)
+			list = ui.List(c, &p.list, listRowCount(p.results, loading), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
 		p.focusListIfRequested(c)
 		if list.Submitted() && !p.interact.clickedThisFrame {
@@ -148,6 +152,40 @@ func (p *Palette) listBody(c *ui.Context) {
 			})
 		}
 	})
+}
+
+// listRowCount is the number of list rows: one per result, and one loading row after them while a batch arrives.
+func listRowCount(results []search.Item, loading bool) int {
+	if loading {
+		return len(results) + 1
+	}
+	return len(results)
+}
+
+// listRowKey identifies list row i. The loading row after the results has a key of its own.
+func listRowKey(results []search.Item, i int) any {
+	if i >= len(results) {
+		return "loading"
+	}
+	return fmt.Sprint(i, results[i].ID, results[i].Title)
+}
+
+// listRowLabel is the assistive name of list row i. The loading row names what it waits for.
+func listRowLabel(results []search.Item, i int) string {
+	if i >= len(results) {
+		return "Loading more results"
+	}
+	return results[i].Title
+}
+
+// drawListRow draws result i, or the loading row after the results while a batch arrives. The loading row is not a
+// result: no choice or click reaches it.
+func (p *Palette) drawListRow(c *ui.Context, i int) {
+	if i >= len(p.results) {
+		design.LoadingRow(c)
+		return
+	}
+	p.row(c, i)
 }
 
 // selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.

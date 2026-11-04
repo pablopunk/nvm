@@ -20,11 +20,11 @@ func (p *Palette) search() {
 		if v.Search != nil {
 			rows = v.Search(q)
 		}
-		p.showRows(v, q, rows, v.Loading == nil || !v.Loading())
+		p.showRows(v, q, rows, v.Loading == nil || !v.Loading(), false)
 		return
 	}
 	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
-		p.showRows(v, q, snap.Items, snap.Settled)
+		p.showRows(v, q, snap.Items, snap.Settled, snap.Pending)
 	}
 }
 
@@ -52,19 +52,26 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	if v != p.cur() || s.Gen != v.coord.Gen() {
 		return
 	}
-	p.showRows(v, s.Query, s.Items, s.Settled)
+	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
 }
 
 // showRows shows rows for a view and a query. The cursor moves to the top when the view or the query changed,
 // and stays where it is when the same query is refreshed.
-func (p *Palette) showRows(v *View, q string, rows []search.Item, settled bool) {
+func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
 	if p.shownView != v || p.shownQuery != q {
 		p.chosen = 0
 	}
 	p.shownView, p.shownQuery = v, q
-	p.results, p.settled = rows, settled
+	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.choose(p.chosen)
+}
+
+// loadingMore reports whether the rows on screen are missing a second batch that is still arriving: the providers of
+// the shown query say a call is in flight, or the view's Pending hook does.
+func (p *Palette) loadingMore() bool {
+	v := p.cur()
+	return (p.shownView == v && p.pending) || (v.Pending != nil && v.Pending())
 }
 
 // invalidateRows forgets the remembered rows of every view on the stack, for when the data behind them changed.

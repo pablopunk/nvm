@@ -53,13 +53,15 @@ func (p Provider) Budget() search.Budget {
 // Root answers the empty query with nothing.
 func (p Provider) Root(context.Context) []search.Item { return nil }
 
-// Search waits for the text to rest, asks the model, and emits the matches. A cancelled search emits nothing. A failed
-// decision is logged and emits nothing, because the local matches already answered the text.
+// Search waits for the text to rest, reports the decision as pending, asks the model, and emits the matches. A
+// cancelled search emits nothing more. A failed decision is logged and emits nothing, because the local matches
+// already answered the text.
 func (p Provider) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	if p.opts.Decider == nil || p.opts.Matcher == nil || q == "" || !p.rest(ctx) {
 		emit(search.Batch{Final: true})
 		return
 	}
+	emit(search.Batch{Pending: true})
 	matches, err := p.opts.Matcher.Matches(ctx, p.opts.Decider, p.opts.Category, q)
 	if ctx.Err() != nil {
 		emit(search.Batch{Final: true})
