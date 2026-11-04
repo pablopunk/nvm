@@ -12,10 +12,21 @@ type fakeFloatingSurface struct {
 	x, y, w, h      int
 }
 
-func (f *fakeFloatingSurface) Focus()                   { f.focused = true }
-func (f *fakeFloatingSurface) Close()                   { f.closed = true }
-func (f *fakeFloatingSurface) Position() (int, int)     { return f.x, f.y }
-func (f *fakeFloatingSurface) Size() (int, int)         { return f.w, f.h }
+func (f *fakeFloatingSurface) Focus() {
+	f.focused = true
+}
+
+func (f *fakeFloatingSurface) Close() {
+	f.closed = true
+}
+
+func (f *fakeFloatingSurface) Position() (int, int) {
+	return f.x, f.y
+}
+
+func (f *fakeFloatingSurface) Size() (int, int) {
+	return f.w, f.h
+}
 
 // openFloatingFixture shows the note of id in a fake floating window and returns the window's test renderer.
 func openFloatingFixture(t *testing.T, p *App, id string) (*ui.Tester, *fakeFloatingSurface) {
