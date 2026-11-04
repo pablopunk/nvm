@@ -102,12 +102,17 @@ func (p *App) extensionHistory() *clipboard.History {
 	return p.clip.history
 }
 
-// extensionsStateChanged redraws the Extensions list when it is the view on top, so a child that finishes starting
-// shows as Running without the user reopening the list, and asks the menu bar to reconcile its items with the new
-// state. It runs on the goroutine that changed the state.
+// extensionsStateChanged redraws the views that show extension state when they are on top: the Extensions list, so a
+// child that finishes starting shows as Running, and the root, so its rows appear without a new query. It also asks
+// the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
 func (p *App) extensionsStateChanged() {
-	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
+	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
+}
+
+// isExtensionStateView is true for the root and the Extensions list, the two views whose rows come from extension state.
+func isExtensionStateView(v *palette.View) bool {
+	return v.Title == extensionsViewTitle || v.Title == rootViewTitle
 }
 
 // questionPresenter is the part of the palette a host question needs: it shows the palette when it is hidden, puts
