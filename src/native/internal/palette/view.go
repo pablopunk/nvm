@@ -58,6 +58,12 @@ type View struct {
 	SelectID string
 	// OnKey sees the keys before the list and the action menu do; it returns true when it used one.
 	OnKey func(c *ui.Context, h search.Host) bool
+	// OnEscape sees Escape before the palette clears the query, leaves the page or hides. It returns true when the page
+	// used the key, such as to stop a reply in flight.
+	OnEscape func() bool
+	// SurvivesHide keeps the page open across a hide, as Electron keeps the last live AI chat: the next summon shows it
+	// and the pages pushed above it are dropped. Every other page is left when the palette hides.
+	SurvivesHide bool
 }
 
 // Grid lays a view's rows out as cells, Columns to a row, as the emoji picker does. The cells share the pane's
