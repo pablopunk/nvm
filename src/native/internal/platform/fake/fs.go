@@ -372,7 +372,7 @@ func (f *FS) Watch(ctx context.Context, name string) (<-chan platform.Event, err
 	if _, err := f.lookupLocked(key); err != nil {
 		return nil, pathError("watch", name, err)
 	}
-	w := &fsWatcher{prefix: key, out: make(chan platform.Event, watcherBuffer)}
+	w := &fsWatcher{prefix: key, root: watchSpelling(name, key), out: make(chan platform.Event, watcherBuffer)}
 	f.watchers = append(f.watchers, w)
 	go f.unwatchOnDone(ctx, w)
 	return w.out, nil

@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"path/filepath"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -9,9 +10,11 @@ import (
 // watcherBuffer is how many events a watcher holds before further events are dropped.
 const watcherBuffer = 64
 
-// fsWatcher receives events for paths at or under prefix.
+// fsWatcher receives events for paths at or under prefix. root is the watched name in the spelling the caller opened
+// it with, and events are reported under it, as a real watcher reports paths under the folder it was given.
 type fsWatcher struct {
 	prefix string
+	root   string
 	out    chan platform.Event
 	// closed is set once out is closed, by BreakWatches or by the watch's context ending; the other one skips it.
 	closed bool
@@ -46,10 +49,34 @@ func (f *FS) notifyLocked(event platform.Event) {
 			continue
 		}
 		select {
-		case w.out <- event:
+		case w.out <- w.spell(event):
 		default:
 		}
 	}
+}
+
+// watchSpelling is the folder name a watch reports under: the caller's name when it is absolute on this OS, and the
+// tree key otherwise.
+func watchSpelling(name, key string) string {
+	if filepath.IsAbs(name) {
+		return filepath.Clean(name)
+	}
+	return filepath.FromSlash(key)
+}
+
+// spell rewrites an event's paths from tree keys into the spelling of the watched root. A path outside the watch,
+// such as the source of a rename from elsewhere, keeps its key.
+func (w *fsWatcher) spell(event platform.Event) platform.Event {
+	event.Path = w.spellKey(event.Path)
+	if event.OldPath != "" && isUnder(event.OldPath, w.prefix) {
+		event.OldPath = w.spellKey(event.OldPath)
+	}
+	return event
+}
+
+func (w *fsWatcher) spellKey(key string) string {
+	below := strings.TrimPrefix(strings.TrimPrefix(key, w.prefix), "/")
+	return filepath.Join(w.root, filepath.FromSlash(below))
 }
 
 // isUnder reports whether key is root or lies beneath it. Both are cleaned tree keys.
@@ -76,7 +103,7 @@ func (f *FS) OverflowWatches(name string) {
 		if !w.closed {
 			w.closed = true
 			select {
-			case w.out <- platform.Event{Op: platform.EventOverflow, Path: w.prefix}:
+			case w.out <- platform.Event{Op: platform.EventOverflow, Path: w.root}:
 			default:
 			}
 			close(w.out)
