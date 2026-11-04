@@ -180,7 +180,7 @@
       {
         "kind": "Commands",
         "title": "Force Quit Apps",
-        "subtitle": "Quit or force quit running apps",
+        "subtitle": "Force quit running applications",
         "section": "Suggestions",
         "id": "",
         "icon": "stop-circle",
@@ -1522,7 +1522,7 @@
       {
         "kind": "Commands",
         "title": "Force Quit Apps",
-        "subtitle": "Quit or force quit running apps",
+        "subtitle": "Force quit running applications",
         "section": "Commands",
         "id": "",
         "icon": "stop-circle",
@@ -2130,7 +2130,7 @@
       {
         "kind": "Commands",
         "title": "Force Quit Apps",
-        "subtitle": "Quit or force quit running apps",
+        "subtitle": "Force quit running applications",
         "section": "Commands",
         "id": "",
         "icon": "stop-circle",
