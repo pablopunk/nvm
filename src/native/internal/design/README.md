@@ -75,6 +75,7 @@ context. The doc comment of each says what it draws and when to use it.
 | `section.go` | `Section` | a group header |
 | `keycap.go` | `Keycap` | a key label, already spelled for the platform |
 | `chip.go` | `Chip` | `ChipData` (icon, bold word, text) |
+| `select.go` | `Select` | `SelectData`, returns the chosen option index or -1; opens the platform's menu (a select) |
 | `popover.go` | `Popover`, `Placement`, `ActionPlacement` | a raised surface at a placement |
 | `action_menu.go` | `ActionMenu` | `[]MenuRow` |
 | `footer.go` | `Footer` | `FooterData` (name, primary and secondary key hints, or a hint) |

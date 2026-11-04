@@ -15,6 +15,11 @@ func galleryControls(c *ui.Context) {
 		Chip(c, ChipData{Icon: "sparkles", Bold: "Tab", Text: "to ask AI"})
 		Chip(c, ChipData{Text: "Plain chip"})
 	})
+	Section(c, "Select: a popup button, current and disabled")
+	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
+		Select(c, SelectData{Options: []string{"Fast", "Smart"}, Selected: 0})
+		Select(c, SelectData{Options: []string{"Fast", "Smart"}, Selected: 1, Disabled: true})
+	})
 	Section(c, "SearchRow: typed, empty, and a fixed title with back")
 	SearchRow(c, SearchData{Placeholder: "Search Clipboard History", Query: &galleryState.query, Input: &galleryState.searchInput, AIHint: true})
 	SearchRow(c, SearchData{Placeholder: "Watcha gonna do?", Query: &galleryState.blank, Input: &galleryState.emptyInput})
