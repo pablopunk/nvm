@@ -17,14 +17,17 @@ import (
 )
 
 // J22 (PLAN.md 3.1): quit an app, then uninstall it through a reviewed list. The app is a fake desktop entry in the
-// isolated HOME whose program is a tiny script the test starts. The script exits on SIGTERM, so Quit is observed as
-// the process ending. The uninstall moves only the entry and its own data folder, into a temp Trash that
-// XDG_DATA_HOME points at, so the real Trash is never touched.
+// isolated HOME whose program is feh, linked under the name fakeapp-sleeper, so the process is named like the entry
+// and owns a real X window with its own PID, as a GUI app does. feh exits on SIGTERM, so Quit is observed as the
+// process ending. The uninstall moves only the entry and its own data folder, into a temp Trash that XDG_DATA_HOME
+// points at, so the real Trash is never touched.
 
 const (
 	fakeAppName     = "Fake Rig App"
 	fakeAppID       = "fakeapp"
 	fakeAppSleeper  = "fakeapp-sleeper" // 15 bytes: the kernel's process-name limit, so the name is not truncated
+	fakeAppImage    = "fakeapp.png"
+	fakeAppTitle    = "fakeapp-window"
 	sleeperExitWait = 15 * time.Second
 	actionMenuKey   = "ctrl+k"
 	uninstallIndex  = 3 // Open, Show in Folder, Copy Path, then Uninstall: the app is not running by then
@@ -35,7 +38,12 @@ const (
 func seedFakeApp(t *testing.T, home string) string {
 	t.Helper()
 	program := filepath.Join(home, "bin", fakeAppSleeper)
-	writeFile(t, program, "#!/bin/sh\ntrap 'exit 0' TERM\nwhile true; do sleep 1; done\n", 0o755)
+	must(t, os.MkdirAll(filepath.Dir(program), 0o755))
+	feh, err := exec.LookPath("feh")
+	must(t, err)
+	must(t, os.Symlink(feh, program))
+	image := filepath.Join(home, "bin", fakeAppImage)
+	must(t, exec.Command("convert", "-size", "320x200", "xc:steelblue", image).Run())
 	entry := filepath.Join(home, ".local", "share", "applications", fakeAppID+".desktop")
 	writeFile(t, entry, "[Desktop Entry]\nType=Application\nName="+fakeAppName+"\nExec="+program+" %U\n", 0o644)
 	writeFile(t, filepath.Join(home, ".local", "share", fakeAppID, "config.toml"), "rig = true\n", 0o644)
@@ -56,7 +64,8 @@ func writeFile(t *testing.T, path, content string, mode os.FileMode) {
 // startSleeper runs the fake program and returns a channel that receives when it has exited and been reaped.
 func startSleeper(t *testing.T, program string) <-chan error {
 	t.Helper()
-	cmd := exec.Command(program)
+	image := filepath.Join(filepath.Dir(program), fakeAppImage)
+	cmd := exec.Command(program, "--title", fakeAppTitle, "-g", "320x200+400+300", image)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
