@@ -37,26 +37,21 @@ func historyRows(deps Deps, q string) []search.Item {
 	return items
 }
 
-// ConversationRow is the list row of one saved conversation: Open, then Remove action, which asks before it deletes the
-// conversation, as 1.x's AI chat rows do.
+// ConversationRow is the list row of one saved conversation: Open, then Remove Chat, which asks before it removes the
+// chat and its history.
 func ConversationRow(deps Deps, record chat.Chat) search.Item {
 	id := record.ID
-	title := chatTitle(record)
 	return search.Item{
 		ID:        id,
-		Title:     title,
+		Title:     chatTitle(record),
 		Subtitle:  kindLabel(record.Kind) + " · " + ago(deps.Now(), record.UpdatedAt),
 		Icon:      ChatIcon(record.Kind),
 		Tone:      "yellow",
 		TintTitle: true,
 		Actions: []search.Action{
 			{Title: "Open", Run: func(h search.Host) { h.Push(ChatView(deps, id)) }},
-			{Title: "Remove action", Dismiss: search.DismissNever, Run: func(h search.Host) {
-				h.Push(palette.Confirm("Remove action", "Delete “"+title+"” from Nevermind", func() {
-					if err := deps.Service.Delete(id); err != nil {
-						h.Toast(refusalCopy(err))
-					}
-				}))
+			{Title: "Remove Chat", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				h.Push(removeConfirm(deps, record))
 			}},
 		},
 	}

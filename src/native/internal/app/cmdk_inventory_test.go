@@ -74,7 +74,7 @@ func menuCases(t *testing.T) []menuCase {
 		{kind: "AI chat", name: "Trip ideas", row: func(t *testing.T) search.Item {
 			deps := aichat.Deps{Now: func() time.Time { return time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC) }}
 			return aichat.ConversationRow(deps, chat.Chat{ID: "chat-trip", Title: "Trip ideas", UpdatedAt: time.Date(2026, 11, 4, 11, 0, 0, 0, time.UTC)})
-		}, menu: []string{"Open", "Remove action"}},
+		}, menu: []string{"Open", "Remove Chat"}},
 		{kind: "extension root item", row: func(t *testing.T) search.Item {
 			return extensionRootItemRow(t)
 		}, menu: []string{"Copy note", "Copy Text", renameTitle, tweakWithAITitle}, skipPrimary: true},

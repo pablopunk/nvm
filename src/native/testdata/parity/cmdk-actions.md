@@ -25,7 +25,7 @@ Order is fixed by `getOptionActionRows` (App.tsx:4526). Rows follow the primary 
 | G9 | App.tsx:4602 | file-backed extension rows | Tweak with AI | none | G7 condition | done: opens the builder chat bound to the extension (builderEditView) |
 | G10 | App.tsx:4610 | rows with a defaultActionId | Override with AI | none | `defaultActionId` (built-in with AI override) | not shown: no source sets defaultActionId, so 1.x never shows it; n/a |
 | G11 | App.tsx:4618 | overridden rows | Restore original | none | `isOverridden` | not shown: overrides cannot be created in 1.x, so the condition is unreachable; n/a |
-| G12 | App.tsx:4626 | AI chat rows and removable rows | Remove action | none | kind ai-chat, or `removable`; confirm: "Delete “<title>” from Nevermind" with Remove action / Cancel (App.tsx:3985-4000) | done for builder-made extension rows: confirmation, then the extension is uninstalled |
+| G12 | App.tsx:4626 | AI chat rows and removable rows | Remove action (extension rows); Remove Chat (AI chat rows) | none | extension rows: `removable`; confirm "Delete “<title>” from Nevermind" with Remove action / Cancel (App.tsx:3985-4000). AI chat rows: Remove Chat (ai-chat-lifecycle.ts:82-92), confirm `Remove "<title>" and its history?` with Remove Chat / Cancel | done: builder-made extension rows confirm, then the extension is uninstalled; AI chat rows confirm, then the chat is removed |
 
 Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias for “<title>”" (App.tsx:2789). Rows: "Save alias “<query>”" when the query is new (subtitle "Make “<title>” appear for this phrase"); one row per saved alias ("Remove this alias", Enter removes it); "Done" (subtitle "<n> aliases saved" or "Close without changes"). Aliases are stored in config.json `aliases` keyed by action ID (portable-config-schema.ts:13, 73). Aliases match root search (action-ranker.ts:19, action-ranking.ts:43) and are not drawn on the row.
 
@@ -119,7 +119,7 @@ Extension authoring actions (G6-G12) are missing in 2.0. See the report for the 
 |---|---|---|---|---|
 | H1 | ai-chat-views.ts:39 | Open (primary, the chat title) | always | done |
 | H2 | ai-created-actions.ts:110 | Tweak <title> (builder chats) | extension chat | missing |
-| H3 | (G12) | Remove action | kind ai-chat | done: confirmation "Delete “<title>” from Nevermind" (ConversationRow) |
+| H3 | ai-chat-lifecycle.ts:82-92 | Remove Chat | kind ai-chat | done: confirmation `Remove "<title>" and its history?` (Generated extension files stay. for builder chats), confirm with Remove Chat / Cancel (ConversationRow, removeConfirm) |
 
 H1-H3 are partly traced: the exact panel of an AI chat row was not read end to end.
 

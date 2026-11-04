@@ -67,3 +67,30 @@ func TestOpeningABuilderChatFromHistoryResumesIt(t *testing.T) {
 		t.Fatal("the list lost its new-chat row")
 	}
 }
+
+// TestChatRowMenuSaysRemoveChatAndConfirmsWithTheHistory checks a chat row in AI Chats offers Remove Chat, not Remove
+// action, and that the confirmation names the chat and its history, with Remove Chat as its first row.
+func TestChatRowMenuSaysRemoveChatAndConfirmsWithTheHistory(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.titledChat(chat.KindConversation, "Trip ideas")
+	r.palette.Show()
+	r.open(HistoryView(r.deps()))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	chooseDelete(r, tt)
+	top := r.palette.Top()
+	if top == nil || top.Title != "Confirm" {
+		t.Fatalf("top page = %v after Remove Chat, want the confirmation", top)
+	}
+	if want := `Remove "Trip ideas" and its history?`; top.Placeholder != want {
+		t.Fatalf("confirmation = %q, want %q", top.Placeholder, want)
+	}
+	if titles := resultTitles(top.Search("")); len(titles) < 2 || titles[0] != "Remove Chat" || titles[1] != "Cancel" {
+		t.Fatalf("confirmation rows = %v, want Remove Chat then Cancel", titles)
+	}
+	tt.Key(0, ui.KeyEnter)
+	if _, ok := r.service.Chat(record.ID); ok {
+		t.Fatal("Remove Chat in the confirmation kept the chat")
+	}
+}
