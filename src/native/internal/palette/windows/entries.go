@@ -44,14 +44,19 @@ func commandEntry(d Deps, command commands.Command) Entry {
 		Keywords: strings.Join(command.Keywords, " "),
 		Hidden:   true,
 		Run: func(search.Host) {
+			invocation := d.paletteInvocation()
 			d.runInBackground("command", command.Title, func(ctx context.Context) string {
-				return d.runner().Execute(ctx, command, d.paletteInvocation())
+				return d.runner().Execute(ctx, command, invocation)
 			})
 		},
 	}
 }
 
 func viewEntries(d Deps) []Entry {
+	return append(baseViewEntries(d), exactEntries(d)...)
+}
+
+func baseViewEntries(d Deps) []Entry {
 	return []Entry{
 		{
 			ID: switchEntryID, Title: "Switch Window", Subtitle: Subtitle, Icon: "app-window", Hidden: true,
@@ -71,7 +76,7 @@ func viewEntries(d Deps) []Entry {
 	}
 }
 
-const viewCount = 3
+const viewCount = 5
 
 const (
 	switchEntryID   = "window.switch"

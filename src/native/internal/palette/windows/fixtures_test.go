@@ -53,6 +53,7 @@ type desk struct {
 	notes    chan [2]string
 	target   windowmgmt.Target
 	focus    *paletteFocus
+	key      string
 }
 
 // paletteFocus stands in for the palette's focus hand-back: it hides nothing and focuses the target's window.
@@ -102,7 +103,7 @@ func buildDesk(t *testing.T, withWindows bool) desk {
 	focus := &paletteFocus{windows: windows, target: target, key: targetKey}
 	engine := windowmgmt.NewService(windowmgmt.Deps{Windows: windows, Focus: focus, Clock: fake.NewClock(), SelfPID: selfPID})
 	settings := windowmgmt.NewSettingsStore(nil)
-	d := desk{windows: windows, settings: settings, notes: make(chan [2]string, 8), target: target, focus: focus}
+	d := desk{windows: windows, settings: settings, notes: make(chan [2]string, 8), target: target, focus: focus, key: targetKey}
 	d.deps = Deps{
 		Engine:   engine,
 		Settings: settings,

@@ -45,3 +45,17 @@ func TestGoldenEdgeGapFollowsOuterGap(t *testing.T) {
 func TestGoldenCustomWindowCommandsNotice(t *testing.T) {
 	golden.AssertMatrix(t, "custom-notice", goldenPalette(t, customView()).View, windowGoldens)
 }
+
+func TestGoldenMoveWindowFormValid(t *testing.T) {
+	d := newDesk(t)
+	p := goldenPalette(t, exactView(d.deps, moveForm))
+	p.SetQuery("120 80")
+	golden.AssertMatrix(t, "move-valid", p.View, windowGoldens)
+}
+
+func TestGoldenResizeWindowFormRefused(t *testing.T) {
+	d := newDesk(t)
+	p := goldenPalette(t, exactView(d.deps, resizeForm))
+	p.SetQuery("0 50")
+	golden.AssertMatrix(t, "resize-refused", p.View, windowGoldens)
+}
