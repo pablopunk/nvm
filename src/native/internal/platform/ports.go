@@ -24,6 +24,7 @@ type Ports struct {
 	Processes    Processes
 	Helper       Helper
 	Hotkeys      Hotkeys
+	Focus        Focus
 	Tray         TrayHost
 	Autostart    Autostart
 	Windows      WindowManager

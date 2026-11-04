@@ -21,11 +21,16 @@ type Notice struct {
 // SetNotice shows n above the results, or clears the banner when n is nil.
 func (p *Palette) SetNotice(n *Notice) { p.notice = n }
 
-// noticeRow draws the banner, when there is one, and runs its action when the button is pressed.
+// noticeRow draws the banner, when there is one, and runs its action when the button is pressed. An alert is
+// announced once when it appears, so a screen reader user hears the problem without the banner repeating it.
 func (p *Palette) noticeRow(c *ui.Context) {
 	n := p.notice
 	if n == nil {
 		return
+	}
+	if n.Alert && p.announcedNotice != n {
+		p.announcedNotice = n
+		c.Announce(n.Title + ". " + n.Detail)
 	}
 	data := design.NoticeData{Icon: n.Icon, Title: n.Title, Detail: n.Detail, ActionLabel: n.ActionLabel, Alert: n.Alert}
 	if design.Notice(c, data) && n.Action != nil {

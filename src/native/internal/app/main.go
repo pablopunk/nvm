@@ -92,6 +92,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Clock:       clock,
 		Synchronous: synchronous,
 		Position:    p.placementOption(),
+		Focus:       p.focusOption(),
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.showApps,
@@ -145,7 +146,7 @@ func (p *App) ready() {
 	p.Attach(p.panel)
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
-	p.panel.OnBlur(p.Hide)
+	p.panel.OnBlur(p.DismissOnBlur)
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()

@@ -24,8 +24,7 @@ const (
 // TestJourneyJ11TakenHotkeyShowsTheBannerAndTheRecoveryShortcut is the conflict path of J11 and the hotkey notice
 // of J25. A second copy on the same display cannot bind Alt+Shift+Space, so it opens once at launch with a banner
 // that names the recovery shortcut, opens with that shortcut, and places its palette centered on the display. The
-// first copy keeps its own shortcut. Saving a taken shortcut from the palette is not covered yet, and neither is
-// hiding the palette with its shortcut while it is shown (pressing the shortcut then does not hide it).
+// first copy keeps its own shortcut. Saving a taken shortcut from the palette is not covered yet.
 func TestJourneyJ11TakenHotkeyShowsTheBannerAndTheRecoveryShortcut(t *testing.T) {
 	first := Launch(t, Options{Run: "first"})
 	second := Launch(t, Options{Run: "second", AllowUnboundHotkey: true})

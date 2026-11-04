@@ -44,10 +44,10 @@ func (p *Palette) runAction(a search.Action) {
 	a.Run(p)
 	switch a.Dismiss {
 	case search.DismissAlways:
-		p.Hide()
+		p.hideAfterAction()
 	case search.DismissAuto:
 		if p.pushes == pushes {
-			p.Hide()
+			p.hideAfterAction()
 		}
 	}
 }

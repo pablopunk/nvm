@@ -44,3 +44,22 @@ func TestNoticeClearsWhenNil(t *testing.T) {
 		t.Fatal("the banner is still on screen after SetNotice(nil)")
 	}
 }
+
+// TestAlertNoticeIsAnnouncedOnce checks J27 for the hotkey banner: an alert is announced when it appears, and
+// redrawing it does not announce it again.
+func TestAlertNoticeIsAnnouncedOnce(t *testing.T) {
+	var ran []string
+	h := newHarness(t, rowsView("Root", &ran, "Alpha"), true)
+	h.p.SetNotice(&Notice{Title: "Alt+Shift+Space is unavailable", Detail: "Use Control+Alt+K to reopen Nevermind.", ActionLabel: "Change shortcut", Alert: true})
+	h.frame()
+	h.frame()
+	count := 0
+	for _, text := range h.tt.Announcements() {
+		if text == "Alt+Shift+Space is unavailable. Use Control+Alt+K to reopen Nevermind." {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("the alert was announced %d times, want once; announcements = %v", count, h.tt.Announcements())
+	}
+}
