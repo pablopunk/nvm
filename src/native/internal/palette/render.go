@@ -54,12 +54,13 @@ func (p *Palette) viewThemed(c *ui.Context) {
 // searchRow is the field at the top of the pane; the design package draws it and reports what happened.
 func (p *Palette) searchRow(c *ui.Context, v *View) {
 	data := design.SearchData{
-		HideInput: v.HideInput,
-		Back:      len(p.stack) > 1,
-		Query:     &p.query,
-		Input:     &p.input,
-		AIHint:    len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
-		Concealed: v.Concealed,
+		HideInput:  v.HideInput,
+		Back:       len(p.stack) > 1,
+		Query:      &p.query,
+		Input:      &p.input,
+		CaretAtEnd: p.takeCaretToEnd(),
+		AIHint:     len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
+		Concealed:  v.Concealed,
 	}
 	if v.HideInput {
 		data.Title = v.Title

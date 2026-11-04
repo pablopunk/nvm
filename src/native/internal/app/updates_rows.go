@@ -31,15 +31,17 @@ func updateAccessory(state update.State) string {
 		return "Failed"
 	case update.StatusUnsupported:
 		return "Unavailable"
+	case update.StatusCurrent:
+		return "Up to date"
 	}
-	return "Up to date"
+	return "Not checked"
 }
 
 // toggleUpdateChannel switches between stable and nightly and checks the new channel at once. A switch is refused
-// while a downloaded update waits for its restart.
+// while a downloaded update waits for its restart, and in a build that cannot update, with the reason.
 func (p *App) toggleUpdateChannel() error {
 	if p.updates == nil {
-		return nil
+		return update.ErrChannelUnavailable
 	}
 	if err := p.updates.SetChannel(p.updates.Channel().Other()); err != nil {
 		return err

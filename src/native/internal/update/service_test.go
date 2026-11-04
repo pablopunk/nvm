@@ -112,10 +112,10 @@ func TestSameAndOlderVersionsAreNeverOfferedOrDownloaded(t *testing.T) {
 	for _, version := range []string{running, "1.9.0", "2.0.0-next.3"} {
 		e := updatefake.NewEngine([]updatefake.Check{offering(version)})
 		svc, rec := newService(e, nil)
-		if got := svc.Check(context.Background()); got.Status != update.StatusIdle {
-			t.Fatalf("offer %s: status = %q, want idle", version, got.Status)
+		if got := svc.Check(context.Background()); got.Status != update.StatusCurrent {
+			t.Fatalf("offer %s: status = %q, want current", version, got.Status)
 		}
-		rec.await(t, update.StatusIdle)
+		rec.await(t, update.StatusCurrent)
 		if e.Installs() != 0 {
 			t.Fatalf("offer %s was downloaded", version)
 		}
@@ -125,8 +125,23 @@ func TestSameAndOlderVersionsAreNeverOfferedOrDownloaded(t *testing.T) {
 func TestNoNewerVersionIsUpToDate(t *testing.T) {
 	e := updatefake.NewEngine([]updatefake.Check{{Found: false}})
 	svc, _ := newService(e, nil)
-	if got := svc.Check(context.Background()); got.Status != update.StatusIdle || update.Message(got) != "Nevermind is up to date" {
+	if got := svc.Check(context.Background()); got.Status != update.StatusCurrent || update.Message(got) != "Nevermind is up to date" {
 		t.Fatalf("state = %+v", got)
+	}
+}
+
+// TestBuildThatCannotUpdateSaysSoBeforeAnyCheck: the page must not show "up to date" or "not checked" in a build with no
+// updater, and a channel switch there is refused with the reason instead of being saved silently.
+func TestBuildThatCannotUpdateSaysSoBeforeAnyCheck(t *testing.T) {
+	svc, _ := newService(updatefake.Disabled(), nil)
+	if got := svc.State(); got.Status != update.StatusUnsupported || update.Message(got) != "Updates are not available in this build yet" {
+		t.Fatalf("state = %+v, want unsupported before any check", got)
+	}
+	if err := svc.SetChannel(update.ChannelNightly); !errors.Is(err, update.ErrChannelUnavailable) {
+		t.Fatalf("switch = %v, want ErrChannelUnavailable", err)
+	}
+	if svc.Channel() != update.ChannelStable {
+		t.Fatalf("channel = %q after a refused switch, want stable", svc.Channel())
 	}
 }
 
@@ -282,10 +297,10 @@ func TestRunChecksAfterTheStartupDelayThenEveryInterval(t *testing.T) {
 		t.Fatal("a check ran before the startup delay")
 	}
 	clock.Advance(update.StartupDelay)
-	rec.await(t, update.StatusIdle)
+	rec.await(t, update.StatusCurrent)
 	clock.AwaitTimerDueIn(update.CheckInterval)
 	clock.Advance(update.CheckInterval)
-	rec.await(t, update.StatusIdle)
+	rec.await(t, update.StatusCurrent)
 	stop()
 	<-done
 	if e.Checks() != 2 {

@@ -17,14 +17,23 @@ const (
 // returns to the list; Cancel returns and leaves the extension off.
 func (p *App) extensionReviewView(ctl extensionController, l manager.Listing) *palette.View {
 	return &palette.View{
-		Title: "Review " + extensionTitle(l), Placeholder: "Review extension",
+		Title: "Review " + extensionTitle(l), HideInput: true,
 		Search: func(string) []search.Item { return extensionReviewRows(ctl, l) },
 	}
 }
 
+// extensionDescription is the manifest's subtitle, or a neutral line when the extension has none.
+func extensionDescription(l manager.Listing) string {
+	if l.Subtitle == "" {
+		return "No description"
+	}
+	return l.Subtitle
+}
+
 func extensionReviewRows(ctl extensionController, l manager.Listing) []search.Item {
 	rows := []search.Item{
-		{Section: l.ID, Title: "Enable", Subtitle: "Starts it now and keeps it on after restart", Icon: "power", Tone: "green", Prominent: true,
+		{Section: extensionTitle(l), Title: extensionDescription(l), Icon: "file-text", Disabled: true},
+		{Title: "Enable", Subtitle: "Starts it now and keeps it on after restart", Icon: "power", Tone: "green", Prominent: true,
 			Actions: []search.Action{{Title: "Enable", Dismiss: search.DismissNever, Run: func(h search.Host) {
 				enableFromReview(ctl, l.ID, h)
 			}}}},
@@ -47,7 +56,7 @@ func enableFromReview(ctl extensionController, id string, h search.Host) {
 // extensionCapabilityRows lists what the extension declares. An unknown capability is shown as such, never hidden.
 func extensionCapabilityRows(l manager.Listing) []search.Item {
 	if len(l.Capabilities) == 0 {
-		return []search.Item{{Section: capabilitySection, Title: "None declared", Subtitle: "The extension did not say what it does", Icon: "lock", Tone: "gray"}}
+		return []search.Item{{Section: capabilitySection, Title: "None declared", Icon: "lock", Tone: "gray"}}
 	}
 	rows := make([]search.Item, 0, len(l.Capabilities))
 	for i, capability := range l.Capabilities {

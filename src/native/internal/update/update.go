@@ -11,6 +11,7 @@ type Status string
 // The statuses an updater reports.
 const (
 	StatusIdle        Status = "idle"
+	StatusCurrent     Status = "current"
 	StatusUnsupported Status = "unsupported"
 	StatusChecking    Status = "checking"
 	StatusAvailable   Status = "available"
@@ -90,8 +91,10 @@ func Message(s State) string {
 		return failurePrefix(s.Stage) + s.Message
 	case StatusUnsupported:
 		return unsupportedMessage
-	default:
+	case StatusCurrent:
 		return "Nevermind is up to date"
+	default:
+		return "Updates have not been checked yet"
 	}
 }
 

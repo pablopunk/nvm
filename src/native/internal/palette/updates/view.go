@@ -64,9 +64,10 @@ func rows(in Snapshot, a Actions) []search.Item {
 	items := []search.Item{{
 		Kind:       search.KindCommands,
 		Title:      StatusLine(in.State),
-		Subtitle:   in.Channel.Label() + " channel · " + checkEvery,
+		Subtitle:   statusSubtitle(in),
 		Icon:       StatusIcon(in.State.Status),
 		Contextual: in.State.Status == update.StatusFailed,
+		Disabled:   true,
 	}}
 	if in.State.Status == update.StatusDownloaded {
 		items = append(items, search.Item{Kind: search.KindCommands, Title: "Restart to Update", Subtitle: "Nevermind " + in.State.LatestVersion + " is installed; restart to run it", Icon: "rotate-ccw", Prominent: true,
@@ -82,7 +83,7 @@ func rows(in Snapshot, a Actions) []search.Item {
 				a.Check()
 				h.Refresh()
 			}}}},
-		search.Item{Kind: search.KindCommands, Title: "Update Channel", Subtitle: channelSubtitle(in.Channel), Accessory: in.Channel.Label(), Icon: "shield-check",
+		search.Item{Kind: search.KindCommands, Title: "Update Channel", Subtitle: channelSubtitle(in), Accessory: in.Channel.Label(), Icon: "shield-check",
 			Actions: []search.Action{{Title: "Switch", Dismiss: search.DismissNever, Run: func(h search.Host) {
 				if err := a.ToggleChannel(); err != nil {
 					h.Toast(err.Error())
@@ -93,8 +94,19 @@ func rows(in Snapshot, a Actions) []search.Item {
 	return items
 }
 
-func channelSubtitle(channel update.Channel) string {
-	if channel == update.ChannelNightly {
+// statusSubtitle names the channel and the schedule, but only in a build that checks: an unsupported build checks nothing.
+func statusSubtitle(in Snapshot) string {
+	if in.State.Status == update.StatusUnsupported {
+		return ""
+	}
+	return in.Channel.Label() + " channel · " + checkEvery
+}
+
+func channelSubtitle(in Snapshot) string {
+	switch {
+	case in.State.Status == update.StatusUnsupported:
+		return "Not available in this build yet"
+	case in.Channel == update.ChannelNightly:
 		return "Includes nightly prereleases; a final release still wins when newer"
 	}
 	return "Final releases only"
