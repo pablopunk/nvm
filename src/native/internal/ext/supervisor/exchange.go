@@ -18,6 +18,8 @@ type childProcess struct {
 	lines      <-chan lineResult
 	done       chan struct{}
 	generation uint64
+	// methods are the protocol methods the child's source declared in its ready line.
+	methods []string
 }
 
 // lineResult is one line from the child, or the final result when the child ends: the error that stopped
