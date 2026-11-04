@@ -23,9 +23,9 @@ func (s *sweepSpy) GC(refs clipboard.GCRefs) clipboard.GCResult {
 // refsStub is a trusted history with no pictures, enough for the cleanup to be wired.
 type refsStub struct{}
 
-func (refsStub) Trusted() bool                             { return true }
-func (refsStub) ImageNames() (map[string]bool, error)      { return map[string]bool{}, nil }
-func (refsStub) HasImage(name string) bool                 { return false }
+func (refsStub) Trusted() bool                        { return true }
+func (refsStub) ImageNames() (map[string]bool, error) { return map[string]bool{}, nil }
+func (refsStub) HasImage(name string) bool            { return false }
 
 func newCleanupScheduler(t *testing.T, clock *fake.Clock, spy *sweepSpy) *jobs.Scheduler {
 	t.Helper()

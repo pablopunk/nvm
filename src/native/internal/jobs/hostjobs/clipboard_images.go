@@ -26,10 +26,10 @@ type ImageSweeper interface {
 // listing) deletes nothing and is not a failure of the job.
 func ClipboardImageCleanup(images ImageSweeper, refs clipboard.GCRefs) jobs.Definition {
 	return jobs.Definition{
-		ID:      ClipboardImageCleanupID,
-		Title:   "Clipboard Image Cleanup",
-		Owner:   jobs.OwnerHost,
-		Scope:   "cache",
+		ID:    ClipboardImageCleanupID,
+		Title: "Clipboard Image Cleanup",
+		Owner: jobs.OwnerHost,
+		Scope: "cache",
 		Triggers: []jobs.Trigger{{
 			Kind:  jobs.TriggerInterval,
 			Every: ClipboardImageCleanupEvery,

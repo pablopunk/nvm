@@ -13,11 +13,11 @@ import (
 
 // fakeSource keeps the jobs the page shows and records the controls it was asked to use.
 type fakeSource struct {
-	jobs     []jobs.Snapshot
-	runErr   error
-	ran      []string
-	enabled  map[string]bool
-	cleared  []string
+	jobs    []jobs.Snapshot
+	runErr  error
+	ran     []string
+	enabled map[string]bool
+	cleared []string
 }
 
 func (f *fakeSource) Snapshot() []jobs.Snapshot { return f.jobs }
