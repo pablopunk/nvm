@@ -216,6 +216,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
@@ -793,6 +812,25 @@
         "id": "",
         "icon": "timer",
         "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Commands",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

@@ -106,6 +106,27 @@ func (c *Clock) AwaitTimers(n int) {
 	}
 }
 
+// AwaitTimerDueIn blocks until an active timer is due exactly d from now. Unlike AwaitTimers it cannot be
+// satisfied by an unrelated or abandoned timer (an After that lost a select stays pending forever), so a test
+// advancing by d is sure the goroutine it means is the one waiting.
+func (c *Clock) AwaitTimerDueIn(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for !c.hasTimerDueLocked(c.now.Add(d)) {
+		c.cond.Wait()
+	}
+}
+
+// hasTimerDueLocked reports whether an active timer's deadline is exactly at. The caller holds c.mu.
+func (c *Clock) hasTimerDueLocked(at time.Time) bool {
+	for _, timer := range c.timers {
+		if timer.active && timer.deadline.Equal(at) {
+			return true
+		}
+	}
+	return false
+}
+
 // PendingTimers reports how many timers and tickers are active.
 func (c *Clock) PendingTimers() int {
 	c.mu.Lock()

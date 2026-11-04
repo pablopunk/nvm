@@ -23,13 +23,16 @@ func NewPorts() platform.Ports {
 		Screens:      screens{},
 		Notifier:     notifier{},
 		Keychain:     keychain{},
+		DeepLinks:    deepLinks{},
 		Processes:    processes{},
 		Helper:       helper{},
 		Hotkeys:      hotkeys{},
+		Focus:        newFocus(),
 		Tray:         trayHost{},
 		Autostart:    autostart{},
 		System:       newSystem(helper{}, shell{}, env.goos, env.home, env.user),
 		Permissions:  permissions{},
+		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
 	}
 }

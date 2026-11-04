@@ -34,6 +34,9 @@ const (
 	CapabilitySystemLogOut     Capability = "system.logOut"
 	CapabilitySystemEmptyTrash Capability = "system.emptyTrash"
 	CapabilitySystemSettings   Capability = "system.settings"
+	CapabilityWindowPlacement  Capability = "window.placement"
+	CapabilityWindowManagement Capability = "windows.manage"
+	CapabilityFocusReturn      Capability = "focus.return"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -46,6 +49,8 @@ func AllCapabilities() []Capability {
 		CapabilityShellTrash, CapabilitySystemEmptyTrash, CapabilitySystemLock, CapabilitySystemLogOut,
 		CapabilitySystemRestart, CapabilitySystemSettings, CapabilitySystemShutDown, CapabilitySystemSleep,
 		CapabilityTrayMenu,
+		CapabilityShellTrash, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
+		CapabilityFocusReturn,
 	}
 	slices.Sort(list)
 	return list

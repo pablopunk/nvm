@@ -951,3 +951,14 @@ What the examples show about the design:
 3. **Partial item patches.** Deferred until a measured need.
 4. **File move and rename.** Not in the TypeScript API and not in v1. A background job that organises files will need it; it should be a dedicated, confirmed action rather than a general file primitive.
 5. **Author-experience test (PLAN WP3.1 UX).** This document has not yet been tested by an agent writing extensions from prompts. The success rate is the input the runtime decision still needs.
+
+## 17. Host runtime as built (WP3.2)
+
+Code: `internal/ext/{bundle,install,enablement,protocol,child,supervisor,manager}`. Extensions run in a child process, the same binary started with `protocol.ChildFlag`. The child interprets the source with Yaegi.
+
+- **Layout on disk.** One folder per extension, named after its id, holding `extension.json` (the manifest the host reviews) and `main.go`. Loading never runs extension code. Dropped-in folders are disabled until the user enables them; enabled state lives in one store document.
+- **Source convention (interim).** Extension source imports the standard library only. Entry points are top-level functions named `Commands`, `RootItems`, `SearchItems` and `RunAction`; each takes a plain map as its context and returns JSON-shaped values. The `api` package is not exported to the interpreter yet: a generated symbol table is about 1,000 lines and the file-size ratchet forbids that. Closing this gap is open work.
+- **Budgets (B8).** Search and root: 20 ms soft (diagnostic), 100 ms hard (the child is killed). Commands: 1 s hard. Run: 5 s hard. Child start: 2 s.
+- **Failure states.** `idle`, `starting`, `running`, `failed` (restart after exponential backoff, 250 ms doubling to 30 s), `broken` (the source does not load; not retried until the folder changes), and `disabled` (three failures in one minute; cleared by a reset or a re-enable). Every failure carries a reason the manager view can show.
+- **Isolation.** A recovered panic is an internal failure with a reference, and the child keeps running. A goroutine panic, a line over 1 MiB, a hard-budget overrun and a resident size over the limit end the child. The address-space cap is set inside the child on Linux only.
+- **Hot reload.** A changed folder replaces its runtime; the old child stops before the new one starts. A failed install changes nothing visible.

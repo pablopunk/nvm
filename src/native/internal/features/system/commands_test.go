@@ -35,7 +35,7 @@ func TestCommandsAreOmittedWhenTheSystemLacksTheirCapability(t *testing.T) {
 func TestCommandsKeepTheCatalogOrderWhenEverythingIsSupported(t *testing.T) {
 	all := capsOf(platform.AllCapabilities()...)
 	got := commandIDs(Commands(all, "Open System Settings"))
-	want := []CommandID{CommandLockScreen, CommandSleep, CommandRestart, CommandShutDown, CommandLogOut, CommandEmptyTrash, CommandSystemPanes}
+	want := []CommandID{CommandLockScreen, CommandSleep, CommandLogOut, CommandRestart, CommandShutDown, CommandEmptyTrash, CommandSystemPanes}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("Commands = %v, want %v", got, want)
 	}

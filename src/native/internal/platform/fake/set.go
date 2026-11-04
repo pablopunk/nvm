@@ -16,13 +16,16 @@ type Set struct {
 	Screens      *Screens
 	Notifier     *Notifier
 	Keychain     *Keychain
+	DeepLinks    *DeepLinks
 	Processes    *Processes
 	Helper       *Helper
 	Hotkeys      *Hotkeys
+	Focus        *Focus
 	Tray         *TrayHost
 	Autostart    *Autostart
 	System       *System
 	Permissions  *Permissions
+	Windows      *WindowManager
 	Capabilities platform.Capabilities
 }
 
@@ -41,13 +44,16 @@ func NewSet() *Set {
 		Screens:      NewScreens(),
 		Notifier:     NewNotifier(),
 		Keychain:     NewKeychain(),
+		DeepLinks:    NewDeepLinks(),
 		Processes:    NewProcesses(),
 		Helper:       NewHelper(),
 		Hotkeys:      NewHotkeys(),
+		Focus:        NewFocus(),
 		Tray:         NewTrayHost(),
 		Autostart:    NewAutostart(),
 		System:       NewSystem(),
 		Permissions:  NewPermissions(),
+		Windows:      NewWindowManager(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -67,13 +73,16 @@ func (s *Set) Ports() platform.Ports {
 		Screens:      s.Screens,
 		Notifier:     s.Notifier,
 		Keychain:     s.Keychain,
+		DeepLinks:    s.DeepLinks,
 		Processes:    s.Processes,
 		Helper:       s.Helper,
 		Hotkeys:      s.Hotkeys,
+		Focus:        s.Focus,
 		Tray:         s.Tray,
 		Autostart:    s.Autostart,
 		System:       s.System,
 		Permissions:  s.Permissions,
+		Windows:      s.Windows,
 		Capabilities: s.Capabilities,
 	}
 }

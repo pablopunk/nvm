@@ -77,6 +77,7 @@ func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Locati
 			cache = rateCache{doc: p.rates}
 		}
 	}
+	p.attachAccount(ports, st)
 	rates, err := calc.NewRateService(ports.HTTP, ports.Clock, cache)
 	if err != nil {
 		log.Println("calculator rates:", err)

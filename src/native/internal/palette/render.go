@@ -34,6 +34,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
 		p.searchRow(c, v)
+		p.noticeRow(c)
 		design.Etched(c)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
 			if v.Body != nil {

@@ -3,7 +3,6 @@ package app
 import (
 	"github.com/pablopunk/nvm/native/internal/search"
 	"net/url"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -70,11 +69,15 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Quit All Apps", Keywords: "quit all apps close everything", Icon: "power", Subtitle: "Review and quit running apps", Run: func(h search.Host) { h.Push(p.quitAllView()) }},
 		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
 		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
+	}
+	cmds = append(cmds, p.systemCommands()...)
+	cmds = append(cmds, []command{
+		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "lock", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
-	}
-	cmds = append(cmds, p.systemCommands()...)
+	}...)
+	cmds = append(cmds, p.placeCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
@@ -102,21 +105,12 @@ func (p *App) settingsView() *palette.View {
 		Title: "Settings", Placeholder: "Search Settings",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			auth := "Not signed in"
-			if a := loadAuth(); a != nil {
-				auth = "Signed in" + func() string {
-					if a.Email != "" {
-						return " as " + a.Email
-					}
-					return ""
-				}()
-			}
 			clip := "On"
 			if p.S.ClipOff {
 				clip = "Off"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
+				{Title: "Palette Hotkey", Accessory: shortcutLabelOf(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
@@ -142,7 +136,7 @@ func (p *App) settingsView() *palette.View {
 					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
-				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
+				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
 			rows = slices.Insert(rows, 4, p.launchAtLoginRows()...)
@@ -150,30 +144,6 @@ func (p *App) settingsView() *palette.View {
 				return rows
 			}
 			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
-		},
-	}
-}
-
-func (p *App) hotkeyView() *palette.View {
-	return &palette.View{
-		Title: "Hotkey", Placeholder: "Press keys, e.g. Alt+Shift+Space",
-		Search: func(q string) []search.Item {
-			if q == "" {
-				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
-			}
-			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
-				old := p.S.Hotkey
-				mygo.GlobalShortcut.Unregister(old)
-				if err := mygo.GlobalShortcut.Register(q, p.Toggle); err != nil {
-					_ = mygo.GlobalShortcut.Register(old, p.Toggle)
-					h.Toast("Invalid or taken: " + err.Error())
-					return
-				}
-				p.S.Hotkey = q
-				p.S.save()
-				h.Pop()
-				h.Toast("Hotkey set to " + q)
-			}}}}}
 		},
 	}
 }

@@ -80,7 +80,7 @@ func (p *App) guideItem(row settingsfeat.GuideRow) search.Item {
 	item := search.Item{ID: row.ID, Title: row.Title, Subtitle: row.Subtitle, Icon: row.Icon}
 	switch row.Action {
 	case settingsfeat.GuideSetShortcut:
-		item.Actions = []search.Action{{Title: "Set Shortcut", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}
+		item.Actions = []search.Action{{Title: "Set Shortcut", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}
 	case settingsfeat.GuideFinish:
 		item.Actions = []search.Action{{Title: "Done for now", Run: func(h search.Host) {
 			p.completeGuide()

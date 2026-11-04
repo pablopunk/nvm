@@ -20,12 +20,15 @@ type Ports struct {
 	Screens      Screens
 	Notifier     Notifier
 	Keychain     Keychain
+	DeepLinks    DeepLinks
 	Processes    Processes
 	Helper       Helper
 	Hotkeys      Hotkeys
+	Focus        Focus
 	Tray         TrayHost
 	Autostart    Autostart
 	System       System
 	Permissions  Permissions
+	Windows      WindowManager
 	Capabilities Capabilities
 }

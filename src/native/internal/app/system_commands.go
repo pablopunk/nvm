@@ -20,6 +20,12 @@ func (p *App) systemCommands() []command {
 	for _, c := range p.systemSvc.Commands() {
 		out = append(out, p.systemCommand(c))
 	}
+	return out
+}
+
+// placeCommands lists the home folders as palette commands, after the other commands, as they always were.
+func (p *App) placeCommands() []command {
+	var out []command
 	for _, place := range p.systemSvc.Places() {
 		out = append(out, p.placeCommand(place))
 	}

@@ -36,9 +36,9 @@ func catalog(settingsTitle string) []Command {
 	return []Command{
 		{ID: CommandLockScreen, Title: "Lock Screen", Subtitle: "Secure this computer", Keywords: "lock screen security", Icon: "lock", capability: platform.CapabilitySystemLock},
 		{ID: CommandSleep, Title: "Sleep", Subtitle: "Put this computer to sleep", Keywords: "sleep suspend", Icon: "moon", capability: platform.CapabilitySystemSleep},
+		{ID: CommandLogOut, Title: "Log Out", Subtitle: "End the current session", Keywords: "logout sign out", Icon: "log-out", Destructive: true, Confirm: "End the current session. Unsaved work in open apps may be lost.", capability: platform.CapabilitySystemLogOut},
 		{ID: CommandRestart, Title: "Restart", Subtitle: "Restart this computer", Keywords: "reboot restart", Icon: "rotate-ccw", Tone: "orange", Destructive: true, Confirm: "Reboot this computer. Unsaved work in open apps may be lost.", capability: platform.CapabilitySystemRestart},
 		{ID: CommandShutDown, Title: "Shut Down", Subtitle: "Power off this computer", Keywords: "shutdown power off", Icon: "power", Tone: "red", Destructive: true, Confirm: "Power off this computer. Unsaved work in open apps may be lost.", capability: platform.CapabilitySystemShutDown},
-		{ID: CommandLogOut, Title: "Log Out", Subtitle: "End the current session", Keywords: "logout sign out", Icon: "log-out", Destructive: true, Confirm: "End the current session. Unsaved work in open apps may be lost.", capability: platform.CapabilitySystemLogOut},
 		{ID: CommandEmptyTrash, Title: "Empty Trash", Subtitle: "Permanently delete trashed files", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Destructive: true, Confirm: "Permanently delete the files in the Trash. This cannot be undone.", capability: platform.CapabilitySystemEmptyTrash},
 		{ID: CommandSystemPanes, Title: settingsTitle, Subtitle: "Open system preferences", Keywords: "settings preferences system", Icon: "settings", capability: platform.CapabilitySystemSettings},
 	}

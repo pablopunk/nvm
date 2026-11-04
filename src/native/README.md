@@ -80,7 +80,7 @@ microphone/dictation (not ported), window management (macOS-only in the product;
 - AI: model tiers ("Fast"), tool use / agent loop, images, chat retention, conversation actions
 - Extension API parity (declarative views, actions, jobs, capabilities, trust model); today only `Search`/`MenuBar`
 - Dictation, window management, permissions, updates, keyboard-shortcut manager, background tasks, diagnostics
-- Onboarding / "Welcome", hotkey notice, backend status rows
+- Onboarding / "Welcome", backend status rows
 - Packaging, signing, auto-update (`mygo build`), Windows/Linux parity pass, tests (`ui.Tester`)
 
 ## Layout

@@ -17,16 +17,11 @@ const xdotoolBinary = "xdotool"
 // pasteSupported reports whether the session can paste: an X11 display, xdotool on the PATH, and no Wayland
 // session (X11 apps under Xwayland receive no keys from xdotool on Wayland).
 func pasteSupported() bool {
-	if isWaylandSession() || os.Getenv("DISPLAY") == "" {
+	if isWaylandSession("linux", os.Getenv) || os.Getenv("DISPLAY") == "" {
 		return false
 	}
 	_, err := exec.LookPath(xdotoolBinary)
 	return err == nil
-}
-
-// isWaylandSession reports whether the desktop session runs on Wayland.
-func isWaylandSession() bool {
-	return os.Getenv("XDG_SESSION_TYPE") == "wayland" || os.Getenv("WAYLAND_DISPLAY") != ""
 }
 
 // pasteGesture sends Ctrl+V to the focused X11 window with xdotool, after checking the focused window's class
