@@ -15,6 +15,10 @@ func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
 		design.UserBubble(c, m.Text)
 	case chat.AuthorNotice:
 		noticeCard(c, *m.Notice)
+	case chat.AuthorTool:
+		if m.Tool != nil {
+			toolRow(c, m)
+		}
 	default:
 		reply(c, deps, m, last)
 	}

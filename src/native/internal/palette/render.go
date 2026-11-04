@@ -218,8 +218,8 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 		if len(it.Actions) > 1 {
 			data.Secondary = &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
 		}
-	} else if v.Hint != "" {
-		data.Hint = KeyLabel(v.Hint)
+	} else if hint := viewHint(v); hint != "" {
+		data.Hint = KeyLabel(hint)
 	}
 	design.Footer(c, data)
 }
@@ -241,4 +241,12 @@ func accessoryLabel(v *View) string {
 		return ""
 	}
 	return v.Accessory.Label()
+}
+
+// viewHint is the right footer text of a view: its HintFn when it has one, its fixed Hint otherwise.
+func viewHint(v *View) string {
+	if v.HintFn != nil {
+		return v.HintFn()
+	}
+	return v.Hint
 }

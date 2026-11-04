@@ -26,6 +26,8 @@ func (p *page) key(c *ui.Context, h search.Host) bool {
 	switch {
 	case c.Shortcut(0, ui.KeyEscape) && p.deps.Service.Busy(p.id):
 		p.deps.Service.Stop(p.id)
+	case c.Shortcut(palette.Mod, ui.KeyD) && p.deps.Service.Awaiting(p.id):
+		p.report(p.deps.Service.Decide(p.id, false))
 	case c.Shortcut(palette.Mod, ui.KeyR):
 		p.report(p.deps.Service.Regenerate(p.id))
 	case c.Shortcut(palette.Mod|ui.Alt, ui.KeyC):

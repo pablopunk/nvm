@@ -1,6 +1,6 @@
 # WP2.4a agent loop spike
 
-Status: report for review. Experimental prototype in `src/native/internal/ai/spike`. Nothing in the app imports it.
+Status: report for review. The prototype in `src/native/internal/ai/spike` was the basis of WP2.4b and has been removed; the loop now lives in `internal/ai/agent`, the path guard in `internal/ai/guard`, and the tools in `internal/ai/tools`.
 Scope: PLAN.md decision D2 (AI agent loop), section 0 table, WP2.4a and WP3.9.
 
 ## Decision summary

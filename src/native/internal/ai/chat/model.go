@@ -26,7 +26,8 @@ const (
 	KindBuilder      Kind = "builder"
 )
 
-// Author says who wrote a message. Notices are in the transcript so that a refusal stays visible after a restart.
+// Author says who wrote a message. Notices are in the transcript so that a refusal stays visible after a restart, and a
+// tool entry is one call the assistant made, shown as an activity row.
 type Author string
 
 // The message authors.
@@ -34,9 +35,11 @@ const (
 	AuthorUser      Author = "user"
 	AuthorAssistant Author = "assistant"
 	AuthorNotice    Author = "notice"
+	AuthorTool      Author = "tool"
 )
 
-// Status is where an assistant message stands. Only a streaming message accepts text.
+// Status is where a message stands. Only a streaming message accepts text. Tool entries use the running, awaiting
+// and end statuses.
 type Status string
 
 // The message statuses.
@@ -44,15 +47,33 @@ const (
 	StatusStreaming Status = "streaming"
 	StatusComplete  Status = "complete"
 	StatusStopped   Status = "stopped"
+	StatusRunning   Status = "running"
+	StatusAwaiting  Status = "awaiting"
+	StatusFailed    Status = "failed"
+	StatusRefused   Status = "refused"
+	StatusCancelled Status = "cancelled"
 )
 
-// Message is one entry of a transcript. Notice is set for AuthorNotice messages only.
+// ToolRun describes one tool call in the transcript: what it is for, its arguments in short form, and the line that
+// says how it ended. The text of its message is the result the model read.
+type ToolRun struct {
+	CallID  string `json:"callId"`
+	Name    string `json:"name"`
+	Label   string `json:"label"`
+	Input   string `json:"input,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
+}
+
+// Message is one entry of a transcript. Notice is set for AuthorNotice messages only. Calls are the tool calls an
+// assistant message ended with; Tool describes a tool entry, which is one call shown as an activity row.
 type Message struct {
-	Author Author    `json:"author"`
-	Text   string    `json:"text"`
-	Status Status    `json:"status"`
-	Notice *Notice   `json:"notice,omitempty"`
-	At     time.Time `json:"at"`
+	Author Author             `json:"author"`
+	Text   string             `json:"text"`
+	Status Status             `json:"status"`
+	Notice *Notice            `json:"notice,omitempty"`
+	Calls  []backend.ToolCall `json:"calls,omitempty"`
+	Tool   *ToolRun           `json:"tool,omitempty"`
+	At     time.Time          `json:"at"`
 }
 
 // Chat is one conversation: its kind and tier, its transcript and when it was last changed.
@@ -93,6 +114,16 @@ func LastReply(chat Chat) (string, bool) {
 func Busy(chat Chat) bool {
 	for _, message := range chat.Messages {
 		if message.Status == StatusStreaming {
+			return true
+		}
+	}
+	return false
+}
+
+// AwaitingAnswer reports whether a tool call of the chat waits for the user's answer, as the transcript shows it.
+func AwaitingAnswer(chat Chat) bool {
+	for _, message := range chat.Messages {
+		if message.Author == AuthorTool && message.Status == StatusAwaiting {
 			return true
 		}
 	}
