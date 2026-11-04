@@ -78,12 +78,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for _, cmd := range p.commandSlots(in.timerOn) {
 		if isBuiltInSlot(cmd) {
-			for _, row := range builtInRows(p, cmd.builtIn, q) {
-				if id := builtInRowActionID(cmd.builtIn, row); id != "" {
-					row = p.withShortcutActions(row, id, in.shortcuts)
-				}
-				out = append(out, row)
-			}
+			out = append(out, p.builtInRootRows(cmd.builtIn, q, in)...)
 			continue
 		}
 		cmd := cmd

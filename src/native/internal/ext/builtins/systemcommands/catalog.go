@@ -34,6 +34,15 @@ func catalog(settingsCommand string) []command {
 	}
 }
 
+// Titles maps the op of each system command to its title, with settingsCommand as the System Settings title.
+func Titles(settingsCommand string) map[string]string {
+	titles := map[string]string{}
+	for _, c := range catalog(settingsCommand) {
+		titles[c.op] = c.title
+	}
+	return titles
+}
+
 // SupportedCount is how many of the commands the system supports, given whether it has a capability by name.
 func SupportedCount(hasCapability func(name string) bool) int {
 	count := 0

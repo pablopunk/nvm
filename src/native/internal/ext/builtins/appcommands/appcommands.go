@@ -18,9 +18,12 @@ const ID = "nevermind.app-commands"
 // QuitOp is the system operation that quits the app; the host runs it.
 const QuitOp = "quit"
 
+// QuitTitle is the title of the native command that quits the app, as 1.x titles it.
+const QuitTitle = "Quit Nevermind"
+
 // quitTitle and quitKeywords are the native command's, unchanged, so the root finds it as it always did.
 const (
-	quitTitle    = "Quit Nevermind"
+	quitTitle    = QuitTitle
 	quitKeywords = "quit exit nevermind"
 )
 

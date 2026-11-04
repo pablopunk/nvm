@@ -33,3 +33,15 @@ func TestSystemCommandRowKeepsItsShortcutUnderAStableID(t *testing.T) {
 		t.Fatalf("accessory = %q", row.Accessory)
 	}
 }
+
+// TestAliasFindsASystemRowWhoseTitleDoesNotMatch saves an alias of Lock Screen and searches the root with it.
+func TestAliasFindsASystemRowWhoseTitleDoesNotMatch(t *testing.T) {
+	p := goldenPalette(t)
+	if err := p.aliasStore().Add(shortcuts.CommandLockScreen, "zq locker"); err != nil {
+		t.Fatal(err)
+	}
+	goldenQuery(p, "zq locker")
+	if _, row := rootRowTitled(t, p, "Lock Screen"); row.Title != "Lock Screen" {
+		t.Fatal("the alias did not find Lock Screen")
+	}
+}
