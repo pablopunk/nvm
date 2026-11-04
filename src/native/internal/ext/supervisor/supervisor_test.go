@@ -327,6 +327,9 @@ func TestResidentWatchKillsAnOversizedChild(t *testing.T) {
 
 func TestMemoryBombHitsTheAddressSpaceCap(t *testing.T) {
 	requireUnixProcesses(t)
+	if raceEnabled {
+		t.Skip("the race runtime reserves more address space than the 2 GiB cap, so the child never starts; the non-race run covers the cap")
+	}
 	r := newRuntime(t, "acme.bomb", func(c *Config) { c.MemoryLimit = 2 << 30 })
 	defer r.Stop()
 	startAndWait(t, r)
