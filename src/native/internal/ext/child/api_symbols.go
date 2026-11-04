@@ -66,6 +66,7 @@ func init() {
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
+		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
 		"CodeInternal":                  reflect.ValueOf(api.CodeInternal),
 		"CodeInvalid":                   reflect.ValueOf(api.CodeInvalid),
@@ -1431,12 +1432,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Updates) State() api.U
 type _github_com_pablopunk_nvm_native_internal_ext_api_Views struct {
 	IValue          interface{}
 	WInvalidate     func()
+	WInvalidateRoot func()
 	WRefresh        func() api.Action
 	WRefreshMenuBar func()
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) Invalidate() {
 	W.WInvalidate()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) InvalidateRoot() {
+	W.WInvalidateRoot()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) Refresh() api.Action {
 	return W.WRefresh()

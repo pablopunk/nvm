@@ -91,6 +91,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		DataRoot:       filepath.Join(dataDir(), "extension-data"),
 		Home:           userHomeDir(),
 		MenuBarRefresh: p.refreshMenuBar,
+		RootRefresh:    p.refreshRootRows,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
 		AIQuota:        p.aiQuotas(),
@@ -144,6 +145,7 @@ func (p *App) extensionHistory() *clipboard.History {
 // child that finishes starting shows as Running, and the root, so its rows appear without a new query. It also asks
 // the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
 func (p *App) extensionsStateChanged() {
+	p.rootRows.reset()
 	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
 }
@@ -151,6 +153,19 @@ func (p *App) extensionsStateChanged() {
 // isExtensionStateView is true for the root and the Extensions list, the two views whose rows come from extension state.
 func isExtensionStateView(v *palette.View) bool {
 	return v.Title == extensionsViewTitle || v.Title == rootViewTitle
+}
+
+// refreshRootRows runs the root's rows again when the root is on top and shown, and asks only the extension that called.
+// An extension's InvalidateRoot call arrives on the child's exchange goroutine, and RefreshTop is safe from any
+// goroutine, so the call does not wait.
+func (p *App) refreshRootRows(extensionID string) {
+	p.rootRows.markPending(extensionID)
+	p.RefreshTop(isRootView)
+}
+
+// isRootView is true for the palette's first level.
+func isRootView(v *palette.View) bool {
+	return v.Title == rootViewTitle
 }
 
 // questionPresenter is the part of the palette a host question needs: it shows the palette when it is hidden, puts

@@ -150,6 +150,8 @@ type App struct {
 	hudWindow *mygo.Window
 	// extIndicators draws extension indicators on aiPanel, created on first use by the extension host.
 	extIndicators *extensionIndicators
+	// rootRows keeps each extension's root rows, so an InvalidateRoot refresh asks only the extension that asked.
+	rootRows rootRowCache
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

@@ -78,6 +78,9 @@ type Deps struct {
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
+	// RootRefresh asks the host to run the root's rows again. It must not block, as MenuBarRefresh. Nil makes the
+	// request a no-op.
+	RootRefresh func(extensionID string)
 }
 
 // documents are the extension's files: one store folder holds all of them.
@@ -103,6 +106,7 @@ type Handler struct {
 	indicatorUpdates *rateLimiter
 	ocrReads         *rateLimiter
 	screenReads      *rateLimiter
+	rootRefreshes    *rateLimiter
 	aiCalls          *aiquota.Window
 	ai               *aiState
 	openOnce         sync.Once
@@ -134,6 +138,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
 		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
 		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
+		rootRefreshes:    newBurstRateLimiter(deps.Clock, rootRefreshBurst, rootRefreshesPerMinute),
 		aiCalls:          aiCallWindow(deps, manifest.ID),
 		ai:               newAIState(),
 	}

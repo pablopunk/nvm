@@ -336,7 +336,7 @@ Rules:
 | `Windows` | `Create`, `Show`, `Hide`, `Toggle`, `Close` | Each returns an `Action`. |
 | `Navigation` | `Root`, `Push`, `Replace`, `Pop`, `Run` | Return `Result` values. Interfaces so tests can fake a Context. |
 | `Input` | `Prompt` | Returns an `Action` that collects fields one at a time. |
-| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar` | The visible view and the menu bar. |
+| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar`, `InvalidateRoot` | The visible view, the menu bar and the root's rows (section 26). |
 
 Go-specific decisions behind the table:
 
@@ -1095,4 +1095,5 @@ Code: `internal/app/extensions_rows.go` (`searchRow`, `scoreQueryFallback`).
 - **Query fallbacks (`Item.QueryFallback`, SearchItems only).** A fallback row is offered for every typed query, as 1.x did. It takes the fallback band (score 40): below rows whose words match the query (50 and up), above loose letter matches (20 and 10). Its declared `Score` is ignored. Learned ranking does not apply to folder extensions yet (section 23: `LearnKey` is built-ins only), so a folder fallback does not climb with use.
 - **Root.** RootItems ignore the flag. A fallback never shows at the empty root.
 - **Ties.** Rows of equal score keep the order of their sources (the root's source order), not 1.x's last-used and title tie break.
-- **Tests.** L1 and L2: `internal/app/extensions_fallback_test.go` runs the `acme.fallback` fixture in a child process against the golden palette (band, order, root exclusion).
+- **Root refresh (`Views().InvalidateRoot()`).** The caller is marked pending, and the palette runs the root again when the root is on top and shown. Only the pending extensions are asked again (`Manager.RootsOf`); the others' rows come from the last root. A state change resets the cache, so the next root asks every extension. While another view is on top the call does nothing, and the next root shown asks the pending extension. Calls are limited to five at once and 150 a minute per extension (1.x: five per 2 s, and 1.x clears only the caller's root cache entry). A call over the limit is ignored and logged as `extension.refresh.throttled`, with no error.
+- **Tests.** L1: `internal/ext/services/views_test.go` (the burst limit on the fake clock) and `internal/app/extensions_root_cache_test.go` (scope rules). L2: `internal/app/extensions_fallback_test.go` (band, order, root exclusion, against the golden palette), `internal/app/extensions_root_cache_test.go` (a refresh reruns the caller's root row), and `internal/ext/manager/root_refresh_test.go` (the `bump` action reaches the host hook; `RootsOf` asks only the marked extension).

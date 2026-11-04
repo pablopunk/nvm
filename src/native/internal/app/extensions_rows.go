@@ -28,7 +28,7 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 		return nil
 	}
 	var out []search.Item
-	for _, result := range m.Roots(ctx) {
+	for _, result := range e.p.rootRows.results(ctx, m) {
 		out = append(out, rootRowsFor(e.p, m, result)...)
 	}
 	for _, result := range m.Commands(ctx) {
