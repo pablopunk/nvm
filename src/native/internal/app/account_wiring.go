@@ -40,6 +40,7 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 		return
 	}
 	p.account = session
+	p.refreshBackendReport()
 }
 
 // accountDeps is the session wiring of this build. Only automation builds change it, to point the account at the

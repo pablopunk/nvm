@@ -12,6 +12,11 @@ import (
 // accountCommands are the root commands that log in or out, as 1.x's account root item does. Only the one the session
 // needs is listed: Log in while signed out, Log out while signed in.
 func (p *App) accountCommands() []command {
+	return append(p.signInOrOutCommands(), p.backendRootCommands()...)
+}
+
+// signInOrOutCommands is the one sign-in row the session needs.
+func (p *App) signInOrOutCommands() []command {
 	if p.signedIn() {
 		return []command{{Title: "Log out of Nevermind", Keywords: "logout log out sign out account nevermind disconnect", Icon: "user",
 			Subtitle: "Signed in as " + p.accountSource().Email, Run: p.signOutFromRoot}}

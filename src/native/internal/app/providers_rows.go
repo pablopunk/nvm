@@ -111,6 +111,9 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		if lq == "" {
 			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
 				it.Score = rootCommandScore(cmd.Title)
+				if cmd.rootScore != 0 {
+					it.Score = cmd.rootScore
+				}
 				out = append(out, it)
 			}
 			continue

@@ -6,7 +6,7 @@ import "testing"
 // to Nevermind and no Log out.
 func TestOnlyTheAccountCommandThatFitsTheSessionIsListed(t *testing.T) {
 	p := goldenPalette(t)
-	cmds := p.accountCommands()
+	cmds := p.signInOrOutCommands()
 	if len(cmds) != 1 || cmds[0].Title != "Log in to Nevermind" || cmds[0].Subtitle != "Connect this device to your Nevermind account" {
 		t.Fatalf("signed out, the account commands are %+v; want Log in to Nevermind alone", cmds)
 	}

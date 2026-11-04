@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"github.com/pablopunk/nvm/native/internal/backend"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -90,10 +92,12 @@ type App struct {
 
 	ports   platform.Ports
 	account *auth.Session
-	store   *store.Store
-	recents *store.Collection[emojiRecents]
-	rates   *store.Collection[rateDocument]
-	calc    *calc.Calculator
+	// backendReport is the last compatibility report the active backend gave; the status row reads it.
+	backendReport atomic.Pointer[backend.CompatReport]
+	store         *store.Store
+	recents       *store.Collection[emojiRecents]
+	rates         *store.Collection[rateDocument]
+	calc          *calc.Calculator
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.

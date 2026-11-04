@@ -50,7 +50,10 @@ func openURL(tpl, q string) func(h search.Host) {
 
 type command struct {
 	// ID names the command for shortcut bindings. Commands without a shortcut leave it empty.
-	ID                                    string
+	ID string
+	// rootScore is the command's score at the empty root when it is not the one of its title, such as a row whose
+	// title changes with its state.
+	rootScore                             int
 	Title, Keywords, Icon, Subtitle, Tone string
 	// PhraseMatch limits the title match to phrases and word prefixes, so a long list of commands does not answer
 	// every query with scattered letters. Keywords still match as aliases.

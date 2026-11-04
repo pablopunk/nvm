@@ -474,6 +474,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Open Settings",
         "subtitle": "Open system preferences",
         "section": "",
@@ -746,25 +765,6 @@
         "id": "",
         "icon": "sticky-note",
         "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictate",
-        "subtitle": "Start or stop cloud voice dictation",
-        "section": "",
-        "id": "",
-        "icon": "mic",
-        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -1886,6 +1886,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Conversations",
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
@@ -2044,6 +2063,25 @@
         "section": "",
         "id": "",
         "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -2441,6 +2479,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
         "section": "",
@@ -2503,6 +2560,25 @@
         "section": "",
         "id": "",
         "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -2985,6 +3061,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Terminal",
         "subtitle": "",
@@ -3041,6 +3136,25 @@
         "section": "",
         "id": "",
         "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
         "tone": "",
         "accessory": "",
         "prominent": false,
