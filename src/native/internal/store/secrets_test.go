@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -37,7 +38,7 @@ func TestSecretFieldNeverReachesDiskBackupsOrNotices(t *testing.T) {
 		t.Fatal("the second save did not write the document")
 	}
 	for _, path := range files.Paths() {
-		if strings.HasPrefix(path, testDir+"/") && !isDirectory(files, path) {
+		if strings.HasPrefix(treePath(path), testDir+string(filepath.Separator)) && !isDirectory(files, path) {
 			if bytes.Contains(mustRead(t, files, path), []byte(canary)) {
 				t.Fatalf("the secret reached %s", path)
 			}

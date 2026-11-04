@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -12,7 +13,7 @@ import (
 )
 
 // settingsTemp is the temporary file a settings write goes through.
-const settingsTemp = testDir + "/.settings.json.tmp"
+var settingsTemp = filepath.Join(testDir, ".settings.json.tmp")
 
 // errDisk is the injected I/O failure.
 var errDisk = errors.New("disk I/O error")
@@ -48,7 +49,7 @@ func openStoreOn(t *testing.T, files *fake.FS, clock *fake.Clock) *Store {
 
 // underStoreDir reports whether a file system write targets the store directory.
 func underStoreDir(name string) bool {
-	return strings.HasPrefix(name, testDir+"/")
+	return strings.HasPrefix(name, testDir+string(filepath.Separator))
 }
 
 // flushSurvivingCrash runs Flush and reports whether it died with the crash signal. Any other panic is

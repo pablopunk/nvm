@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 )
 
 // leasePath is the lock record inside the test store directory.
-const leasePath = testDir + "/" + leaseFileName
+var leasePath = filepath.Join(testDir, leaseFileName)
 
 // quietLease configures a lease that does not renew itself, so tests control every heartbeat.
 func quietLease() LeaseOption {

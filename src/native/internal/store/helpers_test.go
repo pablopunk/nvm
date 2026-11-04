@@ -3,18 +3,26 @@ package store
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
-// testDir is the store directory inside the in-memory file system.
-const testDir = "/cfg/nvm"
+// testDir is the store directory inside the in-memory file system, spelled as the running OS spells an absolute path,
+// because the store joins its file names with the OS separator.
+var testDir = testpath.Abs("cfg", "nvm")
 
 // settingsPath is the file the settings document is written to.
-const settingsPath = testDir + "/settings.json"
+var settingsPath = filepath.Join(testDir, "settings.json")
+
+// treePath is the native spelling of a path the in-memory tree lists under its slash-separated key.
+func treePath(key string) string {
+	return filepath.Join(testpath.Root(), filepath.FromSlash(key))
+}
 
 // settingsDoc is the document most tests use. Token is a secret: it must never reach disk.
 type settingsDoc struct {
@@ -100,7 +108,7 @@ func quarantinedFiles(files *fake.FS) []string {
 	var out []string
 	for _, path := range files.Paths() {
 		if strings.Contains(path, ".corrupt-") {
-			out = append(out, path)
+			out = append(out, treePath(path))
 		}
 	}
 	return out
