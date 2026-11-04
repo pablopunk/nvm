@@ -22,6 +22,7 @@ type Set struct {
 	Hotkeys      *Hotkeys
 	Tray         *TrayHost
 	Autostart    *Autostart
+	Windows      *WindowManager
 	Capabilities platform.Capabilities
 }
 
@@ -46,6 +47,7 @@ func NewSet() *Set {
 		Hotkeys:      NewHotkeys(),
 		Tray:         NewTrayHost(),
 		Autostart:    NewAutostart(),
+		Windows:      NewWindowManager(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -71,6 +73,7 @@ func (s *Set) Ports() platform.Ports {
 		Hotkeys:      s.Hotkeys,
 		Tray:         s.Tray,
 		Autostart:    s.Autostart,
+		Windows:      s.Windows,
 		Capabilities: s.Capabilities,
 	}
 }

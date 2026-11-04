@@ -28,6 +28,7 @@ func NewPorts() platform.Ports {
 		Hotkeys:      hotkeys{},
 		Tray:         trayHost{},
 		Autostart:    autostart{},
+		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
 	}
 }

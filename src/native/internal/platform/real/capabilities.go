@@ -41,6 +41,9 @@ func capabilitiesFor(goos string, getenv func(string) string) platform.Capabilit
 	if !isWaylandSession(goos, getenv) {
 		supported = append(supported, platform.CapabilityWindowPlacement)
 	}
+	if windowManagementSupported() {
+		supported = append(supported, platform.CapabilityWindowManagement)
+	}
 	return platform.NewCapabilities(supported...)
 }
 
