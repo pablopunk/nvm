@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 	"time"
@@ -198,35 +199,27 @@ func TestPreviewsOfEachKind(t *testing.T) {
 func TestFileActionsDriveTheDesktop(t *testing.T) {
 	svc := newTestFiles(t, testFileHome, fixturePaths())
 	fakeShell := svc.shell.(*fake.Shell)
-	clip := svc.clipboard.(*fake.Clipboard)
 	target := fixturePaths()[0]
 	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf")})
-	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents", "report-2024.pdf") || row.Actions[0].Title != "Open report-2024.pdf" {
+	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents", "report-2024.pdf") {
 		t.Fatalf("row = %q / %q", row.Title, row.Subtitle)
 	}
+	titles := searchActionTitles(row.Actions)
+	if titles[0] != "Open report-2024.pdf" || titles[len(titles)-1] != platform.ShellLabelsFor(runtime.GOOS).RevealInFileManager {
+		t.Fatalf("file actions = %v: Open first, then the reveal", titles)
+	}
+	for _, gone := range []string{"Copy Path", "Copy File", "Move to Trash"} {
+		if slices.Contains(titles, gone) {
+			t.Fatalf("file actions still offer %q, which 1.x does not list", gone)
+		}
+	}
 
-	open := &recordingHost{}
-	row.Actions[0].Run(open)
-	reveal := &recordingHost{}
-	row.Actions[2].Run(reveal)
-	copyPath := &recordingHost{}
-	row.Actions[3].Run(copyPath)
+	row.Actions[0].Run(&recordingHost{})
+	row.Actions[len(row.Actions)-1].Run(&recordingHost{})
 	calls := fakeShell.Calls()
 	if len(calls) != 2 || calls[0] != (fake.ShellCall{Op: fake.OpShellOpenPath, Arg: target}) ||
 		calls[1] != (fake.ShellCall{Op: fake.OpShellReveal, Arg: target}) {
 		t.Fatalf("shell calls = %+v", calls)
-	}
-	if got, _ := clip.ReadText(); got != target {
-		t.Fatalf("clipboard = %q, want the path", got)
-	}
-
-	trash := &recordingHost{}
-	row.Actions[5].Run(trash)
-	if len(trash.pushed) != 1 {
-		t.Fatal("Move to Trash must open a confirmation view, not act at once")
-	}
-	if len(fakeShell.Calls()) != 2 {
-		t.Fatal("nothing may be trashed before the confirmation")
 	}
 }
 
@@ -249,7 +242,7 @@ func TestFileActionsFollowThe1xOrderAndMacLabels(t *testing.T) {
 	svc.quickLook = true
 	target := fixturePaths()[0]
 	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf"), Kind: files.KindFile})
-	want := []string{"Open report-2024.pdf", "Preview Contents", "Quick Look", "Show in Finder", "Copy Path", "Copy File", "Move to Trash"}
+	want := []string{"Open report-2024.pdf", "Preview Contents", "Quick Look", "Show in Finder"}
 	if got := searchActionTitles(row.Actions); !slices.Equal(got, want) {
 		t.Fatalf("actions = %v, want %v", got, want)
 	}
@@ -267,7 +260,7 @@ func TestFileActionsFollowThe1xOrderAndMacLabels(t *testing.T) {
 func TestFileActionsOmitQuickLookWithoutTheCapabilityAndNameMediaPreview(t *testing.T) {
 	svc := newTestFiles(t, testFileHome, fixturePaths())
 	image := svc.fileItem(files.Result{Path: fixturePaths()[0], Name: "cat.png", DisplayPath: "~/cat.png", Kind: files.KindImage})
-	want := []string{"Open cat.png", "Preview", "Show in File Manager", "Copy Path", "Copy File", "Move to Trash"}
+	want := []string{"Open cat.png", "Preview", "Show in File Manager"}
 	if got := searchActionTitles(image.Actions); !slices.Equal(got, want) {
 		t.Fatalf("actions = %v, want %v", got, want)
 	}

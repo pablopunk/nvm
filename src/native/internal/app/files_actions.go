@@ -4,7 +4,6 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/features/files"
-	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -30,24 +29,9 @@ func (s *fileService) actionsFor(r files.Result) []search.Action {
 			}
 		}})
 	}
-	return append(actions,
-		search.Action{Title: s.labels.RevealInFileManager, Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
-			hideOrReport(h, files.Reveal(s.shell, path))
-		}},
-		search.Action{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) {
-			hideOrReport(h, s.clipboard.WriteText(path))
-		}},
-		search.Action{Title: "Copy File", Label: "⌃⇧C", Mods: mod | ui.Shift, Key: ui.KeyC, Run: func(h search.Host) {
-			hideOrReport(h, s.copyFiles(path))
-		}},
-		search.Action{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
-			h.Push(palette.Confirm("Move to Trash", r.Name, func() {
-				if err := files.Trash(s.shell, s.home, path); err != nil {
-					s.log.Warn("files.trash-failed", logx.F{"reason": err.Error()})
-				}
-			}))
-		}},
-	)
+	return append(actions, search.Action{Title: s.labels.RevealInFileManager, Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
+		hideOrReport(h, files.Reveal(s.shell, path))
+	}})
 }
 
 // previewTitle names the in-palette preview as 1.x does: "Preview" for pictures and videos, "Preview Contents" for
