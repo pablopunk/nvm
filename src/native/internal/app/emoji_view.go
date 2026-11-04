@@ -12,7 +12,6 @@ import (
 // builds only the rows on screen, so the whole catalog stays searchable without costing a frame.
 const (
 	emojiColumns    = 8
-	emojiCellWidth  = 52
 	emojiCellHeight = 46
 	emojiRowLimit   = 4096
 )
@@ -84,7 +83,6 @@ func (p *App) emojiView() *palette.View {
 		OnKey:  picker.onKey,
 		Grid: &palette.Grid{
 			Columns:    emojiColumns,
-			CellWidth:  emojiCellWidth,
 			CellHeight: emojiCellHeight,
 			Cell:       drawEmojiCell,
 		},
