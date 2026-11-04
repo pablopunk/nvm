@@ -14,8 +14,14 @@ func TestTypingACommandTitleFindsTheCommandOfARunningExtension(t *testing.T) {
 	p.exts.mgr.Store(m)
 
 	findRowTitled(t, collectExtensionRows(t, p, "list fixture"), "List fixture")
-	if rows := collectExtensionRows(t, p, "zz no such command"); len(rows) != 0 {
-		t.Fatalf("query naming no command showed %d rows", len(rows))
+	manifest, _, err := m.Definition("acme.views")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range collectExtensionRows(t, p, "zz no such command") {
+		if row.Kind == manifest.Title {
+			t.Fatalf("query naming no command showed %q from the fixture", row.Title)
+		}
 	}
 }
 

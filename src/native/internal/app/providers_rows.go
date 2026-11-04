@@ -3,8 +3,6 @@ package app
 import (
 	"strings"
 
-	"github.com/egoist/mygo"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
@@ -20,9 +18,7 @@ const (
 	scoreExtension    = 960
 	scoreFileFirst    = 75
 	scoreClipboard    = 55
-	scoreWebURL       = 150
 	scoreAutomate     = 40
-	scoreWebSearch    = 10
 	scoreCommandAlias = 45
 )
 
@@ -53,9 +49,6 @@ func rootCommandScore(title string) int {
 	}
 	return scoreRootCommand
 }
-
-// keyWebSearch is the usage key of the web search row. Commands and applications key themselves by title and id.
-const keyWebSearch = "web:search"
 
 // Each row function is one source of the root: it returns the rows for q, or the root rows for "". They run
 // on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
@@ -187,22 +180,16 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// webRows turns a query into a website when it names one, and otherwise offers the two fallbacks: Automate
-// and a web search. The fallbacks are query fallbacks: an answer row of the search, such as a calculation, leaves them out.
-func webRows(p *App, in *rootInput, q string) []search.Item {
-	if q == "" {
+// automateRows offers Automate for a typed query that does not name a website: the AI builder writes a command for it.
+// The web built-in answers the same query with the search and the website rows. Automate stays native, because the
+// builder's write path is host-only (docs/extension-api.md, section 4). It is a query fallback, which an answer row
+// leaves out.
+func automateRows(p *App, _ *rootInput, q string) []search.Item {
+	if q == "" || search.URLFromQuery(q) != "" {
 		return nil
 	}
-	if u := search.URLFromQuery(q); u != "" {
-		return []search.Item{{Kind: search.KindWeb, Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue", Score: scoreWebURL,
-			Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}}}
-	}
-	return []search.Item{
-		{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
-			Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}},
-		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch, QueryFallback: true,
-			Actions: []search.Action{{Title: "Search the Web", Run: openURL(in.engine.URL, q)}}},
-	}
+	return []search.Item{{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
+		Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}}}
 }
 
 // conversationTiePriority puts builder chats after conversations at equal score and last use, as 1.x does

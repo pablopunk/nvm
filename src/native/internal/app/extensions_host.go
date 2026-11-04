@@ -98,7 +98,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		RootRefresh:     p.refreshRootRows,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,
-		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: p.S.Quicklinks, GuideDone: p.S.GuideDone}),
+		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: p.S.Quicklinks, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine}),
 		AIQuota:         p.aiQuotas(),
 		LegacyStatePath: p.legacyStatePath(),
 	})

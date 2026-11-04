@@ -54,6 +54,7 @@ func saveJSON(name string, v any) {
 // diagnostics switch, the update channel) are read from config.json, see shared_config.go. What the user chose in the
 // root is not here: it is the usage memory (usage.json) and the query history (queries.json), see learning.go.
 type Settings struct {
+	// Engine is the search engine 2.0 kept here. The web built-in reads it as the default of its engine setting.
 	Engine      string
 	ClipOff     bool
 	ClipLimit   int

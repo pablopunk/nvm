@@ -15,7 +15,6 @@ import (
 // are copied, the snippets are cloned, and the slices the UI thread replaces as a whole (apps,
 // extensions, file paths) are shared as they are. The clipboard history locks its own state, so it is shared too.
 type rootInput struct {
-	engine     engine
 	learn      *usage.Learner
 	apps       []appfeat.App
 	clip       *clipEngine
@@ -56,7 +55,6 @@ func chatLastUsed(created, updated time.Time) int64 {
 func (p *App) captureRoot() *rootInput {
 	chats := p.chatHeads()
 	return &rootInput{
-		engine:       p.engine(),
 		learn:        p.learn,
 		apps:         p.appsSnapshot(),
 		clip:         p.clip,

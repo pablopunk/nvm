@@ -23,5 +23,5 @@ var rootSources = []rootSource{
 	{id: "files", provider: rootFileProvider},
 	{id: "clipboard", rows: clipboardRows},
 	{id: "conversations", rows: conversationRows},
-	{id: "web", rows: webRows},
+	{id: "web", rows: automateRows},
 }

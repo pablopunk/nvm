@@ -15,6 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -28,6 +29,7 @@ type builtInInputs struct {
 	Zone         *time.Location
 	Quicklinks   []quicklinks.Link
 	GuideDone    bool
+	SearchEngine string
 }
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
@@ -36,7 +38,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
-		quicklinks.New(in.Quicklinks), gettingstarted.New(in.GuideDone),
+		quicklinks.New(in.Quicklinks), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 	}
 }
 

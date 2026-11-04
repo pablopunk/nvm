@@ -2,7 +2,6 @@ package app
 
 import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
-	"net/url"
 	"slices"
 	"strings"
 
@@ -12,34 +11,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-type engine struct{ Key, Name, URL string }
-
-var engines = []engine{
-	{"google", "Google", "https://www.google.com/search?q={query}"},
-	{"duckduckgo", "DuckDuckGo", "https://duckduckgo.com/?q={query}"},
-	{"bing", "Bing", "https://www.bing.com/search?q={query}"},
-	{"brave", "Brave Search", "https://search.brave.com/search?q={query}"},
-}
-
-func (p *App) engine() engine {
-	for _, e := range engines {
-		if e.Key == p.S.Engine {
-			return e
-		}
-	}
-	return engines[0]
-}
-
-func openURL(tpl, q string) func(h search.Host) {
-	return func(h search.Host) {
-		h.Hide()
-		_ = mygo.Shell.OpenExternal(strings.ReplaceAll(tpl, "{query}", url.QueryEscape(q)))
-	}
-}
 
 type command struct {
 	// ID is the stable name shortcut bindings refer to. It never changes when the title does, and a visible command
@@ -184,10 +159,10 @@ func (p *App) settingsView() *palette.View {
 			rows := []search.Item{
 				{Title: paletteSettingTitle, Subtitle: paletteSettingSubtitle, Accessory: p.paletteSettingAccessory(), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: hyperKeyTitle, Subtitle: hyperKeySubtitle, Icon: "command", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hyperRecorderView()) }}}},
-				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
-					p.S.Engine = engines[(i+1)%len(engines)].Key
-					p.S.save()
+				{Title: "Default Search Engine", Accessory: websearch.EngineName(p.webEngineKey()), Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					if err := p.cycleWebEngine(); err != nil {
+						h.Toast(err.Error())
+					}
 					h.Refresh()
 				}}}},
 				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
