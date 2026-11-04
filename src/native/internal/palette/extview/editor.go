@@ -72,15 +72,13 @@ func newEditorState(s *Session, title, text, placeholder string, readOnly bool) 
 func (ed *editorState) body(c *ui.Context, _ search.Host) {
 	t := design.Tokens(c)
 	ui.Column(c).Grow(1).Children(func() {
-		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus().OnChange(ed.noticeTextChange)
+		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
 		ed.noticeTextChange()
 		ui.Text(c, ed.statusLine()).FontSize(11).TextColor(t.Tertiary).Margin(12)
 	})
 }
 
-// noticeTextChange counts every change of the text as an edit. The body checks it after the area; OnChange checks it
-// again when MyGo applies a key after the view was built (runNoticeActions), which also makes the frame build once
-// more so the status line shows the edit.
+// noticeTextChange counts every change of the text as an edit, however the text area reports it.
 func (ed *editorState) noticeTextChange() {
 	if ed.text == ed.countedText {
 		return
@@ -166,10 +164,15 @@ func (ed *editorState) flush() {
 	if track == nil || !track.dirty || track.blocked || store == nil {
 		return
 	}
+	edits := ed.edits
 	args := protocol.DraftSaveArgs{Key: track.options.Key, Version: track.options.Version, Content: ed.text}
 	if err := store.SaveDraft(ed.sess.extID, args); err != nil {
 		ed.status = "The draft could not be saved; retrying"
 		ed.armTimer()
+		return
+	}
+	// The store's write runs the UI loop, so a key can land during it; that edit stays dirty and keeps its timer.
+	if ed.edits != edits {
 		return
 	}
 	track.dirty = false

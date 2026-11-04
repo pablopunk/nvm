@@ -50,6 +50,29 @@ func TestEditorAutosavesAKeyTheAreaDidNotReport(t *testing.T) {
 	}
 }
 
+// TestEditorKeepsAnEditThatLandsDuringAWrite autosaves the note's first part while the last key arrives inside the store's
+// write, as the UI loop runs during a real write. The write's success must not clear that key's dirty flag, so the
+// next autosave writes the whole note.
+func TestEditorKeepsAnEditThatLandsDuringAWrite(t *testing.T) {
+	drafts := newMemDrafts()
+	r := openEditor(t, drafts, draftOptions("v1"), "")
+	tt := showEditor(t, r)
+	tt.Type(typedNote[:len(typedNote)-1])
+	tt.Frame()
+	drafts.duringSave = func() {
+		r.editor.text = typedNote
+		r.editor.noticeTextChange()
+	}
+	r.autosaveTick(defaultDraftDebounce)
+	if !r.editor.draft.dirty {
+		t.Fatalf("draft is clean after a write that a key landed in; want the key kept dirty for the next autosave")
+	}
+	r.autosaveTick(defaultDraftDebounce)
+	if n := len(drafts.saves); n < 2 || drafts.saves[n-1].Content != typedNote {
+		t.Fatalf("draft saves = %+v; want the last one to hold %q", drafts.saves, typedNote)
+	}
+}
+
 // TestEditorReceivesEveryTypedCharacter types the note the rig types and checks that the editor's text holds all of
 // it, and that the autosaved draft holds all of it too.
 func TestEditorReceivesEveryTypedCharacter(t *testing.T) {

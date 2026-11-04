@@ -16,6 +16,8 @@ type memDrafts struct {
 	saves     []protocol.DraftSaveArgs
 	discarded []string
 	saveErr   error
+	// duringSave, when set, runs inside SaveDraft before it returns: the UI loop runs during a real write.
+	duringSave func()
 }
 
 func newMemDrafts(records ...protocol.DraftRecord) *memDrafts {
@@ -37,6 +39,11 @@ func (m *memDrafts) SaveDraft(_ string, args protocol.DraftSaveArgs) error {
 	}
 	m.saves = append(m.saves, args)
 	m.records[args.Key] = protocol.DraftRecord{Key: args.Key, Version: args.Version, Content: args.Content}
+	if m.duringSave != nil {
+		next := m.duringSave
+		m.duringSave = nil
+		next()
+	}
 	return nil
 }
 
