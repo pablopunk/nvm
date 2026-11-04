@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -68,7 +69,7 @@ func (p *fakeDictationPanel) last() palindicator.State {
 }
 
 func modeName(mode palindicator.Mode) string {
-	return []string{"listening", "waiting", "transcribing", "no-speech", "failed"}[mode]
+	return []string{"listening", "waiting", "transcribing", "no-speech", "failed", "cleaning"}[mode]
 }
 
 // fakeDictationTranscriber answers each segment with the next scripted text, or fails with err.
@@ -153,6 +154,8 @@ type dictationHarness struct {
 	warned       []string
 	settingsOpen int
 	settingsErr  error
+	// completer answers the AI cleanup prompt; nil means the model is not reachable.
+	completer cleanup.Completer
 }
 
 func newDictationHarness(t *testing.T) *dictationHarness {
@@ -181,6 +184,12 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 		OpenMicrophoneSettings: func() error {
 			h.settingsOpen++
 			return h.settingsErr
+		},
+		Complete: func(ctx context.Context, system, user string) (string, error) {
+			if h.completer == nil {
+				return "", errors.New("no model")
+			}
+			return h.completer(ctx, system, user)
 		},
 		OnDevices: func() {},
 	})

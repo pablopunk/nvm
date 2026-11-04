@@ -4,9 +4,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -90,6 +92,7 @@ func (p *App) dictationDeps() dictationDeps {
 		OpenMicrophoneSettings: func() error {
 			return p.ports.System.OpenSettings(systemfeat.PrivacyPaneID, "Microphone")
 		},
+		Complete:     p.dictationCompleter(),
 		RestoreDelay: dictationRestoreDelay,
 		OnDevices:    p.Refresh,
 	}
@@ -102,4 +105,34 @@ func supervisedDictation(name string, fn func()) {
 // dictationAfter runs fn on the UI thread after d.
 func (p *App) dictationAfter(d time.Duration, fn func()) {
 	time.AfterFunc(d, func() { p.redraw(fn) })
+}
+
+// dictationCompleter answers the AI cleanup prompt on the fast model through the account's client. A signed-out
+// account is refused before any text is sent.
+func (p *App) dictationCompleter() cleanup.Completer {
+	return func(ctx context.Context, system, user string) (string, error) {
+		if p.account == nil || !p.account.Snapshot().Connected {
+			return "", chat.ErrNotSignedIn
+		}
+		return chat.Complete(ctx, backendCompletions{client: p.account.Client()}, system, user)
+	}
+}
+
+// backendCompletions adapts the backend client to the one-shot completion's source.
+type backendCompletions struct {
+	client *backend.Client
+}
+
+// ActiveModel reads the route for the query.
+func (b backendCompletions) ActiveModel(ctx context.Context, query backend.ActiveModelQuery) (backend.ModelDescriptor, error) {
+	return b.client.ActiveModel(ctx, query)
+}
+
+// ChatStream opens the streamed reply for req.
+func (b backendCompletions) ChatStream(ctx context.Context, req backend.ChatRequest) (chat.EventStream, error) {
+	stream, err := b.client.ChatStream(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return stream, nil
 }

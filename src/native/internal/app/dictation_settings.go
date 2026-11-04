@@ -12,6 +12,8 @@ const dictationSettingsFile = "dictation.json"
 type dictationSettings struct {
 	DeviceID        string `json:"deviceId"`
 	CopyToClipboard bool   `json:"copyToClipboard"`
+	CleanupWithAI   bool   `json:"cleanupWithAi"`
+	Dictionary      string `json:"dictionary"`
 }
 
 // dictationPrefs reads and changes the settings. The store keeps them on disk; without a writable store they last

@@ -1,6 +1,9 @@
 package app
 
 import (
+	"strconv"
+
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -30,6 +33,16 @@ func (p *App) dictationSettingsView() *palette.View {
 					Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						p.setDictationSettings(func(s *dictationSettings) { s.CopyToClipboard = !s.CopyToClipboard })
 						h.Refresh()
+					}}},
+				},
+				p.cleanupWithAIRow(settings),
+				{
+					Title:     "Custom Dictionary",
+					Subtitle:  "Preferred terms and spellings for AI cleanup",
+					Icon:      "type",
+					Accessory: termCountLabel(len(cleanup.DictionaryTerms(settings.Dictionary))),
+					Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) {
+						h.Push(p.dictionaryView())
 					}}},
 				},
 			}
@@ -80,4 +93,39 @@ func onOff(on bool) string {
 		return "On"
 	}
 	return "Off"
+}
+
+// cleanupWithAIRow is the AI cleanup switch. It needs a signed-in account, so a switch pressed while signed out says so.
+func (p *App) cleanupWithAIRow(settings dictationSettings) search.Item {
+	signedIn := p.accountSignedIn()
+	subtitle := "Send the transcript to Fast AI to correct punctuation, grammar, and transcription errors before pasting."
+	if !signedIn {
+		subtitle = "Sign in to Nevermind to use AI cleaning."
+	}
+	return search.Item{
+		Title:     "Clean with AI",
+		Subtitle:  subtitle,
+		Icon:      "sparkles",
+		Accessory: onOff(signedIn && settings.CleanupWithAI),
+		Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if !signedIn {
+				h.Toast("Sign in to Nevermind to use AI cleaning.")
+				return
+			}
+			p.setDictationSettings(func(s *dictationSettings) { s.CleanupWithAI = !s.CleanupWithAI })
+			h.Refresh()
+		}}},
+	}
+}
+
+// accountSignedIn reports whether the account is connected to a backend.
+func (p *App) accountSignedIn() bool {
+	return p.account != nil && p.account.Snapshot().Connected
+}
+
+func termCountLabel(count int) string {
+	if count == 1 {
+		return "1 term"
+	}
+	return strconv.Itoa(count) + " terms"
 }

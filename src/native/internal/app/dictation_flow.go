@@ -1,10 +1,12 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -55,8 +57,10 @@ type dictationDeps struct {
 	Toast                  func(msg string)
 	Warn                   func(event string, fields map[string]any)
 	OpenMicrophoneSettings func() error
-	RestoreDelay           time.Duration
-	OnDevices              func()
+	// Complete answers the AI cleanup prompt on the fast model. It is used only while the account is signed in.
+	Complete     cleanup.Completer
+	RestoreDelay time.Duration
+	OnDevices    func()
 }
 
 // dictationFlow connects the dictation service to the palette: the Dictate command starts and stops it, the
@@ -138,22 +142,41 @@ func (f *dictationFlow) foregroundTarget() string {
 	return target
 }
 
-// Stop ends the recording, transcribes it off the UI thread and pastes the text.
+// Stop ends the recording, transcribes it off the UI thread, cleans it when the settings ask, and pastes the text.
 func (f *dictationFlow) Stop() {
 	f.show(palindicator.State{Mode: palindicator.ModeTranscribing})
+	settings := f.deps.Settings()
 	f.deps.Background("dictation.stop", func() {
-		text, err := f.service.Stop()
+		transcript, err := f.service.Stop()
 		if err != nil {
 			f.deps.Dispatch(func() { f.fail(err) })
 			return
 		}
-		if text == "" {
+		if transcript == "" {
 			f.deps.Dispatch(f.noSpeech)
 			return
 		}
+		text := f.cleaned(transcript, settings)
 		f.deps.Dispatch(f.hide)
 		f.insert(text)
 	})
+}
+
+// cleaned returns the transcript after AI cleanup, when the settings ask for it and the account can run it. A cleanup
+// that fails leaves the transcript as it was and logs why.
+func (f *dictationFlow) cleaned(transcript string, settings dictationSettings) string {
+	if !settings.CleanupWithAI || f.deps.Complete == nil || !f.deps.Account.SignedIn() {
+		return transcript
+	}
+	f.deps.Dispatch(f.showCleaning)
+	terms := cleanup.NewTerms(settings.Dictionary, nil)
+	return cleanup.Clean(context.Background(), f.deps.Complete, transcript, terms, func(err error) {
+		f.warn("dictation.cleanup-failed", err)
+	})
+}
+
+func (f *dictationFlow) showCleaning() {
+	f.show(palindicator.State{Mode: palindicator.ModeCleaning})
 }
 
 // Cancel drops the running dictation, releases its backend preparation as a user cancel, and closes the indicator. A

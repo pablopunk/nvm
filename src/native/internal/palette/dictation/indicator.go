@@ -14,13 +14,15 @@ import (
 // Mode is the part of a dictation the indicator shows.
 type Mode int
 
-// The indicator modes, in the order a dictation passes through them. NoSpeech and Failed end a dictation.
+// The indicator modes, in the order a dictation passes through them. NoSpeech and Failed end a dictation; Cleaning
+// comes between the transcript and the paste when AI cleanup is on.
 const (
 	ModeListening Mode = iota
 	ModeWaitingForMicrophone
 	ModeTranscribing
 	ModeNoSpeech
 	ModeFailed
+	ModeCleaning
 )
 
 // Control is a button under the indicator's text. The window reports a press to the dictation flow.
@@ -124,6 +126,8 @@ func Subtitle(s State) string {
 		return "Waiting for microphone"
 	case ModeTranscribing:
 		return "Transcribing"
+	case ModeCleaning:
+		return "Cleaning"
 	case ModeNoSpeech:
 		return "No speech detected"
 	case ModeFailed:
