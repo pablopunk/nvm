@@ -48,13 +48,24 @@ func TestCheckReportsTheCompileErrorAndLeavesNothing(t *testing.T) {
 	}
 }
 
-// TestCheckRefusesAnEntryPointWithTheWrongSignature: a wrong arity is refused at load, named by function.
+// TestCheckRefusesAnEntryPointWithTheWrongSignature: a wrong parameter count is refused at load, named by function.
 func TestCheckRefusesAnEntryPointWithTheWrongSignature(t *testing.T) {
 	h := newHarness(t)
 	wrong := strings.Replace(goodSource, "RootItems(ctx api.Context) ([]api.Item, error)", "RootItems() ([]api.Item, error)", 1)
 	_, err := h.m.Check("acme.good", fixtureContents(t, "acme.good", wrong))
 	if err == nil || !strings.Contains(err.Error(), "RootItems has the wrong signature") {
 		t.Fatalf("Check error = %v; want the signature refusal", err)
+	}
+}
+
+// TestCheckRefusesAnEntryPointWithTheWrongType: the count is right but a result type is not the api's, so the
+// entry point is refused at load rather than at its first call.
+func TestCheckRefusesAnEntryPointWithTheWrongType(t *testing.T) {
+	h := newHarness(t)
+	wrong := strings.Replace(goodSource, "RootItems(ctx api.Context) ([]api.Item, error)", "RootItems(ctx api.Context) ([]string, error)", 1)
+	_, err := h.m.Check("acme.good", fixtureContents(t, "acme.good", wrong))
+	if err == nil || !strings.Contains(err.Error(), "RootItems has the wrong signature") {
+		t.Fatalf("Check error = %v; want the signature refusal for the result type", err)
 	}
 }
 
