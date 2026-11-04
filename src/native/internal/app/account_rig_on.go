@@ -19,7 +19,8 @@ const rigBackendEnv = "NVM_RIG_BACKEND"
 // refuses every connection, so a rig launch never reaches the production backend.
 const rigUnreachableOrigin = "http://127.0.0.1:9"
 
-// applyRigBackend points the account at the rig's fake backend. The origin must be a loopback HTTP origin, or the
+// applyRigBackend points the account at the rig's fake backend and pins it there, so Settings and deep links cannot
+// move it to production. The origin must be a loopback HTTP origin, or the
 // app stops rather than fall back to production. Sign-in opens no browser, since the rig approves the code through
 // the fake, and tokens stay in memory, so no test writes to the keyring of the machine it runs on.
 func applyRigBackend(deps *auth.Deps) {
@@ -32,6 +33,7 @@ func applyRigBackend(deps *auth.Deps) {
 		log.Fatalf("rig: %s must name a loopback http origin: %v", rigBackendEnv, err)
 	}
 	deps.Origin = &environment
+	deps.Pinned = true
 	deps.Packaged = false
 	deps.Browser = nil
 	deps.Keychain = fake.NewKeychain()

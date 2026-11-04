@@ -29,14 +29,16 @@ func ChatView(deps Deps, id string) *palette.View {
 	p := &page{deps: deps, id: id}
 	p.list.FollowEnd = true
 	return &palette.View{
-		Title:       "AI Chat",
-		TitleFn:     p.title,
-		Placeholder: placeholderFor(deps.Service, id),
-		Body:        p.body,
-		OnSubmit:    p.submit,
-		OnKey:       p.key,
-		Hint:        hint,
-		HintFn:      p.footerHint,
+		Title:        "AI Chat",
+		TitleFn:      p.title,
+		Placeholder:  placeholderFor(deps.Service, id),
+		Body:         p.body,
+		OnSubmit:     p.submit,
+		OnKey:        p.key,
+		OnEscape:     p.escape,
+		SurvivesHide: true,
+		Hint:         hint,
+		HintFn:       p.footerHint,
 	}
 }
 

@@ -16,6 +16,7 @@ type Ports struct {
 	Resolver     Resolver
 	Clipboard    Clipboard
 	Paster       Paster
+	SelectedText SelectedText
 	Shell        Shell
 	Screens      Screens
 	Notifier     Notifier
@@ -34,4 +35,7 @@ type Ports struct {
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone
 	Opus       OpusCodec
+	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
+	Text    TextRecognizer
+	Capture ScreenCapturer
 }

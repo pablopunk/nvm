@@ -43,7 +43,7 @@ type harness struct {
 	enabled *enablement.Set
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -58,17 +58,22 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatalf("executable: %v", err)
 	}
+	opts := Options{
+		Executable: exe,
+		DataRoot:   filepath.Join(dir, "extension-data"),
+		Budgets: map[string]supervisor.Budget{
+			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: searchBudget},
+		},
+	}
+	for _, change := range tweak {
+		change(&opts)
+	}
 	m, err := New(Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,
-	}, root, set, Options{
-		Executable: exe,
-		Budgets: map[string]supervisor.Budget{
-			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: searchBudget},
-		},
-	})
+	}, root, set, opts)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}

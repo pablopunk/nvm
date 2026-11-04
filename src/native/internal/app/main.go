@@ -3,12 +3,14 @@ package app
 
 import (
 	"log"
+	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
@@ -21,6 +23,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -47,9 +50,12 @@ type App struct {
 
 	md   markdown.Options
 	exts extensionHost
-	// menubar is the app's own menu bar item; nil when the platform has no tray host.
-	menubar  *menubar.Item
-	recorder *diag.Recorder
+	// menubar is the app's own menu bar item; nil when the platform has no tray host. menubarJobs renders every
+	// status item on its cadence, and menubarItems shows the items the extensions declare.
+	menubar      *menubar.Item
+	menubarJobs  *menubar.Scheduler
+	menubarItems atomic.Pointer[extitems.Service]
+	recorder     *diag.Recorder
 	// analytics sends technical diagnostics when the consent switch is on; failures reports each safego failure
 	// through the recorder and then to analytics.
 	analytics *analytics.Client
@@ -102,6 +108,9 @@ type App struct {
 	dictationPref   dictationPrefs
 	dictationWindow *mygo.Window
 	dictationView   palindicator.State
+	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
+	aiCommands *commands.Service
+	aiPanel    *aiIndicator
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -162,6 +171,7 @@ func (p *App) ready() {
 		p.clip.flush()
 	})
 	p.attachChats()
+	p.attachAICommands()
 	notices := p.openLearning()
 	p.startAppServices()
 	p.newPalette(searchClock, false)
@@ -183,6 +193,7 @@ func (p *App) ready() {
 	p.startJobs()
 	go p.startExtensions()
 	p.setUpMenubar()
+	p.runMenubarScheduler()
 	p.startFiles()
 	log.Println("ready")
 }
