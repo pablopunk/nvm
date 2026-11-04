@@ -60,6 +60,8 @@ type Deps struct {
 	Windows WindowEngine
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
 	Shortcuts ShortcutTable
+	// Indicators draws the passive indicators. Nil answers unavailable.
+	Indicators IndicatorSurface
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
@@ -83,21 +85,22 @@ type documents struct {
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
 type Handler struct {
-	deps         Deps
-	manifest     api.Manifest
-	capabilities map[api.Capability]bool
-	logger       *logx.Logger
-	fetches      *rateLimiter
-	logWrites    *rateLimiter
-	actions      *rateLimiter
-	processes    *rateLimiter
-	ocrReads     *rateLimiter
-	screenReads  *rateLimiter
-	openOnce     sync.Once
-	openErr      error
-	closeOnce    sync.Once
-	docs         *documents
-	secretsMu    sync.Mutex
+	deps             Deps
+	manifest         api.Manifest
+	capabilities     map[api.Capability]bool
+	logger           *logx.Logger
+	fetches          *rateLimiter
+	logWrites        *rateLimiter
+	actions          *rateLimiter
+	processes        *rateLimiter
+	indicatorUpdates *rateLimiter
+	ocrReads         *rateLimiter
+	screenReads      *rateLimiter
+	openOnce         sync.Once
+	openErr          error
+	closeOnce        sync.Once
+	docs             *documents
+	secretsMu        sync.Mutex
 }
 
 // New returns the services of one extension. Nothing is opened until the extension makes its first call.
@@ -111,16 +114,17 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		capabilities[capability] = true
 	}
 	return &Handler{
-		deps:         deps,
-		manifest:     manifest,
-		capabilities: capabilities,
-		logger:       logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
-		fetches:      newRateLimiter(deps.Clock, fetchesPerMinute),
-		logWrites:    newRateLimiter(deps.Clock, logWritesPerMinute),
-		actions:      newRateLimiter(deps.Clock, desktopActionsPerMinute),
-		processes:    newRateLimiter(deps.Clock, processRunsPerMinute),
-		ocrReads:     newRateLimiter(deps.Clock, ocrReadsPerMinute),
-		screenReads:  newRateLimiter(deps.Clock, screenReadsPerMinute),
+		deps:             deps,
+		manifest:         manifest,
+		capabilities:     capabilities,
+		logger:           logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
+		fetches:          newRateLimiter(deps.Clock, fetchesPerMinute),
+		logWrites:        newRateLimiter(deps.Clock, logWritesPerMinute),
+		actions:          newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		processes:        newRateLimiter(deps.Clock, processRunsPerMinute),
+		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
+		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
+		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
 	}
 }
 
@@ -194,6 +198,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveShortcuts(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
+	case protocol.ServiceIndicators:
+		return h.serveIndicators(call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

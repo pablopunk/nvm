@@ -115,6 +115,8 @@ type App struct {
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
 	aiCommands *commands.Service
 	aiPanel    *aiIndicator
+	// extIndicators draws extension indicators on aiPanel, created on first use by the extension host.
+	extIndicators *extensionIndicators
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

@@ -50,6 +50,8 @@ type Ports struct {
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
 	Places func() []api.Place
+	// Indicators draws the passive indicators of extensions.
+	Indicators services.IndicatorSurface
 }
 
 // Options tune the child processes of every extension.
@@ -132,6 +134,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Windows:      ports.Windows,
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
+			Indicators:   ports.Indicators,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
 
