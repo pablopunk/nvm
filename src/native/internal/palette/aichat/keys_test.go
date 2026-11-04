@@ -214,3 +214,37 @@ func contains(titles []string, want string) bool {
 	}
 	return false
 }
+
+// TestStopButtonShowsWhileAReplyStreams checks the Stop control is on the page while a reply streams, and that a click
+// stops the reply and takes the control away.
+func TestStopButtonShowsWhileAReplyStreams(t *testing.T) {
+	transport := fixtures.NewStreamingTransport()
+	r := newRig(t, streamingClient(t, transport))
+	record := r.chatWith("Counting", chat.TierFast)
+	r.palette.Show()
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+	if contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop is on the page before a reply starts")
+	}
+
+	tt.Type("count to ten")
+	tt.Key(0, ui.KeyEnter)
+	reply := awaitReply(t, transport)
+	writeFrame(t, reply, fixtures.StreamFrames("One, two", 24)[0])
+	r.awaitReplyText(record.ID, "One, two")
+	tt.Frame()
+	if !contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop is not on the page while the reply streams")
+	}
+
+	if err := tt.Click("Stop"); err != nil {
+		t.Fatalf("click Stop: %v", err)
+	}
+	r.awaitIdle(record.ID)
+	tt.Frame()
+	if contains(tt.Texts(), "Stop") {
+		t.Fatal("Stop stays on the page after the reply stopped")
+	}
+}

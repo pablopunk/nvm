@@ -26,7 +26,7 @@ func (p *page) body(c *ui.Context, h search.Host) {
 				})
 			}).Grow(1)
 		}
-		modelPill(c, record)
+		composerRow(c, p, record, h)
 	})
 }
 
@@ -42,17 +42,4 @@ func emptyTranscript(c *ui.Context, deps Deps, record chat.Chat, k *design.Token
 	ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
 		ui.Text(c, text).FontSize(13).TextColor(k.Tertiary)
 	})
-}
-
-// modelPill names the tier the next reply uses. The backend's model and route names are never shown.
-func modelPill(c *ui.Context, record chat.Chat) {
-	design.Chip(c, design.ChipData{Icon: "sparkles", Bold: tierLabel(record.Tier)})
-}
-
-// tierLabel is the word the pill shows for a tier.
-func tierLabel(tier chat.Tier) string {
-	if tier == chat.TierSmart {
-		return "Smart"
-	}
-	return "Fast"
 }
