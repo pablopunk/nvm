@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +53,7 @@ func TestJourneyDesktopClearNeedsTheUsersAnswer(t *testing.T) {
 	enableThroughReview(t, app, "desktop", "Desktop fixture")
 	hidePalette(t, app)
 
-	must(t, app.ClipboardSet("clear probe entry"))
+	must(t, app.ClipboardSet(uniqueClipboardText("clear probe entry")))
 	must(t, app.SummonPalette())
 	before := waitForHistoryCopy(t, app)
 	if strings.HasSuffix(before, "entries=0") {
@@ -70,6 +71,11 @@ func TestJourneyDesktopClearNeedsTheUsersAnswer(t *testing.T) {
 	runFixtureClear(t, app)
 	waitForRow(t, app, "Clear clipboard history", elementWait)
 	must(t, app.Key("Return"))
+	// The confirmed run finishes off the UI thread and then dismisses the palette; summoning before that hide lands
+	// would find the palette still shown, skip the press, and then lose it to the hide.
+	if _, err := app.WaitPalette(elementWait, "hidden after the confirmed run", isHidden); err != nil {
+		t.Fatal(err)
+	}
 	must(t, app.SummonPalette())
 	if cleared := historyEntriesLabel(t, app); cleared != "history entries=0" {
 		t.Fatalf("confirming the clear left %q, want history entries=0", cleared)
@@ -90,7 +96,7 @@ func TestJourneyDesktopClearEscapeCancelsAtOnce(t *testing.T) {
 	enableThroughReview(t, app, "desktop", "Desktop fixture")
 	hidePalette(t, app)
 
-	must(t, app.ClipboardSet("escape probe entry"))
+	must(t, app.ClipboardSet(uniqueClipboardText("escape probe entry")))
 	must(t, app.SummonPalette())
 	before := waitForHistoryCopy(t, app)
 	if strings.HasSuffix(before, "entries=0") {
@@ -110,4 +116,10 @@ func TestJourneyDesktopClearEscapeCancelsAtOnce(t *testing.T) {
 	if after := historyEntriesLabel(t, app); after != before {
 		t.Fatalf("the second Escape changed history: %q, was %q", after, before)
 	}
+}
+
+// uniqueClipboardText makes a copy the clipboard watcher sees as new. The rig's X clipboard outlives a launch, so the
+// same text copied again (a rerun, or an earlier journey) is not a change and never reaches history.
+func uniqueClipboardText(prefix string) string {
+	return prefix + " " + strconv.FormatInt(time.Now().UnixNano(), 36)
 }
