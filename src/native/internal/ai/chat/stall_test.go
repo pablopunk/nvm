@@ -45,13 +45,11 @@ func assertTurnLogged(t *testing.T, f *fixture, kind string) {
 // quit. No turn runs it any more, so the service ends it as failed instead of showing a spinner forever.
 func TestRestartSettlesATurnAQuitCutOff(t *testing.T) {
 	f := newFixture(t)
-	record := f.newChat()
-	if err := f.store.Mutate(record.ID, f.set.Clock.Now(), func(c *Chat) {
-		c.Messages = []Message{
-			{Author: AuthorUser, Text: "question", Status: StatusComplete},
-			{Author: AuthorAssistant, Status: StatusStreaming},
-		}
-	}); err != nil {
+	record := Chat{ID: "chat-cut-off", Kind: KindConversation, Tier: TierFast, Messages: []Message{
+		{Author: AuthorUser, Text: "question", Status: StatusComplete},
+		{Author: AuthorAssistant, Status: StatusStreaming},
+	}}
+	if err := f.store.Insert(record); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
 	restarted := New(f.svc.opts)

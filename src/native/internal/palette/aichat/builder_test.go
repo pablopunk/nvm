@@ -13,19 +13,7 @@ import (
 // builderWith seeds a builder chat bound to extension, with the given transcript.
 func (r *rig) builderWith(extension string, messages ...chat.Message) chat.Chat {
 	r.t.Helper()
-	record, err := r.service.NewChat(chat.KindBuilder, chat.TierSmart)
-	if err != nil {
-		r.t.Fatalf("NewChat: %v", err)
-	}
-	if err := r.store.Mutate(record.ID, goldenNow, func(c *chat.Chat) {
-		c.Extension = extension
-		c.Messages = messages
-	}); err != nil {
-		r.t.Fatalf("seed builder chat: %v", err)
-	}
-	r.service.Reload()
-	record, _ = r.service.Chat(record.ID)
-	return record
+	return r.seedChat(chat.KindBuilder, chat.TierSmart, "", extension, messages)
 }
 
 // installedNotice is the note a builder writes after it installs an extension enabled.

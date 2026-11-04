@@ -103,19 +103,21 @@ func (s *Service) Chat(id string) (Chat, bool) {
 	return s.cache.get(id)
 }
 
-// NewChat adds an empty chat of kind that uses tier.
+// NewChat opens a chat of kind that uses tier. It is not recorded until its first message is written, so a chat that is
+// opened and left empty leaves nothing in the history.
 func (s *Service) NewChat(kind Kind, tier Tier) (Chat, error) {
-	chat, err := s.opts.Store.Create(kind, tier)
-	if err != nil {
-		return Chat{}, err
-	}
-	s.cache.put(chat)
+	now := s.opts.Clock.Now()
+	chat := Chat{ID: newChatID(), Kind: kind, Tier: tier, CreatedAt: now, UpdatedAt: now}
+	s.cache.putDraft(chat)
 	return chat, nil
 }
 
 // mutate applies change to the chat with id, in the store and in the cache. The change runs once on each copy,
 // so it must be a pure function of the chat it is given.
 func (s *Service) mutate(id string, change func(*Chat)) error {
+	if draft, ok := s.cache.draft(id); ok {
+		return s.mutateDraft(draft, change)
+	}
 	index := s.cache.indexOf(id)
 	if index < 0 {
 		return ErrNotFound
@@ -132,6 +134,24 @@ func (s *Service) mutate(id string, change func(*Chat)) error {
 	return nil
 }
 
+// mutateDraft applies change to a chat nobody has recorded yet. The chat is recorded once it has a message, so an
+// opened chat that is left empty never reaches the store.
+func (s *Service) mutateDraft(draft Chat, change func(*Chat)) error {
+	next := draft
+	next.Messages = slices.Clone(draft.Messages)
+	change(&next)
+	next.UpdatedAt = s.opts.Clock.Now()
+	if len(next.Messages) == 0 {
+		s.cache.putDraft(next)
+		return nil
+	}
+	if err := s.opts.Store.Insert(next); err != nil {
+		return err
+	}
+	s.cache.commitDraft(next)
+	return nil
+}
+
 // Busy reports whether a turn of the chat is in flight.
 func (s *Service) Busy(id string) bool {
 	_, ok := s.runs[id]
@@ -139,8 +159,12 @@ func (s *Service) Busy(id string) bool {
 }
 
 // Delete removes a chat. A chat still answering is stopped, and removed once its turn settles, as the desktop app's
-// Remove Chat does.
+// Remove Chat does. An opened chat that was never recorded is only forgotten.
 func (s *Service) Delete(id string) error {
+	if _, ok := s.cache.draft(id); ok {
+		s.cache.dropDraft(id)
+		return nil
+	}
 	if s.Busy(id) {
 		s.doomed[id] = true
 		s.Stop(id)
@@ -173,9 +197,12 @@ func (s *Service) Model(tier Tier) (backend.ModelDescriptor, bool) {
 	return descriptor, ok
 }
 
-// Expire removes the conversations idle past the retention window, except the ones answering now.
+// Expire removes the chats retention removes: the empty ones and the conversations idle past the retention window,
+// except the ones answering now. Opened chats older than the window are forgotten too.
 func (s *Service) Expire() ([]string, error) {
-	removed, err := s.opts.Store.Expire(s.opts.Clock.Now(), s.Busy)
+	now := s.opts.Clock.Now()
+	removed, err := s.opts.Store.Expire(now, s.Busy)
+	s.cache.dropDraftsCreatedBefore(now.Add(-RetentionWindow))
 	s.Reload()
 	return removed, err
 }

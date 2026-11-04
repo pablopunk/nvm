@@ -12,16 +12,7 @@ import (
 // titledChat creates a chat of kind named title, dated against goldenNow, and reloads the service.
 func (r *rig) titledChat(kind chat.Kind, title string) chat.Chat {
 	r.t.Helper()
-	record, err := r.service.NewChat(kind, chat.TierSmart)
-	if err != nil {
-		r.t.Fatalf("NewChat: %v", err)
-	}
-	if err := r.store.Mutate(record.ID, goldenNow, func(c *chat.Chat) { c.Title = title }); err != nil {
-		r.t.Fatalf("title chat: %v", err)
-	}
-	r.service.Reload()
-	record, _ = r.service.Chat(record.ID)
-	return record
+	return r.seedChat(kind, chat.TierSmart, title, "", []chat.Message{user("hello")})
 }
 
 // TestHistoryListsBuilderChatsButNotProofreads checks the AI Chats list shows conversations and builder chats, and
@@ -92,5 +83,33 @@ func TestChatRowMenuSaysRemoveChatAndConfirmsWithTheHistory(t *testing.T) {
 	tt.Key(0, ui.KeyEnter)
 	if _, ok := r.service.Chat(record.ID); ok {
 		t.Fatal("Remove Chat in the confirmation kept the chat")
+	}
+}
+
+// TestNewChatLeavesNoHistoryRowUntilItsFirstMessage checks opening a new chat records nothing: the page is shown, and
+// the list keeps only its New Chat row.
+func TestNewChatLeavesNoHistoryRowUntilItsFirstMessage(t *testing.T) {
+	r := newRig(t, nil)
+	view := newChat(r.deps())
+	if view == nil || view.Title != "AI Chat" {
+		t.Fatalf("new chat page = %v, want an AI Chat page", view)
+	}
+	if rows := historyRows(r.deps(), ""); len(rows) != 1 || rows[0].Title != "New Chat" {
+		t.Fatalf("history rows = %v after New Chat, want only New Chat", resultTitles(rows))
+	}
+	if stored, _ := r.store.All(); len(stored) != 0 || len(r.service.Chats()) != 0 {
+		t.Fatalf("stored = %v, listed = %v after New Chat, want none", stored, r.service.Chats())
+	}
+}
+
+// TestEmptyChatsSavedBeforeAreNotListed checks a chat an older build saved with no message stays out of the history.
+func TestEmptyChatsSavedBeforeAreNotListed(t *testing.T) {
+	r := newRig(t, nil)
+	if err := r.store.Insert(chat.Chat{ID: "chat-old-empty", Kind: chat.KindConversation, Tier: chat.TierFast, UpdatedAt: goldenNow, CreatedAt: goldenNow}); err != nil {
+		t.Fatalf("Insert: %v", err)
+	}
+	r.service.Reload()
+	if rows := historyRows(r.deps(), ""); len(rows) != 1 {
+		t.Fatalf("history rows = %v, want only New Chat", resultTitles(rows))
 	}
 }

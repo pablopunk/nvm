@@ -1,6 +1,7 @@
 package aichat
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -56,6 +57,7 @@ type rig struct {
 	copied   []string
 	signed   bool
 	sign     auth.SignInState
+	seq      int
 
 	signInStarts int
 	startErr     error
@@ -155,20 +157,45 @@ func (r *rig) deps() Deps {
 	}
 }
 
-// chatWith creates a conversation with a transcript, dated against goldenNow.
+// chatWith creates a conversation with a transcript, dated against goldenNow. With no transcript it is an opened chat.
 func (r *rig) chatWith(title string, tier chat.Tier, messages ...chat.Message) chat.Chat {
 	r.t.Helper()
-	record, err := r.service.NewChat(chat.KindConversation, tier)
-	if err != nil {
-		r.t.Fatalf("NewChat: %v", err)
+	return r.seedChat(chat.KindConversation, tier, title, "", messages)
+}
+
+// seedChat records a chat of kind with a transcript and the given title and extension, dated against goldenNow, and
+// reloads the service. A chat with no transcript is only opened, since the service records a chat with its first
+// message.
+func (r *rig) seedChat(kind chat.Kind, tier chat.Tier, title, extension string, messages []chat.Message) chat.Chat {
+	r.t.Helper()
+	if len(messages) == 0 {
+		return r.openChat(kind, tier, extension)
 	}
-	if err := r.store.Mutate(record.ID, goldenNow, func(c *chat.Chat) {
-		c.Title = title
-		c.Messages = messages
-	}); err != nil {
+	r.seq++
+	record := chat.Chat{
+		ID: fmt.Sprintf("chat-seed-%d", r.seq), Kind: kind, Tier: tier, Title: title, Extension: extension,
+		Messages: messages, CreatedAt: goldenNow, UpdatedAt: goldenNow,
+	}
+	if err := r.store.Insert(record); err != nil {
 		r.t.Fatalf("seed chat: %v", err)
 	}
 	r.service.Reload()
+	record, _ = r.service.Chat(record.ID)
+	return record
+}
+
+// openChat opens a chat of kind on tier, bound to extension when it is not empty. Nothing is recorded until a message.
+func (r *rig) openChat(kind chat.Kind, tier chat.Tier, extension string) chat.Chat {
+	r.t.Helper()
+	record, err := r.service.NewChat(kind, tier)
+	if err != nil {
+		r.t.Fatalf("NewChat: %v", err)
+	}
+	if extension != "" {
+		if err := r.service.Bind(record.ID, extension); err != nil {
+			r.t.Fatalf("Bind: %v", err)
+		}
+	}
 	record, _ = r.service.Chat(record.ID)
 	return record
 }
