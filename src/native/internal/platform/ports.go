@@ -19,5 +19,6 @@ type Ports struct {
 	Hotkeys      Hotkeys
 	Tray         TrayHost
 	Autostart    Autostart
+	Windows      WindowManager
 	Capabilities Capabilities
 }
