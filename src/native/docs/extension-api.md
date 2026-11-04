@@ -1088,4 +1088,6 @@ Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<n
 - **Host-only item fields.** `Item.Section` (the root section a row is listed under) and `Item.LearnKey` (the usage learner's key) are honoured for built-ins only. `Appearance.Foreground` sets the row tone for a built-in; a built-in row with no foreground has no tone.
 - **System services.** `System().SettingsPanes()` lists the OS settings panes. The `open-system-settings` system action opens one by id.
 
-Built-ins moved so far: System Settings panes (`nevermind.system-settings`). The rest of the WP3.10 list is not yet moved.
+Built-ins moved so far: System Settings panes (`nevermind.system-settings`) and system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings). The rest of the WP3.10 list is not yet moved.
+
+Declarative host operations that the palette performs itself (a built-in or a folder extension alike): `set-query` (search again, palette open), `open-path` and `reveal-path` (palette hides, the path opens or is selected), and `system` ops (`lock-screen`, `sleep`, `restart`, `shut-down`, `log-out`, `empty-trash`, `open-system-settings`). A `Confirmation` asks first. A system op runs off the UI thread; a failure shows as a toast.
