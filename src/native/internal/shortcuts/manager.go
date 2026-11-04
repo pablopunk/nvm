@@ -184,3 +184,13 @@ func (m *Manager) titles() map[string]string {
 func (m *Manager) titleOf(actionID string) string {
 	return m.titles()[actionID]
 }
+
+// Suspended reports whether the bindings are released for a recorder.
+func (m *Manager) Suspended() bool {
+	return m.suspended
+}
+
+// PaletteAccelerator is the palette hotkey in canonical form.
+func (m *Manager) PaletteAccelerator() string {
+	return m.load().Palette
+}

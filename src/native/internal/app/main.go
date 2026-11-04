@@ -7,7 +7,6 @@ import (
 	"image/color"
 	"image/png"
 	"log"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -22,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
@@ -47,6 +47,7 @@ type App struct {
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *ClipStore
+	shortcutMgr *shortcuts.Manager
 	snips       *snippets.Store
 	notes       *notes.Store
 	files       *fileService
@@ -87,7 +88,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.showApps,
-		OnHide:      p.hideApps,
+		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
@@ -124,14 +125,7 @@ func (p *App) ready() {
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
 
-	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
-	for i := 0; err != nil && i < 8; i++ { // a previous instance may still hold the key
-		time.Sleep(400 * time.Millisecond)
-		err = mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
-	}
-	if err != nil {
-		log.Println("shortcut", p.S.Hotkey, err)
-	}
+	p.startShortcuts()
 	p.reloadExtensions()
 	p.setUpTray()
 	p.startClipboardWatcher()
