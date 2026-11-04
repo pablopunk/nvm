@@ -147,8 +147,8 @@ func TestAccountRowsShowTheBackendAndTheKey(t *testing.T) {
 	withKey.BYO = &auth.BYOSetting{Provider: "openai", ModelID: "m-1"}
 	items = rows(func() auth.Snapshot { return withKey }, Actions{ClearBYOKey: func(search.Host) {}})
 	cleared := rowTitled(t, items, "Clear BYO provider key")
-	if cleared.Subtitle != "Using own key for openai (m-1)" {
-		t.Fatalf("subtitle = %q, want the provider and model in use", cleared.Subtitle)
+	if cleared.Subtitle != "Using own key for openai" {
+		t.Fatalf("subtitle = %q, want the provider in use", cleared.Subtitle)
 	}
 }
 

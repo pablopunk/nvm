@@ -26,7 +26,7 @@ func (p *page) body(c *ui.Context, h search.Host) {
 				})
 			}).Grow(1)
 		}
-		modelPill(c, p.deps, record)
+		modelPill(c, record)
 	})
 }
 
@@ -44,13 +44,9 @@ func emptyTranscript(c *ui.Context, deps Deps, record chat.Chat, k *design.Token
 	})
 }
 
-// modelPill names the tier the next reply uses and the route the backend resolved for it, when it has said.
-func modelPill(c *ui.Context, deps Deps, record chat.Chat) {
-	text := "Resolving model…"
-	if model, ok := deps.Service.Model(record.Tier); ok && model.Name != "" {
-		text = model.Name
-	}
-	design.Chip(c, design.ChipData{Icon: "sparkles", Bold: tierLabel(record.Tier), Text: text})
+// modelPill names the tier the next reply uses. The backend's model and route names are never shown.
+func modelPill(c *ui.Context, record chat.Chat) {
+	design.Chip(c, design.ChipData{Icon: "sparkles", Bold: tierLabel(record.Tier)})
 }
 
 // tierLabel is the word the pill shows for a tier.

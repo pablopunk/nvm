@@ -2,7 +2,7 @@ package design
 
 import "github.com/egoist/mygo/ui"
 
-// ChipData is a small raised label: an optional icon, an optional bold word, then the text.
+// ChipData is a small raised label: an optional icon, an optional bold word, then an optional text.
 type ChipData struct {
 	Icon string
 	Bold string
@@ -20,6 +20,8 @@ func Chip(c *ui.Context, d ChipData) {
 		if d.Bold != "" {
 			ui.Text(c, d.Bold).FontSize(12).FontWeight(600).TextColor(k.Muted)
 		}
-		ui.Text(c, d.Text).FontSize(12).TextColor(k.Muted)
+		if d.Text != "" {
+			ui.Text(c, d.Text).FontSize(12).TextColor(k.Muted)
+		}
 	})
 }
