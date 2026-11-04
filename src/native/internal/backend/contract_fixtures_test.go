@@ -60,7 +60,7 @@ func TestRecordedDescriptorDecodesAndKeepsChatOff(t *testing.T) {
 }
 
 // TestRecordedDecisionDecodesEveryAnswerType checks the recorded decision response passes the desktop app's
-// shape checks, including choice answers that carry extra probability fields, which must be ignored.
+// shape checks, and that a choice answer keeps the probabilities and confidence the model reported.
 func TestRecordedDecisionDecodesEveryAnswerType(t *testing.T) {
 	var wire decisionWire
 	if err := json.Unmarshal(readContract(t, "decision-success.json"), &wire); err != nil {
@@ -76,7 +76,9 @@ func TestRecordedDecisionDecodesEveryAnswerType(t *testing.T) {
 	if answer := result.Answers["is_bug"]; answer.Type != "predicate" || !answer.Predicate || answer.Probability != 0.9 {
 		t.Fatalf("predicate answer = %+v", answer)
 	}
-	if answer := result.Answers["area"]; answer.Type != "choice" || answer.Choice != "checkout" {
+	if answer := result.Answers["area"]; answer.Type != "choice" || answer.Choice != "checkout" ||
+		answer.Probabilities["checkout"] != 0.8 || answer.Probabilities["login"] != 0.2 ||
+		answer.Confidence == nil || *answer.Confidence != 0.75 {
 		t.Fatalf("choice answer = %+v", answer)
 	}
 	if answer := result.Answers["urgency"]; answer.Type != "score" || answer.Score != 3 {
