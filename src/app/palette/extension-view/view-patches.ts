@@ -1,3 +1,4 @@
+import { allViewItems } from '../filtering';
 import type { CommandItem, CommandView, CommandViewPatch } from '../model';
 
 export type PatchCommandViewOptions = {
@@ -93,4 +94,30 @@ export function patchCommandView(
         ) || [],
     })),
   };
+}
+
+export function selectionAfterViewPatch(
+  current: CommandView,
+  next: CommandView,
+  patch: CommandViewPatch,
+  selected: string,
+) {
+  const nextItems = allViewItems(next);
+  if (nextItems.length === 0) return '';
+  if (patch.selectedItemId !== undefined)
+    return nextItems.some((item) => item.id === patch.selectedItemId)
+      ? patch.selectedItemId
+      : nextItems[0].id;
+  if (
+    next.selectedItemId &&
+    nextItems.some((item) => item.id === next.selectedItemId)
+  )
+    return next.selectedItemId;
+  if (selected && nextItems.some((item) => item.id === selected))
+    return selected;
+  const currentItems = allViewItems(current);
+  const currentIndex = currentItems.findIndex((item) => item.id === selected);
+  const fallbackIndex =
+    currentIndex < 0 ? 0 : Math.min(currentIndex, nextItems.length - 1);
+  return nextItems[fallbackIndex]?.id || '';
 }

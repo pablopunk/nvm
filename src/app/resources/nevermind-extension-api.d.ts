@@ -625,6 +625,13 @@ export type ExtensionViewPatch = {
   items?: Array<Partial<Omit<ExtensionItem, 'id'>> & { id: string }>;
   /** Stable item ids to remove from the current view. */
   removeItemIds?: string[];
+  /**
+   * Only read from an `onSearchChange` result. Ids of items already in the view's `items`,
+   * best first. The host shows them after the instant local matches, exempt from local
+   * filtering and without repeating local matches, and drops them as soon as the search text
+   * changes. Return `[]` for no extra matches.
+   */
+  searchResultIds?: string[];
   /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   /** Only set when intentionally moving focus to a visible item id; host otherwise preserves selection. */
@@ -675,7 +682,7 @@ export type ExtensionAction = {
   draftConflict?: ExtensionDraftConflict;
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string;
-  /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
+  /** Selected accessory value injected by the host when a search accessory's `onChange` runs, or the trimmed search text when a view's `onSearchChange` runs. */
   value?: string;
   /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
   text?: string;
@@ -959,6 +966,15 @@ export type ExtensionView = {
   /** Maximum filtered items rendered at once for an item-backed grid. Keep the complete item set searchable while bounding large grid DOM work; use search or category filters to reach items beyond the visible cap. */
   maxVisibleItems?: number;
   onSelectionChange?: ExtensionAction;
+  /**
+   * List and grid views. Local filtering stays instant and owns the first results; this action
+   * adds a second batch. The host runs it after the user pauses typing (about 350ms), never for
+   * empty search text, with the trimmed text as `action.value`. Return
+   * `{ patch: { searchResultIds } }` naming items of the view's `items`. A result for text the
+   * user has since changed is discarded, and failures are silent, so keep it for enrichment
+   * such as AI-ranked matches, never for the only way to find something.
+   */
+  onSearchChange?: ExtensionAction;
   pagination?: ExtensionPagination;
   searchAccessory?: ExtensionSearchAccessory;
   /** Host-owned visible-view refresh. Use `immediate: true` to render a cheap persisted/snapshot cache first, then refresh after paint and update that cache for the next open; the renderer receives an opaque host handle, never an executable action. */
