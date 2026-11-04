@@ -101,6 +101,8 @@ type App struct {
 	userReadOnly bool
 	quitting     bool
 	edits        map[string]*noteEdit
+	// floating is the floating note window, when it is open.
+	floating *floatingWindow
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 

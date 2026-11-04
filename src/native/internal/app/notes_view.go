@@ -135,21 +135,19 @@ func (p *App) confirmDeleteNote(id, title string) *palette.View {
 	return palette.Confirm("Delete note", fmt.Sprintf("Delete “%s”? This cannot be undone.", title), func() { p.deleteNote(id) })
 }
 
-// deleteNote removes a note. An editor or window showing it is closed first, so its pending text is saved and
-// then removed with the note; the draft goes with it.
+// deleteNote removes a note. An editor showing it is closed first, so its pending text is saved and then removed
+// with the note; the draft goes with it. The floating window, when it shows the note, shows the next one.
 func (p *App) deleteNote(id string) {
 	if edit, ok := p.edits[id]; ok {
-		window := edit.window
-		edit.window = nil
-		if window != nil {
-			window.Close()
-		}
 		_ = edit.sess.Close()
 		delete(p.edits, id)
 	}
 	if err := p.notes.Delete(id); err != nil {
 		p.Toast(noteErrorMessage(err))
 		return
+	}
+	if p.floating != nil && p.floating.edit.id == id {
+		p.showNextFloatingNote()
 	}
 	p.Toast("Note deleted")
 }

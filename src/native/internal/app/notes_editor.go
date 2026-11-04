@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/richtext"
 
@@ -24,7 +23,6 @@ type noteEdit struct {
 	sess    *notes.Session
 	text    string
 	editors int
-	window  *mygo.Window
 	// doc is the rich text the floating window edits; docSource is the Markdown it was last made from or read into.
 	doc       *richtext.Document
 	docSource string
@@ -51,7 +49,7 @@ func (p *App) acquireEdit(id string) (*noteEdit, bool) {
 // releaseEdit ends the session once no palette editor and no window shows the note. Ending it saves what is
 // pending, or keeps the draft when a conflict waits.
 func (p *App) releaseEdit(edit *noteEdit) {
-	if edit.editors > 0 || edit.window != nil {
+	if edit.editors > 0 || p.isFloatingEdit(edit) {
 		return
 	}
 	if p.edits[edit.id] == edit {

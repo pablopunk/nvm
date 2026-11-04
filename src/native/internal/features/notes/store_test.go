@@ -161,16 +161,19 @@ func TestDeletingTheOpenNoteLeavesTheOthersOrAFreshOne(t *testing.T) {
 }
 
 // Ported from the same test file, case "restoreWindow rebuilds the floating window with the most recent note":
-// the floating state and the last frame survive a restart, and the frame is kept when the window closes.
-func TestFloatingNotesAndTheirFramesSurviveARestart(t *testing.T) {
+// the note the window shows and the window's last frame survive a restart, and closing the window keeps the frame.
+func TestFloatingNoteAndTheWindowFrameSurviveARestart(t *testing.T) {
 	f := newFixture(t)
 	note := f.newNote("floating")
 	mustEqual(t, "floating before any", len(f.notes.Floating()), 0)
+	if _, placed := f.notes.FloatingFrame(); placed {
+		t.Fatal("a fresh store has a floating frame")
+	}
 	if err := f.notes.SetFloating(note.ID, true); err != nil {
 		t.Fatal(err)
 	}
 	frame := Frame{X: 10, Y: 20, Width: 300, Height: 200}
-	if err := f.notes.SetFrame(note.ID, frame); err != nil {
+	if err := f.notes.SetFloatingFrame(frame); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.st.Flush(); err != nil {
@@ -179,15 +182,18 @@ func TestFloatingNotesAndTheirFramesSurviveARestart(t *testing.T) {
 	f.restart(false)
 	floating := f.notes.Floating()
 	mustEqual(t, "floating after restart", len(floating), 1)
-	if floating[0].Frame == nil || *floating[0].Frame != frame {
-		t.Fatalf("frame after restart = %+v, want %+v", floating[0].Frame, frame)
+	if got, ok := f.notes.FloatingFrame(); !ok || got != frame {
+		t.Fatalf("frame after restart = %+v (%v), want %+v", got, ok, frame)
 	}
 	if err := f.notes.SetFloating(note.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	closed, _ := f.notes.Get(note.ID)
-	if closed.Floating || closed.Frame == nil {
-		t.Fatalf("closed window kept floating=%v frame=%v", closed.Floating, closed.Frame)
+	if closed.Floating {
+		t.Fatal("closed window kept its note floating")
+	}
+	if got, ok := f.notes.FloatingFrame(); !ok || got != frame {
+		t.Fatalf("frame after close = %+v (%v), want %+v", got, ok, frame)
 	}
 }
 

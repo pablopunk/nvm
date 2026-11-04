@@ -37,6 +37,8 @@ type Draft struct {
 
 type notesDocument struct {
 	Notes []Note `json:"notes"`
+	// Frame is where the floating window was last. There is one floating window, as 1.x has one.
+	Frame *Frame `json:"floatingFrame,omitempty"`
 }
 
 type draftsDocument struct {
@@ -141,14 +143,26 @@ func (s *Store) Delete(id string) error {
 	return s.removeDraft(id)
 }
 
-// SetFloating records whether the note's window is open. Its frame is kept either way.
+// SetFloating records whether the note is the one the floating window shows.
 func (s *Store) SetFloating(id string, floating bool) error {
 	return s.updateNote(id, func(n *Note) { n.Floating = floating })
 }
 
-// SetFrame records where the note's floating window is.
-func (s *Store) SetFrame(id string, frame Frame) error {
-	return s.updateNote(id, func(n *Note) { n.Frame = &frame })
+// FloatingFrame returns where the floating window was last, and whether it has been placed.
+func (s *Store) FloatingFrame() (Frame, bool) {
+	doc, _ := s.notes.Load()
+	if doc.Frame == nil {
+		return Frame{}, false
+	}
+	return *doc.Frame, true
+}
+
+// SetFloatingFrame records where the floating window is.
+func (s *Store) SetFloatingFrame(frame Frame) error {
+	if s.readOnly {
+		return store.ErrReadOnly
+	}
+	return s.notes.Update(func(d *notesDocument) { d.Frame = &frame })
 }
 
 // Drafts returns the drafts the store holds, malformed ones left out.
