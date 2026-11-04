@@ -32,6 +32,16 @@ const contextType = "Context"
 // Render returns the reference for the api package whose source files are at the root of sources, as plain text.
 // Output is deterministic: sections and entries are sorted by name.
 func Render(sources fs.FS) (string, error) {
+	return render(sources, false)
+}
+
+// RenderCompact returns the reference without its prose: the same entry points, types, enum values and functions as
+// Render, with names and signatures only. The builder preloads it, so a typical turn needs no reading tool call.
+func RenderCompact(sources fs.FS) (string, error) {
+	return render(sources, true)
+}
+
+func render(sources fs.FS, terse bool) (string, error) {
 	fset := token.NewFileSet()
 	files, err := parseAPIFiles(fset, sources)
 	if err != nil {
@@ -41,6 +51,7 @@ func Render(sources fs.FS) (string, error) {
 		return "", fmt.Errorf("no api package source files")
 	}
 	index := indexPackage(fset, files)
+	index.terse = terse
 	wire := index.reach(append(append([]string{}, entryInterfaces...), rootTypes...), map[string]bool{contextType: true})
 	return index.render(wire, index.services(wire)), nil
 }
@@ -79,6 +90,8 @@ type pkgIndex struct {
 	docs   map[string]string
 	funcs  map[string]*ast.FuncDecl
 	consts map[string][]constValue
+	// terse drops the prose: doc sentences of types, fields, values, functions and interfaces.
+	terse bool
 }
 
 type constValue struct {
@@ -223,6 +236,22 @@ func (index *pkgIndex) render(wire, services []string) string {
 	return b.String()
 }
 
+// prose is doc text, or nothing in a terse index.
+func (index *pkgIndex) prose(doc string) string {
+	if index.terse {
+		return ""
+	}
+	return doc
+}
+
+// functionProse is the first sentence after a function's signature, or nothing in a terse index.
+func (index *pkgIndex) functionProse(doc string) string {
+	if index.terse {
+		return ""
+	}
+	return ": " + firstSentence(doc)
+}
+
 func isEntryInterface(name string) bool {
 	for _, iface := range entryInterfaces {
 		if iface == name {
@@ -241,7 +270,7 @@ func (index *pkgIndex) writeInterfaceMethods(b *strings.Builder, name string) {
 	if !ok {
 		return
 	}
-	fmt.Fprintf(b, "## %s\n\n%s\n\n", name, index.docs[name])
+	fmt.Fprintf(b, "## %s\n\n%s\n\n", name, index.prose(index.docs[name]))
 	for _, field := range iface.Methods.List {
 		for _, method := range field.Names {
 			fmt.Fprintf(b, "- func %s%s\n", method.Name, strings.TrimPrefix(index.exprText(field.Type), "func"))
@@ -255,7 +284,7 @@ func (index *pkgIndex) writeInterfaceMethods(b *strings.Builder, name string) {
 func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 	spec := index.types[name]
 	fmt.Fprintf(b, "### %s\n\n", name)
-	if doc := index.docs[name]; full && doc != "" {
+	if doc := index.docs[name]; full && doc != "" && !index.terse {
 		fmt.Fprintf(b, "%s\n\n", firstSentence(doc))
 	}
 	switch t := spec.Type.(type) {
@@ -286,7 +315,7 @@ func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full 
 		}
 		for _, name := range field.Names {
 			line := fmt.Sprintf("- `%s` (%s)", jsonName(field.Tag, name.Name), typeText)
-			if full && doc != "" {
+			if full && doc != "" && !index.terse {
 				line += ": " + firstSentence(doc)
 			}
 			b.WriteString(line + "\n")
@@ -303,7 +332,7 @@ func (index *pkgIndex) writeConsts(b *strings.Builder, typeName string) {
 	b.WriteString("Values:\n")
 	for _, value := range values {
 		line := fmt.Sprintf("- %s = %s", value.name, value.value)
-		if value.doc != "" {
+		if value.doc != "" && !index.terse {
 			line += ": " + value.doc
 		}
 		b.WriteString(line + "\n")
@@ -319,7 +348,7 @@ func (index *pkgIndex) writeFunctions(b *strings.Builder) {
 	for _, name := range names {
 		decl := index.funcs[name]
 		if doc := commentText(decl.Doc); doc != "" {
-			fmt.Fprintf(b, "- %s%s: %s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), firstSentence(doc))
+			fmt.Fprintf(b, "- %s%s%s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), index.functionProse(doc))
 		}
 	}
 }

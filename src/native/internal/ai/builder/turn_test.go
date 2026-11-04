@@ -173,11 +173,15 @@ func toolCallReply(writer io.Writer, id, name string, args any) {
 	}
 }
 
-// TestBuilderTurnReadsTheAPIWritesAndBindsTheChat runs one builder turn end to end on the fake backend: the model reads
-// a page of the reference, writes the extension through write_extension, and then answers in a sentence. The extension
-// is installed enabled, the chat is bound to it, and the transcript keeps no source. The request sizes and the steps
-// are reported, so the cost of the turn can be compared with the instructions it used to send on every request.
-func TestBuilderTurnReadsTheAPIWritesAndBindsTheChat(t *testing.T) {
+// previousRequestBytes is the size of the one request a builder turn used to send: the full API reference rode in its
+// instructions. A turn now sends its requests with the terse reference, and each must stay below this.
+const previousRequestBytes = 46827
+
+// TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat runs one builder turn end to end on the fake backend:
+// the model writes the extension through write_extension from the terse reference it was given, and then answers in a
+// sentence. The extension is installed enabled, the chat is bound to it, and the transcript keeps no source. The turn
+// takes two model requests, each smaller than the request it used to send.
+func TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat(t *testing.T) {
 	f := newTurnFixture(t)
 	var id string
 	f.onUI(func() {
@@ -191,22 +195,18 @@ func TestBuilderTurnReadsTheAPIWritesAndBindsTheChat(t *testing.T) {
 		}
 	})
 
-	first := f.nextReply()
-	toolCallReply(first, "call-1", readAPIToolName, map[string]any{"offset": 0})
-	_ = first.Close()
-
 	source := "package main\n\nfunc SearchItems(ctx api.Context, query string) ([]api.Item, error) { return nil, nil }\n"
-	second := f.nextReply()
-	toolCallReply(second, "call-2", writeToolName, map[string]any{
+	first := f.nextReply()
+	toolCallReply(first, "call-1", writeToolName, map[string]any{
 		"manifest": `{"apiVersion":"1.0","id":"user.clock","title":"Clock"}`,
 		"source":   source,
 	})
-	_ = second.Close()
+	_ = first.Close()
 
-	third := f.nextReply()
-	_, _ = io.WriteString(third, fixtures.StreamFrames("Installed the clock. It is not run yet.", 24)[0])
-	_, _ = io.WriteString(third, fixtures.DoneFrame)
-	_ = third.Close()
+	second := f.nextReply()
+	_, _ = io.WriteString(second, fixtures.StreamFrames("Installed the clock. It is not run yet.", 24)[0])
+	_, _ = io.WriteString(second, fixtures.DoneFrame)
+	_ = second.Close()
 	f.awaitSettled(id)
 
 	f.onUI(func() {
@@ -223,10 +223,12 @@ func TestBuilderTurnReadsTheAPIWritesAndBindsTheChat(t *testing.T) {
 	if strings.Join(f.extensions.installs, ",") != "user.clock" {
 		t.Fatalf("installs = %v, want user.clock installed once", f.extensions.installs)
 	}
-	first0, first2 := len(f.transport.Body(0)), len(f.transport.Body(1))
-	t.Logf("builder turn: 3 model steps; request bytes %d, %d, %d; reference %d bytes; instructions %d bytes",
-		first0, first2, len(f.transport.Body(2)), len(apiReference), len(instructionsText))
-	if first0 >= len(apiReference) {
-		t.Fatalf("the first request is %d bytes, which is not smaller than the reference it used to carry", first0)
+	writeBytes, answerBytes := len(f.transport.Body(0)), len(f.transport.Body(1))
+	t.Logf("builder turn: 2 model steps; request bytes %d, %d; preloaded reference %d bytes; instructions %d bytes",
+		writeBytes, answerBytes, len(apiReferenceCompact), len(instructionsText))
+	for step, bytes := range []int{writeBytes, answerBytes} {
+		if bytes >= previousRequestBytes {
+			t.Fatalf("request %d is %d bytes, which is not smaller than the %d-byte request a turn used to send", step, bytes, previousRequestBytes)
+		}
 	}
 }

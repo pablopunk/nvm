@@ -15,7 +15,11 @@ func TestGeneratedReferenceMatchesTheAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if apiReference != want {
+	wantCompact, err := apiref.RenderCompact(os.DirFS("../../ext/api"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if apiReference != want || apiReferenceCompact != wantCompact {
 		t.Fatal("reference_gen.go is stale: run go generate in internal/ai/builder")
 	}
 }
@@ -35,6 +39,22 @@ const maxReferenceBytes = 48 << 10
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
 		t.Fatalf("the reference is %d bytes; the budget is %d", len(apiReference), maxReferenceBytes)
+	}
+}
+
+// maxCompactReferenceBytes bounds the terse reference every builder request carries. It keeps a typical turn's second
+// request under the size of the request a turn used to send.
+const maxCompactReferenceBytes = 32 << 10
+
+func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
+	if len(apiReferenceCompact) > maxCompactReferenceBytes {
+		t.Fatalf("the compact reference is %d bytes; the budget is %d", len(apiReferenceCompact), maxCompactReferenceBytes)
+	}
+}
+
+func TestInstructionsCarryTheCompactReference(t *testing.T) {
+	if !strings.HasSuffix(instructionsText, apiReferenceCompact) {
+		t.Fatal("the instructions do not end with the compact reference")
 	}
 }
 

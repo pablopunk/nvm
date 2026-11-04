@@ -8,12 +8,12 @@ import (
 )
 
 // rulesTemplate is the builder's instruction. ~~~ stands for a Markdown code fence, and API_VERSION for the API version
-// this build implements, so the model never writes a stale one. The API reference is not here: the model reads it with
-// read_extension_api, page by page, and writes the extension with write_extension.
+// this build implements, so the model never writes a stale one. The terse API reference follows it in the instructions;
+// read_extension_api returns the prose of the full reference, page by page.
 const rulesTemplate = `You write extensions for Nevermind, a desktop command palette. An extension is a manifest and one Go source file, interpreted at runtime with the typed Nevermind extension API.
 
 Workflow:
-- Read the API with read_extension_api before you write. Read the pages you need: the first page lists the entry points and the common types. To read several pages, call read_extension_api for each of them in the same reply.
+- The typed API reference follows these rules. It names every entry point, type, enum value and function. Call read_extension_api only when a name needs its explanation; it returns the reference with prose, a page at a time.
 - Then call write_extension once with the manifest as a JSON object (apiVersion, id, title, and optionally commandTitles), the complete main.go source, and any extra Go files in files.
 - write_extension checks the extension, installs it and enables it, and returns the result. If it fails, read the error, fix the code and call write_extension again in this turn.
 - When it is installed, reply with one short sentence. Never paste the manifest or the source into the chat.
@@ -46,11 +46,11 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 }
 ~~~`
 
-// instructionsText is the builder's system prompt for a new extension. It is short on purpose: the reference is read
-// on demand, so every request of a turn carries only what the model has read so far.
+// instructionsText is the builder's system prompt for a new extension: its rules and the terse API reference, so a
+// typical turn writes its extension without a reading call first.
 var instructionsText = fence(strings.NewReplacer(
 	"API_VERSION", apiVersion(),
-).Replace(rulesTemplate))
+).Replace(rulesTemplate)) + "\n\n" + apiReferenceCompact
 
 // fence replaces the ~~~ placeholder with the Markdown code fence.
 func fence(s string) string {

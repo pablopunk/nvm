@@ -45,7 +45,7 @@ type writeArgs struct {
 func readAPITool() agent.Tool {
 	return agent.Tool{
 		Name:        readAPIToolName,
-		Description: "Read one page of the typed Nevermind extension API reference. Call it again with the offset it names to read the next page.",
+		Description: "Read one page of the full Nevermind extension API reference, with the prose behind each name. Call it again with the offset it names to read the next page.",
 		Label:       "Reading the extension API",
 		Schema:      readSchema,
 		Run: func(_ context.Context, args json.RawMessage) (agent.Result, error) {
