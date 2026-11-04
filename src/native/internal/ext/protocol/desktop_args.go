@@ -23,6 +23,12 @@ type QueryArgs struct {
 	Query string `json:"query"`
 }
 
+// NotifyArgs is one operating-system notification: a title and a body, both plain text.
+type NotifyArgs struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
+}
+
 // CapabilityArgs names a public capability, as api.System.HasCapability does.
 type CapabilityArgs struct {
 	Name string `json:"name"`

@@ -38,6 +38,7 @@ const (
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
 	CapabilityFocusReturn      Capability = "focus.return"
+	CapabilityFrontmostApp     Capability = "apps.frontmost"
 	CapabilityMicrophone       Capability = "microphone.capture"
 	CapabilityTextRecognize    Capability = "text.recognize"
 	CapabilityScreenCapture    Capability = "screen.capture"
@@ -50,7 +51,7 @@ const (
 func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
-		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
+		CapabilityFileWatch, CapabilityFocusReturn, CapabilityFrontmostApp, CapabilityGlobalHotkeys, CapabilityHelperRun,
 		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
 		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
 		CapabilityShellBeep, CapabilityShellQuickLook, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,

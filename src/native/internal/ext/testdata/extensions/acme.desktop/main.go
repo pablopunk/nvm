@@ -23,6 +23,8 @@ var checks = map[string]func(api.Context) string{
 	"clipboard": clipboardCheck,
 	"windows":   windowsCheck,
 	"apps":      appsCheck,
+	"frontmost": frontmostCheck,
+	"notify":    notifyCheck,
 	"history":   historyCheck,
 	"shortcuts": shortcutsCheck,
 	"system":    systemCheck,
@@ -74,6 +76,20 @@ func appsCheck(ctx api.Context) string {
 		return "apps failed: " + err.Error()
 	}
 	return fmt.Sprintf("apps listed=%t", len(apps) > 0)
+}
+
+func frontmostCheck(ctx api.Context) string {
+	app, err := ctx.Desktop().Apps().Frontmost()
+	if err != nil {
+		return "frontmost failed: " + err.Error()
+	}
+	return fmt.Sprintf("frontmost named=%t", app.Name != "")
+}
+
+// notifyCheck shows one notification. The host shows it only when the extension declares system.
+func notifyCheck(ctx api.Context) string {
+	err := ctx.System().Notify("Nevermind fixture", "Shown by the desktop fixture")
+	return fmt.Sprintf("notify shown=%t", err == nil)
 }
 
 func historyCheck(ctx api.Context) string {

@@ -14,6 +14,7 @@ const (
 	processRunsPerMinute    = 60
 	ocrReadsPerMinute       = 20
 	screenReadsPerMinute    = 6
+	notificationsPerMinute  = 10
 )
 
 // requireRun refuses a destructive call that does not run under a palette action. A search or a root listing has

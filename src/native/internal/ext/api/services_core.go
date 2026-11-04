@@ -243,6 +243,10 @@ type System interface {
 	SettingsPanes() []SettingsPane
 	// Places lists the standard folders of the user's home, in the order the palette shows them. Empty without a home.
 	Places() []Place
+	// Notify shows an operating-system notification with a title and a body. It needs the system declaration. It has no
+	// click action: the Electron extension API had none. It returns an error when the user or the OS turned notifications
+	// off, and when the system cannot show them.
+	Notify(title, body string) error
 }
 
 // SettingsPane is one pane of the operating system's settings app. Setting an ActionSystem op of

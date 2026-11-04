@@ -73,6 +73,9 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if isX11FocusSession(goos, getenv) && hasTool("xdotool") {
 		supported = append(supported, platform.CapabilityFocusReturn)
 	}
+	if frontmostAppCapable(goos, getenv, hasTool) {
+		supported = append(supported, platform.CapabilityFrontmostApp)
+	}
 	env := processSystemEnvironment()
 	env.goos = goos
 	env.installed = hasTool
@@ -124,6 +127,18 @@ func windowManagementCapable(goos string, getenv func(string) string, hasTool fu
 		return true
 	case "linux":
 		return isX11FocusSession(goos, getenv) && hasAllTools(hasTool, x11WindowTools)
+	}
+	return false
+}
+
+// frontmostAppCapable reports whether the app in front can be named: Launch Services on macOS, and on Linux the same
+// X11 tools the window port reads the active window with. Windows has no port for it in this build.
+func frontmostAppCapable(goos string, getenv func(string) string, hasTool func(string) bool) bool {
+	switch goos {
+	case "darwin":
+		return true
+	case "linux":
+		return windowManagementCapable(goos, getenv, hasTool)
 	}
 	return false
 }

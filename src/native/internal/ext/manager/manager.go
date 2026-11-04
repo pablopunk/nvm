@@ -44,10 +44,14 @@ type Ports struct {
 	Capabilities platform.Capabilities
 	OS           string
 	Windows      services.WindowEngine
-	Shortcuts    services.ShortcutTable
-	OCR          *ocr.Service
-	History      func() *clipboard.History
-	Confirm      services.ConfirmFunc
+	// Frontmost names the app in front for the apps service. Nil answers unavailable.
+	Frontmost services.FrontmostSource
+	// Notifier shows the notifications of the system service. Nil answers unavailable.
+	Notifier platform.Notifier
+	Shortcuts services.ShortcutTable
+	OCR       *ocr.Service
+	History   func() *clipboard.History
+	Confirm   services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
@@ -142,6 +146,8 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Capabilities: ports.Capabilities,
 			OS:           ports.OS,
 			Windows:      ports.Windows,
+			Frontmost:    ports.Frontmost,
+			Notifier:     ports.Notifier,
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,

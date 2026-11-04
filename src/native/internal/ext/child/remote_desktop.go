@@ -81,6 +81,13 @@ func (a remoteApps) Launch(path string) error {
 	return a.link.Call(protocol.ServiceDesktopApps, protocol.OpLaunch, protocol.PathArgs{Path: path}, nil)
 }
 
+// Frontmost names the app in front. The host answers with the bundle id or class, and the indexed path when it has one.
+func (a remoteApps) Frontmost() (api.App, error) {
+	var app api.App
+	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpFrontmost, nil, &app)
+	return app, err
+}
+
 func (a remoteApps) Icon(path string) (string, bool, error) {
 	var icon protocol.IconResult
 	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpIcon, protocol.PathArgs{Path: path}, &icon)

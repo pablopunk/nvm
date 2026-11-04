@@ -4,7 +4,14 @@ import (
 	"context"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
+
+// FrontmostSource names the app that has the keyboard. The platform window port implements it; nil where the OS has
+// none.
+type FrontmostSource interface {
+	Frontmost(ctx context.Context) (platform.WindowApp, bool, error)
+}
 
 // WindowEngine places and lists windows of other apps. The window management engine implements it; this layer sits
 // below that engine, so it cannot name the engine's type. Runtime failures come back as results with OK false.

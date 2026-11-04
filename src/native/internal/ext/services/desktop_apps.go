@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,7 +19,7 @@ const (
 	maxListedApps = 500
 )
 
-func (h *Handler) serveDesktopApps(call protocol.ServiceCall) (any, error) {
+func (h *Handler) serveDesktopApps(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	if err := h.require(api.CapabilityDesktopApps); err != nil {
 		return nil, err
 	}
@@ -34,6 +35,8 @@ func (h *Handler) serveDesktopApps(call protocol.ServiceCall) (any, error) {
 		return nil, h.launchApp(call.Args)
 	case protocol.OpIcon:
 		return h.appIcon(call.Args)
+	case protocol.OpFrontmost:
+		return h.frontmostApp(ctx)
 	}
 	return nil, invalid("desktop.apps has no operation %q", call.Op)
 }

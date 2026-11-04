@@ -31,6 +31,7 @@ var x11OnlyCapabilities = []platform.Capability{
 	platform.CapabilityClipboardPaste,
 	platform.CapabilitySelectionCopy,
 	platform.CapabilityFocusReturn,
+	platform.CapabilityFrontmostApp,
 	platform.CapabilityWindowPlacement,
 	platform.CapabilityWindowManagement,
 }
@@ -107,5 +108,13 @@ func TestPasteAndSelectionNeedXdotoolOnX11(t *testing.T) {
 	}
 	if !pasteCapable("linux", x11, allLinuxToolsInstalled) || !selectionCopySupported("linux", x11, allLinuxToolsInstalled) {
 		t.Fatal("paste or selection copy is omitted on X11 with xdotool")
+	}
+}
+
+// TestFrontmostAppIsOfferedOnMacOSWithoutX11Tools keeps the Launch Services path independent of the X11 tool check.
+func TestFrontmostAppIsOfferedOnMacOSWithoutX11Tools(t *testing.T) {
+	set := capabilitiesFor("darwin", environment(map[string]string{}), func(string) bool { return false })
+	if !set.Supported(platform.CapabilityFrontmostApp) {
+		t.Fatal("the frontmost app is omitted on macOS")
 	}
 }
