@@ -19,14 +19,14 @@ import (
 // dragWindow is the palette's window in these tests. The palette only asks it to update, so updates run at once.
 type dragWindow struct{ visible bool }
 
-func (w *dragWindow) Update(fn func())                 { fn() }
-func (w *dragWindow) Show()                            { w.visible = true }
-func (w *dragWindow) Hide()                            { w.visible = false }
-func (w *dragWindow) IsVisible() bool                  { return w.visible }
-func (w *dragWindow) IsFocused() bool                  { return w.visible }
-func (w *dragWindow) Focus()                           {}
-func (w *dragWindow) Size() (int, int)                 { return 720, 470 }
-func (w *dragWindow) SetPosition(x, y int)             {}
+func (w *dragWindow) Update(fn func())     { fn() }
+func (w *dragWindow) Show()                { w.visible = true }
+func (w *dragWindow) Hide()                { w.visible = false }
+func (w *dragWindow) IsVisible() bool      { return w.visible }
+func (w *dragWindow) IsFocused() bool      { return w.visible }
+func (w *dragWindow) Focus()               {}
+func (w *dragWindow) Size() (int, int)     { return 720, 470 }
+func (w *dragWindow) SetPosition(x, y int) {}
 
 // dragHarness is a palette whose rows drag through the real row wrapper and a fake drag port.
 type dragHarness struct {

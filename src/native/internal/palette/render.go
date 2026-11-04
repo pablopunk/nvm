@@ -194,7 +194,6 @@ func (p *Palette) row(c *ui.Context, i int) {
 	design.Row(c, data)
 }
 
-
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon
 // or letters the design tile draws.
 func (p *Palette) tileData(it search.Item) design.TileData {
