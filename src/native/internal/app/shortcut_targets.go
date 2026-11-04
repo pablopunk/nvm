@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -37,16 +38,40 @@ func commandShortcutID(cmd command) string {
 	return cmd.ID
 }
 
+// movedCommandShortcutIDs are the shortcut keys of the built-in commands that were native commands before. Their
+// bindings keep the keys the user set, so these commands are keyed by the native IDs in place of their extension IDs.
+var movedCommandShortcutIDs = map[string]string{
+	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID: shortcuts.CommandForceQuitApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:   shortcuts.CommandQuitAllApps,
+}
+
 func extensionCommandShortcutID(extID, commandID string) string {
-	return extensionShortcutPrefix + extID + ":" + commandID
+	rest := extensionShortcutPrefix + extID + ":" + commandID
+	if moved, ok := movedCommandShortcutIDs[rest]; ok {
+		return moved
+	}
+	return rest
 }
 
 func splitExtensionCommandShortcutID(actionID string) (extID, commandID string, ok bool) {
+	if extID, commandID, ok := splitMovedCommandShortcutID(actionID); ok {
+		return extID, commandID, true
+	}
 	rest, found := strings.CutPrefix(actionID, extensionShortcutPrefix)
 	if !found {
 		return "", "", false
 	}
 	return strings.Cut(rest, ":")
+}
+
+// splitMovedCommandShortcutID names the built-in command a moved shortcut key stands for.
+func splitMovedCommandShortcutID(actionID string) (extID, commandID string, ok bool) {
+	for key, moved := range movedCommandShortcutIDs {
+		if moved == actionID {
+			return strings.Cut(strings.TrimPrefix(key, extensionShortcutPrefix), ":")
+		}
+	}
+	return "", "", false
 }
 
 // resolveShortcutTitle names a root action outside the Keyboard Shortcuts list's commands and reports whether it still

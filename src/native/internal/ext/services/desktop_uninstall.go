@@ -112,11 +112,11 @@ func (h *Handler) uninstallTrash(raw json.RawMessage) (api.UninstallResult, erro
 		values[id] = true
 	}
 	result := lifecycle.TrashUninstall(snapshot, values)
-	return uninstallResultOf(result), nil
+	return uninstallResultOf(result, lifecycle.TrashFolder()), nil
 }
 
-func uninstallResultOf(result appfeature.TrashResult) api.UninstallResult {
-	out := api.UninstallResult{Status: result.Status, Moved: result.Moved, Notes: noteMessages(result.Notes)}
+func uninstallResultOf(result appfeature.TrashResult, trashFolder string) api.UninstallResult {
+	out := api.UninstallResult{Status: result.Status, TrashFolder: trashFolder, Moved: result.Moved}
 	for _, item := range result.Untouched {
 		out.Untouched = append(out.Untouched, api.UninstallUntouched{Path: item.Path, Message: item.Message})
 	}

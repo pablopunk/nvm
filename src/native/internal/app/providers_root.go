@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
@@ -16,7 +15,6 @@ import (
 // extensions, file paths) are shared as they are. The clipboard history locks its own state, so it is shared too.
 type rootInput struct {
 	learn      *usage.Learner
-	apps       []appfeat.App
 	clip       *clipEngine
 	clipInRoot bool
 	clipSearch bool
@@ -56,7 +54,6 @@ func (p *App) captureRoot() *rootInput {
 	chats := p.chatHeads()
 	return &rootInput{
 		learn:        p.learn,
-		apps:         p.appsSnapshot(),
 		clip:         p.clip,
 		clipInRoot:   !p.S.ClipRootOff,
 		clipSearch:   !p.S.ClipRootSearchOff,

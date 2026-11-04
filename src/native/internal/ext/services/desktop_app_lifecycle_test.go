@@ -27,9 +27,16 @@ type lifecycleRecorder struct {
 	err     error
 }
 
-func (r *lifecycleRecorder) IndexedApps() []appfeature.App { return nil }
+// IndexedApps lists the one app the test shell lists, as the index would.
+func (r *lifecycleRecorder) IndexedApps() []appfeature.App {
+	return []appfeature.App{{Name: "Notes", ID: "com.example.notes", Path: notesApp}}
+}
 
-func (r *lifecycleRecorder) DiscoverUninstall(string) appfeature.Discovery { return appfeature.Discovery{} }
+func (r *lifecycleRecorder) TrashFolder() string { return "" }
+
+func (r *lifecycleRecorder) DiscoverUninstall(string) appfeature.Discovery {
+	return appfeature.Discovery{}
+}
 
 func (r *lifecycleRecorder) TrashUninstall(appfeature.UninstallSnapshot, map[string]bool) appfeature.TrashResult {
 	return appfeature.TrashResult{}

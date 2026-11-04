@@ -95,7 +95,7 @@ func extensionRootItemRow(t *testing.T) search.Item {
 		if result.ExtensionID != "acme.rootitem" {
 			continue
 		}
-		if rows := rootRowsFor(p, m, result); len(rows) == 1 {
+		if rows := rootRowsFor(p, m, result, nil); len(rows) == 1 {
 			return rows[0]
 		}
 	}

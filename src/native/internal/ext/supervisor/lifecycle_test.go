@@ -29,7 +29,11 @@ func (fixedApps) QuitAllApps() ([]appfeature.App, error) {
 
 func (fixedApps) HideApp(appfeature.App) error { return nil }
 
-func (fixedApps) IndexedApps() []appfeature.App { return nil }
+func (fixedApps) IndexedApps() []appfeature.App {
+	return []appfeature.App{{Name: "Notes", ID: "com.example.notes", Path: "/Applications/Notes.app"}}
+}
+
+func (fixedApps) TrashFolder() string { return "" }
 
 func (fixedApps) DiscoverUninstall(string) appfeature.Discovery { return appfeature.Discovery{} }
 

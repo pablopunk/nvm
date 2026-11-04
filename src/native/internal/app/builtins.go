@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
+	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
@@ -39,6 +40,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
 		quicklinks.New(in.Quicklinks), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
+		appsbuiltin.New(),
 	}
 }
 
@@ -67,5 +69,5 @@ func builtInRows(p *App, id, q string) []search.Item {
 	if !ok {
 		return nil
 	}
-	return searchRowsFor(p, m, q, result)
+	return searchRowsFor(p, m, q, result, nil)
 }

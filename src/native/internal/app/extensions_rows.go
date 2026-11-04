@@ -29,7 +29,7 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 	}
 	var out []search.Item
 	for _, result := range e.p.rootRows.results(ctx, m) {
-		out = append(out, rootRowsFor(e.p, m, result)...)
+		out = append(out, rootRowsFor(e.p, m, result, e.in.shortcuts)...)
 	}
 	for _, result := range m.Commands(ctx) {
 		out = append(out, commandRowsFor(e.p, m, result, e.in.shortcuts)...)
@@ -53,20 +53,20 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 		if isCommandPlacedBuiltIn(result.ExtensionID) {
 			continue // listed by commandRows, at the place of its command
 		}
-		out = append(out, searchRowsFor(e.p, m, q, result)...)
+		out = append(out, searchRowsFor(e.p, m, q, result, e.in.shortcuts)...)
 	}
 	emit(search.Batch{Items: out, Final: true})
 }
 
 // searchRowsFor turns one extension's answer into rows. A failed extension contributes at most its pointer row
 // (see failureRows), never its items.
-func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchResult) []search.Item {
+func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchResult, bound map[string]string) []search.Item {
 	if result.Failure != nil {
 		return failureRows(p, result.ExtensionID, result.Title, q, result.Failure)
 	}
 	var out []search.Item
 	for _, item := range result.Items {
-		out = append(out, searchRow(p, m, result, item))
+		out = append(out, searchRow(p, m, result, item, bound))
 	}
 	return out
 }
@@ -76,8 +76,8 @@ func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchRe
 const scoreQueryFallback = 40
 
 // searchRow is one search answer as a root row. A query fallback takes the fallback band whatever Score it declares.
-func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api.Item) search.Item {
-	row := extensionRow(p, m, result.ExtensionID, result.Title, item)
+func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api.Item, bound map[string]string) search.Item {
+	row := extensionRow(p, m, result.ExtensionID, result.Title, item, bound)
 	if item.QueryFallback {
 		row.Score = scoreQueryFallback
 	}
@@ -86,18 +86,18 @@ func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api
 
 // rootRowsFor turns one extension's empty-query rows into rows. A failed extension contributes none at the root, as
 // for its commands.
-func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []search.Item {
+func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound map[string]string) []search.Item {
 	if result.Failure != nil {
 		return nil
 	}
 	var out []search.Item
 	for _, item := range result.Items {
-		out = append(out, extensionRow(p, m, result.ExtensionID, result.Title, item))
+		out = append(out, extensionRow(p, m, result.ExtensionID, result.Title, item, bound))
 	}
 	return out
 }
 
-func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {
+func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item, bound map[string]string) search.Item {
 	deps := p.extensionViewDeps(m)
 	row := search.Item{
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
@@ -114,6 +114,10 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	}
 	for _, action := range item.Actions {
 		row.Actions = append(row.Actions, extview.ActionFor(deps, extID, action))
+	}
+	if m.IsBuiltIn(extID) && item.CustomizeAs != "" {
+		p.shortcutTitles.remember(item.CustomizeAs, item.Title)
+		row = p.withShortcutActions(row, item.CustomizeAs, bound)
 	}
 	return p.withAuthoringActions(row, extID, "")
 }
@@ -139,5 +143,9 @@ func builtInRow(row search.Item, item api.Item) search.Item {
 		row.Score = int(item.Score)
 	}
 	row.LearnKey = item.LearnKey
+	if item.File != nil && item.Image == nil && item.Icon == "" {
+		row.Icon = ""
+		row.IconPath = item.File.Path
+	}
 	return row
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -37,6 +38,18 @@ func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *
 // newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
 // is the real one; a nil network refuses every fetch.
 func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
+	return newManagerWithApps(t, builtins, clock, network, nil, enabled...)
+}
+
+// newFixtureManagerWithApps is newFixtureManager with the palette's apps lifecycle, so the applications built-in lists
+// the apps the palette indexed.
+func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manager.Manager {
+	t.Helper()
+	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+}
+
+// newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
+func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -57,6 +70,7 @@ func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platfor
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 		Places:       fixturePlaces,
 		Network:      network,
+		Apps:         apps,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),

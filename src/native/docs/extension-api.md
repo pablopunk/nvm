@@ -1163,7 +1163,7 @@ Code: `internal/ext/builtins/calculator` (the built-in), `internal/features/calc
 - **Linux.** Running status and quit use the process listing and signals, as the Quit Apps command did before this batch. Quit All skips the desktop shell and the file manager's desktop, and Hide is unsupported.
 - **Failures.** A refused AppleScript shows its reason in the HUD under the extension's title and writes a warning to the log. The Automation hint is shown when macOS refused the grant. Any other failure is logged and shown with its message.
 - **Confirmation.** The service never asks. A built-in that quits or hides apps shows its own confirmation first, through the palette, as the macOS confirms do.
-- **Not in this batch.** Uninstall discovery and the Trash step stay in the host. The Apps built-in is not migrated yet.
+- **Not in this batch.** Uninstall moved to the Apps built-in in section 30.
 - **Fixture.** `internal/ext/testdata/extensions/acme.lifecycle` probes each call, and `acme.paste` (section 28.1) probes the paste family.
 
 ## 29. Dogfood batch 2: quicklinks, getting started and web search as built-ins (WP3.10)
@@ -1179,3 +1179,19 @@ Code: `internal/ext/builtins/quicklinks` (Create Quicklink, keyword rows, six de
 - **Web search (`nevermind.web`).** The search row is a query fallback with the learn key `web:search`, and the website row (score 150) opens an address the query names. The default engine is the declared setting `engine` (Google, DuckDuckGo, Bing, Brave Search), whose default is the engine the settings file held. The settings view reads and writes it through `Manager.ReadSetting` and `Manager.WriteSetting`, the same service calls an extension makes, so the setting needs the `settings.write` capability. Automate stays native (section 4, HO11) and offers a query fallback only when the query names no website.
 - **Tests.** L2: `internal/ext/builtins/quicklinks`, `internal/ext/builtins/gettingstarted` and `internal/ext/builtins/websearch` run each built-in's handlers on fake services; `internal/app/guide_shortcut_test.go` runs the guide through the palette. The root table and learned table are unchanged.
 - **Sign-in row (1.x parity).** The guide lists the optional account as 1.x does: "Sign in to Nevermind" while signed out, whose primary action is the new `account` action with op `sign-in` (`api.AccountSignIn`), which opens the host's sign-in flow as the Log in command does; "Nevermind account", disabled, once signed in. `Context.Account().SignedIn()` (new) reports the state. Credentials never reach the extension (HO2). The row's icon is `user`, the icon of the host's Log in command, because the palette's icon set has no `person`.
+
+## 30. Dogfood batch 3a: the applications built-in (rows, quit commands, uninstall)
+
+Code: `internal/ext/builtins/apps` (rows, Force Quit Apps, Quit All Apps, the uninstall review, the result view). The host's index, running state and quit services stay in `internal/features/apps`, which the services layer reads through `AppLifecycle`.
+
+- **Rows.** Every indexed app is a root row, newest first by when the host first saw it, then by name. A search matches the name, or an alias the user gave the app. Enter opens the app; Uninstall is in the row's menu when the platform has `apps.uninstall`. A row shows Running while the app has a live process, and its system icon loads in the background.
+- **Keys.** A row sets `CustomizeAs` to `app:<path>`, so its keyboard shortcut and alias keep the 1.x key `extension-root:nevermind.apps:app:<path>`. The learning key is `app:<bundle id>`, as before.
+- **Drag.** The row's `File` is the app bundle, so it drags out to other applications.
+- **Commands.** Force Quit Apps lists the running apps; each one asks `Force Quit?` before it is force quit, as 1.x does. Quit All Apps asks once, then asks each running app to quit except Nevermind and the desktop's own apps. Both keep their native shortcut keys (`command:force-quit-apps`, `command:quit-all-apps`) through the host's moved-command table, and their root scores are the native ones.
+- **Uninstall.** `Apps().UninstallReview` runs discovery and keeps the review under a token; `Apps().UninstallTrash` moves the reviewed items the IDs select, checking each one again first, with the same guards as before. The built-in keeps the selection; the review is dropped once it has run. The result view reveals the Trash folder the host reports.
+- **API added.** `Item.CustomizeAs`; `Shortcuts().Aliases(prefix)`; `Apps().List()` now lists the index with `FirstSeenMs`; `Apps().UninstallReview`, `Apps().UninstallTrash` and `UninstallResult.TrashFolder`; the `apps.uninstall` capability. A built-in command's `Score` is honoured at the empty root.
+- **Not on the row.** Show in Finder is not a row action: 1.x has none on app rows, and the root goldens do not list it.
+- **Not used.** Hide and Frontmost are served but the applications built-in does not call them; 1.x does not.
+- **Host-kept.** A global shortcut bound to an app still launches it through the host's shortcut dispatch, which reads the index and the platform launch port.
+- **Budgets.** The new surface grew the builder's reference by about 1 KB. Its size ratchets were raised to 50 KB and 34 KB; the terse reference is what the builder reads on every turn.
+- **Tests.** L2: `internal/ext/builtins/apps` runs each handler on fake services; `internal/ext/services` covers the uninstall and alias operations on fake lifecycles; `internal/app` runs the root goldens through the built-in with the palette's apps service. The root table, the learned table and the goldens are unchanged.

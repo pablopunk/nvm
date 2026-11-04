@@ -191,8 +191,7 @@ type Shortcuts interface {
 	List() []ShortcutRecord
 	// Palette returns the app-wide shortcut that opens Nevermind.
 	Palette() ShortcutRecord
-	// Aliases returns the phrases the user gave the actions whose ID starts with prefix, keyed by action ID. A built-in
-	// that lists customizable rows reads its own, so an alias finds a row the query does not match by its title.
+	// Aliases returns the user's aliases for the action IDs that start with prefix.
 	Aliases(prefix string) map[string][]string
 }
 

@@ -17,6 +17,7 @@ type AppLifecycle interface {
 	IndexedApps() []appfeature.App
 	DiscoverUninstall(appPath string) appfeature.Discovery
 	TrashUninstall(snapshot appfeature.UninstallSnapshot, values map[string]bool) appfeature.TrashResult
+	TrashFolder() string
 	RunningApps(list []appfeature.App) ([]appfeature.App, error)
 	QuitApp(app appfeature.App) (appfeature.QuitOutcome, error)
 	ForceQuitApp(app appfeature.App) (appfeature.QuitOutcome, error)
