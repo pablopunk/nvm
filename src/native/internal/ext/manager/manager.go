@@ -47,7 +47,7 @@ type Ports struct {
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
 	// Notifier shows the notifications of the system service. Nil answers unavailable.
-	Notifier platform.Notifier
+	Notifier  platform.Notifier
 	Shortcuts services.ShortcutTable
 	OCR       *ocr.Service
 	History   func() *clipboard.History
