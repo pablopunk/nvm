@@ -44,16 +44,16 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 	}
 	var out []search.Item
 	for _, result := range m.Search(ctx, q) {
-		out = append(out, searchRowsFor(e.p, m, result)...)
+		out = append(out, searchRowsFor(e.p, m, q, result)...)
 	}
 	emit(search.Batch{Items: out, Final: true})
 }
 
-// searchRowsFor turns one extension's answer into rows. A failed extension is one row whose subtitle says why,
-// so a broken extension is visible in the palette without hiding the others.
-func searchRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []search.Item {
+// searchRowsFor turns one extension's answer into rows. A failed extension contributes at most its pointer row
+// (see failureRows), never its items.
+func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchResult) []search.Item {
 	if result.Failure != nil {
-		return []search.Item{failureRow(result.Title, result.Failure)}
+		return failureRows(p, result.ExtensionID, result.Title, q, result.Failure)
 	}
 	var out []search.Item
 	for _, item := range result.Items {
@@ -62,9 +62,11 @@ func searchRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []se
 	return out
 }
 
+// commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
+// for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
 func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult) []search.Item {
 	if result.Failure != nil {
-		return []search.Item{failureRow(result.Title, result.Failure)}
+		return nil
 	}
 	var out []search.Item
 	for _, command := range result.Commands {
@@ -89,15 +91,6 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		row.Actions = append(row.Actions, paletteAction(p, m, extID, action))
 	}
 	return row
-}
-
-// failureRow is the row an extension shows when it timed out, crashed, or is broken. Running it says why.
-func failureRow(title string, failure *api.Failure) search.Item {
-	return search.Item{
-		Kind: title, Title: title + " is not responding", Subtitle: failure.Message, Icon: "triangle-alert",
-		Tone: "red", Accessory: "Failed", Score: scoreExtension,
-		Actions: []search.Action{{Title: "Details", Run: func(h search.Host) { h.Toast(failure.Message) }}},
-	}
 }
 
 // paletteAction maps one wire action to a palette action. Only run executes extension code; the others are
