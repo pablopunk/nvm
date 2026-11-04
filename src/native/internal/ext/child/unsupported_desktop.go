@@ -91,14 +91,6 @@ func (remoteSystemClipboard) WriteHTML(string, string, bool) error {
 	return unsupported("ctx.desktop.clipboard.writeHtml")
 }
 
-func (remoteSystemClipboard) ReadImage() (string, bool, error) {
-	return "", false, unsupported("ctx.desktop.clipboard.readImage")
-}
-
-func (remoteSystemClipboard) WriteImage(string, bool) error {
-	return unsupported("ctx.desktop.clipboard.writeImage")
-}
-
 func (remoteSystemClipboard) ReadFiles() ([]api.FileRef, error) {
 	return nil, unsupported("ctx.desktop.clipboard.readFiles")
 }

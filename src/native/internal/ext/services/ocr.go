@@ -50,17 +50,26 @@ func (h *Handler) readImage(ctx context.Context, support ocr.Features, raw json.
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.OCRResult{}, err
 	}
+	png, isData, err := ocrPNGInput(args.Input)
+	if err != nil {
+		return api.OCRResult{}, err
+	}
 	path := args.Input.Source
 	if args.Input.File != nil && path == "" {
 		path = args.Input.File.Path
 	}
-	if path == "" {
-		return api.OCRResult{}, invalid("OCR needs an image file path")
+	if !isData && path == "" {
+		return api.OCRResult{}, invalid("OCR needs an image file path or a PNG data URL")
 	}
 	if !h.ocrReads.allow() {
 		return api.OCRResult{}, rateExceeded("OCR reads")
 	}
-	result, err := h.deps.OCR.Image(ctx, path, ocrOptionsOf(args.Options))
+	var result platform.TextResult
+	if isData {
+		result, err = h.deps.OCR.ImagePNG(ctx, png, ocrOptionsOf(args.Options))
+	} else {
+		result, err = h.deps.OCR.Image(ctx, path, ocrOptionsOf(args.Options))
+	}
 	return ocrResultOrFailure(result, err)
 }
 

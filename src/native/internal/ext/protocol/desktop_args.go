@@ -97,3 +97,15 @@ type ShellScriptArgs struct {
 type ShellWhichArgs struct {
 	Command string `json:"command"`
 }
+
+// WriteImageArgs puts a PNG on the clipboard as a data URL. Concealed asks clipboard history to skip it.
+type WriteImageArgs struct {
+	DataURL   string `json:"dataUrl"`
+	Concealed bool   `json:"concealed,omitempty"`
+}
+
+// ImageResult is a clipboard image as a PNG data URL, or Found false when the clipboard holds no image.
+type ImageResult struct {
+	DataURL string `json:"dataUrl,omitempty"`
+	Found   bool   `json:"found"`
+}

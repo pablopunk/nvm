@@ -25,6 +25,9 @@ const (
 
 	OpRefreshMenuBar = "refreshMenuBar"
 
+	OpReadImage  = "read-image"
+	OpWriteImage = "write-image"
+
 	OpShow   = "show"
 	OpUpdate = "update"
 	OpHide   = "hide"

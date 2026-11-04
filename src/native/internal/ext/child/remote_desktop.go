@@ -49,6 +49,16 @@ func (c remoteSystemClipboard) WriteText(text string, concealed bool) error {
 	return c.link.Call(protocol.ServiceDesktopClipboard, protocol.OpWriteText, protocol.WriteTextArgs{Text: text, Concealed: concealed}, nil)
 }
 
+func (c remoteSystemClipboard) ReadImage() (string, bool, error) {
+	var image protocol.ImageResult
+	err := c.link.Call(protocol.ServiceDesktopClipboard, protocol.OpReadImage, nil, &image)
+	return image.DataURL, image.Found, err
+}
+
+func (c remoteSystemClipboard) WriteImage(dataURL string, concealed bool) error {
+	return c.link.Call(protocol.ServiceDesktopClipboard, protocol.OpWriteImage, protocol.WriteImageArgs{DataURL: dataURL, Concealed: concealed}, nil)
+}
+
 // remoteApps lists, searches, launches and reads icons of the apps the host indexed.
 type remoteApps struct {
 	api.Apps

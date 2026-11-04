@@ -21,6 +21,10 @@ func (h *Handler) serveDesktopClipboard(call protocol.ServiceCall) (any, error) 
 		return h.readClipboardText()
 	case protocol.OpWriteText:
 		return nil, h.writeClipboardText(call.Args)
+	case protocol.OpReadImage:
+		return h.readClipboardImage()
+	case protocol.OpWriteImage:
+		return nil, h.writeClipboardImage(call.Args)
 	}
 	return nil, invalid("desktop.clipboard has no operation %q", call.Op)
 }
