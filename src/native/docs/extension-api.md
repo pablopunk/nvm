@@ -996,4 +996,21 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
-Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` and `Views` (WP3.3, WP3.8, WP3.9). The settings view has no goldens yet.
+Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` (WP3.3, WP3.8, WP3.9), and `Views` except `RefreshMenuBar` (section 19). The settings view has no goldens yet.
+
+## 19. Menu bar as built (WP3.5)
+
+Menu bar items are the host's status items, made through `platform.TrayHost` by `internal/menubar` (the app's own item and the extension items share that path). The host reads an extension's items through `MenuBarProvider` and renders them in `internal/menubar/extitems`. Nothing here is visible to extension code except the declared wire types.
+
+- **Lifecycle.** An enabled extension whose child declares `MenuBars` gets one item per declared bar (at most three), created on the next sync (about one second). A disabled or removed extension's items close on that sync, and a reinstalled one (a new version on disk) re-reads its declarations. The child's ready line lists the protocol methods it implements, so the host knows a provider exists without calling it.
+- **Renders.** Triggers set the cadence: the shortest `interval` wins, and `startup` renders at load. Each render runs off the UI thread under the `MenuBars` budget (1 s hard), and its result is applied on the UI thread. `Views().RefreshMenuBar()` asks for a render at once and returns before it happens.
+- **Failure.** A render that fails keeps the last good rows and puts a disabled "Not responding: <reason>" row and a "Show in Extensions" row above them. The next good render removes the head. With no good render the item shows only the head.
+- **Limits.** Titles are shortened to 24 characters; sections to eight, rows to 40 per section, submenus one level deep; text to 120 characters. An invalid action drops only its row. Normalization issues are logged, not shown.
+- **Rows.** Titled sections show a disabled header and are split by dividers. A row with an action runs it; `OpenURL` and `CopyText` are host operations; a row with no runnable action is disabled. Run actions run off the UI thread and their results are logged: a menu cannot host a view, so an action that returns one is reported.
+- **Not rendered yet.** Popovers (the host logs that the menu is used instead), row subtitles, checkmarks, row shortcuts, and per-row icons. Icons are the app's placeholder disc until the icon set ships (WP5.1). A tooltip or icon change makes a new item.
+- **Triggers not served yet.** `files.changed`, `clipboard.changed`, `app.frontmost.changed`, `wake` and `login` are disabled with a logged diagnostic until the trigger host (WP3.6) serves them. The startup delay is ignored: the first render is immediate.
+- **No menu-open refresh.** The platform port has no open event, so a render is never triggered by a click on the item.
+- **Views.** `Views().RefreshMenuBar()` is served. `Views().Refresh()` and `Views().Invalidate()` are palette operations: in a menu bar render they return an empty action and do nothing.
+- **Shared scheduler.** The app's timer title is a job on the same scheduler (`internal/menubar/schedule.go`): one render per second, budgeted, never overlapping, cancelled when the timer ends.
+- **Fixture.** `internal/ext/testdata/extensions/acme.menubar` declares two items, a submenu, failing and recovering actions, and a refresh call. The manager tests and the rig journeys use it.
+

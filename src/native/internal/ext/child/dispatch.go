@@ -47,6 +47,10 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.runAction(req.Invocation)
 	case protocol.MethodLoad:
 		return e.loadItems(req.Invocation)
+	case protocol.MethodMenuBars:
+		return e.encode(protocol.MethodMenuBars, e.contextArgument(api.LaunchContext{}))
+	case protocol.MethodMenuBarTriggers:
+		return e.encode(protocol.MethodMenuBarTriggers)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }
