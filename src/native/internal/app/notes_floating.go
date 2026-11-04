@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -33,7 +34,7 @@ func (p *App) openFloatingNote(id string) {
 	w := mygo.NewWindow(mygo.WindowOptions{
 		Title: n.Title(), Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
 		AlwaysOnTop: true, TitleBarStyle: mygo.TitleBarHidden,
-		Content: ui.View(func(c *ui.Context) { floatingNoteBody(c, edit) }),
+		Content: ui.View(func(c *ui.Context) { floatingNoteWindow(c, edit) }),
 	})
 	edit.window = w
 	w.OnMove(func() { p.rememberFloatingFrame(edit.id, w) })
@@ -109,6 +110,13 @@ func (p *App) floatingNoteClosed(edit *noteEdit) {
 		_ = p.notes.SetFloating(edit.id, false)
 	}
 	p.releaseEdit(edit)
+}
+
+// floatingNoteWindow is the content of a floating window, themed with Nevermind's tokens.
+func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
+	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Children(func() {
+		floatingNoteBody(c, edit)
+	})
 }
 
 // floatingNoteBody is the content of a floating window: the note's text, with the same autosave as the editor.
