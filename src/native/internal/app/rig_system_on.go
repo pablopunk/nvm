@@ -12,10 +12,24 @@ import (
 // rigCallLogEnv names the file the rig reads to learn which system commands the app asked for.
 const rigCallLogEnv = "NVM_RIG_SYSTEM_LOG"
 
-// rigPorts gives an automation build a System port that runs nothing. The rig shares a desktop with other agents,
-// so a confirmed restart, sleep or log out must only be recorded, never performed.
+// rigSystemCapabilities are the system.* intents the recorder answers for. rigSystem records each of them, so the rig
+// offers those commands on any image, whatever programs the image has installed.
+var rigSystemCapabilities = []platform.Capability{
+	platform.CapabilitySystemLock,
+	platform.CapabilitySystemSleep,
+	platform.CapabilitySystemRestart,
+	platform.CapabilitySystemShutDown,
+	platform.CapabilitySystemLogOut,
+	platform.CapabilitySystemEmptyTrash,
+	platform.CapabilitySystemSettings,
+}
+
+// rigPorts gives an automation build a System port that runs nothing, and reports the capabilities that port records.
+// The rig shares a desktop with other agents, so a confirmed restart, sleep or log out must only be recorded, never
+// performed.
 func rigPorts(ports platform.Ports) platform.Ports {
 	ports.System = rigSystem{logPath: os.Getenv(rigCallLogEnv)}
+	ports.Capabilities = platform.NewCapabilities(append(ports.Capabilities.List(), rigSystemCapabilities...)...)
 	return ports
 }
 
