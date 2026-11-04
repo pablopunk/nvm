@@ -21,9 +21,13 @@ import (
 // name is the top-level function name the child looks up.
 var entryInterfaces = []string{"CommandProvider", "RootProvider", "SearchProvider", "ActionHandler", "DataLoader", "MenuBarProvider"}
 
-// rootTypes are the wire types the model must know beyond the entry points: the manifest and the context the
-// handlers receive. Everything they reach is included.
+// rootTypes are the wire types the model must know beyond the entry points: the manifest, and the context the
+// handlers receive. Everything they reach is included, except the services behind Context (see services).
 var rootTypes = []string{"Manifest", "Context"}
+
+// contextType is the handler argument whose accessors are the host services. Its services are rendered as names and
+// signatures only, so the reference stays small while the model still sees every service it may call.
+const contextType = "Context"
 
 // Render returns the reference for the api package in dir, as plain text. Output is deterministic: sections and
 // entries are sorted by name.
@@ -38,8 +42,8 @@ func Render(dir string) (string, error) {
 		return "", fmt.Errorf("no api package in %s", dir)
 	}
 	index := indexPackage(fset, pkg)
-	reachable := index.reach(append(append([]string{}, entryInterfaces...), rootTypes...))
-	return index.render(reachable), nil
+	wire := index.reach(append(append([]string{}, entryInterfaces...), rootTypes...), map[string]bool{contextType: true})
+	return index.render(wire, index.services(wire)), nil
 }
 
 func isSourceFile(info fs.FileInfo) bool {
@@ -113,8 +117,24 @@ func (index *pkgIndex) addConstSpec(decl *ast.GenDecl, spec *ast.ValueSpec) {
 	}
 }
 
-// reach returns the exported type names reachable from roots, following field, method and embedded types.
-func (index *pkgIndex) reach(roots []string) []string {
+// services are the types the Context reaches that the wire types do not reach.
+func (index *pkgIndex) services(wire []string) []string {
+	known := map[string]bool{}
+	for _, name := range wire {
+		known[name] = true
+	}
+	var services []string
+	for _, name := range index.reach(index.referencedTypes(contextType), known) {
+		if _, declared := index.types[name]; declared && !known[name] {
+			services = append(services, name)
+		}
+	}
+	return services
+}
+
+// reach returns the exported type names reachable from roots, following field, method and embedded types. A name in
+// stop is reached but its own references are not followed.
+func (index *pkgIndex) reach(roots []string, stop map[string]bool) []string {
 	seen := map[string]bool{}
 	queue := append([]string(nil), roots...)
 	for len(queue) > 0 {
@@ -124,6 +144,9 @@ func (index *pkgIndex) reach(roots []string) []string {
 			continue
 		}
 		seen[name] = true
+		if stop[name] {
+			continue
+		}
 		for _, next := range index.referencedTypes(name) {
 			if _, declared := index.types[next]; declared && !seen[next] {
 				queue = append(queue, next)
@@ -154,8 +177,9 @@ func (index *pkgIndex) referencedTypes(name string) []string {
 	return names
 }
 
-// render writes the entry point section and one section per reachable type.
-func (index *pkgIndex) render(names []string) string {
+// render writes the entry point section, the wire types with their docs, the Context services as signatures, and the
+// api functions.
+func (index *pkgIndex) render(wire, services []string) string {
 	var b strings.Builder
 	b.WriteString("# Extension API reference\n\n")
 	b.WriteString("Entry points: an extension source defines these top-level functions, each optional, with these signatures.\n\n")
@@ -163,11 +187,14 @@ func (index *pkgIndex) render(names []string) string {
 		index.writeInterfaceMethods(&b, iface)
 	}
 	b.WriteString("\n## Types\n\n")
-	for _, name := range names {
-		if isEntryInterface(name) {
-			continue
+	for _, name := range wire {
+		if !isEntryInterface(name) {
+			index.writeType(&b, name, true)
 		}
-		index.writeType(&b, name)
+	}
+	b.WriteString("## Context services\n\nThe host services a handler reaches through Context. Names and signatures only.\n\n")
+	for _, name := range services {
+		index.writeType(&b, name, false)
 	}
 	b.WriteString("## Functions\n\n")
 	index.writeFunctions(&b)
@@ -201,15 +228,17 @@ func (index *pkgIndex) writeInterfaceMethods(b *strings.Builder, name string) {
 	b.WriteString("\n")
 }
 
-func (index *pkgIndex) writeType(b *strings.Builder, name string) {
+// writeType writes one type. A full type keeps its first sentences and enum values; a signature-only type keeps the
+// names and types of its members.
+func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 	spec := index.types[name]
 	fmt.Fprintf(b, "### %s\n\n", name)
-	if doc := index.docs[name]; doc != "" {
-		fmt.Fprintf(b, "%s\n\n", doc)
+	if doc := index.docs[name]; full && doc != "" {
+		fmt.Fprintf(b, "%s\n\n", firstSentence(doc))
 	}
 	switch t := spec.Type.(type) {
 	case *ast.StructType:
-		index.writeFields(b, t)
+		index.writeFields(b, t, full)
 	case *ast.InterfaceType:
 		for _, field := range t.Methods.List {
 			for _, method := range field.Names {
@@ -218,12 +247,14 @@ func (index *pkgIndex) writeType(b *strings.Builder, name string) {
 		}
 	default:
 		fmt.Fprintf(b, "Type: %s.\n", index.exprText(spec.Type))
-		index.writeConsts(b, name)
+		if full {
+			index.writeConsts(b, name)
+		}
 	}
 	b.WriteString("\n")
 }
 
-func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType) {
+func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full bool) {
 	for _, field := range st.Fields.List {
 		doc := commentText(firstNonNil(field.Doc, field.Comment))
 		typeText := index.exprText(field.Type)
@@ -233,8 +264,8 @@ func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType) {
 		}
 		for _, name := range field.Names {
 			line := fmt.Sprintf("- `%s` (%s)", jsonName(field.Tag, name.Name), typeText)
-			if doc != "" {
-				line += ": " + doc
+			if full && doc != "" {
+				line += ": " + firstSentence(doc)
 			}
 			b.WriteString(line + "\n")
 		}
@@ -266,7 +297,7 @@ func (index *pkgIndex) writeFunctions(b *strings.Builder) {
 	for _, name := range names {
 		decl := index.funcs[name]
 		if doc := commentText(decl.Doc); doc != "" {
-			fmt.Fprintf(b, "- %s%s: %s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), doc)
+			fmt.Fprintf(b, "- %s%s: %s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), firstSentence(doc))
 		}
 	}
 }
@@ -304,6 +335,14 @@ func commentText(group *ast.CommentGroup) string {
 		return ""
 	}
 	return strings.Join(strings.Fields(group.Text()), " ")
+}
+
+// firstSentence keeps the first sentence of a doc comment, which says what the thing is.
+func firstSentence(doc string) string {
+	if before, _, found := strings.Cut(doc, ". "); found {
+		return before + "."
+	}
+	return doc
 }
 
 func firstNonNil(groups ...*ast.CommentGroup) *ast.CommentGroup {

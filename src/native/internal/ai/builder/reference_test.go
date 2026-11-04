@@ -27,6 +27,16 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 	}
 }
 
+// maxReferenceBytes bounds the reference the model reads on every builder turn. The reference was 64 KB of text before
+// the Context services were cut to signatures; this keeps it from growing back past that.
+const maxReferenceBytes = 48 << 10
+
+func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
+	if len(apiReference) > maxReferenceBytes {
+		t.Fatalf("the reference is %d bytes; the budget is %d", len(apiReference), maxReferenceBytes)
+	}
+}
+
 func TestInstructionsNameTheCurrentAPIVersion(t *testing.T) {
 	if !strings.Contains(instructionsText, `"apiVersion":"1.0"`) || strings.Contains(instructionsText, "API_VERSION") {
 		t.Fatal("the instructions do not carry the API version")
