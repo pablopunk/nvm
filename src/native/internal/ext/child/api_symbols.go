@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"go/constant"
+	"go/token"
 	"reflect"
 	"time"
 )
@@ -44,8 +46,10 @@ func init() {
 		"CapabilityDesktopFiles":        reflect.ValueOf(api.CapabilityDesktopFiles),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
+		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
 		"CapabilityOCR":                 reflect.ValueOf(api.CapabilityOCR),
 		"CapabilityPlaces":              reflect.ValueOf(api.CapabilityPlaces),
+		"CapabilitySecrets":             reflect.ValueOf(api.CapabilitySecrets),
 		"CapabilitySettingsWrite":       reflect.ValueOf(api.CapabilitySettingsWrite),
 		"CapabilityShortcuts":           reflect.ValueOf(api.CapabilityShortcuts),
 		"CapabilitySystem":              reflect.ValueOf(api.CapabilitySystem),
@@ -190,6 +194,9 @@ func init() {
 		"SelectionUnknown":              reflect.ValueOf(api.SelectionUnknown),
 		"SelectionUnsupported":          reflect.ValueOf(api.SelectionUnsupported),
 		"SerializableTypes":             reflect.ValueOf(api.SerializableTypes),
+		"SettingBoolean":                reflect.ValueOf(constant.MakeFromLiteral("\"boolean\"", token.STRING, 0)),
+		"SettingNumber":                 reflect.ValueOf(constant.MakeFromLiteral("\"number\"", token.STRING, 0)),
+		"SettingString":                 reflect.ValueOf(constant.MakeFromLiteral("\"string\"", token.STRING, 0)),
 		"ShapeCircle":                   reflect.ValueOf(api.ShapeCircle),
 		"ShapeRounded":                  reflect.ValueOf(api.ShapeRounded),
 		"ShapeSquare":                   reflect.ValueOf(api.ShapeSquare),
@@ -300,6 +307,8 @@ func init() {
 		"ExactFrame":              reflect.ValueOf((*api.ExactFrame)(nil)),
 		"Extension":               reflect.ValueOf((*api.Extension)(nil)),
 		"Failure":                 reflect.ValueOf((*api.Failure)(nil)),
+		"FetchRequest":            reflect.ValueOf((*api.FetchRequest)(nil)),
+		"FetchResponse":           reflect.ValueOf((*api.FetchResponse)(nil)),
 		"Field":                   reflect.ValueOf((*api.Field)(nil)),
 		"FieldType":               reflect.ValueOf((*api.FieldType)(nil)),
 		"FileKindFilter":          reflect.ValueOf((*api.FileKindFilter)(nil)),
@@ -347,6 +356,7 @@ func init() {
 		"ModelTier":               reflect.ValueOf((*api.ModelTier)(nil)),
 		"Navigation":              reflect.ValueOf((*api.Navigation)(nil)),
 		"NavigationMode":          reflect.ValueOf((*api.NavigationMode)(nil)),
+		"Network":                 reflect.ValueOf((*api.Network)(nil)),
 		"OCR":                     reflect.ValueOf((*api.OCR)(nil)),
 		"OCRBlock":                reflect.ValueOf((*api.OCRBlock)(nil)),
 		"OCRInput":                reflect.ValueOf((*api.OCRInput)(nil)),
@@ -446,6 +456,7 @@ func init() {
 		"_Logs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Logs)(nil)),
 		"_MenuBarProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider)(nil)),
 		"_Navigation":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Navigation)(nil)),
+		"_Network":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Network)(nil)),
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
@@ -727,6 +738,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WLaunch     func() api.LaunchContext
 	WLogs       func() api.Logs
 	WNavigation func() api.Navigation
+	WNetwork    func() api.Network
 	WOCR        func() api.OCR
 	WOwnership  func() api.Ownership
 	WSecrets    func() api.Secrets
@@ -785,6 +797,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Logs() api.Lo
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Navigation() api.Navigation {
 	return W.WNavigation()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Network() api.Network {
+	return W.WNetwork()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) OCR() api.OCR {
 	return W.WOCR()
@@ -1095,6 +1110,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Navigation) Root(view 
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Navigation) Run(action api.Action) api.Result {
 	return W.WRun(action)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Network is an interface wrapper for Network type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Network struct {
+	IValue interface{}
+	WFetch func(request api.FetchRequest) (api.FetchResponse, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Network) Fetch(request api.FetchRequest) (api.FetchResponse, error) {
+	return W.WFetch(request)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_OCR is an interface wrapper for OCR type

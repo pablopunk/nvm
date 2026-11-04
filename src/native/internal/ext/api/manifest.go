@@ -30,6 +30,9 @@ type Manifest struct {
 	// Capabilities are review metadata: what the extension says it does. They are not an access
 	// check. An enabled extension has the full host context whether or not it declares anything.
 	Capabilities []Capability `json:"capabilities,omitempty"`
+	// Settings are the user-visible settings the extension declares. Values are stored per extension, and
+	// the declaration is the only way a setting exists: Settings.Set on an undeclared id is refused.
+	Settings []SettingDefinition `json:"settings,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -50,6 +53,8 @@ const (
 	CapabilityDictation           Capability = "dictation"
 	CapabilityCamera              Capability = "camera"
 	CapabilityOCR                 Capability = "ocr"
+	CapabilityNetwork             Capability = "network"
+	CapabilitySecrets             Capability = "secrets"
 )
 
 // KnownCapabilities lists every capability this host version can review.
@@ -59,6 +64,7 @@ func KnownCapabilities() []Capability {
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
 		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,
+		CapabilityNetwork, CapabilitySecrets,
 	}
 }
 
@@ -89,6 +95,9 @@ func (m Manifest) Validate() error {
 	}
 	if strings.TrimSpace(m.Title) == "" {
 		return errors.New("extension title is required")
+	}
+	if err := validateSettingDefinitions(m.Settings); err != nil {
+		return err
 	}
 	return CheckCompatibility(m.APIVersion, Current)
 }
