@@ -16,13 +16,15 @@ const MaxFixAttempts = 2
 
 // Copy for the builder's notices. Each says what happened and what the user does next.
 const (
-	noticeTitle       = "Extension"
-	failedTitle       = "Extension not installed"
-	noEntryPointText  = "the source defines no entry point; define at least one of Commands, RootItems, SearchItems or RunAction"
-	installedFormat   = "“%s” is installed and enabled."
-	retryNoticeFormat = "Extension failed (%s). Asking the model to fix it…"
-	failedFormat      = "Could not produce a working extension: %s. Describe it again to retry."
-	fixRequestFormat  = "The extension was rejected with this error:\n\n%s\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block."
+	noticeTitle            = "Extension"
+	failedTitle            = "Extension not installed"
+	noEntryPointText       = "the source defines no entry point; define at least one of Commands, RootItems, SearchItems or RunAction"
+	alreadyInstalledFormat = "Nothing was written: %q already does this. Change it, or describe a different extension."
+	titleClashFormat       = "Not installed: the row %q already exists in %q. Change that extension, or describe a different one."
+	installedFormat        = "“%s” is installed and enabled."
+	retryNoticeFormat      = "Extension failed (%s). Asking the model to fix it…"
+	failedFormat           = "Could not produce a working extension: %s. Describe it again to retry."
+	fixRequestFormat       = "The extension was rejected with this error:\n\n%s\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block."
 )
 
 // Workshop turns a finished builder reply into an installed, disabled extension, or sends the reason back to the
@@ -39,18 +41,19 @@ func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *W
 	return &Workshop{chats: chats, extensions: extensions, dispatch: dispatch, attempts: map[string]int{}}
 }
 
-// SystemPrompt is the instruction a builder chat starts with. A chat bound to an extension also carries that
-// extension's current manifest and source, read at each turn.
+// SystemPrompt is the instruction a builder chat starts with. It lists the installed extensions, and a chat bound to an
+// extension also carries that extension's current manifest and source, read at each turn.
 func (w *Workshop) SystemPrompt(c chat.Chat) string {
+	text := instructionsText + "\n\n" + installedSection(w.extensions.Catalog())
 	if c.Extension == "" {
-		return instructionsText
+		return text
 	}
 	manifest, source, err := w.extensions.Definition(c.Extension)
 	if err != nil {
-		return instructionsText
+		return text
 	}
 	manifestJSON, _ := json.MarshalIndent(manifest, "", "  ")
-	return instructionsText + "\n\n" + editSection(c.Extension, string(manifestJSON), source)
+	return text + "\n\n" + editSection(c.Extension, string(manifestJSON), source)
 }
 
 // Settled runs on the UI thread after a turn ends. A finished reply is read and built; a stopped or failed one is
@@ -64,6 +67,11 @@ func (w *Workshop) Settled(chatID string, outcome chat.Outcome) {
 		return
 	}
 	reply, _ := chat.LastReply(record)
+	installed := w.extensions.Catalog()
+	if existing, ok := alreadyInstalled(reply, installed); ok && record.Extension == "" {
+		w.note(chatID, chat.NoticeNote, noticeTitle, fmt.Sprintf(alreadyInstalledFormat, existing.ID))
+		return
+	}
 	candidate, err := ParseReply(reply)
 	if err != nil {
 		w.retry(chatID, err.Error())
@@ -72,6 +80,12 @@ func (w *Workshop) Settled(chatID string, outcome chat.Outcome) {
 	if problem := w.ownershipProblem(record.Extension, candidate.Manifest.ID); problem != "" {
 		w.retry(chatID, problem)
 		return
+	}
+	if record.Extension == "" {
+		if clash, title, ok := titleClash(candidate, installed); ok {
+			w.fail(chatID, fmt.Sprintf(titleClashFormat, title, clash.ID))
+			return
+		}
 	}
 	go w.build(chatID, candidate)
 }

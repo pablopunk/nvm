@@ -67,6 +67,11 @@ type fakeExtensions struct {
 	source    map[string]string
 	checks    []checkResult
 	checked   int
+	catalog   []Installed
+}
+
+func (e *fakeExtensions) Catalog() []Installed {
+	return e.catalog
 }
 
 type checkResult struct {
