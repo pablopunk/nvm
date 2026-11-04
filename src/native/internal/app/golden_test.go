@@ -67,7 +67,7 @@ func TestPaletteQuicklinkForm(t *testing.T) {
 
 func TestPaletteEmojiGridSelection(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.emojiView())
+	openEmojiBuiltIn(t, p)
 	goldenQuery(p, "smile")
 	p.Choose(3)
 	golden.AssertMatrix(t, "emoji-grid", p.View, paletteGoldens)
@@ -75,18 +75,17 @@ func TestPaletteEmojiGridSelection(t *testing.T) {
 
 func TestPaletteEmojiNoResults(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.emojiView())
+	openEmojiBuiltIn(t, p)
 	goldenQuery(p, "zzqx")
 	golden.AssertMatrix(t, "emoji-no-results", p.View, paletteGoldens)
 }
 
 func TestPaletteEmojiSkinTonePicker(t *testing.T) {
 	p := goldenPalette(t)
-	entry, ok := emojiCatalog.Lookup("emoji:U+1F44B")
-	if !ok {
-		t.Fatal("the catalog has no waving hand")
-	}
-	goldenOpen(p, p.skinToneView(entry))
+	win := openEmojiBuiltIn(t, p)
+	goldenQuery(p, "waving hand")
+	actionTitled(t, itemTitled(t, p, "Waving Hand"), "Skin Tone…").Run(p)
+	awaitRows(t, p, win, 6)
 	golden.AssertMatrix(t, "emoji-skin-tone", p.View, paletteGoldens)
 }
 

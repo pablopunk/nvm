@@ -23,12 +23,20 @@ func rowTone(item api.Item) string {
 // defaultIcon draws an item that names no icon.
 const defaultIcon = "puzzle"
 
+// rowIcon is the icon of an item's tile. A tile-glyph item draws its glyph in place of an icon.
+func rowIcon(item api.Item) string {
+	if item.TileGlyph && item.Glyph != "" {
+		return ""
+	}
+	return iconOr(item.Icon, defaultIcon)
+}
+
 // row is the palette row of one item: its tile, title, subtitle, the first accessory, its detail pane and its actions.
 // A disabled item keeps its text but has no actions.
 func (s *Session) row(item api.Item) search.Item {
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
-		Icon: iconOr(item.Icon, defaultIcon), Tone: rowTone(item),
+		Icon: rowIcon(item), Tone: rowTone(item),
 		Accessory: accessoryText(item.Accessories),
 		Detail:    s.detailPane(item.Detail),
 		Image:     s.bitmap(item.Image),

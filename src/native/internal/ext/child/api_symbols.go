@@ -288,6 +288,8 @@ func init() {
 		"Attachment":              reflect.ValueOf((*api.Attachment)(nil)),
 		"AttachmentBuilder":       reflect.ValueOf((*api.AttachmentBuilder)(nil)),
 		"BackgroundMode":          reflect.ValueOf((*api.BackgroundMode)(nil)),
+		"Bundle":                  reflect.ValueOf((*api.Bundle)(nil)),
+		"BundleRecord":            reflect.ValueOf((*api.BundleRecord)(nil)),
 		"Cache":                   reflect.ValueOf((*api.Cache)(nil)),
 		"CameraSpec":              reflect.ValueOf((*api.CameraSpec)(nil)),
 		"Capability":              reflect.ValueOf((*api.Capability)(nil)),
@@ -475,6 +477,7 @@ func init() {
 		"_ActionHandler":     reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler)(nil)),
 		"_Apps":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Apps)(nil)),
 		"_AttachmentBuilder": reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder)(nil)),
+		"_Bundle":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Bundle)(nil)),
 		"_Cache":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Cache)(nil)),
 		"_ClipboardHistory":  reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_ClipboardHistory)(nil)),
 		"_Clock":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Clock)(nil)),
@@ -727,6 +730,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder) Tex
 	return W.WText(text, title)
 }
 
+// _github_com_pablopunk_nvm_native_internal_ext_api_Bundle is an interface wrapper for Bundle type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Bundle struct {
+	IValue   interface{}
+	WRecords func() ([]api.BundleRecord, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Bundle) Records() ([]api.BundleRecord, error) {
+	return W.WRecords()
+}
+
 // _github_com_pablopunk_nvm_native_internal_ext_api_Cache is an interface wrapper for Cache type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Cache struct {
 	IValue      interface{}
@@ -920,10 +933,14 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Windows() api
 // _github_com_pablopunk_nvm_native_internal_ext_api_Data is an interface wrapper for Data type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Data struct {
 	IValue                interface{}
+	WBundled              func(name string) api.Bundle
 	WLoader               func(loader string, retry bool) api.DataSource
 	WStaleWhileRevalidate func(loader string, cacheKey string, ttl time.Duration, staleTTL time.Duration, retry bool) api.DataSource
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Data) Bundled(name string) api.Bundle {
+	return W.WBundled(name)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Data) Loader(loader string, retry bool) api.DataSource {
 	return W.WLoader(loader, retry)
 }

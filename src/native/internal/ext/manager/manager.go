@@ -8,6 +8,7 @@
 package manager
 
 import (
+	"github.com/pablopunk/nvm/native/internal/ext/bundled"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -156,6 +157,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			RootRefresh:    opts.RootRefresh,
 			AIQuota:        opts.AIQuota,
 			SearchRefresh:  opts.SearchRefresh,
+			Bundles:        bundled.Shipped(),
 
 			Shell:        ports.Shell,
 			Commands:     ports.Commands,

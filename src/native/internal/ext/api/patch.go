@@ -15,4 +15,7 @@ type ViewPatch struct {
 	// SearchResultIds is read only from an onSearchChange result: ids of items already in the view, best first. The host
 	// shows them after the local matches of the search text, and drops them when the text changes.
 	SearchResultIds []string `json:"searchResultIds,omitempty"`
+	// SearchItems is read only from an onSearchChange result too: rows answered for the search text, shown after the
+	// local matches like SearchResultIds. Their rows are not filtered by the text, and the host drops them when it changes.
+	SearchItems []Item `json:"searchItems,omitempty"`
 }

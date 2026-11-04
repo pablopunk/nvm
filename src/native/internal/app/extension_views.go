@@ -46,6 +46,13 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(items, failure) })
 			}()
 		},
+		Answer: func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure) {
+			result, failure, err := m.Run(ctx, extID, in)
+			if err != nil {
+				failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
+			}
+			return result, failure
+		},
 		LoadImage: func(ref string, done func(*ui.Bitmap)) {
 			go func() {
 				bitmap := loadExtensionBitmap(ports.FS, ref)

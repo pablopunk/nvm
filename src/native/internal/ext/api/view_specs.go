@@ -10,6 +10,13 @@ type GridSpec struct {
 	Columns     int    `json:"columns,omitempty"`
 	Layout      string `json:"layout,omitempty"` // square, wide or compact
 	AspectRatio string `json:"aspectRatio,omitempty"`
+	// CategoryKeys makes Tab and Shift+Tab step the view's SearchAccessory: the next or previous option, wrapping, with
+	// its OnChange run as a pick of its menu would run it. The accessory stays drawn and shows the chosen option.
+	// Without a SearchAccessory with an OnChange, the keys do nothing.
+	CategoryKeys bool `json:"categoryKeys,omitempty"`
+	// SelectionFooter moves the view's subtitle into the footer, after the title and subtitle of the selected item, as
+	// the emoji picker's footer names the chosen character and its category.
+	SelectionFooter bool `json:"selectionFooter,omitempty"`
 }
 
 // CrudItem is one record in a host-owned collection. Unlike Item it has no free-form action

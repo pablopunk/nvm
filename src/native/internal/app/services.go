@@ -1,23 +1,17 @@
 package app
 
 import (
-	"context"
 	"log"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/features/calc"
-	"github.com/pablopunk/nvm/native/internal/features/emoji"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/portable"
-	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
-
-// emojiCatalog is the built-in character catalog. It holds no state, so every view shares one value.
-var emojiCatalog = emoji.NewCatalog()
 
 // rateDocument is rates.json: the exchange-rate quotes the calculator has fetched, keyed "BASE/QUOTE".
 type rateDocument struct {
@@ -90,9 +84,4 @@ func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
 		Platform:      goos,
 		SettingsTitle: platform.ShellLabelsFor(goos).SettingsCommand,
 	})
-}
-
-// prepareCatalog builds the emoji search indexes off the UI path, so the first keystroke does not pay for them.
-func prepareCatalog() {
-	safego.Go("emoji.prepare", func(context.Context) { emojiCatalog.Prepare() })
 }

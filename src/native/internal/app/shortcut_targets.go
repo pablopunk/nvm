@@ -1,6 +1,7 @@
 package app
 
 import (
+	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	"strings"
 	"sync"
 
@@ -41,8 +42,9 @@ func commandShortcutID(cmd command) string {
 // movedCommandShortcutIDs are the shortcut keys of the built-in commands that were native commands before. Their
 // bindings keep the keys the user set, so these commands are keyed by the native IDs in place of their extension IDs.
 var movedCommandShortcutIDs = map[string]string{
-	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID: shortcuts.CommandForceQuitApps,
-	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:   shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:        shortcuts.CommandForceQuitApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:          shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID: shortcuts.CommandEmojiSymbols,
 }
 
 func extensionCommandShortcutID(extID, commandID string) string {

@@ -134,6 +134,23 @@ type Text interface {
 type Data interface {
 	Loader(loader string, retry bool) DataSource
 	StaleWhileRevalidate(loader, cacheKey string, ttl, staleTTL time.Duration, retry bool) DataSource
+	// Bundled names a dataset the app ships. Its records are decoded once and kept.
+	Bundled(name string) Bundle
+}
+
+// Bundle is a read-only dataset the app ships.
+type Bundle interface {
+	// Records returns the dataset's records in the order the app ships them.
+	Records() ([]BundleRecord, error)
+}
+
+// BundleRecord is one row of a bundled dataset.
+type BundleRecord struct {
+	ID       string            `json:"id"`
+	Title    string            `json:"title"`
+	Subtitle string            `json:"subtitle,omitempty"`
+	Keywords []string          `json:"keywords,omitempty"`
+	Fields   map[string]string `json:"fields,omitempty"`
 }
 
 // Drafts resolves unsaved editor text. A draft is recovery state, not the record itself.

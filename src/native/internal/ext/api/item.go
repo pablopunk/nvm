@@ -13,8 +13,10 @@ type Item struct {
 	Icon string `json:"icon,omitempty"`
 	// Glyph is one character drawn natively as a grid tile visual (emoji, symbols).
 	Glyph string `json:"glyph,omitempty"`
-	Image *Image `json:"image,omitempty"`
-	Video string `json:"video,omitempty"`
+	// TileGlyph draws the glyph in a list row's tile in place of the icon, as the skin tone list does.
+	TileGlyph bool   `json:"tileGlyph,omitempty"`
+	Image     *Image `json:"image,omitempty"`
+	Video     string `json:"video,omitempty"`
 	// File is the local file the row or grid cell drags out to other applications, as 1.x's path does. Without
 	// DragImage, the drag shows the file itself when it is an image. Relative paths do not drag. A built-in row with no
 	// Image or Icon shows the file's system icon.

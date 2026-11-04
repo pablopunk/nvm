@@ -19,6 +19,7 @@ type hostContext struct {
 	link     *hostLink
 	cache    *processCache
 	flights  *flightGroup
+	bundles  *bundleCache
 }
 
 var _ api.Context = hostContext{}
@@ -31,6 +32,7 @@ func newHostContext(identity api.Identity, clock platform.Clock, link *hostLink)
 		link:     link,
 		cache:    newProcessCache(clock),
 		flights:  newFlightGroup(),
+		bundles:  newBundleCache(),
 	}
 }
 
@@ -83,7 +85,7 @@ func (c hostContext) Input() api.Input {
 }
 
 func (c hostContext) Data() api.Data {
-	return dataSources{}
+	return dataSources{link: c.link, bundles: c.bundles}
 }
 
 func (c hostContext) Network() api.Network {

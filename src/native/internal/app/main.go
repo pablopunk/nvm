@@ -79,8 +79,6 @@ type App struct {
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
-	// characterSearch is the Emoji & Symbols picker's meaning batch; see emoji_meaning.go.
-	characterSearch *characterSearch
 	// quotas are the model-call counts by owner, shared by the extensions and the picker's decisions.
 	quotas *quota.Registry
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
@@ -219,7 +217,6 @@ func (p *App) ready() {
 	p.recoverDictationMute()
 	p.attachWindows()
 	p.attachDeepLinks()
-	prepareCatalog()
 	p.clip = p.openClipboard()
 	p.openUserData()
 	p.attachUpdater()
