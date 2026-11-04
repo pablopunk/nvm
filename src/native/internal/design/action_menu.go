@@ -10,6 +10,9 @@ type MenuRow struct {
 	// Enter draws the return glyph in place of a key: the default action of the row.
 	Enter    bool
 	Selected bool
+	// Disabled draws the action muted, with Subtitle beneath it as the reason it cannot run. Choosing it does nothing.
+	Disabled bool
+	Subtitle string
 }
 
 // ActionMenu draws the action menu of a row (Ctrl+K) as a popover over the pane. Each action is a row; the
@@ -23,8 +26,10 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 				SelectedFill(rowEl, k, false)
 			}
 			rowEl.Children(func() {
-				ui.Text(c, r.Title).FontSize(13).TextColor(k.Strong).Grow(1).SingleLine()
+				ui.Text(c, r.Title).FontSize(13).TextColor(actionTitleColor(k, r)).Grow(1).SingleLine()
 				switch {
+				case r.Subtitle != "":
+					ui.Text(c, r.Subtitle).FontSize(11).TextColor(k.Muted).SingleLine()
 				case r.Key != "":
 					ui.Text(c, r.Key).FontSize(11).FontWeight(500).TextColor(k.Muted).SingleLine()
 				case r.Enter:
@@ -33,4 +38,12 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 			})
 		}
 	})
+}
+
+// actionTitleColor is the title color of a menu row: strong for an action that runs, muted for one that is disabled.
+func actionTitleColor(k *TokenSet, r MenuRow) ui.Color {
+	if r.Disabled {
+		return k.Muted
+	}
+	return k.Strong
 }

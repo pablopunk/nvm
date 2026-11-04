@@ -232,7 +232,8 @@ func (p *Palette) actionPanel(c *ui.Context) {
 	p.actList.Selected = &p.actChosen
 	rows := make([]design.MenuRow, len(acts))
 	for i, a := range acts {
-		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
+		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen,
+			Disabled: a.Disabled != "", Subtitle: a.Disabled}
 	}
 	design.ActionMenu(c, rows)
 }

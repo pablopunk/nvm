@@ -103,11 +103,12 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 			continue
 		}
 		p.shortcutTitles.remember(actionID, command.Title)
-		out = append(out, p.withShortcutActions(search.Item{
+		row := p.withShortcutActions(search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
 			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, "Run", nil))},
-		}, actionID, bound))
+		}, actionID, bound)
+		out = append(out, p.withAuthoringActions(row, result.ExtensionID))
 	}
 	return out
 }
@@ -127,7 +128,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	for _, action := range item.Actions {
 		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, action))
 	}
-	return row
+	return p.withAuthoringActions(row, extID)
 }
 
 func iconOr(icon, fallback string) string {
