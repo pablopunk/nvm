@@ -35,15 +35,13 @@ type Frame struct {
 	Height int `json:"height"`
 }
 
-// Note is one Markdown note. Floating says whether its window is open; Frame keeps the last geometry of that
-// window, so closing and reopening it puts it back where the user left it.
+// Note is one Markdown note. Floating says whether it is the note the floating window shows.
 type Note struct {
 	ID        string    `json:"id"`
 	Markdown  string    `json:"markdown"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Floating  bool      `json:"floating,omitempty"`
-	Frame     *Frame    `json:"frame,omitempty"`
 }
 
 // Version is the saved version of a note: its UpdatedAt in nanoseconds. Drafts record the version they were

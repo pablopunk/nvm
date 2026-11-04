@@ -127,6 +127,9 @@ type App struct {
 	hyper    *string
 	quitting bool
 	edits    map[string]*noteEdit
+	// floating is the floating note window, when it is open.
+	floating  *floatingWindow
+	floatPane floatingPaneState
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 

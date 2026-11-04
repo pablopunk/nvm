@@ -12,6 +12,7 @@ type TokenSet struct {
 	Strong, Muted, Faint                    ui.Color
 	Danger, Success, Hairline               ui.Color
 	Panel, Raised, Interactive, Sunken      ui.Color
+	Canvas, Link                            ui.Color
 	Selected                                ui.Color
 	EdgeSubtle, EdgeStrong                  ui.Color
 	Secondary, Tertiary, Primary            ui.Color
@@ -40,6 +41,7 @@ func rgba(hex string, a float32) ui.Color { return ui.Hex(hex).Alpha(a) }
 
 var (
 	lightTokens = &TokenSet{
+		Canvas: ui.Hex("#ece9e2"), Link: ui.Hex("#745d00"),
 		Panel: ui.Hex("#f5f2eb"), Bg: ui.Hex("#f5f2eb"), Raised: ui.Hex("#faf8f3"), Surface: ui.Hex("#faf8f3"), Interactive: ui.Hex("#e8e4dc"),
 		Selected: ui.Hex("#ddd8ce"), Sunken: ui.Hex("#e3dfd7"),
 		EdgeSubtle: rgba("#363129", 0.14), EdgeStrong: rgba("#363129", 0.24), Border: rgba("#363129", 0.24), Hairline: rgba("#363129", 0.14),
@@ -54,6 +56,7 @@ var (
 	}
 
 	darkTokens = &TokenSet{
+		Canvas: ui.Hex("#12151b"), Link: ui.Hex("#d7c574"),
 		Panel: ui.Hex("#1a1f28"), Bg: ui.Hex("#1a1f28"), Raised: ui.Hex("#222834"), Surface: ui.Hex("#222834"), Interactive: ui.Hex("#29303d"),
 		Selected: ui.Hex("#343d4d"), Sunken: ui.Hex("#0e1117"),
 		EdgeSubtle: rgba("#d3e0f5", 0.10), EdgeStrong: rgba("#d3e0f5", 0.18), Border: rgba("#d3e0f5", 0.18), Hairline: rgba("#d3e0f5", 0.10),

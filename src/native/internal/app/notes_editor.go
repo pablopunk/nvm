@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
@@ -23,7 +22,8 @@ type noteEdit struct {
 	sess    *notes.Session
 	text    string
 	editors int
-	window  *mygo.Window
+	// floatRich and paletteRich are the rich text of the floating window and of the palette's editor.
+	floatRich, paletteRich noteRichText
 }
 
 // acquireEdit returns the shared edit of a note, opening its session on first use. It reports false when the note
@@ -47,7 +47,7 @@ func (p *App) acquireEdit(id string) (*noteEdit, bool) {
 // releaseEdit ends the session once no palette editor and no window shows the note. Ending it saves what is
 // pending, or keeps the draft when a conflict waits.
 func (p *App) releaseEdit(edit *noteEdit) {
-	if edit.editors > 0 || edit.window != nil {
+	if edit.editors > 0 || p.isFloatingEdit(edit) {
 		return
 	}
 	if p.edits[edit.id] == edit {
@@ -83,7 +83,7 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 	}
 	edit.editors++
 	view := &palette.View{
-		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes   ⌃F Float window",
+		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes",
 		TitleFn: func() string { return notes.Title(edit.text) },
 		OnLeave: func() {
 			edit.editors--
@@ -97,10 +97,9 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 				return
 			}
 			ui.Column(c).Grow(1).Children(func() {
-				ta := ui.TextArea(c, &edit.text).Grow(1).Margin(12).Padding(10).FontSize(15).Placeholder(editorPlaceholder).AutoFocus()
-				if ta.Changed() {
-					_ = edit.sess.Edit(edit.text)
-				}
+				ui.Column(c).Grow(1).Margin(12).Padding(8, 4).Children(func() {
+					editNoteRich(c, edit, &edit.paletteRich, editorPlaceholder)
+				})
 				autosaveStatus(c, edit.sess.Status())
 			})
 		},
@@ -125,9 +124,6 @@ func (p *App) noteEditorKeys(c *ui.Context, h search.Host, edit *noteEdit) bool 
 	case c.Shortcut(mod, ui.KeyO):
 		h.Pop()
 		h.Push(p.notesView())
-	case c.Shortcut(mod, ui.KeyF):
-		h.Hide()
-		p.openFloatingNote(edit.id)
 	case c.Shortcut(mod, ui.KeyBackspace):
 		h.Push(p.confirmDeleteNote(edit.id, notes.Title(edit.text)))
 	default:

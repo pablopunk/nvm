@@ -22,7 +22,7 @@ func TestToggleFloatingNotesIsSearchedButNotSuggested(t *testing.T) {
 // Toggle with no floating note open picks the note saved last, and creates one when no note exists.
 func TestMostRecentNoteIDPicksTheLatestAndCreatesWhenEmpty(t *testing.T) {
 	p := goldenPalette(t)
-	if len(p.openFloatingEdits()) != 0 {
+	if p.floating != nil {
 		t.Fatal("a fresh palette has floating notes open")
 	}
 	latest := p.notes.List()[0]
