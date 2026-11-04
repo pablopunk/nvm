@@ -148,23 +148,28 @@ func (s *LinkService) saved(url string) (LinkStatus, bool) {
 }
 
 // fetchAndRemember fetches the page and stores its metadata, announcing the first settlement. Then it fetches
-// the preview image, stores it and announces again. A ready preview is saved with the history.
+// the preview image, stores it and announces again. A ready preview is saved with the history before the
+// announcement that completes it, so whoever reacts to a settlement reads what was saved.
 func (s *LinkService) fetchAndRemember(url string) {
 	defer s.clearInflight(url)
 	status, remoteImage := s.fetchMetadata(url)
 	s.remember(url, status)
-	s.announce(url)
 	if status.State != LinkReady {
+		s.announce(url)
 		return
 	}
-	if remoteImage != "" {
-		status.ImageRef = s.fetchImage(remoteImage)
-		if status.ImageRef != "" {
-			s.remember(url, status)
-			s.announce(url)
-		}
+	if remoteImage == "" {
+		s.persist(status)
+		s.announce(url)
+		return
 	}
+	s.announce(url)
+	status.ImageRef = s.fetchImage(remoteImage)
 	s.persist(status)
+	if status.ImageRef != "" {
+		s.remember(url, status)
+		s.announce(url)
+	}
 }
 
 // fetchImage fetches and saves a preview image. It returns the stored name, or "" when the image is absent.
