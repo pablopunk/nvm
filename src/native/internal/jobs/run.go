@@ -86,7 +86,7 @@ func (s *Scheduler) beginLocked(r *record, reason string, payload Payload, now t
 func (s *Scheduler) execute(def Definition, run Run) {
 	err := safego.Run("jobs."+def.ID, func(ctx context.Context) error {
 		return def.Run(ctx, run)
-	}, safego.WithContext(s.ctx), safego.WithClock(s.clock), safego.WithTimeout(def.Budget.timeout()), safego.WithReporter(s.reporter))
+	}, s.safegoOptions(safego.WithClock(s.clock), safego.WithTimeout(def.Budget.timeout()))...)
 	s.finish(def.ID, run, err)
 }
 

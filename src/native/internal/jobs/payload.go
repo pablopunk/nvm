@@ -1,5 +1,8 @@
 package jobs
 
+// ChangedPaths is the payload key that carries the files an event names. Bursts merge their lists.
+const ChangedPaths = "changedPaths"
+
 // maxChangedPaths bounds the paths a debounced burst carries into one run, newest kept.
 const maxChangedPaths = 100
 
@@ -20,17 +23,14 @@ func mergePayloads(previous, next Payload) Payload {
 		merged[key] = value
 	}
 	if paths := mergedChangedPaths(previous, next); paths != nil {
-		merged[changedPathsKey] = paths
+		merged[ChangedPaths] = paths
 	}
 	return merged
 }
 
-// changedPathsKey is the payload key that carries the files a files.changed event names.
-const changedPathsKey = "changedPaths"
-
 func mergedChangedPaths(previous, next Payload) []string {
-	before, beforeOK := previous[changedPathsKey].([]string)
-	after, afterOK := next[changedPathsKey].([]string)
+	before, beforeOK := previous[ChangedPaths].([]string)
+	after, afterOK := next[ChangedPaths].([]string)
 	if !beforeOK && !afterOK {
 		return nil
 	}

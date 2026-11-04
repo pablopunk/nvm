@@ -223,7 +223,17 @@ func (s *Scheduler) saveLocked(r *record) {
 
 // goGuarded runs fn on its own goroutine under safego, so a panic in scheduler code is reported and not fatal.
 func (s *Scheduler) goGuarded(name string, fn func()) {
-	safego.Go(name, func(context.Context) { fn() }, safego.WithContext(s.ctx), safego.WithReporter(s.reporter))
+	safego.Go(name, func(context.Context) { fn() }, s.safegoOptions()...)
+}
+
+// safegoOptions are the safego options of every call the scheduler makes. A reporter is passed only when the
+// scheduler has one, so the process-wide default reporter stays in effect otherwise.
+func (s *Scheduler) safegoOptions(extra ...safego.Option) []safego.Option {
+	opts := append([]safego.Option{safego.WithContext(s.ctx)}, extra...)
+	if s.reporter != nil {
+		opts = append(opts, safego.WithReporter(s.reporter))
+	}
+	return opts
 }
 
 // once returns a one-shot timer for d, or nil when d is not positive, which means the wait is immediate.
