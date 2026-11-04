@@ -199,6 +199,7 @@ func TestClipboardHistoryListsAndOnlyRemovesFromAPaletteRun(t *testing.T) {
 	if err := host.history.Remember(entry); err != nil {
 		t.Fatalf("remember: %v", err)
 	}
+	deps.Confirm = func(context.Context, Question) (bool, error) { return true, nil }
 	h := desktopHandler(t, deps, api.CapabilityClipboardHistory)
 	var entries []api.ClipboardEntry
 	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceClipboardHistory, protocol.OpList, api.ClipboardQuery{Text: "dra"})), &entries); err != nil {

@@ -56,6 +56,8 @@ type Deps struct {
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
+	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
+	Confirm ConfirmFunc
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
@@ -126,6 +128,13 @@ func (h *Handler) Close() error {
 
 // Serve answers one call. It never panics on a bad argument: every failure is a Failure in the reply.
 func (h *Handler) Serve(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
+	marker := &waitMark{}
+	reply := h.serveMarked(context.WithValue(ctx, waitMarkKey{}, marker), call)
+	reply.WaitedForUser = marker.waited
+	return reply
+}
+
+func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
 	result, err := h.dispatch(ctx, call)
 	if err != nil {
 		failure := failureOf(err)

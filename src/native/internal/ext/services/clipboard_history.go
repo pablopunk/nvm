@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -87,6 +88,9 @@ func (h *Handler) removeHistory(ctx context.Context, history *clipboard.History,
 	if len(args.IDs) > maxHistoryIDs {
 		return 0, invalid("at most %d entries can be removed at once", maxHistoryIDs)
 	}
+	if err := h.confirmDestructive(ctx, fmt.Sprintf("Remove %d clipboard items", len(args.IDs))); err != nil {
+		return 0, err
+	}
 	return history.Remove(clipboard.RangeQuery{Range: clipboard.RangeIDs, ItemIDs: args.IDs})
 }
 
@@ -100,6 +104,9 @@ func (h *Handler) clearHistory(ctx context.Context, history *clipboard.History, 
 	}
 	kinds, err := kindsOf(args.Types)
 	if err != nil {
+		return 0, err
+	}
+	if err := h.confirmDestructive(ctx, "Clear clipboard history"); err != nil {
 		return 0, err
 	}
 	if len(kinds) == 0 && args.OlderThanMs == 0 {

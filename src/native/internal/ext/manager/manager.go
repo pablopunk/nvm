@@ -43,6 +43,7 @@ type Ports struct {
 	Shortcuts    services.ShortcutTable
 	OCR          *ocr.Service
 	History      func() *clipboard.History
+	Confirm      services.ConfirmFunc
 }
 
 // Options tune the child processes of every extension.
@@ -118,6 +119,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
 			History:      ports.History,
+			Confirm:      ports.Confirm,
 		},
 		entries: map[string]*entry{},
 	}

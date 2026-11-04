@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -70,6 +72,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Shortcuts:    p.extensionShortcuts(),
 		OCR:          ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
 		History:      p.extensionHistory,
+		Confirm:      p.askExtensionConfirmation,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),
@@ -105,6 +108,23 @@ func (p *App) extensionHistory() *clipboard.History {
 func (p *App) extensionsStateChanged() {
 	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
 	p.syncMenuBarItems()
+}
+
+// askExtensionConfirmation shows a destructive extension call's question in the palette and waits for the answer. It
+// runs on the extension's goroutine and pushes the view on the UI thread. Escape gives no answer, so the wait ends
+// with the confirmation timeout and the call is cancelled.
+func (p *App) askExtensionConfirmation(ctx context.Context, question services.Question) (bool, error) {
+	answers := make(chan bool, 1)
+	detail := fmt.Sprintf("Requested by %s. This cannot be undone.", question.Extension)
+	p.onUI(func() {
+		p.Push(palette.Decide(question.Action, detail, func(confirmed bool) { answers <- confirmed }))
+	})
+	select {
+	case confirmed := <-answers:
+		return confirmed, nil
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.
