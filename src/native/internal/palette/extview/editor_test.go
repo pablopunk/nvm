@@ -101,7 +101,7 @@ func draftOptions(version string) *api.DraftOptions {
 // typeText is what the text area does on a frame where the user changed the text.
 func (r *editorRig) typeText(text string) {
 	r.editor.text = text
-	r.editor.edited()
+	r.editor.noticeTextChange()
 }
 
 // autosaveTick fires the debounce timer and runs the callback it posts on the UI thread.
