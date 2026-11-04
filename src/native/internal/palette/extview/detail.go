@@ -15,12 +15,12 @@ func (s *Session) detailPane(detail *api.Detail) func(c *ui.Context, h search.Ho
 		return nil
 	}
 	return func(c *ui.Context, _ search.Host) {
-		drawDetail(c, *detail, s.markdown, s.images[imageRef(detail.Image)])
+		s.drawDetail(c, *detail, s.images[imageRef(detail.Image)])
 	}
 }
 
 // drawDetail shows a detail's title, subtitle, body (Markdown first, then plain text) and metadata rows, in that order.
-func drawDetail(c *ui.Context, detail api.Detail, md *markdown.Options, image *ui.Bitmap) {
+func (s *Session) drawDetail(c *ui.Context, detail api.Detail, image *ui.Bitmap) {
 	t := design.Tokens(c)
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Gap(8).Children(func() {
@@ -33,8 +33,11 @@ func drawDetail(c *ui.Context, detail api.Detail, md *markdown.Options, image *u
 			if detail.Subtitle != "" {
 				ui.Text(c, detail.Subtitle).FontSize(11).TextColor(t.Tertiary)
 			}
-			drawDetailBody(c, detail, md)
+			drawDetailBody(c, detail, s.markdown)
 			drawFacts(c, detail.Facts)
+			if detail.Link != nil {
+				s.drawLinkCard(c, *detail.Link)
+			}
 			if detail.Video != "" {
 				ui.Text(c, "Video is not drawn in this build.").FontSize(11).TextColor(t.Tertiary)
 			}

@@ -60,7 +60,7 @@ func (h *Handler) listHistory(history *clipboard.History, raw json.RawMessage) (
 	entries := history.Find(clipboard.Query{Text: query.Text, Kinds: kinds, Limit: listLimit(query.Limit)})
 	out := make([]api.ClipboardEntry, 0, len(entries))
 	for _, entry := range entries {
-		out = append(out, entryOf(entry))
+		out = append(out, h.entryOf(entry))
 	}
 	return out, nil
 }
@@ -74,7 +74,11 @@ func (h *Handler) getHistoryEntry(history *clipboard.History, raw json.RawMessag
 	if !found {
 		return protocol.ClipboardGetResult{}, nil
 	}
-	return protocol.ClipboardGetResult{Found: true, Entry: entryOf(entry)}, nil
+	out := h.entryOf(entry)
+	if entry.Kind == clipboard.KindImage && h.deps.ClipboardImages != nil {
+		out.ImageDataURL = h.deps.ClipboardImages.Preview(entry.ImageRef)
+	}
+	return protocol.ClipboardGetResult{Found: true, Entry: out}, nil
 }
 
 func (h *Handler) removeHistory(ctx context.Context, history *clipboard.History, raw json.RawMessage) (int, error) {
@@ -144,16 +148,33 @@ func listLimit(requested int) int {
 	}
 }
 
-// entryOf maps a history entry to the wire form. Image bytes never leave the host: an image entry carries its type only.
-func entryOf(entry clipboard.Entry) api.ClipboardEntry {
+// entryOf maps a history entry to the wire form. An image entry carries its file, which is valid while the entry stays in
+// history, and a thumbnail. Image bytes never travel in a listing.
+func (h *Handler) entryOf(entry clipboard.Entry) api.ClipboardEntry {
 	out := api.ClipboardEntry{ID: entry.ID, Type: string(entry.Kind), CreatedAtMs: entry.CreatedAt.UnixMilli()}
 	switch entry.Kind {
-	case clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF:
+	case clipboard.KindText, clipboard.KindRTF:
 		out.Text = entry.Text
+	case clipboard.KindHTML:
+		out.Text, out.HTML = entry.Text, entry.Original
 	case clipboard.KindFiles:
+		out.FilePaths = entry.Paths
 		if len(entry.Paths) > 0 {
 			out.FilePath = entry.Paths[0]
 		}
+	case clipboard.KindImage:
+		h.attachImageHandles(&out, entry.ImageRef)
 	}
 	return out
+}
+
+// attachImageHandles fills the file and the thumbnail of a stored picture. A picture that is gone keeps neither.
+func (h *Handler) attachImageHandles(out *api.ClipboardEntry, ref string) {
+	if h.deps.ClipboardImages == nil {
+		return
+	}
+	if path, err := h.deps.ClipboardImages.Path(ref); err == nil {
+		out.ImagePath = path
+	}
+	out.ThumbnailURL = h.deps.ClipboardImages.Thumbnail(ref)
 }

@@ -23,11 +23,11 @@ const (
 type clipEngine struct {
 	history  *clipboard.History
 	images   *clipboard.ImageStore
+	files    *clipImageFiles
 	watcher  *clipboard.Watcher
 	actions  *clipboard.Actions
 	links    *clipboard.LinkService
 	linksOn  bool
-	pics     *clipPictures
 	caps     platform.Capabilities
 	clock    platform.Clock
 	log      *logx.Logger
@@ -76,20 +76,21 @@ func newClipEngine(deps clipDeps) *clipEngine {
 		Fetcher: clipboard.NewLinkFetcher(ports.PublicHTTP, ports.Resolver), Images: images, Store: history,
 		Clock: ports.Clock, OnSettled: func(string) { deps.redraw(func() {}) },
 	})
-	return &clipEngine{
+	engine := &clipEngine{
 		history: history,
 		images:  images,
 		watcher: watcher,
 		actions: clipboard.NewActions(ports.Clipboard, ports.Paster, images, history, watcher),
 		links:   links,
 		linksOn: !deps.noLinks,
-		pics:    newClipPictures(images, deps.redraw, decodePicture),
 		caps:    ports.Capabilities,
 		clock:   ports.Clock,
 		log:     deps.log,
 		store:   deps.store,
 		redraw:  deps.redraw,
 	}
+	engine.files = newClipImageFiles(engine, deps.dir)
+	return engine
 }
 
 // clipRetention is the policy of the history for a limit of unpinned entries. Entries never expire by age, as

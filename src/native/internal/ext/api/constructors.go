@@ -29,6 +29,12 @@ func CopyText(title, text string, concealed bool) Action {
 	return Action{Kind: ActionCopyText, Title: title, Text: text, Paste: &PasteOptions{Concealed: concealed}}
 }
 
+// CopyImage puts the PNG file at path on the clipboard and closes the palette. Only Nevermind's own pictures can be
+// copied: a clipboard history picture or a file the host wrote for an extension.
+func CopyImage(title, path string) Action {
+	return Action{Kind: ActionCopyImage, Title: title, Path: path}
+}
+
 // PasteText pastes text into the frontmost app. The host does not restore the clipboard afterwards, so the text stays on it.
 func PasteText(title, text string) Action {
 	return Action{Kind: ActionPasteText, Title: title, Text: text}

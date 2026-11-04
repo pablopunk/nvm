@@ -11,6 +11,7 @@ import (
 	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
+	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
@@ -34,6 +35,7 @@ type builtInInputs struct {
 	Snippets     []snippetsbuiltin.Snippet
 	GuideDone    bool
 	SearchEngine string
+	Clipboard    func() clipboardbuiltin.Options
 }
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
@@ -45,6 +47,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
 		appsbuiltin.New(),
+		clipboardbuiltin.New(in.Clipboard),
 	}
 }
 

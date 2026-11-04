@@ -21,7 +21,7 @@ func snippetsBuiltInPage(t *testing.T, legacy []snippets.Snippet, ref string, ar
 }
 
 // builtInViewPage runs a built-in's action and returns the page its view opens.
-func builtInViewPage(t *testing.T, m *manager.Manager, extID string, ref api.ActionRef) *palette.View {
+func builtInViewPage(t testing.TB, m *manager.Manager, extID string, ref api.ActionRef) *palette.View {
 	t.Helper()
 	result, failure, err := m.Run(context.Background(), extID, api.Invocation{Ref: ref})
 	if err != nil || failure != nil || result.View == nil {

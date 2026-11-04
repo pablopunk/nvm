@@ -16,8 +16,6 @@ import (
 type rootInput struct {
 	learn      *usage.Learner
 	clip       *clipEngine
-	clipInRoot bool
-	clipSearch bool
 	// updatePrompt is whether the root shows an update prompt, which replaces the Check for Updates row, as in 1.x.
 	updatePrompt bool
 	chats        []chatHead
@@ -54,8 +52,6 @@ func (p *App) captureRoot() *rootInput {
 	return &rootInput{
 		learn:        p.learn,
 		clip:         p.clip,
-		clipInRoot:   !p.S.ClipRootOff,
-		clipSearch:   !p.S.ClipRootSearchOff,
 		updatePrompt: rootShowsUpdate(p.updateSnapshot().State),
 		chats:        chats,
 		shortcuts:    p.boundShortcuts(),

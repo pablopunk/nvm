@@ -82,6 +82,8 @@ type Deps struct {
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
+	// ClipboardImages makes files and thumbnails of clipboard pictures. Nil leaves image handles out of the results.
+	ClipboardImages ClipboardImages
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.
