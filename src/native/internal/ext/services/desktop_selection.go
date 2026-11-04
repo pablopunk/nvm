@@ -69,7 +69,8 @@ func selectionFailure(err error) error {
 	case errors.Is(err, platform.ErrUnsupported):
 		return unavailable("Selected text is not available on this system yet.")
 	case errors.Is(err, selection.ErrSourceGone), errors.Is(err, selection.ErrFormattedClipboard),
-		errors.Is(err, selection.ErrNothingToUndo), errors.Is(err, selection.ErrSourceChanged):
+		errors.Is(err, selection.ErrKeyboardHeld), errors.Is(err, selection.ErrNothingToUndo),
+		errors.Is(err, selection.ErrSourceChanged):
 		return unavailable("%s", err.Error())
 	}
 	return err

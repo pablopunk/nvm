@@ -158,21 +158,14 @@ func unavailableChatView() *palette.View {
 	}
 }
 
-// chatSettled runs after a chat's turn ends on the UI thread. The extension builder and the AI commands react to theirs.
+// chatSettled runs after a chat's turn ends on the UI thread. The extension builder reacts to its turns.
 func (p *App) chatSettled(id string, outcome chat.Outcome) {
 	record, ok := p.chats.Chat(id)
 	if !ok {
 		return
 	}
-	switch record.Kind {
-	case chat.KindBuilder:
-		if p.builder != nil {
-			p.builder.Settled(id, outcome)
-		}
-	case chat.KindProofread:
-		if p.aiCommands != nil {
-			p.aiCommands.Settled(id, outcome)
-		}
+	if record.Kind == chat.KindBuilder && p.builder != nil {
+		p.builder.Settled(id, outcome)
 	}
 }
 

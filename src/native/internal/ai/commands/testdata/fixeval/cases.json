@@ -1,0 +1,932 @@
+[
+ {
+  "id": "typo-01",
+  "group": "typos",
+  "input": "I recieve the pakage tomorow.",
+  "expect": "fixed",
+  "output": "I receive the package tomorrow.",
+  "model": {
+   "substitutions": [
+    [
+     "recieve",
+     "receive"
+    ],
+    [
+     "pakage",
+     "package"
+    ],
+    [
+     "tomorow",
+     "tomorrow"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-02",
+  "group": "typos",
+  "input": "Thier going to teh store.",
+  "expect": "fixed",
+  "output": "Their going to the store.",
+  "model": {
+   "substitutions": [
+    [
+     "Thier",
+     "Their"
+    ],
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-03",
+  "group": "typos",
+  "input": "The definately wrong seperate words.",
+  "expect": "fixed",
+  "output": "The definitely wrong separate words.",
+  "model": {
+   "substitutions": [
+    [
+     "definately",
+     "definitely"
+    ],
+    [
+     "seperate",
+     "separate"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-04",
+  "group": "typos",
+  "input": "We must acommodate the occured errors.",
+  "expect": "fixed",
+  "output": "We must accommodate the occurred errors.",
+  "model": {
+   "substitutions": [
+    [
+     "acommodate",
+     "accommodate"
+    ],
+    [
+     "occured",
+     "occurred"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-05",
+  "group": "typos",
+  "input": "helo wrold",
+  "expect": "fixed",
+  "output": "hello world",
+  "model": {
+   "substitutions": [
+    [
+     "helo",
+     "hello"
+    ],
+    [
+     "wrold",
+     "world"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-06",
+  "group": "typos",
+  "input": "The quick brwn fox jumps ovr the lazy dog",
+  "expect": "fixed",
+  "output": "The quick brown fox jumps over the lazy dog",
+  "model": {
+   "substitutions": [
+    [
+     "brwn",
+     "brown"
+    ],
+    [
+     "ovr",
+     "over"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "typo-07",
+  "group": "typos",
+  "input": "Recieved your mesage yesturday.",
+  "expect": "fixed",
+  "output": "Received your message yesterday.",
+  "model": {
+   "substitutions": [
+    [
+     "Recieved",
+     "Received"
+    ],
+    [
+     "mesage",
+     "message"
+    ],
+    [
+     "yesturday",
+     "yesterday"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-01",
+  "group": "grammar",
+  "input": "She dont like apples.",
+  "expect": "fixed",
+  "output": "She doesn't like apples.",
+  "model": {
+   "substitutions": [
+    [
+     "dont",
+     "doesn't"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-02",
+  "group": "grammar",
+  "input": "He go to school every day.",
+  "expect": "fixed",
+  "output": "He goes to school every day.",
+  "model": {
+   "substitutions": [
+    [
+     "go to",
+     "goes to"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-03",
+  "group": "grammar",
+  "input": "I has two cats and a dog.",
+  "expect": "fixed",
+  "output": "I have two cats and a dog.",
+  "model": {
+   "substitutions": [
+    [
+     "has two",
+     "have two"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-04",
+  "group": "grammar",
+  "input": "There is many people here.",
+  "expect": "fixed",
+  "output": "There are many people here.",
+  "model": {
+   "substitutions": [
+    [
+     "is many",
+     "are many"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-05",
+  "group": "grammar",
+  "input": "I has went home yesterday.",
+  "expect": "fixed",
+  "output": "I have gone home yesterday.",
+  "model": {
+   "substitutions": [
+    [
+     "has went",
+     "have gone"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-06",
+  "group": "grammar",
+  "input": "he go",
+  "expect": "fixed",
+  "output": "he goes",
+  "model": {
+   "substitutions": [
+    [
+     "go",
+     "goes"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "grammar-07",
+  "group": "grammar",
+  "input": "Me and him was late for the meeting.",
+  "expect": "fixed",
+  "output": "He and I were late for the meeting.",
+  "protect": [
+   "meeting"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "Me and him was",
+     "He and I were"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "punct-01",
+  "group": "punctuation",
+  "input": "hello how are you",
+  "expect": "fixed",
+  "output": "Hello, how are you?",
+  "model": {
+   "substitutions": [
+    [
+     "hello how are you",
+     "Hello, how are you?"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "punct-02",
+  "group": "punctuation",
+  "input": "its a nice day isnt it",
+  "expect": "fixed",
+  "output": "It's a nice day, isn't it?",
+  "model": {
+   "substitutions": [
+    [
+     "its a nice day isnt it",
+     "It's a nice day, isn't it?"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "punct-03",
+  "group": "punctuation",
+  "input": "Wait what  Really",
+  "expect": "fixed",
+  "output": "Wait, what? Really.",
+  "model": {
+   "substitutions": [
+    [
+     "Wait what  Really",
+     "Wait, what? Really."
+    ]
+   ]
+  }
+ },
+ {
+  "id": "punct-04",
+  "group": "punctuation",
+  "input": "this is the end however we continue",
+  "expect": "fixed",
+  "output": "This is the end. However, we continue.",
+  "model": {
+   "substitutions": [
+    [
+     "this is the end however we continue",
+     "This is the end. However, we continue."
+    ]
+   ]
+  }
+ },
+ {
+  "id": "mixed-01",
+  "group": "mixed-language",
+  "input": "Esto es un test con mucho errores ortograficos.",
+  "expect": "fixed",
+  "output": "Esto es un test con muchos errores ortográficos.",
+  "model": {
+   "substitutions": [
+    [
+     "mucho errores",
+     "muchos errores"
+    ],
+    [
+     "ortograficos",
+     "ortográficos"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "mixed-02",
+  "group": "mixed-language",
+  "input": "Gracias por tu ayuda, i apreciate it.",
+  "expect": "fixed",
+  "output": "Gracias por tu ayuda, I appreciate it.",
+  "model": {
+   "substitutions": [
+    [
+     "i apreciate",
+     "I appreciate"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "mixed-03",
+  "group": "mixed-language",
+  "input": "Mañana vamos al cine, you know.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "mixed-04",
+  "group": "mixed-language",
+  "input": "Necesito que me digas la verdad, please.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "mixed-05",
+  "group": "mixed-language",
+  "input": "Hola, ¿cómo estás?",
+  "expect": "refused",
+  "model": {
+   "replies": [
+    "Hello, how are you?",
+    "Hello, how are you?"
+   ]
+  }
+ },
+ {
+  "id": "mixed-06",
+  "group": "mixed-language",
+  "input": "Good morning, my friend.",
+  "expect": "refused",
+  "model": {
+   "replies": [
+    "Доброе утро, мой друг.",
+    "Доброе утро, мой друг."
+   ]
+  }
+ },
+ {
+  "id": "md-01",
+  "group": "markdown",
+  "input": "# meeting notes\n\n- buy milk\n- call bob tomorow",
+  "expect": "fixed",
+  "output": "# Meeting notes\n\n- buy milk\n- call bob tomorrow",
+  "protect": [
+   "# ",
+   "- buy milk"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "# meeting notes",
+     "# Meeting notes"
+    ],
+    [
+     "tomorow",
+     "tomorrow"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "md-02",
+  "group": "markdown",
+  "input": "**Important:** the deadlne is friday.",
+  "expect": "fixed",
+  "output": "**Important:** the deadline is Friday.",
+  "protect": [
+   "**Important:**"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "deadlne",
+     "deadline"
+    ],
+    [
+     "friday",
+     "Friday"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "md-03",
+  "group": "markdown",
+  "input": "Run `npm instal` first, then restart the servr.",
+  "expect": "fixed",
+  "output": "Run `npm instal` first, then restart the server.",
+  "protect": [
+   "`npm instal`"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "servr",
+     "server"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "md-04",
+  "group": "markdown",
+  "input": "> a quote that has a typo in it\n> second line",
+  "expect": "unchanged",
+  "protect": [
+   "> a quote"
+  ]
+ },
+ {
+  "id": "code-01",
+  "group": "code",
+  "input": "```\nconst x = 1\n```\nThis is an exmple.",
+  "expect": "fixed",
+  "output": "```\nconst x = 1\n```\nThis is an example.",
+  "protect": [
+   "const x = 1"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "exmple",
+     "example"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "code-02",
+  "group": "code",
+  "input": "```python\nprint('helo')\n```\nSee above.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "url-01",
+  "group": "urls-emails",
+  "input": "Visit https://exampel.com to see teh docs.",
+  "expect": "fixed",
+  "output": "Visit https://exampel.com to see the docs.",
+  "protect": [
+   "https://exampel.com"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "url-02",
+  "group": "urls-emails",
+  "input": "Email me at jhon.doe@acme.com tomorow.",
+  "expect": "fixed",
+  "output": "Email me at jhon.doe@acme.com tomorrow.",
+  "protect": [
+   "jhon.doe@acme.com"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "tomorow",
+     "tomorrow"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "url-03",
+  "group": "urls-emails",
+  "input": "Open ~/Documents/reprot.pdf now.",
+  "expect": "unchanged",
+  "protect": [
+   "~/Documents/reprot.pdf"
+  ]
+ },
+ {
+  "id": "url-04",
+  "group": "urls-emails",
+  "input": "ping @jhon_doe about the bugg",
+  "expect": "fixed",
+  "output": "ping @jhon_doe about the bug",
+  "protect": [
+   "@jhon_doe"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "bugg",
+     "bug"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "list-01",
+  "group": "lists",
+  "input": "1. buy eggs\n2. call mum\n3. pay rent",
+  "expect": "fixed",
+  "output": "1. Buy eggs\n2. Call mum\n3. Pay rent",
+  "model": {
+   "substitutions": [
+    [
+     "buy eggs",
+     "Buy eggs"
+    ],
+    [
+     "call mum",
+     "Call mum"
+    ],
+    [
+     "pay rent",
+     "Pay rent"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "list-02",
+  "group": "lists",
+  "input": "- teh first item\n- the secnd item",
+  "expect": "fixed",
+  "output": "- the first item\n- the second item",
+  "model": {
+   "substitutions": [
+    [
+     "teh first",
+     "the first"
+    ],
+    [
+     "secnd",
+     "second"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "list-03",
+  "group": "lists",
+  "input": "* [ ] finsh report\n* [x] send invoice",
+  "expect": "fixed",
+  "output": "* [ ] finish report\n* [x] send invoice",
+  "protect": [
+   "[x]"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "finsh",
+     "finish"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "emoji-01",
+  "group": "emoji",
+  "input": "thanks 🙏 that was grat",
+  "expect": "fixed",
+  "output": "thanks 🙏 that was great",
+  "protect": [
+   "🙏"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "grat",
+     "great"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "emoji-02",
+  "group": "emoji",
+  "input": "I love this 😍😍 so much",
+  "expect": "unchanged",
+  "protect": [
+   "😍😍"
+  ]
+ },
+ {
+  "id": "caps-01",
+  "group": "all-caps",
+  "input": "THIS IS VERY IMPORTNAT",
+  "expect": "fixed",
+  "output": "THIS IS VERY IMPORTANT",
+  "model": {
+   "substitutions": [
+    [
+     "IMPORTNAT",
+     "IMPORTANT"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "caps-02",
+  "group": "all-caps",
+  "input": "WE NEED TO FINSIH TODAY",
+  "expect": "fixed",
+  "output": "WE NEED TO FINISH TODAY",
+  "model": {
+   "substitutions": [
+    [
+     "FINSIH",
+     "FINISH"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "ok-01",
+  "group": "already-correct",
+  "input": "The meeting starts at 3 pm in room B.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "ok-02",
+  "group": "already-correct",
+  "input": "Thank you for your message.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "ok-03",
+  "group": "already-correct",
+  "input": "Dear Dr. Smith, the report is attached.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "ok-04",
+  "group": "already-correct",
+  "input": "Ship it on Friday.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "ok-05",
+  "group": "already-correct",
+  "input": "Ünïcödé text stays as it is.",
+  "expect": "unchanged"
+ },
+ {
+  "id": "ok-06",
+  "group": "already-correct",
+  "input": "    indented line stays",
+  "expect": "unchanged"
+ },
+ {
+  "id": "guard-01",
+  "group": "guard",
+  "input": "Can you help me with my essay?",
+  "expect": "refused",
+  "model": {
+   "replies": [
+    "Sure! Here is my answer: yes, I can help with your essay.",
+    "Sure! Here is my answer: yes, I can help with your essay."
+   ]
+  }
+ },
+ {
+  "id": "guard-02",
+  "group": "guard",
+  "input": "Please send the file.",
+  "expect": "refused",
+  "model": {
+   "replies": [
+    "",
+    ""
+   ]
+  }
+ },
+ {
+  "id": "guard-03",
+  "group": "guard",
+  "input": "We shipped the release on monday.",
+  "expect": "fixed",
+  "output": "We shipped the release on Monday.",
+  "model": {
+   "substitutions": [
+    [
+     "monday",
+     "Monday"
+    ]
+   ],
+   "noise": "preamble"
+  }
+ },
+ {
+  "id": "noise-01",
+  "group": "guard",
+  "input": "We shipped the release on monday.",
+  "expect": "fixed",
+  "output": "We shipped the release on Monday.",
+  "model": {
+   "substitutions": [
+    [
+     "monday",
+     "Monday"
+    ]
+   ],
+   "noise": "quotes"
+  }
+ },
+ {
+  "id": "noise-02",
+  "group": "guard",
+  "input": "We shipped the release on monday.",
+  "expect": "fixed",
+  "output": "We shipped the release on Monday.",
+  "model": {
+   "substitutions": [
+    [
+     "monday",
+     "Monday"
+    ]
+   ],
+   "noise": "fence"
+  }
+ },
+ {
+  "id": "noise-03",
+  "group": "guard",
+  "input": "We shipped the release on monday.",
+  "expect": "fixed",
+  "output": "We shipped the release on Monday.",
+  "model": {
+   "substitutions": [
+    [
+     "monday",
+     "Monday"
+    ]
+   ],
+   "noise": "tags"
+  }
+ },
+ {
+  "id": "keep-quotes-01",
+  "group": "guard",
+  "input": "\"hello wrold\" he said",
+  "expect": "fixed",
+  "output": "\"hello world\" he said",
+  "model": {
+   "substitutions": [
+    [
+     "wrold",
+     "world"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "edges-01",
+  "group": "whitespace",
+  "input": "  i recieve it  \n",
+  "expect": "fixed",
+  "output": "  I receive it  \n",
+  "model": {
+   "substitutions": [
+    [
+     "i recieve",
+     "I receive"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "crlf-01",
+  "group": "whitespace",
+  "input": "line one\r\nline too wrold\r\n",
+  "expect": "fixed",
+  "output": "line one\r\nline too world\r\n",
+  "model": {
+   "substitutions": [
+    [
+     "wrold",
+     "world"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "single-01",
+  "group": "whitespace",
+  "input": "teh",
+  "expect": "fixed",
+  "output": "the",
+  "model": {
+   "substitutions": [
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "replies-retry-01",
+  "group": "guard",
+  "input": "i has dogs",
+  "expect": "fixed",
+  "output": "I have dogs.",
+  "model": {
+   "substitutions": [
+    [
+     "i has dogs",
+     "I have dogs."
+    ]
+   ],
+   "replies": [
+    "Sure, I have dogs and cats and birds and a long story about them all.",
+    "I have dogs."
+   ]
+  }
+ },
+ {
+  "id": "long-01",
+  "group": "long",
+  "input": "This is a paragraph that I recieve from the team every week0. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week0 for reference.\n\nThis is a paragraph that I recieve from the team every week1. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week1 for reference.\n\nThis is a paragraph that I recieve from the team every week2. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week2 for reference.\n\nThis is a paragraph that I recieve from the team every week3. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week3 for reference.\n\nThis is a paragraph that I recieve from the team every week4. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week4 for reference.\n\nThis is a paragraph that I recieve from the team every week5. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week5 for reference.\n\nThis is a paragraph that I recieve from the team every week6. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week6 for reference.\n\nThis is a paragraph that I recieve from the team every week7. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week7 for reference.",
+  "expect": "fixed",
+  "output": "This is a paragraph that I receive from the team every week0. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week0 for reference.\n\nThis is a paragraph that I receive from the team every week1. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week1 for reference.\n\nThis is a paragraph that I receive from the team every week2. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week2 for reference.\n\nThis is a paragraph that I receive from the team every week3. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week3 for reference.\n\nThis is a paragraph that I receive from the team every week4. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week4 for reference.\n\nThis is a paragraph that I receive from the team every week5. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week5 for reference.\n\nThis is a paragraph that I receive from the team every week6. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week6 for reference.\n\nThis is a paragraph that I receive from the team every week7. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week7 for reference.",
+  "protect": [
+   "https://example.org/notes/week0"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "recieve",
+     "receive"
+    ],
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "long-02",
+  "group": "long",
+  "input": "This is a paragraph that I recieve from the team every week0. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week0 for reference.\n\nThis is a paragraph that I recieve from the team every week1. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week1 for reference.\n\nThis is a paragraph that I recieve from the team every week2. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week2 for reference.\n\nThis is a paragraph that I recieve from the team every week3. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week3 for reference.\n\nThis is a paragraph that I recieve from the team every week4. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week4 for reference.\n\nThis is a paragraph that I recieve from the team every week5. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week5 for reference.\n\nThis is a paragraph that I recieve from the team every week6. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week6 for reference.\n\nThis is a paragraph that I recieve from the team every week7. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week7 for reference.\n\nThis is a paragraph that I recieve from the team every week8. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week8 for reference.\n\nThis is a paragraph that I recieve from the team every week9. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week9 for reference.\n\nThis is a paragraph that I recieve from the team every week10. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week10 for reference.\n\nThis is a paragraph that I recieve from the team every week11. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week11 for reference.\n\nThis is a paragraph that I recieve from the team every week12. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week12 for reference.\n\nThis is a paragraph that I recieve from the team every week13. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week13 for reference.",
+  "expect": "fixed",
+  "output": "This is a paragraph that I receive from the team every week0. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week0 for reference.\n\nThis is a paragraph that I receive from the team every week1. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week1 for reference.\n\nThis is a paragraph that I receive from the team every week2. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week2 for reference.\n\nThis is a paragraph that I receive from the team every week3. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week3 for reference.\n\nThis is a paragraph that I receive from the team every week4. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week4 for reference.\n\nThis is a paragraph that I receive from the team every week5. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week5 for reference.\n\nThis is a paragraph that I receive from the team every week6. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week6 for reference.\n\nThis is a paragraph that I receive from the team every week7. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week7 for reference.\n\nThis is a paragraph that I receive from the team every week8. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week8 for reference.\n\nThis is a paragraph that I receive from the team every week9. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week9 for reference.\n\nThis is a paragraph that I receive from the team every week10. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week10 for reference.\n\nThis is a paragraph that I receive from the team every week11. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week11 for reference.\n\nThis is a paragraph that I receive from the team every week12. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week12 for reference.\n\nThis is a paragraph that I receive from the team every week13. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week13 for reference.",
+  "protect": [
+   "https://example.org/notes/week13"
+  ],
+  "model": {
+   "substitutions": [
+    [
+     "recieve",
+     "receive"
+    ],
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ },
+ {
+  "id": "long-03",
+  "group": "long",
+  "input": "The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far. The report is ready and the team is happy with the results so far.",
+  "expect": "unchanged",
+  "protect": [
+   "results so far"
+  ]
+ },
+ {
+  "id": "long-04",
+  "group": "long",
+  "input": "This is a paragraph that I recieve from the team every week 0. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 0 for reference.\n\nThis is a paragraph that I recieve from the team every week 1. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 1 for reference.\n\nThis is a paragraph that I recieve from the team every week 2. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 2 for reference.\n\nThis is a paragraph that I recieve from the team every week 3. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 3 for reference.\n\nThis is a paragraph that I recieve from the team every week 4. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 4 for reference.\n\nThis is a paragraph that I recieve from the team every week 5. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 5 for reference.\n\nThis is a paragraph that I recieve from the team every week 6. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 6 for reference.\n\nThis is a paragraph that I recieve from the team every week 7. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 7 for reference.\n\nThis is a paragraph that I recieve from the team every week 8. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 8 for reference.\n\nThis is a paragraph that I recieve from the team every week 9. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 9 for reference.\n\nThis is a paragraph that I recieve from the team every week 10. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 10 for reference.\n\nThis is a paragraph that I recieve from the team every week 11. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 11 for reference.\n\nThis is a paragraph that I recieve from the team every week 12. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 12 for reference.\n\nThis is a paragraph that I recieve from the team every week 13. It contains a few mistakes like teh wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 13 for reference.",
+  "expect": "fixed",
+  "output": "This is a paragraph that I receive from the team every week 0. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 0 for reference.\n\nThis is a paragraph that I receive from the team every week 1. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 1 for reference.\n\nThis is a paragraph that I receive from the team every week 2. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 2 for reference.\n\nThis is a paragraph that I receive from the team every week 3. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 3 for reference.\n\nThis is a paragraph that I receive from the team every week 4. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 4 for reference.\n\nThis is a paragraph that I receive from the team every week 5. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 5 for reference.\n\nThis is a paragraph that I receive from the team every week 6. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 6 for reference.\n\nThis is a paragraph that I receive from the team every week 7. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 7 for reference.\n\nThis is a paragraph that I receive from the team every week 8. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 8 for reference.\n\nThis is a paragraph that I receive from the team every week 9. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 9 for reference.\n\nThis is a paragraph that I receive from the team every week 10. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 10 for reference.\n\nThis is a paragraph that I receive from the team every week 11. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 11 for reference.\n\nThis is a paragraph that I receive from the team every week 12. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 12 for reference.\n\nThis is a paragraph that I receive from the team every week 13. It contains a few mistakes like the wrong spelling and a missing piece of punctuation, plus a link https://example.org/notes/week 13 for reference.",
+  "model": {
+   "substitutions": [
+    [
+     "recieve",
+     "receive"
+    ],
+    [
+     "teh",
+     "the"
+    ]
+   ]
+  }
+ }
+]

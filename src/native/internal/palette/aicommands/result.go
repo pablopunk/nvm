@@ -9,14 +9,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Hints name the answers of a result page: Enter replaces the selection when the result can, and copies otherwise.
-const (
-	replaceHint = "↵ replace selected text · ⌘⌥C copy"
-	copyHint    = "↵ copy · ⌘⌥C copy"
-)
+// copyHint is the footer of a result page: Enter and the copy key both copy the text.
+const copyHint = "↵ copy · ⌘⌥C copy"
 
-// ResultView is the page of a finished command: its text, read on every frame, and the keys that replace or copy it.
-// The palette input is not used for anything; Escape closes the page.
+// ResultView is the page of a finished command: its text, read on every frame, and the keys that copy it. The palette
+// input is not used for anything; Escape closes the page.
 func ResultView(r commands.Result) *palette.View {
 	var host search.Host
 	return &palette.View{
@@ -33,14 +30,8 @@ func ResultView(r commands.Result) *palette.View {
 			copyResult(h, r)
 			return true
 		},
-		OnSubmit: func(string) {
-			if r.Replace != nil {
-				r.Replace(r.Text())
-				return
-			}
-			copyResult(host, r)
-		},
-		Hint: hint(r),
+		OnSubmit: func(string) { copyResult(host, r) },
+		Hint:     copyHint,
 	}
 }
 
@@ -60,12 +51,4 @@ func copyResult(h search.Host, r commands.Result) {
 	if r.Copy != nil {
 		r.Copy(r.Text())
 	}
-}
-
-// hint is the right footer of a result page.
-func hint(r commands.Result) string {
-	if r.Replace != nil {
-		return replaceHint
-	}
-	return copyHint
 }
