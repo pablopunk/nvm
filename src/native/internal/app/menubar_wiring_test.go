@@ -28,7 +28,7 @@ func wiredApp(t *testing.T) (*App, *fake.Set) {
 		Clock: set.Clock, Dir: "/config", Version: nativeClientVersion, OS: "linux", Arch: "amd64", Consent: true,
 	})
 	p.ports = set.Ports()
-	p.updater = updatefake.New(nativeClientVersion, update.State{Status: update.StatusIdle, CurrentVersion: nativeClientVersion})
+	p.updater = updatefake.New(nativeClientVersion, update.State{Status: update.StatusCurrent, CurrentVersion: nativeClientVersion})
 	return p, set
 }
 
