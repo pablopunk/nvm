@@ -98,7 +98,8 @@ type Grid struct {
 	Cell       func(c *ui.Context, it search.Item)
 }
 
-// Accessory is a search field's option picker: each click moves to the next option and reports its value.
+// Accessory is a search field's option picker: a native popup menu of the options, with a check mark on the current one.
+// Choosing an option makes it the value and reports it to OnChange.
 type Accessory struct {
 	Value    string
 	Options  []AccessoryOption
@@ -121,18 +122,32 @@ func (a *Accessory) Label() string {
 	return ""
 }
 
-// Next moves to the option after the current one, wrapping at the end, and reports the new value.
-func (a *Accessory) Next() string {
-	if len(a.Options) == 0 {
-		return a.Value
+// Titles are the option titles in order, for the menu the picker opens.
+func (a *Accessory) Titles() []string {
+	titles := make([]string, 0, len(a.Options))
+	for _, option := range a.Options {
+		titles = append(titles, option.Title)
 	}
-	index := 0
+	return titles
+}
+
+// SelectedIndex is the index of the option whose value is the current value, or -1 when none is.
+func (a *Accessory) SelectedIndex() int {
 	for i, option := range a.Options {
 		if option.Value == a.Value {
-			index = (i + 1) % len(a.Options)
-			break
+			return i
 		}
 	}
+	return -1
+}
+
+// Choose makes the option at index the value and reports it to OnChange. An index with no option changes nothing.
+func (a *Accessory) Choose(index int) {
+	if index < 0 || index >= len(a.Options) {
+		return
+	}
 	a.Value = a.Options[index].Value
-	return a.Value
+	if a.OnChange != nil {
+		a.OnChange(a.Value)
+	}
 }

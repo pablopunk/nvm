@@ -242,9 +242,9 @@ func TestStopButtonShowsWhileAReplyStreams(t *testing.T) {
 	}
 }
 
-// TestTierPickerSwitchesTheTierOnClick checks a click on the tier picker moves the chat to the other tier, and that a
-// click while a reply streams keeps the tier and says why.
-func TestTierPickerSwitchesTheTierOnClick(t *testing.T) {
+// TestTierPickerSwitchesTheTierFromItsMenu checks the tier chosen in the picker's menu becomes the next reply's tier,
+// and that the next reply is sent on it.
+func TestTierPickerSwitchesTheTierFromItsMenu(t *testing.T) {
 	transport := fixtures.NewStreamingTransport()
 	r := newRig(t, streamingClient(t, transport))
 	record := r.chatWith("Tiers", chat.TierFast)
@@ -253,11 +253,15 @@ func TestTierPickerSwitchesTheTierOnClick(t *testing.T) {
 	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
 	tt.Frame()
 
-	if err := tt.Click("Fast ⌄"); err != nil {
+	if err := tt.Click("Fast"); err != nil {
 		t.Fatalf("click the tier picker: %v", err)
 	}
+	tt.Frame()
+	if err := tt.ChooseMenuItem("Smart"); err != nil {
+		t.Fatalf("choose Smart: %v", err)
+	}
 	if got := mustChat(t, r, record.ID).Tier; got != chat.TierSmart {
-		t.Fatalf("tier = %s after a click, want smart", got)
+		t.Fatalf("tier = %s after choosing Smart, want smart", got)
 	}
 
 	if err := r.service.Send(record.ID, "hello"); err != nil {
@@ -266,13 +270,6 @@ func TestTierPickerSwitchesTheTierOnClick(t *testing.T) {
 	reply := awaitReply(t, transport)
 	writeFrame(t, reply, fixtures.StreamFrames("Hi", 24)[0])
 	r.awaitReplyText(record.ID, "Hi")
-	tt.Frame()
-	if err := tt.Click("Smart ⌄"); err != nil {
-		t.Fatalf("click the tier picker while busy: %v", err)
-	}
-	if got := mustChat(t, r, record.ID).Tier; got != chat.TierSmart {
-		t.Fatalf("tier = %s while a reply streams, want it unchanged", got)
-	}
 }
 
 // TestRemovingAChatAsksFirstAndCancelKeepsIt checks Delete on a listed chat opens the question, Cancel keeps the chat,

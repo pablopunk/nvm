@@ -83,6 +83,16 @@ func (p *page) toggleTier(h search.Host) {
 	if record.Tier == chat.TierSmart {
 		next = chat.TierFast
 	}
+	p.setTier(next, h)
+}
+
+// setTier makes next the tier of the next replies and says so on the palette. Choosing the current tier changes
+// nothing, and a refused change is toasted.
+func (p *page) setTier(next chat.Tier, h search.Host) {
+	record, ok := p.deps.Service.Chat(p.id)
+	if !ok || record.Tier == next {
+		return
+	}
 	if err := p.deps.Service.SetTier(p.id, next); err != nil {
 		h.Toast(refusalCopy(err))
 		return

@@ -1,6 +1,7 @@
 package aichat
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -103,22 +104,30 @@ func (p *page) send(text string, h search.Host) bool {
 	return true
 }
 
-// tierPicker names the tier the next reply uses, and switches it on a click. Like the desktop app's select, it is
-// disabled while a reply streams. The backend's model and route names are never shown.
+// tierPicker names the tier the next reply uses. A press opens the native menu of the tiers, and the tier chosen in it
+// becomes the next reply's. Like the desktop app's select, it is disabled while a reply streams. The backend's model
+// and route names are never shown.
 func tierPicker(c *ui.Context, p *page, record chat.Chat, h search.Host) {
-	k := design.Tokens(c)
-	busy := p.deps.Service.Busy(p.id)
-	picker := ui.ButtonBase(c).Padding(3, 8).Radius(6).Disabled(busy)
-	picker.Children(func() {
-		color := k.Secondary
-		if busy {
-			color = k.Faint
-		}
-		ui.Text(c, tierLabel(record.Tier)+" ⌄").FontSize(12).FontWeight(600).TextColor(color)
+	chosen := design.Select(c, design.SelectData{
+		Options:  tierTitles(),
+		Selected: slices.Index(tierOrder, record.Tier),
+		Disabled: p.deps.Service.Busy(p.id),
 	})
-	if picker.Clicked() {
-		p.toggleTier(h)
+	if chosen >= 0 {
+		p.setTier(tierOrder[chosen], h)
 	}
+}
+
+// tierOrder is the order the tier menu lists the tiers in, as the desktop app's select does.
+var tierOrder = []chat.Tier{chat.TierFast, chat.TierSmart}
+
+// tierTitles are the words the tier menu shows, in tierOrder.
+func tierTitles() []string {
+	titles := make([]string, 0, len(tierOrder))
+	for _, tier := range tierOrder {
+		titles = append(titles, tierLabel(tier))
+	}
+	return titles
 }
 
 // tierLabel is the word the picker shows for a tier.
