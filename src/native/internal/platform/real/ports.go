@@ -27,6 +27,7 @@ func NewPorts() platform.Ports {
 		DeepLinks:    deepLinks{},
 		Processes:    processes{},
 		Helper:       helper{},
+		Commands:     commands{userPath: newUserPathCache()},
 		Hotkeys:      hotkeys{},
 		Focus:        newFocus(),
 		Tray:         trayHost{},

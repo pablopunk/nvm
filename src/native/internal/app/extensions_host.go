@@ -67,6 +67,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Logs:      logx.Default(),
 
 		Shell:         ports.Shell,
+		Commands:      ports.Commands,
 		Capabilities:  ports.Capabilities,
 		OS:            p.goos,
 		Windows:       p.extensionWindows(),
@@ -79,6 +80,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),
+		Home:           userHomeDir(),
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
@@ -167,6 +169,12 @@ func awaitQuestion(ctx context.Context, onUI func(func()), pal questionPresenter
 		restore()
 		return false, ctx.Err()
 	}
+}
+
+// userHomeDir is the folder a leading "~" in extension shell arguments stands for. Empty when the system has none.
+func userHomeDir() string {
+	home, _ := os.UserHomeDir()
+	return home
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

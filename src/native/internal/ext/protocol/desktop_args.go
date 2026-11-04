@@ -79,3 +79,21 @@ type OCRRegionArgs struct {
 	Region  api.Rect       `json:"region"`
 	Options api.OCROptions `json:"options"`
 }
+
+// ShellExecArgs runs one program with its arguments.
+type ShellExecArgs struct {
+	Command string           `json:"command"`
+	Args    []string         `json:"args,omitempty"`
+	Options api.ShellOptions `json:"options"`
+}
+
+// ShellScriptArgs runs one script: shell source for Script, AppleScript source for AppleScript.
+type ShellScriptArgs struct {
+	Script  string           `json:"script"`
+	Options api.ShellOptions `json:"options"`
+}
+
+// ShellWhichArgs names a program to look up on the user's PATH.
+type ShellWhichArgs struct {
+	Command string `json:"command"`
+}

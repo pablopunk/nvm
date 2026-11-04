@@ -20,6 +20,7 @@ type Set struct {
 	DeepLinks    *DeepLinks
 	Processes    *Processes
 	Helper       *Helper
+	Commands     *Commands
 	Hotkeys      *Hotkeys
 	Focus        *Focus
 	Tray         *TrayHost
@@ -55,6 +56,7 @@ func NewSet() *Set {
 		DeepLinks:    NewDeepLinks(),
 		Processes:    NewProcesses(),
 		Helper:       NewHelper(),
+		Commands:     NewCommands(),
 		Hotkeys:      NewHotkeys(),
 		Focus:        NewFocus(),
 		Tray:         NewTrayHost(),
@@ -90,6 +92,7 @@ func (s *Set) Ports() platform.Ports {
 		DeepLinks:    s.DeepLinks,
 		Processes:    s.Processes,
 		Helper:       s.Helper,
+		Commands:     s.Commands,
 		Hotkeys:      s.Hotkeys,
 		Focus:        s.Focus,
 		Tray:         s.Tray,

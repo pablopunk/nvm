@@ -160,12 +160,15 @@ type Files interface {
 	SearchIndex(query string, options IndexOptions) []IndexedFile
 }
 
-// ShellOptions controls a process. Zero TimeoutMs and OutputLimit take the host defaults.
+// ShellOptions controls a process. Zero TimeoutMs and OutputLimit take the host defaults: 30 s, clamped to
+// 1 s to 120 s, and 200000 characters per stream. Shell makes Exec join the command and its arguments into one
+// line for /bin/sh -c; Script always runs under /bin/bash as a login shell.
 type ShellOptions struct {
 	CWD         string            `json:"cwd,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
 	TimeoutMs   int64             `json:"timeoutMs,omitempty"`
 	OutputLimit int64             `json:"outputLimit,omitempty"`
+	Shell       bool              `json:"shell,omitempty"`
 }
 
 // ShellResult is the captured output of a process.

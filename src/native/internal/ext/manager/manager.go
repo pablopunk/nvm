@@ -38,6 +38,7 @@ type Ports struct {
 	Logs      *logx.Logger
 	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
 	Shell        platform.Shell
+	Commands     platform.Commands
 	Capabilities platform.Capabilities
 	OS           string
 	Windows      services.WindowEngine
@@ -60,6 +61,8 @@ type Options struct {
 	Budgets       map[string]supervisor.Budget
 	// DataRoot holds one data folder per extension, named after its id.
 	DataRoot string
+	// Home is the user's home folder, which "~" in shell arguments stands for.
+	Home string
 	// OnChange runs after any extension's runtime changes state, so a view showing it can redraw. It runs on its
 	// own goroutine and must not block.
 	OnChange func()
@@ -122,6 +125,8 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			MenuBarRefresh: opts.MenuBarRefresh,
 
 			Shell:        ports.Shell,
+			Commands:     ports.Commands,
+			Home:         opts.Home,
 			Capabilities: ports.Capabilities,
 			OS:           ports.OS,
 			Windows:      ports.Windows,

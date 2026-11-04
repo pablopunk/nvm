@@ -24,6 +24,8 @@ type Ports struct {
 	DeepLinks    DeepLinks
 	Processes    Processes
 	Helper       Helper
+	// Commands runs the programs extensions ask the shell helpers to run.
+	Commands     Commands
 	Hotkeys      Hotkeys
 	Focus        Focus
 	Tray         TrayHost

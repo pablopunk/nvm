@@ -39,4 +39,8 @@ const (
 	OpImage         = "image"
 	OpScreen        = "screen"
 	OpRegion        = "region"
+	OpExec          = "exec"
+	OpScript        = "script"
+	OpAppleScript   = "apple-script"
+	OpWhich         = "which"
 )

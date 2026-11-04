@@ -52,6 +52,10 @@ type Deps struct {
 	Capabilities platform.Capabilities
 	// Shell opens paths and links, lists and launches apps and reads app icons. Nil answers unavailable.
 	Shell platform.Shell
+	// Commands runs the programs and scripts of the shell service. Nil answers unavailable.
+	Commands platform.Commands
+	// Home is the user's home folder, which a leading "~" in a shell argument stands for. Empty leaves "~" as it is.
+	Home string
 	// Windows lists and places windows through the window engine. Nil answers unavailable.
 	Windows WindowEngine
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
@@ -86,6 +90,7 @@ type Handler struct {
 	fetches      *rateLimiter
 	logWrites    *rateLimiter
 	actions      *rateLimiter
+	processes    *rateLimiter
 	ocrReads     *rateLimiter
 	screenReads  *rateLimiter
 	openOnce     sync.Once
@@ -113,6 +118,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		fetches:      newRateLimiter(deps.Clock, fetchesPerMinute),
 		logWrites:    newRateLimiter(deps.Clock, logWritesPerMinute),
 		actions:      newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		processes:    newRateLimiter(deps.Clock, processRunsPerMinute),
 		ocrReads:     newRateLimiter(deps.Clock, ocrReadsPerMinute),
 		screenReads:  newRateLimiter(deps.Clock, screenReadsPerMinute),
 	}
@@ -175,7 +181,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceDesktopFiles:
 		return h.serveDesktopFiles(call)
 	case protocol.ServiceDesktopShell:
-		return h.serveDesktopShell(call)
+		return h.serveDesktopShell(ctx, call)
 	case protocol.ServiceDesktopWindows:
 		return h.serveDesktopWindows(ctx, call)
 	case protocol.ServiceClipboardHistory:
