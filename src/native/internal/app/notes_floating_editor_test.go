@@ -14,7 +14,7 @@ func floatingEditorTester(t *testing.T, p *App, id string) (*ui.Tester, *noteEdi
 	if !ok {
 		t.Fatalf("note %q does not open", id)
 	}
-	tt := ui.NewTester(func(c *ui.Context) { floatingNoteBody(c, edit) }, 360, 300)
+	tt := ui.NewTester(func(c *ui.Context) { floatingPanes(c, p, edit) }, 360, 300)
 	tt.Frame()
 	return tt, edit
 }
@@ -80,7 +80,7 @@ func TestFloatingNoteOpensSavedMarkdownAsStyledText(t *testing.T) {
 	if err := edit.sess.Edit("### hello there\n\n**asdf**"); err != nil {
 		t.Fatal(err)
 	}
-	tt := ui.NewTester(func(c *ui.Context) { floatingNoteBody(c, edit) }, 360, 300)
+	tt := ui.NewTester(func(c *ui.Context) { floatingPanes(c, p, edit) }, 360, 300)
 	tt.Frame()
 
 	text := edit.doc.Text()

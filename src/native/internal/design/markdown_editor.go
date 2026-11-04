@@ -21,7 +21,7 @@ func MarkdownEditor(c *ui.Context, doc *richtext.Document, placeholder string) u
 		Placeholder: placeholder,
 		Font:        ui.Font{Size: markdownEditorFontSize, LineHeight: markdownEditorLineHeight},
 		Theme:       markdownEditorTheme(c),
-	}).Fill()
+	}).Grow(1)
 }
 
 // markdownEditorTheme sets the editor's colors and spacing to the 1.x editor's CSS. Its lengths are in ems of the

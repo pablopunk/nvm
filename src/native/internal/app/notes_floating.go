@@ -19,10 +19,19 @@ const (
 	floatingControlsGap = 36
 )
 
+// floatingSurface is the part of the floating window the app drives: it places, focuses and closes the window. The
+// MyGo window implements it; tests give the app a fake.
+type floatingSurface interface {
+	Focus()
+	Close()
+	Position() (x, y int)
+	Size() (width, height int)
+}
+
 // floatingWindow is the one floating note window, as 1.x has one: it shows one note at a time, and opening another
 // note in it replaces the note. edit is the note it shows.
 type floatingWindow struct {
-	window *mygo.Window
+	window floatingSurface
 	edit   *noteEdit
 }
 
@@ -47,7 +56,11 @@ func (p *App) openFloatingNote(id, title string) {
 		Title: title, Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
 		AlwaysOnTop: true, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 12, Y: 12},
 		MinWidth: floatingMinWidth, MinHeight: floatingMinHeight,
-		Content: ui.View(func(c *ui.Context) { floatingNoteWindow(c, p, p.floating.edit) }),
+		Content: ui.View(func(c *ui.Context) {
+			if p.floating != nil {
+				floatingNoteWindow(c, p, p.floating.edit)
+			}
+		}),
 	})
 	p.floating = &floatingWindow{window: w, edit: edit}
 	w.OnMove(p.rememberFloatingFrame)
@@ -180,6 +193,7 @@ func (p *App) rememberFloatingFrame() {
 func (p *App) floatingWindowClosed() {
 	edit := p.floating.edit
 	p.floating = nil
+	p.floatPane = floatingPaneState{}
 	if !p.quitting {
 		_ = p.notes.SetFloating(edit.id, false)
 	}

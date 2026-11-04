@@ -9,18 +9,38 @@ import (
 )
 
 // floatingNoteWindow is the content of the floating window, laid out as the 1.x window is: a strip under the window
-// controls that drags the window, then the note's header (its title and when it was edited), then the editor.
+// controls that drags the window, then the pane the window shows: the note with its header and actions, a list of
+// notes, or a confirmation.
 func floatingNoteWindow(c *ui.Context, p *App, edit *noteEdit) {
+	p.floatingKeys(c)
 	k := design.Tokens(c)
 	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Background(k.Canvas).Children(func() {
 		ui.Column(c).Fill().Children(func() {
-			ui.Row(c).Height(floatingControlsGap).Fill().DragWindow()
+			ui.Row(c).Height(floatingControlsGap).FillWidth().DragWindow()
 			ui.Column(c).Grow(1).Padding(0, 12, 12, 12).Gap(8).Children(func() {
-				floatingNoteHeader(c, p, edit)
-				floatingNoteBody(c, edit)
+				floatingPanes(c, p, edit)
 			})
 		})
 	})
+}
+
+// floatingPanes draws the pane the window shows. While a conflict waits, the note's choices replace its editor.
+func floatingPanes(c *ui.Context, p *App, edit *noteEdit) {
+	switch p.floatPane.pane {
+	case paneAllNotes:
+		floatingAllNotes(c, p)
+	case paneConfirmDelete:
+		floatingDeleteConfirm(c, p, edit)
+	default:
+		syncBuffer(edit)
+		if _, pending := edit.sess.Conflict(); pending {
+			floatingConflictChoices(c, p, edit)
+			return
+		}
+		floatingNoteHeader(c, p, edit)
+		floatingNoteBody(c, edit)
+		floatingEditActions(c, p)
+	}
 }
 
 // floatingNoteHeader is the note's title over its state: "Markdown · Edited 3m ago", as 1.x's editor header shows.
@@ -37,14 +57,8 @@ func floatingNoteHeader(c *ui.Context, p *App, edit *noteEdit) {
 	})
 }
 
-// floatingNoteBody is the note's Markdown in the rich text editor, with the same autosave as the editor. While a
-// conflict waits, it says so instead.
+// floatingNoteBody is the note's Markdown in the rich text editor, with the same autosave as the editor.
 func floatingNoteBody(c *ui.Context, edit *noteEdit) {
-	syncBuffer(edit)
-	if _, pending := edit.sess.Conflict(); pending {
-		conflictNotice(c, "Unsaved changes from another session are waiting. Open this note in Quick Notes to choose which version to keep.")
-		return
-	}
 	doc := noteDocument(edit)
 	ui.Column(c).Grow(1).Padding(8, 4).Children(func() {
 		editor := design.MarkdownEditor(c, doc, editorPlaceholder).AutoFocus()
