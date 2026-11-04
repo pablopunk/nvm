@@ -6,6 +6,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 )
 
@@ -104,6 +105,10 @@ func TestEmptyChatGoldens(t *testing.T) {
 	r.signed = false
 	r.open(ChatView(r.deps(), record.ID))
 	golden.AssertMatrix(t, "empty-signed-out", r.palette.View, pageGoldens)
+
+	r.sign = auth.SignInState{Phase: auth.PhasePending, Code: "CODE-123", VerificationURL: "https://www.nvm.fyi/device"}
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "empty-signed-out-pending", r.palette.View, pageGoldens)
 }
 
 // TestHistoryGoldens renders the list of saved conversations, most recent first, under the new-chat row.
