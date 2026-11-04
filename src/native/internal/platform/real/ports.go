@@ -31,5 +31,7 @@ func NewPorts() platform.Ports {
 		Autostart:    autostart{},
 		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
+		Microphone:   newMicrophone(),
+		Opus:         opusCodec{},
 	}
 }
