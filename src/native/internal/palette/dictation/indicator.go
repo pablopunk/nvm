@@ -4,6 +4,8 @@
 package dictation
 
 import (
+	"unicode/utf8"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
@@ -35,6 +37,16 @@ const (
 	meterBarWidth  = 3
 )
 
+// Panel height. A dictation without a failure fits the base height; a failure grows the panel one line at a time, so
+// the whole message shows. failureCharsPerLine is a conservative count for the 11-point subtitle in the panel's
+// width, so the panel is never shorter than its text.
+const (
+	BaseHeight          = 64
+	failureChromeHeight = 40
+	failureLineHeight   = 15
+	failureCharsPerLine = 42
+)
+
 // meterWeights shapes the bars so the meter reads as a voice spectrum rather than a flat block.
 var meterWeights = [meterBars]float64{0.45, 0.65, 0.85, 1, 0.8, 0.6, 0.9, 0.7, 0.5, 0.75, 0.55, 0.4}
 
@@ -52,7 +64,10 @@ func Indicator(c *ui.Context, s State) {
 			ui.Icon(c, design.Icon("mic")).FontSize(16).TextColor(tone)
 			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 				ui.Text(c, "Dictation").FontSize(13).FontWeight(600).TextColor(k.Strong).SingleLine()
-				ui.Text(c, Subtitle(s)).FontSize(11).TextColor(subtitleColor).SingleLine()
+				subtitle := ui.Text(c, Subtitle(s)).FontSize(11).TextColor(subtitleColor)
+				if s.Mode != ModeFailed {
+					subtitle.SingleLine()
+				}
 			})
 			if s.Mode == ModeListening {
 				meter(c, s.Level, tone)
@@ -90,4 +105,13 @@ func meter(c *ui.Context, level float64, tone ui.Color) {
 
 func clampLevel(level float64) float64 {
 	return min(1, max(0, level))
+}
+
+// Height is the panel height that fits s: the base height, or more when a failure's message wraps onto more lines.
+func Height(s State) int {
+	if s.Mode != ModeFailed {
+		return BaseHeight
+	}
+	lines := max(1, (utf8.RuneCountInString(s.Detail)+failureCharsPerLine-1)/failureCharsPerLine)
+	return max(BaseHeight, failureChromeHeight+lines*failureLineHeight)
 }

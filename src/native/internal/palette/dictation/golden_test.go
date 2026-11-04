@@ -8,8 +8,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 )
 
-// goldenOptions sizes the indicator the way its window does; the goldens cover light and dark at 1x and 2x.
-var goldenOptions = golden.Options{Group: "dictation", Width: 300, Height: 64}
+// goldenWidth is the panel width the window uses; each golden takes the height Height gives its state.
+const goldenWidth = 300
 
 // indicatorStates lists every state the indicator must render, in the order the goldens are written.
 var indicatorStates = []struct {
@@ -21,15 +21,19 @@ var indicatorStates = []struct {
 	{"indicator-waiting-microphone", State{Mode: ModeWaitingForMicrophone}},
 	{"indicator-transcribing", State{Mode: ModeTranscribing}},
 	{"indicator-no-speech", State{Mode: ModeNoSpeech}},
+	{"indicator-failed-short", State{Mode: ModeFailed, Detail: "Sign in to use API dictation."}},
 	{"indicator-failed-long-detail", State{Mode: ModeFailed, Detail: "Not enough credits for API dictation. Add credits or try again later."}},
+	{"indicator-failed-full-message", State{Mode: ModeFailed, Detail: "This recording exceeds the 30-credit per-request limit. Split it into shorter clips and retry, or record the rest in a separate dictation so each part stays under the limit."}},
 }
 
-// TestIndicatorGoldens renders every indicator state in light and dark at 1x and 2x.
+// TestIndicatorGoldens renders every indicator state in light and dark at 1x and 2x, and the failure states at the
+// height the window gives them.
 func TestIndicatorGoldens(t *testing.T) {
 	for _, entry := range indicatorStates {
 		t.Run(entry.name, func(t *testing.T) {
 			state := entry.state
-			golden.AssertMatrix(t, entry.name, func(c *ui.Context) { Indicator(c, state) }, goldenOptions)
+			options := golden.Options{Group: "dictation", Width: goldenWidth, Height: Height(state)}
+			golden.AssertMatrix(t, entry.name, func(c *ui.Context) { Indicator(c, state) }, options)
 		})
 	}
 }
