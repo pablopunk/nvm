@@ -35,13 +35,13 @@ func updateAccessory(state update.State) string {
 	return "Up to date"
 }
 
-// toggleUpdateChannel switches between stable and nightly and checks the new channel at once. A switch is refused
+// toggleUpdateChannel switches to the next channel (Stable, Nightly, Dev) and checks the new channel at once. A switch is refused
 // while a downloaded update waits for its restart.
 func (p *App) toggleUpdateChannel() error {
 	if p.updates == nil {
 		return nil
 	}
-	if err := p.updates.SetChannel(p.updates.Channel().Other()); err != nil {
+	if err := p.updates.SetChannel(p.updates.Channel().Next()); err != nil {
 		return err
 	}
 	p.checkForUpdates(func(string) {})

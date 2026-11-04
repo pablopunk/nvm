@@ -34,17 +34,17 @@ func TestIsNewerRefusesSameAndOlderVersions(t *testing.T) {
 	}
 }
 
-func TestChannelsParseLabelAndToggle(t *testing.T) {
-	if ParseChannel("nightly") != ChannelNightly || ParseChannel("") != ChannelStable || ParseChannel("dev") != ChannelStable {
+func TestChannelsParseLabelAndCycle(t *testing.T) {
+	if ParseChannel("nightly") != ChannelNightly || ParseChannel("dev") != ChannelDev || ParseChannel("") != ChannelStable {
 		t.Fatal("stored channels must parse, unknown values fall back to stable")
 	}
-	if ChannelNightly.Other() != ChannelStable || ChannelStable.Other() != ChannelNightly {
-		t.Fatal("Other must switch between the two channels")
+	if ChannelStable.Next() != ChannelNightly || ChannelNightly.Next() != ChannelDev || ChannelDev.Next() != ChannelStable {
+		t.Fatal("Next must cycle Stable, Nightly, Dev, as 1.x lists the channels")
 	}
-	if !ChannelNightly.Prereleases() || ChannelStable.Prereleases() {
-		t.Fatal("only nightly offers prereleases")
+	if ChannelStable.Prereleases() || !ChannelNightly.Prereleases() || !ChannelDev.Prereleases() {
+		t.Fatal("only nightly and dev offer prereleases")
 	}
-	if ChannelNightly.Label() != "Nightly" || ChannelStable.Label() != "Stable" {
+	if ChannelStable.Label() != "Stable" || ChannelNightly.Label() != "Nightly" || ChannelDev.Label() != "Dev" {
 		t.Fatal("channel labels changed")
 	}
 }

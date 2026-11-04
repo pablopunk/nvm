@@ -94,8 +94,11 @@ func rows(in Snapshot, a Actions) []search.Item {
 }
 
 func channelSubtitle(channel update.Channel) string {
-	if channel == update.ChannelNightly {
+	switch channel {
+	case update.ChannelNightly:
 		return "Includes nightly prereleases; a final release still wins when newer"
+	case update.ChannelDev:
+		return "Includes frequent dev builds and nightly prereleases; a final release still wins when newer"
 	}
 	return "Final releases only"
 }
