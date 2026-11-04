@@ -18,6 +18,8 @@ type rootInput struct {
 	quicklinks []Quicklink
 	apps       []appfeat.App
 	clip       *clipEngine
+	clipInRoot bool
+	clipSearch bool
 	chats      []chatHead
 	timerOn    bool
 }
@@ -37,6 +39,8 @@ func (p *App) captureRoot() *rootInput {
 		quicklinks: slices.Clone(p.S.Quicklinks),
 		apps:       p.appsSnapshot(),
 		clip:       p.clip,
+		clipInRoot: !p.S.ClipRootOff,
+		clipSearch: !p.S.ClipRootSearchOff,
 		chats:      chats,
 		timerOn:    p.timer != nil,
 	}

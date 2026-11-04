@@ -206,6 +206,16 @@ func (p *App) settingsView() *palette.View {
 					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
+				{Title: "Show Clipboard Items in Root List", Subtitle: "Show copied items inline in the root list", Accessory: onOff(!p.S.ClipRootOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipRootOff = !p.S.ClipRootOff
+					p.S.save()
+					h.Refresh()
+				}}}},
+				{Title: "Show Clipboard Items in Root Search", Subtitle: "Show copied items when searching from the root list", Accessory: onOff(!p.S.ClipRootSearchOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipRootSearchOff = !p.S.ClipRootSearchOff
+					p.S.save()
+					h.Refresh()
+				}}}},
 				{Title: "Dictation", Accessory: deviceTitle(p.dictationFlowFor().Devices(), p.dictationSettings().DeviceID), Icon: "mic", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.dictationSettingsView()) }}}},
 				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.S.DiagnosticsOff), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					p.toggleDiagnostics()

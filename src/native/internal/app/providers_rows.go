@@ -38,6 +38,8 @@ const (
 	scoreRootConversation = 13
 	scoreRootCommand      = 12
 	rootClipboardLimit    = 10
+	// rootSearchClipboardLimit is how many copies a search from the root lists, as 1.x does.
+	rootSearchClipboardLimit = 5
 )
 
 // rootCommandScores are the 1.x scores of the commands the empty root lists.
@@ -127,17 +129,20 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 // clipboardTextKinds are the history kinds the root answers with: copies that are text, with or without markup.
 var clipboardTextKinds = []clipboard.Kind{clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF}
 
-// clipboardRows shows the copies at the empty root, up to rootClipboardLimit, and otherwise the two best text copies
-// that contain a query of three characters or more. Pinned copies come first, then the newest. The history is read
-// on the search goroutine; it locks its own state.
+// clipboardRows shows the copies at the empty root, up to rootClipboardLimit when the root list shows them, and
+// otherwise the best text copies that contain the query, up to rootSearchClipboardLimit when the root search shows
+// them. Pinned copies come first, then the newest. The history is read on the search goroutine; it locks its own state.
 func clipboardRows(p *App, in *rootInput, q string) []search.Item {
 	if q == "" {
+		if !in.clipInRoot {
+			return nil
+		}
 		return clipboardEntryRows(p, in, clipboard.Query{Limit: rootClipboardLimit}, func(int) int { return scoreRootClipboard })
 	}
-	if len(strings.ToLower(q)) < 3 {
+	if !in.clipSearch {
 		return nil
 	}
-	return clipboardEntryRows(p, in, clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: 2}, func(i int) int { return scoreClipboard - i })
+	return clipboardEntryRows(p, in, clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: rootSearchClipboardLimit}, func(i int) int { return scoreClipboard - i })
 }
 
 // clipboardEntryRows turns the history entries of query into rows, scored by their position.
