@@ -66,7 +66,7 @@ func extensionCapabilityRows(l manager.Listing) []search.Item {
 func extensionReviewWarning() search.Item {
 	return search.Item{
 		Section: warningSection, Title: "Capabilities are review metadata, not a sandbox",
-		Subtitle: "They describe intent and restrict nothing. An enabled extension has full access to this computer. See docs/extension-trust-model.md",
+		Subtitle: "Enabling gives full access to this computer. See docs/extension-trust-model.md",
 		Icon:     "lock", Tone: "orange",
 	}
 }
