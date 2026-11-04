@@ -6,6 +6,15 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
+// interactionState is what the rows and cells remember between frames: where the pointer was, whether a press is
+// under way, and whether a click already ran a result in the frame being built.
+type interactionState struct {
+	pointer          pointerAt
+	pressing         bool
+	pressingNow      bool
+	clickedThisFrame bool
+}
+
 // pointerAt is where the pointer was last seen over a row or cell, in the window's DIPs.
 type pointerAt struct {
 	x, y  float32
@@ -57,17 +66,17 @@ func (p *Palette) hoverChoose(el ui.Element, i int) {
 	}
 	b := el.Bounds()
 	at := pointerAt{x: b.X + x, y: b.Y + y, known: true}
-	moved := p.pointer.known && (at.x != p.pointer.x || at.y != p.pointer.y)
-	if moved && !p.pressing && !el.Pressed() {
+	moved := p.interact.pointer.known && (at.x != p.interact.pointer.x || at.y != p.interact.pointer.y)
+	if moved && !p.interact.pressing && !el.Pressed() {
 		p.choose(i)
 	}
-	p.pointer = at
+	p.interact.pointer = at
 }
 
 // notePress records that el is pressed in this frame, so the next frame's pointer moves choose nothing.
 func (p *Palette) notePress(el ui.Element) {
 	if el.Pressed() {
-		p.pressingNow = true
+		p.interact.pressingNow = true
 	}
 }
 
@@ -77,7 +86,7 @@ func (p *Palette) clickRun(el ui.Element, i int) {
 	if !el.Clicked() {
 		return
 	}
-	p.clickedThisFrame = true
+	p.interact.clickedThisFrame = true
 	p.choose(i)
 	p.runDefault()
 }

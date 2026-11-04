@@ -82,14 +82,7 @@ type Palette struct {
 	chosen     int
 	list       ui.ListState
 	input      ui.Handle
-	// pointer is where the pointer was last seen over a result, to tell pointer movement from a list scrolling.
-	pointer pointerAt
-	// pressing tells that a row was pressed in the last frame, and pressingNow that one is pressed in this frame. A
-	// press that drags out files chooses nothing, even over other rows.
-	pressing, pressingNow bool
-	// clickedThisFrame tells that a click ran a result in the frame being built, so the list's double-click submit does
-	// not run it a second time.
-	clickedThisFrame bool
+	interact interactionState // pointer and click state of rows and cells, see interact.go
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
 	focusList bool
 

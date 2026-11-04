@@ -97,8 +97,8 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 }
 
 func (p *Palette) listBody(c *ui.Context) {
-	p.pressing, p.pressingNow = p.pressingNow, false
-	p.clickedThisFrame = false
+	p.interact.pressing, p.interact.pressingNow = p.interact.pressingNow, false
+	p.interact.clickedThisFrame = false
 	v := p.cur()
 	if len(p.results) == 0 {
 		if !p.settled {
@@ -135,7 +135,7 @@ func (p *Palette) listBody(c *ui.Context) {
 			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
 		p.focusListIfRequested(c)
-		if list.Submitted() && !p.clickedThisFrame {
+		if list.Submitted() && !p.interact.clickedThisFrame {
 			p.runDefault()
 		}
 		if p.chosen < 0 && len(p.results) > 0 {
