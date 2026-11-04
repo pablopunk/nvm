@@ -694,18 +694,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
           }
         ]
       },
@@ -987,6 +975,14 @@
         "actions": [
           {
             "title": "Open Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1415,18 +1411,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
           }
         ]
       },
@@ -1454,18 +1438,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
           }
         ]
       },
@@ -1493,18 +1465,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
           }
         ]
       },
@@ -1532,18 +1492,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
           }
         ]
       },

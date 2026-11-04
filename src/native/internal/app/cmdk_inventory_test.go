@@ -19,9 +19,9 @@ var inventoryPath = filepath.Join("..", "..", "testdata", "parity", "cmdk-action
 // menuCase is one row kind: how to reach its row, and the titles of its menu in 1.x order. Each title must also be named
 // in the inventory, so the inventory stays the reference the menus are checked against.
 type menuCase struct {
-	kind  string
-	row   func(t *testing.T) search.Item
-	menu  []string
+	kind string
+	row  func(t *testing.T) search.Item
+	menu []string
 }
 
 // menuCases lists the row kinds the palette can reach from the golden fixtures.
