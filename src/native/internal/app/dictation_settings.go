@@ -14,6 +14,9 @@ type dictationSettings struct {
 	CopyToClipboard bool   `json:"copyToClipboard"`
 	CleanupWithAI   bool   `json:"cleanupWithAi"`
 	Dictionary      string `json:"dictionary"`
+	// UseScreenContext reads the words on screen for the cleanup prompt; ScreenTermLimit is how many of them it names.
+	UseScreenContext bool `json:"useScreenContext"`
+	ScreenTermLimit  int  `json:"screenTermLimit"`
 }
 
 // dictationPrefs reads and changes the settings. The store keeps them on disk; without a writable store they last

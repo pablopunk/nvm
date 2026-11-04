@@ -18,6 +18,7 @@ const (
 	dictationNoSpeechDismiss        = 2200 * time.Millisecond
 	dictationFailureDismiss         = 4 * time.Second
 	dictationControlledDismiss      = 12 * time.Second
+	dictationScreenTimeout          = 2 * time.Second
 	dictationRestoreDelay           = 500 * time.Millisecond
 	dictationSignInMessage          = "Sign in to use cloud dictation."
 	dictationSettingsFailureMessage = "Could not open Microphone settings. Open System Settings → Privacy & Security → Microphone."
@@ -58,7 +59,9 @@ type dictationDeps struct {
 	Warn                   func(event string, fields map[string]any)
 	OpenMicrophoneSettings func() error
 	// Complete answers the AI cleanup prompt on the fast model. It is used only while the account is signed in.
-	Complete     cleanup.Completer
+	Complete cleanup.Completer
+	// ScreenText reads the text the screen shows, for the screen terms the cleanup prompt may use.
+	ScreenText   func(ctx context.Context) (string, error)
 	RestoreDelay time.Duration
 	OnDevices    func()
 }
@@ -142,10 +145,12 @@ func (f *dictationFlow) foregroundTarget() string {
 	return target
 }
 
-// Stop ends the recording, transcribes it off the UI thread, cleans it when the settings ask, and pastes the text.
+// Stop ends the recording, transcribes it off the UI thread, cleans it when the settings ask, and pastes the text. The
+// screen is read while the transcript is on its way, so the reading costs no time the user waits for.
 func (f *dictationFlow) Stop() {
 	f.show(palindicator.State{Mode: palindicator.ModeTranscribing})
 	settings := f.deps.Settings()
+	screen := f.screenTermsFor(settings)
 	f.deps.Background("dictation.stop", func() {
 		transcript, err := f.service.Stop()
 		if err != nil {
@@ -156,27 +161,10 @@ func (f *dictationFlow) Stop() {
 			f.deps.Dispatch(f.noSpeech)
 			return
 		}
-		text := f.cleaned(transcript, settings)
+		text := f.cleaned(transcript, settings, <-screen)
 		f.deps.Dispatch(f.hide)
 		f.insert(text)
 	})
-}
-
-// cleaned returns the transcript after AI cleanup, when the settings ask for it and the account can run it. A cleanup
-// that fails leaves the transcript as it was and logs why.
-func (f *dictationFlow) cleaned(transcript string, settings dictationSettings) string {
-	if !settings.CleanupWithAI || f.deps.Complete == nil || !f.deps.Account.SignedIn() {
-		return transcript
-	}
-	f.deps.Dispatch(f.showCleaning)
-	terms := cleanup.NewTerms(settings.Dictionary, nil)
-	return cleanup.Clean(context.Background(), f.deps.Complete, transcript, terms, func(err error) {
-		f.warn("dictation.cleanup-failed", err)
-	})
-}
-
-func (f *dictationFlow) showCleaning() {
-	f.show(palindicator.State{Mode: palindicator.ModeCleaning})
 }
 
 // Cancel drops the running dictation, releases its backend preparation as a user cancel, and closes the indicator. A
@@ -345,45 +333,4 @@ func (f *dictationFlow) insert(text string) {
 			restoreDictationClipboard(clipboard, text, previous)
 		}
 	})
-}
-
-// writeDictation puts text on the clipboard: concealed unless the user asked to keep it there.
-func writeDictation(clipboard platform.Clipboard, text string, keep bool) error {
-	if keep {
-		return clipboard.WriteText(text)
-	}
-	concealed, ok := clipboard.(platform.ConcealedClipboard)
-	if !ok {
-		return platform.ErrUnsupported
-	}
-	return concealed.WriteConcealedText(text)
-}
-
-// dictationClipboardMessage says why the text could not be placed on the clipboard.
-func dictationClipboardMessage(err error) string {
-	if err == platform.ErrUnsupported {
-		return "Dictation needs a clipboard that keeps text out of history, which this system does not offer yet."
-	}
-	return "Dictation could not reach the clipboard."
-}
-
-// dictationPasteMessage says why the text was not pasted; the text stays on the clipboard in every case.
-func dictationPasteMessage(err error) string {
-	switch {
-	case errors.Is(err, platform.ErrConflict):
-		return "The app you dictated into is not in front, so nothing was pasted. The text is on the clipboard."
-	case errors.Is(err, platform.ErrDenied):
-		return "Allow Nevermind to control the keyboard in System Settings to paste. The text is on the clipboard."
-	case errors.Is(err, platform.ErrUnsupported):
-		return "Paste is not available on this system yet. The text is on the clipboard."
-	}
-	return "Paste failed. The text is on the clipboard."
-}
-
-// restoreDictationClipboard puts the previous text back only when the clipboard still holds the dictation, so a copy
-// the user made meanwhile is kept.
-func restoreDictationClipboard(clipboard platform.Clipboard, dictated, previous string) {
-	if current, err := clipboard.ReadText(); err == nil && current == dictated {
-		_ = clipboard.WriteText(previous)
-	}
 }

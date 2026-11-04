@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -9,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -93,6 +95,7 @@ func (p *App) dictationDeps() dictationDeps {
 			return p.ports.System.OpenSettings(systemfeat.PrivacyPaneID, "Microphone")
 		},
 		Complete:     p.dictationCompleter(),
+		ScreenText:   p.dictationScreenText,
 		RestoreDelay: dictationRestoreDelay,
 		OnDevices:    p.Refresh,
 	}
@@ -135,4 +138,11 @@ func (b backendCompletions) ChatStream(ctx context.Context, req backend.ChatRequ
 		return nil, err
 	}
 	return stream, nil
+}
+
+// dictationScreenText reads the text the screen shows, through the same OCR service the extensions use.
+func (p *App) dictationScreenText(ctx context.Context) (string, error) {
+	service := ocr.New(ocr.Deps{Text: p.ports.Text, Capture: p.ports.Capture, FS: p.ports.FS, TempDir: os.TempDir()})
+	result, err := service.Screen(ctx, ocr.Options{})
+	return result.Text, err
 }

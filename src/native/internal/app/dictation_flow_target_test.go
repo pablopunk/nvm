@@ -104,7 +104,6 @@ func TestAFailedSettingsPaneIsToastedAndLogged(t *testing.T) {
 
 func TestTheListeningIndicatorOffersCancelAndPressingItStopsTheDictation(t *testing.T) {
 	h := newDictationHarness(t)
-	h.speak("never")
 	h.flow.Toggle()
 	if got := h.panel.last(); got.Mode != palindicator.ModeListening || got.Control != palindicator.ControlCancel {
 		t.Fatalf("indicator = %+v, want listening with cancel", got)

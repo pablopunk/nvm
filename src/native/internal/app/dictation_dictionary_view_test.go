@@ -35,3 +35,12 @@ func TestCleanupSwitchSaysWhatToDoWhenSignedOut(t *testing.T) {
 		t.Fatalf("toasts = %v, cleanup = %v; want the sign-in notice and no change", host.toasts, p.dictationSettings().CleanupWithAI)
 	}
 }
+
+func TestScreenTermLimitCyclesThroughTheOfferedSizes(t *testing.T) {
+	if got := nextScreenTermLimit(10); got != 30 {
+		t.Fatalf("after 10 = %d, want 30", got)
+	}
+	if got := nextScreenTermLimit(50); got != 10 {
+		t.Fatalf("after 50 = %d, want to wrap to 10", got)
+	}
+}

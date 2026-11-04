@@ -12,7 +12,7 @@ import (
 // itself. A term is short, so it never needs an editor.
 func (p *App) dictionaryView() *palette.View {
 	return &palette.View{
-		Title:       "Custom Dictionary",
+		Title:       "Custom dictionary",
 		Placeholder: "Type a preferred term, then press Enter",
 		EmptyTitle:  "No terms yet",
 		EmptySub:    "Type a name or spelling the transcripts should keep",

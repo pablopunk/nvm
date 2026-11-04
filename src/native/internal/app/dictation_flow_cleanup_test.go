@@ -72,3 +72,58 @@ func TestTheDictionaryReachesTheCleanupPrompt(t *testing.T) {
 		t.Fatalf("prompt = %q, want the dictionary terms", prompt)
 	}
 }
+
+func TestTheScreenWordsReachTheCleanupPromptWithinTheLimit(t *testing.T) {
+	h := newDictationHarness(t)
+	h.settings.CleanupWithAI = true
+	h.settings.UseScreenContext = true
+	h.settings.ScreenTermLimit = 10
+	h.screenText = func(context.Context) (string, error) { return "Grafana panel Grafana Kubernetes", nil }
+	var prompt string
+	h.completer = func(_ context.Context, _, user string) (string, error) {
+		prompt = user
+		return "ok", nil
+	}
+	h.speak("ok")
+	h.flow.Toggle()
+	h.flow.Toggle()
+
+	if !strings.Contains(prompt, "Screen terms") || !strings.Contains(prompt, "Grafana\npanel\nKubernetes") {
+		t.Fatalf("prompt = %q, want the screen words, each once", prompt)
+	}
+}
+
+func TestTheScreenIsNotReadUnlessTheSettingsAndTheCleanupAskForIt(t *testing.T) {
+	h := newDictationHarness(t)
+	h.settings.UseScreenContext = true
+	h.screenText = func(context.Context) (string, error) { return "Grafana", nil }
+	h.completer = func(context.Context, string, string) (string, error) { return "ok", nil }
+	h.speak("ok")
+	h.flow.Toggle()
+	h.flow.Toggle()
+
+	if h.screenReads != 0 {
+		t.Fatalf("screen reads = %d, want none without AI cleanup", h.screenReads)
+	}
+}
+
+func TestAFailedScreenReadingLeavesTheCleanupToRunWithoutIt(t *testing.T) {
+	h := newDictationHarness(t)
+	h.settings.CleanupWithAI = true
+	h.settings.UseScreenContext = true
+	var prompt string
+	h.completer = func(_ context.Context, _, user string) (string, error) {
+		prompt = user
+		return "Done.", nil
+	}
+	h.speak("done")
+	h.flow.Toggle()
+	h.flow.Toggle()
+
+	if strings.Contains(prompt, "Screen terms") || len(h.pastes) != 1 || h.pastes[0].text != "Done." {
+		t.Fatalf("prompt = %q, pastes = %+v; want the cleanup without screen words", prompt, h.pastes)
+	}
+	if !containsString(h.warned, "dictation.screen-context-failed") {
+		t.Fatalf("warnings = %v, want the screen failure logged", h.warned)
+	}
+}
