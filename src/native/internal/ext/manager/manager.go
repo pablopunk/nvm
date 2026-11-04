@@ -45,6 +45,8 @@ type Ports struct {
 	OCR          *ocr.Service
 	History      func() *clipboard.History
 	Confirm      services.ConfirmFunc
+	// SettingsPanes lists the operating system's settings panes for the system service.
+	SettingsPanes func() []api.SettingsPane
 }
 
 // Options tune the child processes of every extension.
@@ -125,6 +127,8 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OCR:          ports.OCR,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
+
+			SettingsPanes: ports.SettingsPanes,
 		},
 		entries: map[string]*entry{},
 	}

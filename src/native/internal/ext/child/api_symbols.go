@@ -392,6 +392,7 @@ func init() {
 		"SelectionState":          reflect.ValueOf((*api.SelectionState)(nil)),
 		"SettingDefinition":       reflect.ValueOf((*api.SettingDefinition)(nil)),
 		"Settings":                reflect.ValueOf((*api.Settings)(nil)),
+		"SettingsPane":            reflect.ValueOf((*api.SettingsPane)(nil)),
 		"Shell":                   reflect.ValueOf((*api.Shell)(nil)),
 		"ShellCommand":            reflect.ValueOf((*api.ShellCommand)(nil)),
 		"ShellOptions":            reflect.ValueOf((*api.ShellOptions)(nil)),
@@ -1322,6 +1323,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_System struct {
 	WHasCapability func(name string) bool
 	WLabels        func() api.SystemLabels
 	WOS            func() string
+	WSettingsPanes func() []api.SettingsPane
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) HasCapability(name string) bool {
@@ -1332,6 +1334,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Labels() api.S
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OS() string {
 	return W.WOS()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) SettingsPanes() []api.SettingsPane {
+	return W.WSettingsPanes()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard is an interface wrapper for SystemClipboard type

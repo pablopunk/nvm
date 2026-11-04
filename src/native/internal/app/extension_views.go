@@ -49,17 +49,18 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(bitmap) })
 			}()
 		},
-		OpenURL:     func(url string) { _ = mygo.Shell.OpenExternal(url) },
-		CopyText:    func(text string) { mygo.Clipboard.WriteText(text) },
-		Files:       ports.FS,
-		Clock:       ports.Clock,
-		Cache:       extensionSnapshots,
-		Dialog:      ports.FileDialog,
-		Drafts:      m,
-		Pages:       real.NewWebPages(p.paletteWebWindow),
-		Permissions: ports.Permissions,
-		Cameras:     extensionCameras,
-		IsDark:      func() bool { return mygo.Theme.IsDark() },
+		OpenURL:          func(url string) { _ = mygo.Shell.OpenExternal(url) },
+		CopyText:         func(text string) { mygo.Clipboard.WriteText(text) },
+		OpenSettingsPane: p.openSystemPaneByID,
+		Files:            ports.FS,
+		Clock:            ports.Clock,
+		Cache:            extensionSnapshots,
+		Dialog:           ports.FileDialog,
+		Drafts:           m,
+		Pages:            real.NewWebPages(p.paletteWebWindow),
+		Permissions:      ports.Permissions,
+		Cameras:          extensionCameras,
+		IsDark:           func() bool { return mygo.Theme.IsDark() },
 	}
 }
 

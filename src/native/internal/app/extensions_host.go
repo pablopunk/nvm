@@ -65,19 +65,21 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Clipboard: ports.Clipboard,
 		Logs:      logx.Default(),
 
-		Shell:        ports.Shell,
-		Capabilities: ports.Capabilities,
-		OS:           runtime.GOOS,
-		Windows:      p.extensionWindows(),
-		Shortcuts:    p.extensionShortcuts(),
-		OCR:          ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
-		History:      p.extensionHistory,
-		Confirm:      p.askExtensionConfirmation,
+		Shell:         ports.Shell,
+		Capabilities:  ports.Capabilities,
+		OS:            runtime.GOOS,
+		Windows:       p.extensionWindows(),
+		Shortcuts:     p.extensionShortcuts(),
+		OCR:           ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
+		History:       p.extensionHistory,
+		Confirm:       p.askExtensionConfirmation,
+		SettingsPanes: p.systemSettingsPanes,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
+		BuiltIns:       builtInExtensions(),
 	})
 }
 

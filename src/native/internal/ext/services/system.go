@@ -18,6 +18,8 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 		return h.hasCapability(call.Args)
 	case protocol.OpLabels:
 		return systemLabelsOf(platform.ShellLabelsFor(h.deps.OS)), nil
+	case protocol.OpSettingsPanes:
+		return h.settingsPanes(), nil
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }
@@ -47,6 +49,14 @@ func (h *Handler) publicCapability(name string) bool {
 		return ok
 	}
 	return false
+}
+
+// settingsPanes lists the panes the host can open. Without a provider the OS has none to offer.
+func (h *Handler) settingsPanes() []api.SettingsPane {
+	if h.deps.SettingsPanes == nil {
+		return nil
+	}
+	return h.deps.SettingsPanes()
 }
 
 func systemLabelsOf(labels platform.ShellLabels) api.SystemLabels {

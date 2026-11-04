@@ -236,6 +236,15 @@ type System interface {
 	OS() string
 	HasCapability(name string) bool
 	Labels() SystemLabels
+	// SettingsPanes lists the System Settings panes the OS has, in the order it shows them. Empty where the OS has none.
+	SettingsPanes() []SettingsPane
+}
+
+// SettingsPane is one pane of the operating system's settings app. Setting an ActionSystem op of
+// "open-system-settings" to ID opens it.
+type SettingsPane struct {
+	ID    string `json:"id"`
+	Title string `json:"title"`
 }
 
 // UpdateState is a snapshot of the host update manager. Empty strings mean "none".

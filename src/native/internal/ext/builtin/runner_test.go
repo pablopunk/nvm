@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,8 +15,6 @@ import (
 
 // sample is a built-in that answers every method it can.
 type sample struct {
-	calls []string
-	mu    sync.Mutex
 	// storeKey, when set, makes SearchItems write through the storage service.
 	storeKey string
 }
@@ -121,7 +118,7 @@ func TestPanicBecomesAnInternalFailureWithAReference(t *testing.T) {
 }
 
 // stuck never returns from SearchItems, so only the caller's budget ends the call.
-type stuck struct{ bare }
+type stuck struct{}
 
 func (stuck) Manifest() api.Manifest {
 	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: "nevermind.stuck", Title: "Stuck"}}
