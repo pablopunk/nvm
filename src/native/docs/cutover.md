@@ -117,23 +117,32 @@ and `src/native/internal/backend/compat.go`:
    its client costs nothing. The change needs route tests and manifest and 426 fixtures under
    `src/backend/src/fixtures/contracts/`. Until it ships, 2.0 must ignore the manifest's latest version and update URL,
    because they belong to 1.x. Setting the 1.x minimum above 2.0 is not an option: it would block the 2.0 line.
-5. **`/api/me` is cookie-only.** `src/backend/src/pages/api/me.ts` reads the session cookie. 2.0 sends its bearer token
-   there (`internal/backend/request.go`), so the account plan and credits fail with 401 in production. 1.x does not call
-   `/api/me`. Fix one way: the backend accepts bearer tokens on `/api/me` (additive, the same lookup the token routes
-   use), or 2.0 reads credits from `active-model`. This blocks the M2 account view.
-6. **`GET /api/v1/models` has no route.** 2.0 calls it (`internal/backend/models.go`). The only route under that path
-   is a provider catch-all for generate and stream operations. 1.x uses `GET /api/v1/active-model`. Fix in 2.0: use
-   `active-model`, as 1.x does. No backend change.
+   Done in the client: `internal/backend/compat.go` decodes neither field and derives no update-recommended state. The
+   semver comparator that state used is removed too, and is in git history before commit `8c38da71`. A 426 body
+   carries an update URL from the same `NEVERMIND_DESKTOP_UPDATE_URL` variable (`src/backend/src/lib/compatibility.ts`),
+   so an unsupported 2.0 build would be sent to the 1.x download. The owner must set that variable's value with D3.
+5. **No bearer route reports the plan.** `src/backend/src/pages/api/me.ts` reads the session cookie only. 2.0 used to
+   call it with its bearer token, got a 401, and never showed a plan. 2.0 no longer calls `/api/me`. Balance and
+   spend-cap state come from `GET /api/v1/active-model`, with the bearer token, as 1.x reads them. 1.x does not call
+   `/api/me`. Until the backend changes, 2.0 shows the plan as unknown without an error. Backend change still needed,
+   additive, to show the plan: either the backend accepts bearer tokens on `/api/me` (the same lookup the token routes
+   use), or it adds the plan to `active-model`. The owner picks one. Either needs fixtures under
+   `src/backend/src/fixtures/contracts/`. This blocks showing the plan in the M2 account view.
+6. **`GET /api/v1/models` has no route.** The only route under that path is a provider catch-all for generate and
+   stream operations. Fixed in 2.0: the client called `/api/v1/models` with no production caller, and it no longer does.
+   The client reads only `GET /api/v1/active-model`, as 1.x does. No backend change.
+   `internal/backend/route_contract_test.go` fails CI when a route the client or its fake backend uses has no file under
+   `src/backend/src/pages/api`, so a removed route is caught before a desktop build calls it.
 7. **Routes both clients depend on.** `POST /api/auth/device/initiate`, `POST /api/auth/device/exchange`,
    `GET /api/compatibility`, `DELETE /api/tokens/current`, `GET /api/v1/active-model`, `POST /api/v1/decisions`,
    `POST` and `DELETE /api/v1/audio/transcription-preparations`, and `POST /api/v1/audio/transcriptions` (1.x dictation,
-   confirmed in `src/app/electron/dictation/dictation-transcription.ts`). 2.0 also calls `POST /api/v1/chat/completions`
-   and `GET /api/me`. Every backend change to these routes follows the checklist in `docs/backend-api-compatibility.md`.
+   confirmed in `src/app/electron/dictation/dictation-transcription.ts`). 2.0 also calls `POST /api/v1/chat/completions`.
+   It no longer calls `GET /api/me` (item 5). Every backend change to these routes follows the checklist in `docs/backend-api-compatibility.md`.
 8. **Idempotency and dictation headers.** Optional dictation headers stay optional. Neither app's billing identity
    changes.
 
 Backend work list for the overlap (all additive, none needs a 1.x release): the client-name split (4), the scheme
-option (section 2), and bearer support on `/api/me` (5). Each needs fixtures under `src/backend/src/fixtures/contracts/`
+option (section 2), and a bearer route that reports the plan (5). Each needs fixtures under `src/backend/src/fixtures/contracts/`
 and a deploy that passes the pricing gate in `docs/backend-api-compatibility.md`.
 
 ## 5. Release channels and order
@@ -170,7 +179,7 @@ compared only by the backend, and section 4 keeps that comparison from crossing 
 - **Scripted sessions.** Each milestone exit runs the relevant journeys J01-J30 on each OS from a checklist in the PR.
   Every failure becomes an issue with its journey id. **Status: macOS and Windows have not run any journey.**
 - **Parity review.** Side by side with 1.x, per feature: the same results order for 20 canned queries
-  (`src/native/testdata/queries.txt`, **missing**), the same actions and shortcuts, and every difference listed and
+  (`src/native/testdata/queries.txt`, now present and read by the root table test; the side-by-side run against 1.x has not happened), the same actions and shortcuts, and every difference listed and
   either accepted or fixed. The first-pass sheet is `src/native/testdata/parity/parity-review.md`. It lists every
   feature and its Go status.
 - **Copy review.** Every user-facing string follows the product voice and says how to fix an error. Reviewed in the PR.
