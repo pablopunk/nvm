@@ -39,5 +39,5 @@ COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/src.tgz" -C "$root/src/native" --e
 # Many agents share the box's Go build cache, which grows without bound: trim old entries when space runs low.
 box_retry exec "$BOX" -- 'mkdir -p /root/wp; [ "$(df --output=avail -k / | tail -1)" -gt 3145728 ] || find /root/.cache/go-build -type f -mmin +30 -delete' >/dev/null
 box_retry cp "$tmp/src.tgz" "$BOX:/root/wp/$slot.tgz" >/dev/null
-box_retry exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && export PATH=\$PATH:/usr/local/go/bin && $*"
+box_retry exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && export PATH=\$PATH:/usr/local/go/bin GOCACHE=/root/.cache/go-build GOMODCACHE=/root/go/pkg/mod && $*"
 rm -rf "$tmp"

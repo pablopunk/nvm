@@ -2,18 +2,13 @@ package emoji
 
 import (
 	"slices"
+	"strings"
 	"testing"
 )
 
-// bandOf is the band a single field reaches on its own: an ordered band, else the character-set band.
+// bandOf is the ordered band a single field reaches on its own; emoji have no scattered-letter band.
 func bandOf(text, query string) int {
-	if score := orderedScore(text, newSearchQuery(query)); score > 0 {
-		return score
-	}
-	if containsEveryRune(text, query) {
-		return scoreCharacterSet
-	}
-	return 0
+	return orderedScore(text, newSearchQuery(query))
 }
 
 func TestScoreBands(t *testing.T) {
@@ -31,7 +26,7 @@ func TestScoreBands(t *testing.T) {
 		{"ordered word start", "grinning face", "grinning fa", scoreOrderedWordStart},
 		{"ordered word prefix", "big grinning face", "grinning fa", scoreOrderedWordPrefix},
 		{"unordered word prefix", "grinning face", "face grin", scoreUnorderedWordPrefix},
-		{"subsequence", "grinning face", "gnf", scoreSequential},
+		{"scattered letters are no match", "grinning face", "gnf", 0},
 		{"no match", "grinning face", "zz", 0},
 	}
 	for _, tt := range tests {
@@ -43,18 +38,36 @@ func TestScoreBands(t *testing.T) {
 	}
 }
 
-// The character-set band only decides an entry when no field matches in order: an ordered match in
-// any field outranks it, which keeps the fallback from changing the result of a real match.
-func TestCharacterSetBandOnlyDecidesUnorderedMatches(t *testing.T) {
-	if got := recordScore([]string{"grinning face"}, newSearchQuery("ecf")); got != scoreCharacterSet {
-		t.Errorf("character set score = %d, want %d", got, scoreCharacterSet)
+// Scattered letters never match an emoji, in any field: "ecf" does not find "grinning face", while an ordered match in
+// any field still decides the entry.
+func TestScatteredLettersNeverMatchAnEmoji(t *testing.T) {
+	if got := recordScore([]string{"grinning face"}, newSearchQuery("ecf")); got != 0 {
+		t.Errorf("scattered letters score = %d, want 0", got)
 	}
 	if got := recordScore([]string{"grinning face", "ecf"}, newSearchQuery("ecf")); got != scoreExact {
 		t.Errorf("exact keyword score = %d, want %d", got, scoreExact)
 	}
-	if got := recordScore([]string{"grinning face"}, newSearchQuery("zz")); got != 0 {
-		t.Errorf("no-match score = %d, want 0", got)
+}
+
+// "thumbs" finds the thumbs emoji by its name and keywords, and does not list the umbrella whose letters happen to
+// contain its letters in any order.
+func TestThumbsFindsThumbsEmojiNotScatteredMatches(t *testing.T) {
+	results := NewCatalog().Search("thumbs", Options{})
+	if len(results) == 0 || !strings.HasPrefix(results[0].Name(), "thumbs") {
+		t.Fatalf("Search(thumbs) starts with %q, want a thumbs emoji", firstName(results))
 	}
+	for _, entry := range results {
+		if strings.Contains(entry.Name(), "umbrella") {
+			t.Fatalf("Search(thumbs) lists %q, a scattered-letter match", entry.Name())
+		}
+	}
+}
+
+func firstName(results []Entry) string {
+	if len(results) == 0 {
+		return ""
+	}
+	return results[0].Name()
 }
 
 func TestPhraseBoundariesIgnoreNonBMPNeighbours(t *testing.T) {

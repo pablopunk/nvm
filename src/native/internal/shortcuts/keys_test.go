@@ -1,6 +1,9 @@
 package shortcuts
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestCaptureNeedsAModifierExceptForFunctionKeysAndArrows(t *testing.T) {
 	tests := []struct {
@@ -24,5 +27,16 @@ func TestCaptureNeedsAModifierExceptForFunctionKeysAndArrows(t *testing.T) {
 				t.Fatalf("Capture = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// The modifiers a recorder holds are kept as the chord's parts, so Control and Alt of Control+Alt+Left both survive.
+func TestModifierNamesKeepControlAndAltInCanonicalOrder(t *testing.T) {
+	got := ModifierNames(Modifiers{Alt: true, Control: true})
+	if !slices.Equal(got, []string{Control, Alt}) {
+		t.Fatalf("ModifierNames = %v, want Control then Alt", got)
+	}
+	if got := Capture(Modifiers{Alt: true, Control: true}, "Left"); got != "Control+Alt+Left" {
+		t.Fatalf("Capture(Control+Alt, Left) = %q, want Control+Alt+Left", got)
 	}
 }

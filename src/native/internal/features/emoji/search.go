@@ -92,8 +92,8 @@ func recordFields(dst []string, r record, idx *lookups, index int) []string {
 	return dst
 }
 
-// recordScore returns the best band over the fields. Every ordered band scores at least 20, which is
-// above the character-set band, so the fallback runs only when no field matches in order.
+// recordScore returns the best ordered band over the fields. A query that matches no field in order matches nothing:
+// scattered letters are not a match for an emoji, so "thumbs" does not find an umbrella.
 func recordScore(fields []string, q searchQuery) int {
 	best := 0
 	for _, field := range fields {
@@ -102,13 +102,5 @@ func recordScore(fields []string, q searchQuery) int {
 			return best
 		}
 	}
-	if best > 0 {
-		return best
-	}
-	for _, field := range fields {
-		if containsEveryRune(field, q.text) {
-			return scoreCharacterSet
-		}
-	}
-	return 0
+	return best
 }

@@ -6,9 +6,9 @@ import (
 	"unicode/utf8"
 )
 
-// Score bands of the palette's shared fuzzy scorer (src/app/palette/search-ranking.ts). A field
-// scores with the highest band it satisfies; an entry scores with its best field. Keep these in step
-// with the TypeScript until WP1.1's search package replaces this file.
+// Score bands of the palette's shared scorer (src/app/palette/search-ranking.ts), for the ordered matches emoji use. A
+// field scores with the highest band it satisfies; an entry scores with its best field. Emoji never match scattered
+// letters, so the sequential and character-set bands of the root search are absent here.
 const (
 	scoreExact               = 100
 	scoreOrderedWordStart    = 95
@@ -17,8 +17,6 @@ const (
 	scoreOrderedWordPrefix   = 70
 	scoreUnorderedWordPrefix = 60
 	scoreContains            = 50
-	scoreSequential          = 20
-	scoreCharacterSet        = 10
 )
 
 // maxStackWords sizes the word buffers that keep multi-word scoring allocation-free for typical fields.
@@ -37,7 +35,7 @@ func newSearchQuery(text string) searchQuery {
 }
 
 // orderedScore covers the bands that keep the query's characters in order: exact, whole phrase,
-// starts with, contains, word prefixes, and subsequence. Text is one lowercase field.
+// starts with, contains and word prefixes. Text is one lowercase field.
 func orderedScore(text string, q searchQuery) int {
 	needle := q.text
 	if text == needle {
@@ -51,13 +49,7 @@ func orderedScore(text string, q searchQuery) int {
 		}
 	}
 	phrase = max(phrase, queryWordPrefixScore(text, q))
-	if phrase > 0 {
-		return phrase
-	}
-	if isSubsequence(text, needle) {
-		return scoreSequential
-	}
-	return 0
+	return phrase
 }
 
 // wholePhraseScore reports the whole-phrase band when some occurrence of needle, starting at or after
@@ -207,36 +199,4 @@ func isBoundaryAfter(text string, end int) bool {
 
 func isBMPWordRune(r rune) bool {
 	return r <= 0xFFFF && isWordRune(r)
-}
-
-// isSubsequence reports whether the query's characters appear in text in order.
-func isSubsequence(text, query string) bool {
-	position := 0
-	for _, r := range query {
-		index := strings.IndexRune(text[position:], r)
-		if index < 0 {
-			return false
-		}
-		position += index + utf8.RuneLen(r)
-	}
-	return true
-}
-
-// containsEveryRune is the character-set fallback: every query character must occur in text, in any
-// order, with repeats counted. It checks presence first, which rejects most fields cheaply.
-func containsEveryRune(text, query string) bool {
-	for _, r := range query {
-		if !strings.ContainsRune(text, r) {
-			return false
-		}
-	}
-	for index, r := range query {
-		if strings.ContainsRune(query[:index], r) {
-			continue
-		}
-		if strings.Count(text, string(r)) < strings.Count(query, string(r)) {
-			return false
-		}
-	}
-	return true
 }

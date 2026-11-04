@@ -122,6 +122,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Dictate",
+        "subtitle": "Start or stop cloud voice dictation",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "mic",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Suggestions",
@@ -222,6 +241,25 @@
         "section": "Suggestions",
         "id": "",
         "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -1249,48 +1287,10 @@
     "query": "fixture",
     "rows": [
       {
-        "kind": "Fixture",
-        "title": "Fix result for fixture",
-        "subtitle": "fixture",
-        "section": "Top Hit",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Copy",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Fixture",
-        "title": "Fixture docs",
-        "subtitle": "fixture",
-        "section": "Fixture",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Search",
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "Top Hit",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1369,6 +1369,44 @@
       },
       {
         "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "Commands",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "Commands",
+        "id": "",
+        "icon": "move-horizontal",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Commands",
@@ -1394,6 +1432,25 @@
         "id": "",
         "icon": "plus",
         "tone": "teal",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Show Recent Errors",
+        "subtitle": "Find and copy safe error references",
+        "section": "Commands",
+        "id": "",
+        "icon": "circle-alert",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -1526,6 +1583,25 @@
         "section": "Commands",
         "id": "",
         "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -1921,6 +1997,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
+        "section": "Commands",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
@@ -2223,6 +2318,25 @@
         "accessory": "",
         "prominent": false,
         "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
         "iconPath": "",
         "actions": [
           {

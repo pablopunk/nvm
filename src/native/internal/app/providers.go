@@ -151,7 +151,7 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
-				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
+				{Title: "Open Config Folder", Subtitle: p.displayPath(configDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
 			rows = slices.Insert(rows, 4, p.launchAtLoginRows()...)
 			if lq == "" {

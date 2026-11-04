@@ -122,6 +122,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Dictate",
+        "subtitle": "Start or stop cloud voice dictation",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "mic",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Suggestions",
@@ -222,6 +241,25 @@
         "section": "Suggestions",
         "id": "",
         "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -366,6 +404,25 @@
           },
           {
             "title": "Uninstall Calendar…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Maximize Height",
+        "subtitle": "Window Management",
+        "section": "Commands",
+        "id": "",
+        "icon": "move-vertical",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
             "label": ""
           }
         ]
@@ -629,6 +686,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
+        "section": "Commands",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
@@ -711,6 +787,44 @@
       },
       {
         "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "Commands",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "Commands",
+        "id": "",
+        "icon": "move-horizontal",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Commands",
@@ -736,6 +850,25 @@
         "id": "",
         "icon": "plus",
         "tone": "teal",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Show Recent Errors",
+        "subtitle": "Find and copy safe error references",
+        "section": "Commands",
+        "id": "",
+        "icon": "circle-alert",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -825,25 +958,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Keyboard Shortcuts",
-        "subtitle": "View, change, or remove shortcuts",
-        "section": "Commands",
-        "id": "",
-        "icon": "keyboard",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "Restart",
         "subtitle": "Restart this computer",
         "section": "Commands",
@@ -869,6 +983,44 @@
         "id": "",
         "icon": "trash-2",
         "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Commands",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

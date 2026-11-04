@@ -2,6 +2,7 @@ package apps
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -31,6 +32,9 @@ type RunningOptions struct {
 	Changed func()
 	// Platform decides how paths are compared: macOS and Windows ignore case. Empty means runtime.GOOS.
 	Platform string
+	// GUIPIDs names the processes that own a window the user switches to. When set, a process counts as running only
+	// if it is one of them, so background services with a matching name are not listed. Nil keeps every process.
+	GUIPIDs func() (map[int]bool, error)
 }
 
 type runningSnapshot struct {
@@ -204,6 +208,10 @@ func (r *Running) detectWithProcesses(candidates []App) (map[string]bool, error)
 	if err != nil {
 		return nil, err
 	}
+	list, err = r.guiProcesses(list)
+	if err != nil {
+		return nil, err
+	}
 	names := make(map[string]bool, len(list))
 	for _, process := range list {
 		names[strings.ToLower(process.Name)] = true
@@ -215,6 +223,28 @@ func (r *Running) detectWithProcesses(candidates []App) (map[string]bool, error)
 		}
 	}
 	return running, nil
+}
+
+// guiProcesses keeps the processes that own an app window, when the desktop can say which those are. A desktop that
+// cannot list windows keeps every process, as before.
+func (r *Running) guiProcesses(list []platform.Process) ([]platform.Process, error) {
+	if r.opts.GUIPIDs == nil {
+		return list, nil
+	}
+	pids, err := r.opts.GUIPIDs()
+	if errors.Is(err, platform.ErrUnsupported) {
+		return list, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var kept []platform.Process
+	for _, process := range list {
+		if pids[process.PID] {
+			kept = append(kept, process)
+		}
+	}
+	return kept, nil
 }
 
 // desktopEntry reads and parses a .desktop candidate, reusing the parse while its modification time is unchanged.

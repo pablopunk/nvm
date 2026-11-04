@@ -1,6 +1,7 @@
 package apps
 
 import (
+	"context"
 	"os"
 	"path"
 	"strings"
@@ -71,10 +72,35 @@ func NewServices(o ServicesOptions) *Services {
 		Files:      o.Ports.FS,
 		Changed:    o.Changed,
 		Platform:   goos,
+		GUIPIDs:    guiWindowPIDs(goos, o.Ports.Windows),
 	})
 	s.Quitter = &Quitter{Processes: o.Ports.Processes, Clock: o.Ports.Clock, Self: os.Getpid()}
 	s.Uninstaller = NewUninstaller(s.uninstallDeps(o))
 	return s
+}
+
+// guiWindowTimeout bounds the window listing that tells running apps from background services.
+const guiWindowTimeout = 5 * time.Second
+
+// guiWindowPIDs lists the processes that own a window the user switches to. Only Linux asks the window port: other
+// systems detect running apps through their own process or helper port.
+func guiWindowPIDs(goos string, windows platform.WindowManager) func() (map[int]bool, error) {
+	if goos != "linux" || windows == nil {
+		return nil
+	}
+	return func() (map[int]bool, error) {
+		ctx, cancel := context.WithTimeout(context.Background(), guiWindowTimeout)
+		defer cancel()
+		apps, err := windows.RunningApps(ctx)
+		if err != nil {
+			return nil, err
+		}
+		pids := make(map[int]bool, len(apps))
+		for _, app := range apps {
+			pids[app.PID] = true
+		}
+		return pids, nil
+	}
 }
 
 // scanInstalledApps adapts the Shell port's listing to the index's scanner. A listing that fails is an error the
