@@ -78,11 +78,14 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for _, cmd := range p.commandSlots(in.timerOn) {
 		if isBuiltInSlot(cmd) {
-			out = append(out, builtInRows(p, cmd.builtIn, q)...)
+			for _, row := range builtInRows(p, cmd.builtIn, q) {
+				out = append(out, p.withShortcutActions(row, shortcutCommandID(row.Title), in.shortcuts))
+			}
 			continue
 		}
 		cmd := cmd
 		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
+		it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		if lq == "" {
 			if !cmd.Hidden {
 				it.Score = scoreCommandSuggestion - cmd.Order

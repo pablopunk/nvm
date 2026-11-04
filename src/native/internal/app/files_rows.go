@@ -29,7 +29,7 @@ type fileSearch struct {
 }
 
 // rootFileProvider is the root's files source.
-func rootFileProvider(p *App) search.Provider {
+func rootFileProvider(p *App, _ *rootInput) search.Provider {
 	return fileSearch{svc: p.files, limit: fileRootLimit, minChars: fileRootMinChars, id: "files"}
 }
 

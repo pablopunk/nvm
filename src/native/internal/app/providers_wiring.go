@@ -7,7 +7,7 @@ type rootSource struct {
 	id   string
 	rows func(p *App, in *rootInput, q string) []search.Item
 	// provider, when set, replaces rows: the source streams its results in batches.
-	provider func(p *App) search.Provider
+	provider func(p *App, in *rootInput) search.Provider
 }
 
 // rootSources is the root's provider list. The coordinator merges the rows by score, and rows of equal score

@@ -37,7 +37,7 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	rows := apps.AppRows(list, p.appsvc.Running.RunningAmong(list), p.appsvc.SupportsUninstall())
 	out := make([]search.Item, 0, len(rows))
 	for i, row := range rows {
-		out = append(out, p.appItem(list[i], row, scores[i]))
+		out = append(out, p.withShortcutActions(p.appItem(list[i], row, scores[i]), appShortcutID(list[i].ID), in.shortcuts))
 	}
 	return out
 }

@@ -12,9 +12,12 @@ import (
 // extensionSearch is the root's extension source: rows from every running extension's SearchItems, and the
 // durable commands the extensions declare. Each extension answers within its own budget (see package manager),
 // so the coordinator never waits on a hanging extension for longer than that budget.
-type extensionSearch struct{ p *App }
+type extensionSearch struct {
+	p  *App
+	in *rootInput
+}
 
-func extensionProvider(p *App) search.Provider { return extensionSearch{p: p} }
+func extensionProvider(p *App, in *rootInput) search.Provider { return extensionSearch{p: p, in: in} }
 
 func (e extensionSearch) ID() string { return "extensions" }
 
@@ -29,7 +32,7 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 		out = append(out, rootRowsFor(e.p, m, result)...)
 	}
 	for _, result := range m.Commands(ctx) {
-		out = append(out, commandRowsFor(e.p, m, result)...)
+		out = append(out, commandRowsFor(e.p, m, result, e.in.shortcuts)...)
 	}
 	return out
 }
@@ -44,7 +47,7 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 	}
 	var out []search.Item
 	for _, result := range m.SearchCommands(ctx) {
-		out = append(out, matchingCommandRows(e.p, m, result, q)...)
+		out = append(out, matchingCommandRows(e.p, m, result, q, e.in.shortcuts)...)
 	}
 	for _, result := range m.Search(ctx, q) {
 		if isCommandPlacedBuiltIn(result.ExtensionID) {
@@ -83,13 +86,13 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []sear
 
 // commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
 // for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
-func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult) []search.Item {
-	return matchingCommandRows(p, m, result, "")
+func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult, bound map[string]string) []search.Item {
+	return matchingCommandRows(p, m, result, "", bound)
 }
 
 // matchingCommandRows lists a running extension's commands whose title matches q as a phrase, or every command
-// for the empty query. A failed extension declares none.
-func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string) []search.Item {
+// for the empty query. A failed extension declares none. Each command takes a keyboard shortcut from its action menu.
+func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string, bound map[string]string) []search.Item {
 	if result.Failure != nil {
 		return nil
 	}
@@ -98,11 +101,13 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		if q != "" && search.Score(command.Title, q) < search.PhraseScoreFloor {
 			continue
 		}
-		out = append(out, search.Item{
+		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
+		p.shortcutTitles.remember(actionID, command.Title)
+		out = append(out, p.withShortcutActions(search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
 			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, "Run", nil))},
-		})
+		}, actionID, bound))
 	}
 	return out
 }

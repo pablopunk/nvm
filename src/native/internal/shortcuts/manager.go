@@ -2,19 +2,22 @@ package shortcuts
 
 import (
 	"maps"
+	"slices"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Setup is what a Manager needs from the app: the document, the hotkey port and clock, the platform, the commands that
-// take shortcuts, the declared shortcuts (nil when none), what a press of an action runs, the palette's action and
-// the hook for the palette shortcut's status.
+// the list always shows, the title of any other action a shortcut was chosen for (nil when there are none), the
+// declared shortcuts (nil when none), what a press of an action runs, the palette's action and the hook for the
+// palette shortcut's status.
 type Setup struct {
 	Doc       Persistence
 	Hotkeys   platform.Hotkeys
 	Clock     platform.Clock
 	GOOS      string
 	Commands  []Action
+	Resolve   func(actionID string) (title string, ok bool)
 	Declared  func() []Declared
 	Run       func(actionID string)
 	OnPalette func()
@@ -107,7 +110,22 @@ func (m *Manager) Entries() []Entry {
 	if status := m.summon.Status(); status.Unavailable() {
 		inactive[PaletteID] = status.Accelerator + " is in use by another app"
 	}
-	return Entries(m.load(), m.setup.Commands, m.declared(), inactive)
+	doc := m.load()
+	return Entries(doc, append(slices.Clone(m.setup.Commands), m.resolvedChoices(doc)...), m.declared(), inactive)
+}
+
+// Accelerators maps every action that has a shortcut to its accelerator: the user's choices, and the declared
+// shortcuts the user kept.
+func (m *Manager) Accelerators() map[string]string {
+	doc := m.load()
+	out := make(map[string]string, len(doc.Actions))
+	maps.Copy(out, doc.Actions)
+	for _, item := range m.declared() {
+		if _, chosen := out[item.ActionID]; !chosen && !doc.Disabled[item.ActionID] {
+			out[item.ActionID] = Normalize(item.Accelerator)
+		}
+	}
+	return out
 }
 
 // SetAction saves accelerator as actionID's shortcut and binds it.
@@ -209,7 +227,7 @@ func (m *Manager) isDeclared(actionID string) bool {
 
 func (m *Manager) titles() map[string]string {
 	titles := map[string]string{}
-	for _, action := range m.setup.Commands {
+	for _, action := range append(slices.Clone(m.setup.Commands), m.resolvedChoices(m.load())...) {
 		titles[action.ID] = action.Title
 	}
 	for _, item := range m.declared() {
@@ -220,4 +238,26 @@ func (m *Manager) titles() map[string]string {
 
 func (m *Manager) titleOf(actionID string) string {
 	return m.titles()[actionID]
+}
+
+// resolvedChoices are the actions outside the command list that the user chose a shortcut for and that Resolve still
+// knows. An action Resolve no longer knows is dormant: its row and its binding wait until it comes back.
+func (m *Manager) resolvedChoices(doc Document) []Action {
+	if m.setup.Resolve == nil {
+		return nil
+	}
+	listed := map[string]bool{}
+	for _, action := range m.setup.Commands {
+		listed[action.ID] = true
+	}
+	var out []Action
+	for _, actionID := range sortedKeys(doc.Actions) {
+		if listed[actionID] {
+			continue
+		}
+		if title, ok := m.setup.Resolve(actionID); ok {
+			out = append(out, Action{ID: actionID, Title: title})
+		}
+	}
+	return out
 }

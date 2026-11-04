@@ -4,7 +4,6 @@ import (
 	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
-	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -26,6 +25,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
+		Resolve:   p.resolveShortcutTitle,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,
@@ -43,36 +43,19 @@ func (p *App) shortcutsDocument() shortcuts.Persistence {
 	return store.Doc(p.userStore, shortcutsFile, 1, defaults)
 }
 
-// shortcutCommands lists the commands that take a shortcut: the root commands that are visible.
+// shortcutCommands lists the commands the Keyboard Shortcuts list always shows: the root commands that are visible and
+// the window commands. Any other root row takes a shortcut from its action menu, and is listed once it has one.
 func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
 	for _, cmd := range p.commands(false) {
 		if !cmd.Hidden {
-			actions = append(actions, shortcuts.Action{ID: shortcutCommandID(cmd.Title), Title: cmd.Title})
+			actions = append(actions, shortcuts.Action{ID: commandShortcutID(cmd), Title: cmd.Title})
 		}
 	}
 	if p.windowManagementEnabled() {
 		actions = append(actions, windows.ShortcutActions()...)
 	}
 	return actions
-}
-
-func shortcutCommandID(title string) string {
-	return "command:" + title
-}
-
-// runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does.
-func (p *App) runShortcutCommand(actionID string) {
-	if windows.RunShortcut(p.windowDeps(), actionID) {
-		return
-	}
-	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
-			p.Show()
-			p.trackedRun(cmd)(search.Host(p))
-			return
-		}
-	}
 }
 
 // startShortcuts binds the palette shortcut and the actions. It runs once the palette exists. Summon retries a shortcut

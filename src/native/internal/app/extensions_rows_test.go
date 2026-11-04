@@ -13,7 +13,7 @@ import (
 func collectExtensionRows(t *testing.T, p *App, q string) []search.Item {
 	t.Helper()
 	var rows []search.Item
-	extensionProvider(p).Search(context.Background(), q, func(batch search.Batch) {
+	extensionProvider(p, &rootInput{}).Search(context.Background(), q, func(batch search.Batch) {
 		rows = append(rows, batch.Items...)
 	})
 	return rows
@@ -42,7 +42,7 @@ func TestFailedExtensionNeverShowsAtTheRootOrAboveRealRows(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	if rows := extensionProvider(p).Root(context.Background()); len(rows) != 0 {
+	if rows := extensionProvider(p, &rootInput{}).Root(context.Background()); len(rows) != 0 {
 		t.Fatalf("root rows for a failed extension = %d, want none", len(rows))
 	}
 	pointer := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
