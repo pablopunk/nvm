@@ -1,0 +1,35 @@
+package app
+
+import (
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+)
+
+// appWithCapabilities is an app whose one port set reports exactly the capabilities named.
+func appWithCapabilities(t *testing.T, names ...platform.Capability) *App {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	p := goldenPalette(t)
+	p.ports.Capabilities = platform.NewCapabilities(names...)
+	m, err := p.newExtensionManager()
+	if err != nil {
+		t.Fatalf("newExtensionManager: %v", err)
+	}
+	t.Cleanup(m.Close)
+	p.exts.mgr.Store(m)
+	return p
+}
+
+// TestBuiltInCommandsFollowTheAppsCapabilities is the one-source check: a system command appears at the root only when
+// the app's own port set reports its capability, so the extensions never read a different set (the rig's capabilities
+// reach the built-in through the same ports).
+func TestBuiltInCommandsFollowTheAppsCapabilities(t *testing.T) {
+	without := appWithCapabilities(t, platform.CapabilitySystemSleep)
+	if rows := collectExtensionRows(t, without, "restart"); len(rows) != 0 {
+		t.Fatalf("Restart shown without its capability: %d rows", len(rows))
+	}
+	with := appWithCapabilities(t, platform.CapabilitySystemSleep, platform.CapabilitySystemRestart)
+	findRowTitled(t, collectExtensionRows(t, with, "restart"), "Restart")
+}

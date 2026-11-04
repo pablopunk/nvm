@@ -10,13 +10,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // setUpMenubar creates the app's menu bar item over the platform's tray host, and the scheduler that renders every
 // status item. A platform without a tray host runs the app without an item; the palette still opens by its shortcut.
 func (p *App) setUpMenubar() {
-	p.menubarJobs = menubar.NewScheduler(real.NewPorts().Clock, p.onUI)
+	p.menubarJobs = menubar.NewScheduler(p.ports.Clock, p.onUI)
 	item, err := menubar.New(menubar.Options{Host: p.ports.Tray, OnUI: p.onUI, Actions: p.menubarActions()})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})

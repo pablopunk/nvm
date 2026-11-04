@@ -8,7 +8,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/logx"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
@@ -18,7 +17,6 @@ import (
 // startAppServices builds the apps services and starts loading the saved list. It runs before the palette exists, so
 // the palette's show hook can use the services.
 func (p *App) startAppServices() {
-	p.ports = real.NewPorts()
 	var cache apps.Cache
 	if p.store != nil {
 		cache = apps.NewCollectionCache(apps.NewCacheDocument(p.store))

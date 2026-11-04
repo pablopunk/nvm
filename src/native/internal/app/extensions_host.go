@@ -45,8 +45,10 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
+// newExtensionManager builds the manager over the app's one port set, so extensions see the same capabilities and
+// system port as the palette does (the automation build swaps both in appPorts).
 func (p *App) newExtensionManager() (*manager.Manager, error) {
-	ports := real.NewPorts()
+	ports := p.ports
 	exe, err := os.Executable()
 	if err != nil {
 		return nil, err
