@@ -65,20 +65,6 @@ func TestCompatibilityStateFollowsTheManifest(t *testing.T) {
 	}{
 		{name: "current client", want: CompatOK},
 		{
-			name: "newer release exists",
-			mutate: func(m map[string]any) {
-				m["desktop"].(map[string]any)["latestVersion"] = "1.3.0"
-			},
-			want: CompatUpdateRecommended,
-		},
-		{
-			name: "prerelease of the current version is not newer",
-			mutate: func(m map[string]any) {
-				m["desktop"].(map[string]any)["latestVersion"] = "1.2.3-nightly.9"
-			},
-			want: CompatOK,
-		},
-		{
 			name: "backend refuses this version",
 			mutate: func(m map[string]any) {
 				client := m["client"].(map[string]any)
@@ -120,16 +106,26 @@ func TestCompatibilityStateFollowsTheManifest(t *testing.T) {
 	}
 }
 
+// TestCompatibilityIgnoresTheManifestsLatestRelease checks that a release the manifest names as latest does not prompt
+// this client. The backend's latestVersion is a 1.x date-stamped version, which sorts above every 2.0 build.
+func TestCompatibilityIgnoresTheManifestsLatestRelease(t *testing.T) {
+	report := compatibilityWith(t, func(m map[string]any) {
+		desktop := m["desktop"].(map[string]any)
+		desktop["latestVersion"] = "2026.1104.1"
+		desktop["updateUrl"] = "https://github.com/pablopunk/nvm/releases/latest"
+	})
+	if report.State != CompatOK {
+		t.Fatalf("State = %q, want %q: the manifest's latest release belongs to the 1.x line", report.State, CompatOK)
+	}
+}
+
 // TestCompatibilityDecodesTheManifest checks the fields the UI shows are read into the typed manifest.
 func TestCompatibilityDecodesTheManifest(t *testing.T) {
-	report := compatibilityWith(t, func(m map[string]any) {
-		m["desktop"].(map[string]any)["latestVersion"] = "1.2.3"
-	})
-	manifest := report.Manifest
+	manifest := compatibilityWith(t, nil).Manifest
 	if manifest.Backend.Environment != "production" || manifest.API.CurrentVersion != 1 {
 		t.Fatalf("manifest backend/api = %+v / %+v", manifest.Backend, manifest.API)
 	}
-	if manifest.Desktop.LatestVersion != "1.2.3" || manifest.Desktop.MinimumSupportedVersion != "0.1.0" {
+	if manifest.Desktop.MinimumSupportedVersion != "0.1.0" {
 		t.Fatalf("manifest desktop = %+v", manifest.Desktop)
 	}
 	if !manifest.Client.Compatible || !manifest.Features["proxy_streaming"] {
@@ -155,32 +151,5 @@ func TestCompatibilityServerErrorIsReported(t *testing.T) {
 	_, err := h.client.Compatibility(context.Background())
 	if !IsKind(err, KindRejected) {
 		t.Fatalf("Compatibility error = %v, want KindRejected", err)
-	}
-}
-
-// TestVersionOrderingFollowsSemver checks the precedence rules the compatibility state relies on.
-func TestVersionOrderingFollowsSemver(t *testing.T) {
-	tests := []struct {
-		candidate string
-		current   string
-		newer     bool
-		ok        bool
-	}{
-		{candidate: "1.3.0", current: "1.2.9", newer: true, ok: true},
-		{candidate: "1.2.3", current: "1.2.3", newer: false, ok: true},
-		{candidate: "1.2.3-nightly.1", current: "1.2.3", newer: false, ok: true},
-		{candidate: "1.2.3", current: "1.2.3-nightly.1", newer: true, ok: true},
-		{candidate: "1.2.3-beta.10", current: "1.2.3-beta.9", newer: true, ok: true},
-		{candidate: "1.2.3-alpha", current: "1.2.3-1", newer: true, ok: true},
-		{candidate: "v1.10.0", current: "1.9.9", newer: true, ok: true},
-		{candidate: "1.2", current: "1.2.0", newer: false, ok: true},
-		{candidate: "not-a-version", current: "1.0.0", newer: false, ok: false},
-		{candidate: "", current: "1.0.0", newer: false, ok: false},
-	}
-	for _, tt := range tests {
-		newer, ok := isNewerVersion(tt.candidate, tt.current)
-		if newer != tt.newer || ok != tt.ok {
-			t.Errorf("isNewerVersion(%q, %q) = (%v, %v), want (%v, %v)", tt.candidate, tt.current, newer, ok, tt.newer, tt.ok)
-		}
 	}
 }

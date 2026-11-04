@@ -24,7 +24,8 @@ func readContract(t *testing.T, name string) []byte {
 }
 
 // TestRecordedManifestDecodesAndDrivesTheState checks the recorded compatibility manifest passes the required-field
-// checks, and that a desktop one release behind the latest is told to update without being blocked.
+// checks, and that a client behind the manifest'"'"'s latest release is not told to update, because that release
+// belongs to the 1.x line.
 func TestRecordedManifestDecodesAndDrivesTheState(t *testing.T) {
 	var wire compatWire
 	if err := json.Unmarshal(readContract(t, "compatibility-manifest.json"), &wire); err != nil {
@@ -35,10 +36,10 @@ func TestRecordedManifestDecodesAndDrivesTheState(t *testing.T) {
 		t.Fatalf("manifest() rejected the recorded manifest: %v", err)
 	}
 	h := newHarness(t, WithClientVersion("0.6.1"))
-	if state := h.client.deriveState(manifest); state != CompatUpdateRecommended {
-		t.Fatalf("state = %q, want %q for 0.6.1 against latest 0.7.0", state, CompatUpdateRecommended)
+	if state := h.client.deriveState(manifest); state != CompatOK {
+		t.Fatalf("state = %q, want %q for 0.6.1 with the recorded manifest", state, CompatOK)
 	}
-	if manifest.Desktop.LatestVersion != "0.7.0" || manifest.Client.APIVersion != 1 || !manifest.Features["proxy_streaming"] {
+	if manifest.Client.APIVersion != 1 || !manifest.Features["proxy_streaming"] {
 		t.Fatalf("manifest fields = %+v", manifest)
 	}
 }
