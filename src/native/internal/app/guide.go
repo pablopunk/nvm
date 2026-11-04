@@ -65,7 +65,7 @@ func (p *App) guideView() *palette.View {
 	return &palette.View{
 		Title: "Getting Started", Placeholder: "Search tips",
 		Search: func(string) []search.Item {
-			rows := settingsfeat.GuideRows(p.S.Hotkey)
+			rows := settingsfeat.GuideRows(p.guideShortcutLabel())
 			items := make([]search.Item, 0, len(rows))
 			for _, row := range rows {
 				items = append(items, p.guideItem(row))
@@ -73,6 +73,12 @@ func (p *App) guideView() *palette.View {
 			return items
 		},
 	}
+}
+
+// guideShortcutLabel is the palette shortcut the guide's shortcut row names, as the user sees it, or "" when none is
+// bound. It reads the live binding: the shortcut the user changed in the recorder is the one the guide shows.
+func (p *App) guideShortcutLabel() string {
+	return shortcutLabelOf(p.shortcutsManager().PaletteAccelerator())
 }
 
 // guideItem maps one guide row onto a palette row. Information rows have no action.
