@@ -19,12 +19,24 @@ jobs:
   go:
     name: Go static checks and unit tests
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # The goldens are rendered with the system fonts, so the job runs on the same Debian release and font packages as
+    # the shared test box and the rig image; on the runner's own Ubuntu fonts the emoji glyphs differ.
+    container:
+      image: debian:13
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: src/native
 
     steps:
+      - name: Install build tools and golden fonts
+        working-directory: /
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates git curl tar gcc libc6-dev fontconfig \
+            fonts-dejavu fonts-liberation fonts-noto-color-emoji fonts-urw-base35
+
       - name: Checkout
         uses: actions/checkout@v4
 

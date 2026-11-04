@@ -166,10 +166,11 @@ func TestSignInWithoutABrowserStillShowsTheCode(t *testing.T) {
 	if err := r.session.StartSignIn(); err != nil {
 		t.Fatalf("StartSignIn: %v", err)
 	}
-	pending := r.waitForPhase(PhasePending)
-	if !pending.SignIn.BrowserOpenFailed || pending.SignIn.Code == "" {
-		t.Fatalf("pending = %+v, want the code and a failed browser open", pending.SignIn)
-	}
+	// The code is shown as soon as the backend issues it; the failed browser open is recorded right after, so the
+	// test waits for the state to carry both rather than reading the first pending snapshot.
+	r.waitForState("the code with a failed browser open", func(s Snapshot) bool {
+		return s.SignIn.Phase == PhasePending && s.SignIn.Code != "" && s.SignIn.BrowserOpenFailed
+	})
 	r.session.CancelSignIn()
 	r.waitForPhase(PhaseCancelled)
 }
