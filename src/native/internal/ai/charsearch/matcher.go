@@ -3,6 +3,8 @@ package charsearch
 import (
 	"context"
 	"sync"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // allCategory is the category that searches every group, as the picker's "All Characters" does.
@@ -22,6 +24,7 @@ const cacheLimit = 32
 type Matcher struct {
 	groups  []string
 	byGroup map[string][]Record
+	window  *callWindow
 
 	mu    sync.Mutex
 	cache map[string][]Record
@@ -29,9 +32,9 @@ type Matcher struct {
 }
 
 // NewMatcher returns a matcher over the catalog, in the order the records are given.
-func NewMatcher(records []Record) *Matcher {
+func NewMatcher(records []Record, clock platform.Clock) *Matcher {
 	groups, byGroup := semanticGroupsOf(records)
-	return &Matcher{groups: groups, byGroup: byGroup, cache: map[string][]Record{}}
+	return &Matcher{groups: groups, byGroup: byGroup, window: newCallWindow(clock), cache: map[string][]Record{}}
 }
 
 // Matches returns the characters the model finds a match for the text in category, best first. Text shorter than
@@ -45,7 +48,7 @@ func (m *Matcher) Matches(ctx context.Context, decider Decider, category, text s
 	if matches, ok := m.remembered(key); ok {
 		return matches, nil
 	}
-	matches, err := m.answer(ctx, decider, query, category)
+	matches, err := m.answer(askModel(ctx, decider, m.window, query), category)
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +57,8 @@ func (m *Matcher) Matches(ctx context.Context, decider Decider, category, text s
 }
 
 // answer runs the three steps: the likely groups, the shortlist from their characters, and the verified matches.
-func (m *Matcher) answer(ctx context.Context, decider Decider, query, category string) ([]Record, error) {
-	groups, err := likelyGroups(ctx, decider, query, category, m.groups)
+func (m *Matcher) answer(ask askFunc, category string) ([]Record, error) {
+	groups, err := likelyGroups(ask, category, m.groups)
 	if err != nil {
 		return nil, err
 	}
@@ -63,11 +66,11 @@ func (m *Matcher) answer(ctx context.Context, decider Decider, query, category s
 	if len(pool) == 0 {
 		return nil, nil
 	}
-	candidates, err := shortlist(ctx, decider, query, pool)
+	candidates, err := shortlist(ask, pool)
 	if err != nil {
 		return nil, err
 	}
-	return verify(ctx, decider, query, candidates)
+	return verify(ask, candidates)
 }
 
 // remembered returns the answer for key, if it is still in the cache.

@@ -21,11 +21,20 @@ type Decider interface {
 	Decisions(ctx context.Context, req backend.DecisionRequest) (backend.DecisionResult, error)
 }
 
-// decide sends one batch of questions about the search text and returns the answers, with the decision timeout.
-func decide(ctx context.Context, decider Decider, query string, questions []backend.DecisionQuestion) (backend.DecisionResult, error) {
-	ctx, cancel := context.WithTimeout(ctx, DecisionTimeout)
-	defer cancel()
-	return decider.Decisions(ctx, backend.DecisionRequest{Input: searchInput(query), Questions: questions})
+// askFunc sends one batch of questions about the search text and returns the answers.
+type askFunc func(questions []backend.DecisionQuestion) (backend.DecisionResult, error)
+
+// askModel is the askFunc of one search: each batch is counted against the rate limit, then sent with the decision
+// timeout, as 1.x's ai.decide does.
+func askModel(ctx context.Context, decider Decider, window *callWindow, query string) askFunc {
+	return func(questions []backend.DecisionQuestion) (backend.DecisionResult, error) {
+		if !window.allow() {
+			return backend.DecisionResult{}, ErrRateLimited
+		}
+		ctx, cancel := context.WithTimeout(ctx, DecisionTimeout)
+		defer cancel()
+		return decider.Decisions(ctx, backend.DecisionRequest{Input: searchInput(query), Questions: questions})
+	}
 }
 
 // searchInput is the text the model reads: the search text, quoted as JSON so any character survives.

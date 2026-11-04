@@ -23,7 +23,7 @@ func (p *App) characters() *characterSearch {
 		p.characterSearch = &characterSearch{}
 	}
 	if p.characterSearch.matcher == nil {
-		p.characterSearch.matcher = charsearch.NewMatcher(characterRecords())
+		p.characterSearch.matcher = charsearch.NewMatcher(characterRecords(), p.ports.Clock)
 	}
 	return p.characterSearch
 }

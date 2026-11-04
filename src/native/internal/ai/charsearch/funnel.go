@@ -1,7 +1,6 @@
 package charsearch
 
 import (
-	"context"
 	"fmt"
 	"sort"
 
@@ -24,7 +23,7 @@ const (
 
 // likelyGroups returns the groups that could hold a match for query, most likely first. A chosen category skips the
 // question and stands for itself when the model asks about it; a category that is not asked about never matches.
-func likelyGroups(ctx context.Context, decider Decider, query, category string, groups []string) ([]string, error) {
+func likelyGroups(ask askFunc, category string, groups []string) ([]string, error) {
 	if category != allCategory {
 		if contains(groups, category) {
 			return []string{category}, nil
@@ -42,7 +41,7 @@ func likelyGroups(ctx context.Context, decider Decider, query, category string, 
 			Question: fmt.Sprintf(`Would an emoji or symbol from the "%s" category be a good result for this search text?`, group),
 		})
 	}
-	result, err := decide(ctx, decider, query, questions)
+	result, err := ask(questions)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func recallPool(groups []string, byGroup map[string][]Record) []Record {
 
 // shortlist asks which characters of the pool fit the text, one choice question per chunk of the pool, and keeps the
 // best maxQuestions of the candidates the model ranks.
-func shortlist(ctx context.Context, decider Decider, query string, pool []Record) ([]Record, error) {
+func shortlist(ask askFunc, pool []Record) ([]Record, error) {
 	byLabel := make(map[string]Record, len(pool))
 	for _, r := range pool {
 		byLabel[r.label()] = r
@@ -105,7 +104,7 @@ func shortlist(ctx context.Context, decider Decider, query string, pool []Record
 			Options:  append(options, noneOfThese),
 		})
 	}
-	result, err := decide(ctx, decider, query, questions)
+	result, err := ask(questions)
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +129,7 @@ func shortlist(ctx context.Context, decider Decider, query string, pool []Record
 
 // verify asks, for each shortlisted character, whether it matches the text, and keeps the matches whose probability
 // reaches the threshold, best first.
-func verify(ctx context.Context, decider Decider, query string, candidates []Record) ([]Record, error) {
+func verify(ask askFunc, candidates []Record) ([]Record, error) {
 	if len(candidates) == 0 {
 		return nil, nil
 	}
@@ -142,7 +141,7 @@ func verify(ctx context.Context, decider Decider, query string, candidates []Rec
 			Question: fmt.Sprintf("Is %s a good match for the search text?", r.label()),
 		})
 	}
-	result, err := decide(ctx, decider, query, questions)
+	result, err := ask(questions)
 	if err != nil {
 		return nil, err
 	}

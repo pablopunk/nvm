@@ -2,7 +2,12 @@ package charsearch
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"testing"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // cuteModel is the model of the picker's "cute" search: animals and smileys are likely, and the faces are cute to
@@ -37,7 +42,7 @@ func sameKeys(got []Record, want ...string) bool {
 
 func TestMatchesNarrowsByCategoryShortlistsByChoiceAndKeepsVerifiedMatchesBestFirst(t *testing.T) {
 	model := cuteModel()
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, "Cute ")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, allCategory, "Cute ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +67,7 @@ func TestTiedCharactersKeepTheOrderTheyWereOffered(t *testing.T) {
 		groups: map[string]float64{"Animals & Nature": 0.9},
 		glyphs: map[string]float64{"🐱": 0.8, "🐯": 0.8, "🐶": 0.8},
 	}
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, "pet animals")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, allCategory, "pet animals")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +78,7 @@ func TestTiedCharactersKeepTheOrderTheyWereOffered(t *testing.T) {
 
 func TestAChosenCategorySkipsTheCategoryStep(t *testing.T) {
 	model := &fakeModel{glyphs: map[string]float64{"🐱": 0.95}}
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, "Animals & Nature", "adorable pet")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, "Animals & Nature", "adorable pet")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,7 +92,7 @@ func TestAChosenCategorySkipsTheCategoryStep(t *testing.T) {
 
 func TestLexicalOnlyCategoriesNeverAskTheModel(t *testing.T) {
 	model := &fakeModel{}
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, "Flags", "france")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, "Flags", "france")
 	if err != nil || len(matches) != 0 || len(model.calls) != 0 {
 		t.Fatalf("matches = %v, err = %v, calls = %d; want nothing and no call", recordKeys(matches), err, len(model.calls))
 	}
@@ -95,7 +100,7 @@ func TestLexicalOnlyCategoriesNeverAskTheModel(t *testing.T) {
 
 func TestShortTextNeverAsksTheModel(t *testing.T) {
 	model := &fakeModel{}
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, "ox")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, allCategory, "ox")
 	if err != nil || len(matches) != 0 || len(model.calls) != 0 {
 		t.Fatalf("matches = %v, err = %v, calls = %d; want nothing and no call", recordKeys(matches), err, len(model.calls))
 	}
@@ -103,7 +108,7 @@ func TestShortTextNeverAsksTheModel(t *testing.T) {
 
 func TestARepeatedSearchIsAnsweredFromMemory(t *testing.T) {
 	model := cuteModel()
-	matcher := NewMatcher(testCatalog)
+	matcher := NewMatcher(testCatalog, fake.NewClock())
 	if _, err := matcher.Matches(context.Background(), model, allCategory, "kitten time"); err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +123,7 @@ func TestARepeatedSearchIsAnsweredFromMemory(t *testing.T) {
 
 func TestTheSearchStopsAfterTheCategoryStepWhenNoCategoryIsLikely(t *testing.T) {
 	model := &fakeModel{groups: map[string]float64{"Animals & Nature": 0.01, "Smileys & Emotion": 0.01}}
-	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, "quarterly invoices")
+	matches, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, allCategory, "quarterly invoices")
 	if err != nil || len(matches) != 0 {
 		t.Fatalf("matches = %v, err = %v; want nothing", recordKeys(matches), err)
 	}
@@ -129,7 +134,7 @@ func TestTheSearchStopsAfterTheCategoryStepWhenNoCategoryIsLikely(t *testing.T) 
 
 func TestAFailedDecisionReturnsItsErrorAndRemembersNothing(t *testing.T) {
 	model := &fakeModel{failure: errUnavailable}
-	matcher := NewMatcher(testCatalog)
+	matcher := NewMatcher(testCatalog, fake.NewClock())
 	if _, err := matcher.Matches(context.Background(), model, allCategory, "kitten time"); err == nil {
 		t.Fatal("err = nil, want the decision failure")
 	}
@@ -145,7 +150,7 @@ func TestAFailedDecisionReturnsItsErrorAndRemembersNothing(t *testing.T) {
 
 func TestTheInputQuotesTheSearchTextAsJSON(t *testing.T) {
 	model := &fakeModel{}
-	if _, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, `Say "Hi"`); err != nil {
+	if _, err := NewMatcher(testCatalog, fake.NewClock()).Matches(context.Background(), model, allCategory, `Say "Hi"`); err != nil {
 		t.Fatal(err)
 	}
 	if len(model.inputs) == 0 || model.inputs[0] != `Search text: "say \"hi\""` {
@@ -155,7 +160,7 @@ func TestTheInputQuotesTheSearchTextAsJSON(t *testing.T) {
 
 func TestTheShortlistAsksInChunksOfThirtyOneCharacters(t *testing.T) {
 	model := &fakeModel{groups: map[string]float64{"Animals & Nature": 0.9}}
-	if _, err := NewMatcher(sayingCatalog(40)).Matches(context.Background(), model, allCategory, "animal"); err != nil {
+	if _, err := NewMatcher(sayingCatalog(40), fake.NewClock()).Matches(context.Background(), model, allCategory, "animal"); err != nil {
 		t.Fatal(err)
 	}
 	if len(model.calls) != 2 {
@@ -170,3 +175,24 @@ func TestTheShortlistAsksInChunksOfThirtyOneCharacters(t *testing.T) {
 }
 
 var _ Decider = (*fakeModel)(nil)
+
+func TestThirtyDecisionCallsAMinuteThenTheSearchRefusesUntilTheWindowPasses(t *testing.T) {
+	clock := fake.NewClock()
+	model := &fakeModel{}
+	matcher := NewMatcher(testCatalog, clock)
+	for i := range DecisionsPerMinute {
+		if _, err := matcher.Matches(context.Background(), model, allCategory, fmt.Sprintf("search %d", i)); err != nil {
+			t.Fatalf("search %d: %v", i, err)
+		}
+	}
+	if _, err := matcher.Matches(context.Background(), model, allCategory, "one more"); !errors.Is(err, ErrRateLimited) {
+		t.Fatalf("err = %v, want the rate limit", err)
+	}
+	if len(model.calls) != DecisionsPerMinute {
+		t.Fatalf("calls = %d, want the refused search to make none", len(model.calls))
+	}
+	clock.Advance(time.Minute)
+	if _, err := matcher.Matches(context.Background(), model, allCategory, "after a minute"); err != nil {
+		t.Fatalf("after a minute: %v", err)
+	}
+}
