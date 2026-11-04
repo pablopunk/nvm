@@ -1,17 +1,18 @@
 package app
 
 import (
-	"runtime"
-
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/features/files"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// actionsFor returns the actions of one file row, as 1.x lists them: Open first (Enter), then Preview Contents (Preview
-// for a picture or video), then Show in Finder. Copy and Trash are not file row actions in 1.x, so they are not here.
+// actionsFor returns the actions of one file row, in the order of 1.x: Open first (Enter), then the preview, Quick
+// Look where the system has it, and the reveal in the file manager; Copy and Trash follow. Trash asks first, in the
+// palette. Open With is not offered: the Shell port cannot list the applications that open a file yet, and an
+// unavailable capability is left out rather than shown disabled.
 func (s *fileService) actionsFor(r files.Result) []search.Action {
 	path := r.Path
 	actions := []search.Action{
@@ -21,31 +22,41 @@ func (s *fileService) actionsFor(r files.Result) []search.Action {
 		{Title: previewTitle(r), Label: "⌃Y", Mods: mod, Key: ui.KeyY, Run: func(h search.Host) {
 			h.Push(s.previewView(r))
 		}},
-		{Title: revealTitle(), Run: func(h search.Host) {
+	}
+	if s.quickLook {
+		actions = append(actions, search.Action{Title: s.labels.PreviewFile, Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if err := files.QuickLook(s.shell, path); err != nil {
+				h.Toast(err.Error())
+			}
+		}})
+	}
+	return append(actions,
+		search.Action{Title: s.labels.RevealInFileManager, Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
 			hideOrReport(h, files.Reveal(s.shell, path))
 		}},
-	}
-	return actions
+		search.Action{Title: "Copy Path", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) {
+			hideOrReport(h, s.clipboard.WriteText(path))
+		}},
+		search.Action{Title: "Copy File", Label: "⌃⇧C", Mods: mod | ui.Shift, Key: ui.KeyC, Run: func(h search.Host) {
+			hideOrReport(h, s.copyFiles(path))
+		}},
+		search.Action{Title: "Move to Trash", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Run: func(h search.Host) {
+			h.Push(palette.Confirm("Move to Trash", r.Name, func() {
+				if err := files.Trash(s.shell, s.home, path); err != nil {
+					s.log.Warn("files.trash-failed", logx.F{"reason": err.Error()})
+				}
+			}))
+		}},
+	)
 }
 
-// previewTitle is the menu title of the preview action: a picture or video is previewed, anything else has its contents
-// previewed.
+// previewTitle names the in-palette preview as 1.x does: "Preview" for pictures and videos, "Preview Contents" for
+// everything else.
 func previewTitle(r files.Result) string {
 	if r.Kind == files.KindImage || r.Kind == files.KindVideo {
 		return "Preview"
 	}
 	return "Preview Contents"
-}
-
-// revealTitle is the 1.x title of the action that shows a file in the system file manager.
-func revealTitle() string {
-	switch runtime.GOOS {
-	case "darwin":
-		return "Show in Finder"
-	case "windows":
-		return "Show in File Explorer"
-	}
-	return "Show in File Manager"
 }
 
 // previewView is the full-palette preview of one file, opened with Ctrl+Y: the same picture or text as the preview

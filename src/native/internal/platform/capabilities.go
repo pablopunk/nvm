@@ -13,6 +13,7 @@ const (
 	CapabilityClipboardChanged Capability = "clipboard.changed"
 	CapabilityClipboardPaste   Capability = "clipboard.paste"
 	CapabilityShellReveal      Capability = "shell.reveal"
+	CapabilityShellQuickLook   Capability = "shell.quickLook"
 	CapabilityShellTrash       Capability = "shell.trash"
 	CapabilityShellApps        Capability = "shell.installedApps"
 	CapabilityShellAppIcons    Capability = "shell.appIcons"
@@ -52,7 +53,7 @@ func AllCapabilities() []Capability {
 		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
 		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
 		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
-		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
+		CapabilityShellBeep, CapabilityShellQuickLook, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,

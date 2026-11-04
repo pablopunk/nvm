@@ -21,6 +21,9 @@ func (shell) Reveal(path string) error {
 	return nil
 }
 
+// QuickLook shows an item in the system quick preview. Only macOS has one; see quicklook_darwin.go.
+func (shell) QuickLook(path string) error { return quickLook(path) }
+
 // Trash moves an item to the Trash. MyGo refuses to delete permanently when the OS has no Trash for it.
 func (shell) Trash(path string) error { return mygo.Shell.TrashItem(path) }
 
