@@ -141,7 +141,7 @@ func (p *App) ready() {
 	p.Attach(p.panel)
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
-	p.panel.OnBlur(p.Hide)
+	p.panel.OnBlur(p.DismissOnBlur)
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startSummon()
