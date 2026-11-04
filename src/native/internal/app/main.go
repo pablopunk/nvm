@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
@@ -74,7 +75,7 @@ type App struct {
 	notes         *notes.Store
 	files         *fileService
 	chats         *chat.Service
-	builderTries  map[string]int
+	builder       *builder.Workshop
 	timer         *Timer
 	learn         *usage.Learner
 	history       *palette.QueryHistory

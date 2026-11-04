@@ -22,6 +22,7 @@ func (p *App) attachChats() {
 		return
 	}
 	p.chats = newChatService(p.userStore, p)
+	p.builder = p.newBuilder()
 	if removed, err := p.chats.Expire(); err != nil {
 		log.Println("chats: retention failed:", err)
 	} else if len(removed) > 0 {
@@ -40,7 +41,7 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		Connected:    p.signedIn,
 		Dispatch:     p.onUI,
 		NoteError:    p.noteAIError,
-		SystemPrompt: systemPromptFor,
+		SystemPrompt: p.systemPromptFor,
 		OnSettled:    p.chatSettled,
 		Tools:        p.chatToolset(),
 	})
@@ -61,10 +62,10 @@ func (p *App) noteAIError(err error) {
 	}
 }
 
-// systemPromptFor is the instruction a chat of kind starts with: the builder writes extensions, a conversation talks.
-func systemPromptFor(kind chat.Kind) string {
-	if kind == chat.KindBuilder {
-		return builderSystem
+// systemPromptFor is the instruction a chat starts with: the builder writes extensions, a conversation talks.
+func (p *App) systemPromptFor(c chat.Chat) string {
+	if c.Kind == chat.KindBuilder && p.builder != nil {
+		return p.builder.SystemPrompt(c)
 	}
 	return chat.ConversationSystemPrompt
 }
@@ -77,6 +78,7 @@ func (p *App) chatDeps() aichat.Deps {
 		Copy:     p.copyChatReply,
 		SignedIn: p.signedIn,
 		Now:      time.Now,
+		Review:   p.builderReview,
 	}
 }
 
@@ -127,8 +129,8 @@ func unavailableChatView() *palette.View {
 
 // chatSettled runs after a chat's turn ends on the UI thread. Only the extension builder reacts to it.
 func (p *App) chatSettled(id string, outcome chat.Outcome) {
-	if record, ok := p.chats.Chat(id); ok && record.Kind == chat.KindBuilder {
-		p.builderDone(id, outcome)
+	if record, ok := p.chats.Chat(id); ok && record.Kind == chat.KindBuilder && p.builder != nil {
+		p.builder.Settled(id, outcome)
 	}
 }
 

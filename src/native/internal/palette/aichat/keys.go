@@ -12,11 +12,12 @@ import (
 
 // Copy for the palette's answers to keys and refusals. Each names the state and says what happened.
 const (
-	toastStillAnswering = "This chat is still answering. Stop it with Escape first."
-	toastNothingToAsk   = "There is no question to ask again yet."
-	toastCopied         = "Copied the last reply."
-	toastNoReply        = "There is no reply to copy yet."
-	toastFailed         = "That did not work. Try again."
+	toastStillAnswering  = "This chat is still answering. Stop it with Escape first."
+	toastNothingToAsk    = "There is no question to ask again yet."
+	toastCopied          = "Copied the last reply."
+	toastNoReply         = "There is no reply to copy yet."
+	toastFailed          = "That did not work. Try again."
+	toastNothingToReview = "This extension is not installed any more."
 )
 
 // key answers the keys of a chat page before the palette does. It reports whether it used one. Escape is not here: the
@@ -32,10 +33,26 @@ func (p *page) key(c *ui.Context, h search.Host) bool {
 		p.copyLastReply(h)
 	case c.Shortcut(palette.Mod|ui.Shift, ui.KeyM):
 		p.toggleTier(h)
+	case c.Shortcut(palette.Mod, ui.KeyE):
+		p.review(h)
 	default:
 		return false
 	}
 	return true
+}
+
+// review opens the review of the extension this builder chat wrote, on top of the chat, so Escape returns to it.
+func (p *page) review(h search.Host) {
+	record, ok := p.deps.Service.Chat(p.id)
+	if !ok || record.Extension == "" || p.deps.Review == nil {
+		return
+	}
+	view := p.deps.Review(record.Extension)
+	if view == nil {
+		h.Toast(toastNothingToReview)
+		return
+	}
+	h.Push(view)
 }
 
 // escape stops a reply in flight. With no reply in flight it reports false, and the palette goes back as it does on

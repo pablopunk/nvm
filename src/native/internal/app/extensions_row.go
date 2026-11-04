@@ -33,6 +33,11 @@ func extensionRowActions(p *App, ctl extensionController, l manager.Listing) []s
 	actions = append(actions, search.Action{Title: "Show Source", Run: func(h search.Host) {
 		showExtensionSource(ctl, l, h)
 	}})
+	if p.ownedByBuilder(l.ID) {
+		actions = append(actions, search.Action{Title: "Edit with AI", Run: func(h search.Host) {
+			h.Push(p.builderEditView(l.ID))
+		}})
+	}
 	if l.Enabled {
 		actions = append(actions, search.Action{Title: "Disable", Dismiss: search.DismissNever, Run: func(h search.Host) {
 			setExtensionEnabled(ctl, l.ID, false, h)

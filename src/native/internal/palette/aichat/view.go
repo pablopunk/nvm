@@ -9,10 +9,11 @@ import (
 )
 
 // hint is the right footer of a chat page: the keys the page answers beyond typing. awaitingHint replaces it while a
-// tool call waits for the user's answer.
+// tool call waits for the user's answer, and reviewHint while a builder chat has an extension to review.
 const (
 	hint         = "⌘R ask again · ⌘⌥C copy reply · ⌘⇧M model"
 	awaitingHint = "↵ allow · ⌘D refuse · Esc stop"
+	reviewHint   = "⌘E review extension · ⌘R ask again · ⌘⇧M model"
 )
 
 // page is the state of one open chat: which chat it shows, the scroll of its transcript and the host it last drew
@@ -42,22 +43,28 @@ func ChatView(deps Deps, id string) *palette.View {
 	}
 }
 
-// title is the chat's title, or the default for its kind.
+// title is the chat's title, or the default for its kind: a builder chat that changes an extension is an edit.
 func (p *page) title() string {
 	record, ok := p.deps.Service.Chat(p.id)
 	switch {
 	case ok && record.Title != "":
 		return record.Title
+	case ok && record.Kind == chat.KindBuilder && record.Extension != "":
+		return "Edit Extension"
 	case ok && record.Kind == chat.KindBuilder:
 		return "Create Extension"
 	}
 	return "AI Chat"
 }
 
-// placeholderFor is the input's prompt for the chat with id: the builder asks for an extension, a conversation
-// asks for a message.
+// placeholderFor is the input's prompt for the chat with id: a builder chat asks for an extension or for the change
+// to one, and a conversation asks for a message.
 func placeholderFor(service *chat.Service, id string) string {
-	if record, ok := service.Chat(id); ok && record.Kind == chat.KindBuilder {
+	record, ok := service.Chat(id)
+	switch {
+	case ok && record.Kind == chat.KindBuilder && record.Extension != "":
+		return "Describe the change to this extension"
+	case ok && record.Kind == chat.KindBuilder:
 		return "Describe the extension you want"
 	}
 	return "Message AI"
@@ -73,10 +80,15 @@ func (p *page) submit(text string) {
 	p.report(p.deps.Service.Send(p.id, text))
 }
 
-// footerHint is the right footer of the page: it names the answers a waiting tool call takes, as the transcript shows.
+// footerHint is the right footer of the page: it names the answers a waiting tool call takes, as the transcript shows,
+// and the review key of a builder chat that wrote an extension.
 func (p *page) footerHint() string {
-	if record, ok := p.deps.Service.Chat(p.id); ok && chat.AwaitingAnswer(record) {
+	record, ok := p.deps.Service.Chat(p.id)
+	switch {
+	case ok && chat.AwaitingAnswer(record):
 		return awaitingHint
+	case ok && record.Extension != "":
+		return reviewHint
 	}
 	return hint
 }
