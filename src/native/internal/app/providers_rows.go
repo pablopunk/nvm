@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -126,12 +127,13 @@ func clipboardRows(p *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// conversationRows shows up to four recent AI conversations, filtered by title when a query is typed.
+// conversationRows shows up to four recent AI chats, conversations and builder chats alike, filtered by title when a
+// query is typed.
 func conversationRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
 	for _, ch := range in.chats {
-		if ch.builder || ch.title == "" || len(out) >= 4 {
+		if !chat.Listed(ch.kind) || ch.title == "" || len(out) >= 4 {
 			continue
 		}
 		s := scoreConversation
@@ -141,7 +143,8 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 			}
 		}
 		id := ch.id
-		out = append(out, search.Item{Kind: search.KindConversations, Title: "Continue conversation: " + oneLine(ch.title), Subtitle: "AI conversation", Icon: "message-circle", Tone: "yellow", TintTitle: true, Score: s,
+		title, subtitle := aichat.ContinueLabels(ch.kind, oneLine(ch.title))
+		out = append(out, search.Item{Kind: search.KindConversations, Title: title, Subtitle: subtitle, Icon: aichat.ChatIcon(ch.kind), Tone: "yellow", TintTitle: true, Score: s,
 			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(aichat.ChatView(p.chatDeps(), id)) }}}})
 	}
 	return out
