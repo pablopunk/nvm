@@ -119,7 +119,7 @@ func Scan(files platform.FS, root string) ([]Bundle, error) {
 			continue
 		}
 		bundle := Load(files, filepath.Join(root, entry.Name()))
-		if bundle.Manifest.ID != entry.Name() {
+		if len(bundle.Problems) == 0 && bundle.Manifest.ID != entry.Name() {
 			bundle.Problems = append(bundle.Problems, fmt.Sprintf("folder name must match the id %q", bundle.Manifest.ID))
 		}
 		bundles = append(bundles, bundle)
