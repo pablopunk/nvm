@@ -68,16 +68,16 @@ func searchedClipboardCommandRow(t *testing.T, p *App) search.Item {
 }
 
 // TestRootCommandRowOffersSetAndRemoveKeyboardShortcut checks the action menu of a root command: an unbound command
-// offers Set keyboard shortcut only, and a bound one also offers Remove keyboard shortcut and shows its shortcut.
+// offers Set keyboard shortcut and Set alias, and a bound one also offers Remove keyboard shortcut and shows its shortcut.
 func TestRootCommandRowOffersSetAndRemoveKeyboardShortcut(t *testing.T) {
 	p := goldenPalette(t)
 	row := openClipboardCommandRow(t, p)
-	if got, want := searchActionTitles(row.Actions), []string{"Open", setShortcutTitle}; !slices.Equal(got, want) {
+	if got, want := searchActionTitles(row.Actions), []string{clipboardCommandTitle, setShortcutTitle, setAliasTitle}; !slices.Equal(got, want) {
 		t.Fatalf("unbound actions = %v, want %v", got, want)
 	}
 	mustSetShortcut(t, p.shortcutsManager(), shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	row = searchedClipboardCommandRow(t, p)
-	if got, want := searchActionTitles(row.Actions), []string{"Open", setShortcutTitle, removeShortcutTitle}; !slices.Equal(got, want) {
+	if got, want := searchActionTitles(row.Actions), []string{clipboardCommandTitle, setShortcutTitle, removeShortcutTitle, setAliasTitle}; !slices.Equal(got, want) {
 		t.Fatalf("bound actions = %v, want %v", got, want)
 	}
 	if row.Accessory != p.shortcutLabelOf("Command+Alt+V") {
@@ -125,7 +125,7 @@ func TestRemoveKeyboardShortcutFromTheRootRowUnbindsIt(t *testing.T) {
 	if got := entryOf(t, p, shortcuts.CommandClipboardHistory).Accelerator; got != "" {
 		t.Fatalf("accelerator after remove = %q", got)
 	}
-	if row := searchedClipboardCommandRow(t, p); row.Accessory != "" || len(row.Actions) != 2 {
+	if row := searchedClipboardCommandRow(t, p); row.Accessory != "" || len(row.Actions) != 3 {
 		t.Fatalf("row after remove: accessory %q, %d actions", row.Accessory, len(row.Actions))
 	}
 }

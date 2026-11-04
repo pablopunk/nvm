@@ -103,13 +103,11 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 	var out []search.Item
 	for _, cmd := range p.commandSlots(in.timerOn) {
 		if isBuiltInSlot(cmd) {
-			for _, row := range builtInRows(p, cmd.builtIn, q) {
-				out = append(out, p.withShortcutActions(row, builtInRowShortcutID(row.Title), in.shortcuts))
-			}
+			out = append(out, p.builtInRootRows(cmd.builtIn, q, in)...)
 			continue
 		}
 		cmd := cmd
-		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
+		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
 		if commandShortcutID(cmd) != "" {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		}
@@ -129,6 +127,9 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		}
 		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
 			s = scoreCommandAlias
+		}
+		if s == 0 {
+			s = aliasMatchScore(in.aliases[commandShortcutID(cmd)], lq)
 		}
 		if s > 0 {
 			it.Score = s

@@ -21,7 +21,7 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	if p.appsvc == nil {
 		return nil
 	}
-	list, scores := matchingApps(in.apps, q)
+	list, scores := matchingApps(in.apps, q, in.aliases)
 	rows := apps.AppRows(list, p.appsvc.Running.RunningAmong(list), p.appsvc.SupportsUninstall())
 	out := make([]search.Item, 0, len(rows))
 	for i, row := range rows {
@@ -32,7 +32,7 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 
 // matchingApps returns the apps the root lists for q, with their scores. The empty query lists every app, newest
 // first by when it was first seen, as 1.x does; a query lists the apps whose names match it.
-func matchingApps(all []apps.App, q string) ([]apps.App, []int) {
+func matchingApps(all []apps.App, q string, aliases map[string][]string) ([]apps.App, []int) {
 	lq := strings.ToLower(q)
 	if lq == "" {
 		list := slices.Clone(all)
@@ -44,7 +44,11 @@ func matchingApps(all []apps.App, q string) ([]apps.App, []int) {
 	var list []apps.App
 	var scores []int
 	for _, a := range all {
-		if s := search.Score(a.Name, lq); s > 0 {
+		s := search.Score(a.Name, lq)
+		if s == 0 {
+			s = aliasMatchScore(aliases[shortcuts.AppActionID(a.Path)], lq)
+		}
+		if s > 0 {
 			list = append(list, a)
 			scores = append(scores, s)
 		}

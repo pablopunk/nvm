@@ -90,7 +90,7 @@ func TestClipboardHistoryRowsUse1xTitlesAndCopyFirst(t *testing.T) {
 	if len(rows) != 4 {
 		t.Fatalf("rows = %v", rowTitles(p))
 	}
-	rebase := rows[1]
+	rebase := rows[0]
 	if rebase.Title != goldenRebaseTitle || !strings.HasPrefix(rebase.Subtitle, "Copied ") || strings.Contains(rebase.Subtitle, "ago") {
 		t.Fatalf("row = %q / %q", rebase.Title, rebase.Subtitle)
 	}
@@ -100,8 +100,8 @@ func TestClipboardHistoryRowsUse1xTitlesAndCopyFirst(t *testing.T) {
 	if rebase.Actions[0].Title != "Copy Text" {
 		t.Fatalf("first action = %q, want Copy Text", rebase.Actions[0].Title)
 	}
-	if rows[0].Accessory != "Pinned" {
-		t.Fatalf("pinned row accessory = %q", rows[0].Accessory)
+	if rows[0].Accessory != "" {
+		t.Fatalf("a row shows an accessory it should not: %q", rows[0].Accessory)
 	}
 }
 
@@ -114,21 +114,6 @@ func TestClipboardHistoryEmptyStateUsesThe1xCopy(t *testing.T) {
 	}
 	if len(p.Results()) != 0 {
 		t.Fatalf("rows = %v", rowTitles(p))
-	}
-}
-
-// TestClipboardHistoryPinnedRowsComeFirst: pinning a row moves it above the newer unpinned rows; the pinned rows keep
-// their copy order among themselves.
-func TestClipboardHistoryPinnedRowsComeFirst(t *testing.T) {
-	p, _, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Pin").Run(p)
-	goldenQuery(p, "")
-	rows := p.Results()
-	if rows[0].Title != goldenRebaseTitle || !strings.HasPrefix(rows[1].Title, "Meeting notes: ship the design") {
-		t.Fatalf("the pinned rows are not first: %v", rowTitles(p))
-	}
-	if rows[0].Accessory != "Pinned" || rows[1].Accessory != "Pinned" || rows[2].Accessory == "Pinned" {
-		t.Fatalf("accessories = %q, %q, %q", rows[0].Accessory, rows[1].Accessory, rows[2].Accessory)
 	}
 }
 
@@ -152,7 +137,7 @@ func TestClipboardHistoryDeleteNeedsAConfirmation(t *testing.T) {
 // TestClipboardHistoryDeleteRemovesAfterConfirm: the confirmation's action removes the entry and hides the palette.
 func TestClipboardHistoryDeleteRemovesAfterConfirm(t *testing.T) {
 	p, win, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Remove Item").Run(p)
+	actionTitled(t, p.Results()[0], "Remove Item").Run(p)
 	p.Results()[0].Actions[0].Run(p)
 	if _, ok := p.clip.history.Get(goldenRebaseID); ok {
 		t.Fatal("the confirmed removal kept the entry")
@@ -163,18 +148,6 @@ func TestClipboardHistoryDeleteRemovesAfterConfirm(t *testing.T) {
 }
 
 // TestClearAllUnpinnedNeedsAConfirmation: the bulk clear confirms, and keeps pinned entries.
-func TestClearAllUnpinnedNeedsAConfirmation(t *testing.T) {
-	p, _, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Clear All Unpinned").Run(p)
-	if p.Top().Title != "Confirm" || p.clip.history.Len() != 4 {
-		t.Fatalf("clear ran before confirmation: top %q, %d entries", p.Top().Title, p.clip.history.Len())
-	}
-	p.Results()[0].Actions[0].Run(p)
-	if p.clip.history.Len() != 1 {
-		t.Fatalf("entries after clear = %d, want only the pinned one", p.clip.history.Len())
-	}
-}
-
 // TestRemoveLastOffersTheTimeWindows: "Remove Last..." opens the four windows, each confirmed.
 func TestRemoveLastOffersTheTimeWindows(t *testing.T) {
 	p, _, _ := seededClipPalette(t)
@@ -205,7 +178,7 @@ func TestClipboardActionMenuOffersTheRowActions(t *testing.T) {
 	for _, a := range p.Results()[1].Actions {
 		titles = append(titles, a.Title)
 	}
-	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Pin", "Ask AI", "Remove Item", "Remove Last...", "Clear All Unpinned"} {
+	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Remove Item", "Remove Last..."} {
 		if !slices.Contains(titles, want) {
 			t.Fatalf("actions = %v, missing %q", titles, want)
 		}
@@ -227,12 +200,10 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	tt := ui.NewTester(p.View, width, height)
 	tt.Frame()
 	topOfList(tt)
-	tt.Key(0, ui.KeyDown)
-	tt.Frame()
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
 	if text, _ := f.set.Clipboard.ReadText(); text != goldenRebaseTitle {
-		t.Fatalf("Enter on the second row copied %q", text)
+		t.Fatalf("Enter on the first row copied %q", text)
 	}
 	if win.hides == 0 {
 		t.Fatal("copying did not hide the palette")
@@ -241,11 +212,11 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	openClipboardView(p)
 	tt.Frame()
 	topOfList(tt)
-	// The action menu opens on Copy; for a pinned text row the order is Copy, Preview, Paste Text, Ask AI, Unpin,
-	// Remove Item, so Remove Item is five rows down.
+	// The action menu opens on Copy; for a text row the order is Copy, Preview, Paste Text, Remove Item, so Remove
+	// Item is three rows down.
 	tt.Key(mod, ui.KeyK)
 	tt.Frame()
-	for range 5 {
+	for range 3 {
 		tt.Key(0, ui.KeyDown)
 		tt.Frame()
 	}
@@ -256,7 +227,7 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if _, ok := p.clip.history.Get(goldenNotesID); ok {
+	if _, ok := p.clip.history.Get(goldenRebaseID); ok {
 		t.Fatal("the keyboard removal kept the entry")
 	}
 }

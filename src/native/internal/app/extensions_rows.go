@@ -47,7 +47,7 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 	}
 	var out []search.Item
 	for _, result := range m.SearchCommands(ctx) {
-		out = append(out, matchingCommandRows(e.p, m, result, q, e.in.shortcuts)...)
+		out = append(out, matchingCommandRows(e.p, m, result, q, e.in.shortcuts, e.in.aliases)...)
 	}
 	for _, result := range m.Search(ctx, q) {
 		if isCommandPlacedBuiltIn(result.ExtensionID) {
@@ -87,27 +87,28 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []sear
 // commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
 // for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
 func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult, bound map[string]string) []search.Item {
-	return matchingCommandRows(p, m, result, "", bound)
+	return matchingCommandRows(p, m, result, "", bound, nil)
 }
 
 // matchingCommandRows lists a running extension's commands whose title matches q as a phrase, or every command
 // for the empty query. A failed extension declares none. Each command takes a keyboard shortcut from its action menu.
-func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string, bound map[string]string) []search.Item {
+func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string, bound map[string]string, aliases map[string][]string) []search.Item {
 	if result.Failure != nil {
 		return nil
 	}
 	var out []search.Item
 	for _, command := range result.Commands {
-		if q != "" && search.Score(command.Title, q) < search.PhraseScoreFloor {
+		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
+		if q != "" && search.Score(command.Title, q) < search.PhraseScoreFloor && aliasMatchScore(aliases[actionID], q) == 0 {
 			continue
 		}
-		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
 		p.shortcutTitles.remember(actionID, command.Title)
-		out = append(out, p.withShortcutActions(search.Item{
+		row := p.withShortcutActions(search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
-			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, "Run", nil))},
-		}, actionID, bound))
+			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, command.Title, nil))},
+		}, actionID, bound)
+		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
 	}
 	return out
 }
@@ -118,6 +119,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		Score: scoreExtension,
 	}
 	if m.IsBuiltIn(extID) {
+		row.ID = item.ID
 		row = builtInRow(row, item)
 	}
 	if item.Primary != nil {
@@ -126,7 +128,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	for _, action := range item.Actions {
 		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, action))
 	}
-	return row
+	return p.withAuthoringActions(row, extID, "")
 }
 
 func iconOr(icon, fallback string) string {

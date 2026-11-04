@@ -57,7 +57,7 @@ type IDsArgs struct {
 	IDs []string `json:"ids"`
 }
 
-// ClearArgs filters a history clear. Empty Types and zero OlderThanMs clear every unpinned entry.
+// ClearArgs filters a history clear. Empty Types and zero OlderThanMs clear every entry.
 type ClearArgs struct {
 	Types       []string `json:"types,omitempty"`
 	OlderThanMs int64    `json:"olderThanMs,omitempty"`

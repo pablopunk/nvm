@@ -33,6 +33,10 @@ type Manifest struct {
 	// Settings are the user-visible settings the extension declares. Values are stored per extension, and
 	// the declaration is the only way a setting exists: Settings.Set on an undeclared id is refused.
 	Settings []SettingDefinition `json:"settings,omitempty"`
+	// CommandTitles renames commands by their ID. A command shows the title here when one is set, and the title its code
+	// declares otherwise. The palette's Rename writes here, so renaming a command never edits the code. Only titles are
+	// renamed: a subtitle stays as the code declares it.
+	CommandTitles map[string]string `json:"commandTitles,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -112,6 +116,14 @@ func (m Manifest) validateShape() error {
 	}
 	if err := validateSettingDefinitions(m.Settings); err != nil {
 		return err
+	}
+	for id, title := range m.CommandTitles {
+		if strings.TrimSpace(id) == "" {
+			return errors.New("commandTitles has an empty command id")
+		}
+		if strings.TrimSpace(title) == "" {
+			return fmt.Errorf("commandTitles.%s must not be empty", id)
+		}
 	}
 	return CheckCompatibility(m.APIVersion, Current)
 }

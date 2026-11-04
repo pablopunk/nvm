@@ -68,12 +68,13 @@ func matchScore(c command, lq string) int {
 	return commandmatch.Score(c.title, c.keywords, lq)
 }
 
-// commandItem is the row of one command: its title, subtitle and tone, an Open action that runs it, and its usage key.
+// commandItem is the row of one command: its title, subtitle and tone, a primary action titled with the command that runs
+// it, and its usage key.
 func commandItem(c command, score int) api.Item {
 	item := api.Item{
 		ID: c.op, Title: c.title, Subtitle: c.subtitle, Icon: c.icon, Score: float64(score),
 		Section: search.KindCommands, LearnKey: "cmd:" + c.title,
-		Primary: &api.Action{Kind: api.ActionSystem, Op: c.op, Title: "Open", Confirm: confirmationOf(c)},
+		Primary: &api.Action{Kind: api.ActionSystem, Op: c.op, Title: c.title, Confirm: confirmationOf(c)},
 	}
 	if c.tone != "" {
 		item.Appearance = &api.Appearance{Foreground: c.tone}

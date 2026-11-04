@@ -15,7 +15,7 @@ func TestRootEmptyListsEveryAppNewestFirst(t *testing.T) {
 		{Name: "Beta", FirstSeenAt: 3},
 		{Name: "Alpha", FirstSeenAt: 3},
 	}
-	list, scores := matchingApps(installed, "")
+	list, scores := matchingApps(installed, "", nil)
 	want := []string{"Alpha", "Beta", "Zed"}
 	for i, a := range list {
 		if a.Name != want[i] || scores[i] != scoreRootApplication {

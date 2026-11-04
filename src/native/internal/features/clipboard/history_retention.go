@@ -4,24 +4,24 @@ import "time"
 
 // enforceLocked drops the unpinned entries that retention no longer allows, and returns how many went. It
 // applies, in order: expiry by age, the entry cap (oldest first), the image byte cap and the memory cap.
-// Pinned entries are never dropped. The caller holds h.mu.
+// The caller holds h.mu.
 func (h *History) enforceLocked(now time.Time) int {
 	p := h.policy
 	drop := map[*record]bool{}
 	if p.MaxAge > 0 {
 		for _, r := range h.order {
-			if !r.entry.Pinned && now.Sub(r.entry.CreatedAt) > p.MaxAge {
+			if now.Sub(r.entry.CreatedAt) > p.MaxAge {
 				drop[r] = true
 			}
 		}
 	}
-	unpinned := 0
+	kept := 0
 	for _, r := range h.order {
-		if !r.entry.Pinned && !drop[r] {
-			unpinned++
+		if !drop[r] {
+			kept++
 		}
 	}
-	excess := unpinned - p.MaxEntries
+	excess := kept - p.MaxEntries
 	imageBytes, memory := h.imageBytes, h.memory
 	for r := range drop {
 		imageBytes -= r.image
@@ -29,7 +29,7 @@ func (h *History) enforceLocked(now time.Time) int {
 	}
 	for i := len(h.order) - 1; i >= 0; i-- {
 		r := h.order[i]
-		if r.entry.Pinned || drop[r] {
+		if drop[r] {
 			continue
 		}
 		overCount := excess > 0

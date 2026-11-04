@@ -100,6 +100,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -117,11 +121,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "AI Chats",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -140,11 +148,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Emoji \u0026 Symbols",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -192,6 +204,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -209,11 +225,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Quick Notes",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -232,11 +252,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Dictate",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -255,11 +279,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Snippets",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -278,11 +306,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Extensions",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -301,11 +333,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Force Quit Apps",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -330,6 +366,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -352,6 +392,10 @@
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -376,6 +420,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -399,6 +447,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -416,11 +468,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Check for Updates",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -443,19 +499,15 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": ""
-          },
-          {
             "title": "Uninstall Calendar…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -478,19 +530,15 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": ""
-          },
-          {
             "title": "Uninstall Terminal…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -556,19 +604,15 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": ""
-          },
-          {
             "title": "Uninstall Calendar…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -587,11 +631,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Maximize Height",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -610,7 +658,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Create Quicklink",
             "label": ""
           }
         ]
@@ -629,11 +677,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Clipboard History",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -652,11 +704,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Search Files",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -679,19 +735,15 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": ""
-          },
-          {
             "title": "Uninstall Calculator…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1381,19 +1433,15 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Copy Path",
-            "label": ""
-          },
-          {
             "title": "Uninstall Terminal…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1475,6 +1523,10 @@
           {
             "title": "Set keyboard shortcut",
             "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -1492,7 +1544,34 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Start Timer",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "Commands",
+        "id": "restart",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Restart Computer",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1530,11 +1609,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
+            "title": "Empty Trash",
             "label": ""
           }
         ]
@@ -1553,11 +1628,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Report a Problem",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1619,11 +1698,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Settings",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1642,11 +1725,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open Settings",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1665,11 +1752,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Window Management Settings",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1688,11 +1779,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Move Window…",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1730,11 +1825,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Snippets",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1753,7 +1852,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Create Snippet",
             "label": ""
           }
         ]
@@ -1772,11 +1871,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Show Recent Errors",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1833,11 +1936,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Quick Notes",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1875,11 +1982,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Extensions",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1898,11 +2009,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Force Quit Apps",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1921,7 +2036,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Start Timer",
             "label": ""
           }
         ]
@@ -1940,11 +2055,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Restart Computer",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1963,11 +2082,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
+            "title": "Empty Trash",
             "label": ""
           }
         ]
@@ -1986,11 +2101,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Keyboard Shortcuts",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2009,11 +2128,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Check for Updates",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2051,11 +2174,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open Documents",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2074,11 +2201,15 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open Desktop",
             "label": ""
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2097,11 +2228,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
+            "title": "Open Pictures",
             "label": ""
           }
         ]
@@ -2248,16 +2375,8 @@
             "label": "⌃↵"
           },
           {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           }
         ]
       },
@@ -2318,24 +2437,12 @@
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Preview",
+            "title": "Preview Contents",
             "label": "⌃Y"
           },
           {
-            "title": "Copy Path",
-            "label": "⌃C"
-          },
-          {
-            "title": "Copy File",
-            "label": "⌃⇧C"
-          },
-          {
-            "title": "Move to Trash",
-            "label": "⌃⌫"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           }
         ]
       }

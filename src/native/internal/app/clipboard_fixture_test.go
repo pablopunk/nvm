@@ -105,7 +105,7 @@ func (f *clipFixture) awaitNotice(tb testing.TB) store.Notice {
 // watchdog bounds a wait for an event in the fixtures. It never stands in for one: waits end at the event.
 const watchdog = 10 * time.Second
 
-// goldenClipboard is the clipboard history the goldens show: a pinned note, a copied command, a picture and a
+// goldenClipboard is the clipboard history the goldens show: a note, a copied command, a picture and a
 // web address with its saved preview. Nothing is read from disk; the picture is seeded into the cache.
 func goldenClipboard(t *testing.T) *clipEngine {
 	t.Helper()
@@ -138,8 +138,6 @@ func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 	}))
 	must(h.Remember(clipboard.Entry{ID: "e-shot", Kind: clipboard.KindImage, ImageRef: goldenClipboardImageName, Width: 640, Height: 360, Bytes: 1, CreatedAt: goldenNow.Add(-40 * time.Minute)}))
 	must(h.Remember(clipboard.Entry{ID: "e-notes", Kind: clipboard.KindText, Text: "Meeting notes: ship the design package by Friday and review the goldens with Ana", CreatedAt: goldenNow.Add(-2 * time.Hour)}))
-	_, err := h.SetPinned("e-notes", true)
-	must(err)
 	must(h.Remember(clipboard.Entry{ID: "e-rebase", Kind: clipboard.KindText, Text: "git rebase -i HEAD~3", CreatedAt: goldenNow.Add(-3 * time.Minute)}))
 	f.engine.pics.seed(goldenClipboardImageName, shot)
 }

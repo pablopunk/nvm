@@ -13,7 +13,7 @@ const rulesTemplate = `You write extensions for Nevermind, a desktop command pal
 
 Rules:
 - Reply with a short sentence, then exactly two code blocks: a ~~~json manifest block, then a ~~~go source block. Nothing after them.
-- Manifest: {"apiVersion":"API_VERSION","id":"user.my-extension","title":"My extension"}. The id is lowercase and dot-separated, and never starts with "nevermind.".
+- Manifest: {"apiVersion":"API_VERSION","id":"user.my-extension","title":"My extension"}. The id is lowercase and dot-separated, and never starts with "nevermind.". A manifest may also set "commandTitles" to rename commands by id; the user renames commands that way, so leave it out unless the user asks for a command's title.
 - Source: one file, package main, under 200 lines. Import only the standard library and "github.com/pablopunk/nvm/native/internal/ext/api". No goroutines, no cgo, no file or network access unless the API offers it.
 - The reference names types without their package. In source, write each one with the api. prefix (api.Item, api.Action). Use only the names in the reference; do not invent functions, fields or constants.
 - Each entry point is optional. Define the ones the extension needs, with exactly the signatures in the reference.

@@ -25,9 +25,6 @@ const (
 	ActionCopy    ActionType = "copy"
 	ActionPaste   ActionType = "paste"
 	ActionPreview ActionType = "preview"
-	ActionPin     ActionType = "pin"
-	ActionUnpin   ActionType = "unpin"
-	ActionAskAI   ActionType = "ask-ai"
 	ActionRemove  ActionType = "remove"
 	ActionSubmenu ActionType = "submenu"
 )
@@ -71,7 +68,6 @@ type Row struct {
 	Title    string
 	Subtitle string
 	Kind     Kind
-	Pinned   bool
 	Detail   Detail
 	Primary  Action
 	Actions  []Action
@@ -109,9 +105,7 @@ func BuildView(entries []Entry, historyLen int) View {
 }
 
 // BuildRow describes one entry: its title and subtitle, its detail, the copy action it runs on Enter, and
-// the actions on its menu. historyLen decides whether the removal actions appear at all. The pin and ask
-// actions are not in the row: RowExtraActions computes them when the action panel opens, so every row
-// stays small.
+// the actions on its menu. historyLen decides whether the removal actions appear at all.
 func BuildRow(e Entry, historyLen int) Row {
 	title := entryTitle(e)
 	subtitle := entrySubtitle(e)
@@ -125,25 +119,11 @@ func BuildRow(e Entry, historyLen int) Row {
 		Title:    title,
 		Subtitle: subtitle,
 		Kind:     e.Kind,
-		Pinned:   e.Pinned,
 		Detail:   detailFor(e, title, subtitle),
 		Primary:  copyAction,
 		Actions:  actions,
 		Manage:   RemovalActions(historyLen, &e),
 	}
-}
-
-// RowExtraActions returns the actions of an entry's menu that are not part of the row: ask AI for text, and
-// pin or unpin for any entry. The palette calls it when the action panel opens.
-func RowExtraActions(e Entry) []Action {
-	var actions []Action
-	if isRichText(e) {
-		actions = append(actions, Action{Type: ActionAskAI, Title: "Ask AI", ItemID: e.ID})
-	}
-	if e.Pinned {
-		return append(actions, Action{Type: ActionUnpin, Title: "Unpin", ItemID: e.ID})
-	}
-	return append(actions, Action{Type: ActionPin, Title: "Pin", ItemID: e.ID})
 }
 
 // isRichText reports whether an entry holds text that can be pasted as text.

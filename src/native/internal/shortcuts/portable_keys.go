@@ -28,6 +28,14 @@ const (
 	CommandFixSelectedText    = "command:fix-selected-text"
 	CommandTriageSelectedText = "command:triage-selected-text"
 	CommandClassifyImage      = "command:classify-image"
+	CommandLockScreen         = "command:lock-screen"
+	CommandSleep              = "command:sleep"
+	CommandRestart            = "command:restart"
+	CommandSystemSettings     = "command:system-settings"
+	CommandQuitNevermind      = "command:quit-nevermind"
+	CommandPlaceDownloads     = "command:place-downloads"
+	CommandPlaceDocuments     = "command:place-documents"
+	CommandPlaceDesktop       = "command:place-desktop"
 )
 
 // config.json keys shortcuts by 1.x action ID, so both apps read one file. The 2.0 IDs of window layouts and apps
@@ -61,6 +69,14 @@ var builtInCommandKeys = map[string]string{
 	CommandShowRecentErrors:   "extension:nevermind.diagnostics:recent-errors",
 	CommandReportProblem:      "extension:nevermind.diagnostics:report-problem",
 	CommandOSPermissions:      "extension-root:nevermind.permissions:os-permissions",
+	CommandLockScreen:         "extension:nevermind.system:builtin:lock-screen",
+	CommandSleep:              "extension:nevermind.system:builtin:sleep",
+	CommandRestart:            "extension:nevermind.system:builtin:restart",
+	CommandSystemSettings:     "extension:nevermind.system:builtin:settings",
+	CommandQuitNevermind:      "extension:nevermind.system:builtin:quit",
+	CommandPlaceDownloads:     "extension:nevermind.places:places:downloads",
+	CommandPlaceDocuments:     "extension:nevermind.places:places:documents",
+	CommandPlaceDesktop:       "extension:nevermind.places:places:desktop",
 }
 
 var builtInCommandIDs = invertKeys(builtInCommandKeys)

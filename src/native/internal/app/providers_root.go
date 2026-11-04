@@ -28,6 +28,8 @@ type rootInput struct {
 	timerOn      bool
 	// shortcuts maps each root action that has a keyboard shortcut to its accelerator.
 	shortcuts map[string]string
+	// aliases maps each root action to the phrases that find it in the root search.
+	aliases map[string][]string
 }
 
 // chatHead is what the conversation rows read from a chat: its id, its title and whether it is a builder chat.
@@ -52,6 +54,7 @@ func (p *App) captureRoot() *rootInput {
 		chats:        chats,
 		timerOn:      p.timer != nil,
 		shortcuts:    p.boundShortcuts(),
+		aliases:      p.aliasStore().All(),
 	}
 }
 

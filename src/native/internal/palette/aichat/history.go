@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -34,13 +32,14 @@ func historyRows(deps Deps, q string) []search.Item {
 		if record.Kind != chat.KindConversation || (query != "" && !strings.Contains(strings.ToLower(record.Title), query)) {
 			continue
 		}
-		items = append(items, conversationRow(deps, record))
+		items = append(items, ConversationRow(deps, record))
 	}
 	return items
 }
 
-// conversationRow is the list row of one saved conversation: opening it, or deleting it when it is not answering.
-func conversationRow(deps Deps, record chat.Chat) search.Item {
+// ConversationRow is the list row of one saved conversation: Open, then Remove action, which asks before it deletes the
+// conversation, as 1.x's AI chat rows do.
+func ConversationRow(deps Deps, record chat.Chat) search.Item {
 	id := record.ID
 	title := record.Title
 	if title == "" {
@@ -55,14 +54,13 @@ func conversationRow(deps Deps, record chat.Chat) search.Item {
 		TintTitle: true,
 		Actions: []search.Action{
 			{Title: "Open", Run: func(h search.Host) { h.Push(ChatView(deps, id)) }},
-			{Title: "Delete", Label: "⌃⌫", Mods: palette.Mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever,
-				Run: func(h search.Host) {
+			{Title: "Remove action", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				h.Push(palette.Confirm("Remove action", "Delete “"+title+"” from Nevermind", func() {
 					if err := deps.Service.Delete(id); err != nil {
 						h.Toast(refusalCopy(err))
-						return
 					}
-					h.Refresh()
-				}},
+				}))
+			}},
 		},
 	}
 }

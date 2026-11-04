@@ -70,10 +70,12 @@ type Manifest struct {
     Identity                                          // id, title (flattened in JSON)
     Subtitle     string       `json:"subtitle,omitempty"`
     Capabilities []Capability `json:"capabilities,omitempty"`
+    CommandTitles map[string]string `json:"commandTitles,omitempty"` // command id -> title; overrides the title the code declares
 }
 ```
 
 - `id` is lowercase, dot-separated (`acme.world-clock`), at most 128 characters. The prefix `nevermind.` is reserved for built-ins. The id is permanent: enablement, storage, secrets, global shortcuts and restore keys are keyed by it.
+- `commandTitles` renames commands by id. A command shows the manifest's title when one is set, and the title its code declares otherwise. Rename on a command row writes here, so renaming never edits the code. Only titles are renamed.
 - `Manifest()` must be pure. The host reads it before enabling anything, so review never depends on runtime state.
 
 Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one too high):

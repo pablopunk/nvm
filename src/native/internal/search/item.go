@@ -39,6 +39,9 @@ type Action struct {
 	Label   string // shortcut as displayed, e.g. "⌃⌫"
 	Run     func(h Host)
 	Dismiss Dismissal
+	// Disabled names why the action cannot run now, as 1.x shows it under the title of a disabled menu row. A
+	// disabled action stays in the menu, muted, and choosing it does nothing. Empty means the action runs.
+	Disabled string
 }
 
 // Item is one row in the palette.

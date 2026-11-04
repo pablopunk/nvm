@@ -44,8 +44,8 @@ func oneLine(s string) string {
 	return s
 }
 
-// clipboardView is the Clipboard History view: the entries that match the query, pinned first and then newest
-// first. An empty result shows the 1.x empty state.
+// clipboardView is the Clipboard History view: the entries that match the query, newest first. An empty result shows
+// the 1.x empty state.
 func (p *App) clipboardView() *palette.View {
 	return &palette.View{
 		Title: clipboard.ViewTitle, Placeholder: clipboard.ViewPlaceholder,
@@ -81,9 +81,6 @@ func (p *App) clipItem(e clipboard.Entry, historyLen int) search.Item {
 		Actions:   p.clipActions(e, row, historyLen),
 		Detail:    func(c *ui.Context, _ search.Host) { p.clipDetail(c, e) },
 	}
-	if e.Pinned {
-		it.Accessory = "Pinned"
-	}
 	return it
 }
 
@@ -98,48 +95,16 @@ func clipIcon(kind clipboard.Kind) string {
 	return clipIconUnit
 }
 
-// clipActions is the action list of a row, in the order the menu shows: copy (Enter, so it is first), then preview
-// and paste text, ask AI and pin or unpin, the removal actions, and the history-wide clears.
+// clipActions is the action list of a row, in the order the menu shows: copy (Enter, so it is first), then preview and
+// paste text, then the removal actions.
 func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) []search.Action {
 	id := e.ID
 	actions := []search.Action{{Title: row.Primary.Title, Dismiss: search.DismissNever, Run: func(h search.Host) { p.runClipCopy(h, id) }}}
 	actions = append(actions, p.clipRowActions(e, row)...)
-	for _, extra := range clipboard.RowExtraActions(e) {
-		actions = append(actions, p.clipExtraAction(extra, e))
-	}
 	for _, removal := range row.Manage {
 		actions = append(actions, p.clipRemovalAction(removal))
 	}
-	for _, removal := range clipboard.RemovalActions(historyLen, nil) {
-		actions = append(actions, p.clipRemovalAction(removal))
-	}
-	return append(actions, p.clipClearUnpinnedAction())
-}
-
-// clipExtraAction is the ask-AI, pin or unpin action of a row.
-func (p *App) clipExtraAction(a clipboard.Action, e clipboard.Entry) search.Action {
-	id := e.ID
-	switch a.Type {
-	case clipboard.ActionAskAI:
-		text := e.Text
-		return search.Action{Title: a.Title, Label: "⌃J", Mods: mod, Key: ui.KeyJ, Run: func(h search.Host) {
-			h.Push(p.newChatView(clipAskPrompt(text)))
-		}}
-	case clipboard.ActionPin:
-		return p.clipPinAction(id, true, a.Title)
-	}
-	return p.clipPinAction(id, false, a.Title)
-}
-
-// clipPinAction pins or unpins an entry and runs the search again, so the pinned rows move.
-func (p *App) clipPinAction(id string, pinned bool, title string) search.Action {
-	return search.Action{Title: title, Label: "⌃P", Mods: mod, Key: ui.KeyP, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		if _, err := p.clip.history.SetPinned(id, pinned); err != nil {
-			h.Toast(clipChangeMessage(err))
-			return
-		}
-		h.Refresh()
-	}}
+	return actions
 }
 
 // clipRemovalAction is a removal from the history. It needs a confirmation, which the palette shows as a view
@@ -177,27 +142,9 @@ func (p *App) clipSubmenuView(submenu *clipboard.Submenu) *palette.View {
 	}
 }
 
-// clipClearUnpinnedAction removes every entry that is not pinned, after a confirmation.
-func (p *App) clipClearUnpinnedAction() search.Action {
-	return search.Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Dismiss: search.DismissNever,
-		Run: func(h search.Host) {
-			h.Push(palette.Confirm("Clear All Unpinned", "Remove every clipboard item that is not pinned?", p.clearUnpinned))
-		}}
-}
-
 // removeEntries removes the entries a range selects and says how many went.
 func (p *App) removeEntries(q clipboard.RangeQuery) {
 	n, err := p.clip.history.Remove(q)
-	if err != nil {
-		p.Toast(clipChangeMessage(err))
-		return
-	}
-	p.Toast(clipboard.RemovedMessage(n))
-}
-
-// clearUnpinned removes every unpinned entry.
-func (p *App) clearUnpinned() {
-	n, err := p.clip.history.ClearUnpinned()
 	if err != nil {
 		p.Toast(clipChangeMessage(err))
 		return
@@ -225,9 +172,4 @@ func clipChangeMessage(err error) string {
 		return "Clipboard history is read-only: it was written by a newer version of Nevermind."
 	}
 	return "Clipboard history could not be changed."
-}
-
-// clipAskPrompt is the first message of an AI chat about a copied text.
-func clipAskPrompt(text string) string {
-	return "Here is some text from my clipboard:\n\n```\n" + text + "\n```\n\nWhat is it? Be brief."
 }

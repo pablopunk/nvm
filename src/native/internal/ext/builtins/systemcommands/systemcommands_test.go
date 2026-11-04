@@ -62,7 +62,7 @@ func TestTitleMatchRunsItsOpAndKeepsTheTone(t *testing.T) {
 	if item.Appearance == nil || item.Appearance.Foreground != api.ColorOrange {
 		t.Errorf("appearance = %+v, want orange", item.Appearance)
 	}
-	if p := item.Primary; p == nil || p.Kind != api.ActionSystem || p.Op != "restart" || p.Title != "Open" {
+	if p := item.Primary; p == nil || p.Kind != api.ActionSystem || p.Op != "restart" || p.Title != "Restart Computer" {
 		t.Errorf("primary = %+v, want the restart op", p)
 	}
 }

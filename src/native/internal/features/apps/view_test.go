@@ -30,8 +30,9 @@ func TestAppRowsKeepOpenPrimaryAndOfferUninstallLazily(t *testing.T) {
 	}
 }
 
-// A running app shows the running state as its subtitle and offers Quit and Force Quit; an idle app shows neither.
-func TestAppRowsShowRunningStateAndQuitActions(t *testing.T) {
+// A running app shows the running state as its subtitle and nothing else in its menu: Open, as 1.x lists it. An idle app
+// shows neither.
+func TestAppRowsShowRunningStateAndOpenOnly(t *testing.T) {
 	list := []App{{Name: "Notes", Path: "/Applications/Notes.app"}, {Name: "Mail", Path: "/Applications/Mail.app"}}
 	rows := AppRows(list, map[string]bool{"/Applications/Notes.app": true}, false)
 	if rows[0].Subtitle != RunningSubtitle || !rows[0].Running {
@@ -41,15 +42,11 @@ func TestAppRowsShowRunningStateAndQuitActions(t *testing.T) {
 	for _, a := range rows[0].Actions {
 		kinds = append(kinds, a.Kind)
 	}
-	if want := []ActionKind{ActionOpen, ActionReveal, ActionCopyPath, ActionQuit, ActionForceQuit}; !reflect.DeepEqual(kinds, want) {
+	if want := []ActionKind{ActionOpen}; !reflect.DeepEqual(kinds, want) {
 		t.Fatalf("running actions = %v, want %v", kinds, want)
 	}
 	if rows[1].Subtitle != "" || rows[1].Running {
 		t.Fatalf("idle row = %+v", rows[1])
-	}
-	force := rows[0].Actions[4]
-	if !force.Destructive || force.Confirm != "Force Quit" || force.ConfirmMessage != "Force quit Notes? Unsaved data may be lost." {
-		t.Fatalf("force quit = %+v", force)
 	}
 }
 

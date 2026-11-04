@@ -66,6 +66,9 @@ func (p *Palette) onEnter() {
 	switch {
 	case p.actionsOpen:
 		acts := p.actions()
+		if p.actChosen < len(acts) && acts[p.actChosen].Disabled != "" {
+			return
+		}
 		p.actionsOpen = false
 		if p.actChosen < len(acts) {
 			p.runAction(acts[p.actChosen])
