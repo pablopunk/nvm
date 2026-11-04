@@ -11,6 +11,7 @@ import (
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -20,11 +21,11 @@ import (
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
 // root and the palette through the same manager as folder extensions. The calculator keeps its exchange rates in
-// rates, and computes calendar answers in zone.
-func builtInExtensions(rates calc.RateCache, zone *time.Location) []api.Extension {
+// rates, and computes calendar answers in zone. The quicklinks built-in reads the links legacy the settings file held.
+func builtInExtensions(rates calc.RateCache, zone *time.Location, legacyLinks []quicklinks.Link) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
-		calculatorbuiltin.New(rates, zone), classifyimage.Extension{}, aicommands.New(),
+		calculatorbuiltin.New(rates, zone), classifyimage.Extension{}, aicommands.New(), quicklinks.New(legacyLinks),
 	}
 }
 

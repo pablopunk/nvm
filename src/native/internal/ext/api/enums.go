@@ -54,7 +54,9 @@ const (
 	ModeBackground BackgroundMode = "background"
 )
 
-// Placement says where a command appears when the palette opens.
+// Placement says where a command's row appears. No placement means the root and search, as before. Root lists the row
+// at the empty root too. Search lists it for a typed query only. Hidden lists it nowhere: it runs from a shortcut or
+// an alias. A command with several placements is listed where any of them says.
 type Placement string
 
 const (

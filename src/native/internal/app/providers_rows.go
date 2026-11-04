@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -17,7 +15,6 @@ import (
 // The values are the bands the prototype used, so the root's order does not change.
 const (
 	scoreTimer        = 990
-	scoreQuicklink    = 980
 	scoreSnippetExact = 975
 	scoreSnippet      = 970
 	scoreExtension    = 960
@@ -75,26 +72,23 @@ func timerRows(p *App, _ *rootInput, q string) []search.Item {
 	}}}
 }
 
-// quicklinkRows answers "keyword search terms" with a search on the quicklink's site.
-func quicklinkRows(_ *App, in *rootInput, q string) []search.Item {
-	kw, rest, ok := strings.Cut(q, " ")
-	if !ok || strings.TrimSpace(rest) == "" {
-		return nil
-	}
-	var out []search.Item
-	for _, ql := range append(slices.Clone(in.quicklinks), builtinLinks...) {
-		if strings.EqualFold(kw, ql.Keyword) {
-			out = append(out, search.Item{Kind: search.KindQuicklinks, Title: fmt.Sprintf("Search %s for “%s”", ql.Name, strings.TrimSpace(rest)), Subtitle: "Quicklink", Icon: "link", Tone: "blue", Score: scoreQuicklink,
-				Actions: []search.Action{{Title: "Open", Run: openURL(ql.URL, strings.TrimSpace(rest))}}})
-		}
-	}
-	return out
-}
-
 // snippetRows matches snippets by keyword, exact first and then prefix; a snippet with no keyword is found by the
 // snippets view.
 func snippetRows(p *App, _ *rootInput, q string) []search.Item {
 	return snippetRootRows(p, q)
+}
+
+// commandTitleScore is how well a command named title, with keywords, answers the lowercase query lq. The title scores
+// first, and a query the keywords contain scores as an alias. phraseMatch limits the title to phrases and word prefixes.
+func commandTitleScore(title, keywords string, phraseMatch bool, lq string) int {
+	s := search.Score(title, lq)
+	if phraseMatch && s < search.PhraseScoreFloor {
+		s = 0
+	}
+	if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(keywords), lq) {
+		s = scoreCommandAlias
+	}
+	return s
 }
 
 // commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
@@ -122,13 +116,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			}
 			continue
 		}
-		s := search.Score(cmd.Title, lq)
-		if cmd.PhraseMatch && s < search.PhraseScoreFloor {
-			s = 0
-		}
-		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
-			s = scoreCommandAlias
-		}
+		s := commandTitleScore(cmd.Title, cmd.Keywords, cmd.PhraseMatch, lq)
 		if s == 0 {
 			s = aliasMatchScore(in.aliases[commandShortcutID(cmd)], lq)
 		}

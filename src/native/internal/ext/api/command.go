@@ -28,9 +28,15 @@ type Command struct {
 	Placement       []Placement    `json:"placement,omitempty"`
 	Triggers        []Trigger      `json:"triggers,omitempty"`
 	DismissAfterRun bool           `json:"dismissAfterRun,omitempty"`
-	Customizable    bool           `json:"customizable,omitempty"`
-	Actions         []Action       `json:"actions,omitempty"`
-	ActionPanel     *ActionPanel   `json:"actionPanel,omitempty"`
+	// Customizable lets the user bind a shortcut and an alias to the command. Built-ins get the shortcut and alias
+	// actions only when it is set; folder extensions keep theirs (see docs/extension-api.md, section 28).
+	Customizable bool `json:"customizable,omitempty"`
+	// Section and LearnKey are host-only presentation for built-in extensions, as on Item: the root section the row is
+	// listed under and the key the usage learner ranks it by. The host ignores both for folder extensions.
+	Section     string       `json:"section,omitempty"`
+	LearnKey    string       `json:"learnKey,omitempty"`
+	Actions     []Action     `json:"actions,omitempty"`
+	ActionPanel *ActionPanel `json:"actionPanel,omitempty"`
 }
 
 // Validate checks the command id, its triggers and its secondary actions.

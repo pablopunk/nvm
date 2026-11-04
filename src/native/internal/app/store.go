@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/platform/folders"
 )
 
@@ -61,9 +62,11 @@ type Settings struct {
 	// inverted so that a missing key means shown, as 1.x's defaults do.
 	ClipRootOff       bool
 	ClipRootSearchOff bool
-	Quicklinks        []Quicklink
-	Disabled          map[string]bool // extension ids
-	LoginAtOpen       bool
+	// Quicklinks are the links 2.0 kept here. The quicklinks built-in reads them until the user creates a link, which
+	// stores them in the built-in's own storage.
+	Quicklinks  []quicklinks.Link
+	Disabled    map[string]bool // extension ids
+	LoginAtOpen bool
 	// DiagnosticsOff is the "Send Technical Diagnostics" switch, inverted so that a missing key means on.
 	DiagnosticsOff bool
 	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
@@ -74,10 +77,6 @@ type Settings struct {
 	FileIgnore []string
 	// GuideDone is set once the user dismisses the Getting Started guide; the root then shows Help.
 	GuideDone bool
-}
-
-type Quicklink struct {
-	Name, Keyword, URL string // URL has {query}
 }
 
 func loadSettings() *Settings {
