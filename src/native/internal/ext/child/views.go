@@ -21,3 +21,8 @@ func (v remoteViews) Invalidate() {}
 func (v remoteViews) RefreshMenuBar() {
 	_ = v.link.Call(protocol.ServiceViews, protocol.OpRefreshMenuBar, nil, nil)
 }
+
+// InvalidateRoot asks the host to run the root's rows again. The host answers at once and refreshes in the background.
+func (v remoteViews) InvalidateRoot() {
+	_ = v.link.Call(protocol.ServiceViews, protocol.OpInvalidateRoot, nil, nil)
+}

@@ -1,17 +1,16 @@
 package search
 
 import (
-	"cmp"
 	"slices"
 )
 
 // mergeAppended combines the ranked rows of the providers with the appended rows. The ranked rows come first, best
-// first, and the appended rows follow in the order they were emitted, each once. An appended row that repeats a
-// ranked row is dropped. The appended rows take their room out of the limit before the ranked rows do, so a long
-// ranked list cannot hide the second batch. A flat result keeps every row in score order with no section labels.
+// first (compareRows), and the appended rows follow in the order they were emitted, each once. An appended row that
+// repeats a ranked row is dropped. The appended rows take their room out of the limit before the ranked rows do, so a
+// long ranked list cannot hide the second batch. A flat result keeps every row in score order with no section labels.
 func mergeAppended(ranked, appended [][]Item, limit int, searching, flat bool) []Item {
 	rankedItems := dedupe(flatten(ranked))
-	slices.SortStableFunc(rankedItems, func(a, b Item) int { return cmp.Compare(b.Score, a.Score) })
+	slices.SortStableFunc(rankedItems, compareRows)
 	extra := withoutRows(dedupe(flatten(appended)), rankedItems)
 	if limit > 0 {
 		extra = firstN(extra, limit)

@@ -267,3 +267,5 @@ func TestShowEndsAWalkLeftOpen(t *testing.T) {
 		t.Fatalf("summoning the palette should end a walk: navigating %v, query %q", history.Navigating(), h.p.Query())
 	}
 }
+
+func (l *recordingLearner) LastUsed(string) int64 { return 0 }

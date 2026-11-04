@@ -9,6 +9,8 @@ type Learner interface {
 	Boost(key, query string) int
 	// Record notes that the row with key ran as its primary action for query.
 	Record(key, query string)
+	// LastUsed returns the Unix milliseconds of key's last recorded use, or zero when it was never used.
+	LastUsed(key string) int64
 }
 
 // boostUnitsPerPoint converts a learned boost to score points.
@@ -27,6 +29,7 @@ func (c *Coordinator) learned(items []Item, query string) []Item {
 	for i := range items {
 		if key := items[i].LearnKey; key != "" {
 			items[i].Score = Boosted(items[i].Score, c.opts.Learner.Boost(key, query))
+			items[i].LastUsed = max(items[i].LastUsed, c.opts.Learner.LastUsed(key))
 		}
 	}
 	return items

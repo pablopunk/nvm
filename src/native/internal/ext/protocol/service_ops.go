@@ -24,6 +24,7 @@ const (
 	OpDiscard     = "discard"
 
 	OpRefreshMenuBar = "refreshMenuBar"
+	OpInvalidateRoot = "invalidateRoot"
 
 	OpReadImage  = "read-image"
 	OpWriteImage = "write-image"

@@ -69,6 +69,7 @@ func (p *App) appItem(a apps.App, row apps.Row, score int) search.Item {
 		Subtitle: row.Subtitle,
 		IconPath: row.Path,
 		Score:    score,
+		LastUsed: a.FirstSeenAt,
 		LearnKey: appLearnKey(a),
 		Actions:  make([]search.Action, 0, len(row.Actions)),
 	}

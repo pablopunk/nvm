@@ -70,10 +70,16 @@ type Item struct {
 	// Contextual rows are plain guidance text, such as a load error, drawn full contrast and wrapped.
 	Contextual bool
 	// Score ranks the row against the others of its query: the merged results are sorted by it, highest
-	// first, with ties kept in provider order.
+	// first, then by TiePriority, LastUsed and title (compareRows).
 	Score int
 	// LearnKey names the row to the usage learner. The coordinator raises Score by what the user chose for
 	// the key before, and the palette records the key when the row's primary action runs. Empty means the
 	// row is not learned.
 	LearnKey string
+	// LastUsed is the Unix milliseconds of the row's last use: the usage learner's for a LearnKey, or the extension's own
+	// LastUsedMs. The root breaks score ties by it, most recent first, as 1.x does. Zero means never used.
+	LastUsed int64
+	// TiePriority orders rows of equal score and last use, higher first. 1.x gives builder chats -1, so they follow the
+	// other rows.
+	TiePriority int
 }

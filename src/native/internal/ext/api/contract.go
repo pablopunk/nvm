@@ -102,6 +102,11 @@ type Views interface {
 	Invalidate()
 	// RefreshMenuBar re-renders this extension's menu bar items.
 	RefreshMenuBar()
+	// InvalidateRoot runs this extension's root rows again, so rows it changed show without a new query. Other extensions
+	// keep their rows. It does nothing while the root is not on top; the next time the root shows, these rows run again.
+	// Calls are limited to five at once and 150 a minute per extension; a call over the limit is ignored, so a RootItems
+	// that calls it cannot loop.
+	InvalidateRoot()
 }
 
 // Navigation builds results that change the palette stack. The host implements them so that tests

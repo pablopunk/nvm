@@ -46,11 +46,28 @@ func (m *Manager) Roots(ctx context.Context) []SearchResult {
 	return m.fanOut(ctx, protocol.MethodRoot, "")
 }
 
+// RootsOf asks only the extensions marked true in only for their empty-query rows. An unmarked extension is not called,
+// so a refresh of one extension leaves the others' rows as they were.
+func (m *Manager) RootsOf(ctx context.Context, only map[string]bool) []SearchResult {
+	return m.fanOutWhere(ctx, protocol.MethodRoot, "", func(id string) bool { return only[id] })
+}
+
 // fanOut calls method on every target that declares it. The calls run in parallel, each bounded by the budget of
 // method, so one hanging extension cannot delay the others past that budget. It returns when every call has
 // answered or timed out, sorted by extension id.
 func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResult {
-	targets, budget := m.targetsFor(method)
+	return m.fanOutWhere(ctx, method, query, func(string) bool { return true })
+}
+
+// fanOutWhere is fanOut for the targets that keep accepts by extension id.
+func (m *Manager) fanOutWhere(ctx context.Context, method, query string, keep func(id string) bool) []SearchResult {
+	all, budget := m.targetsFor(method)
+	targets := all[:0:0]
+	for _, target := range all {
+		if keep(target.id) {
+			targets = append(targets, target)
+		}
+	}
 	results := make(chan SearchResult, len(targets))
 	var wg sync.WaitGroup
 	for _, target := range targets {

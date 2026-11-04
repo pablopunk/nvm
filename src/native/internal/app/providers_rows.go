@@ -13,7 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Scores of the root's rows. A higher score sorts first; rows of equal score keep the order of their sources.
+// Scores of the root's rows. A higher score sorts first; rows of equal score are ordered as 1.x orders them (compareRows).
 // The values are the bands the prototype used, so the root's order does not change.
 const (
 	scoreCalculator   = 1000
@@ -112,6 +112,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		if commandShortcutID(cmd) != "" {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		}
+		it.LastUsed = commandLastUsed(cmd.Title, in)
 		if lq == "" {
 			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
 				it.Score = rootCommandScore(cmd.Title)
@@ -168,6 +169,7 @@ func clipboardEntryRows(p *App, in *rootInput, query clipboard.Query, score func
 		ci := p.clipItem(e, historyLen)
 		ci.Kind = search.KindClipboard
 		ci.Score = score(i)
+		ci.LastUsed = clipboardLastUsed(e)
 		out = append(out, ci)
 	}
 	return out
@@ -191,7 +193,9 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 		id := ch.id
 		title, subtitle := aichat.ContinueLabels(ch.kind, oneLine(ch.title))
 		out = append(out, search.Item{Kind: search.KindConversations, Title: title, Subtitle: subtitle, Icon: aichat.ChatIcon(ch.kind), Tone: "yellow", TintTitle: true, Score: s,
-			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(aichat.ChatView(p.chatDeps(), id)) }}}})
+			TiePriority: conversationTiePriority(ch.kind),
+			LastUsed:    ch.lastUsed,
+			Actions:     []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(aichat.ChatView(p.chatDeps(), id)) }}}})
 	}
 	return out
 }
@@ -215,4 +219,38 @@ func webRows(p *App, in *rootInput, q string) []search.Item {
 		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch,
 			Actions: []search.Action{{Title: "Search the Web", Run: openURL(in.engine.URL, q)}}},
 	}
+}
+
+// conversationTiePriority puts builder chats after conversations at equal score and last use, as 1.x does
+// (src/app/electron/search/action-ranking.ts:100-111).
+func conversationTiePriority(kind chat.Kind) int {
+	if kind == chat.KindBuilder {
+		return -1
+	}
+	return 0
+}
+
+// clipboardLastUsed is the copy time of a clipboard row, the time 1.x sorts clipboard rows by
+// (src/app/electron/clipboard/clipboard-history.ts:418).
+func clipboardLastUsed(e clipboard.Entry) int64 {
+	if e.CreatedAt.IsZero() {
+		return 0
+	}
+	return e.CreatedAt.UnixMilli()
+}
+
+// commandLastUsed is the last use 1.x gives a root command: Clipboard History sorts just before the newest copy
+// (src/app/electron/clipboard/clipboard-history.ts:804). Other commands have none.
+func commandLastUsed(title string, in *rootInput) int64 {
+	if title != "Clipboard History" || in.clip == nil {
+		return 0
+	}
+	newest := in.clip.history.Find(clipboard.Query{Limit: 1})
+	if len(newest) == 0 {
+		return 0
+	}
+	if last := clipboardLastUsed(newest[0]); last != 0 {
+		return last - 1
+	}
+	return 0
 }

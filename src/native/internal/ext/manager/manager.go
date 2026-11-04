@@ -74,6 +74,8 @@ type Options struct {
 	OnChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
+	// RootRefresh receives an extension's InvalidateRoot calls. It must not block.
+	RootRefresh func(extensionID string)
 	// AIQuota shares each extension's model-call count with the app's other callers of the same owner.
 	AIQuota *quota.Registry
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
@@ -131,6 +133,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Clipboard:      ports.Clipboard,
 			Logs:           ports.Logs,
 			MenuBarRefresh: opts.MenuBarRefresh,
+			RootRefresh:    opts.RootRefresh,
 			AIQuota:        opts.AIQuota,
 
 			Shell:        ports.Shell,

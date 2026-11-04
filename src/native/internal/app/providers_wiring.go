@@ -10,9 +10,9 @@ type rootSource struct {
 	provider func(p *App, in *rootInput) search.Provider
 }
 
-// rootSources is the root's provider list. The coordinator merges the rows by score, and rows of equal score
-// keep the order of this list, so a new source goes where its rows should sort among equals. Adding a
-// provider is one line here and one row function in providers_rows.go.
+// rootSources is the root's provider list. The coordinator merges the rows by score, then by tie priority, last use and
+// title; only rows equal on all of those keep this order. Adding a provider is one line here and one row function in
+// providers_rows.go.
 var rootSources = []rootSource{
 	{id: "calculator", rows: calculatorRows},
 	{id: "timer", rows: timerRows},
