@@ -71,7 +71,13 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 			data.Placeholder = rootPlaceholders[p.phIndex%len(rootPlaceholders)]
 		}
 	}
+	data.Accessory = accessoryLabel(v)
 	events := design.SearchRow(c, data)
+	if events.Accessory {
+		v.Accessory.Value = v.Accessory.Next()
+		v.Accessory.OnChange(v.Accessory.Value)
+		p.search()
+	}
 	if events.Back {
 		p.Pop()
 	}
@@ -159,15 +165,17 @@ func (p *Palette) row(c *ui.Context, i int) {
 	it := p.results[i]
 	sel := i == p.chosen
 	data := design.RowData{
-		Title:     it.Title,
-		Subtitle:  it.Subtitle,
-		Accessory: it.Accessory,
-		Tile:      p.tileData(it),
-		Tone:      it.Tone,
-		TintTitle: it.TintTitle,
-		Prominent: it.Prominent,
-		Selected:  sel,
-		ShowEnter: sel && len(it.Actions) > 0,
+		Title:      it.Title,
+		Subtitle:   it.Subtitle,
+		Accessory:  it.Accessory,
+		Tile:       p.tileData(it),
+		Tone:       it.Tone,
+		TintTitle:  it.TintTitle,
+		Prominent:  it.Prominent,
+		Selected:   sel,
+		Disabled:   it.Disabled,
+		Contextual: it.Contextual,
+		ShowEnter:  sel && len(it.Actions) > 0 && !it.Disabled,
 	}
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
@@ -225,4 +233,12 @@ func (p *Palette) actionPanel(c *ui.Context) {
 		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
 	}
 	design.ActionMenu(c, rows)
+}
+
+// accessoryLabel is the picker's text, or "" when the view has no picker.
+func accessoryLabel(v *View) string {
+	if v.Accessory == nil {
+		return ""
+	}
+	return v.Accessory.Label()
 }

@@ -62,6 +62,10 @@ type Item struct {
 	Actions   []Action
 	Detail    func(c *ui.Context, h Host) // preview pane
 	ID        string
+	// Disabled rows stay visible as context: they draw muted, carry no actions and are skipped by the keyboard.
+	Disabled bool
+	// Contextual rows are plain guidance text, such as a load error, drawn full contrast and wrapped.
+	Contextual bool
 	// Score ranks the row against the others of its query: the merged results are sorted by it, highest
 	// first, with ties kept in provider order.
 	Score int

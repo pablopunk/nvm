@@ -106,3 +106,6 @@ func TestStaticRecorderExportsOnlyKnownReferences(t *testing.T) {
 		t.Fatal("Export did not match the reference")
 	}
 }
+
+// Root has nothing to leave in this test host.
+func (h *recordingHost) Root() {}

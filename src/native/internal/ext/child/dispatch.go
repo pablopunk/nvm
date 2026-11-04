@@ -45,6 +45,8 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.encode(protocol.MethodSearch, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(req.Query))
 	case protocol.MethodRun:
 		return e.runAction(req.Invocation)
+	case protocol.MethodLoad:
+		return e.loadItems(req.Invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }
@@ -56,6 +58,15 @@ func (e *extension) runAction(invocation *api.Invocation) (json.RawMessage, erro
 		in = *invocation
 	}
 	return e.encode(protocol.MethodRun, e.contextArgument(in.Launch), reflect.ValueOf(in))
+}
+
+// loadItems passes the loader named by the invocation to LoadItems. The loader id travels in Ref.ID.
+func (e *extension) loadItems(invocation *api.Invocation) (json.RawMessage, error) {
+	loader := ""
+	if invocation != nil {
+		loader = invocation.Ref.ID
+	}
+	return e.encode(protocol.MethodLoad, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(loader))
 }
 
 // encode calls an entry point and marshals its first result. Results are JSON before they leave the child, so

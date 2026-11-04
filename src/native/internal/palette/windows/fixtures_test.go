@@ -146,3 +146,6 @@ func windowmgmtSettingsWith(t *testing.T, change func(*geometry.Settings)) *wind
 	}
 	return settings
 }
+
+// Root has nothing to leave in this test host.
+func (h *recordingHost) Root() {}

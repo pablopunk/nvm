@@ -17,6 +17,7 @@ const (
 	MethodRoot     = "root"     // RootProvider.RootItems
 	MethodSearch   = "search"   // SearchProvider.SearchItems, with Query
 	MethodRun      = "run"      // ActionHandler.RunAction, with Invocation
+	MethodLoad     = "load"     // DataLoader.LoadItems, with Invocation.Ref.ID as the loader
 )
 
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the

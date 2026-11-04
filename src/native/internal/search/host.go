@@ -8,6 +8,8 @@ type Host interface {
 	Hide()
 	// Pop returns to the view below the current one; it does nothing at the root.
 	Pop()
+	// Root returns to the first view of the palette, leaving every view above it.
+	Root()
 	// Push opens a view above the current one. The argument is the palette's view type; the palette
 	// panics on anything else, because only the composition of views can build one.
 	Push(view any)

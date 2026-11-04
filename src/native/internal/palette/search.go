@@ -20,7 +20,7 @@ func (p *Palette) search() {
 		if v.Search != nil {
 			rows = v.Search(q)
 		}
-		p.showRows(v, q, rows, true)
+		p.showRows(v, q, rows, v.Loading == nil || !v.Loading())
 		return
 	}
 	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
@@ -62,6 +62,7 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled bool) 
 	}
 	p.shownView, p.shownQuery = v, q
 	p.results, p.settled = rows, settled
+	p.chooseRequested(v)
 	p.choose(p.chosen)
 }
 
@@ -72,4 +73,19 @@ func (p *Palette) invalidateRows() {
 			v.coord.Invalidate()
 		}
 	}
+}
+
+// chooseRequested moves the choice to the row the view asked for, once. A view whose rows change later keeps the
+// choice where the user left it.
+func (p *Palette) chooseRequested(v *View) {
+	if v.SelectID == "" {
+		return
+	}
+	for i, row := range p.results {
+		if row.ID == v.SelectID {
+			p.chosen = i
+			break
+		}
+	}
+	v.SelectID = ""
 }

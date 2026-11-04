@@ -24,6 +24,7 @@ var entryPoints = map[string]string{
 	protocol.MethodRoot:     "RootItems",
 	protocol.MethodSearch:   "SearchItems",
 	protocol.MethodRun:      "RunAction",
+	protocol.MethodLoad:     "LoadItems",
 }
 
 // extension is one interpreted extension: the functions it declares and the services it may use.
