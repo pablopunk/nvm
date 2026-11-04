@@ -55,6 +55,8 @@ func mapTrigger(jobID string, index int, trigger api.Trigger, home string) (jobs
 		return eventTrigger(jobs.EventLogin, debounce), nil, true
 	case api.TriggerClipboardChanged:
 		return eventTrigger(ClipboardChangedEvent, debounce), nil, true
+	case api.TriggerAppFrontmostChange:
+		return eventTrigger(FrontmostChangedEvent, debounce), nil, true
 	case api.TriggerFilesChanged:
 		watch := fileWatch{
 			event:   filesEventName(jobID, index),

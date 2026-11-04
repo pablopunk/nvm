@@ -231,7 +231,7 @@ func TestStoppedExtensionLosesItsJobsAndAnUnansweredOneKeepsThem(t *testing.T) {
 func TestUnsupportedTriggerIsSkippedAndTheRestOfTheCommandStillRuns(t *testing.T) {
 	r := newRig(t)
 	r.sync(viewCommand("mixed",
-		api.Trigger{Type: api.TriggerAppFrontmostChange},
+		api.Trigger{Type: api.TriggerType("device.shaken")},
 		api.Trigger{Type: api.TriggerStartup},
 	))
 	snap, ok := r.job(JobPrefix + extensionID + ".mixed")

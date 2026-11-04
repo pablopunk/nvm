@@ -52,6 +52,8 @@ type Config struct {
 	Registry Registry
 	Files    platform.FS
 	Home     string
+	// Frontmost reads the app in front for app.frontmost.changed triggers. Nil disables that trigger's poll.
+	Frontmost Frontmost
 	// Log receives the diagnostics of triggers the host cannot run. Nil means the process logger.
 	Log *logx.Logger
 }

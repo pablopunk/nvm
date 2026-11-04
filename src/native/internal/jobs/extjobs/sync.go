@@ -19,9 +19,11 @@ type Adapter struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu        sync.Mutex
-	watches   map[string]watchSet
-	loginSent bool
+	mu               sync.Mutex
+	watches          map[string]watchSet
+	loginSent        bool
+	frontmostPolling bool
+	frontmostLast    string
 }
 
 // watchSet is the set of watches of one job, with the signature that tells when they must change.
@@ -78,6 +80,7 @@ func (a *Adapter) reconcile(ctx context.Context) error {
 	wanted := map[string]bool{}
 	answering := map[string]bool{}
 	loginWanted := false
+	frontmostWanted := false
 	for _, result := range host.Commands(ctx) {
 		answering[result.ExtensionID] = true
 		if result.Failure != nil {
@@ -90,10 +93,12 @@ func (a *Adapter) reconcile(ctx context.Context) error {
 			}
 			wanted[p.def.ID] = true
 			loginWanted = loginWanted || declaresLogin(command)
+			frontmostWanted = frontmostWanted || declaresFrontmost(command)
 			a.apply(p)
 		}
 	}
 	a.removeStale(wanted, answering)
+	a.syncFrontmostPoll(frontmostWanted)
 	a.emitLoginOnce(loginWanted)
 	return nil
 }
