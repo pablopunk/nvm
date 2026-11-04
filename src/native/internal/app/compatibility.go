@@ -62,6 +62,14 @@ func (c *compatibility) rejectsClient() bool {
 	return c.active != "" && known && !accepted
 }
 
+// refuses reports whether the manifest of baseURL, when one is known, refuses this client.
+func (c *compatibility) refuses(baseURL string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	accepted, known := c.accepted[baseURL]
+	return known && !accepted
+}
+
 // record stores whether baseURL accepts this client, and reports whether the answer changed.
 func (c *compatibility) record(baseURL string, accepted bool) bool {
 	c.mu.Lock()

@@ -63,10 +63,13 @@ func (p *App) updatesView() *palette.View {
 // an offline laptop would show it at every launch. The rows stay out of the way of queries that do not name updates.
 func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	state := p.updateSnapshot().State
-	if !rootShowsUpdate(state) {
+	if !queryNamesUpdates(q) {
 		return nil
 	}
-	if lq := strings.ToLower(strings.TrimSpace(q)); lq != "" && !strings.HasPrefix("update", lq) && !strings.Contains("nevermind update", lq) {
+	if p.compat.rejectsClient() {
+		return []search.Item{p.compatibilityRootItem(state)}
+	}
+	if !rootShowsUpdate(state) {
 		return nil
 	}
 	item := search.Item{Kind: search.KindCommands, Title: update.Message(state), Subtitle: "Nevermind updates", Icon: "rotate-ccw",
@@ -80,6 +83,12 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 		}}}
 	}
 	return []search.Item{item}
+}
+
+// queryNamesUpdates reports whether an empty query, or one that starts the word update, keeps the update rows on the root.
+func queryNamesUpdates(q string) bool {
+	lq := strings.ToLower(strings.TrimSpace(q))
+	return lq == "" || strings.HasPrefix("update", lq) || strings.Contains("nevermind update", lq)
 }
 
 // rootUpdateScore ranks an update row above every command, so it is the first row of the root.

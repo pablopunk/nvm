@@ -27,6 +27,9 @@ type Options struct {
 	SystemPrompt func(chat Chat) string
 	// OnSettled runs on the UI thread after a turn settles and its transcript is saved.
 	OnSettled func(chatID string, outcome Outcome)
+	// Preflight runs before each model request, off the UI thread, and a non-nil error ends the request with that
+	// message, as 1.x refuses an AI request the backend will not serve. Nil runs no check.
+	Preflight func(ctx context.Context) error
 	// Tools are what a conversation may call. The extension builder gets none.
 	Tools Toolset
 	// Logger receives the turns that fail. Nil means the process logger.
@@ -311,10 +314,11 @@ func (s *Service) startTurn(id string) error {
 func (s *Service) setupFor(chat Chat) agent.Setup {
 	setup := agent.Setup{
 		Model: &routeModel{
-			client:   s.opts.Client,
-			tier:     chat.Tier,
-			dispatch: s.opts.Dispatch,
-			note:     s.noteRoute,
+			client:    s.opts.Client,
+			tier:      chat.Tier,
+			dispatch:  s.opts.Dispatch,
+			note:      s.noteRoute,
+			preflight: s.opts.Preflight,
 		},
 		Clock: s.opts.Clock,
 	}

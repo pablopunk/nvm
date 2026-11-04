@@ -43,6 +43,7 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		Dispatch:     p.onUI,
 		NoteError:    p.noteAIError,
 		SystemPrompt: p.systemPromptFor,
+		Preflight:    p.checkCompatibility,
 		OnSettled:    p.chatSettled,
 		Tools:        p.chatToolset(),
 	})

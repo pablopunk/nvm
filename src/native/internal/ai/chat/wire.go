@@ -17,11 +17,12 @@ const paymentRequired = 402
 // routeModel is the model of one turn: the backend route of a tier, resolved once when the turn first streams, and a
 // chat request per model turn of the loop. It never names a model; the backend routes the tier.
 type routeModel struct {
-	client   func() *backend.Client
-	tier     Tier
-	dispatch func(fn func())
-	note     func(tier Tier, descriptor backend.ModelDescriptor)
-	route    *backend.ModelDescriptor
+	client    func() *backend.Client
+	tier      Tier
+	dispatch  func(fn func())
+	note      func(tier Tier, descriptor backend.ModelDescriptor)
+	route     *backend.ModelDescriptor
+	preflight func(ctx context.Context) error
 }
 
 // Stream opens one model turn over messages, offering tools.
@@ -29,6 +30,11 @@ func (m *routeModel) Stream(ctx context.Context, messages []backend.Message, too
 	client := m.client()
 	if client == nil {
 		return nil, ErrNotSignedIn
+	}
+	if m.preflight != nil {
+		if err := m.preflight(ctx); err != nil {
+			return nil, err
+		}
 	}
 	if m.route == nil {
 		if err := m.resolve(ctx, client, messages); err != nil {
