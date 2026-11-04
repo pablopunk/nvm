@@ -32,7 +32,7 @@ func NewPorts() platform.Ports {
 		Tray:         trayHost{},
 		Autostart:    autostart{},
 		System:       newSystem(helper{}, shell{}, env.goos, env.home, env.user),
-		Permissions:  permissions{},
+		Permissions:  newPermissions(helper{}),
 		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
 		Microphone:   newMicrophone(),

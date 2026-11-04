@@ -39,7 +39,11 @@ func (s *Service) FrontmostTarget(ctx context.Context) (Target, bool) {
 		return Target{}, false
 	}
 	app, found, err := s.windows.Frontmost(ctx)
-	if err != nil || !found {
+	if err != nil {
+		s.reportFailure("frontmost", err)
+		return Target{}, false
+	}
+	if !found {
 		return Target{}, false
 	}
 	return Target{PID: app.PID, BundleID: app.BundleID}, true
