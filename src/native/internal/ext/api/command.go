@@ -17,6 +17,8 @@ type Command struct {
 	Title    string   `json:"title"`
 	Subtitle string   `json:"subtitle,omitempty"`
 	Aliases  []string `json:"aliases,omitempty"`
+	// Keywords are more words the root search matches the command by, like aliases, for commands whose title is short.
+	Keywords []string `json:"keywords,omitempty"`
 	Icon     string   `json:"icon,omitempty"`
 	Score    float64  `json:"score,omitempty"`
 	// GlobalShortcut opens or runs this command from anywhere, e.g. "CommandOrControl+Alt+K".
