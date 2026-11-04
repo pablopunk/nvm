@@ -15,6 +15,7 @@ const (
 	KindClipboard     = "Clipboard"
 	KindConversations = "Conversations"
 	KindWeb           = "Web"
+	KindWindows       = "Window"
 	KindSearch        = "Search"
 )
 

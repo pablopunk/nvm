@@ -106,6 +106,9 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			continue
 		}
 		s := search.Score(cmd.Title, lq)
+		if cmd.PhraseMatch && s < search.PhraseScoreFloor {
+			s = 0
+		}
 		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
 			s = scoreCommandAlias
 		}

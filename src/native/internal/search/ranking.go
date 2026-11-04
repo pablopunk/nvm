@@ -100,6 +100,10 @@ func scoreSequential(text, query string) int {
 	return 20
 }
 
+// PhraseScoreFloor is the lowest score of a query that occurs in the text as a phrase, a substring or a word
+// prefix. Lower bands are scattered letters: the in-order band (20) and the bag-of-letters fallback (10).
+const PhraseScoreFloor = 50
+
 // ScoreFuzzy scores lowercase text against a lowercase, non-empty query: a sequential band when one
 // matches, else 10 when every query character occurs in the text.
 func ScoreFuzzy(text, query string) int {

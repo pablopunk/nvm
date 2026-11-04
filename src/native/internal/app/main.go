@@ -24,6 +24,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
+	"github.com/pablopunk/nvm/native/internal/windowmgmt"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -76,6 +77,10 @@ type App struct {
 	edits        map[string]*noteEdit
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
+
+	windows        *windowmgmt.Service
+	windowSettings *windowmgmt.SettingsStore
+	focusCapture   paletteFocusCapture
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -95,7 +100,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Focus:       p.focusOption(),
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
-		OnShow:      p.showApps,
+		OnShow:      p.onPaletteShown,
 		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
@@ -122,6 +127,7 @@ func (p *App) ready() {
 	p.S = loadSettings()
 	p.paletteHidden = make(chan struct{}, 1)
 	p.attachServices(p.appPorts(), configDir(), nil)
+	p.attachWindows()
 	p.attachDeepLinks()
 	p.closeStoreOnQuit()
 	prepareCatalog()
