@@ -117,3 +117,18 @@ func assertNothingReceived(t *testing.T, ch <-chan time.Time) {
 	default:
 	}
 }
+
+func TestJumpFiresOverdueTimersOnceAtWakeWithoutBurst(t *testing.T) {
+	clock := NewClock()
+	ticks := clock.NewTicker(time.Second)
+	defer ticks.Stop()
+	later := clock.After(time.Hour)
+
+	clock.Jump(time.Hour)
+	assertTimeReceived(t, ticks.C(), epoch.Add(time.Hour))
+	assertTimeReceived(t, later, epoch.Add(time.Hour))
+	assertNothingReceived(t, ticks.C())
+
+	clock.Advance(time.Second)
+	assertTimeReceived(t, ticks.C(), epoch.Add(time.Hour+time.Second))
+}
