@@ -151,7 +151,7 @@ One package, `internal/fixtures`, owns deterministic data: fake apps with icons,
 
 ## 2. UI validation protocol
 
-Goal: the product looks like Nevermind (warm paper and gold, ink and gold in dark; flat fills with a lit top edge and soft shadow; no gradients beyond the faint gold key) and feels native on each OS.
+Goal: the product looks like Nevermind (warm paper and gold in light; cool slate in dark, with panel #1a1f28 and selected #343d4d as in Electron's dark tokens in `src/app/palette/styles/theme.css`, which the Go dark set matches; flat fills with a lit top edge and soft shadow; no gradients beyond the faint gold key) and feels native on each OS.
 
 **Reference.** WP0.4 captures reference sheets of the Electron palette (the repo already has `report-linux-palette-screenshot.yml` and `tests/electron/palette.smoke.spec.ts`; reuse them) and stores them under `testdata/reference/`. References are for human review, not pixel diffing across toolkits. Our own goldens are the regression net.
 
