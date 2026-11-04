@@ -14,11 +14,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// testFileHome is the home folder of the file tests; no test reads the real one.
-const testFileHome = "/home/me"
+// testFileHome is the home folder of the file tests, absolute on the running OS; no test reads the real one.
+var testFileHome = testpath.Abs("home", "me")
 
 // fixturePaths are the files the file tests search.
 func fixturePaths() []string {

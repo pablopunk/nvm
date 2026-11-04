@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,9 +11,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
-const home = "/home/u"
+var home = testpath.Abs("home", "u")
 
 // rig is the conversation's tools over fake ports, with a home folder that holds a few files.
 type rig struct {
@@ -26,12 +28,12 @@ type rig struct {
 func newRig(t *testing.T) *rig {
 	t.Helper()
 	r := &rig{t: t, fs: fake.NewFS(), shell: fake.NewShell(), clip: fake.NewClipboard()}
-	r.fs.Seed(home+"/docs/notes.txt", []byte("first line\nsecond line\n"))
-	r.fs.Seed(home+"/docs/photo.png", []byte{0x89, 0x50, 0x00, 0x4e})
-	r.fs.Seed(home+"/.ssh/id_ed25519", []byte("PRIVATE KEY"))
-	r.fs.Seed(home+"/project/.env", []byte("TOKEN=secret"))
-	r.fs.Seed(home+"/project/readme.md", []byte("# project"))
-	r.fs.Seed("/etc/hosts", []byte("127.0.0.1 localhost"))
+	r.fs.Seed(filepath.Join(home, "docs", "notes.txt"), []byte("first line\nsecond line\n"))
+	r.fs.Seed(filepath.Join(home, "docs", "photo.png"), []byte{0x89, 0x50, 0x00, 0x4e})
+	r.fs.Seed(filepath.Join(home, ".ssh", "id_ed25519"), []byte("PRIVATE KEY"))
+	r.fs.Seed(filepath.Join(home, "project", ".env"), []byte("TOKEN=secret"))
+	r.fs.Seed(filepath.Join(home, "project", "readme.md"), []byte("# project"))
+	r.fs.Seed(testpath.Abs("etc", "hosts"), []byte("127.0.0.1 localhost"))
 	r.shell.SetApps([]platform.App{
 		{Name: "Calculator", ID: "calc", Path: "/Applications/Calculator.app"},
 		{Name: "Calendar", ID: "cal", Path: "/Applications/Calendar.app"},
@@ -148,7 +150,7 @@ func TestReadFileTable(t *testing.T) {
 // TestReadFileCutsLongFiles checks the byte bound.
 func TestReadFileCutsLongFiles(t *testing.T) {
 	r := newRig(t)
-	r.fs.Seed(home+"/big.txt", []byte(strings.Repeat("x", maxReadBytes+10)))
+	r.fs.Seed(filepath.Join(home, "big.txt"), []byte(strings.Repeat("x", maxReadBytes+10)))
 	result, err := r.run("read_file", `{"path":"~/big.txt"}`)
 	if err != nil || !strings.Contains(result.Text, "[file cut: showed 16384 of 16394 bytes]") {
 		t.Fatalf("big file = %v, %v", result.Outcome, err)
@@ -253,7 +255,7 @@ func TestTrashFileGoesThroughTheShellAndRefusesHome(t *testing.T) {
 	}
 	trashed := false
 	for _, call := range r.shell.Calls() {
-		trashed = trashed || (call.Op == "Trash" && call.Arg == home+"/docs/notes.txt")
+		trashed = trashed || (call.Op == "Trash" && call.Arg == filepath.Join(home, "docs", "notes.txt"))
 	}
 	if !trashed {
 		t.Fatalf("the shell was not asked to trash the file: %+v", r.shell.Calls())

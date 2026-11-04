@@ -6,21 +6,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
-const home = "/home/u"
+var home = testpath.Abs("home", "u")
 
 // tree is a canonicalizer over an in-memory file tree. A path under a symbolic link resolves through the link's target,
 // as the file system does; a path under one of the existing prefixes resolves to itself; anything else does not exist.
 func tree(links map[string]string, existing ...string) func(string) (string, error) {
 	return func(path string) (string, error) {
 		for link, target := range links {
-			if path == link || strings.HasPrefix(path, link+"/") {
+			if path == link || strings.HasPrefix(path, link+string(filepath.Separator)) {
 				return target + path[len(link):], nil
 			}
 		}
 		for _, prefix := range existing {
-			if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			if path == prefix || strings.HasPrefix(path, prefix+string(filepath.Separator)) {
 				return path, nil
 			}
 		}
@@ -30,7 +32,7 @@ func tree(links map[string]string, existing ...string) func(string) (string, err
 
 // newGuard returns the guard the tools use: the home folder is the only root.
 func newGuard(links map[string]string) *Guard {
-	return New(Config{Home: home, Roots: []string{home}}, tree(links, home, "/etc", "/usr"))
+	return New(Config{Home: home, Roots: []string{home}}, tree(links, home, testpath.Abs("etc"), testpath.Abs("usr")))
 }
 
 // TestCheckTable is the path policy table: what the model may name and what it may not.
@@ -79,10 +81,10 @@ func TestCheckTable(t *testing.T) {
 // refused even though its own name is harmless.
 func TestSymbolicLinksAreJudgedWhereTheyPoint(t *testing.T) {
 	g := newGuard(map[string]string{
-		"/home/u/key":    "/home/u/.ssh/id_ed25519",
-		"/home/u/out":    "/etc",
-		"/home/u/notes":  "/home/u/docs/notes.txt",
-		"/home/u/nested": "/home/u/.aws",
+		filepath.Join(home, "key"):    filepath.Join(home, ".ssh", "id_ed25519"),
+		filepath.Join(home, "out"):    testpath.Abs("etc"),
+		filepath.Join(home, "notes"):  filepath.Join(home, "docs", "notes.txt"),
+		filepath.Join(home, "nested"): filepath.Join(home, ".aws"),
 	})
 	cases := map[string]bool{
 		"~/key":          false,

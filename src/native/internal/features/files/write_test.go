@@ -1,6 +1,7 @@
 package files
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,7 +14,7 @@ import (
 func writeFixture(t *testing.T) *fake.FS {
 	t.Helper()
 	fsys := fake.NewFS()
-	if err := fsys.MkdirAll(testHome+"/Documents", 0o755); err != nil {
+	if err := fsys.MkdirAll(filepath.Join(testHome, "Documents"), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return fsys
@@ -32,7 +33,7 @@ func readBack(t *testing.T, fsys *fake.FS, path string) string {
 // TestWriteTextFileWritesANewFileIntoAnExistingFolder ports "writes a new text file into an existing folder".
 func TestWriteTextFileWritesANewFileIntoAnExistingFolder(t *testing.T) {
 	fsys := writeFixture(t)
-	target := testHome + "/Documents/Trip Plan.md"
+	target := filepath.Join(testHome, "Documents/Trip Plan.md")
 	written, err := WriteTextFile(fsys, testHome, target, "# Porto\n", WriteOptions{})
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +50,7 @@ func TestWriteTextFileWritesANewFileIntoAnExistingFolder(t *testing.T) {
 // requested".
 func TestWriteTextFileRefusesToReplaceUnlessOverwriteIsSet(t *testing.T) {
 	fsys := writeFixture(t)
-	target := testHome + "/Documents/notes.txt"
+	target := filepath.Join(testHome, "Documents/notes.txt")
 	if _, err := WriteTextFile(fsys, testHome, target, "first", WriteOptions{}); err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +77,7 @@ func TestWriteTextFileRefusesToReplaceUnlessOverwriteIsSet(t *testing.T) {
 // paths".
 func TestWriteTextFileNeverCreatesFoldersOrWritesRelativePaths(t *testing.T) {
 	fsys := writeFixture(t)
-	if _, err := WriteTextFile(fsys, testHome, testHome+"/Documents/missing/a.txt", "x", WriteOptions{}); err == nil || !strings.Contains(err.Error(), "does not exist") {
+	if _, err := WriteTextFile(fsys, testHome, filepath.Join(testHome, "Documents/missing/a.txt"), "x", WriteOptions{}); err == nil || !strings.Contains(err.Error(), "does not exist") {
 		t.Fatalf("missing folder err = %v", err)
 	}
 	if _, err := WriteTextFile(fsys, testHome, "relative.txt", "x", WriteOptions{}); err == nil || !strings.Contains(err.Error(), "absolute path") {

@@ -2,6 +2,7 @@ package extjobs
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -11,13 +12,18 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/jobs"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
 const (
 	extensionID = "acme.tasks"
-	watchedRoot = "/watched"
 	watchdog    = 10 * time.Second
+)
+
+var (
+	watchedRoot = testpath.Abs("watched")
+	homeFolder  = testpath.Abs("home", "acme")
 )
 
 // fakeHost answers Commands with what the test set, and records every invocation it is asked to run.
@@ -70,7 +76,7 @@ func newRig(t *testing.T) *rig {
 		Host:     func() Host { return host },
 		Registry: sched,
 		Files:    files,
-		Home:     "/home/acme",
+		Home:     homeFolder,
 	})
 	t.Cleanup(func() {
 		adapter.Close()
@@ -251,12 +257,12 @@ func TestFileTriggerWatchesItsRootAndPassesOnlyMatchingFiles(t *testing.T) {
 		Extensions: []string{".PNG"},
 	}))
 	// Ignored writes come first; the watcher delivers in order, so a wrong pass would show up before the match.
-	mustWrite(t, r.files, watchedRoot+"/notes.txt")
-	mustWrite(t, r.files, watchedRoot+"/.secret.png")
-	mustWrite(t, r.files, watchedRoot+"/shot.png")
+	mustWrite(t, r.files, filepath.Join(watchedRoot, "notes.txt"))
+	mustWrite(t, r.files, filepath.Join(watchedRoot, ".secret.png"))
+	mustWrite(t, r.files, filepath.Join(watchedRoot, "shot.png"))
 
 	invocation := r.nextInvocation()
-	if len(invocation.Launch.ChangedPaths) != 1 || invocation.Launch.ChangedPaths[0] != watchedRoot+"/shot.png" {
+	if len(invocation.Launch.ChangedPaths) != 1 || invocation.Launch.ChangedPaths[0] != filepath.Join(watchedRoot, "shot.png") {
 		t.Fatalf("changed paths = %v", invocation.Launch.ChangedPaths)
 	}
 	if len(invocation.Launch.Files) != 1 || invocation.Launch.Files[0].Kind != "image" || invocation.Launch.Event != "files.changed" {

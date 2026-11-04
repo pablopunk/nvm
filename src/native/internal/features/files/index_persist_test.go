@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -9,7 +10,7 @@ import (
 
 func TestPersistedSnapshotIsServedBeforeTheScan(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, docs+"/a.pdf", docs+"/b.pdf")
+	seedFiles(fsys, filepath.Join(docs, "a.pdf"), filepath.Join(docs, "b.pdf"))
 	store := &MemoryPersistence{}
 	first, firstChanges := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{docs}, Persistence: store})
 	startIndex(t, first, firstChanges)
@@ -57,7 +58,7 @@ func observe(ix *Index) observation {
 // scans, and nothing panics.
 func TestCorruptPersistedSnapshotFallsBackToAFreshScan(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, docs+"/a.pdf")
+	seedFiles(fsys, filepath.Join(docs, "a.pdf"))
 	store := &MemoryPersistence{}
 	store.SetRaw([]byte("NVMFIDX1 this is not a snapshot"))
 	logs := newTestLogger(t)
@@ -84,7 +85,7 @@ func TestCorruptPersistedSnapshotFallsBackToAFreshScan(t *testing.T) {
 // TestSnapshotBuiltForAnotherConfigurationIsNotServed changes the depth between runs: the stored snapshot is ignored.
 func TestSnapshotBuiltForAnotherConfigurationIsNotServed(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, docs+"/a.pdf")
+	seedFiles(fsys, filepath.Join(docs, "a.pdf"))
 	store := &MemoryPersistence{}
 	first, firstChanges := newTestIndex(t, fsys, fake.NewClock(), Config{Roots: []string{docs}, MaxDepth: 2, Persistence: store})
 	startIndex(t, first, firstChanges)

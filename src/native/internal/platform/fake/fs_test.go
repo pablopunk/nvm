@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 func TestWriteThenReadReturnsCopies(t *testing.T) {
@@ -205,5 +208,46 @@ func TestWatchMissingFolderFails(t *testing.T) {
 	_, err := NewFS().Watch(context.Background(), "/nowhere")
 	if !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("Watch of missing folder: %v, want ErrNotExist", err)
+	}
+}
+
+// TestVolumeQualifiedNamesShareTheRootedTree checks that a Windows name with a drive letter reaches the node its
+// rooted spelling names, so a path the OS resolves against the process volume finds what the fixture seeded.
+func TestVolumeQualifiedNamesShareTheRootedTree(t *testing.T) {
+	files := NewFS()
+	files.Seed("/home/u/docs/notes.txt", []byte("notes"))
+	for _, name := range []string{`C:\home\u\docs\notes.txt`, "d:/home/u/docs/notes.txt", "/home/u/docs/notes.txt"} {
+		data, err := files.ReadFile(name)
+		if err != nil || string(data) != "notes" {
+			t.Fatalf("ReadFile(%q) = %q, %v; want the seeded file", name, data, err)
+		}
+	}
+}
+
+// TestWatchReportsEventsUnderTheSpellingItWasOpenedWith checks that an event names its file the way the watch was
+// given its folder, as a real watcher does, so a path built with filepath.Join on the caller's side matches it.
+func TestWatchReportsEventsUnderTheSpellingItWasOpenedWith(t *testing.T) {
+	files := NewFS()
+	root := testpath.Abs("watched")
+	if err := files.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events, err := files.Watch(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := filepath.Join(root, "shot.png")
+	if err := files.WriteFile(want, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case event := <-events:
+		if event.Path != want {
+			t.Fatalf("event path = %q, want %q", event.Path, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no event for a file written under the watch")
 	}
 }

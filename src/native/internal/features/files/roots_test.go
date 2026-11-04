@@ -3,6 +3,8 @@ package files
 import (
 	"path/filepath"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // TestDefaultRootsCoverTheStandardPersonalFolders ports file-index-roots.test.ts.
@@ -31,21 +33,21 @@ func TestDisplayPathAbbreviatesOnlyTheHomeFolderAndItsDescendants(t *testing.T) 
 	if got := DisplayPath(testHome, testHome); got != "~" {
 		t.Errorf("home itself = %q, want ~", got)
 	}
-	if got := DisplayPath(testHome, filepath.Join(testHome, "Library", "Cache")); got != "~/Library/Cache" {
-		t.Errorf("descendant = %q, want ~/Library/Cache", got)
+	if got := DisplayPath(testHome, filepath.Join(testHome, "Library", "Cache")); got != filepath.Join("~", "Library", "Cache") {
+		t.Errorf("descendant = %q, want ~/Library/Cache in the OS's separator", got)
 	}
 	if got := DisplayPath(testHome, testHome+"-other"); got != testHome+"-other" {
 		t.Errorf("sibling sharing a prefix = %q, want it unchanged", got)
 	}
-	if got := DisplayPath("", "/srv/data"); got != "/srv/data" {
+	if got := DisplayPath("", testpath.Abs("srv", "data")); got != testpath.Abs("srv", "data") {
 		t.Errorf("empty home = %q, want the path unchanged", got)
 	}
 }
 
 // TestNormalizeRootsExpandsHomeAndDropsRelativeAndDuplicateRoots covers the root handling of find-files.ts.
 func TestNormalizeRootsExpandsHomeAndDropsRelativeAndDuplicateRoots(t *testing.T) {
-	got := NormalizeRoots(testHome, []string{"~/Downloads", "relative/dir", "", "~", "/srv/data/", "~/Downloads"})
-	want := []string{filepath.Join(testHome, "Downloads"), testHome, "/srv/data"}
+	got := NormalizeRoots(testHome, []string{"~/Downloads", "relative/dir", "", "~", testpath.Abs("srv", "data"), "~/Downloads"})
+	want := []string{filepath.Join(testHome, "Downloads"), testHome, testpath.Abs("srv", "data")}
 	if len(got) != len(want) {
 		t.Fatalf("NormalizeRoots = %v, want %v", got, want)
 	}
@@ -74,7 +76,7 @@ func TestIsInsideRootRequiresASeparatorBoundary(t *testing.T) {
 			t.Errorf("IsInsideRoot(%q, %q) = %v, want %v", c.path, root, got, c.want)
 		}
 	}
-	if !IsInsideRoot("/anything", "/") {
+	if !IsInsideRoot(testpath.Abs("anything"), testpath.Root()) {
 		t.Error("the filesystem root contains every absolute path")
 	}
 }

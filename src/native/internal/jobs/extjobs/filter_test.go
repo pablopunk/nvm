@@ -1,9 +1,11 @@
 package extjobs
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 func TestFileFilterAppliesHiddenExtensionIgnoreAndKind(t *testing.T) {
@@ -32,8 +34,9 @@ func TestFileFilterAppliesHiddenExtensionIgnoreAndKind(t *testing.T) {
 }
 
 func TestExpandRootsKeepsOnlyAbsoluteRootsAndExpandsHome(t *testing.T) {
-	got := expandRoots([]string{"~/Desktop", "/tmp/x/", "relative", "~"}, "/home/acme")
-	want := []string{"/home/acme/Desktop", "/tmp/x", "/home/acme"}
+	home := testpath.Abs("home", "acme")
+	got := expandRoots([]string{"~/Desktop", testpath.Abs("tmp", "x") + string(filepath.Separator), "relative", "~"}, home)
+	want := []string{filepath.Join(home, "Desktop"), testpath.Abs("tmp", "x"), home}
 	if len(got) != len(want) {
 		t.Fatalf("roots = %v, want %v", got, want)
 	}

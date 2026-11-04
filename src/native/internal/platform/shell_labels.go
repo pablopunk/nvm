@@ -8,6 +8,14 @@ type ShellLabels struct {
 	KeyboardSettings    string
 }
 
+// SettingsTitleFor returns the title of the command that opens the system settings on goos (runtime.GOOS names).
+func SettingsTitleFor(goos string) string {
+	if goos == "darwin" {
+		return "Open System Settings"
+	}
+	return "Open Settings"
+}
+
 // ShellLabelsFor returns the titles for the operating system goos (runtime.GOOS names).
 func ShellLabelsFor(goos string) ShellLabels {
 	switch goos {

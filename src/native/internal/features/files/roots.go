@@ -69,7 +69,7 @@ func IsInsideRoot(p, root string) bool {
 	if p == root {
 		return true
 	}
-	if root == string(filepath.Separator) {
+	if strings.HasSuffix(root, string(filepath.Separator)) {
 		return strings.HasPrefix(p, root)
 	}
 	return strings.HasPrefix(p, root+string(filepath.Separator))

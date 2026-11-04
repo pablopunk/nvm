@@ -69,7 +69,7 @@ func TestCalculatorLabelsAStaleRateWithItsCacheAge(t *testing.T) {
 	const dir = "/nvm-test/config"
 	fetched := set.Clock.Now().Add(-72 * time.Hour)
 	seedRates(t, set, dir, calc.Rates{"USD/EUR": {Rate: 0.5, Provider: "Frankfurter", UpdatedAt: fetched, FetchedAt: fetched}})
-	p.attachServices(set.Ports(), dir, time.UTC)
+	p.attachServices(set.Ports(), "linux", dir, time.UTC)
 
 	goldenQuery(p, "10 usd to eur")
 	rows := p.Results()
@@ -88,7 +88,7 @@ func TestRateRefreshStoresTheQuoteInRatesJSON(t *testing.T) {
 	set := fake.NewSet()
 	set.HTTP.Script(fake.Response{Status: 200, Body: []byte(`{"rate": 0.5, "date": "2026-01-01"}`)})
 	const dir = "/nvm-test/config"
-	p.attachServices(set.Ports(), dir, time.UTC)
+	p.attachServices(set.Ports(), "linux", dir, time.UTC)
 
 	if _, ok := p.calc.Query("10 usd to eur"); ok {
 		t.Fatal("a quote answered before any was fetched")

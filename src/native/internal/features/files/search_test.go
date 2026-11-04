@@ -237,7 +237,7 @@ func TestSortNeedsStatOnlyForMetadataSorts(t *testing.T) {
 func TestSearchShowsDisplayPathsAbbreviatedToHome(t *testing.T) {
 	snap := snapshotOf(record{dir: filepath.Join(testHome, "Documents"), name: "plan.md"})
 	got := finalResults(t, snap, Query{Text: "plan"})
-	if len(got) != 1 || got[0].DisplayPath != "~/Documents/plan.md" || got[0].Path != filepath.Join(testHome, "Documents", "plan.md") {
+	if len(got) != 1 || got[0].DisplayPath != filepath.Join("~", "Documents", "plan.md") || got[0].Path != filepath.Join(testHome, "Documents", "plan.md") {
 		t.Fatalf("result = %+v", got)
 	}
 }
@@ -245,7 +245,7 @@ func TestSearchShowsDisplayPathsAbbreviatedToHome(t *testing.T) {
 // TestFindWalksRootsAndReportsMissingOnes checks the one-shot find: missing roots are reported, kinds and sorts apply.
 func TestFindWalksRootsAndReportsMissingOnes(t *testing.T) {
 	fsys := fake.NewFS()
-	seedFiles(fsys, testHome+"/Downloads/a.png", testHome+"/Downloads/b.txt", testHome+"/Documents/c.png")
+	seedFiles(fsys, filepath.Join(testHome, "Downloads/a.png"), filepath.Join(testHome, "Downloads/b.txt"), filepath.Join(testHome, "Documents/c.png"))
 	opts := FindOptions{
 		Home:  testHome,
 		Query: Query{Kinds: []Kind{KindImage}, SortBy: SortName, Order: OrderAsc},
@@ -257,7 +257,7 @@ func TestFindWalksRootsAndReportsMissingOnes(t *testing.T) {
 	if got := namesOf(result.Results); !slices.Equal(got, []string{"a.png", "c.png"}) {
 		t.Fatalf("results = %v", got)
 	}
-	if !slices.Equal(result.MissingRoots, []string{testHome + "/Gone"}) {
+	if !slices.Equal(result.MissingRoots, []string{filepath.Join(testHome, "Gone")}) {
 		t.Fatalf("missing roots = %v", result.MissingRoots)
 	}
 }
@@ -268,7 +268,7 @@ func TestFindRespectsTheScanLimit(t *testing.T) {
 	for i := range 40 {
 		fsys.Seed(fmt.Sprintf("%s/Downloads/f%02d.txt", testHome, i), []byte("x"))
 	}
-	result, err := Find(context.Background(), fsys, []string{testHome + "/Downloads"}, FindOptions{Home: testHome, ScanLimit: 5})
+	result, err := Find(context.Background(), fsys, []string{filepath.Join(testHome, "Downloads")}, FindOptions{Home: testHome, ScanLimit: 5})
 	if err != nil {
 		t.Fatalf("Find: %v", err)
 	}

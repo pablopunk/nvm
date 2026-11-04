@@ -11,6 +11,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // benchQueries are the kinds of query a palette types: short prefixes, multi-word names, a miss and a kind filter.
@@ -49,7 +50,7 @@ func percentile(sorted []time.Duration, p float64) time.Duration {
 // one of the benchQueries to its final batch. The p50 and p95 of the iterations are reported as metrics.
 func BenchmarkSearch50k(b *testing.B) {
 	snap := fixtureSnapshot(50_000)
-	env := searchEnv{home: "/home/user", roots: []string{"/home/user"}, skipDefaults: true}
+	env := searchEnv{home: testpath.Abs("home", "user"), roots: []string{testpath.Abs("home", "user")}, skipDefaults: true}
 	durations := make([]time.Duration, 0, b.N)
 	b.ReportAllocs()
 	b.ResetTimer()
@@ -79,7 +80,7 @@ func BenchmarkFullScan50k(b *testing.B) {
 	b.ReportAllocs()
 	for range b.N {
 		var counters scanCounters
-		result, err := scanTrees(context.Background(), fsys, cfg, []scanStart{{dir: "/home/user", remaining: 12}}, &counters)
+		result, err := scanTrees(context.Background(), fsys, cfg, []scanStart{{dir: testpath.Abs("home", "user"), remaining: 12}}, &counters)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -124,7 +125,7 @@ func TestMemoryFootprintOfTheIndex(t *testing.T) {
 // latency of each, so a run shows the B2 numbers without the benchmark harness.
 func TestSearchLatencyOverFiftyThousandEntries(t *testing.T) {
 	snap := fixtureSnapshot(50_000)
-	env := searchEnv{home: "/home/user", roots: []string{"/home/user"}, skipDefaults: true}
+	env := searchEnv{home: testpath.Abs("home", "user"), roots: []string{testpath.Abs("home", "user")}, skipDefaults: true}
 	var durations []time.Duration
 	for range 5 {
 		for _, q := range benchQueries {
@@ -153,8 +154,8 @@ func TestFiftyThousandFilesIndexedFromTheFileSystem(t *testing.T) {
 	}
 	changes := make(chan struct{}, 64)
 	ix, err := New(Config{
-		Home:               "/home/user",
-		Roots:              []string{"/home/user"},
+		Home:               testpath.Abs("home", "user"),
+		Roots:              []string{testpath.Abs("home", "user")},
 		MaxDepth:           12,
 		MaxEntries:         60_000,
 		IncludeHidden:      true,
