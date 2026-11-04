@@ -92,6 +92,28 @@ func TestEscapeStopsTheReplyAndKeepsThePage(t *testing.T) {
 	if len(messages) != 2 || messages[1].Text != "Once upon" || messages[1].Status != chat.StatusStopped {
 		t.Fatalf("transcript = %+v, want the partial reply marked stopped", messages)
 	}
+
+	tt.Key(0, ui.KeyEscape)
+	if r.palette.Top() != r.root {
+		t.Fatal("with the reply stopped, Escape should go back to the root")
+	}
+}
+
+// TestEscapeOnAnIdleChatGoesBack checks that Escape pops a chat with no reply in flight, as Electron's
+// popExtensionView does. The chat page used to take the key as a stop request even with nothing to stop, and
+// the palette never saw it.
+func TestEscapeOnAnIdleChatGoesBack(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Idle", chat.TierFast, user("q"), assistant("a"))
+	r.palette.Show()
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+
+	tt.Key(0, ui.KeyEscape)
+	if r.palette.Top() != r.root {
+		t.Fatal("Escape on an idle chat should go back to the root")
+	}
 }
 
 // TestCopyShortcutCopiesTheLastReply checks Command or Control with Shift and C copies the newest reply, and that
