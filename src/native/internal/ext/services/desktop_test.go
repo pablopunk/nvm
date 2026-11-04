@@ -233,6 +233,17 @@ func TestOCRReadsImagesAndIsRateLimited(t *testing.T) {
 	requireCode(t, serve(t, h, protocol.ServiceOCR, protocol.OpImage, protocol.OCRImageArgs{Input: api.OCRInput{Source: image}}), api.CodeQuota, "rate limited")
 }
 
+// TestHasCapabilityAnswersSelectionCopy checks the name the AI commands built-in asks before it offers its fix: an answer
+// of false there hides the command, so the name must be one the host maps.
+func TestHasCapabilityAnswersSelectionCopy(t *testing.T) {
+	_, deps := newDesktopHost(t, platform.CapabilitySelectionCopy)
+	h := desktopHandler(t, deps)
+	var supported bool
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceSystem, protocol.OpHasCapability, protocol.CapabilityArgs{Name: "selection.copy"})), &supported); err != nil || !supported {
+		t.Fatalf("selection.copy %v (%v)", supported, err)
+	}
+}
+
 func TestSystemAndShortcutsNeedOnlyTheirDeclarations(t *testing.T) {
 	_, deps := newDesktopHost(t, platform.CapabilityWindowManagement)
 	bare := desktopHandler(t, deps)
