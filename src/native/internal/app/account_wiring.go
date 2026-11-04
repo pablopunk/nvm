@@ -15,9 +15,14 @@ import (
 // nativeClientVersion is the desktop version the Go app reports to the backend's compatibility checks.
 const nativeClientVersion = "2.0.0-go"
 
-// isPackagedBuild is true for every build this app ships. Development backends stay out of reach until the
-// release build flags exist (WP5.5).
-const isPackagedBuild = true
+// isPackagedBuild is "true" only in builds the packaging workflow links with -X (docs/packaging.md), so a development
+// build keeps the development backends.
+var isPackagedBuild = "false"
+
+// packagedBuild reports whether this binary is a packaged build.
+func packagedBuild() bool {
+	return isPackagedBuild == "true"
+}
 
 // attachAccount opens the account session over st. Without a store the session keeps its profile in memory, so
 // the sign-in still works for this run.
@@ -44,7 +49,7 @@ func (p *App) accountDeps(ports platform.Ports, profile *store.Collection[auth.P
 		Logger:        logx.Default(),
 		Profile:       profile,
 		Browser:       ports.Shell.OpenURL,
-		Packaged:      isPackagedBuild,
+		Packaged:      packagedBuild(),
 		ClientVersion: nativeClientVersion,
 		DeviceLabel:   deviceLabel(),
 		OnChange:      p.refreshAccountPage,

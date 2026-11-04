@@ -82,7 +82,7 @@ func (p *App) accountActions() palaccount.Actions {
 			reportIfFailed(h, session.SwitchEnvironment(kind, rawURL))
 			h.Refresh()
 		},
-		Development: !isPackagedBuild,
+		Development: !packagedBuild(),
 	}
 }
 

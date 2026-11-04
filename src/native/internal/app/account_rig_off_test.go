@@ -10,9 +10,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// A default build ignores NVM_RIG_BACKEND: the account still starts on production, packaged, so a loopback origin
+// A packaged build ignores NVM_RIG_BACKEND: the account still starts on production, packaged, so a loopback origin
 // is refused. No request leaves the test.
 func TestDefaultBuildIgnoresTheRigBackendOverride(t *testing.T) {
+	asPackagedBuild(t)
 	t.Setenv("NVM_RIG_BACKEND", "http://127.0.0.1:9")
 	set := fake.NewSet()
 	deps := (&App{}).accountDeps(set.Ports(), nil)
