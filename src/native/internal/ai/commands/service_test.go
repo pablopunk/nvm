@@ -1,9 +1,6 @@
 package commands
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
 // TestTriageShowsTheAnswers asks the decision route about the selection and shows the summary.
 func TestTriageShowsTheAnswers(t *testing.T) {
