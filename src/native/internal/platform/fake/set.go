@@ -23,6 +23,8 @@ type Set struct {
 	Focus        *Focus
 	Tray         *TrayHost
 	Autostart    *Autostart
+	System       *System
+	Permissions  *Permissions
 	Windows      *WindowManager
 	Microphone   *Microphone
 	Opus         *OpusCodec
@@ -51,6 +53,8 @@ func NewSet() *Set {
 		Focus:        NewFocus(),
 		Tray:         NewTrayHost(),
 		Autostart:    NewAutostart(),
+		System:       NewSystem(),
+		Permissions:  NewPermissions(),
 		Windows:      NewWindowManager(),
 		Microphone:   NewMicrophone(),
 		Opus:         NewOpusCodec(),
@@ -80,6 +84,8 @@ func (s *Set) Ports() platform.Ports {
 		Focus:        s.Focus,
 		Tray:         s.Tray,
 		Autostart:    s.Autostart,
+		System:       s.System,
+		Permissions:  s.Permissions,
 		Windows:      s.Windows,
 		Microphone:   s.Microphone,
 		Opus:         s.Opus,

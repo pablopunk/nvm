@@ -10,6 +10,7 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 
 // NewPorts returns the production port set. It has no side effects until a port method is called.
 func NewPorts() platform.Ports {
+	env := processSystemEnvironment()
 	return platform.Ports{
 		Clock:        realClock{},
 		FS:           osFS{},
@@ -29,6 +30,8 @@ func NewPorts() platform.Ports {
 		Focus:        newFocus(),
 		Tray:         trayHost{},
 		Autostart:    autostart{},
+		System:       newSystem(helper{}, shell{}, env.goos, env.home, env.user),
+		Permissions:  permissions{},
 		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
 		Microphone:   newMicrophone(),

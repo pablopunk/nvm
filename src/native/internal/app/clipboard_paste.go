@@ -19,7 +19,7 @@ const clipPasteName = "clipboard.paste"
 func (p *App) appPorts() platform.Ports {
 	ports := real.NewPorts()
 	ports.Paster = real.NewPaster(ports.Helper, p.waitPaletteHidden)
-	return ports
+	return rigPorts(ports)
 }
 
 // notePaletteHidden records that the palette window hid. The window calls it from its hide event on the UI

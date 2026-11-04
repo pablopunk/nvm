@@ -27,6 +27,13 @@ const (
 	CapabilityTrayMenu         Capability = "tray.menu"
 	CapabilityAutostart        Capability = "autostart.signIn"
 	CapabilityFileWatch        Capability = "files.watch"
+	CapabilitySystemLock       Capability = "system.lock"
+	CapabilitySystemSleep      Capability = "system.sleep"
+	CapabilitySystemRestart    Capability = "system.restart"
+	CapabilitySystemShutDown   Capability = "system.shutDown"
+	CapabilitySystemLogOut     Capability = "system.logOut"
+	CapabilitySystemEmptyTrash Capability = "system.emptyTrash"
+	CapabilitySystemSettings   Capability = "system.settings"
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
 	CapabilityFocusReturn      Capability = "focus.return"
@@ -37,11 +44,13 @@ const (
 func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
-		CapabilityFileWatch, CapabilityGlobalHotkeys, CapabilityHelperRun, CapabilityKeychain,
-		CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal, CapabilityScreensDisplays,
-		CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep, CapabilityShellReveal,
-		CapabilityShellTrash, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
-		CapabilityFocusReturn, CapabilityMicrophone,
+		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
+		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
+		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
+		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySystemEmptyTrash,
+		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
+		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
+		CapabilityWindowPlacement,
 	}
 	slices.Sort(list)
 	return list

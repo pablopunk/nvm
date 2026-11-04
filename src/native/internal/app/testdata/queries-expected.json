@@ -4,6 +4,29 @@
     "rows": [
       {
         "kind": "Commands",
+        "title": "Welcome to Nevermind",
+        "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Get Started",
+            "label": ""
+          },
+          {
+            "title": "Dismiss welcome",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Clipboard History",
         "subtitle": "Browse and paste what you copied",
         "section": "Suggestions",
@@ -86,25 +109,6 @@
         "id": "",
         "icon": "sticky-note",
         "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictate",
-        "subtitle": "Start or stop cloud voice dictation",
-        "section": "Suggestions",
-        "id": "",
-        "icon": "mic",
-        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -218,25 +222,6 @@
         "section": "Suggestions",
         "id": "",
         "icon": "settings",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
-        "section": "Suggestions",
-        "id": "",
-        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -433,7 +418,7 @@
       {
         "kind": "Commands",
         "title": "Lock Screen",
-        "subtitle": "",
+        "subtitle": "Secure this computer",
         "section": "Commands",
         "id": "",
         "icon": "lock",
@@ -1264,10 +1249,48 @@
     "query": "fixture",
     "rows": [
       {
+        "kind": "Fixture",
+        "title": "Fix result for fixture",
+        "subtitle": "fixture",
+        "section": "Top Hit",
+        "id": "",
+        "icon": "puzzle",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Copy",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Fixture",
+        "title": "Fixture docs",
+        "subtitle": "fixture",
+        "section": "Fixture",
+        "id": "",
+        "icon": "puzzle",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Top Hit",
+        "section": "Search",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1327,30 +1350,11 @@
       },
       {
         "kind": "Commands",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "title": "Open Settings",
+        "subtitle": "Open system preferences",
         "section": "Commands",
         "id": "",
         "icon": "settings",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Move Window…",
-        "subtitle": "Window Management",
-        "section": "Commands",
-        "id": "",
-        "icon": "move-horizontal",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -1390,25 +1394,6 @@
         "id": "",
         "icon": "plus",
         "tone": "teal",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Show Recent Errors",
-        "subtitle": "Find and copy safe error references",
-        "section": "Commands",
-        "id": "",
-        "icon": "circle-alert",
-        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -1499,7 +1484,7 @@
       {
         "kind": "Commands",
         "title": "Restart",
-        "subtitle": "",
+        "subtitle": "Restart this computer",
         "section": "Commands",
         "id": "",
         "icon": "rotate-ccw",
@@ -1518,7 +1503,7 @@
       {
         "kind": "Commands",
         "title": "Empty Trash",
-        "subtitle": "",
+        "subtitle": "Permanently delete trashed files",
         "section": "Commands",
         "id": "",
         "icon": "trash-2",
@@ -1541,25 +1526,6 @@
         "section": "Commands",
         "id": "",
         "icon": "keyboard",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
-        "section": "Commands",
-        "id": "",
-        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -1938,30 +1904,11 @@
       {
         "kind": "Commands",
         "title": "Empty Trash",
-        "subtitle": "",
+        "subtitle": "Permanently delete trashed files",
         "section": "Commands",
         "id": "",
         "icon": "trash-2",
         "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Report a Problem",
-        "subtitle": "Record a problem reference without screen content",
-        "section": "Commands",
-        "id": "",
-        "icon": "message-circle",
-        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -2276,25 +2223,6 @@
         "accessory": "",
         "prominent": false,
         "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
-        "section": "Commands",
-        "id": "",
-        "icon": "rotate-ccw",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
         "iconPath": "",
         "actions": [
           {

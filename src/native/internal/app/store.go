@@ -58,6 +58,8 @@ type Settings struct {
 	FileRoots []string
 	// FileIgnore adds ignore patterns to the Files index, on top of the defaults.
 	FileIgnore []string
+	// GuideDone is set once the user dismisses the Getting Started guide; the root then shows Help.
+	GuideDone bool
 }
 
 type Quicklink struct {
