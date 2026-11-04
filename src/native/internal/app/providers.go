@@ -77,6 +77,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
 	}
 	cmds = append(cmds, p.systemCommands()...)
+	cmds = append(cmds, p.meaningFilesCommands()...)
 	cmds = append(cmds, []command{
 		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
