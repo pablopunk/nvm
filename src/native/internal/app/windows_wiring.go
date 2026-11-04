@@ -66,7 +66,5 @@ func (p *App) windowDeps() windows.Deps {
 // notifyWindowOutcome shows a window command's failure as a system notification, because the command runs after
 // the palette has hidden to hand focus back.
 func (p *App) notifyWindowOutcome(title, body string) {
-	if p.ports.Notifier != nil {
-		_ = p.ports.Notifier.Show(title, body)
-	}
+	p.notifySystem(title, body)
 }

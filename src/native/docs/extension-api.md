@@ -1,11 +1,11 @@
-# Extension API v1 (Go): design
+# Extension API v1 (Go)
 
-Status: **proposal for owner review** (WP3.1). Nothing in the app imports the package yet; the host runtime lands in WP3.2.
+Status: **as built** (WP3.1 to WP3.10). The host (`internal/ext`), the AI builder and the built-ins import the package. Sections 1 to 16 state the contract. Sections 17 to 23 record what each stage built, and the open questions are in section 16.
 
 Source of truth:
 
 - Types and validation: `src/native/internal/ext/api` (wire types, behaviour interfaces, Context services, validators).
-- Rules enforced by tests: `clone_test.go` (type graph walk), `roundtrip_test.go` with `testdata/golden/samples.json` (wire JSON), `examples_test.go` (the examples below compile against the package).
+- Rules enforced by tests: `clone_test.go` (type graph walk), `roundtrip_test.go` with `testdata/golden/samples.json` (wire JSON), `examples_test.go` (the section 14 examples compile against the package).
 - Runtime numbers and decision D1: `docs/extension-runtime-spike.md`.
 - The TypeScript contract this replaces: `src/app/resources/nevermind-extension-api.d.ts`. Section 14 maps every TypeScript type.
 
@@ -27,12 +27,12 @@ Non-goals:
 ## 2. Shape of the system
 
 ```
-extension source (Go today; runtime decided by D1)
+extension source (Go, interpreted in a child process, section 17)
    implements Extension, and optionally CommandProvider, RootProvider, SearchProvider,
    ActionHandler, DataLoader, WindowRestorer, MenuBarProvider
    receives Context (in-process services: Storage, Desktop, AI, ...)
         | returns and receives wire types only: Item, View, Command, Action{Ref}, Result
-host (internal/ext, WP3.2)
+host (internal/ext, section 17)
    validates every payload, mints opaque tokens for the palette, enforces the B8 call budget,
    renders views, runs triggers, keeps last-good state on failure
 ```
@@ -41,7 +41,7 @@ The package is layer `ext` (rank 6 in `internal/layers`) and imports only the st
 
 ## 3. Versioning and compatibility
 
-The manifest carries `apiVersion` as `"major.minor"`. This design is `1.0`.
+The manifest carries `apiVersion` as `"major.minor"`. The API is `1.0`.
 
 Rules, enforced by `CheckCompatibility` and documented here:
 
@@ -99,8 +99,8 @@ Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one
 
 Review semantics:
 
-- Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and the diagnostic for an undeclared use is still a proposal (WP3.2).
-- Three capabilities are enforced, from WP3.7: `network`, `secrets` and `settings.write`. A call without its declaration fails with a permission failure that names the capability, and the refusal is logged. See section 18.
+- Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and does not yet diagnose it (section 16, question 2).
+- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), and the desktop capabilities (section 21). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
 - OS permissions (camera, microphone, screen recording, accessibility) remain real boundaries. The OS asks, and the answer is the enforcement.
 - An enabled extension has the full Context whether or not it declares anything. This matches the trust model.
 
@@ -354,7 +354,7 @@ Go-specific decisions behind the table:
 1. Every wire type is plain data: no `func`, `chan`, `interface` or `unsafe.Pointer` anywhere in its type graph. `TestSerializableTypesAreCloneSafe` walks the graph. `TestCloneWalkFlagsForbiddenShapes` proves the walk can fail.
 2. Every exported field of a wire type has an explicit JSON name. Renaming a Go identifier cannot change the wire.
 3. Wire JSON is pinned by `testdata/golden/samples.json`. `TestWireSamplesRoundTripThroughJSON` checks that every sample marshals, unmarshals and marshals to the same bytes.
-4. Actions cross the boundary as `ActionRef`, never as code. The host mints opaque palette tokens and maps them back to ids on invocation (WP3.2).
+4. Actions cross the boundary as `ActionRef`, never as code. The host mints opaque palette tokens and maps them back to ids on invocation (section 17).
 5. Validation is data-level: `Validate` on manifest, action, trigger, command, view, form, menu bar, window layout and options. The host calls the same functions.
 
 ## 14. Author examples
@@ -756,7 +756,7 @@ func (screenshotIndex) RunAction(ctx api.Context, in api.Invocation) (api.Result
 }
 ```
 
-What the examples show about the design:
+What the examples show:
 
 - A command is declared once; its rows are produced per open (14.2). The root item and the command are the same capability, not two launchers.
 - Forms validate with the host's own validator (14.3). `Navigation().Pop()` is a value, not a side effect.
@@ -950,11 +950,11 @@ What the examples show about the design:
 
 ## 16. Open questions for review
 
-1. **Runtime (D1).** The types are runtime-neutral, and the Go-specific choices above (no generics on methods, struct-for-union) cost little under a JS runtime too. The runtime decision is in `docs/extension-runtime-spike.md`.
+1. **Runtime.** The runtime was decided in `docs/extension-runtime-spike.md` and is built as section 17 describes. Revisit it only if the child-process model misses the call budget (B8) on a measured run.
 2. **Undeclared-capability diagnostics.** Proposed, not implemented. Needs owner agreement because it adds noise to review.
 3. **Partial item patches.** Deferred until a measured need.
 4. **File move and rename.** Not in the TypeScript API and not in v1. A background job that organises files will need it; it should be a dedicated, confirmed action rather than a general file primitive.
-5. **Author-experience test (PLAN WP3.1 UX).** This document has not yet been tested by an agent writing extensions from prompts. The success rate is the input the runtime decision still needs.
+5. **Author-experience test (PLAN WP3.1 UX).** No measured study has run: no agent has yet written extensions from this document alone under observation. The result is the input to the next revision of this document.
 
 ## 17. Host runtime as built (WP3.2)
 
@@ -1056,7 +1056,7 @@ Decisions behind the table:
 - **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
-Not built in this slice: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 

@@ -74,7 +74,7 @@ func benchClipEntries(entries []fixtures.ClipboardEntry) []clipboard.Entry {
 // benchmarks never touch the user's configuration.
 func newBenchPalette(b *testing.B) *App {
 	b.Helper()
-	b.Setenv("HOME", b.TempDir())
+	isolateUserFolders(b, b.TempDir())
 	data := benchData()
 	p := &App{
 		S:      &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},

@@ -47,7 +47,7 @@ type SignInState struct {
 
 // AccountInfo holds the account details the view shows when the backend reports them.
 type AccountInfo struct {
-	// Plan is the plan name, when the backend reports it.
+	// Plan is the plan name, when a backend route reports it. Empty means unknown.
 	Plan string
 	// Balance is the total credit balance, when the backend reports it.
 	Balance int

@@ -3,9 +3,7 @@ package fixtures
 // Routes the fake backend serves.
 const (
 	ChatCompletionsPath          = "/api/v1/chat/completions"
-	ModelsPath                   = "/api/v1/models"
 	ActiveModelPath              = "/api/v1/active-model"
-	MePath                       = "/api/me"
 	TranscriptionsPath           = "/api/v1/audio/transcriptions"
 	TranscriptionPreparationPath = "/api/v1/audio/transcription-preparations"
 )
@@ -37,15 +35,9 @@ const NotFoundBody = `{"error":{"type":"not_found","message":"No such route"}}`
 // MethodNotAllowedBody is the 405 body for a known route called with the wrong method.
 const MethodNotAllowedBody = `{"error":{"type":"method_not_allowed","message":"Method not allowed"}}`
 
-// ModelsBody lists two fake models. The IDs are fixture names, not product model IDs.
-const ModelsBody = `{"data":[{"id":"fixture-fast","name":"Fixture Fast"},{"id":"fixture-smart","name":"Fixture Smart"}]}`
-
 // ActiveModelBody is the descriptor of the fixture route for every model tier: an openai-completions route with
 // credits left and no notice. Its names are fixtures, not product model IDs.
 const ActiveModelBody = `{"id":"fixture-route","name":"Fixture Route","contextWindow":128000,"maxInputTokens":100000,"maxTokens":4096,"reasoning":false,"thinkingLevel":"off","input":["text"],"api":"openai-completions","provider":"fixture","baseUrl":"https://fixture.test","modelTier":"free","creditKind":"free","credits":{"paid":0,"free":81,"total":81},"notice":"ok","noticeReason":"","costEstimate":null}`
-
-// MeBody is the signed-in account. The email uses the reserved example.test domain.
-const MeBody = `{"id":"user_fixture","email":"fixture@example.test","plan":"free","credits":{"balance":81}}`
 
 // TranscriptionBody is the answer of the transcription route for any recording.
 const TranscriptionBody = `{"text":"Fixture transcript of the recording."}`

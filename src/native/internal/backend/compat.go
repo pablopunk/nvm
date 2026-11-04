@@ -25,14 +25,11 @@ type APIInfo struct {
 	SupportedVersions []int `json:"supportedVersions"`
 }
 
-// DesktopInfo carries the release policy for desktop clients.
+// DesktopInfo carries the release policy for desktop clients. The manifest's latestVersion and updateUrl are not
+// decoded: they describe the 1.x line until the 2.0 client name ships (src/native/docs/cutover.md, section 4).
 type DesktopInfo struct {
 	// MinimumSupportedVersion is the oldest client version the backend accepts.
 	MinimumSupportedVersion string `json:"minimumSupportedVersion"`
-	// LatestVersion is the newest released client, or empty when the backend does not know.
-	LatestVersion string `json:"latestVersion"`
-	// UpdateURL is where users download an update.
-	UpdateURL string `json:"updateUrl"`
 	// SupportPolicy names the support window policy.
 	SupportPolicy string `json:"supportPolicy"`
 }
@@ -96,8 +93,6 @@ const (
 	CompatUnknown CompatState = "unknown"
 	// CompatOK means this client is current enough and the API major is supported.
 	CompatOK CompatState = "ok"
-	// CompatUpdateRecommended means a newer desktop release exists; the client still works.
-	CompatUpdateRecommended CompatState = "update_recommended"
 	// CompatUpdateRequired means the backend refuses this client version or has issued a force update.
 	CompatUpdateRequired CompatState = "update_required"
 	// CompatSunset means the backend retired this client's API major, so an update is the only way forward.
@@ -117,8 +112,6 @@ type compatWire struct {
 	} `json:"api"`
 	Desktop *struct {
 		MinimumSupportedVersion *string `json:"minimumSupportedVersion"`
-		LatestVersion           *string `json:"latestVersion"`
-		UpdateURL               *string `json:"updateUrl"`
 		SupportPolicy           string  `json:"supportPolicy"`
 	} `json:"desktop"`
 	Client *struct {
@@ -162,7 +155,7 @@ func (c *Client) Compatibility(ctx context.Context) (CompatReport, error) {
 func (w compatWire) manifest() (Manifest, error) {
 	if w.Backend == nil || w.Backend.Version == nil || w.Backend.Environment == nil ||
 		w.API == nil || w.API.CurrentVersion == nil || w.API.SupportedVersions == nil ||
-		w.Desktop == nil || w.Desktop.MinimumSupportedVersion == nil || w.Desktop.UpdateURL == nil ||
+		w.Desktop == nil || w.Desktop.MinimumSupportedVersion == nil ||
 		w.Client == nil || w.Client.Compatible == nil || w.Features == nil {
 		return Manifest{}, &Error{Kind: KindBadResponse, Status: 200, Message: "compatibility manifest is missing required fields"}
 	}
@@ -171,7 +164,6 @@ func (w compatWire) manifest() (Manifest, error) {
 		API:     APIInfo{CurrentVersion: *w.API.CurrentVersion, SupportedVersions: w.API.SupportedVersions},
 		Desktop: DesktopInfo{
 			MinimumSupportedVersion: *w.Desktop.MinimumSupportedVersion,
-			UpdateURL:               *w.Desktop.UpdateURL,
 			SupportPolicy:           w.Desktop.SupportPolicy,
 		},
 		Client: ClientStatus{
@@ -184,9 +176,6 @@ func (w compatWire) manifest() (Manifest, error) {
 		},
 		Features: w.Features,
 		Notices:  w.Notices,
-	}
-	if w.Desktop.LatestVersion != nil {
-		manifest.Desktop.LatestVersion = *w.Desktop.LatestVersion
 	}
 	if w.Client.UnsupportedReason != nil {
 		manifest.Client.UnsupportedReason = *w.Client.UnsupportedReason
@@ -201,9 +190,6 @@ func (c *Client) deriveState(manifest Manifest) CompatState {
 	}
 	if !manifest.Client.Compatible || hasForceUpdateNotice(manifest.Notices) {
 		return CompatUpdateRequired
-	}
-	if newer, ok := isNewerVersion(manifest.Desktop.LatestVersion, c.identity.version); ok && newer {
-		return CompatUpdateRecommended
 	}
 	return CompatOK
 }

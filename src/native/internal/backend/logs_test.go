@@ -19,13 +19,13 @@ func TestCanaryTokenNeverReachesLogsOrErrors(t *testing.T) {
 	ctx := context.Background()
 	var errs []error
 
-	_, err := h.client.Me(ctx)
+	_, err := h.client.ActiveModel(ctx, ActiveModelQuery{})
 	errs = append(errs, err)
 	backend.SetMode(fixtures.ModeUnauthorized)
-	_, err = h.client.Me(ctx)
+	_, err = h.client.ActiveModel(ctx, ActiveModelQuery{})
 	errs = append(errs, err)
 	backend.SetMode(fixtures.ModeInsufficientCredits)
-	_, err = h.client.Models(ctx)
+	_, err = h.client.ActiveModel(ctx, ActiveModelQuery{})
 	errs = append(errs, err)
 	backend.SetMode(fixtures.ModeMidStreamError)
 	stream, err := h.client.ChatStream(ctx, ChatRequest{Messages: userMessages("hi")})

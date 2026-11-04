@@ -4,12 +4,8 @@ package real
 
 import "github.com/pablopunk/nvm/native/internal/platform"
 
-// windowManagementSupported is false until a Windows backend exists (WP4.1 L6 work); the capability is then
-// omitted rather than shown disabled.
-func windowManagementSupported() bool {
-	return false
-}
-
+// newWindowManager is nil until a Windows backend exists (WP4.1 L6 work). The capability is omitted with it,
+// rather than shown disabled.
 func newWindowManager(platform.Helper) platform.WindowManager {
 	return nil
 }

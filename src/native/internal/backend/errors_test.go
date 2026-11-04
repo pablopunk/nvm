@@ -73,10 +73,10 @@ func TestFixtureFailureModesMapToKinds(t *testing.T) {
 			backend := h.withBackend(t)
 			backend.SetMode(tt.mode)
 			h.useSynchronousWaits()
-			_, err := h.client.Models(context.Background())
+			_, err := h.client.ActiveModel(context.Background(), ActiveModelQuery{})
 			typed := asError(err)
 			if typed == nil {
-				t.Fatalf("Models error = %v, want a *Error", err)
+				t.Fatalf("ActiveModel error = %v, want a *Error", err)
 			}
 			if typed.Kind != tt.wantKind || typed.Status != tt.wantStatus {
 				t.Fatalf("got kind %s status %d, want %s status %d (%v)", typed.Kind, typed.Status, tt.wantKind, tt.wantStatus, typed)
@@ -99,8 +99,8 @@ func TestFixtureFailureModesMapToKinds(t *testing.T) {
 func TestFixtureHealthyBackendAnswersWithoutError(t *testing.T) {
 	h := newHarness(t)
 	backend := h.withBackend(t)
-	if _, err := h.client.Models(context.Background()); err != nil {
-		t.Fatalf("Models on a healthy backend: %v", err)
+	if _, err := h.client.ActiveModel(context.Background(), ActiveModelQuery{}); err != nil {
+		t.Fatalf("ActiveModel on a healthy backend: %v", err)
 	}
 	if n := len(backend.Requests()); n != 1 {
 		t.Fatalf("made %d requests, want 1", n)
@@ -131,9 +131,9 @@ func TestStalledBackendTimesOutAndRetriesOnlyGets(t *testing.T) {
 	h.client.http = hang
 	waits := h.useSynchronousWaits()
 
-	_, err := h.client.Models(context.Background())
+	_, err := h.client.ActiveModel(context.Background(), ActiveModelQuery{})
 	if !IsKind(err, KindTimeout) || UserMessage(err) != copyTimeout {
-		t.Fatalf("Models error = %v, want KindTimeout with the timeout line", err)
+		t.Fatalf("ActiveModel error = %v, want KindTimeout with the timeout line", err)
 	}
 	if hang.requests != 3 {
 		t.Fatalf("GET made %d attempts, want 3", hang.requests)

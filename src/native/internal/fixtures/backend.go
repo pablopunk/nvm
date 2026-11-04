@@ -41,7 +41,7 @@ type BackendRequest struct {
 	Body   string
 }
 
-// Backend is an http.Handler that imitates the Nevermind backend's /api/v1 routes, /api/me and the device sign-in.
+// Backend is an http.Handler that imitates the Nevermind backend's /api/v1 routes the client calls and the device sign-in.
 // Its failure mode can be switched between requests. Use it with fake.HTTP.Handle, or serve it from any listener.
 //
 //	backend := fixtures.NewBackend()
@@ -139,12 +139,8 @@ func (b *Backend) serveRoute(w http.ResponseWriter, r *http.Request, body string
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == ChatCompletionsPath:
 		b.serveChat(w, r, body, mode)
-	case r.Method == http.MethodGet && r.URL.Path == ModelsPath:
-		writeBody(w, http.StatusOK, "application/json", ModelsBody)
 	case r.Method == http.MethodGet && r.URL.Path == ActiveModelPath:
 		writeBody(w, http.StatusOK, "application/json", b.currentActiveModel())
-	case r.Method == http.MethodGet && r.URL.Path == MePath:
-		writeBody(w, http.StatusOK, "application/json", MeBody)
 	case r.Method == http.MethodPost && r.URL.Path == DeviceInitiatePath:
 		b.serveDeviceInitiate(w, r)
 	case r.Method == http.MethodPost && r.URL.Path == DeviceExchangePath:
@@ -201,7 +197,7 @@ func (b *Backend) record(r *http.Request, body string) {
 // isBackendRoute reports whether the request targets a route the fake implements at all.
 func isBackendRoute(r *http.Request) bool {
 	switch r.URL.Path {
-	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath, DeviceInitiatePath, DeviceExchangePath,
+	case ChatCompletionsPath, ActiveModelPath, DeviceInitiatePath, DeviceExchangePath,
 		DeviceApprovePath, TranscriptionsPath, TranscriptionPreparationPath, DecisionsPath:
 		return true
 	default:

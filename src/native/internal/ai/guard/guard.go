@@ -141,13 +141,23 @@ func isCredential(resolved string, current canonical) bool {
 	return insideAny(candidate, current.denied)
 }
 
-// lexicalPath joins raw to cwd when it is relative and cleans it. It does not touch the file system.
+// lexicalPath makes raw absolute and cleans it. It does not touch the file system. A rooted path without a volume,
+// such as \etc\hosts on Windows, is not absolute to Go, so it takes the process volume rather than joining the cwd.
 func lexicalPath(raw, cwd, home string) string {
 	expanded := expandPath(raw, home)
-	if !filepath.IsAbs(expanded) {
+	switch {
+	case filepath.IsAbs(expanded):
+	case isRooted(expanded):
+		expanded = absolute(expanded)
+	default:
 		expanded = filepath.Join(cwd, expanded)
 	}
 	return filepath.Clean(expanded)
+}
+
+// isRooted reports whether a path starts at a separator without naming a volume.
+func isRooted(path string) bool {
+	return strings.HasPrefix(path, "/") || strings.HasPrefix(path, `\`)
 }
 
 func homeCredentialRoots(home string) []string {

@@ -5,16 +5,28 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // configDir is the directory of the app's own files. Golden tests swap it for a fixed path.
 var configDir = defaultConfigDir
 
 func defaultConfigDir() string {
-	home, _ := os.UserHomeDir()
-	d := filepath.Join(home, ".config", "nvm-native")
+	d := appConfigFolder(runtime.GOOS, os.UserHomeDir, os.UserConfigDir)
 	_ = os.MkdirAll(d, 0o755)
 	return d
+}
+
+// appConfigFolder is the app's own folder for one OS: under the home folder, or on Windows under the per-user
+// application data folder, where Electron keeps its userData. Without a config folder it falls back to the home.
+func appConfigFolder(goos string, home, userConfig func() (string, error)) string {
+	if goos == "windows" {
+		if dir, err := userConfig(); err == nil {
+			return filepath.Join(dir, "nvm-native")
+		}
+	}
+	dir, _ := home()
+	return filepath.Join(dir, ".config", "nvm-native")
 }
 
 func loadJSON(name string, v any) {

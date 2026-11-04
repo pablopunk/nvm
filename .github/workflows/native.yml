@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   push:
     branches: [main]
     paths:
       - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   workflow_dispatch:
 
@@ -89,3 +91,33 @@ jobs:
         # Non-blocking until the first advisory baseline is triaged; then drop continue-on-error.
         continue-on-error: true
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  # The Go app must run on macOS and Windows, not only compile there. Goldens are compared only on Linux (the
+  # golden package skips them elsewhere), so this job runs vet and the rest of the test suite on each OS.
+  cross-os:
+    name: Go vet and tests on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -count=1 -timeout 40m ./...
