@@ -17,7 +17,7 @@ const (
 // returns to the list; Cancel returns and leaves the extension off.
 func (p *App) extensionReviewView(ctl extensionController, l manager.Listing) *palette.View {
 	return &palette.View{
-		Title: "Review " + extensionTitle(l), HideInput: true,
+		Title: "Review " + extensionTitle(l),
 		Search: func(string) []search.Item { return extensionReviewRows(ctl, l) },
 	}
 }

@@ -100,7 +100,7 @@ func TestReviewCancelReturnsWithoutEnabling(t *testing.T) {
 
 func TestReviewViewIsTitledAfterTheExtension(t *testing.T) {
 	view := (&App{}).extensionReviewView(&fakeExtensions{}, reviewListing())
-	if view.Title != "Review Capability fixture" || !view.HideInput || view.Presentation != palette.Stacked {
+	if view.Title != "Review Capability fixture" || view.Presentation != palette.Stacked {
 		t.Fatalf("review view title = %q, want it named after the extension", view.Title)
 	}
 }
