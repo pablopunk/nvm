@@ -66,6 +66,7 @@ func init() {
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
+		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
 		"CodeInternal":                  reflect.ValueOf(api.CodeInternal),
 		"CodeInvalid":                   reflect.ValueOf(api.CodeInvalid),
