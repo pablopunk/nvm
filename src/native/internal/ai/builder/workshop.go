@@ -1,41 +1,49 @@
 package builder
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 )
 
-// MaxFixAttempts bounds how many times a rejected reply goes back to the model. A chat gets this many fixes after its
-// first try.
-const MaxFixAttempts = 2
-
-// Copy for the builder's notices. Each says what happened and what the user does next.
+// Copy for the builder's steps and results. Each says what the builder is doing or what happened.
 const (
-	noticeTitle       = "Extension"
-	failedTitle       = "Extension not installed"
-	noEntryPointText  = "the source defines no entry point; define at least one of Commands, RootItems, SearchItems or RunAction"
-	installedFormat   = "“%s” is installed and enabled."
-	retryNoticeFormat = "Extension failed (%s). Asking the model to fix it…"
-	failedFormat      = "Could not produce a working extension: %s. Describe it again to retry."
-	fixRequestFormat  = "The extension was rejected with this error:\n\n%s\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block."
+	noEntryPointText = "the source defines no entry point; define at least one of Commands, RootItems, SearchItems or RunAction"
+	installedFormat  = "Installed and enabled %q. It is not run yet, so say it is installed and not verified."
+	checkingStep     = "Checking…"
+	installingStep   = "Installing…"
 )
 
-// Workshop turns a finished builder reply into an installed, disabled extension, or sends the reason back to the
-// model. Its state is owned by the UI thread; the checks and the install run off it and report through dispatch.
+// Workshop is the extension builder. Its tools read the API reference and write an extension: write_extension checks
+// the extension in a child process, installs it enabled, and returns the result to the model in the same turn, so a
+// rejected extension is fixed by the model without a new turn. Its state is owned by the UI thread; the checks and
+// the install run off it, and a tool call reaches the UI thread to read or change a chat.
 type Workshop struct {
 	chats      Conversation
 	extensions Extensions
 	dispatch   func(fn func())
-	attempts   map[string]int
+	// written holds the extension a builder chat installed in its current turn, bound to the chat when the turn settles.
+	written map[string]string
 }
 
 // New returns a workshop over the chat service and the extension manager. dispatch runs a function on the UI thread.
 func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *Workshop {
-	return &Workshop{chats: chats, extensions: extensions, dispatch: dispatch, attempts: map[string]int{}}
+	return &Workshop{chats: chats, extensions: extensions, dispatch: dispatch, written: map[string]string{}}
+}
+
+// Toolset returns the tools of the builder chat chatID for one turn: the API reader and write_extension.
+func (w *Workshop) Toolset(chatID string) chat.Toolset {
+	registry, err := agent.NewRegistry(readAPITool(), w.writeTool(chatID))
+	if err != nil {
+		log.Println("builder: could not register the tools:", err)
+		return chat.Toolset{}
+	}
+	return chat.Toolset{Registry: registry}
 }
 
 // SystemPrompt is the instruction a builder chat starts with. A chat bound to an extension also carries that
@@ -52,37 +60,92 @@ func (w *Workshop) SystemPrompt(c chat.Chat) string {
 	return instructionsText + "\n\n" + editSection(c.Extension, string(manifestJSON), source)
 }
 
-// Settled runs on the UI thread after a turn ends. A finished reply is read and built; a stopped or failed one is
-// left alone, since the user decides what happens next.
-func (w *Workshop) Settled(chatID string, outcome chat.Outcome) {
-	if outcome.Ending != chat.EndFinished {
-		return
-	}
-	record, ok := w.chats.Chat(chatID)
+// Settled runs on the UI thread after a turn ends. An extension the turn installed is bound to the chat, whatever the
+// turn's ending, so the chat owns it from then on.
+func (w *Workshop) Settled(chatID string, _ chat.Outcome) {
+	id, ok := w.written[chatID]
 	if !ok {
 		return
 	}
-	reply, _ := chat.LastReply(record)
-	candidate, err := ParseReply(reply)
-	if err != nil {
-		w.retry(chatID, err.Error())
-		return
+	delete(w.written, chatID)
+	if err := w.chats.Bind(chatID, id); err != nil {
+		log.Println("builder: could not bind the chat to its extension:", err)
 	}
-	if problem := w.ownershipProblem(record.Extension, candidate.Manifest.ID); problem != "" {
-		w.retry(chatID, problem)
-		return
-	}
-	go w.build(chatID, candidate)
 }
 
-// build checks the candidate and installs it enabled, as the desktop app's write_extension does, then hands the result
-// to the UI thread.
-func (w *Workshop) build(chatID string, candidate Candidate) {
-	err := w.verify(candidate)
+// writeExtension is the write_extension tool of chat chatID: it checks the arguments, the ownership of the id, the
+// extension in a child process, and then installs it enabled. A failure is returned as the tool's error.
+func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.RawMessage) (agent.Result, error) {
+	var in writeArgs
+	if err := json.Unmarshal(args, &in); err != nil {
+		return agent.Result{}, err
+	}
+	candidate, err := NewCandidate(in.Manifest, in.Source, in.Files)
+	if err != nil {
+		return agent.Result{}, err
+	}
+	if problem := w.claimProblem(ctx, chatID, candidate.Manifest.ID); problem != "" {
+		return agent.Result{}, errors.New(problem)
+	}
+	w.step(ctx, chatID, checkingStep)
+	err = w.verify(candidate)
 	if err == nil {
+		w.step(ctx, chatID, installingStep)
 		err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), true)
 	}
-	w.dispatch(func() { w.finish(chatID, candidate, err) })
+	if !w.onUI(ctx, func() { w.finishWrite(chatID, candidate, err) }) {
+		return agent.Result{}, errors.New("the turn was stopped before the extension was written")
+	}
+	if err != nil {
+		return agent.Result{}, err
+	}
+	return agent.Result{Text: fmt.Sprintf(installedFormat, candidate.Manifest.Title), Outcome: "Installed and enabled"}, nil
+}
+
+// step shows a step of the chat on the UI thread while a write runs.
+func (w *Workshop) step(ctx context.Context, chatID, label string) {
+	w.onUI(ctx, func() { w.chats.SetStep(chatID, label) })
+}
+
+// finishWrite runs on the UI thread at the end of a write: the step ends, and an installed extension is remembered for
+// the chat.
+func (w *Workshop) finishWrite(chatID string, candidate Candidate, err error) {
+	w.chats.ClearStep(chatID)
+	if err == nil {
+		w.written[chatID] = candidate.Manifest.ID
+	}
+}
+
+// claimProblem explains why the chat may not write the extension id on the UI thread, and returns "" when it may. It
+// returns the refusal as text, so the model can choose another id.
+func (w *Workshop) claimProblem(ctx context.Context, chatID, id string) string {
+	var problem string
+	if !w.onUI(ctx, func() {
+		bound := ""
+		if record, ok := w.chats.Chat(chatID); ok {
+			bound = record.Extension
+		}
+		problem = w.ownershipProblem(bound, id)
+	}) {
+		return "the turn was stopped"
+	}
+	return problem
+}
+
+// onUI runs fn on the UI thread and waits for it, so a tool call reads and changes the chats in the order the UI does.
+// It reports false when the turn ended before fn ran; fn may still run later and then changes nothing the caller reads.
+func (w *Workshop) onUI(ctx context.Context, fn func()) bool {
+	done := make(chan struct{})
+	w.dispatch(func() {
+		fn()
+		close(done)
+	})
+	select {
+	case <-done:
+		return true
+	case <-ctx.Done():
+		return false
+	}
 }
 
 // verify loads the candidate in a child process: it must compile and implement at least one entry point.
@@ -97,29 +160,8 @@ func (w *Workshop) verify(candidate Candidate) error {
 	return nil
 }
 
-// finish runs on the UI thread with the result of build. An installed extension is bound to the chat and noted; a
-// refused one is sent back to the model.
-func (w *Workshop) finish(chatID string, candidate Candidate, err error) {
-	switch {
-	case errors.Is(err, ErrExtensionsLoading):
-		w.fail(chatID, err.Error())
-	case err != nil:
-		w.retry(chatID, err.Error())
-	default:
-		w.installed(chatID, candidate)
-	}
-}
-
-func (w *Workshop) installed(chatID string, candidate Candidate) {
-	delete(w.attempts, chatID)
-	if err := w.chats.Bind(chatID, candidate.Manifest.ID); err != nil {
-		log.Println("builder: could not bind the chat to its extension:", err)
-	}
-	w.note(chatID, chat.NoticeNote, noticeTitle, fmt.Sprintf(installedFormat, candidate.Manifest.Title))
-}
-
-// ownershipProblem explains why the chat may not write the extension id, and returns "" when it may. A chat bound
-// to an extension keeps its id. A new extension takes an id no other extension or chat has.
+// ownershipProblem explains why the chat may not write the extension id, and returns "" when it may. A chat bound to an
+// extension keeps its id. A new extension takes an id no other extension or chat has.
 func (w *Workshop) ownershipProblem(bound, id string) string {
 	if bound != "" {
 		if id != bound {
@@ -134,33 +176,4 @@ func (w *Workshop) ownershipProblem(bound, id string) string {
 		return fmt.Sprintf("The id %q belongs to another AI chat. Choose another id for this extension.", id)
 	}
 	return fmt.Sprintf("An extension with the id %q already exists. Choose another id for this extension.", id)
-}
-
-// retry sends the reason back to the model while the chat has fixes left, and writes the failure once it has none.
-func (w *Workshop) retry(chatID, reason string) {
-	if w.attempts[chatID] >= MaxFixAttempts {
-		delete(w.attempts, chatID)
-		w.fail(chatID, reason)
-		return
-	}
-	w.attempts[chatID]++
-	w.note(chatID, chat.NoticeNote, noticeTitle, fmt.Sprintf(retryNoticeFormat, oneLine(reason)))
-	if err := w.chats.Send(chatID, fixRequest(reason)); err != nil {
-		log.Println("builder: could not send the fix:", err)
-	}
-}
-
-// fail writes the failure of a chat that produced no working extension.
-func (w *Workshop) fail(chatID, reason string) {
-	w.note(chatID, chat.NoticeFailed, failedTitle, fmt.Sprintf(failedFormat, oneLine(reason)))
-}
-
-func (w *Workshop) note(chatID string, kind chat.NoticeKind, title, message string) {
-	if err := w.chats.Note(chatID, chat.Notice{Kind: kind, Title: title, Message: message}); err != nil {
-		log.Println("builder: could not note the result:", err)
-	}
-}
-
-func fixRequest(reason string) string {
-	return fmt.Sprintf(fixRequestFormat, truncateRunes(reason, maxReasonRunes))
 }

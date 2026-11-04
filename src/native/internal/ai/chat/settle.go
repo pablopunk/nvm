@@ -12,6 +12,7 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 		delete(s.runs, id)
 	}
 	s.endReasoning(r)
+	s.ClearStep(id)
 	s.logTurnEnd(r, outcome)
 	if s.doomed[id] {
 		_ = s.remove(id)

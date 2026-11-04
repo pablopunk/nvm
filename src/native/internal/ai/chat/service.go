@@ -12,6 +12,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
+// BuilderMaxSteps bounds the model steps of a builder turn: reads of the API reference, writes and their fixes. A
+// builder write checks and installs an extension, so it gets a longer tool timeout than a conversation's tools.
+const (
+	BuilderMaxSteps    = 16
+	BuilderToolTimeout = 90 * time.Second
+)
+
 // Options are what the service runs on. Client returns the backend client of the active account, or nil when
 // there is none, and Connected reports whether that account is signed in. Dispatch runs a change on the UI thread;
 // the service owns its state on that thread, and only a turn's goroutine works off it, through Dispatch.
@@ -31,8 +38,11 @@ type Options struct {
 	// Preflight runs before each model request, off the UI thread, and a non-nil error ends the request with that
 	// message, as 1.x refuses an AI request the backend will not serve. Nil runs no check.
 	Preflight func(ctx context.Context) error
-	// Tools are what a conversation may call. The extension builder gets none.
+	// Tools are what a conversation may call.
 	Tools Toolset
+	// BuilderTools returns the tools of the builder chat with the id, for one turn. It runs on the UI thread. Nil gives a
+	// builder no tools.
+	BuilderTools func(chatID string) Toolset
 	// Logger receives the turns that fail. Nil means the process logger.
 	Logger *logx.Logger
 }
@@ -54,12 +64,6 @@ type Service struct {
 	doomed map[string]bool
 	// steps holds what each chat is doing outside its reply, such as a builder's check of the extension it wrote.
 	steps map[string]Step
-}
-
-// Step is what a chat is doing besides its reply, and when it began. The palette shows it with the elapsed time.
-type Step struct {
-	Label string
-	Since time.Time
 }
 
 // New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
@@ -112,15 +116,6 @@ func (s *Service) Chat(id string) (Chat, bool) {
 	return s.cache.get(id)
 }
 
-// NewChat opens a chat of kind that uses tier. It is not recorded until its first message is written, so a chat that is
-// opened and left empty leaves nothing in the history.
-func (s *Service) NewChat(kind Kind, tier Tier) (Chat, error) {
-	now := s.opts.Clock.Now()
-	chat := Chat{ID: newChatID(), Kind: kind, Tier: tier, CreatedAt: now, UpdatedAt: now}
-	s.cache.putDraft(chat)
-	return chat, nil
-}
-
 // mutate applies change to the chat with id, in the store and in the cache. The change runs once on each copy,
 // so it must be a pure function of the chat it is given.
 func (s *Service) mutate(id string, change func(*Chat)) error {
@@ -141,49 +136,6 @@ func (s *Service) mutate(id string, change func(*Chat)) error {
 	next.UpdatedAt = now
 	s.cache.replace(index, next)
 	return nil
-}
-
-// mutateDraft applies change to a chat nobody has recorded yet. The chat is recorded once it has a message, so an
-// opened chat that is left empty never reaches the store.
-func (s *Service) mutateDraft(draft Chat, change func(*Chat)) error {
-	next := draft
-	next.Messages = slices.Clone(draft.Messages)
-	change(&next)
-	next.UpdatedAt = s.opts.Clock.Now()
-	if len(next.Messages) == 0 {
-		s.cache.putDraft(next)
-		return nil
-	}
-	if err := s.opts.Store.Insert(next); err != nil {
-		return err
-	}
-	s.cache.commitDraft(next)
-	return nil
-}
-
-// SetStep shows what the chat is doing besides its reply, from now until ClearStep. It runs on the UI thread.
-func (s *Service) SetStep(id, label string) {
-	s.steps[id] = Step{Label: label, Since: s.opts.Clock.Now()}
-}
-
-// ClearStep ends the step the chat shows.
-func (s *Service) ClearStep(id string) {
-	delete(s.steps, id)
-}
-
-// StepView is a step as a view shows it: its label and how long it has run, on the service's clock.
-type StepView struct {
-	Label   string
-	Elapsed time.Duration
-}
-
-// StepOf returns the step the chat is doing, if any, with how long it has run.
-func (s *Service) StepOf(id string) (StepView, bool) {
-	step, ok := s.steps[id]
-	if !ok {
-		return StepView{}, false
-	}
-	return StepView{Label: step.Label, Elapsed: s.opts.Clock.Now().Sub(step.Since)}, true
 }
 
 // Busy reports whether a turn of the chat is in flight.
@@ -387,25 +339,6 @@ func (s *Service) startTurn(id string) error {
 	s.runs[id] = r
 	go s.consume(id, r)
 	return nil
-}
-
-// setupFor is the loop setup of a chat: its model tier and, for conversations, the tools.
-func (s *Service) setupFor(chat Chat) agent.Setup {
-	setup := agent.Setup{
-		Model: &routeModel{
-			client:    s.opts.Client,
-			tier:      chat.Tier,
-			dispatch:  s.opts.Dispatch,
-			note:      s.noteRoute,
-			preflight: s.opts.Preflight,
-		},
-		Clock: s.opts.Clock,
-	}
-	if chat.Kind == KindConversation {
-		setup.Tools = s.opts.Tools.Registry
-		setup.Policy = s.opts.Tools.Policy
-	}
-	return setup
 }
 
 // noteRoute keeps the descriptor a tier resolved to, so the palette can name it. It runs on the UI thread.

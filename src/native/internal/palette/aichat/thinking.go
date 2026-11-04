@@ -14,6 +14,18 @@ import (
 // shownReasoningBytes bounds the reasoning text the block draws: its newest part, so a long thought stays cheap to draw.
 const shownReasoningBytes = 4000
 
+// shownResultBytes bounds the result text a tool row's Result disclosure draws.
+const shownResultBytes = 4000
+
+// truncateBytesForShow is the longest prefix of text that is at most n bytes and ends on a whole rune.
+func truncateBytesForShow(text string, n int) string {
+	cut := n
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut]
+}
+
 // progressRow is the line that says what a turn is doing, with the time since it began: a spinner, the label and the
 // elapsed time. The model's name is never part of it.
 func progressRow(c *ui.Context, k *design.TokenSet, label string, since, now time.Time) {

@@ -146,11 +146,28 @@ func TestReasoningGoldens(t *testing.T) {
 	golden.AssertMatrix(t, "reasoning-open", r.palette.View, pageGoldens)
 }
 
-// TestBuilderWritingGoldens renders a builder reply that is streaming the extension, with the Checking step under it.
+// TestBuilderWritingGoldens renders a builder turn that wrote its extension: the write's tool row is done, and the
+// check of the extension is the step under the transcript.
 func TestBuilderWritingGoldens(t *testing.T) {
 	r := newRig(t, nil)
-	record := r.builderWith("", user("A clock in the palette."), streaming("Writing the clock now.\n\n```json\n{\"id\": \"user.clock\"}"))
+	written := chat.Message{Author: chat.AuthorTool, Status: chat.StatusComplete, At: goldenNow, Text: "Installed and enabled \"Clock\".",
+		Tool: &chat.ToolRun{Name: "write_extension", Label: "Writing extension", Input: "user.clock", Outcome: "Installed and enabled"}}
+	record := r.builderWith("", user("A clock in the palette."), written)
 	r.service.SetStep(record.ID, "Checking…")
 	r.open(ChatView(r.deps(), record.ID))
 	golden.AssertMatrix(t, "builder-writing", r.palette.View, streamingGoldens)
+}
+
+// TestBuilderPreviewGoldens renders a builder chat with the extension preview open beside it: the rows the extension
+// shows now are on the right of the transcript.
+func TestBuilderPreviewGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	r.previewRows = func(string) []PreviewRow {
+		return []PreviewRow{{Title: "Local time", Subtitle: "Clock"}, {Title: "Today's date", Subtitle: "Clock"}}
+	}
+	record := r.builderWith("user.clock", user("A clock in the palette."), assistant("Installed the clock. It is not run yet."))
+	p := newPage(r.deps(), record.ID)
+	p.showPreview = true
+	r.open(p.view())
+	golden.AssertMatrix(t, "builder-preview", r.palette.View, pageGoldens)
 }

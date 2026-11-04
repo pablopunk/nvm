@@ -12,13 +12,13 @@ import (
 var ErrExtensionsLoading = errors.New("extensions are still loading")
 
 // Conversation is what the builder reads and writes on the chat service: the chats, the owners of an extension, the
-// messages it sends, the notices it writes and the extension a chat is bound to. chat.Service satisfies it.
+// step a chat shows while a write runs, and the extension a chat is bound to. chat.Service satisfies it.
 type Conversation interface {
 	Chat(id string) (chat.Chat, bool)
 	Owners(extension string) []chat.Chat
-	Send(id, text string) error
-	Note(id string, notice chat.Notice) error
 	Bind(id, extension string) error
+	SetStep(id, label string)
+	ClearStep(id string)
 }
 
 // Extensions is what the builder reads and writes on the extension manager. Check loads candidate files in a child

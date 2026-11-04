@@ -33,7 +33,10 @@ func (s *Service) apply(id string, r *run, event agent.Event) {
 		s.appendReasoning(id, event.Text)
 	case agent.EventDelta:
 		s.appendText(id, event.Text)
+	case agent.EventCallDrafting:
+		s.SetStep(id, event.Call.Label+"…")
 	case agent.EventCalls:
+		s.ClearStep(id)
 		s.endReply(id, event.Calls)
 	case agent.EventToolStart:
 		s.startToolRun(id, event.Call)

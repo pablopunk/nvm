@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log"
 
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
@@ -16,6 +17,14 @@ func (p *App) newBuilder() *builder.Workshop {
 
 // builderView opens a new builder chat, where the user describes the extension.
 func (p *App) builderView() *palette.View { return p.builderViewWith("") }
+
+// builderToolset returns the tools of a builder chat for one turn: none until the builder exists.
+func (p *App) builderToolset(chatID string) chat.Toolset {
+	if p.builder == nil {
+		return chat.Toolset{}
+	}
+	return p.builder.Toolset(chatID)
+}
 
 // builderViewWith opens the extension builder and, given a prompt, sends it at once ("Automate ...").
 func (p *App) builderViewWith(prompt string) *palette.View {
@@ -56,4 +65,35 @@ func (p *App) builderReview(id string) *palette.View {
 		}
 	}
 	return nil
+}
+
+// extensionPreviewRows is the rows an extension shows in its builder chat's preview: the snapshot the last refresh kept.
+func (p *App) extensionPreviewRows(extension string) []aichat.PreviewRow {
+	return p.previewRows[extension]
+}
+
+// refreshPreviewRows reads the rows an extension shows now, off the UI thread, and keeps them on the UI thread, so the
+// preview shows the extension as it is after each write.
+func (p *App) refreshPreviewRows(extension string) {
+	m := p.extensionManager()
+	if m == nil {
+		return
+	}
+	go func() {
+		var rows []aichat.PreviewRow
+		for _, result := range m.Roots(context.Background()) {
+			if result.ExtensionID != extension {
+				continue
+			}
+			for _, item := range result.Items {
+				rows = append(rows, aichat.PreviewRow{Title: item.Title, Subtitle: item.Subtitle})
+			}
+		}
+		p.onUI(func() {
+			if p.previewRows == nil {
+				p.previewRows = map[string][]aichat.PreviewRow{}
+			}
+			p.previewRows[extension] = rows
+		})
+	}()
 }

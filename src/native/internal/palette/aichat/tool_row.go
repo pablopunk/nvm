@@ -10,9 +10,11 @@ import (
 // Copy the transcript shows for a tool call that is still waiting for the user.
 const copyAwaiting = "Waiting for you. Enter allows it, ⌘D refuses it."
 
-// toolRow draws one tool call as an activity row: its icon and label, its arguments in short form, and the line that
-// says what it is doing or how it ended. A call waiting for the user says which keys answer it.
-func toolRow(c *ui.Context, m chat.Message) {
+// toolRow draws one tool call of the transcript, the same for every chat: its icon and title, its short detail, the
+// line that says what it is doing or how it ended, and, once it has ended, a Result disclosure that opens what the
+// model read. A call waiting for the user says which keys answer it. The transcript never shows what a call was given
+// beyond its short detail, so a written extension's source stays out of the chat.
+func toolRow(c *ui.Context, p *page, index int, m chat.Message) {
 	k := design.Tokens(c)
 	run := m.Tool
 	ui.Column(c).Gap(4).Padding(8, 12).Radius(8).Background(k.Surface).Border(1, k.EdgeSubtle).Children(func() {
@@ -24,7 +26,34 @@ func toolRow(c *ui.Context, m chat.Message) {
 			}
 		})
 		ui.Text(c, toolLine(m)).FontSize(11).TextColor(toolLineColor(k, m.Status)).MaxLines(2)
+		if resultReady(m) {
+			resultDisclosure(c, p, index, m.Text)
+		}
 	})
+}
+
+// resultReady reports whether a tool row has a result to show: the call has ended and the model read something.
+func resultReady(m chat.Message) bool {
+	return m.Text != "" && m.Status != chat.StatusRunning && m.Status != chat.StatusAwaiting
+}
+
+// resultDisclosure is the closed Result disclosure of a tool row; opened, it shows the newest part of the result.
+func resultDisclosure(c *ui.Context, p *page, index int, result string) {
+	k := design.Tokens(c)
+	open := p.resultOpen[index]
+	if ui.Collapsible(c, "Result", &open, func() {
+		ui.Text(c, clipResult(result)).FontSize(11).TextColor(k.Muted)
+	}).Changed() {
+		p.resultOpen[index] = open
+	}
+}
+
+// clipResult is the start of a result, at most shownResultBytes, cut on a whole rune and marked when cut.
+func clipResult(result string) string {
+	if len(result) <= shownResultBytes {
+		return result
+	}
+	return truncateBytesForShow(result, shownResultBytes) + "…"
 }
 
 // toolIcon names the icon of a tool. A tool without one of its own shows the sparkles.

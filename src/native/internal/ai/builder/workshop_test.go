@@ -1,200 +1,172 @@
 package builder
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 
-	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// TestFinishedReplyInstallsEnabledAndBindsTheChat is the happy path: the candidate loads, is installed enabled, the chat
-// owns the extension, and the user is told it is on.
-func TestFinishedReplyInstallsEnabledAndBindsTheChat(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	extensions := newFakeExtensions(checkResult{methods: []string{"RootItems"}})
-	workshop, queue := newWorkshopFor(conversation, extensions)
-
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if !extensions.enabled["user.clock"] {
-		t.Fatal("the extension was installed off; the desktop app enables it at once")
+// clockArgs is the write_extension arguments of a valid clock extension.
+func clockArgs(t *testing.T) json.RawMessage {
+	t.Helper()
+	args, err := json.Marshal(map[string]any{
+		"manifest": `{"apiVersion":"1.0","id":"user.clock","title":"Clock"}`,
+		"source":   "package main\n\nfunc SearchItems() {}\n",
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if conversation.bound["b1"] != "user.clock" {
-		t.Fatalf("the chat is bound to %q; want user.clock", conversation.bound["b1"])
-	}
-	if len(conversation.sent) != 0 {
-		t.Fatalf("a good reply sent %q back to the model", conversation.sent)
-	}
-	last := conversation.notes[len(conversation.notes)-1]
-	if last.Kind != chat.NoticeNote || !strings.Contains(last.Message, "installed and enabled") {
-		t.Fatalf("the last note is %+v; want the review notice", last)
-	}
+	return args
 }
 
-// TestRejectedSourceGoesBackToTheModelAndIsFixed scripts the bad-source reply the rig journey uses: the first source
-// does not compile, the model is told why, and its second source installs.
-func TestRejectedSourceGoesBackToTheModelAndIsFixed(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	extensions := newFakeExtensions(
-		checkResult{err: errors.New("extension source does not compile: undefined: api.Itme")},
-		checkResult{methods: []string{"RootItems"}},
-	)
-	workshop, queue := newWorkshopFor(conversation, extensions)
+// synchronous runs every UI call at once, as a UI thread that is free does.
+func synchronous(fn func()) { fn() }
 
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], "undefined: api.Itme") {
-		t.Fatalf("the model was sent %q; want the compile error", conversation.sent)
-	}
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], reply("user.clock", goodSource))
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if !extensions.enabled["user.clock"] || conversation.bound["b1"] != "user.clock" {
-		t.Fatal("the fixed extension was not installed enabled and bound to the chat")
-	}
-}
-
-// TestFixAttemptsAreBounded: after MaxFixAttempts fixes the chat fails with the reason and nothing is installed.
-func TestFixAttemptsAreBounded(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	broken := checkResult{err: errors.New("extension source does not compile")}
-	extensions := newFakeExtensions(broken)
-	workshop, queue := newWorkshopFor(conversation, extensions)
-
-	for range MaxFixAttempts + 1 {
-		workshop.Settled("b1", finished())
-		awaitUI(t, queue)
-		conversation.chats["b1"] = appendReply(conversation.chats["b1"], reply("user.clock", goodSource))
-	}
-
-	if len(conversation.sent) != MaxFixAttempts {
-		t.Fatalf("the model was asked %d times; want %d", len(conversation.sent), MaxFixAttempts)
-	}
-	last := conversation.notes[len(conversation.notes)-1]
-	if last.Kind != chat.NoticeFailed || !strings.Contains(last.Message, "does not compile") {
-		t.Fatalf("the last note is %+v; want the failure with its reason", last)
-	}
-	if _, ok := extensions.installed["user.clock"]; ok {
-		t.Fatal("a rejected extension was installed")
-	}
-}
-
-// TestReplyWithoutBlocksIsSentBack covers a reply that forgot the code: it is a bounded fix, not a silent stop.
-func TestReplyWithoutBlocksIsSentBack(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	conversation.chats["b1"] = appendReply(conversation.chats["b1"], "Sorry, I cannot.")
-	workshop, _ := newWorkshopFor(conversation, newFakeExtensions())
-
-	workshop.Settled("b1", finished())
-
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], "```go block") {
-		t.Fatalf("the model was sent %q; want the block rule", conversation.sent)
-	}
-}
-
-// TestSourceWithoutEntryPointIsRefused: a source that loads but implements nothing is not an extension.
-func TestSourceWithoutEntryPointIsRefused(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	extensions := newFakeExtensions(checkResult{methods: nil})
-	workshop, queue := newWorkshopFor(conversation, extensions)
-
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], "no entry point") {
-		t.Fatalf("the model was sent %q; want the entry point rule", conversation.sent)
-	}
-}
-
-// TestStoppedReplyIsLeftAlone: only a finished reply is built.
-func TestStoppedReplyIsLeftAlone(t *testing.T) {
-	conversation := newFakeConversation(builderChat("b1"))
-	workshop, queue := newWorkshopFor(conversation, newFakeExtensions())
-
-	workshop.Settled("b1", chat.Outcome{Ending: chat.EndStopped})
-
-	select {
-	case <-queue:
-		t.Fatal("a stopped reply was built")
-	default:
-	}
-	if len(conversation.sent) != 0 || len(conversation.notes) != 0 {
-		t.Fatal("a stopped reply wrote to the chat")
-	}
-}
-
-// TestNewIDMustNotBelongToAnotherChatOrExtension protects other extensions and other chats' work.
-func TestNewIDMustNotBelongToAnotherChatOrExtension(t *testing.T) {
-	owner := builderChat("other")
-	owner.Extension = "user.clock"
-	conversation := newFakeConversation(builderChat("b1"), owner)
+// TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles checks the write: the extension is checked, installed
+// enabled, the steps the chat shows are checking then installing and then cleared, and the chat is bound to the
+// extension once its turn settles.
+func TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles(t *testing.T) {
+	conversation := newFakeConversation(builderChat("chat-1"))
 	extensions := newFakeExtensions()
-	extensions.existing["user.clock"] = api.Manifest{Identity: api.Identity{ID: "user.clock", Title: "Clock"}}
-	workshop, _ := newWorkshopFor(conversation, extensions)
+	w := New(conversation, extensions, synchronous)
 
-	workshop.Settled("b1", finished())
-
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], "belongs to another AI chat") {
-		t.Fatalf("the model was sent %q; want the ownership rule", conversation.sent)
+	result, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	if err != nil {
+		t.Fatalf("writeExtension: %v", err)
+	}
+	if !strings.Contains(result.Text, `Installed and enabled "Clock"`) || result.Outcome != "Installed and enabled" {
+		t.Fatalf("result = %+v, want the installed line", result)
+	}
+	if strings.Join(extensions.installs, ",") != "user.clock" {
+		t.Fatalf("installs = %v, want user.clock", extensions.installs)
+	}
+	if strings.Join(conversation.steps, "|") != "Checking…|Installing…|" {
+		t.Fatalf("steps = %q, want checking, installing, then cleared", conversation.steps)
+	}
+	if _, bound := conversation.bound["chat-1"]; bound {
+		t.Fatal("the chat was bound before its turn settled")
+	}
+	w.Settled("chat-1", finished())
+	if conversation.bound["chat-1"] != "user.clock" {
+		t.Fatalf("bound = %v, want the chat bound to user.clock", conversation.bound)
 	}
 }
 
-// TestEditedChatKeepsItsExtensionID: a chat bound to an extension may not write a different id.
-func TestEditedChatKeepsItsExtensionID(t *testing.T) {
-	edit := builderChat("b1")
-	edit.Extension = "user.clock"
-	conversation := newFakeConversation(edit)
-	workshop, _ := newWorkshopFor(conversation, newFakeExtensions())
-	conversation.chats["b1"] = appendReply(edit, reply("user.other", goodSource))
-
-	workshop.Settled("b1", finished())
-
-	if len(conversation.sent) != 1 || !strings.Contains(conversation.sent[0], "Keep its id") {
-		t.Fatalf("the model was sent %q; want the id rule", conversation.sent)
-	}
-}
-
-// TestEditingReplacesTheInstalledVersionEnabled: an edit installs the new version enabled, as a new one is.
-func TestEditingReplacesTheInstalledVersionEnabled(t *testing.T) {
-	edit := builderChat("b1")
-	edit.Extension = "user.clock"
-	conversation := newFakeConversation(edit)
-	extensions := newFakeExtensions(checkResult{methods: []string{"RootItems"}})
-	extensions.existing["user.clock"] = api.Manifest{Identity: api.Identity{ID: "user.clock", Title: "Clock"}}
-	extensions.enabled["user.clock"] = true
-	workshop, queue := newWorkshopFor(conversation, extensions)
-
-	workshop.Settled("b1", finished())
-	awaitUI(t, queue)
-
-	if !extensions.enabled["user.clock"] {
-		t.Fatal("the edited extension was installed off")
-	}
-}
-
-// TestSystemPromptCarriesTheCurrentFilesOfAnEdit checks the edit context names the id and includes the source.
-func TestSystemPromptCarriesTheCurrentFilesOfAnEdit(t *testing.T) {
+// TestWriteReturnsARejectionAndInstallsNothing checks an extension without an entry point is refused as the tool's
+// error, so the model can fix it in the same turn, and nothing is installed.
+func TestWriteReturnsARejectionAndInstallsNothing(t *testing.T) {
+	conversation := newFakeConversation(builderChat("chat-1"))
 	extensions := newFakeExtensions()
-	extensions.existing["user.clock"] = api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: "user.clock", Title: "Clock"}}
-	extensions.source["user.clock"] = "package main // current marker\n"
-	workshop, _ := newWorkshopFor(newFakeConversation(), extensions)
+	extensions.methods = nil
+	w := New(conversation, extensions, synchronous)
 
-	prompt := workshop.SystemPrompt(chat.Chat{ID: "b1", Kind: chat.KindBuilder, Extension: "user.clock"})
-
-	if !strings.Contains(prompt, "current marker") || !strings.Contains(prompt, `Its id is "user.clock"`) {
-		t.Fatal("the edit prompt does not carry the extension's current source and id")
+	_, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	if err == nil || !strings.Contains(err.Error(), "no entry point") {
+		t.Fatalf("err = %v, want the entry point rejection", err)
 	}
-	if strings.Contains(workshop.SystemPrompt(chat.Chat{Kind: chat.KindBuilder}), "current marker") {
-		t.Fatal("a new extension's prompt carries another extension's source")
+	if len(extensions.installs) != 0 || conversation.steps[len(conversation.steps)-1] != "" {
+		t.Fatalf("installs = %v, steps = %q; want nothing installed and the step cleared", extensions.installs, conversation.steps)
 	}
 }
 
-func appendReply(record chat.Chat, text string) chat.Chat {
-	next := record
-	next.Messages = append(append([]chat.Message(nil), record.Messages...), chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusComplete})
-	return next
+// TestWriteRefusesAnIdAnotherExtensionHas checks a new chat cannot take the id of an installed extension.
+func TestWriteRefusesAnIdAnotherExtensionHas(t *testing.T) {
+	conversation := newFakeConversation(builderChat("chat-1"))
+	extensions := newFakeExtensions()
+	extensions.existing["user.clock"] = clockManifestValue(t)
+	w := New(conversation, extensions, synchronous)
+
+	_, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	if err == nil || !strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("err = %v, want the id refusal", err)
+	}
+	if len(extensions.installs) != 0 {
+		t.Fatalf("installs = %v, want none", extensions.installs)
+	}
+}
+
+// TestBoundChatKeepsItsIdAndRefusesAnother checks a chat that changes an extension may only write that extension's id.
+func TestBoundChatKeepsItsIdAndRefusesAnother(t *testing.T) {
+	record := builderChat("chat-1")
+	record.Extension = "user.clock"
+	conversation := newFakeConversation(record)
+	extensions := newFakeExtensions()
+	w := New(conversation, extensions, synchronous)
+
+	other, _ := json.Marshal(map[string]any{"manifest": `{"apiVersion":"1.0","id":"user.other","title":"Other"}`, "source": "package main\n"})
+	if _, err := w.writeExtension(context.Background(), "chat-1", other); err == nil || !strings.Contains(err.Error(), "Keep its id") {
+		t.Fatalf("err = %v, want the bound-id refusal", err)
+	}
+	if _, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t)); err != nil {
+		t.Fatalf("the bound id should write: %v", err)
+	}
+}
+
+// TestWriteStopsWaitingWhenTheTurnEnds checks a write whose turn is cancelled before the UI thread answers returns
+// rather than waiting forever.
+func TestWriteStopsWaitingWhenTheTurnEnds(t *testing.T) {
+	conversation := newFakeConversation(builderChat("chat-1"))
+	w := New(conversation, newFakeExtensions(), func(func()) {})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := w.writeExtension(ctx, "chat-1", clockArgs(t)); err == nil {
+		t.Fatal("a write whose turn ended should fail, not wait")
+	}
+}
+
+// TestWriteFailureFromTheInstallIsReturned checks an install that the manager refuses is the tool's error.
+func TestWriteFailureFromTheInstallIsReturned(t *testing.T) {
+	extensions := newFakeExtensions()
+	extensions.installErr = errors.New("disk full")
+	w := New(newFakeConversation(builderChat("chat-1")), extensions, synchronous)
+	if _, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t)); err == nil || err.Error() != "disk full" {
+		t.Fatalf("err = %v, want the install failure", err)
+	}
+}
+
+// TestWriteArgumentsAreCheckedFirst checks a write with a bad manifest never reaches the chat or the manager.
+func TestWriteArgumentsAreCheckedFirst(t *testing.T) {
+	extensions := newFakeExtensions()
+	conversation := newFakeConversation(builderChat("chat-1"))
+	w := New(conversation, extensions, synchronous)
+	bad, _ := json.Marshal(map[string]any{"manifest": "{", "source": "package main"})
+	if _, err := w.writeExtension(context.Background(), "chat-1", bad); err == nil || len(conversation.steps) != 0 {
+		t.Fatalf("err = %v, steps = %q; want a refusal before any step", err, conversation.steps)
+	}
+}
+
+// TestToolsetOffersTheReaderAndTheWriter checks a builder turn is offered exactly the two tools.
+func TestToolsetOffersTheReaderAndTheWriter(t *testing.T) {
+	w := New(newFakeConversation(), newFakeExtensions(), synchronous)
+	toolset := w.Toolset("chat-1")
+	wire, err := toolset.Registry.Wire()
+	if err != nil {
+		t.Fatalf("Wire: %v", err)
+	}
+	for _, name := range []string{readAPIToolName, writeToolName} {
+		if !strings.Contains(string(wire), name) {
+			t.Fatalf("tools = %s, want %s", wire, name)
+		}
+	}
+}
+
+// TestSummaryOfAWriteIsTheExtensionId checks the transcript row names the extension, not the source it carries.
+func TestSummaryOfAWriteIsTheExtensionId(t *testing.T) {
+	if got := summarizeWrite(clockArgs(t)); got != "user.clock" {
+		t.Fatalf("summary = %q, want user.clock", got)
+	}
+}
+
+// clockManifestValue is the manifest of the clock extension as the manager returns it.
+func clockManifestValue(t *testing.T) api.Manifest {
+	t.Helper()
+	var manifest api.Manifest
+	if err := json.Unmarshal([]byte(`{"apiVersion":"1.0","id":"user.clock","title":"Clock"}`), &manifest); err != nil {
+		t.Fatal(err)
+	}
+	return manifest
 }

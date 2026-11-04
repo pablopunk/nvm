@@ -201,6 +201,7 @@ func (r *turnRun) consume(stream ModelStream) (backend.Message, error) {
 			r.emit(Event{Kind: EventDelta, Text: chunk.Text})
 		}
 		if chunk.ToolDelta != nil {
+			r.announceDraft(calls, *chunk.ToolDelta)
 			calls.add(*chunk.ToolDelta)
 		}
 		if chunk.Usage != nil {
@@ -214,6 +215,21 @@ func (r *turnRun) consume(stream ModelStream) (backend.Message, error) {
 		}
 	}
 	return assistantMessage(text.String(), calls.list()), nil
+}
+
+// announceDraft emits EventCallDrafting the first time a tool call of the model step names its tool, so the transcript
+// can say what the model is writing while its arguments stream.
+func (r *turnRun) announceDraft(calls *callAssembler, delta backend.ToolCallDelta) {
+	if delta.Name == "" || calls.named(delta.Index) {
+		return
+	}
+	info := CallInfo{ID: delta.ID, Name: delta.Name, Label: delta.Name}
+	if r.setup.Tools != nil {
+		if tool, known := r.setup.Tools.Lookup(delta.Name); known {
+			info.Label = tool.Label
+		}
+	}
+	r.emit(Event{Kind: EventCallDrafting, Call: info})
 }
 
 // assistantMessage builds the assistant entry of a model turn. Content is left out when a turn only calls tools.

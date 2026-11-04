@@ -251,6 +251,8 @@ Shared view parts:
 
 Presentation: `root`, `stacked`, `preview`, `side-preview`. A view-producing command invoked while another view is open is stacked below it, and dismissing it restores the parent without reopening it.
 
+`side-preview` shows the selected row's detail beside the list, the same inspector pane an item's `Detail` opens. The AI builder uses the same split: a builder chat that wrote an extension can show that extension's rows beside its transcript (Show Preview, ⌃⇧P), refreshed after each write. The preview reads a snapshot, so it never waits on the extension.
+
 Item ids must be unique within a view (`Validate` checks). Collection record ids must not start with `__nvm:`, which the host reserves for its own rows.
 
 ## 8. Forms and the 16 field types

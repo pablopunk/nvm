@@ -16,13 +16,15 @@ const (
 	EventStep      EventKind = "step"
 	EventDelta     EventKind = "delta"
 	EventReasoning EventKind = "reasoning"
-	EventCalls     EventKind = "calls"
-	EventToolStart EventKind = "tool_start"
-	EventApproval  EventKind = "approval"
-	EventToolEnd   EventKind = "tool_end"
-	EventError     EventKind = "error"
-	EventAborted   EventKind = "aborted"
-	EventDone      EventKind = "done"
+	// EventCallDrafting says the model has started writing the arguments of a tool call. Call names the tool.
+	EventCallDrafting EventKind = "call_drafting"
+	EventCalls        EventKind = "calls"
+	EventToolStart    EventKind = "tool_start"
+	EventApproval     EventKind = "approval"
+	EventToolEnd      EventKind = "tool_end"
+	EventError        EventKind = "error"
+	EventAborted      EventKind = "aborted"
+	EventDone         EventKind = "done"
 )
 
 // CallStatus says how one tool call ended.

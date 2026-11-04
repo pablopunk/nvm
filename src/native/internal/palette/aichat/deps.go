@@ -29,4 +29,7 @@ type Deps struct {
 	Review      func(extension string) *palette.View
 	PickImages  func(done func([]chat.Image))
 	PasteImage  func() (image chat.Image, ok bool, err error)
+	// PreviewRows returns the rows the extension with the id shows now, for the preview beside its builder chat. It runs
+	// on the UI thread every frame, so it returns a snapshot. Nil means no chat has a preview.
+	PreviewRows func(extension string) []PreviewRow
 }

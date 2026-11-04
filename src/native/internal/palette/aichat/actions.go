@@ -30,6 +30,9 @@ func (p *page) chatActions() []search.Action {
 	if i := latestReasoning(record.Messages); i >= 0 {
 		acts = append(acts, p.thinkingAction(i))
 	}
+	if p.previewable(record) {
+		acts = append(acts, p.previewAction(record))
+	}
 	acts = append(acts, p.switchTierAction(record.Tier), p.newChatAction(), p.deleteChatAction(record))
 	if record.Kind == chat.KindBuilder && record.Extension != "" && p.deps.Review != nil {
 		acts = append(acts, p.reviewAction())

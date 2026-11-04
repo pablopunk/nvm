@@ -30,6 +30,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -95,9 +96,12 @@ type App struct {
 	files          *fileService
 	chats          *chat.Service
 	builder        *builder.Workshop
-	timer          *Timer
-	learn          *usage.Learner
-	history        *palette.QueryHistory
+	// previewRows is the rows each extension shows in the preview beside its builder chat, read off the UI thread after
+	// each write and stored on the UI thread.
+	previewRows map[string][]aichat.PreviewRow
+	timer       *Timer
+	learn       *usage.Learner
+	history     *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session

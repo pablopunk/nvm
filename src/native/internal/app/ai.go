@@ -65,6 +65,7 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		Preflight:    p.checkCompatibility,
 		OnSettled:    p.chatSettled,
 		Tools:        p.chatToolset(),
+		BuilderTools: p.builderToolset,
 	})
 }
 
@@ -110,6 +111,7 @@ func (p *App) chatDeps() aichat.Deps {
 		Review:      p.builderReview,
 		PickImages:  p.chooseChatImages,
 		PasteImage:  p.clipboardChatImage,
+		PreviewRows: p.extensionPreviewRows,
 	}
 }
 
@@ -168,6 +170,9 @@ func (p *App) chatSettled(id string, outcome chat.Outcome) {
 	case chat.KindBuilder:
 		if p.builder != nil {
 			p.builder.Settled(id, outcome)
+		}
+		if record.Extension != "" {
+			p.refreshPreviewRows(record.Extension)
 		}
 	case chat.KindProofread:
 		if p.aiCommands != nil {

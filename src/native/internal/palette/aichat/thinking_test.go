@@ -74,16 +74,17 @@ func TestElapsedTimeShowsOnTheThinkingRow(t *testing.T) {
 	}
 }
 
-// TestBuilderShowsWritingAndItsSteps checks a builder reply that streams the extension says Writing extension, and a
-// step the workshop sets, such as Checking, shows under the transcript.
-func TestBuilderShowsWritingAndItsSteps(t *testing.T) {
+// TestBuilderShowsItsSteps checks the steps of a builder turn show under the transcript while they run: writing the
+// extension as its arguments stream, then checking it.
+func TestBuilderShowsItsSteps(t *testing.T) {
 	r := newRig(t, nil)
-	record := r.builderWith("", user("A clock."), streaming("```json\n{\"id\":\"user.clock\"}\n```"))
+	record := r.builderWith("", user("A clock."))
 	r.open(ChatView(r.deps(), record.ID))
 	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	r.service.SetStep(record.ID, "Writing extension…")
 	tt.Frame()
 	if !tt.HasText("Writing extension…") {
-		t.Fatal("a streaming builder reply should say Writing extension…")
+		t.Fatal("the step Writing extension… is not shown")
 	}
 	r.service.SetStep(record.ID, "Checking…")
 	tt.Frame()
@@ -111,5 +112,27 @@ func TestNoTimeYetStillShowsZeroSeconds(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("0s") {
 		t.Fatal("a turn that began now should read 0s")
+	}
+}
+
+// TestToolRowResultOpensOnRequest checks a finished tool row offers a closed Result disclosure, and opening it shows
+// what the model read, for every chat's tool rows alike.
+func TestToolRowResultOpensOnRequest(t *testing.T) {
+	r := newRig(t, nil)
+	done := chat.Message{Author: chat.AuthorTool, Status: chat.StatusComplete, At: goldenNow, Text: "Extension API reference, bytes 0 to 12.",
+		Tool: &chat.ToolRun{Name: "read_extension_api", Label: "Reading the extension API", Outcome: "Read part of the API"}}
+	record := r.chatWith("Plan", chat.TierSmart, user("Read it."), done)
+	r.open(ChatView(r.deps(), record.ID))
+	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	tt.Frame()
+	if !tt.HasText("Reading the extension API") || tt.HasText("bytes 0 to 12") {
+		t.Fatal("the tool row should show its title, with its result closed")
+	}
+	if err := tt.Click("Result"); err != nil {
+		t.Fatalf("Click Result: %v", err)
+	}
+	tt.Frame()
+	if !tt.HasText("bytes 0 to 12") {
+		t.Fatal("opening Result did not show what the model read")
 	}
 }

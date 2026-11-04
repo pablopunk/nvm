@@ -25,7 +25,7 @@ func renderMessage(c *ui.Context, p *page, index int, m chat.Message, last bool)
 		noticeCard(c, *m.Notice)
 	case chat.AuthorTool:
 		if m.Tool != nil {
-			toolRow(c, m)
+			toolRow(c, p, index, m)
 		}
 	default:
 		reply(c, p, index, m, last)
@@ -47,9 +47,6 @@ func reply(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 		return
 	}
 	p.deps.Reply(c, m.Text, streaming && last)
-	if record, ok := p.deps.Service.Chat(p.id); streaming && last && ok && record.Kind == chat.KindBuilder {
-		progressRow(c, k, "Writing extension…", m.At, p.deps.Now())
-	}
 	if m.Status == chat.StatusStopped {
 		ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 	}
