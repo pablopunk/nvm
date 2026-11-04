@@ -84,7 +84,9 @@ func (e extensionMenuBars) MenuBarExtensions() []extitems.Extension {
 	}
 	var listed []extitems.Extension
 	for _, ext := range m.MenuBarExtensions() {
-		listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		if e.p.visibility.shown(ext.ID) {
+			listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		}
 	}
 	return listed
 }

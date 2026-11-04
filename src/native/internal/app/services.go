@@ -74,6 +74,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 			p.recents = store.Doc(st, "emoji-recents.json", 1, func() emojiRecents { return emojiRecents{} })
 			p.rates = store.Doc(st, "rates.json", 1, defaultRateDocument)
 			p.restoreCompatibility(st)
+			p.restoreMenuBarVisibility(st)
 			cache = rateCache{doc: p.rates}
 		}
 	}

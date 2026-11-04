@@ -101,6 +101,9 @@ type App struct {
 	// popovers are the menu bar popovers, by item; each keeps its palette until its item goes.
 	popovers map[string]*menuPopover
 
+	// visibility holds which extensions show their menu bar items.
+	visibility menuBarVisibility
+
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.
 	userStore    *store.Store
