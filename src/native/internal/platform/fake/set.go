@@ -12,6 +12,7 @@ type Set struct {
 	Resolver     *Resolver
 	Clipboard    *Clipboard
 	Paster       *Paster
+	SelectedText *SelectedText
 	Shell        *Shell
 	Screens      *Screens
 	Notifier     *Notifier
@@ -34,14 +35,16 @@ type Set struct {
 // NewSet returns a complete set of empty fakes that supports every capability. Remove a capability from
 // Capabilities to test the code path where the OS lacks it.
 func NewSet() *Set {
+	clipboard := NewClipboard()
 	return &Set{
 		Clock:        NewClock(),
 		FS:           NewFS(),
 		HTTP:         NewHTTP(),
 		PublicHTTP:   NewHTTP(),
 		Resolver:     NewResolver(),
-		Clipboard:    NewClipboard(),
+		Clipboard:    clipboard,
 		Paster:       NewPaster(),
+		SelectedText: NewSelectedText(clipboard),
 		Shell:        NewShell(),
 		Screens:      NewScreens(),
 		Notifier:     NewNotifier(),
@@ -73,6 +76,7 @@ func (s *Set) Ports() platform.Ports {
 		Resolver:     s.Resolver,
 		Clipboard:    s.Clipboard,
 		Paster:       s.Paster,
+		SelectedText: s.SelectedText,
 		Shell:        s.Shell,
 		Screens:      s.Screens,
 		Notifier:     s.Notifier,

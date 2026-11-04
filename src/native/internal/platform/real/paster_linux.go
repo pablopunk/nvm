@@ -24,9 +24,15 @@ func pasteSupported() bool {
 	return err == nil
 }
 
-// pasteGesture sends Ctrl+V to the focused X11 window with xdotool, after checking the focused window's class
-// when expectedAppID is set. Ctrl+V is the 1.x gesture; terminals that paste with Ctrl+Shift+V are not covered.
+// pasteGesture sends Ctrl+V to the focused X11 window with xdotool. Ctrl+V is the 1.x gesture; terminals that paste
+// with Ctrl+Shift+V are not covered.
 func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
+	return keyGesture(ctx, helper, expectedAppID, "ctrl+v")
+}
+
+// keyGesture sends one key chord to the focused X11 window with xdotool, after checking the focused window's class
+// when expectedAppID is set.
+func keyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chord string) error {
 	if !pasteSupported() {
 		return platform.ErrUnsupported
 	}
@@ -39,7 +45,7 @@ func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID str
 			return platform.ErrConflict
 		}
 	}
-	_, err := runXdotool(ctx, helper, "key", "--clearmodifiers", "ctrl+v")
+	_, err := runXdotool(ctx, helper, "key", "--clearmodifiers", chord)
 	return err
 }
 
