@@ -55,8 +55,8 @@ func TestTextRowBuildsPasteAction(t *testing.T) {
 	if !hasAction(row.Actions, ActionPaste) {
 		t.Fatal("text row has no paste action")
 	}
-	if !hasAction(RowExtraActions(entry), ActionAskAI) {
-		t.Fatal("text entry has no ask-AI action")
+	if !hasAction(RowExtraActions(entry), ActionPin) {
+		t.Fatal("entry has no pin action")
 	}
 	if row.Primary.Type != ActionCopy {
 		t.Fatalf("primary = %s, want copy", row.Primary.Type)

@@ -16,9 +16,9 @@ Order is fixed by `getOptionActionRows` (App.tsx:4526). Rows follow the primary 
 |---|---|---|---|---|---|---|
 | G1 | App.tsx:4531 | customizable rows | Set keyboard shortcut | none | `canCustomizeCommandAction`: `customizable` or kind in app, builtin, clipboard-history, extension-action (model.ts:26, 679) | done (`shortcut_row_actions.go`) |
 | G2 | App.tsx:4539 | customizable rows with a binding | Remove keyboard shortcut | none | G1 and a shortcut is bound; subtitle is the shortcut | done |
-| G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | missing (no generic row Preview) |
-| G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | missing |
-| G5 | App.tsx:4567 | customizable rows | Set alias | none | G1 condition | missing (added in this change) |
+| G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | n/a in 2.0: every row with preview content has its own Preview action (files, clipboard) |
+| G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | n/a (file rows have Preview Contents; Quick Look is missing, see F3) |
+| G5 | App.tsx:4567 | customizable rows | Set alias | none | G1 condition | done (`shortcut_row_actions.go`, `palette/aliasview`) |
 | G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | missing |
 | G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | missing |
 | G8 | App.tsx:4591 | generated extension rows | Submit as PR | none | G6 condition and GitHub CLI installed; disabled with "Requires GitHub CLI (gh auth login)" until authed | missing |
@@ -38,7 +38,7 @@ Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias fo
 | A1 | apps.ts:217 | Open <name> (primary) | Enter | always | done (`Open <name>`) |
 | A2 | apps.ts:175 | Uninstall <name>… (destructive) | none | `app-uninstall` capability and path not under /System | done (`features/apps/view.go`) |
 | A3 | (generic) | Set keyboard shortcut / Remove keyboard shortcut | | G1, G2 | done |
-| A4 | (generic) | Set alias | | G5 | missing (added in this change) |
+| A4 | (generic) | Set alias | | G5 | done |
 | — | apps.ts:225 | Force Quit <name> | | 1.x shows it only in the Force Quit Apps command, not on the row | extra (removed from the row) |
 | — | (none) | Show in Folder, Copy Path, Quit <name> | | 1.x has no such row action | extra (removed from the row) |
 
@@ -49,11 +49,11 @@ Total for an app row in 1.x: Open, Uninstall (when supported), Set keyboard shor
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
 | F1 | files.ts:33 | Open <name> (primary) | Enter | always | done |
-| F2 | files.ts:9 | Preview Contents | ⌘Y | non-media file (`previewFile`) | partial (2.0 "Preview", ⌃Y) |
-| F2b | files.ts:9 | Preview | ⌘Y | image or video file | partial |
-| F3 | files.ts:25 | Quick Look (macOS; "Preview File" elsewhere, only with the quick-look capability) | none | `quick-look` capability | missing |
-| F4 | os.ts:410 | Show in Finder (macOS) / Show in File Explorer / Show in File Manager | none | always | partial (2.0 "Show in Folder", ⌃↵) |
-| — | (none) | Copy Path, Copy File, Move to Trash | | 1.x has none on file rows | extra (removed) |
+| F2 | files.ts:9 | Preview Contents | ⌘Y | non-media file (`previewFile`) | done (2.0 label ⌃Y, the platform's modifier label convention) |
+| F2b | files.ts:9 | Preview | ⌘Y | image or video file | done |
+| F3 | files.ts:25 | Quick Look (macOS; "Preview File" elsewhere, only with the quick-look capability) | none | `quick-look` capability | missing: the Go Shell port has no Quick Look call yet |
+| F4 | os.ts:410 | Show in Finder (macOS) / Show in File Explorer / Show in File Manager | none | always | done (`revealTitle`) |
+| — | (none) | Copy Path, Copy File, Move to Trash | | 1.x has none on file rows | extra: removed from the menu |
 | — | G3, G4 | generic Preview and Preview File | | suppressed by F2/F3 | n/a |
 
 File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
@@ -62,13 +62,14 @@ File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
-| C1 | clipboard-history.ts:392 | Copy Text (Copy Image for images; Copy Video Path for video) (primary) | Enter | always | partial (2.0 uses the row's primary title) |
-| C2 | clipboard-history.ts:372 | Preview | ⌘Y | always (preview intent) | partial |
-| C3 | clipboard-history.ts:443 | Paste Text | none | text entries only (not image or video) | partial (2.0 "Paste", ⌃↵, also on images) |
+| C1 | clipboard-history.ts:392 | Copy Text (Copy Image for images; Copy Video Path for video) (primary) | Enter | always | traced: 2.0 primary title not compared in a 1.x run |
+| C2 | clipboard-history.ts:372 | Preview | ⌘Y | always (preview intent) | done (2.0 label ⌃Y) |
+| C3 | clipboard-history.ts:443 | Paste Text | none | text entries only (not image or video) | done (2.0 label ⌃↵) |
 | C4 | clipboard-removal-actions.ts:1-140, clipboard-history.ts:469 | Manage History section: Remove Item | none | entry present; destructive, confirm "Remove “<title>” from clipboard history?" | done |
 | C5 | clipboard-removal-actions.ts:50 | Remove Last... (submenu): 5 Minutes, Hour, Day, Week | none | entry present | done |
-| C6 | clipboard-removal-actions.ts:124-139 | (history level, Clipboard History view) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | none | history not empty | done |
-| — | none | Pin, Unpin, Ask AI, Clear Unpinned | | 1.x has none | extra (see report: PLAN J05 asks for pin) |
+| C6 | clipboard-removal-actions.ts:124-139 | (history level, Clipboard History view) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | none | history not empty | removed from the entry menu; the view-level set is not changed by this pass |
+| — | none | Pin, Unpin | | 1.x has none | extra, kept: PLAN J05 asks for pin (owner decision) |
+| — | none | Ask AI, Clear All Unpinned | | 1.x has none | extra: removed from the entry menu |
 
 Clipboard entries have no keyboard shortcut or alias in 1.x.
 
@@ -80,7 +81,7 @@ Clipboard entries have no keyboard shortcut or alias in 1.x.
 | K2 | calculator.ts:97 | Continue Calculation | none | always (replaces the search with the result) | done |
 | K3 | calculator.ts:106 | Swap Units | none | unit conversion with a swap query | done |
 | K4 | calculator.ts:117 | Copy Unformatted Result | none | formatted result differs from raw | done |
-| K5 | calculator.ts:123 | Paste Result | none | always | partial (2.0 binds ⌃↵) |
+| K5 | calculator.ts:123 | Paste Result | none | always | done (2.0 label ⌃↵) |
 
 ### B5. Commands and built-in extension rows (extension-action, `src/app/extensions/*.ts`)
 
@@ -88,17 +89,17 @@ Commands are durable actions (`commandFromItem`, extension-action-builders.ts:2)
 
 | Command | 1.x file:line | Kind | 1.x primary title | 2.0 status |
 |---|---|---|---|---|
-| Lock Screen | system.ts:10 | extension-action | Lock Screen | partial (2.0 keys the shortcut by title) |
-| Sleep | system.ts:19 | extension-action | Sleep | partial |
-| Restart Computer | system.ts:28 | extension-action | Restart Computer | partial |
-| System Settings (Windows Settings on Windows) | system.ts:37, os.ts:395 | extension-action | System Settings | partial |
-| Quit Nevermind | system.ts:48 | extension-action | Quit Nevermind | partial |
-| Open Downloads | system.ts:103 (placesItems) | extension-action | Open Downloads | partial (keyed by title) |
-| Open Documents | system.ts:103 | extension-action | Open Documents | partial |
-| Open Desktop | system.ts:103 | extension-action | Open Desktop | partial |
+| Lock Screen | system.ts:10 | extension-action | Lock Screen | done (stable ID `command:lock-screen`) |
+| Sleep | system.ts:19 | extension-action | Sleep | done (stable ID) |
+| Restart Computer | system.ts:28 | extension-action | Restart Computer | partial: primary titled Restart Computer, row title still Restart |
+| System Settings (Windows Settings on Windows) | system.ts:37, os.ts:395 | extension-action | System Settings | missing as a root row (2.0 System Settings is the syspanes built-in, with no stable ID yet) |
+| Quit Nevermind | system.ts:48 | extension-action | Quit Nevermind | done (stable ID `command:quit-nevermind`) |
+| Open Downloads | system.ts:103 (placesItems) | extension-action | Open Downloads | done (stable ID `command:place-downloads`; row title is the folder name) |
+| Open Documents | system.ts:103 | extension-action | Open Documents | done (stable ID) |
+| Open Desktop | system.ts:103 | extension-action | Open Desktop | done (stable ID) |
 | Force Quit Apps | apps.ts:255 | extension-action | Force Quit Apps | done |
 | Clipboard History, AI Chats, Emoji & Symbols, Find Files by Meaning, Quick Notes, New Floating Note, Dictate, Extensions, Keyboard Shortcuts, Background Tasks, Settings, Check for Updates, Recent Errors, Report a Problem, OS Permissions | various | extension / extension-root | command title | done (ID-mapped in `portable_keys.go`) |
-| Window layouts (Left Half, Maximize, …) | window-management-commands.ts | extension-action | layout title | partial (keys via layout prefix) |
+| Window layouts (Left Half, Maximize, …) | window-management-commands.ts | extension-action | layout title | not re-traced in this pass; shortcuts keyed by the layout prefix |
 
 ### B6. Extension root items and extension actions (`extension-root-item`, `extension-action`)
 
@@ -143,14 +144,19 @@ No 1.x counterpart. Snippets, quicklinks and "Start timer" are 2.0 features (the
 
 ## C. Counts
 
-| | 1.x | done | partial | missing | extra (removed) | n/a |
-|---|---|---|---|---|---|---|
-| Generic options G1-G12 | 12 | see report | | | | |
-| Application rows | 3 + 1 | | | | | |
-| File rows | 4 | | | | | |
-| Clipboard entry rows | 6 | | | | | |
-| Calculator rows | 5 | | | | | |
-| Commands and built-ins | 1 (+ title) | | | | | |
-| AI chat rows | 3 | | | | | |
+Counted over the rows above (A: generic G1-G12; B: per kind). Statuses refer to this change.
 
-The counts are filled in by the parity test (`cmdk_parity_test.go`) and the report.
+| Group | 1.x actions | done | partial or traced | missing | extra (removed or kept) | n/a |
+|---|---|---|---|---|---|---|
+| Generic G1-G12 | 12 | 3 (G1, G2, G5) | 0 | 7 (G6-G12: Duplicate, Rename, Submit as PR, Tweak with AI, Override with AI, Restore original, Remove action) | 0 | 2 (G3, G4) |
+| Applications B1 | 3 (Open, Uninstall, alias sub-flow) | 4 with the generic set | 0 | 0 | 4 removed (Show in Folder, Copy Path, Quit, Force Quit) | 0 |
+| Files B2 | 4 | 3 | 0 | 1 (Quick Look) | 3 removed (Copy Path, Copy File, Move to Trash) | 0 |
+| Clipboard entries B3 | 5 (+ 3 view-level) | 4 | 2 | 0 | 2 kept (Pin, Unpin), 2 removed (Ask AI, Clear All Unpinned) | 0 |
+| Calculator B4 | 5 | 5 | 0 | 0 | 0 | 0 |
+| Commands and built-ins B5 | per command | system and places done with stable IDs | 1 (System Settings root row) | 1 | 0 | 0 |
+| Extension rows B6 | 3 cases | 0 | 0 | all authoring actions (G6-G12) | 0 | 0 |
+| AI chats B7 | 3 | 1 | 2 | 0 | 0 | 0 |
+| Snippets, quicklinks, timers B8 | 0 | 0 | 0 | 0 | 0 | 3 features, all 2.0 only |
+
+Not in this pass: alias matching for the built-in system and places rows and for extension rows (they match by title in
+their own search), the extension authoring group, Quick Look, and the AI override group.

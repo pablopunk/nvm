@@ -159,18 +159,6 @@ func TestClipboardHistoryDeleteRemovesAfterConfirm(t *testing.T) {
 }
 
 // TestClearAllUnpinnedNeedsAConfirmation: the bulk clear confirms, and keeps pinned entries.
-func TestClearAllUnpinnedNeedsAConfirmation(t *testing.T) {
-	p, _, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Clear All Unpinned").Run(p)
-	if p.Top().Title != "Confirm" || p.clip.history.Len() != 4 {
-		t.Fatalf("clear ran before confirmation: top %q, %d entries", p.Top().Title, p.clip.history.Len())
-	}
-	p.Results()[0].Actions[0].Run(p)
-	if p.clip.history.Len() != 1 {
-		t.Fatalf("entries after clear = %d, want only the pinned one", p.clip.history.Len())
-	}
-}
-
 // TestRemoveLastOffersTheTimeWindows: "Remove Last..." opens the four windows, each confirmed.
 func TestRemoveLastOffersTheTimeWindows(t *testing.T) {
 	p, _, _ := seededClipPalette(t)
@@ -201,7 +189,7 @@ func TestClipboardActionMenuOffersTheRowActions(t *testing.T) {
 	for _, a := range p.Results()[1].Actions {
 		titles = append(titles, a.Title)
 	}
-	for _, want := range []string{"Copy Text", "Paste", "Pin", "Ask AI", "Remove Item", "Remove Last...", "Clear All Unpinned"} {
+	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Pin", "Remove Item", "Remove Last..."} {
 		if !slices.Contains(titles, want) {
 			t.Fatalf("actions = %v, missing %q", titles, want)
 		}

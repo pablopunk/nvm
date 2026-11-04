@@ -27,7 +27,6 @@ const (
 	ActionPreview ActionType = "preview"
 	ActionPin     ActionType = "pin"
 	ActionUnpin   ActionType = "unpin"
-	ActionAskAI   ActionType = "ask-ai"
 	ActionRemove  ActionType = "remove"
 	ActionSubmenu ActionType = "submenu"
 )
@@ -133,17 +132,13 @@ func BuildRow(e Entry, historyLen int) Row {
 	}
 }
 
-// RowExtraActions returns the actions of an entry's menu that are not part of the row: ask AI for text, and
-// pin or unpin for any entry. The palette calls it when the action panel opens.
+// RowExtraActions returns the actions of an entry's menu that are not part of the row: pin or unpin, which 2.0 keeps
+// from the clipboard journey (PLAN J05). The palette calls it when the action panel opens.
 func RowExtraActions(e Entry) []Action {
-	var actions []Action
-	if isRichText(e) {
-		actions = append(actions, Action{Type: ActionAskAI, Title: "Ask AI", ItemID: e.ID})
-	}
 	if e.Pinned {
-		return append(actions, Action{Type: ActionUnpin, Title: "Unpin", ItemID: e.ID})
+		return []Action{{Type: ActionUnpin, Title: "Unpin", ItemID: e.ID}}
 	}
-	return append(actions, Action{Type: ActionPin, Title: "Pin", ItemID: e.ID})
+	return []Action{{Type: ActionPin, Title: "Pin", ItemID: e.ID}}
 }
 
 // isRichText reports whether an entry holds text that can be pasted as text.

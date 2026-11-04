@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -192,40 +193,32 @@ func TestPreviewsOfEachKind(t *testing.T) {
 	}
 }
 
-// TestFileActionsDriveTheDesktop checks Open, Show in Folder, Copy Path and Trash against the fake shell and clipboard.
-// Trash must ask first, and cancelling must not touch the file.
+// TestFileActionsDriveTheDesktop checks the file row's menu as 1.x lists it (Open, Preview Contents, Show in Finder)
+// against the fake shell. A file row has no Copy or Trash action.
 func TestFileActionsDriveTheDesktop(t *testing.T) {
 	svc := newTestFiles(t, testFileHome, fixturePaths())
 	fakeShell := svc.shell.(*fake.Shell)
-	clip := svc.clipboard.(*fake.Clipboard)
 	target := fixturePaths()[0]
 	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf")})
 	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents") {
 		t.Fatalf("row = %q / %q", row.Title, row.Subtitle)
 	}
+	if got, want := searchActionTitles(row.Actions), []string{"Open report-2024.pdf", "Preview Contents", revealTitle()}; !slices.Equal(got, want) {
+		t.Fatalf("file actions = %v, want %v", got, want)
+	}
 
-	open := &recordingHost{}
-	row.Actions[0].Run(open)
-	reveal := &recordingHost{}
-	row.Actions[1].Run(reveal)
-	copyPath := &recordingHost{}
-	row.Actions[3].Run(copyPath)
+	row.Actions[0].Run(&recordingHost{})
+	row.Actions[2].Run(&recordingHost{})
 	calls := fakeShell.Calls()
 	if len(calls) != 2 || calls[0] != (fake.ShellCall{Op: fake.OpShellOpenPath, Arg: target}) ||
 		calls[1] != (fake.ShellCall{Op: fake.OpShellReveal, Arg: target}) {
 		t.Fatalf("shell calls = %+v", calls)
 	}
-	if got, _ := clip.ReadText(); got != target {
-		t.Fatalf("clipboard = %q, want the path", got)
-	}
 
-	trash := &recordingHost{}
-	row.Actions[5].Run(trash)
-	if len(trash.pushed) != 1 {
-		t.Fatal("Move to Trash must open a confirmation view, not act at once")
-	}
-	if len(fakeShell.Calls()) != 2 {
-		t.Fatal("nothing may be trashed before the confirmation")
+	preview := &recordingHost{}
+	row.Actions[1].Run(preview)
+	if len(preview.pushed) != 1 {
+		t.Fatal("Preview Contents must open the preview view")
 	}
 }
 

@@ -117,8 +117,11 @@ func clipIcon(kind clipboard.Kind) string {
 func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) []search.Action {
 	id := e.ID
 	actions := []search.Action{{Title: row.Primary.Title, Dismiss: search.DismissNever, Run: func(h search.Host) { p.runClipCopy(h, id) }}}
-	if p.clip.caps.Supported(platform.CapabilityClipboardPaste) {
-		actions = append(actions, search.Action{Title: "Paste", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Dismiss: search.DismissNever,
+	actions = append(actions, search.Action{Title: "Preview", Label: "⌃Y", Mods: mod, Key: ui.KeyY, Run: func(h search.Host) {
+		h.Push(p.clipPreviewView(e))
+	}})
+	if p.clip.caps.Supported(platform.CapabilityClipboardPaste) && isTextCopy(e) {
+		actions = append(actions, search.Action{Title: "Paste Text", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Dismiss: search.DismissNever,
 			Run: func(h search.Host) { p.runClipPaste(h, id) }})
 	}
 	for _, extra := range clipboard.RowExtraActions(e) {
@@ -127,25 +130,17 @@ func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) 
 	for _, removal := range row.Manage {
 		actions = append(actions, p.clipRemovalAction(removal))
 	}
-	for _, removal := range clipboard.RemovalActions(historyLen, nil) {
-		actions = append(actions, p.clipRemovalAction(removal))
-	}
-	return append(actions, p.clipClearUnpinnedAction())
+	return actions
 }
 
-// clipExtraAction is the ask-AI, pin or unpin action of a row.
+// isTextCopy reports whether a copy is text, with or without markup. Only those have a Paste Text action in 1.x.
+func isTextCopy(e clipboard.Entry) bool {
+	return e.Kind == clipboard.KindText || e.Kind == clipboard.KindHTML || e.Kind == clipboard.KindRTF
+}
+
+// clipExtraAction is the pin or unpin action of a row.
 func (p *App) clipExtraAction(a clipboard.Action, e clipboard.Entry) search.Action {
-	id := e.ID
-	switch a.Type {
-	case clipboard.ActionAskAI:
-		text := e.Text
-		return search.Action{Title: a.Title, Label: "⌃J", Mods: mod, Key: ui.KeyJ, Run: func(h search.Host) {
-			h.Push(p.newChatView(clipAskPrompt(text)))
-		}}
-	case clipboard.ActionPin:
-		return p.clipPinAction(id, true, a.Title)
-	}
-	return p.clipPinAction(id, false, a.Title)
+	return p.clipPinAction(e.ID, a.Type == clipboard.ActionPin, a.Title)
 }
 
 // clipPinAction pins or unpins an entry and runs the search again, so the pinned rows move.
@@ -179,6 +174,22 @@ func (p *App) clipRemovalAction(a clipboard.Action) search.Action {
 	return action
 }
 
+// clipPreviewView is the full-palette preview of one copy: the same picture or text as its detail pane.
+func (p *App) clipPreviewView(e clipboard.Entry) *palette.View {
+	return &palette.View{
+		Title:       "Preview",
+		Placeholder: "Preview",
+		HideInput:   true,
+		Body: func(c *ui.Context, _ search.Host) {
+			if e.Kind == clipboard.KindImage {
+				p.clipImageDetail(c, e)
+				return
+			}
+			p.clipDetail(c, e)
+		},
+	}
+}
+
 // clipSubmenuView is the list a "Remove Last..." action opens: one confirmed removal per time window.
 func (p *App) clipSubmenuView(submenu *clipboard.Submenu) *palette.View {
 	return &palette.View{
@@ -192,14 +203,6 @@ func (p *App) clipSubmenuView(submenu *clipboard.Submenu) *palette.View {
 			return items
 		},
 	}
-}
-
-// clipClearUnpinnedAction removes every entry that is not pinned, after a confirmation.
-func (p *App) clipClearUnpinnedAction() search.Action {
-	return search.Action{Title: "Clear All Unpinned", Label: "⌃⇧⌫", Mods: mod | ui.Shift, Key: ui.KeyBackspace, Dismiss: search.DismissNever,
-		Run: func(h search.Host) {
-			h.Push(palette.Confirm("Clear All Unpinned", "Remove every clipboard item that is not pinned?", p.clearUnpinned))
-		}}
 }
 
 // removeEntries removes the entries a range selects and says how many went.
@@ -252,9 +255,4 @@ func clipChangeMessage(err error) string {
 		return "Clipboard history is read-only: it was written by a newer version of Nevermind."
 	}
 	return "Clipboard history could not be changed."
-}
-
-// clipAskPrompt is the first message of an AI chat about a copied text.
-func clipAskPrompt(text string) string {
-	return "Here is some text from my clipboard:\n\n```\n" + text + "\n```\n\nWhat is it? Be brief."
 }

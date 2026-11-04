@@ -46,8 +46,8 @@ type Row struct {
 	Actions  []Action
 }
 
-// AppRows lists the apps in index order with their actions: Open first, then Reveal, Copy Path, Quit and Force
-// Quit while running, and Uninstall when the platform supports it.
+// AppRows lists the apps in index order with their actions, as 1.x lists them: Open first, then Uninstall when the
+// platform supports it. The rest of an app's menu is the shared customization set (shortcut and alias) the palette adds.
 func AppRows(list []App, running map[string]bool, uninstallable bool) []Row {
 	rows := make([]Row, 0, len(list))
 	for _, app := range list {
@@ -61,17 +61,7 @@ func appRow(app App, isRunning, uninstallable bool) Row {
 	if isRunning {
 		row.Subtitle = RunningSubtitle
 	}
-	row.Actions = []Action{
-		{Kind: ActionOpen, Title: "Open " + app.Name},
-		{Kind: ActionReveal, Title: "Show in Folder"},
-		{Kind: ActionCopyPath, Title: "Copy Path"},
-	}
-	if isRunning {
-		row.Actions = append(row.Actions,
-			Action{Kind: ActionQuit, Title: "Quit " + app.Name},
-			forceQuitAction(app.Name),
-		)
-	}
+	row.Actions = []Action{{Kind: ActionOpen, Title: "Open " + app.Name}}
 	if uninstallable {
 		row.Actions = append(row.Actions, Action{Kind: ActionUninstall, Title: "Uninstall " + app.Name + "…", Destructive: true})
 	}
