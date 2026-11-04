@@ -44,3 +44,85 @@ No port was needed from this window, so this sync adds no Go code or tests.
 - **F2. Side-preview presentation (WP3.3).** Clipboard history and extension views declare `side-preview`, but 2.0
   draws only the plain list. When WP3.3 draws it, the empty state must sit in one container with its actions, as in
   #281 b. Add an L2 golden for the empty side-preview list at that point.
+
+## Sync 2026-11-04: main e5f13458
+
+- Previous merge base: `4c4c0425` (main at the prior sync).
+- Branch: `native/main-sync` (worktree `/Users/pablopunk/.t3/worktrees/nvm/native-main-sync`).
+- Merge commit: `e5f6d9a7` (`Merge origin/main into native/main-sync`). Clean, with no conflicts: main changed only
+  `src/app` and the root docs, and this branch changed only `src/native`.
+- Commits in window: one, `e5f13458` (PR #283: AI-ranked second batch in emoji and symbol search). It touches
+  `src/app` and `src/backend`; the rest of its files are `.agents/`, `scripts/file-size-baseline.json` and tests.
+- `scripts/lint-changed.cjs origin/main` (Biome on changed files, the Windows platform inventory and the extension
+  fixture coverage check) passed on the merged tree.
+
+| Date | Main SHA | Commit | Summary | 2.0 status | 2.0 file or fix |
+|---|---|---|---|---|---|
+| 2026-11-04 | e5f13458 | #283 a | Views take `onSearchChange`: the host runs it for the trimmed search text once typing rests for 350 ms, and the patch's `searchResultIds` show after the local matches, once each, unfiltered by the query, dropped when the text changes. Failures stay silent, empty text never asks. | needs a port (ported) | `internal/ext/api/view.go` (`OnSearchChange`, list and grid only), `patch.go` (`SearchResultIds`), `internal/palette/extview/search_change.go` and `session.go` (`withSecondBatch`). `internal/app/extension_views.go` gives the views the app's `onUI`. Commit `0d97ada5`. |
+| 2026-11-04 | e5f13458 | #283 b | Emoji & Symbols second batch: the decision model is asked in three steps (categories, choice shortlist of 31 plus none of these, one predicate per candidate), matches at 0.5 and up, best first, cached for 32 searches, text under three characters never asks, Flags, Technical and Math are never asked. Signed in only. | needs a port (ported) | `internal/ai/charsearch` (funnel, matcher, provider); `internal/app/emoji_meaning.go` (account gate, rows score zero so the catalog stays first); `internal/app/emoji_view.go` (`Providers`). Commits `ee64d678`, `1e948a62`. |
+| 2026-11-04 | e5f13458 | #283 c | The shared decision contract sends `probabilities` and `confidence` on choice answers, which the second batch ranks by. 2.0's client dropped them. | needs a port (ported) | `internal/backend/decisions_wire.go` (`DecisionAnswer.Probabilities`, `Confidence`); the recorded contract test now checks them. Commit `8ce856f1`. |
+| 2026-11-04 | e5f13458 | #283 d | The host's merge rule for a second batch: local rows first, the batch after them without repeats, and the batch takes its room from the limit or `MaxVisibleItems` first. | needs a port (ported) | `internal/search/append.go` (`AppendedProvider`), `merge_appended.go` (`mergeAppended` replaces `merge`), `internal/palette/extview/search_change.go` (`searchChangeRows`). Commit `afaebdb5`. |
+| 2026-11-04 | e5f13458 | #283 e | Dev UI fixture "Grid Search Results" (typing "yellow" adds two fruit after a second). | needs a port (ported) | `internal/ext/testdata/extensions/acme.views` command `search-results` and handler `search-meaning`; L2 test and golden in `internal/app/extension_search_change_test.go`. Commits `0d97ada5`, `e3db780b`. |
+| 2026-11-04 | e5f13458 | #283 f | The emoji picker declares the `ai` capability and runs the second batch only for an account that can ask. | needs a port (ported) | 2.0 built-ins have no capability review; the account gate in `internal/app/emoji_meaning.go` (`characterDecider`) is the equivalent. A signed-out picker has no second batch. Commit `1e948a62`. |
+| 2026-11-04 | e5f13458 | #283 g | The builder's API reference lists `onSearchChange` as an AI capability note. | needs a port (ported) | 2.0's reference is generated from the Go API (`internal/ai/builder/apiref`). Regenerated `reference_gen.go` on the box; the drift test passes. Commit `0d97ada5`. |
+| 2026-11-04 | e5f13458 | #283 h | Type and doc updates: `nevermind-extension-api.d.ts` (`searchResultIds`, `onSearchChange`, `Invocation.value`), and `model.ts` (`CommandView.onSearchChange`, `CommandViewPatch.searchResultIds`). | needs a port (ported) | Go TSDoc in `internal/ext/api` and `docs/extension-api.md` (section 7, the `OnSearchChange` bullet and the `Invocation` comment). Commit `0d97ada5`. |
+| 2026-11-04 | e5f13458 | #283 i | `selectionAfterPatch` moved from `App.tsx` to `extension-view/view-patches.ts`. | not applicable | Refactor only: the rule is pre-window 1.x behavior and moved without change. The 2.0 cursor after patches is the palette's (`internal/palette/search.go`, `showRows`), a question from before this window, not new work here. |
+| 2026-11-04 | e5f13458 | #283 j | `view-normalizer.ts` normalizes the `onSearchChange` action for the Electron IPC action cache. | not applicable | Electron IPC clone-safety. 2.0's `ActionRef` is data in the Go view and is looked up by ID in the child, so nothing needs normalizing. |
+| 2026-11-04 | e5f13458 | #283 k | Formatting: numeric separators in a test, import order in `emoji-symbols.ts`, `actionPanelFromActions` brace style, `use-view-search-results` hook placement in `App.tsx`. | not applicable | TypeScript and Biome formatting only; no behavior. |
+| 2026-11-04 | e5f13458 | #283 l | `.agents/skills/nevermind-box-signin/SKILL.md` (a skill for running 1.x signed in on a disposable box). Outside the `src/app` and `src/backend` filter. | not applicable | 1.x agent tooling for the Electron app. The 2.0 equivalent of a signed-in run is the rig (`src/native/PLAN.md`, WP0.3). |
+| 2026-11-04 | e5f13458 | #283 m | `scripts/file-size-baseline.json` raised one entry and lowered another. Outside the filter. | not applicable | 1.x size ratchet. 2.0's ratchet is `internal/layers/size-baseline.json` (empty; no file over 400 lines). |
+
+Counts for this sync (thirteen rows): already in 2.0: 0. needs a port: 8 (all ported in this branch). not applicable: 5 (a
+refactor, Electron IPC, formatting, outside-filter agent tooling and size ratchet).
+
+### Ports and commits
+
+- `8ce856f1` backend: choice and score decisions keep `probabilities` and `confidence` (row c).
+- `afaebdb5` search: appended providers, the second-batch merge rule (row d).
+- `0d97ada5` ext: views take `onSearchChange` and `searchResultIds`; API reference regenerated; docs; acme.views fixture (rows a, g, h, e in part).
+- `ee64d678` ai: `internal/ai/charsearch`, the three-step funnel with its matcher and provider (row b).
+- `1e948a62` emoji: the picker adds the meaning matches after the catalog's matches, golden `emoji-meaning` (rows b, f).
+- `e3db780b` app: the search-results fixture's second batch through the child, golden `extension-search-grid` (row e).
+
+Beyond the rows, one fix found while porting: `extensionViewDeps` (`internal/app/extension_views.go`) did not pass
+`OnUI`, so a view's interval refresh ran its handler on the timer goroutine instead of the UI thread. It now passes
+`p.onUI`, as the Deps comment requires. This predates the window.
+
+### Checks
+
+- On the box (slot `mainsync`): `go build ./... && go vet ./... && go test -count=1 ./...` exited 0 with 79 packages ok and no
+  FAIL on the tree at `1e948a62`. After the last commit the charsearch package (17 tests) was re-run on the box and passed.
+  Gate on the final tree: see the commit message of this section's last commit.
+- The box disk was full (28 MB free) at the first Go run. Only the `mainsync` slot and go-build cache files older than 60
+  minutes were removed, as the brief allows.
+- Locally: `mise exec -- pnpm check:changed origin/main` (Biome changed files, Windows inventory, fixture coverage) passed.
+- Not run: any app launch, GUI, or macOS or Windows run (CLAUDE.md). The emoji and extension goldens were rendered
+  on the box and inspected here (light and dark, 1x and 2x).
+
+### Deliberate difference
+
+- Equal shortlist probabilities keep the order the options were offered in. 1.x keeps the order of the model's JSON
+  answer. The 2.0 client decodes the answer into a Go map, which has no order, so the offered order stands in for it. Only
+  characters the model rates equally can change order.
+
+### Coordination with other native branches
+
+- `native/grid-keys` (not yet in `native/mac-preview`) sets the emoji row limit to 160 (1.x `MAX_VISIBLE_ITEMS`).
+  The appended-provider rule (row d) already makes the meaning batch take its room from that limit, so the batch stays
+  visible when grid-keys lands. Its emoji matcher changes touch `internal/app/emoji_view.go`, `emoji_rows.go` and
+  `internal/features/emoji`, where this sync also edits `emoji_view.go` (one line, the `Providers` closure).
+- `native/ext-ai` (not in `native/mac-preview`) serves `ctx.ai` decisions to extensions. Its mapping from the backend
+  answers must carry `Probabilities` and `Confidence` on choice answers, which this sync adds to the backend type. When
+  that branch merges, the mapping needs the same two fields, or 1.x extension choices lose their probabilities.
+- `native/views-parity`, `native/ext-api-gaps`, `native/cmdk-parity`, `native/chat-ux`: no commits in the paths this sync
+  touches (`internal/palette/extview`, `internal/ext/api`, `internal/search`, `internal/ai/filesearch`, `internal/app`
+  emoji files).
+
+### Follow-ups
+
+- **F1. Extension action visibility (from the 4c4c0425 sync; not in this window).** 1.x honors
+  `actionPanelVisibility` for items and views. 2.0 reads neither field. Open because the semantics of `menu` and `hidden`
+  for items and views need an owner decision recorded in `docs/extension-api.md` first, as the prior plan says.
+- **F2. Side-preview presentation and the render cap (from the 4c4c0425 sync, WP3.3).** 2.0 draws no side-preview
+  presentation, and `MaxVisibleItems` is stored but not drawn (lists or grids). The second-batch room rule (row d) is in
+  place for when the cap is drawn. Open because it is WP3.3 work (XL in PLAN.md), outside this window.
