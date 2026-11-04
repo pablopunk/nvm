@@ -4,6 +4,7 @@ package real
 
 import (
 	"context"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -15,6 +16,11 @@ func pasteGesture(context.Context, platform.Helper, string) error {
 
 // undoGesture reports that undo is unavailable on this OS.
 func undoGesture(context.Context, platform.Helper, string) error {
+	return platform.ErrUnsupported
+}
+
+// typeGesture reports that typing is unavailable on this OS.
+func typeGesture(context.Context, platform.Helper, string, string, time.Duration) error {
 	return platform.ErrUnsupported
 }
 

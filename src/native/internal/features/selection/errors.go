@@ -22,3 +22,7 @@ var ErrNothingToUndo = errors.New("There is no fix to undo")
 
 // ErrSourceChanged is returned by Undo when the window in front is not the one the last replacement landed in.
 var ErrSourceChanged = errors.New("The focused window changed, so nothing was undone")
+
+// ErrConcealedContent is returned by a paste that must keep its content out of clipboard history when this clipboard
+// cannot mark that content as concealed. The content is not put on the clipboard.
+var ErrConcealedContent = errors.New("This clipboard cannot keep this content out of history, so nothing was pasted")

@@ -63,6 +63,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	}
 	mygo.App.OnQuit(closeStoreOnQuit(state))
 	textReader := ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()})
+	selections := p.extensionSelection()
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
@@ -89,7 +90,9 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		SettingsPanes: p.systemSettingsPanes,
 		Places:        p.systemPlaces,
 		Indicators:    p.extensionIndicators(),
-		Selection:     p.extensionSelection(),
+		Selection:     selections,
+		Paste:         selections,
+		Apps:          p.appsvc,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dataDir(), "extension-data"),

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -80,14 +81,29 @@ func (h *Handler) serveDesktopKeyboard(call protocol.ServiceCall) (any, error) {
 	if err := h.require(api.CapabilityDesktopKeyboard); err != nil {
 		return nil, err
 	}
-	if h.deps.Selection == nil {
-		return nil, unavailable("the keyboard is not available in this build")
+	switch call.Op {
+	case protocol.OpUndo:
+		return nil, h.undoSelection()
+	case protocol.OpTypeText:
+		return nil, h.typeTextCall(call.Args)
 	}
-	if call.Op != protocol.OpUndo {
-		return nil, invalid("desktop.keyboard has no operation %q", call.Op)
+	return nil, invalid("desktop.keyboard has no operation %q", call.Op)
+}
+
+func (h *Handler) undoSelection() error {
+	if h.deps.Selection == nil {
+		return unavailable("the keyboard is not available in this build")
 	}
 	if !h.actions.allow() {
-		return nil, rateExceeded("desktop actions")
+		return rateExceeded("desktop actions")
 	}
-	return nil, selectionFailure(h.deps.Selection.Undo())
+	return selectionFailure(h.deps.Selection.Undo())
+}
+
+func (h *Handler) typeTextCall(raw json.RawMessage) error {
+	var args protocol.TypeTextArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return err
+	}
+	return h.typeText(args.Text, args.Options.DelayMs)
 }

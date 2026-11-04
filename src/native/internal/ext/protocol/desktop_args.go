@@ -145,3 +145,14 @@ type WriteBytesArgs struct {
 	Data      []byte `json:"data"`
 	Overwrite bool   `json:"overwrite,omitempty"`
 }
+
+// TypeTextArgs types text into the frontmost app. Options carries the delay between characters.
+type TypeTextArgs struct {
+	Text    string          `json:"text"`
+	Options api.TypeOptions `json:"options"`
+}
+
+// PathsArgs names several files or folders on this computer, such as the apps a running-state call asks about.
+type PathsArgs struct {
+	Paths []string `json:"paths"`
+}

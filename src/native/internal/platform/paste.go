@@ -1,5 +1,7 @@
 package platform
 
+import "time"
+
 // Paster is the intent "paste into the app that had focus before the palette opened". The caller has
 // already placed the content on the clipboard; the port sends the OS paste gesture to the frontmost app.
 //
@@ -20,4 +22,11 @@ type Paster interface {
 	// can remember the app it will paste into. It returns "" when the app is not known (Nevermind itself has the
 	// keyboard, or no window does) and ErrUnsupported where the OS cannot name the app.
 	FrontmostAppID() (string, error)
+}
+
+// Typist is an optional extension of Paster: it types text into the frontmost app as key presses, which leaves the
+// clipboard alone. Only macOS implements it (capability keyboard.type-text), as the 1.x host did; a Paster without it
+// refuses typing with ErrUnsupported. delay is the pause between characters, zero for none.
+type Typist interface {
+	TypeIntoFrontmost(expectedAppID, text string, delay time.Duration) error
 }

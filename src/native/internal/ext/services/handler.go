@@ -70,6 +70,10 @@ type Deps struct {
 	Indicators IndicatorSurface
 	// Selection reads, replaces and undoes the selected text of the summoned app. Nil answers unavailable.
 	Selection SelectionEngine
+	// Paste puts content on the clipboard, pastes it and types text into the app in front. Nil answers unavailable.
+	Paste PasteEngine
+	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil answers unavailable.
+	Apps AppLifecycle
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
@@ -222,6 +226,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveDesktopSelection(call)
 	case protocol.ServiceDesktopKeyboard:
 		return h.serveDesktopKeyboard(call)
+	case protocol.ServiceDesktopPaste:
+		return h.servePaste(call)
 	case protocol.ServiceClipboardHistory:
 		return h.serveClipboardHistory(ctx, call)
 	case protocol.ServiceOCR:

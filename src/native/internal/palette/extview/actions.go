@@ -60,12 +60,8 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 	case api.ActionCopyText:
 		text := action.Text
 		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyText(h, text) }}
-	case api.ActionPasteText:
-		if s.deps.PasteText == nil {
-			break
-		}
-		text := action.Text
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.PasteText(h, title, text) }}
+	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
+		return s.pasteOperation(action, title)
 	case api.ActionPushView:
 		if action.View == nil {
 			break
@@ -90,6 +86,18 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 }
 
+// pasteOperation sends a paste or typing action to the app in front. The palette hides first, and the services of the
+// extension perform it, so the capabilities the extension declared apply. The HUD reports the outcome.
+func (s *Session) pasteOperation(action api.Action, title string) search.Action {
+	return search.Action{Title: title, Run: func(h search.Host) {
+		if s.deps.Paste == nil {
+			h.Toast(unavailableMessage)
+			return
+		}
+		s.deps.Paste(h, s.extID, action)
+	}}
+}
+
 // hostOperation is a declarative action the host performs itself. It runs through the route, so a Confirmation asks
 // first, as it does for a run action.
 func (s *Session) hostOperation(action api.Action, title string) search.Action {
@@ -102,6 +110,10 @@ const unavailableMessage = "This action is not available yet"
 
 func defaultTitle(kind api.ActionKind) string {
 	switch kind {
+	case api.ActionPaste, api.ActionPasteText:
+		return "Paste"
+	case api.ActionTypeText:
+		return "Type"
 	case api.ActionOpenURL:
 		return "Open"
 	case api.ActionCopyText:

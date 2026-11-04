@@ -14,6 +14,7 @@ const (
 	ServiceShortcuts        = "shortcuts"
 	ServiceDesktopSelection = "desktop.selection"
 	ServiceDesktopKeyboard  = "desktop.keyboard"
+	ServiceDesktopPaste     = "desktop.paste"
 )
 
 // Operations of the desktop-side services. The names are the host's own; a child never sends a method name.
@@ -56,4 +57,11 @@ const (
 	OpText          = "text"
 	OpReplace       = "replace"
 	OpUndo          = "undo"
+	OpRunning       = "running"
+	OpQuit          = "quit"
+	OpForceQuit     = "force-quit"
+	OpQuitAll       = "quit-all"
+	OpHideApp       = "hide-app"
+	OpTypeText      = "type-text"
+	OpPerform       = "perform"
 )

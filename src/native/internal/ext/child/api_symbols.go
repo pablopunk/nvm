@@ -162,6 +162,7 @@ func init() {
 		"MaskCircle":                    reflect.ValueOf(api.MaskCircle),
 		"MaskNone":                      reflect.ValueOf(api.MaskNone),
 		"MaskRounded":                   reflect.ValueOf(api.MaskRounded),
+		"MaxRunningPaths":               reflect.ValueOf(constant.MakeFromLiteral("30", token.INT, 0)),
 		"MenuBarIcons":                  reflect.ValueOf(&api.MenuBarIcons).Elem(),
 		"MenuIconDefault":               reflect.ValueOf(api.MenuIconDefault),
 		"MetadataLink":                  reflect.ValueOf(api.MetadataLink),
@@ -185,6 +186,7 @@ func init() {
 		"PanelMenu":                     reflect.ValueOf(api.PanelMenu),
 		"PanelVisible":                  reflect.ValueOf(api.PanelVisible),
 		"ParseVersion":                  reflect.ValueOf(api.ParseVersion),
+		"Paste":                         reflect.ValueOf(api.Paste),
 		"PasteText":                     reflect.ValueOf(api.PasteText),
 		"PatchAppend":                   reflect.ValueOf(api.PatchAppend),
 		"PatchMerge":                    reflect.ValueOf(api.PatchMerge),
@@ -239,6 +241,7 @@ func init() {
 		"TriggerLogin":                  reflect.ValueOf(api.TriggerLogin),
 		"TriggerStartup":                reflect.ValueOf(api.TriggerStartup),
 		"TriggerWake":                   reflect.ValueOf(api.TriggerWake),
+		"TypeText":                      reflect.ValueOf(api.TypeText),
 		"ValidateFieldValue":            reflect.ValueOf(api.ValidateFieldValue),
 		"ViewCamera":                    reflect.ValueOf(api.ViewCamera),
 		"ViewChat":                      reflect.ValueOf(api.ViewChat),
@@ -397,6 +400,7 @@ func init() {
 		"ProgressStatus":          reflect.ValueOf((*api.ProgressStatus)(nil)),
 		"ProgressStep":            reflect.ValueOf((*api.ProgressStep)(nil)),
 		"PromptSpec":              reflect.ValueOf((*api.PromptSpec)(nil)),
+		"QuitResult":              reflect.ValueOf((*api.QuitResult)(nil)),
 		"Rect":                    reflect.ValueOf((*api.Rect)(nil)),
 		"Refresh":                 reflect.ValueOf((*api.Refresh)(nil)),
 		"Result":                  reflect.ValueOf((*api.Result)(nil)),
@@ -618,15 +622,26 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler) RunActi
 // _github_com_pablopunk_nvm_native_internal_ext_api_Apps is an interface wrapper for Apps type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Apps struct {
 	IValue     interface{}
+	WForceQuit func(path string) (api.QuitResult, error)
 	WFrontmost func() (api.App, error)
+	WHide      func(path string) error
 	WIcon      func(path string) (dataURL string, found bool, err error)
 	WLaunch    func(path string) error
 	WList      func() ([]api.App, error)
+	WQuit      func(path string) (api.QuitResult, error)
+	WQuitAll   func() ([]api.App, error)
+	WRunning   func(paths []string) ([]string, error)
 	WSearch    func(query string) ([]api.App, error)
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) ForceQuit(path string) (api.QuitResult, error) {
+	return W.WForceQuit(path)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Frontmost() (api.App, error) {
 	return W.WFrontmost()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Hide(path string) error {
+	return W.WHide(path)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Icon(path string) (dataURL string, found bool, err error) {
 	return W.WIcon(path)
@@ -636,6 +651,15 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Launch(path stri
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) List() ([]api.App, error) {
 	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Quit(path string) (api.QuitResult, error) {
+	return W.WQuit(path)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) QuitAll() ([]api.App, error) {
+	return W.WQuitAll()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Running(paths []string) ([]string, error) {
+	return W.WRunning(paths)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Search(query string) ([]api.App, error) {
 	return W.WSearch(query)

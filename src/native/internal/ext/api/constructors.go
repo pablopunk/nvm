@@ -127,3 +127,15 @@ func Panel(sections ...ActionSection) *ActionPanel {
 func ErrorView(title, message string) View {
 	return ListView(title, Item{ID: "error", Title: title, Subtitle: message, Disabled: true, Contextual: true})
 }
+
+// Paste puts content on the clipboard and sends the paste gesture to the app in front. The palette hides first. Options
+// follow ctx.actions.paste: RestoreClipboard puts the clipboard back afterwards, and Concealed keeps it out of history.
+func Paste(title string, content ClipboardContent, options PasteOptions) Action {
+	return Action{Kind: ActionPaste, Title: title, Content: &content, Paste: &options}
+}
+
+// TypeText types text into the app in front as key presses, so the clipboard is left alone. It needs the
+// keyboard.type-text system capability, which only macOS offers.
+func TypeText(title, text string, options TypeOptions) Action {
+	return Action{Kind: ActionTypeText, Title: title, Text: text, Typing: &options}
+}

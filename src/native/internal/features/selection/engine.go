@@ -118,12 +118,17 @@ func (e *Engine) takePending() (platform.FocusTarget, bool) {
 	return landed, pending
 }
 
-// restoreLater puts the displaced clipboard back once the target app has read the paste, unless the clipboard no
-// longer holds the replacement text.
+// restoreLater puts the displaced clipboard back once the target app has read the replacement, unless the clipboard
+// no longer holds the replacement text.
 func (e *Engine) restoreLater(text string, snapshot clipboardSnapshot) {
+	e.restoreAfter(e.deps.RestoreDelay, snapshot, e.stillHolds(Content{Kind: KindText, Text: text}))
+}
+
+// restoreAfter puts the snapshot back after delay, when stillHeld reports the clipboard still holds what was written.
+func (e *Engine) restoreAfter(delay time.Duration, snapshot clipboardSnapshot, stillHeld func() bool) {
 	safego.Go("selection.restore", func(context.Context) {
-		<-e.deps.Clock.After(e.deps.RestoreDelay)
-		if current, err := e.deps.Clipboard.ReadText(); err == nil && current == text {
+		<-e.deps.Clock.After(delay)
+		if stillHeld() {
 			e.reader.restore(snapshot)
 		}
 	})

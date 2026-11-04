@@ -59,3 +59,18 @@ func (p paster) PasteIntoFrontmost(expectedAppID string) error {
 	}
 	return pasteGesture(ctx, p.helper, expectedAppID)
 }
+
+// TypeIntoFrontmost waits for the palette to hide, then types text into the frontmost app. It follows the
+// PasteIntoFrontmost rules for expectedAppID and returns platform.ErrUnsupported where typing is not offered.
+func (p paster) TypeIntoFrontmost(expectedAppID, text string, delay time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pasteTimeout)
+	defer cancel()
+	if p.waitHidden != nil {
+		if err := p.waitHidden(ctx); err != nil {
+			return err
+		}
+	}
+	return typeGesture(ctx, p.helper, expectedAppID, text, delay)
+}
+
+var _ platform.Typist = paster{}
