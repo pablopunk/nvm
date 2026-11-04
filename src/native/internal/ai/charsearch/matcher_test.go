@@ -57,6 +57,20 @@ func TestMatchesNarrowsByCategoryShortlistsByChoiceAndKeepsVerifiedMatchesBestFi
 	}
 }
 
+func TestTiedCharactersKeepTheOrderTheyWereOffered(t *testing.T) {
+	model := &fakeModel{
+		groups: map[string]float64{"Animals & Nature": 0.9},
+		glyphs: map[string]float64{"🐱": 0.8, "🐯": 0.8, "🐶": 0.8},
+	}
+	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, allCategory, "pet animals")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !sameKeys(matches, "cat", "tiger", "dog") {
+		t.Fatalf("matches = %v, want the offered order for equal probabilities", recordKeys(matches))
+	}
+}
+
 func TestAChosenCategorySkipsTheCategoryStep(t *testing.T) {
 	model := &fakeModel{glyphs: map[string]float64{"🐱": 0.95}}
 	matches, err := NewMatcher(testCatalog).Matches(context.Background(), model, "Animals & Nature", "adorable pet")

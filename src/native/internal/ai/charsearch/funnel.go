@@ -118,7 +118,7 @@ func shortlist(ctx context.Context, decider Decider, query string, pool []Record
 			}
 		}
 	}
-	sortCandidates(ranked)
+	sortCandidates(ranked, offeredIndex(pool))
 	var out []Record
 	for _, candidate := range firstCandidates(ranked, maxQuestions) {
 		if r, ok := byLabel[candidate.label]; ok {
@@ -165,13 +165,23 @@ func verify(ctx context.Context, decider Decider, query string, candidates []Rec
 	return out, nil
 }
 
-// sortCandidates orders the candidates best first, ties by label, so one answer always ranks the same way.
-func sortCandidates(candidates []choiceCandidate) {
+// offeredIndex maps each offered label to its place in the pool, the order the options were asked in.
+func offeredIndex(pool []Record) map[string]int {
+	index := make(map[string]int, len(pool))
+	for i, r := range pool {
+		index[r.label()] = i
+	}
+	return index
+}
+
+// sortCandidates orders the candidates best first. Equal probabilities keep the order the options were offered in,
+// so a Go map's lack of order never changes the ranking.
+func sortCandidates(candidates []choiceCandidate, offered map[string]int) {
 	sort.SliceStable(candidates, func(a, b int) bool {
 		if candidates[a].probability != candidates[b].probability {
 			return candidates[a].probability > candidates[b].probability
 		}
-		return candidates[a].label < candidates[b].label
+		return offered[candidates[a].label] < offered[candidates[b].label]
 	})
 }
 
