@@ -83,31 +83,6 @@ type harness struct {
 	popovers *recordedPopovers
 }
 
-// recordedPopovers is the popover host the tests give the service. It keeps what it was asked, in order.
-type recordedPopovers struct {
-	mu        sync.Mutex
-	toggles   []string
-	refreshes []string
-}
-
-func (r *recordedPopovers) Toggle(extensionID, barID string, _ api.Popover) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.toggles = append(r.toggles, extensionID+"/"+barID)
-}
-
-func (r *recordedPopovers) Refresh(extensionID, barID string, _ api.Popover) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.refreshes = append(r.refreshes, extensionID+"/"+barID)
-}
-
-func (r *recordedPopovers) counts() (toggles, refreshes int) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return len(r.toggles), len(r.refreshes)
-}
-
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	return newHarnessFor(t, "darwin")

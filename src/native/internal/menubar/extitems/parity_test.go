@@ -3,6 +3,7 @@ package extitems
 import (
 	"bytes"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -110,6 +111,31 @@ func TestOffMacOSTheTitleJoinsTheTooltip(t *testing.T) {
 	if tip := tray.Options().ToolTip; tip != "Clock — 04:59" {
 		t.Fatalf("Linux tooltip = %q, want the title after an em dash", tip)
 	}
+}
+
+// recordedPopovers is the popover host the tests give the service. It keeps what it was asked, in order.
+type recordedPopovers struct {
+	mu        sync.Mutex
+	toggles   []string
+	refreshes []string
+}
+
+func (r *recordedPopovers) Toggle(extensionID, barID string, _ api.Popover) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.toggles = append(r.toggles, extensionID+"/"+barID)
+}
+
+func (r *recordedPopovers) Refresh(extensionID, barID string, _ api.Popover) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshes = append(r.refreshes, extensionID+"/"+barID)
+}
+
+func (r *recordedPopovers) counts() (toggles, refreshes int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.toggles), len(r.refreshes)
 }
 
 // popoverBar is an item with a popover of one list and a menu of one row.
