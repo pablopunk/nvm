@@ -7,7 +7,7 @@ import (
 )
 
 // lookups are derived once from the static records: the lowercase Unicode label, group name and copy action title each
-// search matches, the rune mask that skips records, the id map behind Lookup and Recents, and the single-character map
+// search matches, the rune mask that skips records, the id map behind Lookup, and the single-character map
 // behind UnicodeInfo.
 type lookups struct {
 	labels     []string

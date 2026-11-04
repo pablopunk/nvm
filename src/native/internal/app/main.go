@@ -92,7 +92,6 @@ type App struct {
 	ports   platform.Ports
 	account *auth.Session
 	store   *store.Store
-	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
 

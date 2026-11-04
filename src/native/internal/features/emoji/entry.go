@@ -100,7 +100,7 @@ func (e Entry) Codepoints() string {
 	return CodepointsOf(e.Glyph())
 }
 
-// ID returns the stable opaque identifier used by recents and actions, for example
+// ID returns the stable opaque identifier used by actions and Lookup, for example
 // "emoji:U+1F600" or "symbol:U+2713".
 func (e Entry) ID() string {
 	if !e.Valid() {

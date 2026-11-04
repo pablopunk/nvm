@@ -210,7 +210,7 @@ func TestJourneyJ03CalculatorCopiesTheResult(t *testing.T) {
 }
 
 // TestJourneyJ08EmojiCopiesAGlyph is the J08 smoke: "emoji" opens Emoji & Symbols, "fire" finds the fire character,
-// and Enter copies it. Skin tones, Unicode values, the keyboard grid and recents of J08 are not covered yet.
+// and Enter copies it. Skin tones, Unicode values and the keyboard grid of J08 are not covered yet.
 func TestJourneyJ08EmojiCopiesAGlyph(t *testing.T) {
 	app := Launch(t, Options{})
 	nonce := fmt.Sprintf("rig-emoji-%d", time.Now().UnixNano())

@@ -12,12 +12,6 @@ func NewCatalog() *Catalog {
 	return &Catalog{}
 }
 
-// RecentSource supplies the ids of recently used entries, newest first, as Entry.ID formats them.
-// Persistence belongs to the caller; the catalog only reads.
-type RecentSource interface {
-	RecentIDs() []string
-}
-
 // All returns every entry in catalog order: emoji first, then symbols.
 func (c *Catalog) All() []Entry {
 	out := make([]Entry, len(records))
@@ -51,29 +45,6 @@ func (c *Catalog) Lookup(id string) (Entry, bool) {
 		return Entry{}, false
 	}
 	return entryAt(int(index)), true
-}
-
-// Recents resolves the source's ids to entries, newest first. Unknown and repeated ids are skipped, and
-// a positive limit caps the result.
-func (c *Catalog) Recents(source RecentSource, limit int) []Entry {
-	if source == nil {
-		return nil
-	}
-	byID := builtinLookups().byID
-	seen := map[uint16]bool{}
-	var out []Entry
-	for _, id := range source.RecentIDs() {
-		if limit > 0 && len(out) >= limit {
-			break
-		}
-		index, ok := byID[id]
-		if !ok || seen[index] {
-			continue
-		}
-		seen[index] = true
-		out = append(out, entryAt(int(index)))
-	}
-	return out
 }
 
 // categoryIDOf finds the string id of a group name. AllCategory is not a group, so it reports false.
