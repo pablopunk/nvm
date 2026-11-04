@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -36,12 +37,11 @@ func (p *App) startJobs() {
 		p.registerHostJob(hostjobs.ClipboardImageCleanup(p.clip.images, p.clip.history))
 	}
 	home, _ := os.UserHomeDir()
-	triggers := extjobs.New(context.Background(), extjobs.Config{
-		Host:     p.extensionTriggerHost,
-		Registry: sched,
-		Files:    p.ports.FS,
-		Home:     home,
-	})
+	triggerCfg := extjobs.Config{Host: p.extensionTriggerHost, Registry: sched, Files: p.ports.FS, Home: home}
+	if p.ports.Windows != nil {
+		triggerCfg.Frontmost = p.frontmostAppID
+	}
+	triggers := extjobs.New(context.Background(), triggerCfg)
 	p.registerHostJob(triggers.SyncJob())
 	stopForwarding := p.forwardClipboardChanges()
 	mygo.App.OnQuit(func() {
@@ -111,9 +111,51 @@ func newestClipboardID(history *clipboard.History) string {
 	return entries[0].ID
 }
 
-// backgroundTasksView is the Background Tasks page over the scheduler.
+// frontmostAppID names the app in front by bundle ID, then by name, or "" when no app is.
+func (p *App) frontmostAppID(ctx context.Context) (string, error) {
+	app, found, err := p.ports.Windows.Frontmost(ctx)
+	if err != nil || !found {
+		return "", err
+	}
+	if app.BundleID != "" {
+		return app.BundleID, nil
+	}
+	return app.Name, nil
+}
+
+// backgroundTasksView is the Background Tasks page over the scheduler. The open page re-reads the jobs whenever one
+// changes, and stops listening when the palette leaves it.
 func (p *App) backgroundTasksView() *palette.View {
-	return background.View(p.backgroundSource(), time.Now)
+	view := background.View(p.backgroundSource(), time.Now)
+	view.OnLeave = p.refreshOnJobChanges()
+	return view
+}
+
+// refreshOnJobChanges re-runs the open palette search each time a job changes, so a run that finishes shows up in
+// the Background Tasks list without reopening it. The returned function stops the refreshing.
+func (p *App) refreshOnJobChanges() func() {
+	if p.background == nil {
+		return func() {}
+	}
+	changes, cancel := p.background.Subscribe()
+	stop := make(chan struct{})
+	safego.Go("jobs.background.refresh", func(context.Context) {
+		for {
+			select {
+			case <-stop:
+				return
+			case <-changes:
+				p.Refresh()
+			}
+		}
+	})
+	var once sync.Once
+	return func() {
+		once.Do(func() {
+			cancel()
+			close(stop)
+		})
+	}
 }
 
 // backgroundSource is the scheduler as the page reads it, or nil before the scheduler starts.

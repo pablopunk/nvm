@@ -35,7 +35,7 @@ func rowActions(source Source, snap jobs.Snapshot, now func() time.Time) []searc
 			h.Refresh()
 		}},
 	}
-	if snap.Enabled {
+	if snap.Enabled && snap.Halted == "" {
 		actions = append(actions, search.Action{Title: "Disable Job", Dismiss: search.DismissNever, Run: func(h search.Host) {
 			toggle(h, source, id, title, false)
 		}})

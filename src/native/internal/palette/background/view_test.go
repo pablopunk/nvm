@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/jobs"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -98,7 +99,7 @@ func TestRowsShowStatusTriggersAndLastRun(t *testing.T) {
 		t.Fatalf("rows = %d", len(items))
 	}
 	cleanup := rowTitled(t, items, "Clipboard Image Cleanup")
-	if cleanup.Subtitle != "Succeeded · Every 1h · Last 90 min ago" || cleanup.Accessory != "Host" {
+	if cleanup.Subtitle != "Succeeded · Every 1h · Last 1 h ago" || cleanup.Accessory != "Host" {
 		t.Fatalf("cleanup row = %q / %q", cleanup.Subtitle, cleanup.Accessory)
 	}
 	fetch := rowTitled(t, items, "Fetch Feed")
@@ -119,7 +120,7 @@ func TestEnterOpensTheRunHistoryOfTheJob(t *testing.T) {
 	if len(host.pushed) != 1 {
 		t.Fatalf("pushed %d views", len(host.pushed))
 	}
-	history := host.pushed[0].(interface{ Search(string) []search.Item })
+	history := host.pushed[0].(*palette.View)
 	runs := history.Search("")
 	wantWhen := epoch.Add(-5 * time.Minute).Local().Format("2006-01-02 15:04:05")
 	if len(runs) != 1 || runs[0].Title != "Failed · event:wake" || runs[0].Subtitle != wantWhen+" · the feed is down" {
