@@ -84,11 +84,11 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 	nonce := fmt.Sprintf("Rig note %d", time.Now().UnixNano())
 
 	must(t, app.SummonPalette())
-	must(t, app.Type("Quick Notes"))
-	_, err := app.WaitFor("Quick Notes", elementWait)
+	must(t, app.Type("Floating Notes"))
+	_, err := app.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Quick Notes", elementWait)
+	_, err = app.WaitFor("Search Floating Notes", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // the first row starts a note
 	_, err = app.WaitFor("Untitled note", elementWait)
@@ -106,11 +106,11 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 
 	relaunched := Launch(t, Options{Home: home, Run: "relaunch"})
 	must(t, relaunched.SummonPalette())
-	must(t, relaunched.Type("Quick Notes"))
-	_, err = relaunched.WaitFor("Quick Notes", elementWait)
+	must(t, relaunched.Type("Floating Notes"))
+	_, err = relaunched.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Return"))
-	_, err = relaunched.WaitFor("Search Quick Notes", elementWait)
+	_, err = relaunched.WaitFor("Search Floating Notes", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Down")) // the newest note is the row after "New Note"
 	must(t, relaunched.Key("Return"))

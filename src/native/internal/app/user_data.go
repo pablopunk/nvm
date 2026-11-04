@@ -37,7 +37,7 @@ func (p *App) openUserData() {
 // this instance is read-only. It reads only the notices already queued.
 func (p *App) showUserDataNotices() {
 	if p.userReadOnly {
-		p.Toast("Quick Notes and Snippets are open in another Nevermind window, so they are read-only here")
+		p.Toast("Floating Notes and Snippets are open in another Nevermind window, so they are read-only here")
 	}
 	for {
 		select {

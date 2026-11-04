@@ -47,7 +47,7 @@ func (p *App) openFloatingNote(id string) {
 // newFloatingNote is the root command: it creates a note and opens it in a floating window.
 func (p *App) newFloatingNote() {
 	if p.notes == nil {
-		p.Toast("Quick Notes could not be opened")
+		p.Toast("Floating Notes could not be opened")
 		return
 	}
 	n, err := p.notes.Create(clock())
@@ -129,7 +129,7 @@ func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
 func floatingNoteBody(c *ui.Context, edit *noteEdit) {
 	syncBuffer(edit)
 	if _, pending := edit.sess.Conflict(); pending {
-		conflictNotice(c, "Unsaved changes from another session are waiting. Open this note in Quick Notes to choose which version to keep.")
+		conflictNotice(c, "Unsaved changes from another session are waiting. Open this note in Floating Notes to choose which version to keep.")
 		return
 	}
 	ta := ui.TextArea(c, &edit.text).Fill().Padding(12).FontSize(14).Placeholder(editorPlaceholder).AutoFocus()

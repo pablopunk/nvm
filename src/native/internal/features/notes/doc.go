@@ -1,4 +1,4 @@
-// Package notes is the Quick Notes library: Markdown notes that autosave, floating note windows and the
+// Package notes is the Floating Notes library: Markdown notes that autosave, floating note windows and the
 // draft safety that keeps unsaved text across a crash.
 //
 // The behavior contract is the 1.x code in src/app/extensions/floating-notes.ts, src/app/electron/extension-host/

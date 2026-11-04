@@ -12,7 +12,7 @@ import (
 
 var testCommands = []Action{
 	{ID: "command:clipboard", Title: "Clipboard History"},
-	{ID: "command:notes", Title: "Quick Notes"},
+	{ID: "command:notes", Title: "Floating Notes"},
 }
 
 type managerFixture struct {

@@ -702,7 +702,7 @@
       },
       {
         "kind": "Commands",
-        "title": "Quick Notes",
+        "title": "Floating Notes",
         "subtitle": "Jot something down",
         "section": "",
         "id": "",
@@ -1868,7 +1868,7 @@
       },
       {
         "kind": "Commands",
-        "title": "Quick Notes",
+        "title": "Floating Notes",
         "subtitle": "Jot something down",
         "section": "Commands",
         "id": "",

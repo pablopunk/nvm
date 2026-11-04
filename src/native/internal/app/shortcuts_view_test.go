@@ -13,7 +13,7 @@ import (
 
 var clipboardEntry = shortcuts.Entry{ActionID: shortcutCommandID("Clipboard History"), Title: "Clipboard History"}
 
-// goldenShortcutsList is the Keyboard Shortcuts list over the root: Clipboard History has a shortcut, and Quick Notes
+// goldenShortcutsList is the Keyboard Shortcuts list over the root: Clipboard History has a shortcut, and Floating Notes
 // asked for one the OS refused.
 func goldenShortcutsList(t *testing.T) *App {
 	t.Helper()
@@ -21,7 +21,7 @@ func goldenShortcutsList(t *testing.T) *App {
 	manager := p.shortcutsManager()
 	mustSetShortcut(t, manager, shortcutCommandID("Clipboard History"), "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
-	mustSetShortcut(t, manager, shortcutCommandID("Quick Notes"), "Command+Alt+N")
+	mustSetShortcut(t, manager, shortcutCommandID("Floating Notes"), "Command+Alt+N")
 	goldenOpen(p, p.keyboardShortcutsView())
 	return p
 }
@@ -58,7 +58,7 @@ func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
 	if got := byTitle["Clipboard History"]; got != shortcutLabelOf("Command+Alt+V")+"|" {
 		t.Fatalf("clipboard row = %q", got)
 	}
-	if got := byTitle["Quick Notes"]; got != shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
+	if got := byTitle["Floating Notes"]; got != shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
 		t.Fatalf("notes row = %q", got)
 	}
 	if got := len(p.shortcutRows("clip")); got != 1 {
