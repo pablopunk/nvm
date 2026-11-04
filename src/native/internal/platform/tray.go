@@ -8,6 +8,8 @@ type MenuItem struct {
 	Separator bool
 	Disabled  bool
 	Action    func()
+	// Submenu nests rows under this one; Action is then unused.
+	Submenu []MenuItem
 }
 
 // TrayOptions describes a menu bar or system tray icon. Icon is PNG; the empty Icon shows only the title.

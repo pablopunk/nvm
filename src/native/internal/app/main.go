@@ -3,6 +3,7 @@ package app
 
 import (
 	"log"
+	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -20,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -46,9 +48,12 @@ type App struct {
 
 	md   markdown.Options
 	exts extensionHost
-	// menubar is the app's own menu bar item; nil when the platform has no tray host.
-	menubar  *menubar.Item
-	recorder *diag.Recorder
+	// menubar is the app's own menu bar item; nil when the platform has no tray host. menubarJobs renders every
+	// status item on its cadence, and menubarItems shows the items the extensions declare.
+	menubar      *menubar.Item
+	menubarJobs  *menubar.Scheduler
+	menubarItems atomic.Pointer[extitems.Service]
+	recorder     *diag.Recorder
 	// analytics sends technical diagnostics when the consent switch is on; failures reports each safego failure
 	// through the recorder and then to analytics.
 	analytics *analytics.Client
@@ -179,6 +184,7 @@ func (p *App) ready() {
 	p.startShortcuts()
 	go p.startExtensions()
 	p.setUpMenubar()
+	p.runMenubarScheduler()
 	p.startFiles()
 	log.Println("ready")
 }
