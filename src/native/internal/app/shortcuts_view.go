@@ -79,20 +79,13 @@ func shortcutLabelOf(accelerator string) string {
 	return shortcuts.Label(accelerator, runtime.GOOS)
 }
 
-// paletteShortcutLabel is the palette hotkey as shown in Settings.
-func (p *App) paletteShortcutLabel() string {
-	return shortcutLabelOf(p.shortcutsManager().PaletteAccelerator())
-}
-
-// paletteChangeMessage is the toast after the palette hotkey changes: a recovery key, or a system feature that also
-// holds the key, is said out loud.
+// paletteChangeMessage is the toast after the palette shortcut changes. A system feature that also holds the key is
+// said out loud.
 func paletteChangeMessage(change shortcuts.PaletteChange) string {
 	label := shortcutLabelOf(change.Accelerator)
 	switch {
 	case change.Unchanged:
 		return "Shortcut unchanged: " + label
-	case change.Recovery != "":
-		return label + " is taken; " + shortcutLabelOf(change.Recovery) + " opens Nevermind instead"
 	case change.SystemOwner != "":
 		return "Shortcut set: " + label + ". " + change.SystemOwner + " also uses it"
 	}

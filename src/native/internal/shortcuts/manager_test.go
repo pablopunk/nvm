@@ -1,9 +1,13 @@
 package shortcuts
 
 import (
+	"errors"
 	"reflect"
 	"slices"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 var testCommands = []Action{
@@ -25,6 +29,7 @@ func newManagerFixture(t *testing.T, goos string, doc Document, declared func() 
 	f.manager = NewManager(Setup{
 		Doc:       f.doc,
 		Hotkeys:   f.hotkeys,
+		Clock:     fake.NewClock(),
 		GOOS:      goos,
 		Commands:  testCommands,
 		Declared:  declared,
@@ -167,8 +172,8 @@ func TestChangingThePaletteKeyBindsTheNewOneAndSavesIt(t *testing.T) {
 func TestATakenPaletteKeyKeepsThePreviousOneBound(t *testing.T) {
 	f := newManagerFixture(t, "darwin", DefaultDocument("Alt+Shift+Space"), nil, "Control+Shift+Space")
 	f.manager.Start()
-	if _, err := f.manager.SetPalette("ctrl+shift+space"); err == nil || err.Error() != "Control+Shift+Space is in use by another app" {
-		t.Fatalf("error = %v", err)
+	if _, err := f.manager.SetPalette("ctrl+shift+space"); !errors.Is(err, platform.ErrConflict) {
+		t.Fatalf("error = %v, want a conflict", err)
 	}
 	if want := []string{"Alt+Shift+Space"}; !reflect.DeepEqual(f.bound(), want) {
 		t.Fatalf("bound = %v, want %v", f.bound(), want)
@@ -190,15 +195,14 @@ func TestSamePaletteKeyIsUnchangedAndSpotlightIsFlagged(t *testing.T) {
 	}
 }
 
-func TestOnLinuxAPalettePickSurvivesWithARecoveryKey(t *testing.T) {
+func TestOnLinuxATakenPaletteChangeRestoresThePreviousKeyWithoutARecovery(t *testing.T) {
 	f := newManagerFixture(t, "linux", DefaultDocument("Alt+Shift+Space"), nil, "Control+Shift+Space")
 	f.manager.Start()
-	change, err := f.manager.SetPalette("ctrl+shift+space")
-	if err != nil {
-		t.Fatal(err)
+	if _, err := f.manager.SetPalette("ctrl+shift+space"); !errors.Is(err, platform.ErrConflict) {
+		t.Fatalf("error = %v, want a conflict", err)
 	}
-	if change.Recovery != "Control+Alt+K" {
-		t.Fatalf("recovery = %q", change.Recovery)
+	if want := []string{"Alt+Shift+Space"}; !reflect.DeepEqual(f.bound(), want) {
+		t.Fatalf("bound = %v, want %v", f.bound(), want)
 	}
 }
 
@@ -231,4 +235,37 @@ func entryFor(t *testing.T, m *Manager, actionID string) Entry {
 	}
 	t.Fatalf("no entry for %s in %+v", actionID, m.Entries())
 	return Entry{}
+}
+
+func TestChangingThePaletteWhileSuspendedLeavesNothingBound(t *testing.T) {
+	f := newManagerFixture(t, "darwin", DefaultDocument("Alt+Shift+Space"), nil)
+	f.manager.Start()
+	f.manager.Suspend()
+	if _, err := f.manager.SetPalette("ctrl+shift+space"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.bound()) != 0 {
+		t.Fatalf("a palette change during a recorder bound %v", f.bound())
+	}
+	f.manager.Resume()
+	if want := []string{"Control+Shift+Space"}; !reflect.DeepEqual(f.bound(), want) {
+		t.Fatalf("bound after resume = %v, want %v", f.bound(), want)
+	}
+}
+
+func TestAnActionCannotTakeThePaletteShortcut(t *testing.T) {
+	f := newManagerFixture(t, "darwin", DefaultDocument("Alt+Shift+Space"), nil)
+	f.manager.Start()
+	if err := f.manager.SetAction("command:notes", "alt+shift+space"); err == nil || err.Error() != "Alt+Shift+Space is reserved for opening Nevermind" {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestSuspendKeepsThePaletteStatusForTheNextResume(t *testing.T) {
+	f := newManagerFixture(t, "darwin", DefaultDocument("Alt+Shift+Space"), nil)
+	f.manager.Start()
+	f.manager.Suspend()
+	if status := f.manager.Resume(); !status.Registered || status.Accelerator != "Alt+Shift+Space" {
+		t.Fatalf("status after resume = %+v", status)
+	}
 }

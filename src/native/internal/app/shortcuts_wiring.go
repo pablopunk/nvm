@@ -1,9 +1,7 @@
 package app
 
 import (
-	"log"
 	"runtime"
-	"time"
 
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
@@ -11,13 +9,6 @@ import (
 )
 
 const shortcutsFile = "shortcuts.json"
-
-// The palette key may still be held by a previous instance, so it is retried for a few seconds before the app gives
-// up on it.
-const (
-	paletteBindAttempts = 8
-	paletteBindDelay    = 400 * time.Millisecond
-)
 
 // shortcutsManager returns the app's shortcut manager, creating it on first use.
 func (p *App) shortcutsManager() *shortcuts.Manager {
@@ -31,10 +22,12 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 	return shortcuts.Setup{
 		Doc:       p.shortcutsDocument(),
 		Hotkeys:   p.ports.Hotkeys,
+		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
+		OnSummon:  p.notifySummon,
 	}
 }
 
@@ -75,21 +68,10 @@ func (p *App) runShortcutCommand(actionID string) {
 	}
 }
 
-// startShortcuts binds the palette hotkey and the actions. It runs once the palette exists. A recovery key is only
-// accepted after the chosen key has been refused on every attempt, because a previous instance may release it soon.
+// startShortcuts binds the palette shortcut and the actions. It runs once the palette exists. Summon retries a shortcut
+// that a previous instance may still hold, and the banner says when it stays unavailable.
 func (p *App) startShortcuts() {
-	status := p.shortcutsManager().Start()
-	for attempt := 1; !status.Registered && attempt < paletteBindAttempts; attempt++ {
-		time.Sleep(paletteBindDelay)
-		status = p.shortcutsManager().Start()
-	}
-	switch {
-	case status.Registered:
-	case status.Recovery != "":
-		log.Println("shortcut", status.Accelerator, "is in use; bound", status.Recovery, "instead")
-	default:
-		log.Println("shortcut", status.Accelerator, "is in use by another app")
-	}
+	p.summonChanged(p.shortcutsManager().Start())
 }
 
 // onPaletteHide closes the app's panels and gives back the shortcuts a recorder holds, so the palette key still works.

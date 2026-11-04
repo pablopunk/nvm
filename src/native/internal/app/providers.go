@@ -90,6 +90,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
 			h.Push(palette.Confirm("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
 		}},
+		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
@@ -138,20 +139,30 @@ func (p *App) settingsView() *palette.View {
 				login = "On"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: p.paletteShortcutLabel(), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
-				{Title: "Keyboard Shortcuts", Subtitle: "View, change, or remove shortcuts", Icon: "keyboard", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }}}},
+				{Title: "Palette Hotkey", Accessory: shortcutLabelOf(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
 					p.S.save()
 					h.Refresh()
 				}}}},
-				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { p.S.ClipOff = !p.S.ClipOff; p.S.save(); h.Refresh() }}}},
+				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipOff = !p.S.ClipOff
+					p.S.save()
+					p.clip.setEnabled(!p.S.ClipOff)
+					h.Refresh()
+				}}, {Title: "Link Previews", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipNoLinks = !p.S.ClipNoLinks
+					p.S.save()
+					p.clip.setLinkPreviews(!p.S.ClipNoLinks)
+					h.Refresh()
+				}}}},
 				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					sizes := []int{50, 200, 500, 1000}
+					sizes := []int{50, 300, 500, 1000}
 					i := slices.Index(sizes, p.S.ClipLimit)
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
+					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
 				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},

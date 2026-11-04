@@ -93,14 +93,20 @@ func TestCachedRowsShowAtOnceAndRefreshInPlace(t *testing.T) {
 // state: the list is blank until the answer is in.
 func TestEmptyStateWaitsForTheProviders(t *testing.T) {
 	clock := fake.NewClock()
-	slow := search.NewRowsProvider("slow", func(context.Context, string) []search.Item {
-		<-clock.After(time.Second)
+	var armOnce sync.Once
+	slowProviderArmed := make(chan struct{})
+	slow := search.NewRowsProvider("slow", func(_ context.Context, q string) []search.Item {
+		wait := clock.After(time.Second)
+		if q == "zz" {
+			armOnce.Do(func() { close(slowProviderArmed) })
+		}
+		<-wait
 		return nil
 	})
 	root := &View{Title: "Root", EmptyTitle: "Nothing here", Providers: func() []search.Provider { return []search.Provider{slow} }}
 	h := newHarness(t, root, false, withClock(clock))
 	h.typeText("zz")
-	clock.AwaitTimers(1)
+	<-slowProviderArmed
 	if h.p.Settled() {
 		t.Fatal("a pending query must not report itself settled")
 	}

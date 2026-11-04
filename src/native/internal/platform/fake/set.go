@@ -8,6 +8,8 @@ type Set struct {
 	Clock        *Clock
 	FS           *FS
 	HTTP         *HTTP
+	PublicHTTP   *HTTP
+	Resolver     *Resolver
 	Clipboard    *Clipboard
 	Paster       *Paster
 	Shell        *Shell
@@ -29,6 +31,8 @@ func NewSet() *Set {
 		Clock:        NewClock(),
 		FS:           NewFS(),
 		HTTP:         NewHTTP(),
+		PublicHTTP:   NewHTTP(),
+		Resolver:     NewResolver(),
 		Clipboard:    NewClipboard(),
 		Paster:       NewPaster(),
 		Shell:        NewShell(),
@@ -51,6 +55,8 @@ func (s *Set) Ports() platform.Ports {
 		Clock:        s.Clock,
 		FS:           s.FS,
 		HTTP:         s.HTTP,
+		PublicHTTP:   s.PublicHTTP,
+		Resolver:     s.Resolver,
 		Clipboard:    s.Clipboard,
 		Paster:       s.Paster,
 		Shell:        s.Shell,

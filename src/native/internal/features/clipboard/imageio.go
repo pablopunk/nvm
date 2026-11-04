@@ -40,6 +40,42 @@ func encodePNG(img image.Image) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// PreviewPNG decodes a PNG, JPEG or GIF picture within the decode limits, reduces it so its longer side is at
+// most maxEdge pixels, and returns it as PNG. It is the one path pictures take to a preview: the link fetcher
+// and the clipboard detail pane both use it, and neither runs it on the UI thread.
+func PreviewPNG(data []byte, maxEdge int) ([]byte, error) {
+	img, err := decodeLimited(data)
+	if err != nil {
+		return nil, err
+	}
+	return encodePNG(fitWithin(img, maxEdge))
+}
+
+// fitWithin returns img reduced by nearest-neighbour sampling so that its longer side is at most maxEdge
+// pixels, keeping the aspect ratio. A picture already that small is returned as it is.
+func fitWithin(img image.Image, maxEdge int) image.Image {
+	bounds := img.Bounds()
+	if maxEdge <= 0 || max(bounds.Dx(), bounds.Dy()) <= maxEdge {
+		return img
+	}
+	width, height := bounds.Dx(), bounds.Dy()
+	if width >= height {
+		height = max(1, height*maxEdge/width)
+		width = maxEdge
+	} else {
+		width = max(1, width*maxEdge/height)
+		height = maxEdge
+	}
+	dst := image.NewNRGBA(image.Rect(0, 0, width, height))
+	for y := range height {
+		sourceY := bounds.Min.Y + y*bounds.Dy()/height
+		for x := range width {
+			dst.Set(x, y, img.At(bounds.Min.X+x*bounds.Dx()/width, sourceY))
+		}
+	}
+	return dst
+}
+
 // pixelHash returns the content hash of an image's size and pixels. Two encodings of one picture hash alike.
 func pixelHash(img image.Image) string {
 	bounds := img.Bounds()

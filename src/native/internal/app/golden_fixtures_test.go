@@ -121,22 +121,6 @@ func goldenBitmap(t *testing.T, width, height int, fill color.NRGBA) *ui.Bitmap 
 	return bm
 }
 
-func goldenClipboard(t *testing.T) *ClipStore {
-	t.Helper()
-	shot := goldenBitmap(t, 640, 360, color.NRGBA{R: 96, G: 128, B: 160, A: 255})
-	cs := &ClipStore{
-		Entries: []ClipEntry{
-			{ID: "e-notes", Kind: "text", Text: "Meeting notes: ship the design package by Friday and review the goldens with Ana", At: goldenNow.Add(-2 * time.Hour), Pinned: true},
-			{ID: "e-rebase", Kind: "text", Text: "git rebase -i HEAD~3", At: goldenNow.Add(-3 * time.Minute)},
-			{ID: "e-shot", Kind: "image", Image: "e-shot.png", W: 640, H: 360, At: goldenNow.Add(-40 * time.Minute)},
-			{ID: "e-link", Kind: "text", Text: "https://nevermind.app/docs/palette", At: goldenNow.Add(-26 * time.Hour)},
-		},
-		thumbs: map[string]*ui.Bitmap{"e-shot": shot},
-	}
-	cs.full.id, cs.full.bm = "e-shot", shot
-	return cs
-}
-
 func goldenApps() []appfeat.App {
 	return []appfeat.App{
 		{Name: "Calculator", ID: "org.gnome.Calculator.desktop", Path: "/usr/share/applications/org.gnome.Calculator.desktop"},

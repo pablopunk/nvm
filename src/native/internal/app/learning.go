@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -54,7 +52,7 @@ func (p *App) showLearningNotices(notices <-chan store.Notice) {
 				return
 			}
 			if notice.Kind == store.Quarantined {
-				p.Toast(fmt.Sprintf("Saved rankings could not be read and were moved to %s", notice.Path))
+				p.Toast(quarantineToast(notice))
 			}
 		default:
 			return

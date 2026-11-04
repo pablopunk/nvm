@@ -133,7 +133,6 @@ Documented, not hidden. Each item is a place where the code does not yet meet th
 Numeric style literals left in `internal/app` (the color lint passes; these are geometry):
 
 - `ai.go`: 115, 117, 125, 130, 135 (paddings, gaps, sizes)
-- `clipboard.go`: 318, 328 (font sizes)
 - `emoji.go`: 95, 101, 102 (paddings, cell size, radius, glyph size)
 - `forms.go`: 54 (paddings, gaps; the form view), and the snippet and note views added with WP1.9 (`notes_editor.go`,
   `notes_floating.go`, `notes_view.go`, `snippets_view.go`): font sizes 11, 12, 13, 14 and 15 and margins 12 and 10,

@@ -175,6 +175,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
         "section": "Suggestions",
@@ -1460,6 +1479,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "Commands",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Documents",
         "subtitle": "$HOME/Documents",
         "section": "Commands",
@@ -2036,10 +2074,10 @@
       },
       {
         "kind": "Clipboard",
-        "title": "Meeting notes: ship the design package by Friday and review the goldens with Ana",
+        "title": "Meeting notes: ship the design package by Friday and review the goldens …",
         "subtitle": "Copied 2h ago · Text",
         "section": "Clipboard",
-        "id": "e-notes",
+        "id": "clipboard:e-notes",
         "icon": "clipboard",
         "tone": "blue",
         "accessory": "Pinned",
@@ -2048,7 +2086,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Copy to Clipboard",
+            "title": "Copy Text",
             "label": ""
           },
           {
@@ -2056,16 +2094,32 @@
             "label": "⌃↵"
           },
           {
+            "title": "Ask AI",
+            "label": "⌃J"
+          },
+          {
             "title": "Unpin",
             "label": "⌃P"
           },
           {
-            "title": "Ask AI About This",
-            "label": "⌃J"
+            "title": "Remove Item",
+            "label": "⌃⌫"
           },
           {
-            "title": "Delete",
-            "label": "⌃⌫"
+            "title": "Remove Last...",
+            "label": ""
+          },
+          {
+            "title": "Remove Entries from Last Hour",
+            "label": ""
+          },
+          {
+            "title": "Remove Entries from Last Day",
+            "label": ""
+          },
+          {
+            "title": "Remove All Entries",
+            "label": ""
           },
           {
             "title": "Clear All Unpinned",

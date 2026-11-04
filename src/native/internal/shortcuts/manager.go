@@ -1,56 +1,65 @@
 package shortcuts
 
 import (
-	"fmt"
+	"maps"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// Setup is what a Manager needs from the app: the document, the hotkey port, the platform, the commands that take
-// shortcuts, the declared shortcuts (nil when none), and what a press runs.
+// Setup is what a Manager needs from the app: the document, the hotkey port and clock, the platform, the commands that
+// take shortcuts, the declared shortcuts (nil when none), what a press of an action runs, the palette's action and
+// the hook for the palette shortcut's status.
 type Setup struct {
 	Doc       Persistence
 	Hotkeys   platform.Hotkeys
+	Clock     platform.Clock
 	GOOS      string
 	Commands  []Action
 	Declared  func() []Declared
 	Run       func(actionID string)
 	OnPalette func()
+	OnSummon  func(Status)
 }
 
-// Manager answers the Keyboard Shortcuts list and the recorder, saves their changes, and keeps the bound shortcuts
-// in step with the document. Suspend releases every binding while a recorder is open, so that the keys it records
-// reach it instead of running their actions.
+// Manager answers the Keyboard Shortcuts list and the recorder, saves their changes, and keeps the bound shortcuts in
+// step with the document. The palette shortcut is bound by Summon, the one registrar of it, and its accelerator is
+// stored in the document. Suspend releases every binding, Summon's included, while a recorder is open, so that the
+// keys it records reach it instead of running their actions.
 type Manager struct {
 	setup     Setup
-	palette   *PaletteHotkey
+	summon    *Summon
 	bindings  *Bindings
 	inactive  map[string]string
 	suspended bool
 }
 
-// PaletteChange reports the result of a palette hotkey change. SystemOwner names a system feature that already owns
-// the key, and Recovery is the key bound instead on Linux when the chosen one was taken.
+// PaletteChange reports a palette shortcut change that was saved. SystemOwner names a system feature that already owns
+// the key.
 type PaletteChange struct {
 	Accelerator string
 	Unchanged   bool
 	SystemOwner string
-	Recovery    string
 }
 
 // NewManager returns a manager that binds nothing until Start.
 func NewManager(setup Setup) *Manager {
 	return &Manager{
-		setup:    setup,
-		palette:  NewPaletteHotkey(setup.Hotkeys, setup.GOOS, setup.OnPalette),
+		setup: setup,
+		summon: NewSummon(SummonOptions{
+			Hotkeys:  setup.Hotkeys,
+			Clock:    setup.Clock,
+			GOOS:     setup.GOOS,
+			Toggle:   setup.OnPalette,
+			OnChange: setup.OnSummon,
+		}),
 		bindings: NewBindings(setup.Hotkeys, setup.Run),
 		inactive: map[string]string{},
 	}
 }
 
-// Start binds the palette hotkey and the actions from the document. It returns the palette hotkey's status.
-func (m *Manager) Start() PaletteStatus {
-	status := m.palette.Bind(m.load().Palette)
+// Start binds the palette shortcut from the document and the actions. It returns the palette shortcut's status.
+func (m *Manager) Start() Status {
+	status := m.summon.Start(m.load().Palette)
 	m.applyActions()
 	return status
 }
@@ -59,25 +68,46 @@ func (m *Manager) Start() PaletteStatus {
 func (m *Manager) Suspend() {
 	m.suspended = true
 	m.bindings.ReleaseAll()
-	m.palette.Release()
+	m.summon.Suspend()
 }
 
 // Resume binds the document's shortcuts again.
-func (m *Manager) Resume() PaletteStatus {
+func (m *Manager) Resume() Status {
 	m.suspended = false
-	status := m.palette.Bind(m.load().Palette)
+	status := m.summon.Start(m.load().Palette)
 	m.applyActions()
 	return status
 }
 
-// Reserved reports whether accelerator is the palette's own key, which no action may take.
-func (m *Manager) Reserved(accelerator string) bool {
-	return m.palette.Reserved(accelerator)
+// Suspended reports whether the bindings are released for a recorder.
+func (m *Manager) Suspended() bool {
+	return m.suspended
 }
 
-// Entries lists the rows of the Keyboard Shortcuts list.
+// PaletteStatus is the palette shortcut's status, as Summon reports it.
+func (m *Manager) PaletteStatus() Status {
+	return m.summon.Status()
+}
+
+// PaletteAccelerator is the palette shortcut in canonical form, as the document holds it.
+func (m *Manager) PaletteAccelerator() string {
+	return m.load().Palette
+}
+
+// Reserved reports whether accelerator is the palette's own shortcut, or the recovery one bound in its place. No action
+// may take it.
+func (m *Manager) Reserved(accelerator string) bool {
+	status := m.summon.Status()
+	return accelerator != "" && (accelerator == status.Accelerator || accelerator == status.Recovery)
+}
+
+// Entries lists the rows of the Keyboard Shortcuts list. An unavailable palette shortcut says so under its row.
 func (m *Manager) Entries() []Entry {
-	return Entries(m.load(), m.setup.Commands, m.declared(), m.inactive)
+	inactive := maps.Clone(m.inactive)
+	if status := m.summon.Status(); status.Unavailable() {
+		inactive[PaletteID] = status.Accelerator + " is in use by another app"
+	}
+	return Entries(m.load(), m.setup.Commands, m.declared(), inactive)
 }
 
 // SetAction saves accelerator as actionID's shortcut and binds it.
@@ -106,8 +136,8 @@ func (m *Manager) RemoveAction(actionID string) error {
 	return nil
 }
 
-// SetPalette saves accelerator as the palette hotkey and binds it. When the OS refuses it, the previous key stays
-// bound and the error names the refusal.
+// SetPalette moves the palette shortcut to accelerator through Summon and saves it. When the OS refuses the key, Summon
+// binds the previous one again and the error wraps platform.ErrConflict; nothing is saved.
 func (m *Manager) SetPalette(accelerator string) (PaletteChange, error) {
 	current := m.load()
 	next, err := current.WithPalette(accelerator, m.titleOf)
@@ -119,17 +149,24 @@ func (m *Manager) SetPalette(accelerator string) (PaletteChange, error) {
 		change.Unchanged = true
 		return change, nil
 	}
-	status := m.palette.Bind(next.Palette)
-	if !status.Registered && status.Recovery == "" {
-		m.palette.Bind(current.Palette)
-		return PaletteChange{}, fmt.Errorf("%s is in use by another app", next.Palette)
+	if err := m.summon.Change(next.Palette); err != nil {
+		m.keepSuspendedIfSuspended()
+		return PaletteChange{}, err
 	}
-	change.Recovery = status.Recovery
+	m.keepSuspendedIfSuspended()
 	if err := m.save(next); err != nil {
-		m.palette.Bind(current.Palette)
+		_ = m.summon.Change(current.Palette)
+		m.keepSuspendedIfSuspended()
 		return PaletteChange{}, err
 	}
 	return change, nil
+}
+
+// keepSuspendedIfSuspended releases what Summon bound during a recorder's change, so the recorder still gets the keys.
+func (m *Manager) keepSuspendedIfSuspended() {
+	if m.suspended {
+		m.summon.Suspend()
+	}
 }
 
 func (m *Manager) applyActions() {
@@ -141,7 +178,7 @@ func (m *Manager) applyActions() {
 	m.inactive = m.bindings.Apply(PlanBindings(wanted, m.Reserved))
 }
 
-// load returns the document, with the default palette hotkey when the stored one is blank.
+// load returns the document, with the default palette shortcut when the stored one is blank.
 func (m *Manager) load() Document {
 	doc, _ := m.setup.Doc.Load()
 	if doc.Palette == "" {
@@ -172,8 +209,8 @@ func (m *Manager) isDeclared(actionID string) bool {
 
 func (m *Manager) titles() map[string]string {
 	titles := map[string]string{}
-	for _, command := range m.setup.Commands {
-		titles[command.ID] = command.Title
+	for _, action := range m.setup.Commands {
+		titles[action.ID] = action.Title
 	}
 	for _, item := range m.declared() {
 		titles[item.ActionID] = item.Title
@@ -183,14 +220,4 @@ func (m *Manager) titles() map[string]string {
 
 func (m *Manager) titleOf(actionID string) string {
 	return m.titles()[actionID]
-}
-
-// Suspended reports whether the bindings are released for a recorder.
-func (m *Manager) Suspended() bool {
-	return m.suspended
-}
-
-// PaletteAccelerator is the palette hotkey in canonical form.
-func (m *Manager) PaletteAccelerator() string {
-	return m.load().Palette
 }

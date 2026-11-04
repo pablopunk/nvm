@@ -43,18 +43,21 @@ type App struct {
 	extTrays []*extTray
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
+	summon   *shortcuts.Summon
 	appsvc   *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
-	clip        *ClipStore
-	shortcutMgr *shortcuts.Manager
-	snips       *snippets.Store
-	notes       *notes.Store
-	files       *fileService
-	chats       *ChatStore
-	timer       *Timer
-	learn       *usage.Learner
-	history     *palette.QueryHistory
+	clip        *clipEngine
+	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
+	paletteHidden chan struct{}
+	shortcutMgr   *shortcuts.Manager
+	snips         *snippets.Store
+	notes         *notes.Store
+	files         *fileService
+	chats         *ChatStore
+	timer         *Timer
+	learn         *usage.Learner
+	history       *palette.QueryHistory
 
 	ports   platform.Ports
 	store   *store.Store
@@ -69,6 +72,8 @@ type App struct {
 	userReadOnly bool
 	quitting     bool
 	edits        map[string]*noteEdit
+	// launchShown records that the palette opened at launch because its shortcut could not be bound.
+	launchShown bool
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -84,7 +89,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Root:        p.rootView(),
 		Clock:       clock,
 		Synchronous: synchronous,
-		Position:    p.position,
+		Position:    p.placementOption(),
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.showApps,
@@ -95,19 +100,33 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 	})
 }
 
-// position centers the window a third down the work area of the display under the pointer.
+// position places the window on the work area of the display under the pointer. It is nil on a session that
+// does not let clients place their windows, and the compositor keeps the window where it puts it.
 func (p *App) position(w, h int) (int, int) {
-	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
-	return d.WorkArea.X + (d.WorkArea.Width-w)/2, d.WorkArea.Y + (d.WorkArea.Height-h)/3
+	screens := p.ports.Screens
+	d := screens.NearestDisplay(screens.CursorPoint())
+	return palette.PlaceOnWorkArea(d.WorkArea, w, h)
+}
+
+func (p *App) placementOption() func(w, h int) (int, int) {
+	if !p.ports.Capabilities.Supported(platform.CapabilityWindowPlacement) {
+		return nil
+	}
+	return p.position
 }
 
 func (p *App) ready() {
 	p.S = loadSettings()
-	p.attachServices(real.NewPorts(), configDir(), nil)
+	p.paletteHidden = make(chan struct{}, 1)
+	p.attachServices(p.appPorts(), configDir(), nil)
 	p.closeStoreOnQuit()
 	prepareCatalog()
-	p.clip = newClipStore()
+	p.clip = p.openClipboard()
 	p.openUserData()
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		p.clip.setEnabled(false)
+		p.clip.flush()
+	})
 	p.chats = newChatStore()
 	notices := p.openLearning()
 	p.startAppServices()
@@ -124,11 +143,11 @@ func (p *App) ready() {
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
+	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()
 	p.reloadExtensions()
 	p.setUpTray()
-	p.startClipboardWatcher()
 	p.startFiles()
 	log.Println("ready")
 }

@@ -58,7 +58,7 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 	if recorder.entry.ActionID == shortcuts.PaletteID {
 		change, err := manager.SetPalette(recorder.accelerator)
 		if err != nil {
-			h.Toast(err.Error())
+			h.Toast(changeHotkeyMessage(shortcutLabelOf(recorder.accelerator), shortcutLabelOf(manager.PaletteAccelerator())))
 			return
 		}
 		h.Pop()
