@@ -39,7 +39,7 @@ func GuideRows(shortcut string) []GuideRow {
 		{ID: "getting-started-find", Title: "Find a command", Subtitle: "Return to the palette, then search for an app, file, or command.", Icon: "search"},
 		{ID: "getting-started-run", Title: "Run it", Subtitle: `Choose a result and press Enter. Try "Calculator" or "Open Downloads".`, Icon: "keyboard"},
 		shortcutRow(shortcut),
-		{ID: "getting-started-permissions", Title: "Permissions when needed", Subtitle: "A prompt appears only when a command needs access.", Icon: "lock"},
+		{ID: "getting-started-permissions", Title: "Permissions when needed", Subtitle: "A prompt appears only when a command needs access.", Icon: "shield-check"},
 		{ID: "getting-started-done", Title: "Done for now", Subtitle: "Dismiss this guide and keep using the palette.", Icon: "check", Action: GuideFinish},
 	}
 }

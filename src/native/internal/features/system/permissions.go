@@ -28,9 +28,9 @@ var permissionTable = []struct {
 	platforms []string
 }{
 	{PermissionRow{Kind: platform.PermissionMicrophone, Title: "Microphone", Description: "Voice dictation input", Icon: "mic", Anchor: "Microphone", CanRequest: true}, nil},
-	{PermissionRow{Kind: platform.PermissionCamera, Title: "Camera", Description: "Extension live camera views", Icon: "image", Anchor: "Camera", CanRequest: true}, nil},
-	{PermissionRow{Kind: platform.PermissionAccessibility, Title: "Accessibility", Description: "Paste text and read selected text", Icon: "user", Anchor: "Accessibility", CanRequest: true}, []string{"darwin"}},
-	{PermissionRow{Kind: platform.PermissionScreenRecording, Title: "Screen Recording", Description: "Screen capture for OCR and images", Icon: "app-window", Anchor: "ScreenCapture"}, []string{"darwin"}},
+	{PermissionRow{Kind: platform.PermissionCamera, Title: "Camera", Description: "Extension live camera views", Icon: "camera", Anchor: "Camera", CanRequest: true}, nil},
+	{PermissionRow{Kind: platform.PermissionAccessibility, Title: "Accessibility", Description: "Paste text and read selected text", Icon: "accessibility", Anchor: "Accessibility", CanRequest: true}, []string{"darwin"}},
+	{PermissionRow{Kind: platform.PermissionScreenRecording, Title: "Screen Recording", Description: "Screen capture for OCR and images", Icon: "monitor", Anchor: "ScreenCapture"}, []string{"darwin"}},
 	{PermissionRow{Kind: platform.PermissionFilesAndFolders, Title: "Files & Folders", Description: "App indexing and file search", Icon: "folder", Anchor: "FilesAndFolders"}, []string{"darwin"}},
 }
 
