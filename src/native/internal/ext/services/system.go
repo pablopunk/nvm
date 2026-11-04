@@ -47,7 +47,7 @@ func (h *Handler) publicCapability(name string) bool {
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",
-		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "selection.copy",
+		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "clipboard.paste", "selection.copy",
 		"keyboard.type-text", "apps.running", "apps.quit", "apps.hide", "apps.uninstall",
 		"system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
 		return h.deps.Capabilities.Supported(platform.Capability(name))

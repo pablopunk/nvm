@@ -6,6 +6,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -41,8 +42,9 @@ func commandShortcutID(cmd command) string {
 // movedCommandShortcutIDs are the shortcut keys of the built-in commands that were native commands before. Their
 // bindings keep the keys the user set, so these commands are keyed by the native IDs in place of their extension IDs.
 var movedCommandShortcutIDs = map[string]string{
-	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID: shortcuts.CommandForceQuitApps,
-	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:   shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                  shortcuts.CommandForceQuitApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                    shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID: shortcuts.CommandSnippets,
 }
 
 func extensionCommandShortcutID(extID, commandID string) string {

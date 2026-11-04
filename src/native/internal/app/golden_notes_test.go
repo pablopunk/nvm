@@ -1,6 +1,7 @@
 package app
 
 import (
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
@@ -36,7 +37,7 @@ func TestPaletteNoteConflictChoices(t *testing.T) {
 
 func TestPaletteSnippetsList(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.snippetsView())
+	goldenOpen(p, snippetsBuiltInPage(t, goldenLegacySnippets(t), snippetsbuiltin.ListCommandID, nil))
 	p.Choose(1)
 	golden.AssertMatrix(t, "snippets-list", p.View, paletteGoldens)
 }

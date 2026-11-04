@@ -4,7 +4,6 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/features/notes"
-	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -23,7 +22,7 @@ func (p *App) openUserData() {
 		logx.Default().Warn("notes and snippets open read-only", logx.F{})
 	}
 	p.notes = notes.New(st, searchClock, p.userReadOnly)
-	p.snips = snippets.New(st, searchClock, p.userReadOnly)
+	p.legacySnips = loadLegacySnippets(st)
 	p.userNotices = st.Notices()
 	mygo.App.OnQuit(func() {
 		p.closeEdits()

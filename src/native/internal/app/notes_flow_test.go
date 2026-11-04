@@ -3,10 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -124,65 +121,5 @@ func TestCompareOpensTheDiffAndEscapeReturnsToTheChoices(t *testing.T) {
 	p.Pop()
 	if top := topView(p); top.Title != "Unsaved changes found" {
 		t.Fatalf("after Escape the top view is %q, want the choices", top.Title)
-	}
-}
-
-// Snippets are found by their keyword at the root, and a keyword is one row whose action pastes the snippet.
-func TestRootFindsASnippetByItsKeyword(t *testing.T) {
-	p := goldenPalette(t)
-	goldenQuery(p, ";sig")
-	row := findRow(t, p, "Email signature")
-	if row.Kind != search.KindSnippets {
-		t.Fatalf("kind = %q, want Snippets", row.Kind)
-	}
-	if row.LearnKey != "snippet:snip-sig" {
-		t.Fatalf("learn key = %q", row.LearnKey)
-	}
-}
-
-// Paste refused by the platform leaves the snippet on the clipboard for a manual paste, and nothing is lost.
-func TestPasteRefusedLeavesTheSnippetOnTheClipboard(t *testing.T) {
-	p := goldenPalette(t)
-	paster := p.ports.Paster.(*fake.Paster)
-	paster.FailNext(fake.OpPasteIntoFrontmost, platform.ErrUnsupported)
-	clip := p.ports.Clipboard.(*fake.Clipboard)
-	snip, ok := p.snips.Get("snip-sig")
-	if !ok {
-		t.Fatal("fixture snippet missing")
-	}
-
-	p.clip = clipEngineOver(p.ports)
-	p.pasteSnippet(&recordingHost{}, snip)
-
-	deadline := time.Now().Add(watchdog)
-	for {
-		got, _ := clip.ReadText()
-		if got == snip.Text {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("clipboard = %q, want the snippet text", got)
-		}
-		time.Sleep(time.Millisecond)
-	}
-}
-
-// The snippets list paste action is the first action when the platform can paste, and copy when it cannot.
-func TestSnippetPrimaryActionFollowsThePasteCapability(t *testing.T) {
-	p := goldenPalette(t)
-	goldenOpen(p, p.snippetsView())
-	snip, _ := p.snips.Get("snip-sig")
-	if got := p.snippetItem(snip).Actions[0].Title; got != "Paste" {
-		t.Fatalf("primary action = %q, want Paste", got)
-	}
-	var withoutPaste []platform.Capability
-	for _, c := range platform.AllCapabilities() {
-		if c != platform.CapabilityClipboardPaste {
-			withoutPaste = append(withoutPaste, c)
-		}
-	}
-	p.ports.Capabilities = platform.NewCapabilities(withoutPaste...)
-	if got := p.snippetItem(snip).Actions[0].Title; got != "Copy to Clipboard" {
-		t.Fatalf("primary action without paste = %q, want Copy to Clipboard", got)
 	}
 }

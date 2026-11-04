@@ -1195,3 +1195,15 @@ Code: `internal/ext/builtins/apps` (rows, Force Quit Apps, Quit All Apps, the un
 - **Host-kept.** A global shortcut bound to an app still launches it through the host's shortcut dispatch, which reads the index and the platform launch port.
 - **Budgets.** The new surface grew the builder's reference by about 1 KB. Its size ratchets were raised to 50 KB and 34 KB; the terse reference is what the builder reads on every turn.
 - **Tests.** L2: `internal/ext/builtins/apps` runs each handler on fake services; `internal/ext/services` covers the uninstall and alias operations on fake lifecycles; `internal/app` runs the root goldens through the built-in with the palette's apps service. The root table, the learned table and the goldens are unchanged.
+
+## 31. Dogfood batch 3b: the snippets built-in
+
+Code: `internal/ext/builtins/snippets`. The app's native snippet views, rows, form and paste path are gone; the built-in is the only snippets code.
+
+- **Rows.** A keyword typed at the root finds the snippet whose keyword is the query (ranked above prefixes, 975 and 970, as before). Enter pastes the text through `PasteText` when the platform has `clipboard.paste` and copies it where it does not. Copy to Clipboard, Edit and Delete are the row's menu; ⌃C, ⌃E and ⌃⌫ keep their keys as `CommandOrControl` shortcuts. Delete asks first through `WithConfirmation`.
+- **Commands.** Snippets lists at the root with the native score and is customizable, so its shortcut keeps `command:snippets` through the host's moved-command table. Create Snippet is search only.
+- **Storage.** Snippets live in the extension's storage under `snippets`. The snippets document the app kept before this built-in is read once, and answers until the first save stores the list with it. A save keeps entries the list does not show, such as malformed ones, so nothing is dropped.
+- **Placeholders.** `{clipboard}` and `{date}` are filled when the snippet is pasted or copied, in one pass, as before.
+- **API added.** `ColorTeal`, the teal foreground the native snippet rows used; `System().HasCapability("clipboard.paste")`, the name the host answers for the paste gesture.
+- **Differences from the native views.** The form is the palette's row form, not a stacked form: each field is a row, and a refused save shows its message in the palette's feedback instead of under the fields. The list filters its rows by title, subtitle, keyword and alias, as every extension list does, so the Create Snippet row filters too. The detail pane shows the placeholders as a labelled row under the text rather than a footer.
+- **Tests.** Unit: `internal/ext/builtins/snippets` covers the rows, paste, copy, validation, keyword uniqueness, storage and legacy answers. Goldens: `snippets-list`, `snippet-form` and `material-snippet-form` now render through the built-in; the three were regenerated for the row form and the detail row. The root and learned tables are unchanged.

@@ -13,8 +13,6 @@ import (
 // The values are the bands the prototype used, so the root's order does not change.
 const (
 	scoreTimer        = 990
-	scoreSnippetExact = 975
-	scoreSnippet      = 970
 	scoreExtension    = 960
 	scoreFileFirst    = 75
 	scoreClipboard    = 55
@@ -63,12 +61,6 @@ func timerRows(p *App, _ *rootInput, q string) []search.Item {
 	return []search.Item{{Kind: search.KindTimer, Title: "Start timer: " + d.String(), Subtitle: "Shows a countdown in the tray", Icon: "timer", Tone: "orange", Score: scoreTimer, Actions: []search.Action{
 		{Title: "Start", Run: func(h search.Host) { p.startTimer(d); h.Hide() }},
 	}}}
-}
-
-// snippetRows matches snippets by keyword, exact first and then prefix; a snippet with no keyword is found by the
-// snippets view.
-func snippetRows(p *App, _ *rootInput, q string) []search.Item {
-	return snippetRootRows(p, q)
 }
 
 // commandTitleScore is how well a command named title, with keywords, answers the lowercase query lq. The title scores

@@ -128,3 +128,8 @@ func (p *App) feedbackFromBackground(f palette.Feedback) {
 func (p *App) toastFromBackground(msg string) {
 	p.redraw(func() { p.Toast(msg) })
 }
+
+// canPaste reports whether the platform can send the paste gesture. The emoji grid copies where it cannot.
+func (p *App) canPaste() bool {
+	return p.ports.Capabilities.Supported(platform.CapabilityClipboardPaste)
+}

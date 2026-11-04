@@ -15,7 +15,6 @@ type rootSource struct {
 // providers_rows.go.
 var rootSources = []rootSource{
 	{id: "timer", rows: timerRows},
-	{id: "snippets", rows: snippetRows},
 	{id: "extensions", provider: extensionProvider},
 	{id: "commands", rows: commandRows},
 	{id: "updates", rows: updateRootRows},

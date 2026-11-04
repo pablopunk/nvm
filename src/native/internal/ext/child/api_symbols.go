@@ -88,6 +88,7 @@ func init() {
 		"ColorPink":                     reflect.ValueOf(api.ColorPink),
 		"ColorPurple":                   reflect.ValueOf(api.ColorPurple),
 		"ColorRed":                      reflect.ValueOf(api.ColorRed),
+		"ColorTeal":                     reflect.ValueOf(api.ColorTeal),
 		"ColorYellow":                   reflect.ValueOf(api.ColorYellow),
 		"CopyText":                      reflect.ValueOf(api.CopyText),
 		"Current":                       reflect.ValueOf(&api.Current).Elem(),
