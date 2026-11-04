@@ -31,6 +31,8 @@ type Deps struct {
 	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
 	// system action report unavailable.
 	OpenSettingsPane func(id string)
+	// RecordPaletteShortcut pushes the recorder of the palette shortcut onto h. Nil makes the action report unavailable.
+	RecordPaletteShortcut func(h search.Host)
 	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
 	// the action report unavailable.
 	OpenPath   func(path string)

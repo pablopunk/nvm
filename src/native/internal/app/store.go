@@ -75,7 +75,8 @@ type Settings struct {
 	FileRoots []string
 	// FileIgnore adds ignore patterns to the Files index, on top of the defaults.
 	FileIgnore []string
-	// GuideDone is set once the user dismisses the Getting Started guide; the root then shows Help.
+	// GuideDone is set once the user dismissed the Getting Started guide. The guide built-in reads it until its own
+	// storage holds the flag.
 	GuideDone bool
 }
 

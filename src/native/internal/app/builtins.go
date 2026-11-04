@@ -10,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
@@ -19,13 +20,23 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
+// builtInInputs are the values the settings file held before the built-ins kept their own state. Each built-in reads
+// its value until its own storage or setting holds one. Rates is the calculator's exchange-rate cache and Zone the zone
+// its calendar answers use.
+type builtInInputs struct {
+	Rates        calc.RateCache
+	Zone         *time.Location
+	Quicklinks   []quicklinks.Link
+	GuideDone    bool
+}
+
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
-// root and the palette through the same manager as folder extensions. The calculator keeps its exchange rates in
-// rates, and computes calendar answers in zone. The quicklinks built-in reads the links legacy the settings file held.
-func builtInExtensions(rates calc.RateCache, zone *time.Location, legacyLinks []quicklinks.Link) []api.Extension {
+// root and the palette through the same manager as folder extensions.
+func builtInExtensions(in builtInInputs) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
-		calculatorbuiltin.New(rates, zone), classifyimage.Extension{}, aicommands.New(), quicklinks.New(legacyLinks),
+		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
+		quicklinks.New(in.Quicklinks), gettingstarted.New(in.GuideDone),
 	}
 }
 

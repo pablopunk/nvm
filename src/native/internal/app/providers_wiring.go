@@ -18,7 +18,6 @@ var rootSources = []rootSource{
 	{id: "snippets", rows: snippetRows},
 	{id: "extensions", provider: extensionProvider},
 	{id: "commands", rows: commandRows},
-	{id: "guide", rows: guideRootRows},
 	{id: "updates", rows: updateRootRows},
 	{id: "applications", rows: applicationRows},
 	{id: "files", provider: rootFileProvider},

@@ -35,6 +35,8 @@ const (
 	ActionCamera        ActionKind = "camera"
 	ActionOpenPalette   ActionKind = "open-palette"
 	ActionSetQuery      ActionKind = "set-query"
+	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
+	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
 	// shows "This action is not available yet" when it runs.
 	ActionUnavailable ActionKind = "unavailable"
@@ -190,7 +192,7 @@ func (a Action) validateDeclarative() error {
 		if a.View == nil {
 			return errors.New("view is required")
 		}
-	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionUnavailable:
+	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionRecordPaletteShortcut, ActionUnavailable:
 		return nil
 	case ActionShellExec:
 		return validateShell(a.Shell)
