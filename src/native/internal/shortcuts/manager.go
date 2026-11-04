@@ -178,12 +178,10 @@ func (m *Manager) applyActions() {
 	m.inactive = m.bindings.Apply(PlanBindings(wanted, m.Reserved))
 }
 
-// load returns the document, with the default palette shortcut when the stored one is blank.
+// load returns the stored document. A blank palette shortcut stays blank: a fresh install binds none, as 1.x does,
+// and the palette shows the "No shortcut set" banner until the user sets one.
 func (m *Manager) load() Document {
 	doc, _ := m.setup.Doc.Load()
-	if doc.Palette == "" {
-		doc.Palette = DefaultPalette
-	}
 	return doc
 }
 

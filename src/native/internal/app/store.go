@@ -79,7 +79,7 @@ type Quicklink struct {
 }
 
 func loadSettings() *Settings {
-	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: clipDefaultLimit, Disabled: map[string]bool{}}
+	s := &Settings{Engine: "google", ClipLimit: clipDefaultLimit, Disabled: map[string]bool{}}
 	loadJSON("settings.json", s)
 	if s.Disabled == nil {
 		s.Disabled = map[string]bool{}

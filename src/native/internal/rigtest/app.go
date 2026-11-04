@@ -108,8 +108,8 @@ func Launch(t *testing.T, opts Options) *App {
 			t.Fatal(err)
 		}
 	}
-	if opts.Hotkey != "" {
-		if err := writeHotkeySettings(home, opts.Hotkey); err != nil {
+	if opts.Hotkey != "" || opts.Home == "" {
+		if err := writeHotkeySettings(home, hotkey); err != nil {
 			t.Fatal(err)
 		}
 	}
