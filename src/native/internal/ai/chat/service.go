@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -51,6 +52,14 @@ type Service struct {
 	models map[Tier]backend.ModelDescriptor
 	// doomed holds the chats removed as soon as their turn settles.
 	doomed map[string]bool
+	// steps holds what each chat is doing outside its reply, such as a builder's check of the extension it wrote.
+	steps map[string]Step
+}
+
+// Step is what a chat is doing besides its reply, and when it began. The palette shows it with the elapsed time.
+type Step struct {
+	Label string
+	Since time.Time
 }
 
 // New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
@@ -62,7 +71,7 @@ func New(opts Options) *Service {
 	if opts.Logger == nil {
 		opts.Logger = logx.Default()
 	}
-	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}}
+	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}, doomed: map[string]bool{}, steps: map[string]Step{}}
 	s.Reload()
 	s.settleCutOffTurns()
 	return s
@@ -150,6 +159,31 @@ func (s *Service) mutateDraft(draft Chat, change func(*Chat)) error {
 	}
 	s.cache.commitDraft(next)
 	return nil
+}
+
+// SetStep shows what the chat is doing besides its reply, from now until ClearStep. It runs on the UI thread.
+func (s *Service) SetStep(id, label string) {
+	s.steps[id] = Step{Label: label, Since: s.opts.Clock.Now()}
+}
+
+// ClearStep ends the step the chat shows.
+func (s *Service) ClearStep(id string) {
+	delete(s.steps, id)
+}
+
+// StepView is a step as a view shows it: its label and how long it has run, on the service's clock.
+type StepView struct {
+	Label   string
+	Elapsed time.Duration
+}
+
+// StepOf returns the step the chat is doing, if any, with how long it has run.
+func (s *Service) StepOf(id string) (StepView, bool) {
+	step, ok := s.steps[id]
+	if !ok {
+		return StepView{}, false
+	}
+	return StepView{Label: step.Label, Elapsed: s.opts.Clock.Now().Sub(step.Since)}, true
 }
 
 // Busy reports whether a turn of the chat is in flight.
@@ -349,7 +383,7 @@ func (s *Service) startTurn(id string) error {
 	if err != nil {
 		return err
 	}
-	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history))
+	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history), chat.Kind, chat.Tier, s.opts.Clock.Now())
 	s.runs[id] = r
 	go s.consume(id, r)
 	return nil

@@ -23,6 +23,8 @@ type Setup struct {
 	MaxSteps       int
 	ToolTimeout    time.Duration
 	MaxOutputBytes int
+	// TurnTimeout bounds the active time of a turn: model replies and tool runs, not the waits for the user.
+	TurnTimeout time.Duration
 }
 
 func (s Setup) withDefaults() Setup {
@@ -38,6 +40,9 @@ func (s Setup) withDefaults() Setup {
 	if s.MaxOutputBytes <= 0 {
 		s.MaxOutputBytes = DefaultMaxOutputBytes
 	}
+	if s.TurnTimeout <= 0 {
+		s.TurnTimeout = DefaultTurnTimeout
+	}
 	return s
 }
 
@@ -45,7 +50,7 @@ func (s Setup) withDefaults() Setup {
 // channel closes. The consumer must drain Events; the loop waits on it.
 type Turn struct {
 	events chan Event
-	cancel context.CancelFunc
+	cancel context.CancelCauseFunc
 
 	mu      sync.Mutex
 	waiting map[string]chan bool
@@ -54,7 +59,7 @@ type Turn struct {
 // Start begins a turn over history, the messages the model sees, ending with the user's message. It returns at once;
 // the loop runs on its own goroutine.
 func Start(parent context.Context, setup Setup, history []backend.Message) *Turn {
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
 	turn := &Turn{events: make(chan Event), cancel: cancel, waiting: map[string]chan bool{}}
 	run := &turnRun{turn: turn, ctx: ctx, setup: setup.withDefaults(), messages: append([]backend.Message(nil), history...)}
 	safego.Go("agent.turn", func(context.Context) { run.execute() })
@@ -68,7 +73,7 @@ func (t *Turn) Events() <-chan Event {
 
 // Cancel stops the turn. A running tool sees its context end; calls that have not run are reported as cancelled.
 func (t *Turn) Cancel() {
-	t.cancel()
+	t.cancel(context.Canceled)
 }
 
 // Decide answers the call of an EventApproval. It reports false when no approval waits for callID.
@@ -92,10 +97,34 @@ type turnRun struct {
 	messages []backend.Message
 	usage    Usage
 	finished bool
+	started  time.Time
+	waited   time.Duration
 }
 
 func (r *turnRun) emit(event Event) {
 	r.turn.events <- event
+}
+
+// activeTime is how long the turn has run, not counting the time it waited for the user's answers.
+func (r *turnRun) activeTime() time.Duration {
+	return r.setup.Clock.Now().Sub(r.started) - r.waited
+}
+
+// pastDeadline ends the turn with ErrTurnDeadline once its active time passes the limit. It reports whether it did.
+func (r *turnRun) pastDeadline() bool {
+	if r.activeTime() <= r.setup.TurnTimeout {
+		return false
+	}
+	r.turn.cancel(ErrTurnDeadline)
+	return true
+}
+
+// endEvent is the terminal event of a turn whose context ended: a deadline is an error, anything else a stop.
+func (r *turnRun) endEvent() Event {
+	if errors.Is(context.Cause(r.ctx), ErrTurnDeadline) {
+		return Event{Kind: EventError, Err: ErrTurnDeadline}
+	}
+	return Event{Kind: EventAborted}
 }
 
 // finish sends the terminal event, once, with the usage of the turn.
@@ -112,10 +141,11 @@ func (r *turnRun) finish(event Event) {
 // limit is reached. The events channel closes when it returns, even on a panic.
 func (r *turnRun) execute() {
 	defer close(r.turn.events)
+	r.started = r.setup.Clock.Now()
 	r.emit(Event{Kind: EventStart})
 	for step := 1; step <= r.setup.MaxSteps; step++ {
-		if r.ctx.Err() != nil {
-			r.finish(Event{Kind: EventAborted})
+		if r.pastDeadline() || r.ctx.Err() != nil {
+			r.finish(r.endEvent())
 			return
 		}
 		r.emit(Event{Kind: EventStep, Step: step})
@@ -163,6 +193,9 @@ func (r *turnRun) consume(stream ModelStream) (backend.Message, error) {
 		if err != nil {
 			return backend.Message{}, err
 		}
+		if chunk.Reasoning != "" {
+			r.emit(Event{Kind: EventReasoning, Text: chunk.Reasoning})
+		}
 		if chunk.Text != "" {
 			text.WriteString(chunk.Text)
 			r.emit(Event{Kind: EventDelta, Text: chunk.Text})
@@ -172,6 +205,9 @@ func (r *turnRun) consume(stream ModelStream) (backend.Message, error) {
 		}
 		if chunk.Usage != nil {
 			r.usage.add(*chunk.Usage)
+		}
+		if r.pastDeadline() {
+			return backend.Message{}, ErrTurnDeadline
 		}
 		if r.ctx.Err() != nil {
 			return backend.Message{}, r.ctx.Err()
@@ -192,7 +228,7 @@ func assistantMessage(text string, calls []backend.ToolCall) backend.Message {
 // failWith ends the turn for a failure of the model or a stream, or aborts it when the turn was cancelled.
 func (r *turnRun) failWith(err error) {
 	if r.ctx.Err() != nil {
-		r.finish(Event{Kind: EventAborted})
+		r.finish(r.endEvent())
 		return
 	}
 	r.finish(Event{Kind: EventError, Err: err})

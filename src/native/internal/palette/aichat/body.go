@@ -37,7 +37,10 @@ func transcript(c *ui.Context, p *page, record chat.Chat) {
 	}
 	ui.List(c, &p.list, len(record.Messages), func(i int) {
 		ui.Column(c).Padding(6, 4).Children(func() {
-			renderMessage(c, p.deps, record.Messages[i], i == len(record.Messages)-1)
+			renderMessage(c, p, i, record.Messages[i], i == len(record.Messages)-1)
 		})
 	}).Grow(1)
+	if step, ok := p.deps.Service.StepOf(p.id); ok {
+		progressRowFor(c, design.Tokens(c), step.Label, step.Elapsed)
+	}
 }

@@ -9,9 +9,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 )
 
-// renderMessage draws one transcript entry: the user's line as a bubble, a notice as a card, and a reply as
-// Markdown. last says whether the entry is the newest, which is the one a reply may still be arriving in.
-func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
+// renderMessage draws one transcript entry: the user's line as a bubble, a notice as a card, and a reply as Markdown.
+// index is the entry's place in the transcript and last says whether it is the newest, which is the one a reply may
+// still be arriving in.
+func renderMessage(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 	switch m.Author {
 	case chat.AuthorUser:
 		if len(m.Images) > 0 {
@@ -27,34 +28,31 @@ func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
 			toolRow(c, m)
 		}
 	default:
-		reply(c, deps, m, last)
+		reply(c, p, index, m, last)
 	}
 }
 
-// reply draws an assistant entry. A reply with no visible text yet shows the thinking state; a reply that stopped says
-// so.
-func reply(c *ui.Context, deps Deps, m chat.Message, last bool) {
+// reply draws an assistant entry: its reasoning as a block that opens on request, then its text. A reply with no text
+// yet shows the progress of the turn, and a reply that stopped says so.
+func reply(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 	k := design.Tokens(c)
 	streaming := m.Status == chat.StatusStreaming
+	if m.Reasoning != "" {
+		reasoningBlock(c, p, index, m.Reasoning)
+	}
 	if strings.TrimSpace(m.Text) == "" {
 		if streaming {
-			thinking(c, k)
+			progressRow(c, k, "Thinking", m.At, p.deps.Now())
 		}
 		return
 	}
-	deps.Reply(c, m.Text, streaming && last)
+	p.deps.Reply(c, m.Text, streaming && last)
+	if record, ok := p.deps.Service.Chat(p.id); streaming && last && ok && record.Kind == chat.KindBuilder {
+		progressRow(c, k, "Writing extension…", m.At, p.deps.Now())
+	}
 	if m.Status == chat.StatusStopped {
 		ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 	}
-}
-
-// thinking is the state of a reply that has no visible text yet, while the model works. It names the state only; the
-// model's reasoning is not shown, as in the desktop app, which glows the same word in the accent color.
-func thinking(c *ui.Context, k *design.TokenSet) {
-	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Spinner(c)
-		ui.Text(c, "Thinking").FontSize(13).FontWeight(500).TextColor(k.Accent)
-	})
 }
 
 // noticeCard draws a notice: its title, then the words that say what to do next.

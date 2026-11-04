@@ -27,6 +27,9 @@ func (p *page) chatActions() []search.Action {
 	if busy {
 		acts = append(acts, p.stopAction())
 	}
+	if i := latestReasoning(record.Messages); i >= 0 {
+		acts = append(acts, p.thinkingAction(i))
+	}
 	acts = append(acts, p.switchTierAction(record.Tier), p.newChatAction(), p.deleteChatAction(record))
 	if record.Kind == chat.KindBuilder && record.Extension != "" && p.deps.Review != nil {
 		acts = append(acts, p.reviewAction())
@@ -99,4 +102,15 @@ func (p *page) deleteChatAction(record chat.Chat) search.Action {
 func (p *page) reviewAction() search.Action {
 	return search.Action{Title: "Review Extension", Label: "⌃E", Key: ui.KeyE, Mods: palette.Mod, Dismiss: search.DismissNever,
 		Run: p.review}
+}
+
+// thinkingAction opens or closes the reasoning block of entry index, for keyboard users and the menu.
+func (p *page) thinkingAction(index int) search.Action {
+	title := "Show Thinking"
+	if p.thinkingOpen[index] {
+		title = "Hide Thinking"
+	}
+	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(search.Host) {
+		p.thinkingOpen[index] = !p.thinkingOpen[index]
+	}}
 }

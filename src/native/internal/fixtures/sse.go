@@ -75,3 +75,28 @@ func deltaFrame(content string) string {
 	}
 	return "data: " + string(payload) + "\n\n"
 }
+
+// ReasoningFrames splits reasoning text into SSE data frames of at most size bytes each, as a reasoning model streams
+// its thinking in the reasoning field before any content.
+func ReasoningFrames(text string, size int) []string {
+	var frames []string
+	for _, piece := range StreamFrames(text, size) {
+		frames = append(frames, reasoningFrame(piece))
+	}
+	return frames
+}
+
+// reasoningFrame turns one content frame into a reasoning frame carrying the same text.
+func reasoningFrame(contentFrame string) string {
+	var chunk sseChunk
+	payload := strings.TrimSuffix(strings.TrimPrefix(contentFrame, "data: "), "\n\n")
+	if err := json.Unmarshal([]byte(payload), &chunk); err != nil || len(chunk.Choices) == 0 {
+		return contentFrame
+	}
+	text := chunk.Choices[0].Delta.Content
+	encoded, _ := json.Marshal(map[string]any{
+		"object":  "chat.completion.chunk",
+		"choices": []map[string]any{{"index": 0, "delta": map[string]string{"reasoning": text}}},
+	})
+	return "data: " + string(encoded) + "\n\n"
+}

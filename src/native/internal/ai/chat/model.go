@@ -81,7 +81,9 @@ type Message struct {
 	Calls  []backend.ToolCall `json:"calls,omitempty"`
 	Tool   *ToolRun           `json:"tool,omitempty"`
 	Images []Image            `json:"images,omitempty"`
-	At     time.Time          `json:"at"`
+	// Reasoning is the model's reasoning for this reply, kept up to MaxReasoningBytes. The palette shows it collapsed.
+	Reasoning string    `json:"reasoning,omitempty"`
+	At        time.Time `json:"at"`
 }
 
 // Chat is one conversation: its kind and tier, its transcript and when it was last changed. A builder chat names the
@@ -96,6 +98,9 @@ type Chat struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// MaxReasoningBytes bounds the reasoning a reply keeps. The rest of a longer reasoning is dropped, never shown.
+const MaxReasoningBytes = 64 << 10
 
 // titleRunes bounds a title, the first line of the first message.
 const titleRunes = 60

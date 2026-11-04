@@ -19,6 +19,8 @@ type page struct {
 	input       ui.Handle
 	attachments []chat.Image
 	host        search.Host
+	// thinkingOpen says which reasoning blocks are open, by the index of their transcript entry.
+	thinkingOpen map[int]bool
 }
 
 // ChatView is the page of the chat with id. Its body is the transcript and its composer; the palette has no search
@@ -29,7 +31,7 @@ func ChatView(deps Deps, id string) *palette.View {
 
 // newPage is the state of a chat page, before the palette shows it.
 func newPage(deps Deps, id string) *page {
-	p := &page{deps: deps, id: id}
+	p := &page{deps: deps, id: id, thinkingOpen: map[int]bool{}}
 	p.list.FollowEnd = true
 	return p
 }

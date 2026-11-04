@@ -56,6 +56,7 @@ const (
 	copyFailed           = "The reply failed. Ask again, or try later."
 	copyEmptyReply       = "The model sent no text. Ask again."
 	copyStepLimit        = "The reply used every step without a final answer. Ask again to keep going."
+	copyTurnDeadline     = "The reply ran past 10 minutes, so it was stopped. Ask again to get a new reply."
 	copyPricing          = "Nevermind cannot price the selected AI model right now, so this request was not sent. Try again later or choose another model."
 )
 
@@ -72,6 +73,9 @@ func NoticeFor(err error, partial string) Notice {
 	}
 	if errors.Is(err, ErrEmptyReply) {
 		return Notice{Kind: NoticeFailed, Title: "No reply", Message: copyEmptyReply}
+	}
+	if errors.Is(err, agent.ErrTurnDeadline) {
+		return Notice{Kind: NoticeTimeout, Title: "Reply took too long", Message: copyTurnDeadline}
 	}
 	if errors.Is(err, agent.ErrStepLimit) {
 		return Notice{Kind: NoticeStepLimit, Title: "Step limit reached", Message: copyStepLimit}

@@ -130,3 +130,27 @@ func TestThinkingGoldens(t *testing.T) {
 	r.open(ChatView(r.deps(), record.ID))
 	golden.AssertMatrix(t, "thinking", r.palette.View, pageGoldens)
 }
+
+// TestReasoningGoldens renders a finished reply whose Thinking block is closed, then the same block opened.
+func TestReasoningGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Plan a trip", chat.TierSmart,
+		user("Plan a three day trip to Lisbon."),
+		reasoned("Day one: the old town. Day two: Sintra. Day three: the coast.", "Weighing a pace of two sights a day against the hills, then the coast."))
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "reasoning-closed", r.palette.View, pageGoldens)
+
+	opened := newPage(r.deps(), record.ID)
+	opened.thinkingOpen[1] = true
+	r.open(opened.view())
+	golden.AssertMatrix(t, "reasoning-open", r.palette.View, pageGoldens)
+}
+
+// TestBuilderWritingGoldens renders a builder reply that is streaming the extension, with the Checking step under it.
+func TestBuilderWritingGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.builderWith("", user("A clock in the palette."), streaming("Writing the clock now.\n\n```json\n{\"id\": \"user.clock\"}"))
+	r.service.SetStep(record.ID, "Checking…")
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "builder-writing", r.palette.View, streamingGoldens)
+}
