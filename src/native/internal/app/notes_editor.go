@@ -85,7 +85,7 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 	}
 	edit.editors++
 	view := &palette.View{
-		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes   ⌃F Float window",
+		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes",
 		TitleFn: func() string { return notes.Title(edit.text) },
 		OnLeave: func() {
 			edit.editors--
@@ -127,9 +127,6 @@ func (p *App) noteEditorKeys(c *ui.Context, h search.Host, edit *noteEdit) bool 
 	case c.Shortcut(mod, ui.KeyO):
 		h.Pop()
 		h.Push(p.notesView())
-	case c.Shortcut(mod, ui.KeyF):
-		h.Hide()
-		p.openFloatingNote(edit.id, floatingWindowTitle)
 	case c.Shortcut(mod, ui.KeyBackspace):
 		h.Push(p.confirmDeleteNote(edit.id, notes.Title(edit.text)))
 	default:
