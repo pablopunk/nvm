@@ -6,26 +6,35 @@ import (
 	"unicode/utf8"
 )
 
-// lookups are derived once from the static records: the lowercase Unicode label and group name each
-// search matches, the rune mask that skips records, the id map behind Lookup and Recents, and the
-// single-character map behind UnicodeInfo.
+// lookups are derived once from the static records: the lowercase Unicode label, group name and copy action title each
+// search matches, the rune mask that skips records, the id map behind Lookup and Recents, and the single-character map
+// behind UnicodeInfo.
 type lookups struct {
-	labels []string
-	groups []string
-	masks  []charMask
-	byID   map[string]uint16
-	byRune map[rune]uint16
+	labels     []string
+	groups     []string
+	copyTitles []string
+	masks      []charMask
+	byID       map[string]uint16
+	byRune     map[rune]uint16
 }
+
+// The titles 1.x gives a picker row's actions with frontmost paste available. 1.x's search matches them, so a query
+// such as "unicode" matches every character, as it does there.
+const (
+	copyUnicodeTitle   = "copy unicode"
+	pasteSkinToneTitle = "paste with skin tone"
+)
 
 var builtinLookups = sync.OnceValue(buildLookups)
 
 func buildLookups() *lookups {
 	idx := &lookups{
-		labels: make([]string, len(records)),
-		groups: make([]string, len(records)),
-		masks:  make([]charMask, len(records)),
-		byID:   make(map[string]uint16, len(records)),
-		byRune: make(map[rune]uint16, len(records)),
+		labels:     make([]string, len(records)),
+		groups:     make([]string, len(records)),
+		copyTitles: make([]string, len(records)),
+		masks:      make([]charMask, len(records)),
+		byID:       make(map[string]uint16, len(records)),
+		byRune:     make(map[rune]uint16, len(records)),
 	}
 	lowerGroups := map[uint16]string{}
 	for index, rec := range records {
@@ -33,9 +42,15 @@ func buildLookups() *lookups {
 		codepoints := entry.Codepoints()
 		idx.labels[index] = strings.ToLower(codepoints)
 		idx.groups[index] = lowerGroup(lowerGroups, rec.group)
+		idx.copyTitles[index] = "copy " + strings.ToLower(entry.Name())
 		idx.masks[index].addText(entry.Glyph())
 		for _, field := range entry.Keywords() {
 			idx.masks[index].addText(strings.ToLower(field))
+		}
+		idx.masks[index].addText(idx.copyTitles[index])
+		idx.masks[index].addText(copyUnicodeTitle)
+		if rec.skinTone {
+			idx.masks[index].addText(pasteSkinToneTitle)
 		}
 		idx.byID[entry.Kind().String()+":"+codepoints] = uint16(index)
 		if r, ok := baseRune(entry.Glyph()); ok {

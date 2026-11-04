@@ -8,12 +8,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// The picker's grid: eight cells a row, as the 1.x picker lays them out. Every catalog entry is a row, and the grid
-// builds only the rows on screen, so the whole catalog stays searchable without costing a frame.
+// The picker's grid: eight cells a row, as the 1.x picker lays them out. The grid shows the first 160 matches, as 1.x's
+// MAX_VISIBLE_ITEMS does, so a broad query lists the same characters in both apps.
 const (
 	emojiColumns    = 8
 	emojiCellHeight = 46
-	emojiRowLimit   = 4096
+	emojiRowLimit   = 160
 )
 
 // emojiCategoryNames is the order Tab cycles the categories in: all characters first, then the catalog's groups.

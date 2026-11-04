@@ -6,46 +6,37 @@ import (
 	"testing"
 )
 
-// bandOf is the ordered band a single field reaches on its own; emoji have no scattered-letter band.
-func bandOf(text, query string) int {
-	return orderedScore(text, newSearchQuery(query))
-}
-
-func TestScoreBands(t *testing.T) {
+// Each field matches the way 1.x's grid filter matches a value: it contains the query, or the query's words start the
+// field's words in order or in any order.
+func TestQueriesMatchFieldsAsThe1xGridFilterDoes(t *testing.T) {
 	tests := []struct {
 		name  string
 		text  string
 		query string
-		want  int
+		want  bool
 	}{
-		{"exact", "grinning face", "grinning face", scoreExact},
-		{"whole phrase after a word", "a smiling face", "smiling face", scoreWholePhrase},
-		{"whole word inside", "big grinning face", "grinning", scoreWholePhrase},
-		{"starts with but not whole", "grinning", "grinn", scoreStartsWith},
-		{"contains inside a word", "xgrinningx", "grinning", scoreContains},
-		{"ordered word start", "grinning face", "grinning fa", scoreOrderedWordStart},
-		{"ordered word prefix", "big grinning face", "grinning fa", scoreOrderedWordPrefix},
-		{"unordered word prefix", "grinning face", "face grin", scoreUnorderedWordPrefix},
-		{"scattered letters are no match", "grinning face", "gnf", 0},
-		{"no match", "grinning face", "zz", 0},
+		{"exact", "grinning face", "grinning face", true},
+		{"starts with", "grinning", "grinn", true},
+		{"contains inside a word", "xgrinningx", "grinning", true},
+		{"contains a whole phrase", "a smiling face", "smiling face", true},
+		{"words in order", "big grinning face", "grinning fa", true},
+		{"words in any order", "grinning face", "face grin", true},
+		{"scattered letters are no match", "grinning face", "gnf", false},
+		{"no match", "grinning face", "zz", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := bandOf(tt.text, tt.query); got != tt.want {
-				t.Errorf("band of %q against %q = %d, want %d", tt.text, tt.query, got, tt.want)
+			if got := matchesQuery(tt.text, newSearchQuery(tt.query)); got != tt.want {
+				t.Errorf("matchesQuery(%q, %q) = %v, want %v", tt.text, tt.query, got, tt.want)
 			}
 		})
 	}
 }
 
-// Scattered letters never match an emoji, in any field: "ecf" does not find "grinning face", while an ordered match in
-// any field still decides the entry.
+// Scattered letters never match an emoji, in any field: "ecf" does not find "grinning face".
 func TestScatteredLettersNeverMatchAnEmoji(t *testing.T) {
-	if got := recordScore([]string{"grinning face"}, newSearchQuery("ecf")); got != 0 {
-		t.Errorf("scattered letters score = %d, want 0", got)
-	}
-	if got := recordScore([]string{"grinning face", "ecf"}, newSearchQuery("ecf")); got != scoreExact {
-		t.Errorf("exact keyword score = %d, want %d", got, scoreExact)
+	if _, matched := rankRecord([]string{"grinning face"}, 1, newSearchQuery("ecf")); matched {
+		t.Error("scattered letters matched a record")
 	}
 }
 
@@ -68,13 +59,6 @@ func firstName(results []Entry) string {
 		return ""
 	}
 	return results[0].Name()
-}
-
-func TestPhraseBoundariesIgnoreNonBMPNeighbours(t *testing.T) {
-	// The TypeScript reads UTF-16 units, where a non-BMP character is never a word character.
-	if got := bandOf("𝐀face", "face"); got != scoreWholePhrase {
-		t.Errorf("score after a non-BMP letter = %d, want %d", got, scoreWholePhrase)
-	}
 }
 
 func TestSearchFindsEntriesByNameKeywordCharacterAndUnicode(t *testing.T) {
@@ -132,8 +116,8 @@ func TestEmptyQueryListsCatalogInOrder(t *testing.T) {
 	}
 }
 
-// TestSearchPutsTheEntryNamedByTheQueryFirst checks the tie rule: "fire" is also a keyword of the firefighters,
-// which score the same exact band, and the character named fire must still lead.
+// TestSearchPutsTheEntryNamedByTheQueryFirst checks the tie rule: "fire" is also a keyword of the firefighters, which
+// rank as keyword matches, and the character named fire must still lead.
 func TestSearchPutsTheEntryNamedByTheQueryFirst(t *testing.T) {
 	top := NewCatalog().Search("fire", Options{Limit: 1})
 	if len(top) == 0 || top[0].Name() != "fire" {
@@ -141,20 +125,22 @@ func TestSearchPutsTheEntryNamedByTheQueryFirst(t *testing.T) {
 	}
 }
 
-func TestSearchResultsAreOrderedByBestScore(t *testing.T) {
+// TestSearchOrdersTitleMatchesThenKeywordMatchesThenTheRest checks 1.x's order: entries named by the query first, then
+// entries with a keyword equal to it, then the rest, and each rank in catalog order.
+func TestSearchOrdersTitleMatchesThenKeywordMatchesThenTheRest(t *testing.T) {
 	catalog := NewCatalog()
+	idx := builtinLookups()
 	for _, query := range []string{"smile", "face", "sign", "u+1f6", "heart"} {
 		results := catalog.Search(query, Options{})
 		needle := newSearchQuery(normalizeQuery(query))
-		previous := scoreExact + 1
-		idx := builtinLookups()
+		previousRank, previousRef := rankTitle, uint16(0)
 		for _, entry := range results {
-			fields := recordFields(nil, entry.record(), idx, int(entry.ref)-1)
-			score := recordScore(fields, needle)
-			if score > previous {
-				t.Fatalf("Search(%q) puts score %d after %d", query, score, previous)
+			fields, identity := recordFields(nil, entry.record(), idx, int(entry.ref)-1)
+			rank := rankOf(fields[:identity], needle)
+			if rank < previousRank || rank == previousRank && entry.ref <= previousRef {
+				t.Fatalf("Search(%q) puts %q (rank %d) after rank %d or out of catalog order", query, entry.Name(), rank, previousRank)
 			}
-			previous = score
+			previousRank, previousRef = rank, entry.ref
 		}
 	}
 }
