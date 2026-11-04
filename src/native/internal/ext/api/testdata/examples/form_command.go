@@ -8,23 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type quickNote struct{}
-
-var (
-	_ api.Extension       = quickNote{}
-	_ api.CommandProvider = quickNote{}
-	_ api.ActionHandler   = quickNote{}
-)
-
-func (quickNote) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.quick-note", Title: "Quick Note"},
-		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
-	}
-}
-
-func (quickNote) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{ID: "settings", Title: "Quick Note Settings", Icon: "sticky-note", Aliases: []string{"qn"}}}, nil
 }
 
@@ -45,7 +29,7 @@ func noteFields() []api.Field {
 	return []api.Field{name, folder, format, tags, notify}
 }
 
-func (quickNote) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "settings":
 		submit := api.Run("save", "Save", nil)

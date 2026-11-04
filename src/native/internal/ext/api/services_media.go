@@ -1,6 +1,6 @@
 package api
 
-// OCRInput names an image: a path, a file URL, a data URL, or a file reference.
+// OCRInput names an image: a path, a file URL, a PNG data URL (for example from ReadImage), or a file reference.
 type OCRInput struct {
 	Source string   `json:"source,omitempty"`
 	File   *FileRef `json:"file,omitempty"`

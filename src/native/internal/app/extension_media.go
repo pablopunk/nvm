@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/base64"
+	"net/url"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -42,9 +43,18 @@ func imageBytes(files platform.FS, ref string) ([]byte, bool) {
 	if files == nil {
 		return nil, false
 	}
-	data, size, err := files.ReadFilePrefix(ref, maxImageFileBytes)
+	data, size, err := files.ReadFilePrefix(localImagePath(ref), maxImageFileBytes)
 	if err != nil || size > maxImageFileBytes {
 		return nil, false
 	}
 	return data, true
+}
+
+// localImagePath returns the path of a local image ref: a file: URL, as the files service names a file, or a plain path.
+func localImagePath(ref string) string {
+	parsed, err := url.Parse(ref)
+	if err != nil || parsed.Scheme != "file" {
+		return ref
+	}
+	return parsed.Path
 }

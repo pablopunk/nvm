@@ -221,7 +221,7 @@ Support playbook (to be written as a short page before any outside user receives
 1. Ask for the version (Settings, Updates), the platform and architecture, and the error reference from the
    Diagnostics page (copy the reference, not the log). Never ask for clipboard, screen or file contents.
 2. Sign-in trouble: the paste-code path always works. "consumed" means another app took the code; sign in again.
-3. "Where is my data?" Use the section 3 copy. 2.0 never reads 1.x data.
+3. "Where is my data?" Use the section 3 copy. 2.0 never reads 1.x settings or keychain entries; its extensions folder is shared with 1.x (section 3).
 4. "My extension stopped working." 2.0 does not run 1.x extensions. Point to Automate.
 5. A client the backend marks unsupported (`unsupported_desktop_version`) gets an update prompt. 2.0 derives it in
    `internal/backend/compat.go`. The user updates that app; no support ticket is needed.

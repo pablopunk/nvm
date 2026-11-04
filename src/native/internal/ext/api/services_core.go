@@ -214,7 +214,8 @@ type IndicatorInput struct {
 	DurationMs int64           `json:"durationMs,omitempty"`
 }
 
-// Indicators shows status while a command runs in the background, for example during dictation.
+// Indicators shows status while a command runs in the background, for example during dictation. An empty ID names
+// the extension's default indicator, and the host keeps each extension's indicators apart from every other's.
 type Indicators interface {
 	Show(input IndicatorInput) error
 	Update(input IndicatorInput) error

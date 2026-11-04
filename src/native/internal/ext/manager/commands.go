@@ -3,10 +3,12 @@ package manager
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // CommandResult is one running extension's durable commands. Failure is set as for SearchResult.
@@ -64,4 +66,16 @@ func applyCommandTitles(commands []api.Command, titles map[string]string) {
 			commands[i].Title = title
 		}
 	}
+}
+
+// CommandMatches reports whether a command answers the query: its title, one of its aliases or one of its keywords
+// matches the query as a phrase, a substring or a word. The root search lists a command for every query it matches.
+func CommandMatches(command api.Command, query string) bool {
+	texts := slices.Concat([]string{command.Title}, command.Aliases, command.Keywords)
+	for _, text := range texts {
+		if search.Score(text, query) >= search.PhraseScoreFloor {
+			return true
+		}
+	}
+	return false
 }

@@ -12,6 +12,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -38,6 +39,7 @@ type Ports struct {
 	Logs      *logx.Logger
 	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
 	Shell        platform.Shell
+	Commands     platform.Commands
 	Capabilities platform.Capabilities
 	OS           string
 	Windows      services.WindowEngine
@@ -49,6 +51,10 @@ type Ports struct {
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
 	Places func() []api.Place
+	// Indicators draws the passive indicators of extensions.
+	Indicators services.IndicatorSurface
+	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
+	AI *extai.Service
 }
 
 // Options tune the child processes of every extension.
@@ -60,6 +66,8 @@ type Options struct {
 	Budgets       map[string]supervisor.Budget
 	// DataRoot holds one data folder per extension, named after its id.
 	DataRoot string
+	// Home is the user's home folder, which "~" in shell arguments stands for.
+	Home string
 	// OnChange runs after any extension's runtime changes state, so a view showing it can redraw. It runs on its
 	// own goroutine and must not block.
 	OnChange func()
@@ -122,11 +130,15 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			MenuBarRefresh: opts.MenuBarRefresh,
 
 			Shell:        ports.Shell,
+			Commands:     ports.Commands,
+			Home:         opts.Home,
 			Capabilities: ports.Capabilities,
 			OS:           ports.OS,
 			Windows:      ports.Windows,
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
+			Indicators:   ports.Indicators,
+			AI:           ports.AI,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
 

@@ -26,14 +26,16 @@ const (
 // Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the
 // host answers with a ServiceReply carrying the same CallID. The host decides what each call may do.
 const (
-	ServiceStorage  = "storage"
-	ServiceSecrets  = "secrets"
-	ServiceSettings = "settings"
-	ServiceLogs     = "logs"
-	ServiceText     = "text"
-	ServiceNetwork  = "network"
-	ServiceDrafts   = "drafts"
-	ServiceViews    = "views"
+	ServiceStorage    = "storage"
+	ServiceSecrets    = "secrets"
+	ServiceSettings   = "settings"
+	ServiceLogs       = "logs"
+	ServiceText       = "text"
+	ServiceNetwork    = "network"
+	ServiceDrafts     = "drafts"
+	ServiceViews      = "views"
+	ServiceIndicators = "indicators"
+	ServiceAI         = "ai"
 )
 
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the

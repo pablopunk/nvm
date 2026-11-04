@@ -102,7 +102,7 @@ Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one
 Review semantics:
 
 - Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and does not yet diagnose it (section 16, question 2).
-- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), and the desktop capabilities (section 21). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
+- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), the desktop capabilities (section 21), and `ai` (section 25). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
 - OS permissions (camera, microphone, screen recording, accessibility) remain real boundaries. The OS asks, and the answer is the enforcement.
 - An enabled extension has the full Context whether or not it declares anything. This matches the trust model.
 
@@ -329,7 +329,7 @@ Rules:
 | `Indicators` | `Show`, `Update`, `Hide` | Passive, never takes focus. Added in this revision. |
 | `System` | `OS`, `HasCapability`, `Labels` | Use `HasCapability` to omit rows, not to duplicate platform checks. |
 | `Updates` | `State` | Actions do the work. |
-| `AI` | `IsAvailable`, `Decide`, `Ask`, `Stream`, `Prepare`, `Attachments`, `Session` | Tiers `smart` and `fast`; no model ids. Stream delivers events on a channel. |
+| `AI` | `IsAvailable`, `Decide`, `Ask`, `Stream`, `Prepare`, `Attachments`, `Session` | Tiers `smart` and `fast`; no model ids. Stream delivers events on a channel. Served, section 25. |
 | `AIBuilder` | chat and tweak helpers | Host-only (built-in `nevermind.*`). |
 | `Ownership` | `OwnerOf`, `FilesForChat`, `CanWrite` | Host-only. |
 | `Windows` | `Create`, `Show`, `Hide`, `Toggle`, `Close` | Each returns an `Action`. |
@@ -362,13 +362,17 @@ Go-specific decisions behind the table:
 
 ## 14. Author examples
 
-Each example is a compiled file in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, and `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper. Interpreter runs are not part of these tests.
+Runtime rule: the interpreter cannot call methods on interpreted struct values, so an extension file declares its entry points as top-level functions named `Commands`, `RootItems`, `SearchItems`, `RunAction`, `LoadItems`, `MenuBars` and `MenuBarTriggers` (`internal/ext/child/interpret.go`). Each example below is a complete extension source in that form: no receiver types, no `Manifest` method (the manifest is `extension.json` beside `main.go`), and no interface assertions. The interpreter has no `max` builtin, so the examples write the comparison out.
+
+Each example is a complete extension source in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper, and `TestAuthorExamplesLoadAsInterpretedExtensions` (in `internal/ext/child`) evaluates each one in the interpreter and checks that it declares an entry point with the protocol signature.
 
 ### 14.1 Search provider (rows for a query, no commands)
 
 `testdata/examples/search_provider.go`
 
 ```go
+// Example: a search provider. Rows appear only for queries it recognises, and Enter copies the
+// converted value. It needs no commands because nothing here is durable or shortcut-able.
 package main
 
 import (
@@ -379,21 +383,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type temperature struct{}
-
-var (
-	_ api.Extension      = temperature{}
-	_ api.SearchProvider = temperature{}
-)
-
-func (temperature) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.temperature", Title: "Temperature"},
-	}
-}
-
-func (temperature) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	value, unit, ok := parseTemperature(query)
 	if !ok {
 		return nil, nil
@@ -439,6 +429,8 @@ func convertTemperature(value float64, unit string) (float64, string) {
 `testdata/examples/list_command.go`
 
 ```go
+// Example: a command that opens a list view of recent downloads. The command is durable (aliases,
+// a global shortcut); the rows are produced per open and are never registered as commands.
 package main
 
 import (
@@ -447,23 +439,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type downloads struct{}
-
-var (
-	_ api.Extension       = downloads{}
-	_ api.CommandProvider = downloads{}
-	_ api.ActionHandler   = downloads{}
-)
-
-func (downloads) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.downloads", Title: "Downloads"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:             "recent-downloads",
 		Title:          "Recent Downloads",
@@ -474,7 +450,7 @@ func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (downloads) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "recent-downloads":
 		return recentDownloadsView(ctx)
@@ -519,6 +495,8 @@ func recentDownloadsView(ctx api.Context) (api.Result, error) {
 `testdata/examples/form_command.go`
 
 ```go
+// Example: a command that opens a structured form. Values are validated with the same rules the
+// host applies, and the submit handler saves through Settings and closes the form.
 package main
 
 import (
@@ -527,23 +505,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type quickNote struct{}
-
-var (
-	_ api.Extension       = quickNote{}
-	_ api.CommandProvider = quickNote{}
-	_ api.ActionHandler   = quickNote{}
-)
-
-func (quickNote) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.quick-note", Title: "Quick Note"},
-		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
-	}
-}
-
-func (quickNote) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{ID: "settings", Title: "Quick Note Settings", Icon: "sticky-note", Aliases: []string{"qn"}}}, nil
 }
 
@@ -564,7 +526,7 @@ func noteFields() []api.Field {
 	return []api.Field{name, folder, format, tags, notify}
 }
 
-func (quickNote) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "settings":
 		submit := api.Run("save", "Save", nil)
@@ -594,6 +556,8 @@ func saveSettings(ctx api.Context, in api.Invocation) (api.Result, error) {
 `testdata/examples/menubar.go`
 
 ```go
+// Example: a menu bar status item for a pomodoro timer. The title changes every second, which is
+// why it lives in the title and not in the rows: changing rows rebuilds the native menu.
 package main
 
 import (
@@ -603,31 +567,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type pomodoro struct{}
-
 type timerState struct {
 	RunningSinceMs int64 `json:"runningSinceMs"`
 	RemainingMs    int64 `json:"remainingMs"`
 }
 
-var (
-	_ api.Extension       = pomodoro{}
-	_ api.MenuBarProvider = pomodoro{}
-	_ api.ActionHandler   = pomodoro{}
-)
-
-func (pomodoro) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.pomodoro", Title: "Pomodoro"},
-	}
-}
-
-func (pomodoro) MenuBarTriggers() []api.Trigger {
+func MenuBarTriggers() []api.Trigger {
 	return []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}}
 }
 
-func (pomodoro) MenuBars(ctx api.Context) ([]api.MenuBar, error) {
+func MenuBars(ctx api.Context) ([]api.MenuBar, error) {
 	state, err := loadTimer(ctx)
 	if err != nil {
 		return nil, err
@@ -653,7 +602,10 @@ func (state timerState) remaining(now time.Time) time.Duration {
 	if state.RunningSinceMs != 0 {
 		left -= now.Sub(time.UnixMilli(state.RunningSinceMs))
 	}
-	return max(left, 0)
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 func formatRemaining(d time.Duration) string {
@@ -668,7 +620,7 @@ func loadTimer(ctx api.Context) (timerState, error) {
 	return state, nil
 }
 
-func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "toggle" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -696,6 +648,9 @@ func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error
 `testdata/examples/background_job.go`
 
 ```go
+// Example: a trigger-driven background job. The host runs it when new screenshots land on the
+// Desktop (debounced, no overlap, bounded file list in LaunchContext) and it keeps a bounded
+// index in storage. It has no view, so it never shows the palette.
 package main
 
 import (
@@ -707,23 +662,7 @@ import (
 
 const maxIndexedScreenshots = 500
 
-type screenshotIndex struct{}
-
-var (
-	_ api.Extension       = screenshotIndex{}
-	_ api.CommandProvider = screenshotIndex{}
-	_ api.ActionHandler   = screenshotIndex{}
-)
-
-func (screenshotIndex) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.screenshot-index", Title: "Screenshot Index"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:    "index-new-screenshots",
 		Title: "Index New Screenshots",
@@ -738,7 +677,7 @@ func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (screenshotIndex) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "index-new-screenshots" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -1040,7 +979,7 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | --- | --- | --- |
 | `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
 | `desktop.apps` | `list`, `search`, `launch`, `icon` | `desktop.apps` |
-| `desktop.files` | `open`, `reveal` (absolute paths only) | `desktop.files` |
+| `desktop.files` | `open`, `reveal`, `find` (existing folders; missing and relative ones are skipped), `metadata`, `thumbnail` (a PNG data URL for pictures), `fileUrl` (a `file:` URL), `openWithApps` (bundles ranked by their document types through `mdls` and `plutil`, else every bundle by name), `writeBytes` (512 KiB per call; refuses an existing file unless `overwrite`, never creates folders). Absolute paths only. | `desktop.files` |
 | `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
 | `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
 | `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
@@ -1059,7 +998,7 @@ Decisions behind the table:
 - **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
-Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
@@ -1094,3 +1033,56 @@ Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<n
 Built-ins moved so far: System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). The rest of the WP3.10 list is not yet moved. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
 
 Declarative host operations that the palette performs itself (a built-in or a folder extension alike): `set-query` (search again, palette open), `open-path` and `reveal-path` (palette hides, the path opens or is selected), and `system` ops (`lock-screen`, `sleep`, `restart`, `shut-down`, `log-out`, `empty-trash`, `quit`, `open-system-settings`). A `Confirmation` asks first. A system op runs off the UI thread; a failure shows as a toast.
+
+## 24. Folder layout and the Electron app's folder
+
+Go extensions live in the shared folder `~/.config/nevermind/extensions` on every platform, the folder the Electron app uses for its `.ts` extensions (`src/app/electron/extension-host/extension-paths.ts:13-15`). Each extension is one folder named after its id:
+
+```
+~/.config/nevermind/extensions/
+  acme.world-clock/        Go extension: extension.json (manifest) and main.go (source)
+  syncthing-browser.ts     Electron extension: ignored by this host
+  nevermind-extension-api.d.ts, package.json   Electron files: ignored by this host
+```
+
+- **Loaded.** A folder that holds `extension.json` or `main.go`. The folder name must equal the manifest id. A name ending in `.ts` is refused, because the Electron loader would try to import it.
+- **Ignored silently.** Files, hidden folders (`.staging-`, `.trash-`), and folders holding neither file. `bundle.Scan` (`internal/ext/bundle/bundle.go`) and `isExtensionFolder` do this.
+- **Electron compatibility (checked in `src/app`, no changes made).** The Electron loader reads the folder and keeps names that end in `.ts` but not `.d.ts` (`extension-loader.ts:140-144`, `extension-source-files.ts:1-6`). Subfolders and `.go` files never match, so they are skipped with no log line. The Electron proposals scan (`extension-proposals.ts:28-31`), the AI builder listing (`ai/ai-builder-read-tools.ts:252-255`) and the chat migration (`ai/ai-chat-migration.ts:25`, `isFile()`) filter the same way. The one hazard is a folder named `*.ts`, which the loader would import and log as `extension.load.failed` (`extension-loader.ts:162`); this host refuses such ids. Verdict: the Electron app coexists with Go extension folders without errors.
+- **Electron writes.** On each load the Electron app copies `nevermind-extension-api.d.ts` and writes `package.json` into the folder (`extension-loader.ts:80-101`). This host never writes those names.
+- **Names.** The folder name must equal the manifest id, so an id is also the folder. An Electron file keeps its name and is never renamed. To port `caffeinate.ts`, create `local.caffeinate/` with `extension.json` (`"id": "local.caffeinate"`) and `main.go`. The Electron file stays where it is. Ids use lowercase dot-separated segments, and the `nevermind.` prefix is reserved.
+- **Several files.** Every `.go` file of the folder except `_test.go` files belongs to the extension. The host merges them into one source (union of imports, one spec per path; `child/sources.go`), because the interpreter rejects a package imported twice across evaluations. The bundle hash covers every file, so an edit to any of them reloads the extension. The installer writes only `extension.json` and `main.go`; other files are added by hand or by a later installer.
+
+### Budgets
+
+A run has a 5 s hard budget and a load 10 s, both counting the extension's own time. The time the host spends answering a service call is added back, and each service keeps its own limit (three minutes for the supervisor, and each service's own limit inside it, such as 120 s for a shell command). A busy loop with no host call still hits the budget (`supervisor/supervisor_test.go`); a root that waits twenty seconds on a host shell call completes (`supervisor/host_wait_test.go`). The Electron host has no compute budget, because its extension code runs asynchronously. Its limits are the refresh burst (5 per 2 s) and 30 AI calls per minute (`extension-rate-limits.ts`), and this host keeps its own rate limits per service.
+
+### Toasts
+
+An action result may carry a toast. The palette shows it as an indicator titled with the action that produced it, errors for four seconds and other tones for 2.2 seconds, as the Electron host does (`action-feedback.ts:105-132`). A toast without a tone reads as success, which is a deviation. `ui.error(title, message)` is `api.ErrorView`: a list with one contextual row carrying the message.
+
+### Lists and subtitles
+
+A list does not show `View.Subtitle`. The Electron host shows it on grid views and editor headers only (`extension-view/extension-view.tsx:466,531`), so this matches.
+
+### Context services as built (WP3.x extension API gaps)
+
+- **Shell.** `ctx.desktop.shell.exec`, `script`, `appleScript` and `which` run under the `system` capability, which is refused when undeclared. A login PATH precedes the host PATH (as in the Electron app), `~` expands in command, arguments, working folder and script, the default timeout is 30 s clamped to 1 to 120 s, and a killed process reports exit -1. Output is capped at 200000 characters per stream and marked when cut. AppleScript runs only on macOS. Calls share a limit of 60 runs a minute. Code: `services/desktop_process.go`, `platform.Commands`.
+- **Indicators.** `ctx.indicators` show, update and hide draw one passive panel for every extension. The host keys each indicator by extension id. Updates are limited to 120 a minute. A later show replaces the shown indicator. A timed indicator clears only while it is still the one shown. Code: `services/indicators.go`, `internal/app/extension_indicators.go`. The panel is shared with the AI commands, so the latest writer wins.
+- **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them. Window actions are served only where the host implements them, and otherwise show the palette's unavailable message.
+- **Not served.** `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (keyboard, selection, extra file, clipboard and window-management operations, frontmost app) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
+- **Builder placeholders.** The AI builder action builders return `unavailable` actions. They validate, and the palette shows "This action is not available yet" when one runs, so the view that carries one still loads.
+- **Open items from the converter reports.** `desktop.files` `readText`, `writeText`, `quickLook`, the file index and `displayPath` (which returns the path unchanged), and thumbnails of videos. Thumbnails of every find result are not rendered: call `thumbnail` for the ones a view shows. A network redirect policy is not added: 1.x exposes none (its extensions called Node's `fetch` directly), so 2.0 follows up to five redirects one hop at a time, and the converted paperless extension's `redirect: 'error'` check reads `FinalURL`; the only difference is the message for a refused redirect target. Loaders keep their id as the only argument: 1.x loaders are closures, so a loader's arguments travel in its id, as the converted extensions do. Commands take `keywords` as well as `aliases`, and the root search matches both.
+
+## 25. AI as built (extension model calls)
+
+Code: `internal/ai/extai` (the calls, attachments and decisions, no per-extension state), `internal/ai/extai/extaitest` (the test rig), `internal/ai/chat/route.go` (the one-shot tier route), `internal/ext/services/ai*.go` (the host side of `ctx.AI`), `internal/ext/child/remote_ai*.go` (the extension side), `internal/ext/protocol/ai_ops.go` (the operations).
+
+- **Served, with 1.x's contract.** `IsAvailable`, `Prepare`, `Ask`, `Stream`, `Decide`, `Session` (ask, stream, reset) and the attachment builders `text`, `image`, `file`, `clipboard` and `ocrImage`. Tiers `smart` (the default) and `fast`, resolved by the backend's active-model route. No model is ever named.
+- **Capabilities.** Every operation needs `ai`. An attachment that reads files needs `desktop.files`, one that reads the clipboard needs `desktop.clipboard`, and one that runs OCR needs `ocr`. A missing declaration is a permission failure that names it.
+- **Quota.** 30 calls a minute per extension (1.x's rate). Ask, stream, decide and session calls count once each; preparing, availability checks, stream pulls and attachment reads do not. Over the limit the call fails as `quota` with 1.x's message.
+- **Errors.** A signed-out account gets `unavailable` with a sign-in line. A backend refusal keeps the backend client's palette copy (credits, rate limit, paused free AI, and so on) and maps to `quota`, `invalid-input`, `timeout`, `cancelled` or `unavailable`. Refused input keeps 1.x's words (tier, absolute paths, the decision image rules). A call times out after 2 minutes (a stream after 5). Go failures carry no 1.x error code; the code is the category.
+- **Streams are pulled.** `Stream` opens the reply on the host and returns once the connection is up; the host then answers `stream-next` service calls with the events since the last pull. The pull is host time, so it does not count against the extension's budget. Events are buffered on the extension side (4096); `Result` never waits on a consumer. A stream is pumped while a request waits on it, so an extension that keeps a stream running after its request returns resumes pulling at its next request.
+- **Sessions** keep their last 40 messages in host memory (8 sessions per extension). `Reset` forgets them.
+- **Limits.** 4 open streams per extension. Attachments: at most 8 per call (a decision refuses more); text is cut at 80,000 characters; an image is at most 8 MiB for a prompt and 2 MiB decoded for a decision (PNG, JPEG or WebP).
+- **Not served yet.** `selectedText` and `selectedFiles` answer unavailable: the host has no selection port that reads the source app's selection for an extension, and no Finder selection port.
+- **Tests.** L1: `internal/ai/extai` (ask, stream, tier header, not signed in, timeout, attachments, decisions) and `internal/ext/services/ai_test.go` (refusal, quota, sign-out, stream events and abort, sessions, timeout, attachment capabilities). L2: `internal/ext/supervisor/ai_test.go` runs the `acme.ai` fixture in a child process against the fake backend.

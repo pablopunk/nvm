@@ -9,31 +9,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type pomodoro struct{}
-
 type timerState struct {
 	RunningSinceMs int64 `json:"runningSinceMs"`
 	RemainingMs    int64 `json:"remainingMs"`
 }
 
-var (
-	_ api.Extension       = pomodoro{}
-	_ api.MenuBarProvider = pomodoro{}
-	_ api.ActionHandler   = pomodoro{}
-)
-
-func (pomodoro) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.pomodoro", Title: "Pomodoro"},
-	}
-}
-
-func (pomodoro) MenuBarTriggers() []api.Trigger {
+func MenuBarTriggers() []api.Trigger {
 	return []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}}
 }
 
-func (pomodoro) MenuBars(ctx api.Context) ([]api.MenuBar, error) {
+func MenuBars(ctx api.Context) ([]api.MenuBar, error) {
 	state, err := loadTimer(ctx)
 	if err != nil {
 		return nil, err
@@ -59,7 +44,10 @@ func (state timerState) remaining(now time.Time) time.Duration {
 	if state.RunningSinceMs != 0 {
 		left -= now.Sub(time.UnixMilli(state.RunningSinceMs))
 	}
-	return max(left, 0)
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 func formatRemaining(d time.Duration) string {
@@ -74,7 +62,7 @@ func loadTimer(ctx api.Context) (timerState, error) {
 	return state, nil
 }
 
-func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "toggle" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}

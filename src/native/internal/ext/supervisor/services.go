@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
-// ServiceHandler answers the host services a child calls while a request runs. It runs on the request's goroutine
-// inside the request's budget, and it must return promptly: the child waits for the reply. The runtime fills in
+// ServiceHandler answers the host services a child calls while a request runs. It runs on the request's goroutine,
+// and the request's run budget does not count the time it takes; the child waits for the reply. The runtime fills in
 // ReplyTo, so a handler sets only Data or Failure.
 type ServiceHandler interface {
 	Serve(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply
@@ -24,10 +25,14 @@ func serviceCallFrom(line lineResult, open bool) (protocol.ServiceCall, bool) {
 	return protocol.ParseServiceCall(line.data)
 }
 
-// answerService runs one service call and writes its reply to the child. The services get the request's hard
-// budget as their deadline, so a slow service ends with the call instead of outliving it.
+// serviceCallTimeout bounds one host service call. It is the service's own limit, not the caller's run budget: a shell
+// command or an OCR read may take longer than a run is allowed to compute, and the run budget does not count that wait.
+const serviceCallTimeout = 3 * time.Minute
+
+// answerService runs one service call and writes its reply to the child. A slow service ends at serviceCallTimeout
+// or when the runtime stops, so it never outlives the host.
 func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget, method string) (waited bool, err error) {
-	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), method), r.lifetimeContext()), budget.Hard)
+	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), method), r.lifetimeContext()), serviceCallTimeout)
 	defer cancel()
 	reply := r.serveCall(ctx, call)
 	reply.ReplyTo = call.CallID

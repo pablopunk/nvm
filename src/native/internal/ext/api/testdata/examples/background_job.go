@@ -12,23 +12,7 @@ import (
 
 const maxIndexedScreenshots = 500
 
-type screenshotIndex struct{}
-
-var (
-	_ api.Extension       = screenshotIndex{}
-	_ api.CommandProvider = screenshotIndex{}
-	_ api.ActionHandler   = screenshotIndex{}
-)
-
-func (screenshotIndex) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.screenshot-index", Title: "Screenshot Index"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:    "index-new-screenshots",
 		Title: "Index New Screenshots",
@@ -43,7 +27,7 @@ func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (screenshotIndex) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "index-new-screenshots" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}

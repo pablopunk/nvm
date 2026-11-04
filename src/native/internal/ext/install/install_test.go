@@ -125,3 +125,22 @@ func TestSweepRemovesInterruptedStagingAndTrash(t *testing.T) {
 		t.Fatalf("leftovers after Sweep: %v", got)
 	}
 }
+
+func TestInstallWritesEveryGoFileOfAMultiFileExtension(t *testing.T) {
+	files := fake.NewFS()
+	clock := fake.NewClock()
+	folder := contents("acme.multi", "package main\n")
+	folder["helpers.go"] = []byte("package main\n// helpers\n")
+	folder["data.go"] = []byte("package main\n// data\n")
+	if err := Install(files, clock, root, "acme.multi", folder); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	for _, name := range []string{bundle.ManifestFile, bundle.SourceFile, "helpers.go", "data.go"} {
+		if _, err := files.ReadFile(root + "/acme.multi/" + name); err != nil {
+			t.Fatalf("%s was not installed: %v", name, err)
+		}
+	}
+	if loaded := bundle.Load(files, root+"/acme.multi"); !loaded.Runnable() {
+		t.Fatalf("installed folder problems = %v", loaded.Problems)
+	}
+}

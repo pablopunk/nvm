@@ -35,6 +35,9 @@ const (
 	ActionCamera        ActionKind = "camera"
 	ActionOpenPalette   ActionKind = "open-palette"
 	ActionSetQuery      ActionKind = "set-query"
+	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
+	// shows "This action is not available yet" when it runs.
+	ActionUnavailable ActionKind = "unavailable"
 )
 
 // Op values for the kinds that have sub-operations.
@@ -187,7 +190,7 @@ func (a Action) validateDeclarative() error {
 		if a.View == nil {
 			return errors.New("view is required")
 		}
-	case ActionPop, ActionOpenPalette, ActionSetQuery:
+	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionUnavailable:
 		return nil
 	case ActionShellExec:
 		return validateShell(a.Shell)

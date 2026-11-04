@@ -79,3 +79,52 @@ type OCRRegionArgs struct {
 	Region  api.Rect       `json:"region"`
 	Options api.OCROptions `json:"options"`
 }
+
+// ShellExecArgs runs one program with its arguments.
+type ShellExecArgs struct {
+	Command string           `json:"command"`
+	Args    []string         `json:"args,omitempty"`
+	Options api.ShellOptions `json:"options"`
+}
+
+// ShellScriptArgs runs one script: shell source for Script, AppleScript source for AppleScript.
+type ShellScriptArgs struct {
+	Script  string           `json:"script"`
+	Options api.ShellOptions `json:"options"`
+}
+
+// ShellWhichArgs names a program to look up on the user's PATH.
+type ShellWhichArgs struct {
+	Command string `json:"command"`
+}
+
+// WriteImageArgs puts a PNG on the clipboard as a data URL. Concealed asks clipboard history to skip it.
+type WriteImageArgs struct {
+	DataURL   string `json:"dataUrl"`
+	Concealed bool   `json:"concealed,omitempty"`
+}
+
+// ImageResult is a clipboard image as a PNG data URL, or Found false when the clipboard holds no image.
+type ImageResult struct {
+	DataURL string `json:"dataUrl,omitempty"`
+	Found   bool   `json:"found"`
+}
+
+// FindArgs names the folders of one walk and its options.
+type FindArgs struct {
+	Roots   []string        `json:"roots"`
+	Options api.FindOptions `json:"options"`
+}
+
+// ThumbnailResult is a picture of a file as a PNG data URL, or Found false when the file has no picture.
+type ThumbnailResult struct {
+	URL   string `json:"url,omitempty"`
+	Found bool   `json:"found"`
+}
+
+// WriteBytesArgs names a file to write and its content. Overwrite replaces an existing file.
+type WriteBytesArgs struct {
+	Path      string `json:"path"`
+	Data      []byte `json:"data"`
+	Overwrite bool   `json:"overwrite,omitempty"`
+}

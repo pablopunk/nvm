@@ -1,0 +1,208 @@
+package services
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
+	"image"
+	"net/url"
+	"path/filepath"
+	"time"
+
+	_ "image/gif"  // registers the GIF decoder with image.DecodeConfig
+	_ "image/jpeg" // registers the JPEG decoder with image.DecodeConfig
+	_ "image/png"  // registers the PNG decoder with image.DecodeConfig
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/features/files"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
+)
+
+// thumbnailEdge is the edge in pixels of the pictures extensions receive from Thumbnail. dimensionPrefixBytes bounds
+// how much of an image is read to learn its size.
+const (
+	thumbnailEdge        = 256
+	dimensionPrefixBytes = 256 << 10
+)
+
+// findFiles walks the requested folders and returns the best files the options select. Missing and relative folders
+// are skipped, as the index skips them.
+func (h *Handler) findFiles(ctx context.Context, raw json.RawMessage) ([]api.FileRef, error) {
+	var args protocol.FindArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return nil, err
+	}
+	if h.deps.Files == nil {
+		return nil, unavailable("files are not available in this build")
+	}
+	query, err := findQuery(args.Options)
+	if err != nil {
+		return nil, err
+	}
+	found, err := files.Find(ctx, h.deps.Files, args.Roots, files.FindOptions{
+		Query:     query,
+		Home:      h.deps.Home,
+		Depth:     args.Options.Depth,
+		ScanLimit: args.Options.ScanLimit,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("find files: %w", err)
+	}
+	refs := make([]api.FileRef, 0, len(found.Results))
+	for _, result := range found.Results {
+		ref := fileRefOf(result.Path, h.deps.Home, result.Size, result.Modified, result.Created)
+		if args.Options.IncludeDimensions && ref.Kind == files.KindImage.String() {
+			ref.Width, ref.Height = h.imageDimensions(result.Path)
+		}
+		refs = append(refs, ref)
+	}
+	return refs, nil
+}
+
+// findQuery turns the extension's find options into a file query. Unknown kinds and sort keys are invalid input, so
+// a typo does not silently search everything.
+func findQuery(options api.FindOptions) (files.Query, error) {
+	kinds, err := findKinds(options.Kind)
+	if err != nil {
+		return files.Query{}, err
+	}
+	sortBy, err := findSortKey(options.SortBy)
+	if err != nil {
+		return files.Query{}, err
+	}
+	return files.Query{
+		Kinds:      kinds,
+		Extensions: options.Extensions,
+		Patterns:   options.Patterns,
+		Limit:      options.Limit,
+		SortBy:     sortBy,
+		Order:      findOrder(options.Order),
+	}, nil
+}
+
+func findKinds(kind string) ([]files.Kind, error) {
+	switch kind {
+	case "":
+		return nil, nil
+	case "image":
+		return []files.Kind{files.KindImage}, nil
+	case "video":
+		return []files.Kind{files.KindVideo}, nil
+	case "media":
+		return []files.Kind{files.KindMedia}, nil
+	case "file":
+		return []files.Kind{files.KindFile}, nil
+	}
+	return nil, invalid("find kind %q is not image, video, media or file", kind)
+}
+
+func findSortKey(sortBy string) (files.SortBy, error) {
+	switch key := files.SortBy(sortBy); key {
+	case files.SortNone, files.SortAdded, files.SortCreated, files.SortRecent, files.SortModified, files.SortName, files.SortSize:
+		return key, nil
+	}
+	return files.SortNone, invalid("find sort key %q is not recent, modified, added, created, name or size", sortBy)
+}
+
+// findOrder reads the direction of a sort. Descending is the default, as the palette wants for recency.
+func findOrder(order string) files.Order {
+	if order == "asc" {
+		return files.OrderAsc
+	}
+	return files.OrderDesc
+}
+
+// fileMetadata describes one file, with its image dimensions when it is a picture.
+func (h *Handler) fileMetadata(raw json.RawMessage) (api.FileRef, error) {
+	path, err := absolutePathArg(raw)
+	if err != nil {
+		return api.FileRef{}, err
+	}
+	if h.deps.Files == nil {
+		return api.FileRef{}, unavailable("files are not available in this build")
+	}
+	info, err := h.deps.Files.Stat(path)
+	if err != nil {
+		return api.FileRef{}, notFound("cannot read %s", files.DisplayPath(h.deps.Home, path))
+	}
+	ref := fileRefOf(path, h.deps.Home, info.Size(), info.ModTime(), time.Time{})
+	if ref.Kind == files.KindImage.String() {
+		ref.Width, ref.Height = h.imageDimensions(path)
+	}
+	return ref, nil
+}
+
+// fileThumbnail returns a PNG picture of an image file, or Found false when the file has no picture.
+func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, error) {
+	path, err := absolutePathArg(raw)
+	if err != nil {
+		return protocol.ThumbnailResult{}, err
+	}
+	if h.deps.Files == nil {
+		return protocol.ThumbnailResult{}, unavailable("files are not available in this build")
+	}
+	picture, err := thumbs.Render(h.deps.Files, path, thumbnailEdge)
+	if err != nil {
+		return protocol.ThumbnailResult{}, nil
+	}
+	return protocol.ThumbnailResult{URL: pngDataURLPrefix + base64.StdEncoding.EncodeToString(picture), Found: true}, nil
+}
+
+// fileURLOf returns the file: URL of an absolute path.
+func (h *Handler) fileURLOf(raw json.RawMessage) (string, error) {
+	path, err := absolutePathArg(raw)
+	if err != nil {
+		return "", err
+	}
+	return fileURLFor(path), nil
+}
+
+func fileURLFor(path string) string {
+	return (&url.URL{Scheme: "file", Path: path}).String()
+}
+
+// fileRefOf describes a file from its path and what the stat or scan knows of it.
+func fileRefOf(path, home string, size int64, modified, created time.Time) api.FileRef {
+	name := filepath.Base(path)
+	kind := files.KindOf(name).String()
+	ref := api.FileRef{
+		Path:        path,
+		Name:        name,
+		DisplayPath: files.DisplayPath(home, path),
+		FileURL:     fileURLFor(path),
+		Kind:        kind,
+		Extension:   files.ExtensionOf(name),
+		MimeType:    files.MIMEType(name),
+		Size:        size,
+		MtimeMs:     millisOf(modified),
+		BirthtimeMs: millisOf(created),
+	}
+	ref.URL = ref.FileURL
+	if kind == files.KindVideo.String() {
+		ref.VideoURL = ref.FileURL
+	}
+	return ref
+}
+
+func millisOf(t time.Time) int64 {
+	if t.IsZero() {
+		return 0
+	}
+	return t.UnixMilli()
+}
+
+// imageDimensions reads the width and height of a picture from its header. An unreadable picture has zero dimensions.
+func (h *Handler) imageDimensions(path string) (int, int) {
+	data, _, err := h.deps.Files.ReadFilePrefix(path, dimensionPrefixBytes)
+	if err != nil {
+		return 0, 0
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil {
+		return 0, 0
+	}
+	return config.Width, config.Height
+}

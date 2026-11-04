@@ -37,8 +37,8 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 	return out
 }
 
-// Search emits, for q, the commands of the running extensions whose titles match it and their search rows, in
-// one batch. A command is found by typing its title, as a built-in command is.
+// Search emits, for q, the commands of the running extensions that match it and their search rows, in one batch. A
+// command is found by its title, its aliases or its keywords, as a built-in command is by its title.
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m == nil {
@@ -99,7 +99,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 	var out []search.Item
 	for _, command := range result.Commands {
 		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
-		if q != "" && search.Score(command.Title, q) < search.PhraseScoreFloor && aliasMatchScore(aliases[actionID], q) == 0 {
+		if q != "" && !manager.CommandMatches(command, q) && aliasMatchScore(aliases[actionID], q) == 0 {
 			continue
 		}
 		p.shortcutTitles.remember(actionID, command.Title)

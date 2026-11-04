@@ -24,7 +24,19 @@ const (
 	OpDiscard     = "discard"
 
 	OpRefreshMenuBar = "refreshMenuBar"
+
+	OpReadImage  = "read-image"
+	OpWriteImage = "write-image"
+
+	OpShow   = "show"
+	OpUpdate = "update"
+	OpHide   = "hide"
 )
+
+// IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
+type IndicatorHideArgs struct {
+	ID string `json:"id,omitempty"`
+}
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.
 type KeyArgs struct {

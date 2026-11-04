@@ -15,6 +15,13 @@ import (
 func init() {
 	Symbols["github.com/pablopunk/nvm/native/internal/ext/api/api"] = map[string]reflect.Value{
 		// function, constant and variable definitions
+		"AIEventAborted":                reflect.ValueOf(constant.MakeFromLiteral("\"aborted\"", token.STRING, 0)),
+		"AIEventDelta":                  reflect.ValueOf(constant.MakeFromLiteral("\"delta\"", token.STRING, 0)),
+		"AIEventDone":                   reflect.ValueOf(constant.MakeFromLiteral("\"done\"", token.STRING, 0)),
+		"AIEventError":                  reflect.ValueOf(constant.MakeFromLiteral("\"error\"", token.STRING, 0)),
+		"AIEventStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
+		"AIEventToolEnd":                reflect.ValueOf(constant.MakeFromLiteral("\"tool_end\"", token.STRING, 0)),
+		"AIEventToolStart":              reflect.ValueOf(constant.MakeFromLiteral("\"tool_start\"", token.STRING, 0)),
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
@@ -37,6 +44,7 @@ func init() {
 		"ActionToggleSetting":           reflect.ValueOf(api.ActionToggleSetting),
 		"ActionTrash":                   reflect.ValueOf(api.ActionTrash),
 		"ActionTypeText":                reflect.ValueOf(api.ActionTypeText),
+		"ActionUnavailable":             reflect.ValueOf(api.ActionUnavailable),
 		"ActionUpdate":                  reflect.ValueOf(api.ActionUpdate),
 		"ActionWindow":                  reflect.ValueOf(api.ActionWindow),
 		"AllFieldTypes":                 reflect.ValueOf(api.AllFieldTypes),
@@ -91,6 +99,7 @@ func init() {
 		"ErrNotFound":                   reflect.ValueOf(&api.ErrNotFound).Elem(),
 		"ErrPermission":                 reflect.ValueOf(&api.ErrPermission).Elem(),
 		"ErrQuotaExceeded":              reflect.ValueOf(&api.ErrQuotaExceeded).Elem(),
+		"ErrorView":                     reflect.ValueOf(api.ErrorView),
 		"FailureOf":                     reflect.ValueOf(api.FailureOf),
 		"FieldCheckbox":                 reflect.ValueOf(api.FieldCheckbox),
 		"FieldDate":                     reflect.ValueOf(api.FieldDate),
@@ -410,6 +419,7 @@ func init() {
 		"TemplateOptions":         reflect.ValueOf((*api.TemplateOptions)(nil)),
 		"TemplateResult":          reflect.ValueOf((*api.TemplateResult)(nil)),
 		"Text":                    reflect.ValueOf((*api.Text)(nil)),
+		"Toast":                   reflect.ValueOf((*api.Toast)(nil)),
 		"Tone":                    reflect.ValueOf((*api.Tone)(nil)),
 		"Trigger":                 reflect.ValueOf((*api.Trigger)(nil)),
 		"TriggerType":             reflect.ValueOf((*api.TriggerType)(nil)),
@@ -975,6 +985,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Files struct {
 	WReveal        func(path string) error
 	WSearchIndex   func(query string, options api.IndexOptions) []api.IndexedFile
 	WThumbnail     func(path string) (url string, found bool)
+	WWriteBytes    func(path string, data []byte, overwrite bool) (api.FileRef, error)
 	WWriteText     func(path string, text string, overwrite bool) (api.FileRef, error)
 }
 
@@ -1022,6 +1033,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) SearchIndex(que
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) Thumbnail(path string) (url string, found bool) {
 	return W.WThumbnail(path)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) WriteBytes(path string, data []byte, overwrite bool) (api.FileRef, error) {
+	return W.WWriteBytes(path, data, overwrite)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) WriteText(path string, text string, overwrite bool) (api.FileRef, error) {
 	return W.WWriteText(path, text, overwrite)

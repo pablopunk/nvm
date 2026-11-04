@@ -141,6 +141,8 @@ type App struct {
 	// hud shows what an action did while the palette is hidden; hudWindow is its panel, created on first use.
 	hud       *feedback.HUD
 	hudWindow *mygo.Window
+	// extIndicators draws extension indicators on aiPanel, created on first use by the extension host.
+	extIndicators *extensionIndicators
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

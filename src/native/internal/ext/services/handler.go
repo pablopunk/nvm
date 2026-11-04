@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
@@ -52,16 +53,24 @@ type Deps struct {
 	Capabilities platform.Capabilities
 	// Shell opens paths and links, lists and launches apps and reads app icons. Nil answers unavailable.
 	Shell platform.Shell
+	// Commands runs the programs and scripts of the shell service. Nil answers unavailable.
+	Commands platform.Commands
+	// Home is the user's home folder, which a leading "~" in a shell argument stands for. Empty leaves "~" as it is.
+	Home string
 	// Windows lists and places windows through the window engine. Nil answers unavailable.
 	Windows WindowEngine
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
 	Shortcuts ShortcutTable
+	// Indicators draws the passive indicators. Nil answers unavailable.
+	Indicators IndicatorSurface
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
+	// AI makes the model calls of ctx.AI. Nil answers unavailable.
+	AI *extai.Service
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
@@ -79,20 +88,24 @@ type documents struct {
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
 type Handler struct {
-	deps         Deps
-	manifest     api.Manifest
-	capabilities map[api.Capability]bool
-	logger       *logx.Logger
-	fetches      *rateLimiter
-	logWrites    *rateLimiter
-	actions      *rateLimiter
-	ocrReads     *rateLimiter
-	screenReads  *rateLimiter
-	openOnce     sync.Once
-	openErr      error
-	closeOnce    sync.Once
-	docs         *documents
-	secretsMu    sync.Mutex
+	deps             Deps
+	manifest         api.Manifest
+	capabilities     map[api.Capability]bool
+	logger           *logx.Logger
+	fetches          *rateLimiter
+	logWrites        *rateLimiter
+	actions          *rateLimiter
+	processes        *rateLimiter
+	indicatorUpdates *rateLimiter
+	ocrReads         *rateLimiter
+	screenReads      *rateLimiter
+	aiCalls          *rateLimiter
+	ai               *aiState
+	openOnce         sync.Once
+	openErr          error
+	closeOnce        sync.Once
+	docs             *documents
+	secretsMu        sync.Mutex
 }
 
 // New returns the services of one extension. Nothing is opened until the extension makes its first call.
@@ -106,21 +119,26 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		capabilities[capability] = true
 	}
 	return &Handler{
-		deps:         deps,
-		manifest:     manifest,
-		capabilities: capabilities,
-		logger:       logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
-		fetches:      newRateLimiter(deps.Clock, fetchesPerMinute),
-		logWrites:    newRateLimiter(deps.Clock, logWritesPerMinute),
-		actions:      newRateLimiter(deps.Clock, desktopActionsPerMinute),
-		ocrReads:     newRateLimiter(deps.Clock, ocrReadsPerMinute),
-		screenReads:  newRateLimiter(deps.Clock, screenReadsPerMinute),
+		deps:             deps,
+		manifest:         manifest,
+		capabilities:     capabilities,
+		logger:           logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
+		fetches:          newRateLimiter(deps.Clock, fetchesPerMinute),
+		logWrites:        newRateLimiter(deps.Clock, logWritesPerMinute),
+		actions:          newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		processes:        newRateLimiter(deps.Clock, processRunsPerMinute),
+		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
+		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
+		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
+		aiCalls:          newRateLimiter(deps.Clock, aiCallsPerMinute),
+		ai:               newAIState(),
 	}
 }
 
 // Close flushes and closes the extension's store. A handler closed before its first call never opens the store,
 // and every later call answers unavailable. Close is safe to call more than once.
 func (h *Handler) Close() error {
+	h.ai.close()
 	h.openOnce.Do(func() { h.openErr = errHandlerClosed })
 	var closeErr error
 	h.closeOnce.Do(func() {
@@ -173,9 +191,9 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceDesktopApps:
 		return h.serveDesktopApps(call)
 	case protocol.ServiceDesktopFiles:
-		return h.serveDesktopFiles(call)
+		return h.serveDesktopFiles(ctx, call)
 	case protocol.ServiceDesktopShell:
-		return h.serveDesktopShell(call)
+		return h.serveDesktopShell(ctx, call)
 	case protocol.ServiceDesktopWindows:
 		return h.serveDesktopWindows(ctx, call)
 	case protocol.ServiceClipboardHistory:
@@ -188,6 +206,10 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveShortcuts(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
+	case protocol.ServiceIndicators:
+		return h.serveIndicators(call)
+	case protocol.ServiceAI:
+		return h.serveAI(ctx, call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

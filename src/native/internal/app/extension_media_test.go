@@ -132,3 +132,12 @@ func TestGoldenWebviewPlateAndNotice(t *testing.T) {
 	mediaSession(t, p, m, "webview", unavailable, fake.NewPermissions())
 	golden.AssertMatrix(t, "webview-unavailable", p.View, mediaGoldens)
 }
+
+func TestLocalImagePathReadsFileURLsAndPlainPaths(t *testing.T) {
+	if got := localImagePath("file:///Users/me/my%20pic.png"); got != "/Users/me/my pic.png" {
+		t.Fatalf("file URL path %q", got)
+	}
+	if got := localImagePath("/Users/me/pic.png"); got != "/Users/me/pic.png" {
+		t.Fatalf("plain path %q", got)
+	}
+}

@@ -3,7 +3,7 @@ package api
 import "encoding/json"
 
 // ModelTier selects a route by intent. The backend maps tiers to models and applies the user's
-// entitlement. Extension code never names a model.
+// entitlement. Extension code never names a model. The empty tier means smart.
 type ModelTier string
 
 const (
@@ -11,8 +11,8 @@ const (
 	ModelFast  ModelTier = "fast"
 )
 
-// Attachment is context added to a prompt. Kind is text, image or file; As selects how a file
-// is read: text, image, metadata or ocr.
+// Attachment is context added to a prompt. Kind is text, image or file. Path names a file on disk and must be
+// absolute; DataURL carries an image inline. As selects how a file is read: text, image, metadata or ocr.
 type Attachment struct {
 	Kind     string   `json:"kind"`
 	Title    string   `json:"title,omitempty"`
@@ -32,8 +32,20 @@ type AIOptions struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
-// AIStreamEvent is one streaming event. Type is start, delta, tool-start, tool-end, done,
-// aborted or error.
+// Stream event types. They carry the names the 1.x extension API uses, so an extension ported from 1.x
+// keeps its switch statements. The host never sends a tool event: extensions cannot run tools.
+const (
+	AIEventStart     = "start"
+	AIEventDelta     = "delta"
+	AIEventToolStart = "tool_start"
+	AIEventToolEnd   = "tool_end"
+	AIEventDone      = "done"
+	AIEventAborted   = "aborted"
+	AIEventError     = "error"
+)
+
+// AIStreamEvent is one streaming event. Type is one of the AIEvent constants. Text is set on delta events,
+// Message on error events.
 type AIStreamEvent struct {
 	Type    string `json:"type"`
 	Text    string `json:"text,omitempty"`
@@ -42,8 +54,10 @@ type AIStreamEvent struct {
 	Message string `json:"message,omitempty"`
 }
 
-// AIStream delivers events on Events and the full text from Result. Events is closed when the
-// stream ends. Cancelling the Context's Std() aborts the stream.
+// AIStream delivers events on Events and the full reply from Result. Events starts with an AIEventStart and
+// ends with exactly one terminal event (done, aborted or error), then the channel is closed. The channel is
+// buffered; a consumer that falls far behind loses deltas, but Result still holds the whole reply. Result
+// blocks until the stream ends and returns an error for a failed or aborted reply. Abort ends the stream.
 type AIStream interface {
 	Events() <-chan AIStreamEvent
 	Result() (string, error)
@@ -62,7 +76,8 @@ type AttachmentBuilder interface {
 	OCRImage(path string, title string) (Attachment, error)
 }
 
-// AISession is a conversation scoped to one extension. Session ids are local to the extension.
+// AISession is a conversation scoped to one extension. Session ids are local to the extension. The session
+// keeps its last turns; Reset forgets them.
 type AISession interface {
 	Ask(prompt string, options AIOptions) (string, error)
 	Stream(prompt string, options AIOptions) (AIStream, error)
@@ -85,13 +100,14 @@ type DecisionQuestion struct {
 	Question string               `json:"question"`
 	// Options has two to 32 distinct values for choice questions.
 	Options []string `json:"options,omitempty"`
-	// Min and Max bound score questions; at most ten levels. Labels name levels inside the range.
-	Min    int               `json:"min,omitempty"`
-	Max    int               `json:"max,omitempty"`
+	// Min and Max bound score questions; at most ten levels. Pointers, so a minimum of zero is sent.
+	Min    *int              `json:"min,omitempty"`
+	Max    *int              `json:"max,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// DecisionRequest carries the shared input (JSON text, object or array) and the questions.
+// DecisionRequest carries the shared input (a JSON string, object or array) and the questions. Images in
+// Attachments are never dropped: an unreadable or unsupported one fails the call.
 type DecisionRequest struct {
 	Input       json.RawMessage    `json:"input"`
 	Attachments []Attachment       `json:"attachments,omitempty"`
@@ -121,8 +137,9 @@ type DecisionResult struct {
 	} `json:"usage"`
 }
 
-// AI is the model access surface. Calls are quota-limited per extension and need the ai capability
-// for review. Images are never silently dropped: an unsupported image route fails the call.
+// AI is the model access surface. Calls are quota-limited per extension (30 calls a minute: ask, stream,
+// decide and session calls) and need the ai capability for review. Images are never silently dropped: an
+// unsupported image route fails the call.
 type AI interface {
 	IsAvailable() (bool, error)
 	Decide(request DecisionRequest) (DecisionResult, error)

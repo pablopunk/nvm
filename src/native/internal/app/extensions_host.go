@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
@@ -60,6 +61,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		return nil, err
 	}
 	mygo.App.OnQuit(closeStoreOnQuit(state))
+	textReader := ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()})
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
@@ -71,21 +73,39 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Logs:      logx.Default(),
 
 		Shell:         ports.Shell,
+		Commands:      ports.Commands,
 		Capabilities:  ports.Capabilities,
 		OS:            p.goos,
 		Windows:       p.extensionWindows(),
 		Shortcuts:     p.extensionShortcuts(),
-		OCR:           ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
+		OCR:           textReader,
+		AI:            p.extensionAI(textReader),
 		History:       p.extensionHistory,
 		Confirm:       p.askExtensionConfirmation,
 		SettingsPanes: p.systemSettingsPanes,
 		Places:        p.systemPlaces,
+		Indicators:    p.extensionIndicators(),
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
 		DataRoot:       filepath.Join(dataDir(), "extension-data"),
+		Home:           userHomeDir(),
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
+	})
+}
+
+// extensionAI is the model call service extensions use. It shares the app's account and OCR, so a call made while
+// signed out is refused the same way the palette's AI features refuse it.
+func (p *App) extensionAI(textReader *ocr.Service) *extai.Service {
+	return extai.New(extai.Deps{
+		Client:    p.backendClient,
+		Connected: p.signedIn,
+		Clock:     p.ports.Clock,
+		Clipboard: p.ports.Clipboard,
+		Files:     p.ports.FS,
+		OCR:       textReader,
+		Home:      userHomeDir(),
 	})
 }
 
@@ -173,7 +193,15 @@ func awaitQuestion(ctx context.Context, onUI func(func()), pal questionPresenter
 	}
 }
 
-// extensionsDir is the folder of installed extensions: one folder per extension, named after its id.
+// userHomeDir is the folder a leading "~" in extension shell arguments stands for. Empty when the system has none.
+func userHomeDir() string {
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// extensionsDir is the shared folder of extensions: one folder per Go extension, named after its id, beside the
+// Electron app's TypeScript files. It is the folder the Electron app uses on every platform, so the two apps read
+// the same extensions. docs/extension-api.md section 24 states the layout.
 func extensionsDir() string {
 	d := filepath.Join(sharedDir(), folders.ExtensionsName)
 	_ = os.MkdirAll(d, 0o755)

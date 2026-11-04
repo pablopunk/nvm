@@ -80,6 +80,26 @@ func (s *Service) Image(ctx context.Context, path string, opts Options) (platfor
 	return s.deps.Text.Recognize(ctx, path, opts.Languages)
 }
 
+// ImagePNG reads the text of PNG bytes, such as a clipboard image. The bytes go through a temporary file that is
+// removed before the call returns.
+func (s *Service) ImagePNG(ctx context.Context, png []byte, opts Options) (platform.TextResult, error) {
+	if s.deps.TempDir == "" {
+		return platform.TextResult{}, ErrNoTempFolder
+	}
+	ctx, cancel := context.WithTimeout(ctx, boundedTimeout(opts.Timeout))
+	defer cancel()
+	name, err := captureName()
+	if err != nil {
+		return platform.TextResult{}, err
+	}
+	dst := filepath.Join(s.deps.TempDir, name)
+	if err := s.deps.FS.WriteFile(dst, png, 0o600); err != nil {
+		return platform.TextResult{}, err
+	}
+	defer func() { _ = s.deps.FS.Remove(dst) }()
+	return s.deps.Text.Recognize(ctx, dst, opts.Languages)
+}
+
 // Screen reads the text the screen shows.
 func (s *Service) Screen(ctx context.Context, opts Options) (platform.TextResult, error) {
 	return s.screen(ctx, nil, opts)
