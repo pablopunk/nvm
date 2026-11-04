@@ -69,18 +69,19 @@ func (p *App) menubarUpdateRow() *menubar.UpdateRow {
 	return nil
 }
 
-// updateRootRows shows a found, downloading or ready update at the root, where the person is about to search. It
-// stays out of the way of queries that do not name updates.
+// updateRootRows shows an update that is found, downloading or ready at the root, above the commands, where the person
+// is about to search. A failed install is shown too, so a refused update is never silent; a failed check is not, because
+// an offline laptop would show it at every launch. The rows stay out of the way of queries that do not name updates.
 func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	state := p.updateSnapshot().State
-	if state.Status != update.StatusAvailable && state.Status != update.StatusDownloading && state.Status != update.StatusDownloaded {
+	if !rootShowsUpdate(state) {
 		return nil
 	}
 	if lq := strings.ToLower(strings.TrimSpace(q)); lq != "" && !strings.HasPrefix("update", lq) && !strings.Contains("nevermind update", lq) {
 		return nil
 	}
 	item := search.Item{Kind: search.KindCommands, Title: update.Message(state), Subtitle: "Nevermind updates", Icon: "rotate-ccw",
-		Score: scoreCommandAlias, LearnKey: "updates", Prominent: state.Status == update.StatusDownloaded,
+		Score: rootUpdateScore, LearnKey: "updates", Prominent: state.Status == update.StatusDownloaded,
 		Actions: []search.Action{{Title: "Open Updates", Run: func(h search.Host) { h.Push(p.updatesView()) }}}}
 	if state.Status == update.StatusDownloaded {
 		item.Actions = []search.Action{{Title: "Restart to Update", Run: func(h search.Host) {
@@ -90,4 +91,17 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 		}}}
 	}
 	return []search.Item{item}
+}
+
+// rootUpdateScore ranks an update row above every command, so it is the first row of the root.
+const rootUpdateScore = 95
+
+func rootShowsUpdate(state update.State) bool {
+	switch state.Status {
+	case update.StatusAvailable, update.StatusDownloading, update.StatusDownloaded:
+		return true
+	case update.StatusFailed:
+		return state.Stage == update.StageInstall
+	}
+	return false
 }

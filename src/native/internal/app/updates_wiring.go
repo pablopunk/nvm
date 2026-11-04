@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"log"
 
 	"github.com/egoist/mygo"
 
@@ -20,7 +21,10 @@ func (p *App) attachUpdater() {
 		Clock:    p.ports.Clock,
 		Channels: newUpdateChannels(p),
 		Current:  mygo.App.Version(),
-		OnChange: func(update.State) { p.onUI(p.refreshUpdateSurfaces) },
+		OnChange: func(state update.State) {
+			log.Printf("update state: %s %q", state.Status, update.Message(state))
+			p.onUI(p.refreshUpdateSurfaces)
+		},
 	})
 	p.updater = p.updates
 	safego.Go("updates.schedule", func(ctx context.Context) { p.updates.Run(ctx) })

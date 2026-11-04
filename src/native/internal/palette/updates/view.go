@@ -62,10 +62,10 @@ func StatusLine(s update.State) string {
 
 func rows(in Snapshot, a Actions) []search.Item {
 	items := []search.Item{{
-		Kind:     search.KindCommands,
-		Title:    StatusLine(in.State),
-		Subtitle: in.Channel.Label() + " channel · " + checkEvery,
-		Icon:     StatusIcon(in.State.Status),
+		Kind:       search.KindCommands,
+		Title:      StatusLine(in.State),
+		Subtitle:   in.Channel.Label() + " channel · " + checkEvery,
+		Icon:       StatusIcon(in.State.Status),
 		Contextual: in.State.Status == update.StatusFailed,
 	}}
 	if in.State.Status == update.StatusDownloaded {
