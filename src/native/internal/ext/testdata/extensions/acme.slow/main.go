@@ -1,9 +1,13 @@
 package main
 
-import "time"
+import (
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+)
 
 // SearchItems answers after a delay longer than the test's hard budget. It declares no RootItems.
-func SearchItems(ctx any, query string) ([]map[string]any, error) {
+func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	time.Sleep(300 * time.Millisecond)
-	return []map[string]any{{"id": "late", "title": "Too late"}}, nil
+	return []api.Item{{ID: "late", Title: "Too late"}}, nil
 }

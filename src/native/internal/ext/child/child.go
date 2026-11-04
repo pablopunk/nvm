@@ -3,9 +3,8 @@
 // Yaegi and answers line-delimited requests on stdin with responses on stdout (see package protocol). Extension
 // code can crash, hang or exhaust memory in this process only; the host kills it at the deadline.
 //
-// Extension source imports only the standard library. Its methods take and return plain JSON-shaped values,
-// because the host's types cannot be exported to the interpreter without a generated table that the file-size
-// ratchet forbids (see docs/extension-runtime-spike.md and docs/extension-api.md).
+// Extension source imports the api package (through the generated symbol table in api_symbols.go) and the
+// standard library. Its entry points have the signatures of the api interfaces (see docs/extension-api.md).
 //
 // Layer: ext. The package imports api, protocol and the Yaegi interpreter.
 package child
@@ -20,6 +19,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // Main runs the child when args ask for it and reports the exit code with true. For any other command line
@@ -64,7 +64,7 @@ func serve(sourcePath string, memoryLimit uint64, identity api.Identity, in io.R
 			fmt.Fprintf(os.Stderr, "extension child: memory limit not applied: %v\n", err)
 		}
 	}
-	ext, err := load(sourcePath, identity)
+	ext, err := load(sourcePath, identity, real.NewPorts().Clock)
 	if err != nil {
 		failure := api.FailureOf(err)
 		failure.Message = truncate(failure.Message)

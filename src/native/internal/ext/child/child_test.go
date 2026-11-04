@@ -65,7 +65,7 @@ func TestGoodExtensionAnswersEachMethodWithJSON(t *testing.T) {
 	if responses[0].ID != 1 || responses[3].ID != 4 {
 		t.Fatalf("response ids not echoed: %d, %d", responses[0].ID, responses[3].ID)
 	}
-	if !strings.Contains(string(responses[3].Data), `"ran":"hello"`) {
+	if !strings.Contains(string(responses[3].Data), `"title":"ran hello"`) {
 		t.Fatalf("run data = %s; want the action id echoed", responses[3].Data)
 	}
 }
