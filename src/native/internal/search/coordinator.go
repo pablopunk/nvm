@@ -342,17 +342,6 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	return snap
 }
 
-// pendingCallsLocked reports whether a provider that has not finished has said its call is in flight. The caller
-// holds c.mu.
-func (c *Coordinator) pendingCallsLocked() bool {
-	for _, s := range c.slots {
-		if s.pending && !s.finished {
-			return true
-		}
-	}
-	return false
-}
-
 // current returns the merged result of gen, for a synchronous query.
 func (c *Coordinator) current(gen int) Snapshot {
 	c.mu.Lock()
