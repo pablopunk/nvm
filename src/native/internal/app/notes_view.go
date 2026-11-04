@@ -19,8 +19,8 @@ import (
 // Markdown of the chosen note. Filtering matches the text of the notes, as the 1.x list did.
 func (p *App) notesView() *palette.View {
 	return &palette.View{
-		Title: "Quick Notes", Placeholder: "Search Quick Notes",
-		EmptyTitle: "A clear space for your next idea.", EmptySub: "Create a Markdown note and keep it close at hand.",
+		Title: "Quick Notes", Placeholder: "Find a note",
+		EmptyTitle: "A clear space for your next idea", EmptySub: "Create a Markdown note and keep it close at hand.",
 		Search: func(q string) []search.Item {
 			if p.notes == nil {
 				return nil
@@ -58,7 +58,7 @@ func (p *App) noteItem(n notes.Note) search.Item {
 		Icon: "sticky-note", Tone: "yellow", TintTitle: true,
 	}
 	it.Actions = []search.Action{
-		{Title: "Open", Run: func(h search.Host) { p.openNoteFromList(h, id) }},
+		{Title: "Open note", Run: func(h search.Host) { p.openNoteFromList(h, id) }},
 		{Title: "Open as Floating Window", Label: "⌃F", Mods: mod, Key: ui.KeyF, Run: func(h search.Host) { h.Hide(); p.openFloatingNote(id) }},
 		{Title: "Copy Text", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(text); h.Hide() }},
 		{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
@@ -129,9 +129,10 @@ func (p *App) newNote() {
 	}
 }
 
-// confirmDeleteNote asks before a note is deleted: the palette's confirmation, not a native dialog.
+// confirmDeleteNote asks before a note is deleted, with the 1.x question and the "Delete note" button: the palette's
+// confirmation, not a native dialog.
 func (p *App) confirmDeleteNote(id, title string) *palette.View {
-	return palette.Confirm(fmt.Sprintf("Delete “%s”", title), "This cannot be undone.", func() { p.deleteNote(id) })
+	return palette.Confirm("Delete note", fmt.Sprintf("Delete “%s”? This cannot be undone.", title), func() { p.deleteNote(id) })
 }
 
 // deleteNote removes a note. An editor or window showing it is closed first, so its pending text is saved and

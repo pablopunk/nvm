@@ -44,6 +44,47 @@ func (p *App) openFloatingNote(id string) {
 	w.Show()
 }
 
+// toggleFloatingNotes is the Toggle Floating Notes command: it closes the floating notes that are shown, and otherwise
+// shows the most recent note floating, creating one when there is none.
+func (p *App) toggleFloatingNotes() {
+	if open := p.openFloatingEdits(); len(open) > 0 {
+		for _, edit := range open {
+			edit.window.Close()
+		}
+		return
+	}
+	if p.notes == nil {
+		p.Toast("Quick Notes could not be opened")
+		return
+	}
+	id, err := p.mostRecentNoteID()
+	if err != nil {
+		p.Toast(noteErrorMessage(err))
+		return
+	}
+	p.openFloatingNote(id)
+}
+
+// openFloatingEdits lists the notes that have a floating window open.
+func (p *App) openFloatingEdits() []*noteEdit {
+	var open []*noteEdit
+	for _, edit := range p.edits {
+		if edit.window != nil {
+			open = append(open, edit)
+		}
+	}
+	return open
+}
+
+// mostRecentNoteID is the note saved last, or a new note when there is none yet.
+func (p *App) mostRecentNoteID() (string, error) {
+	if all := p.notes.List(); len(all) > 0 {
+		return all[0].ID, nil
+	}
+	n, err := p.notes.Create(clock())
+	return n.ID, err
+}
+
 // newFloatingNote is the root command: it creates a note and opens it in a floating window.
 func (p *App) newFloatingNote() {
 	if p.notes == nil {

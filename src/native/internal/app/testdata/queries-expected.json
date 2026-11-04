@@ -1502,6 +1502,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Toggle Floating Notes",
+        "subtitle": "Show or hide your floating Markdown notes",
+        "section": "Commands",
+        "id": "",
+        "icon": "sticky-note",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Extensions",
         "subtitle": "Manage and create extensions",
         "section": "Commands",
