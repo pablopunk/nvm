@@ -54,16 +54,20 @@ func TestToggleGivesTheKeyboardBack(t *testing.T) {
 	}
 }
 
-// TestClickAwayGivesTheKeyboardBack checks a focus loss that hides the palette after the grace.
-func TestClickAwayGivesTheKeyboardBack(t *testing.T) {
+// TestClickAwayLeavesTheKeyboardWithTheWindowClicked checks a focus loss that hides the palette after the grace:
+// the user picked another window, so the palette does not pull the keyboard back to the one from before the summon.
+func TestClickAwayLeavesTheKeyboardWithTheWindowClicked(t *testing.T) {
 	focus := fake.NewFocus()
 	focus.SetActive(appBeforeSummon)
 	var ran []string
 	h := newHarness(t, rowsView("Root", &ran, "Alpha"), true, withFocus(focus))
 	blurOnce(h)
 	passGrace(t, h)
-	if got := focus.Restored(); !reflect.DeepEqual(got, []platform.FocusTarget{appBeforeSummon}) {
-		t.Fatalf("restored %v after a click away", got)
+	if h.win.IsVisible() {
+		t.Fatal("the palette is still shown after a click away")
+	}
+	if got := focus.Restored(); len(got) != 0 {
+		t.Fatalf("restored %v after a click away; the clicked window keeps the keyboard", got)
 	}
 }
 

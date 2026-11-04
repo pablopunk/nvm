@@ -28,3 +28,10 @@ func (p *Palette) hideAfterAction() {
 	p.returnTo = nil
 	p.Hide()
 }
+
+// hideAfterFocusMovedAway dismisses the palette after another window took the keyboard, as a click on it does. The
+// keyboard stays with the window the user chose instead of going back to the one from before the summon.
+func (p *Palette) hideAfterFocusMovedAway() {
+	p.returnTo = nil
+	p.Hide()
+}
