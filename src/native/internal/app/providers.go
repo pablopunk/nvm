@@ -120,15 +120,6 @@ func (p *App) settingsView() *palette.View {
 		Title: "Settings", Placeholder: "Search Settings",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			auth := "Not signed in"
-			if a := loadAuth(); a != nil {
-				auth = "Signed in" + func() string {
-					if a.Email != "" {
-						return " as " + a.Email
-					}
-					return ""
-				}()
-			}
 			clip := "On"
 			if p.S.ClipOff {
 				clip = "Off"
@@ -154,7 +145,7 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
-				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
+				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
 			if lq == "" {

@@ -10,7 +10,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"slices"
 	"strings"
 	"time"
@@ -41,20 +40,20 @@ func newChatStore() *ChatStore {
 
 func (s *ChatStore) save() { saveJSON("chats.json", s) }
 
-type authInfo struct{ BaseURL, Token, Email string }
+// authInfo is the origin and bearer token a chat request carries.
+type authInfo struct{ BaseURL, Token string }
 
-func loadAuth() *authInfo {
-	a := &authInfo{}
-	loadJSON("auth.json", a)
-	if a.Token == "" {
-		if t := os.Getenv("NVM_TOKEN"); t != "" {
-			a.Token, a.BaseURL = t, "https://api.nvm.fyi"
-		}
-	}
-	if a.Token == "" || a.BaseURL == "" {
+// chatCredentials reads the signed-in origin and token from the account session. It reads the keychain, so it
+// runs off the UI thread; nil means the account is not connected.
+func (p *App) chatCredentials() *authInfo {
+	if p.account == nil {
 		return nil
 	}
-	return a
+	origin, token, ok := p.account.Credentials()
+	if !ok {
+		return nil
+	}
+	return &authInfo{BaseURL: origin, Token: token.Reveal()}
 }
 
 type chatRun struct {
@@ -121,8 +120,8 @@ func (p *App) transcript(c *ui.Context, run *chatRun) {
 				if run.chat.Builder {
 					hint = "Describe what you want; the model writes a Go extension, it is checked and installed."
 				}
-				if loadAuth() == nil {
-					hint = "Not signed in: put a token in ~/.config/nvm-native/auth.json"
+				if !p.signedIn() {
+					hint = "Not signed in: log in from Settings > Account"
 				}
 				ui.Text(c, hint).FontSize(13).TextColor(k.Tertiary)
 			})
@@ -173,7 +172,7 @@ func (p *App) sendChat(run *chatRun, text string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	run.cancel = cancel
 	go func() {
-		finish, err := streamCompletion(ctx, api, func(chunk string) {
+		finish, err := streamCompletion(ctx, p.chatCredentials(), api, func(chunk string) {
 			p.panel.Update(func() { ch.Messages[len(ch.Messages)-1].Content += chunk })
 		})
 		p.panel.Update(func() {
@@ -199,10 +198,9 @@ func (p *App) sendChat(run *chatRun, text string) {
 	}()
 }
 
-func streamCompletion(ctx context.Context, msgs []map[string]string, onChunk func(string)) (finish string, err error) {
-	a := loadAuth()
+func streamCompletion(ctx context.Context, a *authInfo, msgs []map[string]string, onChunk func(string)) (finish string, err error) {
 	if a == nil {
-		return "", fmt.Errorf("not signed in — add a token to ~/.config/nvm-native/auth.json")
+		return "", fmt.Errorf("not signed in — log in from Settings > Account")
 	}
 	body, _ := json.Marshal(map[string]any{"model": "auto", "stream": true, "max_tokens": 4096, "messages": msgs})
 	req, _ := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(a.BaseURL, "/")+"/api/v1/chat/completions", bytes.NewReader(body))

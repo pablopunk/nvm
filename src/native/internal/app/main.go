@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -56,6 +57,7 @@ type App struct {
 	history     *palette.QueryHistory
 
 	ports   platform.Ports
+	account *auth.Session
 	store   *store.Store
 	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
@@ -103,6 +105,7 @@ func (p *App) position(w, h int) (int, int) {
 func (p *App) ready() {
 	p.S = loadSettings()
 	p.attachServices(real.NewPorts(), configDir(), nil)
+	p.attachDeepLinks()
 	p.closeStoreOnQuit()
 	prepareCatalog()
 	p.clip = newClipStore()
