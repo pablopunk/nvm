@@ -22,11 +22,14 @@ func NewPorts() platform.Ports {
 		Screens:      screens{},
 		Notifier:     notifier{},
 		Keychain:     keychain{},
+		DeepLinks:    deepLinks{},
 		Processes:    processes{},
 		Helper:       helper{},
 		Hotkeys:      hotkeys{},
+		Focus:        newFocus(),
 		Tray:         trayHost{},
 		Autostart:    autostart{},
+		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
 	}
 }

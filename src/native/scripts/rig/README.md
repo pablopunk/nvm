@@ -10,6 +10,7 @@ Runs the real app on a desktop that has what the app needs (Xvfb, openbox, picom
 | `entrypoint.sh` | Starts the desktop, runs the command given as arguments, then stops only the PIDs it started. |
 | `rig.sh` | Driver: `build`, `run`, `up`, `shot`, `logs`, `down`. |
 | `run-journeys.sh` | Builds the app with `-tags automation` and runs the rig tests. Both the container and the box run it. |
+| `window-x11.sh` | Private Xvfb with openbox and a panel, a feh probe window, and the X11 window engine check (WP4.1b). Needs `RIG_ARTIFACTS`; leaves before, left-half and after screenshots there. |
 | `assets/wall.png` | The fixed wallpaper (the shared test box's `/root/wall.png`), so pixels are stable across runs. |
 
 The Go side is `internal/rigtest` (build tag `rig`) and the journeys in `internal/rigtest/journeys_test.go`. The app is built with `-tags automation`, which links the MyGo automation plugin (`cmd/nvm/automation_on.go`). Default builds do not contain the plugin.

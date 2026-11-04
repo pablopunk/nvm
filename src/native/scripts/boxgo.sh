@@ -18,7 +18,8 @@ fi
 slot=$1; shift
 tmp=$(mktemp -d)
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/src.tgz" -C "$root/src/native" --exclude=.git --exclude="._*" .
-box exec "$BOX" -- "mkdir -p /root/wp" >/dev/null
+# Many agents share the box's Go build cache, which grows without bound: trim old entries when space runs low.
+box exec "$BOX" -- 'mkdir -p /root/wp; [ "$(df --output=avail -k / | tail -1)" -gt 3145728 ] || find /root/.cache/go-build -type f -mmin +30 -delete' >/dev/null
 box cp "$tmp/src.tgz" "$BOX:/root/wp/$slot.tgz" >/dev/null
 box exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && export PATH=\$PATH:/usr/local/go/bin && $*"
 rm -rf "$tmp"

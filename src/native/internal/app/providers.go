@@ -90,6 +90,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
 			h.Push(palette.Confirm("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
 		}},
+		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
@@ -120,15 +121,6 @@ func (p *App) settingsView() *palette.View {
 		Title: "Settings", Placeholder: "Search Settings",
 		Search: func(q string) []search.Item {
 			lq := strings.ToLower(q)
-			auth := "Not signed in"
-			if a := loadAuth(); a != nil {
-				auth = "Signed in" + func() string {
-					if a.Email != "" {
-						return " as " + a.Email
-					}
-					return ""
-				}()
-			}
 			clip := "On"
 			if p.S.ClipOff {
 				clip = "Off"
@@ -138,7 +130,7 @@ func (p *App) settingsView() *palette.View {
 				login = "On"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: palette.ShortcutLabel(p.S.Hotkey), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
+				{Title: "Palette Hotkey", Accessory: shortcutLabelOf(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
@@ -165,37 +157,13 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
-				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
+				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
 			if lq == "" {
 				return rows
 			}
 			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
-		},
-	}
-}
-
-func (p *App) hotkeyView() *palette.View {
-	return &palette.View{
-		Title: "Hotkey", Placeholder: "Press keys, e.g. " + palette.ShortcutLabel("Alt+Shift+Space"),
-		Search: func(q string) []search.Item {
-			if q == "" {
-				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + palette.ShortcutLabel(p.S.Hotkey), Icon: "keyboard"}}
-			}
-			return []search.Item{{Title: "Use “" + palette.ShortcutLabel(q) + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
-				old := p.S.Hotkey
-				mygo.GlobalShortcut.Unregister(old)
-				if err := mygo.GlobalShortcut.Register(q, p.Toggle); err != nil {
-					_ = mygo.GlobalShortcut.Register(old, p.Toggle)
-					h.Toast("Invalid or taken: " + err.Error())
-					return
-				}
-				p.S.Hotkey = q
-				p.S.save()
-				h.Pop()
-				h.Toast("Hotkey set to " + palette.ShortcutLabel(q))
-			}}}}}
 		},
 	}
 }

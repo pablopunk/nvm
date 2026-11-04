@@ -27,6 +27,9 @@ const (
 	CapabilityTrayMenu         Capability = "tray.menu"
 	CapabilityAutostart        Capability = "autostart.signIn"
 	CapabilityFileWatch        Capability = "files.watch"
+	CapabilityWindowPlacement  Capability = "window.placement"
+	CapabilityWindowManagement Capability = "windows.manage"
+	CapabilityFocusReturn      Capability = "focus.return"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -36,7 +39,8 @@ func AllCapabilities() []Capability {
 		CapabilityFileWatch, CapabilityGlobalHotkeys, CapabilityHelperRun, CapabilityKeychain,
 		CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal, CapabilityScreensDisplays,
 		CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep, CapabilityShellReveal,
-		CapabilityShellTrash, CapabilityTrayMenu,
+		CapabilityShellTrash, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
+		CapabilityFocusReturn,
 	}
 	slices.Sort(list)
 	return list

@@ -7,12 +7,12 @@ import (
 	"image/color"
 	"image/png"
 	"log"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -22,6 +22,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
@@ -43,12 +44,14 @@ type App struct {
 	extTrays []*extTray
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
+	summon   *shortcuts.Summon
 	appsvc   *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
 	paletteHidden chan struct{}
+	shortcutMgr   *shortcuts.Manager
 	snips         *snippets.Store
 	notes         *notes.Store
 	files         *fileService
@@ -58,6 +61,7 @@ type App struct {
 	history       *palette.QueryHistory
 
 	ports   platform.Ports
+	account *auth.Session
 	store   *store.Store
 	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
@@ -70,6 +74,8 @@ type App struct {
 	userReadOnly bool
 	quitting     bool
 	edits        map[string]*noteEdit
+	// launchShown records that the palette opened at launch because its shortcut could not be bound.
+	launchShown bool
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -85,27 +91,38 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Root:        p.rootView(),
 		Clock:       clock,
 		Synchronous: synchronous,
-		Position:    p.position,
+		Position:    p.placementOption(),
+		Focus:       p.focusOption(),
 		Icon:        p.fileIcon,
 		AskAI:       p.newChatView,
 		OnShow:      p.showApps,
-		OnHide:      p.hideApps,
+		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
 	})
 }
 
-// position centers the window a third down the work area of the display under the pointer.
+// position places the window on the work area of the display under the pointer. It is nil on a session that
+// does not let clients place their windows, and the compositor keeps the window where it puts it.
 func (p *App) position(w, h int) (int, int) {
-	d := mygo.Screen.DisplayNearestPoint(mygo.Screen.CursorScreenPoint())
-	return d.WorkArea.X + (d.WorkArea.Width-w)/2, d.WorkArea.Y + (d.WorkArea.Height-h)/3
+	screens := p.ports.Screens
+	d := screens.NearestDisplay(screens.CursorPoint())
+	return palette.PlaceOnWorkArea(d.WorkArea, w, h)
+}
+
+func (p *App) placementOption() func(w, h int) (int, int) {
+	if !p.ports.Capabilities.Supported(platform.CapabilityWindowPlacement) {
+		return nil
+	}
+	return p.position
 }
 
 func (p *App) ready() {
 	p.S = loadSettings()
 	p.paletteHidden = make(chan struct{}, 1)
 	p.attachServices(p.appPorts(), configDir(), nil)
+	p.attachDeepLinks()
 	p.closeStoreOnQuit()
 	prepareCatalog()
 	p.clip = p.openClipboard()
@@ -129,17 +146,10 @@ func (p *App) ready() {
 	p.Attach(p.panel)
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
-	p.panel.OnBlur(p.Hide)
+	p.panel.OnBlur(p.DismissOnBlur)
 	p.panel.OnHide(p.notePaletteHidden)
 
-	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
-	for i := 0; err != nil && i < 8; i++ { // a previous instance may still hold the key
-		time.Sleep(400 * time.Millisecond)
-		err = mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
-	}
-	if err != nil {
-		log.Println("shortcut", p.S.Hotkey, err)
-	}
+	p.startShortcuts()
 	p.reloadExtensions()
 	p.setUpTray()
 	p.startFiles()
