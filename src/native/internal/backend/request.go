@@ -53,6 +53,9 @@ type requestSpec struct {
 	// timeout bounds the whole call, from the request through reading the body. Zero means only the caller's
 	// context applies, which is how streams run.
 	timeout time.Duration
+	// idleTimeout ends the call as a timeout when no response byte arrives for this long, from sending the request
+	// until the body ends. Zero watches nothing. Streams set it, since their whole length has no bound.
+	idleTimeout time.Duration
 	// idempotent allows transient failures to be retried. Only GET calls set it.
 	idempotent bool
 }

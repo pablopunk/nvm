@@ -52,7 +52,8 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 }
 
 // openLogFile writes the log to a size-rotated file under the config directory and mirrors it to stderr, so a
-// development run still shows it in the terminal.
+// development run still shows it in the terminal. The standard library's log lines go to the same file at warn, so
+// an app launched from Finder, whose stderr goes nowhere, keeps them.
 func openLogFile(ports platform.Ports) {
 	logger, err := logx.New(ports.FS, ports.Clock, filepath.Join(configDir(), logDirectoryName), logx.Options{Stderr: os.Stderr})
 	if err != nil {
@@ -60,6 +61,8 @@ func openLogFile(ports platform.Ports) {
 		return
 	}
 	logx.SetDefault(logger)
+	log.SetFlags(0)
+	log.SetOutput(logger.Writer(logx.Warn))
 }
 
 // analyticsEndpoint is the ingest route in release builds, and nowhere otherwise.

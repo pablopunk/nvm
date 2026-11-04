@@ -17,6 +17,9 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 	_ = s.mutate(id, func(c *Chat) {
 		finishTurn(c, outcome, s.opts.Clock.Now())
 	})
+	if chat, ok := s.Chat(id); ok {
+		s.logFailedTurn(chat, outcome)
+	}
 	if outcome.Err != nil && s.opts.NoteError != nil {
 		s.opts.NoteError(outcome.Err)
 	}
