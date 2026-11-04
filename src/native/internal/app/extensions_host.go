@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -27,7 +28,7 @@ func (p *App) extensionManager() *manager.Manager {
 // startExtensions builds the manager from the extensions folder and publishes it. It runs on its own goroutine:
 // scanning the folder and starting enabled children never waits the palette's first paint.
 func (p *App) startExtensions() {
-	m, err := newExtensionManager(p.refreshMenuBar)
+	m, err := newExtensionManager(p.refreshMenuBar, p.extensionsStateChanged)
 	if err != nil {
 		log.Println("extensions:", err)
 		return
@@ -36,7 +37,7 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
-func newExtensionManager(menuBarRefresh func(extensionID string)) (*manager.Manager, error) {
+func newExtensionManager(menuBarRefresh func(extensionID string), onChange func()) (*manager.Manager, error) {
 	ports := real.NewPorts()
 	exe, err := os.Executable()
 	if err != nil {
@@ -59,7 +60,16 @@ func newExtensionManager(menuBarRefresh func(extensionID string)) (*manager.Mana
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),
 		MenuBarRefresh: menuBarRefresh,
+		OnChange:       onChange,
 	})
+}
+
+// extensionsStateChanged redraws the Extensions list when it is the view on top, so a child that finishes starting
+// shows as Running without the user reopening the list, and asks the menu bar to reconcile its items with the new
+// state. It runs on the goroutine that changed the state.
+func (p *App) extensionsStateChanged() {
+	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
+	p.syncMenuBarItems()
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

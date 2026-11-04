@@ -32,6 +32,7 @@ const (
 	ServiceLogs     = "logs"
 	ServiceText     = "text"
 	ServiceNetwork  = "network"
+	ServiceDrafts   = "drafts"
 	ServiceViews    = "views"
 )
 

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -61,6 +62,11 @@ type Config struct {
 	Budgets       map[string]Budget
 	MaxFailures   int
 	FailureWindow time.Duration
+	// OnStateChange runs, on its own goroutine, after every change of a runtime's state. Views use it to redraw
+	// what they show about the extension.
+	OnStateChange func()
+	// Log records the lifecycle of the child (running, failed, disabled) with its reason. Nil records nothing.
+	Log *logx.Logger
 }
 
 func (c Config) startTimeout() time.Duration {

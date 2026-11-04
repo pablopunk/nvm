@@ -52,6 +52,13 @@ func (p *App) refreshMenuBar(extensionID string) {
 	}
 }
 
+// syncMenuBarItems asks the menu bar service to reconcile its items now. It does nothing before the service starts.
+func (p *App) syncMenuBarItems() {
+	if service := p.menubarItems.Load(); service != nil {
+		service.Sync()
+	}
+}
+
 // runMenubarScheduler drives the scheduler until the app quits.
 func (p *App) runMenubarScheduler() {
 	go p.menubarJobs.Run(context.Background())

@@ -2,12 +2,13 @@ package app
 
 import (
 	"fmt"
-	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
+
+// extensionsViewTitle names the Extensions list, so a refresh can tell it apart from the views pushed on it.
+const extensionsViewTitle = "Extensions"
 
 // extensionsView is the Extensions list: the create and reload commands, then one row per installed extension.
 func (p *App) extensionsView() *palette.View {
@@ -15,12 +16,12 @@ func (p *App) extensionsView() *palette.View {
 }
 
 // extensionsViewFor builds the list from the controller ctl returns at each search, so the list follows a manager
-// that starts after the view opened.
+// that starts after the view opened. The rows are ranked by their titles for the query, so an exact title is first.
 func (p *App) extensionsViewFor(ctl func() extensionController) *palette.View {
 	return &palette.View{
-		Title: "Extensions", Placeholder: "Search Extensions",
+		Title: extensionsViewTitle, Placeholder: "Search Extensions",
 		Search: func(q string) []search.Item {
-			out := []search.Item{
+			rows := []search.Item{
 				{Title: "Create Extension with AI", Subtitle: "Describe it; an extension is written, checked and installed", Icon: "zap", Tone: "yellow", Prominent: true,
 					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.builderView()) }}}},
 				{Title: "Reload Extensions", Icon: "rotate-ccw", Tone: "gray",
@@ -29,23 +30,14 @@ func (p *App) extensionsViewFor(ctl func() extensionController) *palette.View {
 					}}}},
 			}
 			m := ctl()
-			if m == nil {
-				return out
-			}
-			for _, l := range m.List() {
-				if matchesExtensionQuery(l, q) {
-					out = append(out, extensionListRow(p, m, l))
+			if m != nil {
+				for _, l := range m.List() {
+					rows = append(rows, extensionListRow(p, m, l))
 				}
 			}
-			return out
+			return search.RankScored(rows, q, search.ItemTexts)
 		},
 	}
-}
-
-// matchesExtensionQuery is true when q is empty or appears in the extension's title or id.
-func matchesExtensionQuery(l manager.Listing, q string) bool {
-	lq := strings.ToLower(q)
-	return lq == "" || strings.Contains(strings.ToLower(extensionTitle(l)), lq) || strings.Contains(strings.ToLower(l.ID), lq)
 }
 
 // reloadExtensions rescans the folder and reports the count. It runs on the UI thread, so the scan is the only

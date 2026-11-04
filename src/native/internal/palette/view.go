@@ -38,8 +38,11 @@ type View struct {
 	// Limit is how many rows the view keeps from its providers. Zero means search.DefaultLimit.
 	Limit int
 	// OnSubmit receives the input text when Enter is pressed in a Body view.
-	OnSubmit             func(q string)
-	HideInput            bool
+	OnSubmit  func(q string)
+	HideInput bool
+	// Concealed masks the search field's text while the view is open, for a secret such as a password. The query is
+	// never remembered or learned while it is set.
+	Concealed            bool
 	EmptyTitle, EmptySub string
 	KeepQuery            bool          // do not clear the input on Enter
 	Status               func() string // not drawn; kept for the views that set it

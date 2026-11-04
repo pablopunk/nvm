@@ -11,8 +11,11 @@ func (p *Palette) rootHistory() *QueryHistory {
 	return p.opts.History
 }
 
-// rememberQuery records a query submitted at the root.
+// rememberQuery records a query submitted at the root. A concealed view's query is never recorded.
 func (p *Palette) rememberQuery(query string) {
+	if p.cur().Concealed {
+		return
+	}
 	if h := p.rootHistory(); h != nil {
 		h.Remember(query)
 	}

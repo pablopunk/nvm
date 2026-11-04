@@ -84,6 +84,12 @@ func (s *Service) Start() {
 	s.opts.Scheduler.Schedule(syncJob, menubar.Job{Every: syncEvery, Run: s.syncRender})
 }
 
+// Sync reconciles the items with the enabled extensions as soon as possible. A lifecycle change calls it, so an
+// extension that starts, fails or is disabled shows or closes its items without waiting for the next periodic sync.
+func (s *Service) Sync() {
+	s.opts.Scheduler.Now(syncJob)
+}
+
 // Refresh re-renders the items of extension id as soon as possible. It is the answer to Views().RefreshMenuBar, and it
 // returns at once. An unknown id does nothing.
 func (s *Service) Refresh(id string) {

@@ -20,10 +20,11 @@ const (
 // Kind separates the user's conversations from the extension builder's chats.
 type Kind string
 
-// The chat kinds.
+// The chat kinds. A proofread is the chat behind Fix Selected Text with AI; it is never listed in the history.
 const (
 	KindConversation Kind = "conversation"
 	KindBuilder      Kind = "builder"
+	KindProofread    Kind = "proofread"
 )
 
 // Author says who wrote a message. Notices are in the transcript so that a refusal stays visible after a restart, and a

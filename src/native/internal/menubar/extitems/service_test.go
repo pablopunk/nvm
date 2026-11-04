@@ -211,6 +211,23 @@ func TestRefreshRerendersNowWithoutWaitingForTheInterval(t *testing.T) {
 	}
 }
 
+func TestSyncShowsAnExtensionThatStartedWithoutWaitingForThePeriodicSync(t *testing.T) {
+	h := newHarness(t)
+	h.source.set(func(s *fakeSource) { s.ids = nil })
+	h.svc.Sync()
+	h.settle()
+	h.source.set(func(s *fakeSource) {
+		s.ids = []string{"acme.menubar"}
+		s.triggers = nil
+		s.bars = []api.MenuBar{clockBar("started")}
+	})
+	h.svc.Sync()
+	h.settle()
+	if got := h.item("main").Title(); got != "started" {
+		t.Fatalf("title after a lifecycle sync = %q", got)
+	}
+}
+
 func TestRenderFailureKeepsTheLastGoodRowsUnderANotRespondingHead(t *testing.T) {
 	h := newHarness(t)
 	h.source.set(func(s *fakeSource) { s.renderErr = errors.New("boom") })

@@ -14,13 +14,23 @@ func (b *Backend) SetReply(text string) {
 	b.reply = text
 }
 
-// QueueReplies makes the next chat streams answer with texts, in order, before the reply set by SetReply. A chat
-// request after the queue is empty gets the SetReply text again. A scripted builder conversation queues its
-// replies this way, the bad source first and the fixed one after.
+// QueueReplies makes the next chat requests answer with texts, in order, as plain text replies. Once the queue is
+// empty a request gets the SetReply text again. A scripted builder conversation queues its replies this way.
 func (b *Backend) QueueReplies(texts ...string) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	b.queued = append(b.queued, texts...)
+	for _, text := range texts {
+		b.script = append(b.script, ScriptedReply{Frames: append(StreamFrames(text, 24), DoneFrame)})
+	}
+}
+
+// SetScript queues recorded replies for the next chat requests, first in first out, so a journey can script a model
+// that asks for a tool and then answers with what the tool returned. A request answers with the next queued reply;
+// once the queue is empty, the text of SetReply answers again.
+func (b *Backend) SetScript(replies ...ScriptedReply) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.script = append([]ScriptedReply(nil), replies...)
 }
 
 // SetChunkDelay paces each chat stream: every frame after the first waits d after the one before it, so a test can
@@ -31,27 +41,38 @@ func (b *Backend) SetChunkDelay(d time.Duration) {
 	b.chunkDelay = d
 }
 
-// streamSettings returns the reply text and the pacing of the next chat stream. The next queued reply, when there is
-// one, is taken off the queue.
+// streamSettings returns the reply text and the pacing of the next chat stream.
 func (b *Backend) streamSettings() (string, time.Duration) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	reply := b.reply
-	if len(b.queued) > 0 {
-		reply = b.queued[0]
-		b.queued = b.queued[1:]
-	}
-	return reply, b.chunkDelay
+	return b.reply, b.chunkDelay
 }
 
-// serveChat answers a chat completion: a stream of the reply text, or one of the stream failure modes.
+// nextScripted pops the next queued reply, if one is queued.
+func (b *Backend) nextScripted() (ScriptedReply, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.script) == 0 {
+		return ScriptedReply{}, false
+	}
+	reply := b.script[0]
+	b.script = b.script[1:]
+	return reply, true
+}
+
+// serveChat answers a chat completion: the next scripted reply, else a stream of the reply text, or one of the
+// stream failure modes.
 func (b *Backend) serveChat(w http.ResponseWriter, r *http.Request, body string, mode FailureMode) {
 	if !strings.Contains(body, `"messages"`) {
 		writeBody(w, http.StatusBadRequest, "application/json", InvalidRequestBody)
 		return
 	}
 	reply, delay := b.streamSettings()
-	b.countStream(writeStream(w, r, chatFrames(mode, reply), delay))
+	frames := chatFrames(mode, reply)
+	if scripted, ok := b.nextScripted(); ok {
+		frames = scripted.Frames
+	}
+	b.countStream(writeStream(w, r, frames, delay))
 }
 
 // chatFrames returns the SSE frames of one chat reply in mode.

@@ -59,6 +59,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 		Query:     &p.query,
 		Input:     &p.input,
 		AIHint:    len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
+		Concealed: v.Concealed,
 	}
 	if v.HideInput {
 		data.Title = v.Title

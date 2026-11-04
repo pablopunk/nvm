@@ -125,13 +125,23 @@ func (s *Session) invoke(h search.Host, r route) {
 	})
 }
 
-// finish applies a result on the UI thread. A failure stays on screen under the search field. A view opens above the
-// current page, replaces it, or becomes the root; a patch refreshes the visible rows; a pop goes back a page; an empty
-// result closes the palette.
+// maxFollowUps bounds the chain of follow-up actions one run may start, so a handler that answers with itself stops.
+const maxFollowUps = 4
+
+// finish applies a result on the UI thread. A failure stays on screen under the search field. A follow-up action runs
+// instead of the rest of the result, as Electron does. A view opens above the current page, replaces it, or becomes
+// the root; a patch refreshes the visible rows; a pop goes back a page; an empty result closes the palette.
 func (s *Session) finish(h search.Host, extID string, result api.Result, failure *api.Failure) {
+	s.finishAt(h, extID, result, failure, 0)
+}
+
+// finishAt is finish after depth follow-up actions have already run in this chain.
+func (s *Session) finishAt(h search.Host, extID string, result api.Result, failure *api.Failure, depth int) {
 	switch {
 	case failure != nil:
 		h.Toast(failure.Message)
+	case result.Next != nil:
+		s.runFollowUp(h, extID, *result.Next, depth+1)
 	case result.View != nil:
 		switch result.Navigation {
 		case api.NavRoot:
@@ -178,4 +188,43 @@ func (s *Session) confirmPage(r route) *palette.View {
 func withoutConfirmation(action api.Action) api.Action {
 	action.Confirm = nil
 	return action
+}
+
+// submit runs an action with a full invocation, such as a form's or an editor's submit, and applies its result like any
+// other action. afterRun, when set, sees whether the run failed before the result is applied.
+func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed bool)) {
+	if s.deps.Invoke == nil {
+		h.Toast(unavailableMessage)
+		return
+	}
+	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
+		if afterRun != nil {
+			afterRun(failure != nil)
+		}
+		s.finish(h, s.extID, result, failure)
+	})
+}
+
+// runFollowUp runs the action a result names: a confirmation first when it asks for one, a run action through the
+// extension (whose own result is applied the same way, up to maxFollowUps deep), or a declarative action on the host.
+func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, depth int) {
+	if depth > maxFollowUps {
+		h.Toast("This action asked for too many follow-up actions")
+		return
+	}
+	if action.Confirm != nil {
+		h.Push(s.confirmPage(route{extID: extID, action: action}))
+		return
+	}
+	if action.Kind != api.ActionRun {
+		s.action(action, "").Run(h)
+		return
+	}
+	if action.Ref == nil || s.deps.Invoke == nil {
+		h.Toast(unavailableMessage)
+		return
+	}
+	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
+		s.finishAt(h, extID, result, failure, depth)
+	})
 }
