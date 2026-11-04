@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"runtime"
 
+	"github.com/egoist/mygo"
+
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -12,7 +14,16 @@ import (
 // on macOS, Windows and Linux; the verified matrix lives in the rig reports, not here. Process listing
 // and signalling exist on Linux only until macOS and Windows get implementations.
 func Capabilities() platform.Capabilities {
-	return capabilitiesFor(runtime.GOOS, os.Getenv, hasTool)
+	return withWebViewCapabilities(capabilitiesFor(runtime.GOOS, os.Getenv, hasTool), mygo.WebViewAvailable())
+}
+
+// withWebViewCapabilities adds the web view intents when the system has a web view. Camera preview runs on a web
+// page, so it follows the web view and needs no separate OS check.
+func withWebViewCapabilities(caps platform.Capabilities, webViewAvailable bool) platform.Capabilities {
+	if !webViewAvailable {
+		return caps
+	}
+	return platform.NewCapabilities(append(caps.List(), platform.CapabilityWebView, platform.CapabilityCameraPreview)...)
 }
 
 // hasTool reports whether an executable of that name is on the PATH.
