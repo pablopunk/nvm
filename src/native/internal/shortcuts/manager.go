@@ -225,12 +225,9 @@ func (m *Manager) titlesOf(doc Document) map[string]string {
 	return titles
 }
 
-// load returns the document, with the default palette shortcut when the stored one is blank.
+// load returns the document. A blank palette shortcut means none: it is not replaced by a default.
 func (m *Manager) load() Document {
 	doc, _ := m.setup.Doc.Load()
-	if doc.Palette == "" {
-		doc.Palette = DefaultPalette
-	}
 	return doc
 }
 

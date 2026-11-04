@@ -175,7 +175,7 @@ func (p *App) settingsView() *palette.View {
 				clip = "Off"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: shortcutLabelOf(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
+				{Title: "Palette Hotkey", Accessory: paletteAccessory(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key

@@ -79,6 +79,14 @@ func shortcutLabelOf(accelerator string) string {
 	return shortcuts.Label(accelerator, runtime.GOOS)
 }
 
+// paletteAccessory is the Settings accessory of the palette shortcut. A blank palette shortcut means none.
+func paletteAccessory(accelerator string) string {
+	if accelerator == "" {
+		return "None"
+	}
+	return shortcutLabelOf(accelerator)
+}
+
 // paletteChangeMessage is the toast after the palette shortcut changes. A system feature that also holds the key is
 // said out loud.
 func paletteChangeMessage(change shortcuts.PaletteChange) string {

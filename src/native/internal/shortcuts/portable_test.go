@@ -122,7 +122,7 @@ func TestPortableDocumentWritesOnlyTheKeysItChangesAndKeepsUnknownOnes(t *testin
 	}
 }
 
-func TestSavingAnActionDoesNotWriteTheDefaultPaletteOverOneX(t *testing.T) {
+func TestBlankPaletteInConfigStaysBlankWhenAnActionChanges(t *testing.T) {
 	files := fake.NewFS()
 	if err := files.MkdirAll("/home/owner/.config/nevermind", 0o755); err != nil {
 		t.Fatal(err)

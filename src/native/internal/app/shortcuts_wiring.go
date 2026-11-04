@@ -36,7 +36,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 // for the process.
 func (p *App) shortcutsDocument() shortcuts.Persistence {
 	if p.sharedConfig == nil {
-		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(shortcuts.DefaultPalette))
+		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(""))
 	}
 	return shortcuts.NewPortableDocument(p.sharedConfig)
 }

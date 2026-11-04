@@ -19,6 +19,9 @@ func goldenShortcutsList(t *testing.T) *App {
 	t.Helper()
 	p := goldenPalette(t)
 	manager := p.shortcutsManager()
+	if _, err := manager.SetPalette("Alt+Shift+Space"); err != nil {
+		t.Fatal(err)
+	}
 	mustSetShortcut(t, manager, shortcutCommandID("Clipboard History"), "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
 	mustSetShortcut(t, manager, shortcutCommandID("Quick Notes"), "Command+Alt+N")

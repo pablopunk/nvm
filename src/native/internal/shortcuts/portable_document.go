@@ -30,18 +30,8 @@ func (d portableDocument) Update(change func(*Document)) error {
 		before := documentOf(stored)
 		doc := before
 		change(&doc)
-		writeDocument(stored, doc, paletteChanged(before.Palette, doc.Palette))
+		writeDocument(stored, doc, before.Palette != doc.Palette)
 	})
-}
-
-// paletteChanged reports whether a save changes the palette shortcut in the file. A blank palette in the file means
-// the default to 2.0, and a save that only fills that default in must not write it: 1.x reads the key as its own
-// palette shortcut.
-func paletteChanged(before, after string) bool {
-	if before == "" && after == DefaultPalette {
-		return false
-	}
-	return before != after
 }
 
 func documentOf(stored portable.Document) Document {
