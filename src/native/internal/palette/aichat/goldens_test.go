@@ -115,3 +115,13 @@ func TestHistoryGoldens(t *testing.T) {
 	r.open(HistoryView(r.deps()))
 	golden.AssertMatrix(t, "history", r.palette.View, pageGoldens)
 }
+
+// TestThinkingGoldens renders a reply that has started but has no visible text yet: the thinking state.
+func TestThinkingGoldens(t *testing.T) {
+	r := newRig(t, nil)
+	record := r.chatWith("Plan a trip", chat.TierSmart,
+		user("Plan a three day trip to Lisbon."),
+		streaming(""))
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "thinking", r.palette.View, pageGoldens)
+}
