@@ -10,11 +10,11 @@ import (
 	"time"
 )
 
-// J21 (PLAN.md 3.1): Fix Selected Text with AI runs from the palette over the app the selection is in. The rig has no
-// third-party text editor, so the source is a floating note: its text is selected, the palette's command copies the
-// selection with the real X11 focus and xdotool path, the proofread streams through the fake backend, the result page
-// offers the correction, and Enter replaces the selection in the note and restores the clipboard. Not covered: a
-// third-party source app, the triage and classify commands, the indicator's frames, and the failure copy.
+// J21 (PLAN.md 3.1): Fix Selected Text with AI runs from the palette over the app the selection is in. The source is a
+// floating note: its text is selected, the palette's command copies the selection with the real X11 focus and xdotool
+// path, the correction goes through the fake backend, and the selection is replaced in the note with the clipboard
+// restored. The fix needs no confirmation. Not covered: a third-party source app (see the editor journey), the triage
+// and classify commands, the indicator's frames, and the failure copy.
 
 const (
 	j21Input     = "this are selected text"
@@ -42,11 +42,6 @@ func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 	must(t, app.Type("Fix Selected Text"))
 	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
 	must(t, err)
-	must(t, app.Key("Return"))
-	_, err = app.WaitFor(j21Corrected, j21AIWait)
-	must(t, err)
-	shoot(t, app, "j21-1-result")
-
 	must(t, app.Key("Return"))
 	waitNoteOnDisk(t, app, j21Corrected)
 	waitClipboardEquals(t, app, j21Clipboard)
