@@ -117,6 +117,8 @@ type FormValues map[string]FormValue
 type FormSpec struct {
 	Fields []Field `json:"fields"`
 	Submit *Action `json:"submit,omitempty"`
+	// SubmitTitle labels the save row. Empty means "Save".
+	SubmitTitle string `json:"submitTitle,omitempty"`
 }
 
 // Validate checks field ids and types. Value validation is ValidateFieldValue.

@@ -74,6 +74,14 @@ func (c hostContext) Text() api.Text {
 	return remoteText{link: c.link}
 }
 
+func (c hostContext) Drafts() api.Drafts {
+	return remoteDrafts{link: c.link}
+}
+
+func (c hostContext) Input() api.Input {
+	return api.NewInput()
+}
+
 func (c hostContext) Data() api.Data {
 	return dataSources{}
 }
