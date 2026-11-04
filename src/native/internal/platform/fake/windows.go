@@ -10,10 +10,11 @@ import (
 
 // WindowsCall is one recorded WindowManager call. Frame is the frame a write asked for.
 type WindowsCall struct {
-	Op    string
-	PID   int
-	Key   string
-	Frame platform.WindowFrame
+	Op           string
+	PID          int
+	Key          string
+	Frame        platform.WindowFrame
+	PositionOnly bool
 }
 
 // WindowManager is a simulated desktop of windows and displays, the harness for engine tests. Writes
@@ -132,48 +133,48 @@ func (w *WindowManager) Calls() []WindowsCall {
 
 // Access implements platform.WindowManager.
 func (w *WindowManager) Access(ctx context.Context) (platform.WindowAccess, error) {
-	return simCall(w, ctx, "Access", 0, "", platform.WindowFrame{}, func() (platform.WindowAccess, error) {
+	return simCall(w, ctx, WindowsCall{Op: "Access"}, func() (platform.WindowAccess, error) {
 		return w.access, nil
 	})
 }
 
 // Displays implements platform.WindowManager.
 func (w *WindowManager) Displays(ctx context.Context) ([]platform.WindowDisplay, error) {
-	return simCall(w, ctx, "Displays", 0, "", platform.WindowFrame{}, func() ([]platform.WindowDisplay, error) {
+	return simCall(w, ctx, WindowsCall{Op: "Displays"}, func() ([]platform.WindowDisplay, error) {
 		return append([]platform.WindowDisplay(nil), w.displays...), nil
 	})
 }
 
 // RunningApps implements platform.WindowManager. Apps are the owners of the windows.
 func (w *WindowManager) RunningApps(ctx context.Context) ([]platform.WindowApp, error) {
-	return simCall(w, ctx, "RunningApps", 0, "", platform.WindowFrame{}, func() ([]platform.WindowApp, error) {
+	return simCall(w, ctx, WindowsCall{Op: "RunningApps"}, func() ([]platform.WindowApp, error) {
 		return w.appsLocked(), nil
 	})
 }
 
 // Windows implements platform.WindowManager.
 func (w *WindowManager) Windows(ctx context.Context, pid int) ([]platform.WindowRecord, error) {
-	return simCall(w, ctx, "Windows", pid, "", platform.WindowFrame{}, func() ([]platform.WindowRecord, error) {
+	return simCall(w, ctx, WindowsCall{Op: "Windows", PID: pid}, func() ([]platform.WindowRecord, error) {
 		return w.recordsLocked(func(entry *simWindow) bool { return entry.PID == pid }), nil
 	})
 }
 
 // AllWindows implements platform.WindowManager.
 func (w *WindowManager) AllWindows(ctx context.Context) ([]platform.WindowRecord, error) {
-	return simCall(w, ctx, "AllWindows", 0, "", platform.WindowFrame{}, func() ([]platform.WindowRecord, error) {
+	return simCall(w, ctx, WindowsCall{Op: "AllWindows"}, func() ([]platform.WindowRecord, error) {
 		return w.recordsLocked(func(*simWindow) bool { return true }), nil
 	})
 }
 
-// FocusedWindow implements platform.WindowManager. Only the front-most window can be focused, and only
-// for its own process.
+// FocusedWindow implements platform.WindowManager. Like the Accessibility and EWMH queries it stands in
+// for, it returns the process's own top-most window, even when another app is in front.
 func (w *WindowManager) FocusedWindow(ctx context.Context, pid int) (platform.WindowRecord, error) {
-	return simCall(w, ctx, "FocusedWindow", pid, "", platform.WindowFrame{}, func() (platform.WindowRecord, error) {
-		front := w.frontLocked()
-		if front == nil || front.PID != pid {
+	return simCall(w, ctx, WindowsCall{Op: "FocusedWindow", PID: pid}, func() (platform.WindowRecord, error) {
+		top := w.topmostOfLocked(pid)
+		if top == nil {
 			return platform.WindowRecord{}, &platform.WindowError{Code: platform.WindowErrorNoWindow}
 		}
-		return w.recordLocked(front), nil
+		return w.recordLocked(top), nil
 	})
 }
 
@@ -183,7 +184,7 @@ func (w *WindowManager) Frontmost(ctx context.Context) (platform.WindowApp, bool
 		app   platform.WindowApp
 		found bool
 	}
-	result, err := simCall(w, ctx, "Frontmost", 0, "", platform.WindowFrame{}, func() (frontmostResult, error) {
+	result, err := simCall(w, ctx, WindowsCall{Op: "Frontmost"}, func() (frontmostResult, error) {
 		front := w.frontLocked()
 		if front == nil {
 			return frontmostResult{}, nil
@@ -196,7 +197,7 @@ func (w *WindowManager) Frontmost(ctx context.Context) (platform.WindowApp, bool
 
 // SetFrame implements platform.WindowManager.
 func (w *WindowManager) SetFrame(ctx context.Context, write platform.WindowWrite) (platform.WindowFrame, error) {
-	return simCall(w, ctx, "SetFrame", write.PID, write.Key, write.Frame, func() (platform.WindowFrame, error) {
+	return simCall(w, ctx, WindowsCall{Op: "SetFrame", PID: write.PID, Key: write.Key, Frame: write.Frame, PositionOnly: write.PositionOnly}, func() (platform.WindowFrame, error) {
 		entry, err := w.ownedLocked(write.PID, write.Key)
 		if err != nil {
 			return platform.WindowFrame{}, err
@@ -210,7 +211,7 @@ func (w *WindowManager) SetFrame(ctx context.Context, write platform.WindowWrite
 
 // SetFullScreen implements platform.WindowManager. Entering full screen fills the window's display.
 func (w *WindowManager) SetFullScreen(ctx context.Context, pid int, key string, fullScreen bool) (platform.WindowFrame, error) {
-	return simCall(w, ctx, "SetFullScreen", pid, key, platform.WindowFrame{}, func() (platform.WindowFrame, error) {
+	return simCall(w, ctx, WindowsCall{Op: "SetFullScreen", PID: pid, Key: key, Frame: platform.WindowFrame{}}, func() (platform.WindowFrame, error) {
 		entry, err := w.ownedLocked(pid, key)
 		if err != nil {
 			return platform.WindowFrame{}, err
@@ -227,7 +228,7 @@ func (w *WindowManager) SetFullScreen(ctx context.Context, pid int, key string, 
 
 // Raise implements platform.WindowManager.
 func (w *WindowManager) Raise(ctx context.Context, pid int, key string) error {
-	_, err := simCall(w, ctx, "Raise", pid, key, platform.WindowFrame{}, func() (struct{}, error) {
+	_, err := simCall(w, ctx, WindowsCall{Op: "Raise", PID: pid, Key: key, Frame: platform.WindowFrame{}}, func() (struct{}, error) {
 		if _, err := w.ownedLocked(pid, key); err != nil {
 			return struct{}{}, err
 		}
@@ -238,16 +239,16 @@ func (w *WindowManager) Raise(ctx context.Context, pid int, key string) error {
 }
 
 // simCall records one method call, then runs its body under the lock, unless a scripted failure is queued
-// for op. A cancelled context fails first, as the real calls do.
-func simCall[T any](w *WindowManager, ctx context.Context, op string, pid int, key string, frame platform.WindowFrame, body func() (T, error)) (T, error) {
+// for the call's op. A cancelled context fails first, as the real calls do.
+func simCall[T any](w *WindowManager, ctx context.Context, call WindowsCall, body func() (T, error)) (T, error) {
 	var zero T
 	if err := ctx.Err(); err != nil {
 		return zero, err
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	w.calls = append(w.calls, WindowsCall{Op: op, PID: pid, Key: key, Frame: frame})
-	if scripted := w.popFailureLocked(op); scripted != nil {
+	w.calls = append(w.calls, call)
+	if scripted := w.popFailureLocked(call.Op); scripted != nil {
 		return zero, scripted
 	}
 	return body()

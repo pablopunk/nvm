@@ -63,6 +63,15 @@ func (w *WindowManager) frontLocked() *simWindow {
 	return w.windows[w.stack[0]]
 }
 
+func (w *WindowManager) topmostOfLocked(pid int) *simWindow {
+	for _, key := range w.stack {
+		if entry := w.windows[key]; entry != nil && entry.PID == pid {
+			return entry
+		}
+	}
+	return nil
+}
+
 func (w *WindowManager) bringToFrontLocked(key string) {
 	if _, ok := w.windows[key]; !ok {
 		return
