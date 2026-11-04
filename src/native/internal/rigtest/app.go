@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -320,11 +321,24 @@ func sanitizeName(name string) string {
 // hasLine reports whether a log line is exactly message, after the timestamp log.Print adds.
 func hasLine(log, message string) bool {
 	for _, got := range strings.Split(log, "\n") {
-		if strings.TrimSpace(got) == message || strings.HasSuffix(got, " "+message) {
+		if strings.TrimSpace(got) == message || strings.HasSuffix(got, " "+message) || logxMessageIs(got, message) {
 			return true
 		}
 	}
 	return false
+}
+
+// logxMessageIs reports whether line is a logx record whose msg is message. The app logs its standard lines as
+// records, so the plain-line match alone never sees them.
+func logxMessageIs(line, message string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "{") {
+		return false
+	}
+	var record struct {
+		Msg string `json:"msg"`
+	}
+	return json.Unmarshal([]byte(trimmed), &record) == nil && record.Msg == message
 }
 
 func tail(s string, lines int) string {
