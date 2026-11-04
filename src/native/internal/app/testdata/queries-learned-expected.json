@@ -292,6 +292,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
@@ -654,6 +673,25 @@
         "section": "Commands",
         "id": "",
         "icon": "x",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "Commands",
+        "id": "",
+        "icon": "user",
         "tone": "",
         "accessory": "",
         "prominent": false,
