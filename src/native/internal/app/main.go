@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync/atomic"
 
+	"github.com/pablopunk/nvm/native/internal/backend"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
@@ -28,6 +30,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/portable"
@@ -91,10 +94,12 @@ type App struct {
 
 	ports   platform.Ports
 	account *auth.Session
-	store   *store.Store
-	recents *store.Collection[emojiRecents]
-	rates   *store.Collection[rateDocument]
-	calc    *calc.Calculator
+	// backendReport is the last compatibility report the active backend gave; the status row reads it.
+	backendReport atomic.Pointer[backend.CompatReport]
+	store         *store.Store
+	recents       *store.Collection[emojiRecents]
+	rates         *store.Collection[rateDocument]
+	calc          *calc.Calculator
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.
@@ -120,6 +125,9 @@ type App struct {
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
 	aiCommands *commands.Service
 	aiPanel    *aiIndicator
+	// hud shows what an action did while the palette is hidden; hudWindow is its panel, created on first use.
+	hud       *feedback.HUD
+	hudWindow *mygo.Window
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -144,6 +152,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
+		Feedback:    p.showPaletteFeedback,
 	})
 }
 
@@ -193,6 +202,7 @@ func (p *App) ready() {
 	p.restoreFloatingNotes()
 	p.panel.OnClose(p.hidePanelUnlessQuitting)
 	p.panel.OnBlur(p.DismissOnBlur)
+	mygo.App.OnDidResignActive(func() { p.panel.Update(p.DismissOnBlur) })
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()
@@ -216,7 +226,12 @@ func Run() {
 	mygo.App.SetName("Nevermind")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
-	mygo.App.OnSecondInstance(func([]string, string) { p.panel.Update(p.Show) })
+	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		p.panel.Update(func() {
+			p.Show()
+			p.receiveSecondInstanceLink(args)
+		})
+	})
 	mygo.App.WhenReady(p.ready)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)

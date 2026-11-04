@@ -50,6 +50,8 @@ type Options struct {
 	// Learner raises the score of the rows that carry a LearnKey by what the user chose for them. Nil means
 	// no row is learned.
 	Learner Learner
+	// Flat lists the rows in score order with no section labels, as 1.x's root list does, for every query.
+	Flat bool
 }
 
 // ProviderStats counts the calls of one provider over the coordinator's life.
@@ -324,7 +326,7 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	for i, s := range c.slots {
 		batches[i] = s.items
 	}
-	snap := Snapshot{Gen: c.gen, Query: c.query, Items: merge(batches, c.limit(), c.query != ""), Settled: c.pending == 0}
+	snap := Snapshot{Gen: c.gen, Query: c.query, Items: merge(batches, c.limit(), c.query != "", c.opts.Flat), Settled: c.pending == 0}
 	c.emitted = true
 	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
 	return snap

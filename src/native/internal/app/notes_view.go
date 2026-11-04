@@ -15,11 +15,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// notesView is Quick Notes: a row that starts a note, then every note newest first. The detail pane shows the
+// notesView is Floating Notes: a row that starts a note, then every note newest first. The detail pane shows the
 // Markdown of the chosen note. Filtering matches the text of the notes, as the 1.x list did.
 func (p *App) notesView() *palette.View {
 	return &palette.View{
-		Title: "Quick Notes", Placeholder: "Find a note",
+		Title: "Floating Notes", Placeholder: "Find a note",
 		EmptyTitle: "A clear space for your next idea", EmptySub: "Create a Markdown note and keep it close at hand.",
 		Search: func(q string) []search.Item {
 			if p.notes == nil {
@@ -87,7 +87,7 @@ func noteDetail(c *ui.Context, p *App, n notes.Note) {
 // openNewNote starts a note from the list or the root and opens its editor above the list.
 func (p *App) openNewNote(h search.Host) {
 	if p.notes == nil {
-		h.Toast("Quick Notes could not be opened")
+		h.Toast("Floating Notes could not be opened")
 		return
 	}
 	n, err := p.notes.Create(clock())
@@ -115,7 +115,7 @@ func (p *App) openNoteFromList(h search.Host, id string) {
 // newNote is the root command: it creates a note and opens its editor on the palette.
 func (p *App) newNote() {
 	if p.notes == nil {
-		p.Toast("Quick Notes could not be opened")
+		p.Toast("Floating Notes could not be opened")
 		return
 	}
 	n, err := p.notes.Create(clock())
@@ -158,9 +158,9 @@ func (p *App) deleteNote(id string) {
 func noteErrorMessage(err error) string {
 	switch {
 	case errors.Is(err, notes.ErrLimit):
-		return "Quick Notes is full: delete a note to make room"
+		return "Floating Notes is full: delete a note to make room"
 	case errors.Is(err, store.ErrReadOnly):
-		return "Quick Notes are read-only in this window"
+		return "Floating Notes are read-only in this window"
 	}
 	return "Could not change the note: " + err.Error()
 }

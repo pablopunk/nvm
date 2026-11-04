@@ -17,7 +17,7 @@ func TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm(t *testing.T) {
 	must(t, app.SummonPalette())
 
 	must(t, app.Type("restart"))
-	_, err := app.WaitFor("Restart", elementWait)
+	_, err := app.WaitFor("Restart Computer", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Restart?", elementWait)
@@ -30,7 +30,7 @@ func TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm(t *testing.T) {
 	must(t, app.Key("Down"))
 	must(t, app.Key("Return"))
 	must(t, app.Type("restart"))
-	_, err = app.WaitFor("Restart", elementWait)
+	_, err = app.WaitFor("Restart Computer", elementWait)
 	must(t, err)
 	if calls := systemCalls(t, app); len(calls) != 0 {
 		t.Fatalf("Cancel ran a system command: %v", calls)

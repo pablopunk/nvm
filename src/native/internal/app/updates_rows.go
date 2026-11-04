@@ -37,13 +37,13 @@ func updateAccessory(state update.State) string {
 	return "Not checked"
 }
 
-// toggleUpdateChannel switches between stable and nightly and checks the new channel at once. A switch is refused
-// while a downloaded update waits for its restart, and in a build that cannot update, with the reason.
+// toggleUpdateChannel switches to the next channel (Stable, Nightly, Dev) and checks the new channel at once. A switch is refused
+// while a downloaded update waits for its restart.
 func (p *App) toggleUpdateChannel() error {
 	if p.updates == nil {
 		return update.ErrChannelUnavailable
 	}
-	if err := p.updates.SetChannel(p.updates.Channel().Other()); err != nil {
+	if err := p.updates.SetChannel(p.updates.Channel().Next()); err != nil {
 		return err
 	}
 	p.checkForUpdates(func(string) {})
@@ -95,8 +95,8 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	return []search.Item{item}
 }
 
-// rootUpdateScore ranks an update row above every command, so it is the first row of the root.
-const rootUpdateScore = 95
+// rootUpdateScore is the update prompt's score, as 1.x's update prompt has it: above every other root row.
+const rootUpdateScore = 1000
 
 func rootShowsUpdate(state update.State) bool {
 	switch state.Status {

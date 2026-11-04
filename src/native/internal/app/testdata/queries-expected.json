@@ -6,7 +6,7 @@
         "kind": "Commands",
         "title": "Welcome to Nevermind",
         "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
-        "section": "Suggestions",
+        "section": "",
         "id": "",
         "icon": "sparkles",
         "tone": "",
@@ -26,20 +26,75 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Clipboard History",
-        "subtitle": "Browse and paste what you copied",
-        "section": "Suggestions",
-        "id": "",
+        "kind": "Clipboard",
+        "title": "Meeting notes: ship the design package by Friday and review the goldens …",
+        "subtitle": "Copied 2h ago · Text",
+        "section": "",
+        "id": "clipboard:e-notes",
+        "icon": "clipboard",
+        "tone": "blue",
+        "accessory": "Pinned",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Copy Text",
+            "label": ""
+          },
+          {
+            "title": "Paste",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Ask AI",
+            "label": "⌃J"
+          },
+          {
+            "title": "Unpin",
+            "label": "⌃P"
+          },
+          {
+            "title": "Remove Item",
+            "label": "⌃⌫"
+          },
+          {
+            "title": "Remove Last...",
+            "label": ""
+          },
+          {
+            "title": "Remove Entries from Last Hour",
+            "label": ""
+          },
+          {
+            "title": "Remove Entries from Last Day",
+            "label": ""
+          },
+          {
+            "title": "Remove All Entries",
+            "label": ""
+          },
+          {
+            "title": "Clear All Unpinned",
+            "label": "⌃⇧⌫"
+          }
+        ]
+      },
+      {
+        "kind": "Clipboard",
+        "title": "git rebase -i HEAD~3",
+        "subtitle": "Copied 3m ago · Text",
+        "section": "",
+        "id": "clipboard:e-rebase",
         "icon": "clipboard",
         "tone": "blue",
         "accessory": "",
         "prominent": false,
-        "tintTitle": false,
+        "tintTitle": true,
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Copy Text",
             "label": ""
           },
           {
@@ -104,11 +159,11 @@
         "tone": "blue",
         "accessory": "",
         "prominent": false,
-        "tintTitle": false,
+        "tintTitle": true,
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Copy Image",
             "label": ""
           },
           {
@@ -118,20 +173,20 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Quick Notes",
-        "subtitle": "Jot something down",
-        "section": "Suggestions",
-        "id": "",
-        "icon": "sticky-note",
-        "tone": "yellow",
+        "kind": "Clipboard",
+        "title": "https://nevermind.app/docs/palette",
+        "subtitle": "Copied 1d ago · Text",
+        "section": "",
+        "id": "clipboard:text:67d54378443b6814d21963ae2f26f5d91a5d3429",
+        "icon": "clipboard",
+        "tone": "blue",
         "accessory": "",
         "prominent": false,
-        "tintTitle": false,
+        "tintTitle": true,
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Copy Text",
             "label": ""
           },
           {
@@ -246,7 +301,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Remove Last...",
             "label": ""
           },
           {
@@ -269,7 +324,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Remove Entries from Last Hour",
             "label": ""
           },
           {
@@ -292,7 +347,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Remove Entries from Last Day",
             "label": ""
           },
           {
@@ -315,7 +370,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Remove All Entries",
             "label": ""
           },
           {
@@ -351,7 +406,7 @@
         "kind": "Applications",
         "title": "Firefox",
         "subtitle": "",
-        "section": "Applications",
+        "section": "",
         "id": "",
         "icon": "",
         "tone": "",
@@ -386,7 +441,7 @@
         "kind": "Applications",
         "title": "Terminal",
         "subtitle": "",
-        "section": "Applications",
+        "section": "",
         "id": "",
         "icon": "",
         "tone": "",
@@ -610,7 +665,7 @@
         "kind": "Applications",
         "title": "Calculator",
         "subtitle": "",
-        "section": "Applications",
+        "section": "",
         "id": "",
         "icon": "",
         "tone": "",
@@ -645,7 +700,7 @@
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
-        "section": "Applications",
+        "section": "",
         "id": "",
         "icon": "",
         "tone": "",
@@ -672,6 +727,648 @@
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Clocks",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.clocks.desktop",
+        "actions": [
+          {
+            "title": "Open Clocks",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Clocks…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Current version: ",
+        "section": "",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Lock Screen",
+        "subtitle": "Secure this computer",
+        "section": "",
+        "id": "",
+        "icon": "lock",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Sleep",
+        "subtitle": "Put this computer to sleep",
+        "section": "",
+        "id": "",
+        "icon": "moon",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Open Settings",
+        "subtitle": "Open system preferences",
+        "section": "",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Downloads",
+        "subtitle": "$HOME/Downloads",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Documents",
+        "subtitle": "$HOME/Documents",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Desktop",
+        "subtitle": "$HOME/Desktop",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "AI Chats",
+        "subtitle": "Chat with the assistant",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit Nevermind",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "x",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Clipboard History",
+        "subtitle": "Browse and paste what you copied",
+        "section": "",
+        "id": "",
+        "icon": "clipboard",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Time zones",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Emoji \u0026 Symbols",
+        "subtitle": "Search and paste emoji",
+        "section": "",
+        "id": "",
+        "icon": "smile",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Search Files",
+        "subtitle": "Find files in your home folder",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Floating Notes",
+        "subtitle": "Jot something down",
+        "section": "",
+        "id": "",
+        "icon": "sticky-note",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "query": "cl",
+    "rows": [
+      {
+        "kind": "Commands",
+        "title": "Clipboard History",
+        "subtitle": "Browse and paste what you copied",
+        "section": "",
+        "id": "",
+        "icon": "clipboard",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Clocks",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.clocks.desktop",
+        "actions": [
+          {
+            "title": "Open Clocks",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Clocks…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit All Apps",
+        "subtitle": "Review and quit running apps",
+        "section": "",
+        "id": "",
+        "icon": "power",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"cl\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Search Files",
+        "subtitle": "Find files in your home folder",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Create Quicklink",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "link",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Calculator",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.Calculator.desktop",
+        "actions": [
+          {
+            "title": "Open Calculator",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calculator…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Calendar",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
+        "actions": [
+          {
+            "title": "Open Calendar",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calendar…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Lock Screen",
+        "subtitle": "Secure this computer",
+        "section": "",
+        "id": "",
+        "icon": "lock",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"cl\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -753,44 +1450,6 @@
             "label": "⌃⌫"
           }
         ]
-      },
-      {
-        "kind": "Search",
-        "title": "Automate \"cl\"",
-        "subtitle": "Build a reusable command with AI",
-        "section": "Search",
-        "id": "",
-        "icon": "zap",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": true,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Automate",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"cl\"",
-        "subtitle": "Search instead",
-        "section": "Search",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
       }
     ]
   },
@@ -801,7 +1460,7 @@
         "kind": "Commands",
         "title": "Clipboard History",
         "subtitle": "Browse and paste what you copied",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "clipboard",
         "tone": "blue",
@@ -863,7 +1522,7 @@
         "kind": "Search",
         "title": "Automate \"clip\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -882,7 +1541,7 @@
         "kind": "Search",
         "title": "Search the web for \"clip\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -963,12 +1622,36 @@
             "label": "⌃⌫"
           }
         ]
+      }
+    ]
+  },
+  {
+    "query": "clipboard",
+    "rows": [
+      {
+        "kind": "Commands",
+        "title": "Clipboard History",
+        "subtitle": "Browse and paste what you copied",
+        "section": "",
+        "id": "",
+        "icon": "clipboard",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
       },
       {
         "kind": "Search",
         "title": "Automate \"clipboard\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -987,7 +1670,7 @@
         "kind": "Search",
         "title": "Search the web for \"clipboard\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -1001,6 +1684,45 @@
             "label": ""
           }
         ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads",
+        "section": "",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
+          }
+        ]
       }
     ]
   },
@@ -1011,7 +1733,7 @@
         "kind": "Applications",
         "title": "Calculator",
         "subtitle": "",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "",
         "tone": "",
@@ -1043,10 +1765,29 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Automate \"calc\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Create Quicklink",
         "subtitle": "",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "link",
         "tone": "blue",
@@ -1057,6 +1798,25 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"calc\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -1099,44 +1859,6 @@
             "label": "⌃⌫"
           }
         ]
-      },
-      {
-        "kind": "Search",
-        "title": "Automate \"calc\"",
-        "subtitle": "Build a reusable command with AI",
-        "section": "Search",
-        "id": "",
-        "icon": "zap",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": true,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Automate",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"calc\"",
-        "subtitle": "Search instead",
-        "section": "Search",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
       }
     ]
   },
@@ -1147,7 +1869,7 @@
         "kind": "Calculator",
         "title": "2+2 = 4",
         "subtitle": "Copy result to clipboard",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "calculator",
         "tone": "orange",
@@ -1179,7 +1901,7 @@
         "kind": "Calculator",
         "title": "12 km to mi = 7.4565 mi",
         "subtitle": "Copy converted result to clipboard",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "calculator",
         "tone": "orange",
@@ -1215,7 +1937,7 @@
         "kind": "Timer",
         "title": "Start timer: 5m0s",
         "subtitle": "Shows a countdown in the tray",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "timer",
         "tone": "orange",
@@ -1234,7 +1956,7 @@
         "kind": "Search",
         "title": "Automate \"timer 5m\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1253,7 +1975,7 @@
         "kind": "Search",
         "title": "Search the web for \"timer 5m\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -1277,7 +1999,7 @@
         "kind": "Quicklinks",
         "title": "Search Hacker News for “rust”",
         "subtitle": "Quicklink",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "link",
         "tone": "blue",
@@ -1296,7 +2018,7 @@
         "kind": "Search",
         "title": "Automate \"hn rust\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1315,7 +2037,7 @@
         "kind": "Search",
         "title": "Search the web for \"hn rust\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -1339,7 +2061,7 @@
         "kind": "Snippets",
         "title": "Email signature",
         "subtitle": ";sig  ·  Pablo Nevermind",
-        "section": "Top Hit",
+        "section": "",
         "id": "snip-sig",
         "icon": "type",
         "tone": "teal",
@@ -1370,7 +2092,7 @@
         "kind": "Search",
         "title": "Automate \";sig\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1389,7 +2111,7 @@
         "kind": "Search",
         "title": "Search the web for \";sig\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -1413,7 +2135,7 @@
         "kind": "Search",
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -1432,7 +2154,7 @@
         "kind": "Search",
         "title": "Search the web for \"fixture\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -1456,7 +2178,7 @@
         "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "settings",
         "tone": "",
@@ -1479,7 +2201,7 @@
         "kind": "Commands",
         "title": "Open Settings",
         "subtitle": "Open system preferences",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "settings",
         "tone": "",
@@ -1502,7 +2224,7 @@
         "kind": "Commands",
         "title": "Window Management Settings",
         "subtitle": "Gaps, cycling, and sizes for window layouts",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "settings",
         "tone": "",
@@ -1525,7 +2247,7 @@
         "kind": "Commands",
         "title": "Move Window…",
         "subtitle": "Window Management",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "move-horizontal",
         "tone": "",
@@ -1545,10 +2267,29 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Automate \"set\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "type",
         "tone": "teal",
@@ -1571,7 +2312,7 @@
         "kind": "Commands",
         "title": "Create Snippet",
         "subtitle": "",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "plus",
         "tone": "teal",
@@ -1590,7 +2331,7 @@
         "kind": "Commands",
         "title": "Show Recent Errors",
         "subtitle": "Find and copy safe error references",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "circle-alert",
         "tone": "",
@@ -1611,9 +2352,47 @@
       },
       {
         "kind": "Commands",
-        "title": "Quick Notes",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Floating Notes",
         "subtitle": "Jot something down",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "sticky-note",
         "tone": "yellow",
@@ -1655,7 +2434,7 @@
         "kind": "Commands",
         "title": "Extensions",
         "subtitle": "Manage and create extensions",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "puzzle",
         "tone": "purple",
@@ -1701,7 +2480,7 @@
         "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "timer",
         "tone": "orange",
@@ -1720,7 +2499,7 @@
         "kind": "Commands",
         "title": "Restart Computer",
         "subtitle": "Restart this computer",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "rotate-ccw",
         "tone": "orange",
@@ -1743,7 +2522,7 @@
         "kind": "Commands",
         "title": "Empty Trash",
         "subtitle": "Permanently delete trashed files",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "trash-2",
         "tone": "red",
@@ -1766,7 +2545,7 @@
         "kind": "Commands",
         "title": "Keyboard Shortcuts",
         "subtitle": "View, change, or remove shortcuts",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "keyboard",
         "tone": "",
@@ -1788,8 +2567,8 @@
       {
         "kind": "Commands",
         "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
-        "section": "Commands",
+        "subtitle": "Current version: ",
+        "section": "",
         "id": "",
         "icon": "rotate-ccw",
         "tone": "",
@@ -1810,9 +2589,28 @@
       },
       {
         "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Documents",
         "subtitle": "$HOME/Documents",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "folder",
         "tone": "blue",
@@ -1835,7 +2633,7 @@
         "kind": "Commands",
         "title": "Desktop",
         "subtitle": "$HOME/Desktop",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "folder",
         "tone": "blue",
@@ -1858,7 +2656,7 @@
         "kind": "Commands",
         "title": "Pictures",
         "subtitle": "$HOME/Pictures",
-        "section": "Commands",
+        "section": "",
         "id": "",
         "icon": "folder",
         "tone": "blue",
@@ -1873,6 +2671,44 @@
           },
           {
             "title": "Set keyboard shortcut",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Time zones",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"set\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -2461,7 +3297,350 @@
             "label": "⌃⌫"
           }
         ]
+      }
+    ]
+  },
+  {
+    "query": "term",
+    "rows": [
+      {
+        "kind": "Applications",
+        "title": "Terminal",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
+        "actions": [
+          {
+            "title": "Open Terminal",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
+          }
+        ]
       },
+      {
+        "kind": "Search",
+        "title": "Automate \"term\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit Nevermind",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "x",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Start Timer",
+        "subtitle": "Type e.g. “timer 5m”",
+        "section": "",
+        "id": "",
+        "icon": "timer",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Empty Trash",
+        "subtitle": "Permanently delete trashed files",
+        "section": "",
+        "id": "",
+        "icon": "trash-2",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"term\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "query": "fire",
+    "rows": [
+      {
+        "kind": "Applications",
+        "title": "Firefox",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/firefox.desktop",
+        "actions": [
+          {
+            "title": "Open Firefox",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Firefox…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"fire\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Search Files",
+        "subtitle": "Find files in your home folder",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Quit or force quit running apps",
+        "section": "",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"fire\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "query": "meeting",
+    "rows": [
       {
         "kind": "Clipboard",
         "title": "Meeting notes: ship the design package by Friday and review the goldens …",
@@ -2525,7 +3704,7 @@
         "kind": "Search",
         "title": "Automate \"meeting\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -2541,10 +3720,29 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Search the web for \"meeting\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -2822,12 +4020,55 @@
             "label": "⌃⌫"
           }
         ]
+      }
+    ]
+  },
+  {
+    "query": "release",
+    "rows": [
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Current version: ",
+        "section": "",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
       },
       {
         "kind": "Search",
-        "title": "Automate \"time\"",
+        "title": "Automate \"release\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -2844,9 +4085,9 @@
       },
       {
         "kind": "Search",
-        "title": "Search the web for \"time\"",
+        "title": "Search the web for \"release\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",
@@ -2860,6 +4101,272 @@
             "label": ""
           }
         ]
+      },
+      {
+        "kind": "Files",
+        "title": "release-plan.txt",
+        "subtitle": "~/Documents",
+        "section": "",
+        "id": "$HOME/Documents/release-plan.txt",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/release-plan.txt",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "query": "time",
+    "rows": [
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Time zones",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Start Timer",
+        "subtitle": "Type e.g. “timer 5m”",
+        "section": "",
+        "id": "",
+        "icon": "timer",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"time\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Terminal",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
+        "actions": [
+          {
+            "title": "Open Terminal",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Terminal…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit Nevermind",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "x",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"time\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "meeting-notes.md",
+        "subtitle": "~/Documents",
+        "section": "",
+        "id": "$HOME/Documents/meeting-notes.md",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/meeting-notes.md",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Show in Folder",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
+          }
+        ]
       }
     ]
   },
@@ -2870,7 +4377,7 @@
         "kind": "Web",
         "title": "Open github.com",
         "subtitle": "Open website",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "globe",
         "tone": "blue",
@@ -2894,7 +4401,7 @@
         "kind": "Web",
         "title": "Open github.com",
         "subtitle": "Open website",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "globe",
         "tone": "blue",
@@ -2918,7 +4425,7 @@
         "kind": "Search",
         "title": "Automate \"show the current time in tokyo and london\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Top Hit",
+        "section": "",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
@@ -2937,7 +4444,7 @@
         "kind": "Search",
         "title": "Search the web for \"show the current time in tokyo and london\"",
         "subtitle": "Search instead",
-        "section": "Search",
+        "section": "",
         "id": "",
         "icon": "search",
         "tone": "blue",

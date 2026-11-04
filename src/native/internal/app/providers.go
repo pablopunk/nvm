@@ -52,7 +52,10 @@ func openURL(tpl, q string) func(h search.Host) {
 type command struct {
 	// ID is the stable name shortcut bindings refer to. It never changes when the title does, and a visible command
 	// needs one to take a shortcut.
-	ID                                    string
+	ID string
+	// rootScore is the command's score at the empty root when it is not the one of its title, such as a row whose
+	// title changes with its state.
+	rootScore                             int
 	Title, Keywords, Icon, Subtitle, Tone string
 	// PhraseMatch limits the title match to phrases and word prefixes, so a long list of commands does not answer
 	// every query with scattered letters. Keywords still match as aliases.
@@ -89,7 +92,7 @@ func leadingCommands(p *App) []command {
 		{ID: shortcuts.CommandAIChats, Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
 		{ID: shortcuts.CommandEmojiSymbols, Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
 		{ID: shortcuts.CommandSearchFiles, Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(h search.Host) { h.Push(p.filesView()) }},
-		{ID: shortcuts.CommandQuickNotes, Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
+		{ID: shortcuts.CommandQuickNotes, Title: "Floating Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
 		{Title: "Toggle Floating Notes", Keywords: "notes note float floating window sticky toggle", Icon: "sticky-note", Subtitle: "Show or hide your floating Markdown notes", Hidden: true, Run: func(h search.Host) { h.Hide(); p.toggleFloatingNotes() }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
 		{ID: shortcuts.CommandNewFloatingNote, Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
@@ -111,12 +114,13 @@ func trailingCommands(p *App, timerOn bool) []command {
 		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksView()) }},
 		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
-		{ID: shortcuts.CommandCheckForUpdates, Title: "Check for Updates", Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Look for a newer version of Nevermind", Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
+		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
 		{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsView()) }},
 		{ID: shortcuts.CommandReportProblem, Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		builtInSlot(appcommands.ID, 1),
 		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
+	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.windowCommands()...)
@@ -134,7 +138,7 @@ func builtInSlot(id string, width int) command {
 func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
-var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
+var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Floating Notes": "yellow",
 	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Toggle Floating Notes": "yellow", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
 	"Start Timer": "orange", "Cancel Timer": "orange",
 	commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
@@ -161,9 +165,16 @@ func commandSpan(c command) int {
 // rootViewTitle names the palette's first level, so a refresh can find it among the views pushed on it.
 const rootViewTitle = "Nevermind"
 
-// rootView is the palette's first level: the providers of every source, merged by the coordinator.
+// rootRowLimit is how many rows the root keeps, as 1.x's SEARCH_RESULT_LIMIT.
+const rootRowLimit = 30
+
+// rootEmptyTitle is what the root says when it has no rows, for an empty query or a typed one, as 1.x's root list does.
+const rootEmptyTitle = "Type anything"
+
+// rootView is the palette's first level: the providers of every source, merged by the coordinator. Its rows are in
+// score order with no section labels, as 1.x's root list shows them.
 func (p *App) rootView() *palette.View {
-	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close"}
+	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true, EmptyTitle: rootEmptyTitle}
 }
 
 // ---- settings ----
@@ -202,6 +213,16 @@ func (p *App) settingsView() *palette.View {
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
 					p.clip.setLimit(p.S.ClipLimit)
+					h.Refresh()
+				}}}},
+				{Title: "Show Clipboard Items in Root List", Subtitle: "Show copied items inline in the root list", Accessory: onOff(!p.S.ClipRootOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipRootOff = !p.S.ClipRootOff
+					p.S.save()
+					h.Refresh()
+				}}}},
+				{Title: "Show Clipboard Items in Root Search", Subtitle: "Show copied items when searching from the root list", Accessory: onOff(!p.S.ClipRootSearchOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.S.ClipRootSearchOff = !p.S.ClipRootSearchOff
+					p.S.save()
 					h.Refresh()
 				}}}},
 				{Title: "Dictation", Accessory: deviceTitle(p.dictationFlowFor().Devices(), p.dictationSettings().DeviceID), Icon: "mic", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.dictationSettingsView()) }}}},

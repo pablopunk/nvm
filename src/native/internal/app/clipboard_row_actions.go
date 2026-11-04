@@ -64,7 +64,7 @@ func (p *App) runClipPasteText(h search.Host, id string) {
 		h.Toast("That item is no longer in clipboard history.")
 		return
 	}
-	p.pasteAfterHide(h, plainTextOf(entry))
+	p.pasteAfterHide(h, "Paste Text", plainTextOf(entry))
 }
 
 // plainTextOf is the entry as plain text under the same ID, so the paste is recorded against the history entry.

@@ -1,6 +1,8 @@
 package palette
 
 import (
+	"sync/atomic"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -14,8 +16,13 @@ type Window interface {
 	Show()
 	Hide()
 	IsVisible() bool
+	// IsFocused reports whether the window has the keyboard. A visible window without it is one another window took the
+	// keyboard from, which the summon shortcut brings forward rather than hides.
+	IsFocused() bool
 	Size() (width, height int)
 	SetPosition(x, y int)
+	// Focus gives the window the keyboard.
+	Focus()
 }
 
 // Options are what the shell needs from its host.
@@ -46,6 +53,9 @@ type Options struct {
 	// Focus gives the keyboard back to the window that had it when the palette was shown, when the palette hides
 	// without an action that chose its own destination. Nil disables it.
 	Focus platform.Focus
+	// Feedback shows a message raised while the palette is hidden, where it outlives the hide, as 1.x's HUD does. Nil
+	// drops such messages.
+	Feedback func(f Feedback)
 	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
 	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, paths []string, draw func())
@@ -69,11 +79,7 @@ type Palette struct {
 	actChosen   int
 	actList     ui.ListState
 
-	toastMsg string
-	// toastsStale is set when the palette hid or showed: the window's toasts of the last presentation are closed
-	// on the next frame, because the window freezes their timers while it is hidden.
-	toastsStale bool
-	notice      *Notice
+	notice *Notice
 	// returnTo is the window the keyboard goes back to when the palette hides, captured when it was shown.
 	returnTo *platform.FocusTarget
 	// summoned is the window that had the keyboard before the palette was last shown. Unlike returnTo it survives the
@@ -91,8 +97,18 @@ type Palette struct {
 	shownQuery string
 	// pushes counts the views pushed, so an action can tell whether it opened one.
 	pushes int
+	// running is the title of the action that is running, which titles the toasts it raises.
+	running string
 	// announced is the selection assistive technology was last told about.
 	announced selection
+	// searchSpan is the search field's selection as the last frame drew it, and edge the arrow the field let go of
+	// at its end, which the next frame acts on (keys_arrows.go).
+	searchSpan [2]int
+	edge       searchEdge
+	// blurred is set from a focus loss until its grace passes (blur.go). dialogs counts the native dialogs that have the
+	// keyboard for the palette (dialog.go); the palette stays open while one does.
+	blurred bool
+	dialogs atomic.Int32
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.
@@ -115,10 +131,11 @@ func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 // Show shows the palette with every search reset, on the root or on the chat page that survived the last hide, then
 // runs OnShow.
 func (p *Palette) Show() {
-	if !p.win.IsVisible() {
+	if !p.win.IsVisible() || !p.win.IsFocused() {
 		p.captureFocus()
 	}
 	p.shows++
+	p.blurred = false
 	if p.opts.Position != nil {
 		w, h := p.win.Size()
 		x, y := p.opts.Position(w, h)
@@ -129,7 +146,6 @@ func (p *Palette) Show() {
 	p.actionsOpen = false
 	p.shownView = nil
 	p.resetRootHistory()
-	p.dropToasts()
 	p.leaveUnsurvivingPages()
 	p.search()
 	if p.opts.OnShow != nil {
@@ -140,9 +156,11 @@ func (p *Palette) Show() {
 	p.syncActive(nil)
 }
 
-// Toggle shows the palette when it is hidden and hides it when it is shown: the hotkey's action.
+// Toggle is the summon shortcut's action, as 1.x reads it: a palette that is shown and has the keyboard hides. Any other
+// state shows it, so a shown palette behind another window comes forward. A focus loss still within its grace counts as
+// the keyboard being here, because the shortcut's own press causes that loss.
 func (p *Palette) Toggle() {
-	if p.win.IsVisible() {
+	if p.win.IsVisible() && (p.blurred || p.win.IsFocused()) {
 		p.Hide()
 		return
 	}
@@ -157,7 +175,6 @@ func (p *Palette) Open(v *View) {
 
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
-	p.dropToasts()
 	for _, v := range p.stack {
 		if v.OnHide != nil {
 			v.OnHide()
@@ -169,20 +186,6 @@ func (p *Palette) Hide() {
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
 	}
-}
-
-// Toast sets the one-line message shown under the search field on the next frame. A message raised while the
-// palette is hidden is dropped: toasts belong to the presentation that is open.
-func (p *Palette) Toast(msg string) {
-	if p.win == nil || p.win.IsVisible() {
-		p.toastMsg = msg
-	}
-}
-
-// dropToasts forgets the message and the window toasts of the presentation that is ending.
-func (p *Palette) dropToasts() {
-	p.toastMsg = ""
-	p.toastsStale = true
 }
 
 // Refresh runs the current search again and keeps the cursor where it is. It is safe from any goroutine.

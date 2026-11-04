@@ -8,7 +8,7 @@ import (
 
 // titles names the actions in conflict messages, as the list does.
 func titles(id string) string {
-	return map[string]string{"clipboard": "Clipboard History", "notes": "Quick Notes"}[id]
+	return map[string]string{"clipboard": "Clipboard History", "notes": "Floating Notes"}[id]
 }
 
 // The conflict table of a user's choice: each row is an edit of the same document and the outcome the palette shows.

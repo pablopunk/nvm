@@ -7,7 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
-// The goldens of Quick Notes and Snippets: the list with its detail pane, the editor, the conflict choices, and the
+// The goldens of Floating Notes and Snippets: the list with its detail pane, the editor, the conflict choices, and the
 // snippets list. The stores are the feature packages' own, opened over a fake disk seeded with the fixtures.
 
 func TestPaletteNotesList(t *testing.T) {

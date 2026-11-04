@@ -30,6 +30,34 @@ func (Extension) Manifest() api.Manifest {
 	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "Places"}}
 }
 
+// rootPlaces are the folders the empty root lists, in 1.x's order; each takes the next score below rootPlaceScore.
+var rootPlaces = []string{"Downloads", "Documents", "Desktop"}
+
+// rootPlaceScore is the 1.x score of the first root folder.
+const rootPlaceScore = 18
+
+// RootItems lists the Downloads, Documents and Desktop folders at the empty root, at their 1.x scores.
+func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
+	places := ctx.System().Places()
+	var out []api.Item
+	for i, name := range rootPlaces {
+		if place, ok := placeNamed(places, name); ok {
+			out = append(out, placeItem(place, rootPlaceScore-i))
+		}
+	}
+	return out, nil
+}
+
+// placeNamed returns the folder called name, if the system lists it.
+func placeNamed(places []api.Place, name string) (api.Place, bool) {
+	for _, place := range places {
+		if place.Name == name {
+			return place, true
+		}
+	}
+	return api.Place{}, false
+}
+
 // SearchItems lists the folders whose names, or keywords, match the query. Folders show only for a query, never at the
 // empty root.
 func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) {

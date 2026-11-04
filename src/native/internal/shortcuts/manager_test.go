@@ -12,7 +12,7 @@ import (
 
 var testCommands = []Action{
 	{ID: "command:clipboard", Title: "Clipboard History"},
-	{ID: "command:notes", Title: "Quick Notes"},
+	{ID: "command:notes", Title: "Floating Notes"},
 }
 
 type managerFixture struct {
@@ -69,6 +69,18 @@ func TestAnEmptyStoredPaletteBindsNothing(t *testing.T) {
 	f := newManagerFixture(t, "darwin", Document{}, nil)
 	if status := f.manager.Start(); status.Accelerator != "" || len(f.hotkeys.bound) != 0 {
 		t.Fatalf("palette = %q, bound = %v; a blank palette means none", status.Accelerator, f.hotkeys.bound)
+	}
+}
+
+// TestAFreshInstallBindsNoPaletteShortcut checks 1.x's default: no palette key until the user chooses one, so nothing is
+// bound and the summon status says so.
+func TestAFreshInstallBindsNoPaletteShortcut(t *testing.T) {
+	f := newManagerFixture(t, "darwin", Document{}, nil)
+	if status := f.manager.Start(); status.Registered || status.Accelerator != "" {
+		t.Fatalf("palette status = %+v, want no shortcut", status)
+	}
+	if got := f.bound(); len(got) != 0 {
+		t.Fatalf("bound = %v on a fresh install, want none", got)
 	}
 }
 

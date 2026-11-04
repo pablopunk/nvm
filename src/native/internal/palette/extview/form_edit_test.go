@@ -16,7 +16,9 @@ type editWindow struct{}
 func (editWindow) Update(fn func())     { fn() }
 func (editWindow) Show()                {}
 func (editWindow) Hide()                {}
+func (editWindow) Focus()               {}
 func (editWindow) IsVisible() bool      { return true }
+func (editWindow) IsFocused() bool      { return true }
 func (editWindow) Size() (int, int)     { return 720, 470 }
 func (editWindow) SetPosition(x, y int) {}
 

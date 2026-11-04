@@ -11,10 +11,12 @@ const blurDismissGrace = 200 * time.Millisecond
 // meantime. The host calls it when the window loses focus. It is safe from the window's thread.
 func (p *Palette) DismissOnBlur() {
 	shows := p.shows
+	p.blurred = true
 	go func() {
 		<-p.opts.Clock.After(blurDismissGrace)
 		p.win.Update(func() {
-			if p.shows == shows && p.win.IsVisible() {
+			p.blurred = false
+			if p.shows == shows && p.win.IsVisible() && p.dialogs.Load() == 0 {
 				p.hideAfterFocusMovedAway()
 			}
 		})

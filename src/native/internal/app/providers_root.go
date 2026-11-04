@@ -20,8 +20,12 @@ type rootInput struct {
 	learn      *usage.Learner
 	apps       []appfeat.App
 	clip       *clipEngine
-	chats      []chatHead
-	timerOn    bool
+	clipInRoot bool
+	clipSearch bool
+	// updatePrompt is whether the root shows an update prompt, which replaces the Check for Updates row, as in 1.x.
+	updatePrompt bool
+	chats        []chatHead
+	timerOn      bool
 	// shortcuts maps each root action that has a keyboard shortcut to its accelerator.
 	shortcuts map[string]string
 }
@@ -37,14 +41,17 @@ type chatHead struct {
 func (p *App) captureRoot() *rootInput {
 	chats := p.chatHeads()
 	return &rootInput{
-		engine:     p.engine(),
-		quicklinks: slices.Clone(p.S.Quicklinks),
-		learn:      p.learn,
-		apps:       p.appsSnapshot(),
-		clip:       p.clip,
-		chats:      chats,
-		timerOn:    p.timer != nil,
-		shortcuts:  p.boundShortcuts(),
+		engine:       p.engine(),
+		quicklinks:   slices.Clone(p.S.Quicklinks),
+		learn:        p.learn,
+		apps:         p.appsSnapshot(),
+		clip:         p.clip,
+		clipInRoot:   !p.S.ClipRootOff,
+		clipSearch:   !p.S.ClipRootSearchOff,
+		updatePrompt: rootShowsUpdate(p.updateSnapshot().State),
+		chats:        chats,
+		timerOn:      p.timer != nil,
+		shortcuts:    p.boundShortcuts(),
 	}
 }
 

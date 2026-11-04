@@ -1,14 +1,17 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"runtime"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
@@ -37,6 +40,7 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 		return
 	}
 	p.account = session
+	p.refreshBackendReport()
 }
 
 // accountDeps is the session wiring of this build. Only automation builds change it, to point the account at the
@@ -66,6 +70,28 @@ func (p *App) attachDeepLinks() {
 	if _, err := p.account.Attach(p.ports.DeepLinks); err != nil {
 		log.Println("deep links: the sign-in scheme was not registered:", err)
 	}
+}
+
+// secondInstanceLink returns the nvm:// link on the command line of a second launch. The OS starts a new instance with
+// the link there on Windows and Linux, where the running app must take it.
+func secondInstanceLink(args []string) (string, bool) {
+	prefix := auth.Scheme + "://"
+	for _, arg := range args {
+		if strings.HasPrefix(arg, prefix) {
+			return arg, true
+		}
+	}
+	return "", false
+}
+
+// receiveSecondInstanceLink hands the link of a second launch to the account session, off the UI thread.
+func (p *App) receiveSecondInstanceLink(args []string) {
+	link, ok := secondInstanceLink(args)
+	if !ok || p.account == nil {
+		return
+	}
+	account := p.account
+	safego.Go("account.second_instance_link", func(context.Context) { account.HandleURL(link) })
 }
 
 // deviceLabel names this computer on the backend's sign-in page, as the desktop app does.

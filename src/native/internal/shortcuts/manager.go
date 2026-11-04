@@ -196,7 +196,8 @@ func (m *Manager) applyActions() {
 	m.inactive = m.bindings.Apply(PlanBindings(wanted, m.Reserved))
 }
 
-// load returns the document. A blank palette shortcut means none: it is not replaced by a default.
+// load returns the stored document. A blank palette shortcut stays blank: a fresh install binds none, as 1.x does,
+// and the palette shows the "No shortcut set" banner until the user sets one.
 func (m *Manager) load() Document {
 	doc, _ := m.setup.Doc.Load()
 	return doc

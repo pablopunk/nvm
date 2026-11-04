@@ -15,6 +15,8 @@ func (w *shownWindow) Update(fn func())          { fn() }
 func (w *shownWindow) Show()                     { w.visible = true }
 func (w *shownWindow) Hide()                     { w.visible = false }
 func (w *shownWindow) IsVisible() bool           { return w.visible }
+func (w *shownWindow) IsFocused() bool           { return w.visible }
+func (w *shownWindow) Focus()                    {}
 func (w *shownWindow) Size() (width, height int) { return 720, 470 }
 func (w *shownWindow) SetPosition(x, y int)      {}
 

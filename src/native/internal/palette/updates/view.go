@@ -108,6 +108,8 @@ func channelSubtitle(in Snapshot) string {
 		return "Not available in this build yet"
 	case in.Channel == update.ChannelNightly:
 		return "Includes nightly prereleases; a final release still wins when newer"
+	case in.Channel == update.ChannelDev:
+		return "Includes frequent dev builds and nightly prereleases; a final release still wins when newer"
 	}
 	return "Final releases only"
 }

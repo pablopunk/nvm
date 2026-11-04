@@ -45,8 +45,10 @@ func (p *Palette) RunAction(a search.Action) { p.runAction(a) }
 // runAction runs an action and then applies its dismissal policy. Every way of running an action goes through
 // here, so the policy holds for Enter, for the action menu and for a row's own shortcut.
 func (p *Palette) runAction(a search.Action) {
-	pushes := p.pushes
+	pushes, outer := p.pushes, p.running
+	p.running = a.Title
 	a.Run(p)
+	p.running = outer
 	switch a.Dismiss {
 	case search.DismissAlways:
 		p.hideAfterAction()

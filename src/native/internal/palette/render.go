@@ -22,14 +22,6 @@ func (p *Palette) View(c *ui.Context) {
 
 func (p *Palette) viewThemed(c *ui.Context) {
 	v := p.cur()
-	if p.toastsStale {
-		c.CloseToast("")
-		p.toastsStale = false
-	}
-	if p.toastMsg != "" {
-		design.Toast(c, p.toastMsg)
-		p.toastMsg = ""
-	}
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
@@ -61,6 +53,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 		CaretAtEnd: p.takeCaretToEnd(),
 		AIHint:     len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
 		Concealed:  v.Concealed,
+		OnKey:      p.onSearchKey,
 	}
 	if v.HideInput {
 		data.Title = v.Title
@@ -75,6 +68,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	}
 	data.Accessory = accessoryLabel(v)
 	events := design.SearchRow(c, data)
+	p.searchSpan = events.Selection
 	if events.Accessory {
 		v.Accessory.Value = v.Accessory.Next()
 		v.Accessory.OnChange(v.Accessory.Value)

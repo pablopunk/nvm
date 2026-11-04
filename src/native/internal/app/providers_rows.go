@@ -15,22 +15,47 @@ import (
 // Scores of the root's rows. A higher score sorts first; rows of equal score keep the order of their sources.
 // The values are the bands the prototype used, so the root's order does not change.
 const (
-	scoreCalculator        = 1000
-	scoreTimer             = 990
-	scoreQuicklink         = 980
-	scoreSnippetExact      = 975
-	scoreSnippet           = 970
-	scoreExtension         = 960
-	scoreFileFirst         = 75
-	scoreClipboard         = 55
-	scoreConversation      = 30
-	scoreWebURL            = 150
-	scoreAutomate          = 40
-	scoreWebSearch         = 10
-	scoreCommandSuggestion = 100
-	scoreAppSuggestion     = 60
-	scoreCommandAlias      = 45
+	scoreCalculator   = 1000
+	scoreTimer        = 990
+	scoreQuicklink    = 980
+	scoreSnippetExact = 975
+	scoreSnippet      = 970
+	scoreExtension    = 960
+	scoreFileFirst    = 75
+	scoreClipboard    = 55
+	scoreWebURL       = 150
+	scoreAutomate     = 40
+	scoreWebSearch    = 10
+	scoreCommandAlias = 45
 )
+
+// The empty root scores its rows as 1.x does, on 1.x's scale: a copy 60, an app 30 plus the 25 an app result gets,
+// a conversation 13, a recent file the rest of the band below the commands. A command with no 1.x score sits at the
+// 1.x default for commands.
+const (
+	scoreRootClipboard    = 60
+	scoreRootApplication  = 55
+	scoreRootConversation = 13
+	scoreRootCommand      = 12
+	rootClipboardLimit    = 10
+	// rootSearchClipboardLimit is how many copies a search from the root lists, as 1.x does.
+	rootSearchClipboardLimit = 5
+)
+
+// checkForUpdatesTitle names the command that checks for an update.
+const checkForUpdatesTitle = "Check for Updates"
+
+// rootCommandScores are the 1.x scores of the commands the empty root lists.
+var rootCommandScores = map[string]int{"Clipboard History": 14, "Force Quit Apps": 14, "Keyboard Shortcuts": 16, "AI Chats": 16,
+	checkForUpdatesTitle: 23, "Log in to Nevermind": 18, "Log out of Nevermind": 18}
+
+// rootCommandScore is the score of a command at the empty root.
+func rootCommandScore(title string) int {
+	if score, ok := rootCommandScores[title]; ok {
+		return score
+	}
+	return scoreRootCommand
+}
 
 // keyWebSearch is the usage key of the web search row. Commands and applications key themselves by title and id.
 const keyWebSearch = "web:search"
@@ -89,8 +114,11 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		}
 		if lq == "" {
-			if !cmd.Hidden {
-				it.Score = scoreCommandSuggestion - cmd.Order
+			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
+				it.Score = rootCommandScore(cmd.Title)
+				if cmd.rootScore != 0 {
+					it.Score = cmd.rootScore
+				}
 				out = append(out, it)
 			}
 			continue
@@ -113,19 +141,31 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 // clipboardTextKinds are the history kinds the root answers with: copies that are text, with or without markup.
 var clipboardTextKinds = []clipboard.Kind{clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF}
 
-// clipboardRows shows the two best text copies that contain a query of three characters or more: pinned ones
-// first, then the newest. The history is read on the search goroutine; it locks its own state.
+// clipboardRows shows the copies at the empty root, up to rootClipboardLimit when the root list shows them, and
+// otherwise the best text copies that contain the query, up to rootSearchClipboardLimit when the root search shows
+// them. Pinned copies come first, then the newest. The history is read on the search goroutine; it locks its own state.
 func clipboardRows(p *App, in *rootInput, q string) []search.Item {
-	if len(strings.ToLower(q)) < 3 {
+	if q == "" {
+		if !in.clipInRoot {
+			return nil
+		}
+		return clipboardEntryRows(p, in, clipboard.Query{Limit: rootClipboardLimit}, func(int) int { return scoreRootClipboard })
+	}
+	if !in.clipSearch {
 		return nil
 	}
-	entries := in.clip.history.Find(clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: 2})
+	return clipboardEntryRows(p, in, clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: rootSearchClipboardLimit}, func(i int) int { return scoreClipboard - i })
+}
+
+// clipboardEntryRows turns the history entries of query into rows, scored by their position.
+func clipboardEntryRows(p *App, in *rootInput, query clipboard.Query, score func(position int) int) []search.Item {
+	entries := in.clip.history.Find(query)
 	historyLen := in.clip.history.Len()
 	out := make([]search.Item, 0, len(entries))
 	for i, e := range entries {
 		ci := p.clipItem(e, historyLen)
 		ci.Kind = search.KindClipboard
-		ci.Score = scoreClipboard - i
+		ci.Score = score(i)
 		out = append(out, ci)
 	}
 	return out
@@ -139,7 +179,7 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 		if ch.builder || ch.title == "" || len(out) >= 4 {
 			continue
 		}
-		s := scoreConversation
+		s := scoreRootConversation
 		if lq != "" {
 			if s = search.Score(ch.title, lq); s == 0 {
 				continue

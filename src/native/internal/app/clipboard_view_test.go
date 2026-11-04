@@ -32,6 +32,8 @@ func (w *testWindow) Hide() {
 
 // IsVisible reports the visibility the test set.
 func (w *testWindow) IsVisible() bool { return w.visible }
+func (w *testWindow) IsFocused() bool { return w.visible }
+func (w *testWindow) Focus()          {}
 
 // Size is the palette's size.
 func (w *testWindow) Size() (int, int) { return width, height }

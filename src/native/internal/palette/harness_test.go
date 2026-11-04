@@ -18,13 +18,15 @@ const watchdog = 10 * time.Second
 // fakeWindow is the palette's window in tests. Update queues its function, as the UI thread would take it
 // later; the test runs the queue with drain, so no test depends on goroutine timing.
 type fakeWindow struct {
-	mu      sync.Mutex
-	queued  []func()
-	notify  chan struct{}
-	visible bool
-	shows   int
-	hides   int
-	x, y    int
+	mu         sync.Mutex
+	queued     []func()
+	notify     chan struct{}
+	visible    bool
+	focused    bool
+	focusCalls int
+	shows      int
+	hides      int
+	x, y       int
 }
 
 func newFakeWindow() *fakeWindow {
@@ -41,13 +43,23 @@ func (w *fakeWindow) Update(fn func()) {
 	}
 }
 
-// awaitQueued blocks until the window is asked to update, failing the test after the watchdog.
+// awaitQueued blocks until an update is queued, failing the test after the watchdog. A signal the queue has already
+// drained is not an update, so the queue is checked after each signal.
 func (w *fakeWindow) awaitQueued(t *testing.T) {
 	t.Helper()
-	select {
-	case <-w.notify:
-	case <-time.After(watchdog):
-		t.Fatal("the window was never asked to update")
+	deadline := time.After(watchdog)
+	for {
+		w.mu.Lock()
+		queued := len(w.queued)
+		w.mu.Unlock()
+		if queued > 0 {
+			return
+		}
+		select {
+		case <-w.notify:
+		case <-deadline:
+			t.Fatal("the window was never asked to update")
+		}
 	}
 }
 
@@ -66,11 +78,17 @@ func (w *fakeWindow) drain() {
 	}
 }
 
-func (w *fakeWindow) Show()                { w.visible = true; w.shows++ }
-func (w *fakeWindow) Hide()                { w.visible = false; w.hides++ }
-func (w *fakeWindow) IsVisible() bool      { return w.visible }
+func (w *fakeWindow) Show()           { w.visible, w.focused = true, true; w.shows++ }
+func (w *fakeWindow) Hide()           { w.visible, w.focused = false, false; w.hides++ }
+func (w *fakeWindow) IsVisible() bool { return w.visible }
+func (w *fakeWindow) IsFocused() bool { return w.focused }
+func (w *fakeWindow) Focus()          { w.focused = true; w.focusCalls++ }
+
 func (w *fakeWindow) Size() (int, int)     { return 720, 470 }
 func (w *fakeWindow) SetPosition(x, y int) { w.x, w.y = x, y }
+
+// takeKeyboard gives the keyboard to another window, as a click on it does, without the palette hearing about it.
+func (w *fakeWindow) takeKeyboard() { w.focused = false }
 
 // harness drives a palette the way the window does: keys and text go to the tester, and frames settle.
 type harness struct {

@@ -40,7 +40,7 @@ func TestNewNoteRowOpensTheEditorAboveTheList(t *testing.T) {
 		t.Fatalf("notes = %d, want %d", got, before+1)
 	}
 	p.Pop()
-	if top := topView(p); top.Title != "Quick Notes" {
+	if top := topView(p); top.Title != "Floating Notes" {
 		t.Fatalf("after Escape the top view is %q, want the list", top.Title)
 	}
 }
@@ -58,7 +58,7 @@ func TestDeleteAsksForConfirmationAndCancelKeepsTheNote(t *testing.T) {
 		t.Fatalf("top view = %q, want the confirmation", top.Title)
 	}
 	goldenChoose(t, p, 1, "Cancel")
-	if top := topView(p); top.Title != "Quick Notes" {
+	if top := topView(p); top.Title != "Floating Notes" {
 		t.Fatalf("after Cancel the top view is %q, want the list", top.Title)
 	}
 	if _, ok := p.notes.Get(target.ID); !ok {

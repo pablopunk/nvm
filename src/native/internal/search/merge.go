@@ -10,9 +10,9 @@ const DefaultLimit = 40
 
 // merge combines the rows of several providers into one result: rows with an ID are de-duplicated by ID
 // and Kind (the first provider wins), the rows are sorted by score, highest first, with ties in provider
-// order, the result is cut to limit, and the rows are sectioned. searching tells sectioning whether the
-// query is typed, which changes the top hit and the grouping of commands.
-func merge(batches [][]Item, limit int, searching bool) []Item {
+// order, and the result is cut to limit. Then the rows are sectioned, unless flat keeps them as sorted:
+// searching tells sectioning whether the query is typed, which changes the top hit and the grouping of commands.
+func merge(batches [][]Item, limit int, searching, flat bool) []Item {
 	var all []Item
 	for _, items := range batches {
 		all = append(all, items...)
@@ -21,6 +21,9 @@ func merge(batches [][]Item, limit int, searching bool) []Item {
 	slices.SortStableFunc(all, func(a, b Item) int { return cmp.Compare(b.Score, a.Score) })
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
+	}
+	if flat {
+		return all
 	}
 	return sectioned(all, searching)
 }

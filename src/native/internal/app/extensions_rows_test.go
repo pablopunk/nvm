@@ -42,8 +42,10 @@ func TestFailedExtensionNeverShowsAtTheRootOrAboveRealRows(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	if rows := extensionProvider(p, &rootInput{}).Root(context.Background()); len(rows) != 0 {
-		t.Fatalf("root rows for a failed extension = %d, want none", len(rows))
+	for _, row := range extensionProvider(p, &rootInput{}).Root(context.Background()) {
+		if row.Accessory == "Failed" || row.Title == "Broken source fixture is not responding" {
+			t.Fatalf("the root shows the failed extension as %q", row.Title)
+		}
 	}
 	pointer := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
 	if pointer.Score >= scoreWebSearch {

@@ -57,9 +57,15 @@ type Settings struct {
 	ClipOff     bool
 	ClipLimit   int
 	ClipNoLinks bool // link previews of copied web addresses are off
-	Quicklinks  []Quicklink
-	Disabled    map[string]bool // extension ids
-	LoginAtOpen bool
+	// ClipRootOff and ClipRootSearchOff hide the copies from the root list and from the root's search. They are
+	// inverted so that a missing key means shown, as 1.x's defaults do.
+	ClipRootOff       bool
+	ClipRootSearchOff bool
+	Quicklinks        []Quicklink
+	Disabled          map[string]bool // extension ids
+	LoginAtOpen       bool
+	// DiagnosticsOff is the "Send Technical Diagnostics" switch, inverted so that a missing key means on.
+	DiagnosticsOff bool
 	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
 	EmojiSkinTone int
 	// FileRoots are the folders the Files index covers; empty means the standard personal folders.

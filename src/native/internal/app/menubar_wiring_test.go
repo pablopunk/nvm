@@ -38,6 +38,8 @@ func (w *stubWindow) Update(fn func())     { fn() }
 func (w *stubWindow) Show()                { w.shown = true }
 func (w *stubWindow) Hide()                { w.shown = false }
 func (w *stubWindow) IsVisible() bool      { return w.shown }
+func (w *stubWindow) IsFocused() bool      { return w.shown }
+func (w *stubWindow) Focus()               {}
 func (w *stubWindow) Size() (int, int)     { return width, height }
 func (w *stubWindow) SetPosition(x, y int) {}
 

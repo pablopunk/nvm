@@ -53,7 +53,7 @@ func TestEmptyQueryListsNoCommands(t *testing.T) {
 func TestTitleMatchRunsItsOpAndKeepsTheTone(t *testing.T) {
 	items := searchTitles(t, allSupported(), "restart")
 	if len(items) != 1 || items[0].Title != "Restart Computer" {
-		t.Fatalf("items = %+v, want the Restart command", items)
+		t.Fatalf("items = %+v, want the Restart Computer command", items)
 	}
 	item := items[0]
 	if item.Section != "Commands" || item.LearnKey != "cmd:Restart Computer" || item.Subtitle != "Restart this computer" {
@@ -109,5 +109,27 @@ func TestSettingsCommandUsesTheOSLabel(t *testing.T) {
 	items := searchTitles(t, allSupported(), "preferences")
 	if len(items) != 1 || items[0].Title != "Open System Settings" || items[0].Primary.Op != "open-system-settings" {
 		t.Fatalf("items = %+v, want the settings command", items)
+	}
+}
+
+// TestRootListsLockSleepRestartAndSettingsAtTheirOneXScores pins the commands the empty root shows: the four 1.x
+// commands in their order, and none of the commands only a query finds.
+func TestRootListsLockSleepRestartAndSettingsAtTheirOneXScores(t *testing.T) {
+	items, err := Extension{}.RootItems(fakeContext{supported: allSupported()})
+	if err != nil {
+		t.Fatalf("RootItems: %v", err)
+	}
+	wantTitles := []string{"Lock Screen", "Sleep", "Restart Computer"}
+	wantScores := []float64{22, 21, 20, 19}
+	if len(items) != len(wantScores) {
+		t.Fatalf("root lists %d commands, want %d", len(items), len(wantScores))
+	}
+	for i, want := range wantScores {
+		if items[i].Score != want {
+			t.Fatalf("row %d scores %v, want %v", i, items[i].Score, want)
+		}
+		if i < len(wantTitles) && items[i].Title != wantTitles[i] {
+			t.Fatalf("row %d is %q, want %q", i, items[i].Title, wantTitles[i])
+		}
 	}
 }

@@ -27,7 +27,7 @@ var commandVariants = map[string]string{
 	"AI Chats":           "ai-chats",
 	"Emoji & Symbols":    "emoji-symbols",
 	"Search Files":       "search-files",
-	"Quick Notes":        "quick-notes",
+	"Floating Notes":     "quick-notes",
 	"Snippets":           "snippets",
 	"Extensions":         "extensions",
 	"Force Quit Apps":    "force-quit-apps",

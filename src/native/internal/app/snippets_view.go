@@ -95,7 +95,7 @@ func (p *App) canPaste() bool {
 // paste waits for the palette to hide instead of blocking the UI thread on that hide.
 func (p *App) pasteSnippet(h search.Host, sn snippets.Snippet) {
 	clip, _ := p.ports.Clipboard.ReadText()
-	p.pasteAfterHide(h, textEntry(snippets.Expand(sn.Text, clip, clock())))
+	p.pasteAfterHide(h, pasteActionTitle, textEntry(snippets.Expand(sn.Text, clip, clock())))
 }
 
 // copySnippet puts the expanded snippet on the clipboard.
