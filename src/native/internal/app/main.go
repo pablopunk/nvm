@@ -96,6 +96,7 @@ type App struct {
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
 	menuOS  string // the platform the menu bar draws its rows for; empty means the platform the app runs on
+	compat  compatibility
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.
@@ -201,6 +202,7 @@ func (p *App) ready() {
 	p.startJobs()
 	go p.startExtensions()
 	p.setUpMenubar()
+	p.syncCompatibilityAccount()
 	p.runMenubarScheduler()
 	p.startFiles()
 	log.Println("ready")

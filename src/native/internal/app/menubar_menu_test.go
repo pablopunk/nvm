@@ -28,6 +28,7 @@ func (w uiWindow) Update(fn func()) { w.jobs <- fn }
 // checked as the app drew it.
 type menuUpdates struct {
 	app    *App
+	set    *fake.Set
 	tray   *fake.Tray
 	window *stubWindow
 	ui     uiWindow
@@ -43,7 +44,7 @@ func newMenuUpdates(t *testing.T, engine *updatefake.Engine) *menuUpdates {
 	t.Helper()
 	p, set := wiredApp(t)
 	p.menuOS = "darwin"
-	m := &menuUpdates{app: p, window: &stubWindow{}, engine: engine, menu: map[update.Status][]platform.MenuItem{}}
+	m := &menuUpdates{app: p, set: set, window: &stubWindow{}, engine: engine, menu: map[update.Status][]platform.MenuItem{}}
 	m.ui = uiWindow{stubWindow: m.window, jobs: make(chan func(), 1024)}
 	go func() {
 		for fn := range m.ui.jobs {

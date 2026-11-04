@@ -81,6 +81,7 @@ func deviceLabel() string {
 // redraw is queued on the UI thread.
 func (p *App) refreshAccountPage() {
 	p.onUI(func() {
+		p.syncCompatibilityAccount()
 		p.Refresh()
 		if p.chats != nil {
 			p.chats.AccountChanged()

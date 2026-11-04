@@ -38,6 +38,9 @@ func (p *App) refreshMenubarMenu() {
 // Each state reads as 1.x reads it: an update found or downloading is offered as a download, a ready one as an install,
 // and a failed install as a download to try again. A failed check leaves Check for Updates….
 func (p *App) menubarUpdateRow(state update.State) *menubar.UpdateRow {
+	if row := p.compatibilityUpdateRow(state); row != nil {
+		return row
+	}
 	switch state.Status {
 	case update.StatusDownloaded:
 		return &menubar.UpdateRow{Label: updateTitle("Install", state), Action: p.installFromMenu}
