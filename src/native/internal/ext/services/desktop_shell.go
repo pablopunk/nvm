@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"net/url"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
@@ -32,8 +33,8 @@ func (h *Handler) openExternal(call protocol.ServiceCall) error {
 	if err := decodeArgs(call.Args, &args); err != nil {
 		return err
 	}
-	if !webLink(args.URL) {
-		return invalid("only http and https links can be opened")
+	if !externalLink(args.URL) {
+		return invalid("only http, https and mailto links can be opened")
 	}
 	if !h.actions.allow() {
 		return rateExceeded("link opens")
@@ -41,7 +42,18 @@ func (h *Handler) openExternal(call protocol.ServiceCall) error {
 	return h.deps.Shell.OpenURL(args.URL)
 }
 
-func webLink(raw string) bool {
-	parsed, err := url.Parse(raw)
-	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+// externalLink reports whether a link may open outside the palette. It is the Electron host's rule: http and https
+// need a host, and mailto is allowed; every other scheme is refused.
+func externalLink(raw string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return false
+	}
+	switch parsed.Scheme {
+	case "http", "https":
+		return parsed.Host != ""
+	case "mailto":
+		return true
+	}
+	return false
 }
