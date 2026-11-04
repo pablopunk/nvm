@@ -4,7 +4,6 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -83,19 +82,35 @@ func clientRouteConstants(t *testing.T) []routeConstant {
 	t.Helper()
 	var found []routeConstant
 	for _, dir := range clientRouteSources {
-		fset := token.NewFileSet()
-		packages, err := parser.ParseDir(fset, dir, notTestFile, parser.Mode(0))
-		if err != nil {
-			t.Fatalf("parse %s: %v", dir, err)
-		}
-		for _, pkg := range packages {
-			for _, file := range pkg.Files {
-				found = append(found, apiConstantsIn(file)...)
-			}
+		for _, file := range parseNonTestFiles(t, dir) {
+			found = append(found, apiConstantsIn(file)...)
 		}
 	}
 	sort.Slice(found, func(i, j int) bool { return found[i].route < found[j].route })
 	return found
+}
+
+// parseNonTestFiles parses the non-test Go files of dir.
+func parseNonTestFiles(t *testing.T, dir string) []*ast.File {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("read %s: %v", dir, err)
+	}
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.Mode(0))
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		files = append(files, file)
+	}
+	return files
 }
 
 // apiConstantsIn returns the /api/ string constants declared at the top level of one file.
@@ -154,11 +169,6 @@ func servedByPagesRoute(apiDir, route string) bool {
 		}
 	}
 	return false
-}
-
-// notTestFile filters the parser to non-test Go files.
-func notTestFile(info fs.FileInfo) bool {
-	return !strings.HasSuffix(info.Name(), "_test.go")
 }
 
 // writeRouteFile creates an empty route file and its directories.
