@@ -22,14 +22,6 @@ func (p *Palette) View(c *ui.Context) {
 
 func (p *Palette) viewThemed(c *ui.Context) {
 	v := p.cur()
-	if p.toastsStale {
-		c.CloseToast("")
-		p.toastsStale = false
-	}
-	if p.toastMsg != "" {
-		design.Toast(c, p.toastMsg)
-		p.toastMsg = ""
-	}
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {

@@ -77,11 +77,7 @@ type Palette struct {
 	actChosen   int
 	actList     ui.ListState
 
-	toastMsg string
-	// toastsStale is set when the palette hid or showed: the window's toasts of the last presentation are closed
-	// on the next frame, because the window freezes their timers while it is hidden.
-	toastsStale bool
-	notice      *Notice
+	notice *Notice
 	// returnTo is the window the keyboard goes back to when the palette hides, captured when it was shown.
 	returnTo *platform.FocusTarget
 	// summoned is the window that had the keyboard before the palette was last shown. Unlike returnTo it survives the
@@ -148,7 +144,6 @@ func (p *Palette) Show() {
 	p.actionsOpen = false
 	p.shownView = nil
 	p.resetRootHistory()
-	p.dropToasts()
 	p.leaveUnsurvivingPages()
 	p.search()
 	if p.opts.OnShow != nil {
@@ -178,7 +173,6 @@ func (p *Palette) Open(v *View) {
 
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
-	p.dropToasts()
 	for _, v := range p.stack {
 		if v.OnHide != nil {
 			v.OnHide()
@@ -190,12 +184,6 @@ func (p *Palette) Hide() {
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
 	}
-}
-
-// dropToasts forgets the message and the window toasts of the presentation that is ending.
-func (p *Palette) dropToasts() {
-	p.toastMsg = ""
-	p.toastsStale = true
 }
 
 // Refresh runs the current search again and keeps the cursor where it is. It is safe from any goroutine.

@@ -8,9 +8,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// TestNotifyGoesToTheHUDOnlyWhenThePaletteIsHidden pins where a message raised with a title and a tone lands: under
-// the field while the palette is up, and in the HUD, with its title and tone, once it has hidden.
-func TestNotifyGoesToTheHUDOnlyWhenThePaletteIsHidden(t *testing.T) {
+// TestNotifyGoesToTheHUDWhetherThePaletteIsUpOrHidden pins that every message reaches the HUD with its title and tone,
+// as 1.x's HUD shows every action result.
+func TestNotifyGoesToTheHUDWhetherThePaletteIsUpOrHidden(t *testing.T) {
 	var shown []Feedback
 	p := New(Options{Root: &View{Title: "root"}, Clock: fake.NewClock(), Synchronous: true, Feedback: func(f Feedback) { shown = append(shown, f) }})
 	win := newFakeWindow()
@@ -18,14 +18,10 @@ func TestNotifyGoesToTheHUDOnlyWhenThePaletteIsHidden(t *testing.T) {
 
 	win.visible = true
 	p.Notify(Feedback{Title: "Paste", Message: "Paste failed.", Tone: feedback.ToneError})
-	if len(shown) != 0 || p.toastMsg != "Paste failed." {
-		t.Fatalf("with the palette up the message went to the HUD (%d) or the field holds %q", len(shown), p.toastMsg)
-	}
-
 	win.visible = false
 	p.Notify(Feedback{Title: "Paste", Message: "Pasted", Tone: feedback.ToneDefault})
-	if len(shown) != 1 || shown[0].Title != "Paste" || shown[0].Message != "Pasted" || shown[0].Tone != feedback.ToneDefault {
-		t.Fatalf("hidden palette sent %+v to the HUD, want the Paste title and default tone", shown)
+	if len(shown) != 2 || shown[0].Tone != feedback.ToneError || shown[0].Title != "Paste" || shown[1].Message != "Pasted" {
+		t.Fatalf("the HUD got %+v, want both messages with their titles and tones", shown)
 	}
 }
 
@@ -34,17 +30,10 @@ func TestNotifyGoesToTheHUDOnlyWhenThePaletteIsHidden(t *testing.T) {
 func TestToastIsAFeedbackWithoutATitle(t *testing.T) {
 	var shown []Feedback
 	p := New(Options{Root: &View{Title: "root"}, Clock: fake.NewClock(), Synchronous: true, Feedback: func(f Feedback) { shown = append(shown, f) }})
-	win := newFakeWindow()
-	p.Attach(win)
-	win.visible = true
-	p.Toast("Quitting Mail…")
-	if len(shown) != 0 {
-		t.Fatalf("a visible window with a toast sent it to the HUD: %+v", shown)
-	}
-	win.visible = false
+	p.Attach(newFakeWindow())
 	p.Toast("Quitting Mail…")
 	if len(shown) != 1 || shown[0] != (Feedback{Message: "Quitting Mail…"}) {
-		t.Fatalf("hidden toast = %+v, want an untitled default message", shown)
+		t.Fatalf("toast = %+v, want an untitled default message", shown)
 	}
 }
 
