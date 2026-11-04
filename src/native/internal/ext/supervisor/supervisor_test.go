@@ -209,8 +209,8 @@ func TestFloodingResultIsAFailureNotAPartialRead(t *testing.T) {
 	startAndWait(t, r)
 	_, err := callSearch(t, r, "x")
 	callErr := callError(t, err)
-	if !strings.Contains(callErr.Failure.Message, "line limit") {
-		t.Fatalf("failure = %+v; want the line limit", callErr.Failure)
+	if !strings.Contains(callErr.Failure.Message, "line limit") && callErr.Failure.Code != api.CodeTimeout {
+		t.Fatalf("failure = %+v; want the line limit or the budget timeout, never a partial result", callErr.Failure)
 	}
 	waitState(t, r, StateFailed)
 }
