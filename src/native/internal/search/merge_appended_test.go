@@ -23,7 +23,7 @@ func scored(id string, score int) Item {
 func TestAppendedRowsFollowTheRankedRowsInEmissionOrder(t *testing.T) {
 	ranked := [][]Item{{scored("fire", 3), scored("flame", 1)}}
 	appended := [][]Item{{scored("cat", 0), scored("dog", 0)}}
-	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false)); len(got) != 4 || got[0] != "fire" || got[1] != "flame" || got[2] != "cat" || got[3] != "dog" {
+	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false, true)); len(got) != 4 || got[0] != "fire" || got[1] != "flame" || got[2] != "cat" || got[3] != "dog" {
 		t.Fatalf("rows = %v, want the ranked rows then the appended ones", got)
 	}
 }
@@ -31,7 +31,7 @@ func TestAppendedRowsFollowTheRankedRowsInEmissionOrder(t *testing.T) {
 func TestAppendedRowsNeverRankAboveTheRankedRows(t *testing.T) {
 	ranked := [][]Item{{scored("low", 1)}}
 	appended := [][]Item{{scored("high", 500)}}
-	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false)); got[0] != "low" || got[1] != "high" {
+	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false, true)); got[0] != "low" || got[1] != "high" {
 		t.Fatalf("rows = %v, want the appended row after the ranked one whatever its score", got)
 	}
 }
@@ -39,7 +39,7 @@ func TestAppendedRowsNeverRankAboveTheRankedRows(t *testing.T) {
 func TestAppendedRowAlreadyRankedIsDropped(t *testing.T) {
 	ranked := [][]Item{{scored("fire", 3)}}
 	appended := [][]Item{{scored("fire", 0), scored("cat", 0)}}
-	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false)); len(got) != 2 || got[1] != "cat" {
+	if got := rowIDs(mergeAppended(ranked, appended, 0, true, false, true)); len(got) != 2 || got[1] != "cat" {
 		t.Fatalf("rows = %v, want fire once and then cat", got)
 	}
 }
@@ -50,7 +50,7 @@ func TestAppendedRowsTakeTheirRoomFromTheLimitFirst(t *testing.T) {
 		ranked = append(ranked, scored(string(rune('a'+i)), 10-i))
 	}
 	appended := [][]Item{{scored("x", 0), scored("y", 0)}}
-	got := rowIDs(mergeAppended([][]Item{ranked}, appended, 4, true, false))
+	got := rowIDs(mergeAppended([][]Item{ranked}, appended, 4, true, false, true))
 	if len(got) != 4 || got[0] != "a" || got[1] != "b" || got[2] != "x" || got[3] != "y" {
 		t.Fatalf("rows = %v, want the top two ranked rows and both appended rows within the limit", got)
 	}
@@ -58,7 +58,7 @@ func TestAppendedRowsTakeTheirRoomFromTheLimitFirst(t *testing.T) {
 
 func TestAppendedRowsAloneFillTheirLimit(t *testing.T) {
 	appended := [][]Item{{scored("x", 0), scored("y", 0), scored("z", 0)}}
-	if got := rowIDs(mergeAppended(nil, appended, 2, true, false)); len(got) != 2 || got[0] != "x" || got[1] != "y" {
+	if got := rowIDs(mergeAppended(nil, appended, 2, true, false, true)); len(got) != 2 || got[0] != "x" || got[1] != "y" {
 		t.Fatalf("rows = %v, want the first two appended rows", got)
 	}
 }

@@ -65,6 +65,8 @@ type Options struct {
 type Palette struct {
 	opts Options
 	win  Window
+	// refresh holds the queries background sources asked the palette to search again.
+	refresh searchRefresher
 
 	stack []*View
 	query string

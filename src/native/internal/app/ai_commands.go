@@ -2,14 +2,15 @@ package app
 
 import (
 	"context"
-	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	"github.com/pablopunk/nvm/native/internal/palette/aicommands"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // attachAICommands builds the AI commands over the app's ports and chat service. It runs after attachChats; without
@@ -21,7 +22,6 @@ func (p *App) attachAICommands() {
 	p.aiCommands = commands.NewService(commands.Options{
 		Clock:        searchClock,
 		Clipboard:    p.ports.Clipboard,
-		Files:        p.ports.FS,
 		SelectedText: p.ports.SelectedText,
 		Paster:       p.ports.Paster,
 		Focus:        p.focusOption(),
@@ -85,7 +85,7 @@ func (p *App) discardPaletteHidden() {
 }
 
 // aiCommandRows are the AI commands in the root list, or none when the chat store did not open. Fix and triage need a
-// selection the OS can copy; classification reads the clipboard and is always offered.
+// selection the OS can copy. Classify Image with AI is a built-in, placed after them (see classifyImageSlot).
 func (p *App) aiCommandRows() []command {
 	if p.aiCommands == nil {
 		return nil
@@ -96,32 +96,16 @@ func (p *App) aiCommandRows() []command {
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Fix) }},
 		{ID: shortcuts.CommandTriageSelectedText, Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Triage) }},
-		{Title: commands.ClassifyTitle, Keywords: "classify image picture screenshot photograph ai", Icon: "image", Subtitle: "Choose an image and identify its category",
-			Run: func(h search.Host) { p.chooseImageToClassify(h) }},
 	}
 }
 
-// chooseImageToClassify hides the palette and opens the operating system's chooser for one picture; the picture the
-// user chose is classified. The chooser blocks, so it runs off the UI thread. A canceled chooser changes nothing.
-func (p *App) chooseImageToClassify(h search.Host) {
-	h.Hide()
-	dialog := p.ports.FileDialog
-	if dialog == nil {
-		p.Toast(chooserUnavailable)
-		return
+// classifyImageSlot is the place of the Classify Image with AI built-in's row in the command list. Like the other AI
+// commands it is offered only when the chat store opened.
+func (p *App) classifyImageSlot() []command {
+	if p.aiCommands == nil {
+		return nil
 	}
-	request := platform.ChooseRequest{Title: commands.ClassifyTitle, ButtonLabel: "Classify Image", Extensions: []string{"png", "jpg", "jpeg"}, FilterName: "Images"}
-	safego.Go("ai-commands.classify.choose", func(context.Context) {
-		paths, err := dialog.Choose(request)
-		p.onUI(func() {
-			switch {
-			case err != nil:
-				p.Toast(chooserUnavailable)
-			case len(paths) > 0:
-				p.aiCommands.ClassifyImageFile(paths[0])
-			}
-		})
-	})
+	return []command{builtInSlot(classifyimage.ID, 1)}
 }
 
 // chooserUnavailable is the line shown when the operating system's chooser cannot open.

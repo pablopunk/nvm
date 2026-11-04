@@ -85,6 +85,9 @@ type Deps struct {
 	// RootRefresh asks the host to run the root's rows again. It must not block, as MenuBarRefresh. Nil makes the
 	// request a no-op.
 	RootRefresh func(extensionID string)
+	// SearchRefresh asks the palette to search again for a query, for one extension's background data. It must not
+	// block. Nil makes the request a no-op.
+	SearchRefresh func(extensionID, query string)
 }
 
 // documents are the extension's files: one store folder holds all of them.

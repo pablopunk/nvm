@@ -6,6 +6,7 @@ import (
 	"log"
 	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 
@@ -105,9 +106,12 @@ type App struct {
 	backendReport atomic.Pointer[backend.CompatReport]
 	store         *store.Store
 	rates         *store.Collection[rateDocument]
-	calc          *calc.Calculator
-	menuOS        string // the platform the menu bar draws its rows for; empty means the platform the app runs on
-	compat        compatibility
+	// rateCache keeps the exchange rates of the calculator built-in in rates.json; zone is where its calendar answers
+	// are computed (nil means the machine's zone).
+	rateCache calc.RateCache
+	zone      *time.Location
+	menuOS    string // the platform the menu bar draws its rows for; empty means the platform the app runs on
+	compat    compatibility
 
 	// popovers are the menu bar popovers, by item; each keeps its palette until its item goes.
 	popovers map[string]*menuPopover

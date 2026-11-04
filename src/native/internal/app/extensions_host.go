@@ -94,8 +94,9 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Home:           userHomeDir(),
 		MenuBarRefresh: p.refreshMenuBar,
 		RootRefresh:    p.refreshRootRows,
+		SearchRefresh:  func(_, query string) { p.RefreshSearch(query) },
 		OnChange:       p.extensionsStateChanged,
-		BuiltIns:       builtInExtensions(),
+		BuiltIns:       builtInExtensions(p.rateCache, p.zone),
 		AIQuota:        p.aiQuotas(),
 	})
 }

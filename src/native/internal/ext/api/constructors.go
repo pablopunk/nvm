@@ -29,9 +29,9 @@ func CopyText(title, text string, concealed bool) Action {
 	return Action{Kind: ActionCopyText, Title: title, Text: text, Paste: &PasteOptions{Concealed: concealed}}
 }
 
-// PasteText pastes text into the frontmost app and restores the clipboard afterwards.
+// PasteText pastes text into the frontmost app. The host does not restore the clipboard afterwards, so the text stays on it.
 func PasteText(title, text string) Action {
-	return Action{Kind: ActionPasteText, Title: title, Text: text, Paste: &PasteOptions{RestoreClipboard: true}}
+	return Action{Kind: ActionPasteText, Title: title, Text: text}
 }
 
 // SetQuery replaces the palette's search text and searches again, keeping the palette open.

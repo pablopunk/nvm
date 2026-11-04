@@ -1,10 +1,6 @@
 package calc
 
-import (
-	"testing"
-
-	"github.com/pablopunk/nvm/native/internal/platform/fake"
-)
+import "testing"
 
 // typicalQueries are the inputs a person types most often. The budget is 50 microseconds for each.
 var typicalQueries = []string{
@@ -44,7 +40,7 @@ func BenchmarkEvaluateTypical(b *testing.B) {
 func BenchmarkQueryCachedCurrency(b *testing.B) {
 	clock := clockAt(testNow)
 	cache := &memCache{rates: Rates{"USD/GBP": fiatQuote(0.8, testNow)}}
-	rates, err := NewRateService(fake.NewHTTP(), clock, cache)
+	rates, err := NewRateService(cache)
 	if err != nil {
 		b.Fatal(err)
 	}

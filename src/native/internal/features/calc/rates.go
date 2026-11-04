@@ -8,8 +8,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Quote is one exchange rate: how many units of the target currency one unit of the source currency buys.
@@ -39,11 +37,7 @@ type currencyPair struct {
 // RateService holds the cached quotes, queues the pairs users ask about, and refreshes them over HTTP. Quotes are
 // served from memory without waiting on the network. A refresh that fails keeps the quote it had.
 type RateService struct {
-	http     platform.HTTP
-	clock    platform.Clock
-	cache    RateCache
-	endpoint string
-	timeout  time.Duration
+	cache RateCache
 
 	refreshing sync.Mutex
 	mu         sync.Mutex
@@ -54,13 +48,9 @@ type RateService struct {
 
 // NewRateService returns a service seeded from cache. A nil cache keeps quotes in memory only. When loading fails
 // the service still works, starts empty, and the load error is returned so the caller can report it.
-func NewRateService(h platform.HTTP, clock platform.Clock, cache RateCache) (*RateService, error) {
+func NewRateService(cache RateCache) (*RateService, error) {
 	s := &RateService{
-		http:       h,
-		clock:      clock,
 		cache:      cache,
-		endpoint:   rateEndpoint,
-		timeout:    rateRequestTimeout,
 		rates:      Rates{},
 		queuedKeys: map[string]bool{},
 	}
@@ -110,11 +100,18 @@ func (s *RateService) queue(source, target string) {
 	s.queued = append(s.queued, currencyPair{source: source, target: target})
 }
 
-// Refresh fetches every queued pair whose quote is missing or older than a day, stores the results, and saves the
-// cache when anything changed. Pairs are dequeued whether or not they succeed, so a failing currency is not retried
-// until someone asks for it again. Errors are joined; quotes that succeeded are kept. A call made while another
-// refresh runs returns at once.
-func (s *RateService) Refresh(ctx context.Context) error {
+// Pending reports whether pairs are queued for the next Refresh.
+func (s *RateService) Pending() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.queued) > 0
+}
+
+// Refresh fetches every queued pair whose quote is missing or older than a day, through fetch, stores the results,
+// and saves the cache when anything changed. Pairs are dequeued whether or not they succeed, so a failing currency is
+// not retried until someone asks for it again. Errors are joined; quotes that succeeded are kept. A call made while
+// another refresh runs returns at once.
+func (s *RateService) Refresh(ctx context.Context, clock Clock, fetch RateFetcher) error {
 	if !s.refreshing.TryLock() {
 		return nil
 	}
@@ -126,10 +123,10 @@ func (s *RateService) Refresh(ctx context.Context) error {
 			errs = append(errs, err)
 			break
 		}
-		if s.isFresh(pair) {
+		if s.isFresh(pair, clock.Now()) {
 			continue
 		}
-		quote, err := s.fetchQuote(ctx, pair)
+		quote, err := s.fetchQuote(ctx, fetch, clock, pair)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("%s/%s: %w", pair.source, pair.target, err))
 			continue
@@ -156,11 +153,11 @@ func (s *RateService) takeQueued() []currencyPair {
 }
 
 // isFresh reports whether the direct quote for a pair was fetched within the stale window.
-func (s *RateService) isFresh(pair currencyPair) bool {
+func (s *RateService) isFresh(pair currencyPair, now time.Time) bool {
 	s.mu.Lock()
 	quote, ok := s.rates[rateKey(pair.source, pair.target)]
 	s.mu.Unlock()
-	return ok && !quote.FetchedAt.IsZero() && s.clock.Now().Sub(quote.FetchedAt) < rateStaleAfter
+	return ok && !quote.FetchedAt.IsZero() && now.Sub(quote.FetchedAt) < rateStaleAfter
 }
 
 // store records a fresh quote for a pair.

@@ -10,7 +10,7 @@ func TestFlatMergeKeepsScoreOrderWithoutSections(t *testing.T) {
 		{{Kind: KindApplications, Title: "Safari", Score: 55}, {Kind: KindApplications, Title: "Mail", Score: 55}},
 		{{Kind: KindClipboard, Title: "copied", Score: 60}},
 	}
-	flat := mergeAppended(batches, nil, 30, false, true)
+	flat := mergeAppended(batches, nil, 30, false, true, true)
 	wantTitles := []string{"copied", "Mail", "Safari", "Settings"}
 	for i, it := range flat {
 		if it.Title != wantTitles[i] || it.Section != "" {
@@ -18,7 +18,7 @@ func TestFlatMergeKeepsScoreOrderWithoutSections(t *testing.T) {
 		}
 	}
 
-	sectioned := mergeAppended(batches, nil, 30, false, false)
+	sectioned := mergeAppended(batches, nil, 30, false, false, true)
 	if sectioned[0].Title != "Settings" || sectioned[0].Section == "" {
 		t.Fatalf("a sectioned empty query starts with %q in %q, want the commands section", sectioned[0].Title, sectioned[0].Section)
 	}
@@ -30,7 +30,7 @@ func TestFlatMergeStillCutsToTheLimit(t *testing.T) {
 	for i := range 40 {
 		batch = append(batch, Item{Kind: KindApplications, Title: "App", Score: 55 - i%2})
 	}
-	if got := len(mergeAppended([][]Item{batch}, nil, 30, false, true)); got != 30 {
+	if got := len(mergeAppended([][]Item{batch}, nil, 30, false, true, true)); got != 30 {
 		t.Fatalf("flat merge kept %d rows, want 30", got)
 	}
 }

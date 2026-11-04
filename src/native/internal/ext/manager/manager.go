@@ -82,6 +82,8 @@ type Options struct {
 	RootRefresh func(extensionID string)
 	// AIQuota shares each extension's model-call count with the app's other callers of the same owner.
 	AIQuota *quota.Registry
+	// SearchRefresh receives an extension's RefreshSearch calls. It must not block.
+	SearchRefresh func(extensionID, query string)
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
 }
@@ -139,6 +141,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			MenuBarRefresh: opts.MenuBarRefresh,
 			RootRefresh:    opts.RootRefresh,
 			AIQuota:        opts.AIQuota,
+			SearchRefresh:  opts.SearchRefresh,
 
 			Shell:        ports.Shell,
 			Commands:     ports.Commands,

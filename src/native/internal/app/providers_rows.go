@@ -16,7 +16,6 @@ import (
 // Scores of the root's rows. A higher score sorts first; rows of equal score are ordered as 1.x orders them (compareRows).
 // The values are the bands the prototype used, so the root's order does not change.
 const (
-	scoreCalculator   = 1000
 	scoreTimer        = 990
 	scoreQuicklink    = 980
 	scoreSnippetExact = 975
@@ -201,7 +200,7 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 }
 
 // webRows turns a query into a website when it names one, and otherwise offers the two fallbacks: Automate
-// and a web search. Calculations take the place of the fallbacks.
+// and a web search. The fallbacks are query fallbacks: an answer row of the search, such as a calculation, leaves them out.
 func webRows(p *App, in *rootInput, q string) []search.Item {
 	if q == "" {
 		return nil
@@ -210,13 +209,10 @@ func webRows(p *App, in *rootInput, q string) []search.Item {
 		return []search.Item{{Kind: search.KindWeb, Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue", Score: scoreWebURL,
 			Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}}}
 	}
-	if _, ok := p.calc.Query(q); ok {
-		return nil
-	}
 	return []search.Item{
-		{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate,
+		{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
 			Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}},
-		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch,
+		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch, QueryFallback: true,
 			Actions: []search.Action{{Title: "Search the Web", Run: openURL(in.engine.URL, q)}}},
 	}
 }

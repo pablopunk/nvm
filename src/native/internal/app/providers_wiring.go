@@ -14,7 +14,6 @@ type rootSource struct {
 // title; only rows equal on all of those keep this order. Adding a provider is one line here and one row function in
 // providers_rows.go.
 var rootSources = []rootSource{
-	{id: "calculator", rows: calculatorRows},
 	{id: "timer", rows: timerRows},
 	{id: "quicklinks", rows: quicklinkRows},
 	{id: "snippets", rows: snippetRows},

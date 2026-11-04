@@ -25,6 +25,19 @@ const fixtureWaitTimeout = 20 * time.Second
 // Their children are this test binary (see TestMain).
 func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 	t.Helper()
+	return newManagerOver(t, builtInExtensions(nil, time.UTC), enabled...)
+}
+
+// newManagerOver is newFixtureManager with the built-ins it runs given: a benchmark passes only the one it measures.
+func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *manager.Manager {
+	t.Helper()
+	return newManagerOverNetwork(t, builtins, nil, nil, enabled...)
+}
+
+// newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
+// is the real one; a nil network refuses every fetch.
+func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
+	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
 	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(dir, "state"))
@@ -36,14 +49,18 @@ func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 	if err != nil {
 		t.Fatalf("executable: %v", err)
 	}
+	if clock == nil {
+		clock = ports.Clock
+	}
 	m, err := manager.New(manager.Ports{
-		Files: ports.FS, Clock: ports.Clock, Worker: real.NewWorker(), Processes: ports.Processes,
+		Files: ports.FS, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 		Places:       fixturePlaces,
+		Network:      network,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
-		BuiltIns:   builtInExtensions(),
+		BuiltIns:   builtins,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},
@@ -61,7 +78,7 @@ func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 }
 
 // fixtureFiles reads an extension folder from the extension fixtures.
-func fixtureFiles(t *testing.T, id string) map[string][]byte {
+func fixtureFiles(t testing.TB, id string) map[string][]byte {
 	t.Helper()
 	dir := filepath.Join("..", "ext", "testdata", "extensions", id)
 	files := map[string][]byte{}

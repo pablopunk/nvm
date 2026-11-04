@@ -8,10 +8,11 @@ import (
 // first (compareRows), and the appended rows follow in the order they were emitted, each once. An appended row that
 // repeats a ranked row is dropped. The appended rows take their room out of the limit before the ranked rows do, so a
 // long ranked list cannot hide the second batch. A flat result keeps every row in score order with no section labels.
-func mergeAppended(ranked, appended [][]Item, limit int, searching, flat bool) []Item {
-	rankedItems := dedupe(flatten(ranked))
+// settled is false while some provider is still running; see withoutQueryFallbacks.
+func mergeAppended(ranked, appended [][]Item, limit int, searching, flat, settled bool) []Item {
+	rankedItems, extraItems := withoutQueryFallbacks(dedupe(flatten(ranked)), dedupe(flatten(appended)), settled)
 	slices.SortStableFunc(rankedItems, compareRows)
-	extra := withoutRows(dedupe(flatten(appended)), rankedItems)
+	extra := withoutRows(extraItems, rankedItems)
 	if limit > 0 {
 		extra = firstN(extra, limit)
 		rankedItems = firstN(rankedItems, max(0, limit-len(extra)))
