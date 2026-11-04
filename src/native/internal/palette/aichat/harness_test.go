@@ -36,6 +36,7 @@ func (testWindow) Show()                {}
 func (testWindow) Hide()                {}
 func (testWindow) IsVisible() bool      { return true }
 func (testWindow) IsFocused() bool      { return true }
+func (testWindow) Focus() {}
 func (testWindow) Size() (int, int)     { return goldenWidth, goldenHeight }
 func (testWindow) SetPosition(x, y int) {}
 

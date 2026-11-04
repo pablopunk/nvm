@@ -1,6 +1,8 @@
 package palette
 
 import (
+	"sync/atomic"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -19,6 +21,8 @@ type Window interface {
 	IsFocused() bool
 	Size() (width, height int)
 	SetPosition(x, y int)
+	// Focus gives the window the keyboard.
+	Focus()
 }
 
 // Options are what the shell needs from its host.
@@ -101,8 +105,10 @@ type Palette struct {
 	// at its end, which the next frame acts on (keys_arrows.go).
 	searchSpan [2]int
 	edge       searchEdge
-	// blurred is set from a focus loss until its grace passes (blur.go).
+	// blurred is set from a focus loss until its grace passes (blur.go). dialogs counts the native dialogs that have the
+	// keyboard for the palette (dialog.go); the palette stays open while one does.
 	blurred bool
+	dialogs atomic.Int32
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.

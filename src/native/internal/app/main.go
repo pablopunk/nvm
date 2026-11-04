@@ -196,6 +196,7 @@ func (p *App) ready() {
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.DismissOnBlur)
+	mygo.App.OnDidResignActive(func() { p.panel.Update(p.DismissOnBlur) })
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()

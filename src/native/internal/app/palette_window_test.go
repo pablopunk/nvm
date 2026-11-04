@@ -18,6 +18,7 @@ func (w *queuedWindow) Show()                { w.visible = true }
 func (w *queuedWindow) Hide()                { w.visible = false }
 func (w *queuedWindow) IsVisible() bool      { return w.visible }
 func (w *queuedWindow) IsFocused() bool      { return w.visible }
+func (w *queuedWindow) Focus() {}
 func (w *queuedWindow) Size() (int, int)     { return width, height }
 func (w *queuedWindow) SetPosition(int, int) {}
 

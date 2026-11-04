@@ -16,7 +16,7 @@ func (p *Palette) DismissOnBlur() {
 		<-p.opts.Clock.After(blurDismissGrace)
 		p.win.Update(func() {
 			p.blurred = false
-			if p.shows == shows && p.win.IsVisible() {
+			if p.shows == shows && p.win.IsVisible() && p.dialogs.Load() == 0 {
 				p.hideAfterFocusMovedAway()
 			}
 		})
