@@ -78,7 +78,6 @@ func newBenchPalette(b *testing.B) *App {
 		appsvc: newFixtureAppServices(data.apps),
 		clip:   benchClipboard(b, data.clips),
 
-		chats: &ChatStore{},
 		files: newTestFiles(b, b.TempDir(), data.files),
 	}
 	p.newPalette(searchClock, true)

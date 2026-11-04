@@ -1,17 +1,25 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/palette"
+	"log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
-	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // ---- extension builder: the model writes a Go extension, Yaegi checks it, we install it ----
+//
+// The builder is a chat of kind builder on the smart tier. Its results (installed, failed) are notes in the
+// transcript. The builder moves onto the extension platform in WP3.9; until then it lives here.
 
 var goBlockRe = regexp.MustCompile("(?s)```(?:go|golang)?\\s*\\n(.*?)```")
+
+// builderFixAttempts bounds how many times a failing extension is sent back to the model.
+const builderFixAttempts = 2
 
 func extractGo(s string) string {
 	ms := goBlockRe.FindAllStringSubmatch(s, -1)
@@ -25,44 +33,68 @@ func (p *App) builderView() *palette.View { return p.builderViewWith("") }
 
 // builderViewWith opens the extension builder and, given a prompt, sends it at once ("Automate ...").
 func (p *App) builderViewWith(prompt string) *palette.View {
-	ch := &Chat{ID: newID("builder"), Updated: time.Now(), Builder: true}
-	p.chats.Chats = append([]*Chat{ch}, p.chats.Chats...)
-	v := p.chatView(ch)
-	if prompt != "" {
-		ch.Title = `Automate "` + prompt + `"`
-		p.panel.Update(func() { p.sendChat(p.runs[ch.ID], prompt) })
+	return p.openChat(chat.KindBuilder, chat.TierSmart, prompt)
+}
+
+// builderDone installs the extension a finished reply contains. A reply that does not load goes back to the model
+// a bounded number of times, then the failure is noted in the transcript.
+func (p *App) builderDone(id string, outcome chat.Outcome) {
+	if outcome.Ending != chat.EndFinished {
+		return
 	}
-	return v
-}
-
-func (p *App) notice(run *chatRun, text string) {
-	run.chat.Messages = append(run.chat.Messages, ChatMsg{"notice", text})
-}
-
-func (p *App) builderDone(run *chatRun) {
-	last := run.chat.Messages[len(run.chat.Messages)-1].Content
-	code := extractGo(last)
+	record, ok := p.chats.Chat(id)
+	if !ok {
+		return
+	}
+	text, _ := chat.LastReply(record)
+	code := extractGo(text)
 	if code == "" {
 		return
 	}
 	ext, err := evalExtension(code)
 	if err != nil {
-		if run.attempts < 2 {
-			run.attempts++
-			p.notice(run, "Extension failed to load ("+oneLine(err.Error())+") — asking the model to fix it…")
-			p.sendChat(run, "The extension failed to load with this error:\n\n"+err.Error()+"\n\nReply with the complete corrected file in one ```go block.")
-			return
-		}
-		p.notice(run, "✗ Could not produce a working extension: "+oneLine(err.Error()))
+		p.retryOrNoteBuilderFailure(id, err)
 		return
 	}
 	file := filepath.Join(extensionsDir(), sanitize(ext.ID)+".go")
 	if os.WriteFile(file, []byte(code), 0o644) != nil {
-		p.notice(run, "✗ Could not write "+file)
+		p.noteBuilder(id, chat.NoticeFailed, "✗ Could not write "+file)
 		return
 	}
 	p.reloadExtensions()
-	p.notice(run, "✓ Installed “"+ext.Title+"” — "+file)
+	p.noteBuilder(id, chat.NoticeNote, "✓ Installed “"+ext.Title+"” — "+file)
+}
+
+// retryOrNoteBuilderFailure sends a non-loading extension back to the model, or notes that it gave up.
+func (p *App) retryOrNoteBuilderFailure(id string, loadErr error) {
+	if p.builderTries == nil {
+		p.builderTries = map[string]int{}
+	}
+	if p.builderTries[id] < builderFixAttempts {
+		p.builderTries[id]++
+		p.noteBuilder(id, chat.NoticeNote, "Extension failed to load ("+oneLine(loadErr.Error())+") — asking the model to fix it…")
+		fix := "The extension failed to load with this error:\n\n" + loadErr.Error() + "\n\nReply with the complete corrected file in one ```go block."
+		if err := p.chats.Send(id, fix); err != nil {
+			log.Println("builder: could not send the fix:", err)
+		}
+		return
+	}
+	p.noteBuilder(id, chat.NoticeFailed, "✗ Could not produce a working extension: "+oneLine(loadErr.Error()))
+}
+
+// noteBuilder writes a builder result into the transcript as a notice.
+func (p *App) noteBuilder(id string, kind chat.NoticeKind, text string) {
+	if err := p.chats.Note(id, chat.Notice{Kind: kind, Title: builderNoticeTitle(kind), Message: text}); err != nil {
+		log.Println("builder: could not note the result:", err)
+	}
+}
+
+// builderNoticeTitle is the heading of a builder result: a success reads as a note, a failure as a failure.
+func builderNoticeTitle(kind chat.NoticeKind) string {
+	if kind == chat.NoticeFailed {
+		return "Extension not installed"
+	}
+	return "Extension"
 }
 
 func sanitize(s string) string {

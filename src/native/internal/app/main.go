@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
@@ -42,7 +43,6 @@ type App struct {
 	md       markdown.Options
 	exts     []loadedExt
 	extTrays []*extTray
-	runs     map[string]*chatRun
 	tray     *mygo.Tray
 	summon   *shortcuts.Summon
 	appsvc   *appfeat.Services
@@ -54,7 +54,8 @@ type App struct {
 	snips         *snippets.Store
 	notes         *notes.Store
 	files         *fileService
-	chats         *ChatStore
+	chats         *chat.Service
+	builderTries  map[string]int
 	timer         *Timer
 	learn         *usage.Learner
 	history       *palette.QueryHistory
@@ -129,7 +130,7 @@ func (p *App) ready() {
 		p.clip.setEnabled(false)
 		p.clip.flush()
 	})
-	p.chats = newChatStore()
+	p.attachChats()
 	notices := p.openLearning()
 	p.startAppServices()
 	p.newPalette(searchClock, false)

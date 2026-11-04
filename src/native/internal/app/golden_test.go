@@ -2,7 +2,6 @@ package app
 
 import (
 	"testing"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -62,21 +61,6 @@ func TestPaletteQuicklinkForm(t *testing.T) {
 	p := goldenPalette(t)
 	goldenOpen(p, p.quicklinkForm())
 	golden.AssertMatrix(t, "quicklink-form", p.View, paletteGoldens)
-}
-
-func TestPaletteChatTranscript(t *testing.T) {
-	p := goldenPalette(t)
-	goldenOpen(p, goldenChatView(p, false))
-	golden.AssertMatrix(t, "chat-transcript", p.View, paletteGoldens)
-}
-
-// streamingGoldens lets the reply finish revealing: the fake clock moves past the reveal's catch-up.
-var streamingGoldens = golden.Options{Group: "palette", Width: width, Height: height, Advance: 10 * time.Second}
-
-func TestPaletteChatStreamingReply(t *testing.T) {
-	p := goldenPalette(t)
-	goldenOpen(p, goldenChatView(p, true))
-	golden.AssertMatrix(t, "chat-streaming", p.View, streamingGoldens)
 }
 
 func TestPaletteEmojiGridSelection(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -152,9 +153,9 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 				continue
 			}
 		}
-		chat := ch.chat
+		id := ch.id
 		out = append(out, search.Item{Kind: search.KindConversations, Title: "Continue conversation: " + oneLine(ch.title), Subtitle: "AI conversation", Icon: "message-circle", Tone: "yellow", TintTitle: true, Score: s,
-			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(chat)) }}}})
+			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(aichat.ChatView(p.chatDeps(), id)) }}}})
 	}
 	return out
 }
