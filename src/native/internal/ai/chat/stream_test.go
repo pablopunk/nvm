@@ -9,19 +9,19 @@ import (
 )
 
 // pipeFixture is a fixture whose chat replies arrive frame by frame from the test.
-func pipeFixture(t *testing.T) (*fixture, *pipeTransport) {
+func pipeFixture(t *testing.T) (*fixture, *fixtures.StreamingTransport) {
 	t.Helper()
-	transport := newPipeTransport()
+	transport := fixtures.NewStreamingTransport()
 	f := &fixture{t: t, set: fake.NewSet(), connected: true}
 	f.build(transport)
 	return f, transport
 }
 
 // nextReply returns the writer of the next chat reply the service opened.
-func nextReply(t *testing.T, transport *pipeTransport) io.WriteCloser {
+func nextReply(t *testing.T, transport *fixtures.StreamingTransport) io.WriteCloser {
 	t.Helper()
 	select {
-	case writer := <-transport.bodies:
+	case writer := <-transport.Replies():
 		return writer
 	case <-t.Context().Done():
 		t.Fatal("no reply was requested")
@@ -75,7 +75,7 @@ func TestStopKeepsTheTextAndResumeContinuesTheChat(t *testing.T) {
 	resumed := nextReply(t, transport)
 	writeFrames(t, resumed, append(fixtures.StreamFrames("Back again.", 24), fixtures.DoneFrame))
 	f.awaitTurn(chat.ID)
-	if got := roles(t, transport.body(1)); len(got) != 4 || got[2] != "assistant" {
+	if got := roles(t, transport.Body(1)); len(got) != 4 || got[2] != "assistant" {
 		t.Fatalf("resumed request roles = %v, want the stopped reply sent back", got)
 	}
 	messages = f.messages(chat.ID)

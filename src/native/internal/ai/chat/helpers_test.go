@@ -1,9 +1,6 @@
 package chat
 
 import (
-	"io"
-	"net/http"
-	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -179,54 +176,4 @@ func (f *fixture) messages(id string) []Message {
 func lastAssistantText(chat Chat) string {
 	text, _ := LastReply(chat)
 	return text
-}
-
-// pipeTransport answers the active-model route with the fixture descriptor and every chat request with a body the
-// test writes frame by frame. Each chat request also records its body, so a test can read what was sent.
-type pipeTransport struct {
-	bodies   chan *io.PipeWriter
-	mu       sync.Mutex
-	requests []string
-}
-
-func newPipeTransport() *pipeTransport {
-	return &pipeTransport{bodies: make(chan *io.PipeWriter, 16)}
-}
-
-func (p *pipeTransport) Do(req *http.Request) (*http.Response, error) {
-	if strings.HasSuffix(req.URL.Path, "/active-model") {
-		return jsonResponse(req, fixtures.ActiveModelBody), nil
-	}
-	body, _ := io.ReadAll(req.Body)
-	p.mu.Lock()
-	p.requests = append(p.requests, string(body))
-	p.mu.Unlock()
-	reader, writer := io.Pipe()
-	p.bodies <- writer
-	return &http.Response{
-		Status:     "200 OK",
-		StatusCode: http.StatusOK,
-		Header:     http.Header{"Content-Type": {"text/event-stream"}},
-		Body:       reader,
-		Request:    req,
-	}, nil
-}
-
-// body returns the body of the i-th chat request the transport received.
-func (p *pipeTransport) body(i int) []byte {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	return []byte(p.requests[i])
-}
-
-// jsonResponse answers req with a 200 JSON body.
-func jsonResponse(req *http.Request, body string) *http.Response {
-	return &http.Response{
-		Status:        "200 OK",
-		StatusCode:    http.StatusOK,
-		Header:        http.Header{"Content-Type": {"application/json"}},
-		Body:          io.NopCloser(strings.NewReader(body)),
-		ContentLength: int64(len(body)),
-		Request:       req,
-	}
 }

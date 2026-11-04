@@ -113,6 +113,13 @@ func (s *Service) Send(id, text string) error {
 	return s.startTurn(id)
 }
 
+// Note adds an informational notice to the transcript, such as the outcome of an action the chat started.
+func (s *Service) Note(id string, notice Notice) error {
+	return s.opts.Store.Mutate(id, func(c *Chat) {
+		c.Messages = append(c.Messages, s.noticeMessage(notice))
+	})
+}
+
 // Regenerate drops the replies and notices after the last user message and asks again.
 func (s *Service) Regenerate(id string) error {
 	if s.Busy(id) {

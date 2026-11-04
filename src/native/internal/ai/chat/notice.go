@@ -24,6 +24,7 @@ const (
 	NoticeTimeout          NoticeKind = "timeout"
 	NoticeCutOff           NoticeKind = "cut_off"
 	NoticeFailed           NoticeKind = "failed"
+	NoticeNote             NoticeKind = "note"
 )
 
 // Notice is a line in the transcript that explains why a turn did not finish, or why it could not start.

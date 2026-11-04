@@ -2,7 +2,6 @@ package chat
 
 import (
 	"errors"
-	"net/http"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
@@ -46,6 +45,9 @@ func (s *Service) converse(id string, r *run, tier Tier, request []backend.Messa
 	})
 }
 
+// paymentRequired is the HTTP status the backend refuses a paused route with.
+const paymentRequired = 402
+
 // blockedRouteError is the refusal for a route the backend marks as paused by the free spend cap, or nil. It is
 // shaped as the refusal the backend would have sent, so the same notice and account note apply.
 func blockedRouteError(descriptor backend.ModelDescriptor) error {
@@ -54,7 +56,7 @@ func blockedRouteError(descriptor backend.ModelDescriptor) error {
 	}
 	return &backend.Error{
 		Kind:    backend.KindRejected,
-		Status:  http.StatusPaymentRequired,
+		Status:  paymentRequired,
 		Code:    "free_spend_cap_reached",
 		Message: "the route is paused by the free spend cap",
 	}
