@@ -55,13 +55,13 @@ func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
 	for _, row := range rows {
 		byTitle[row.Title] = row.Accessory + "|" + row.Subtitle
 	}
-	if got := byTitle["Palette Hotkey"]; got != shortcutLabelOf("Alt+Shift+Space")+"|" {
+	if got := byTitle["Palette Hotkey"]; got != p.shortcutLabelOf("Alt+Shift+Space")+"|" {
 		t.Fatalf("palette row = %q", got)
 	}
-	if got := byTitle["Clipboard History"]; got != shortcutLabelOf("Command+Alt+V")+"|" {
+	if got := byTitle["Clipboard History"]; got != p.shortcutLabelOf("Command+Alt+V")+"|" {
 		t.Fatalf("clipboard row = %q", got)
 	}
-	if got := byTitle["Quick Notes"]; got != shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
+	if got := byTitle["Quick Notes"]; got != p.shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
 		t.Fatalf("notes row = %q", got)
 	}
 	if got := len(p.shortcutRows("clip")); got != 1 {

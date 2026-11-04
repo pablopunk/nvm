@@ -21,6 +21,7 @@ func sharedConfigApp(t *testing.T) (*App, *fake.FS) {
 	}
 	p.sharedConfig = portable.Open(files, sharedFixtureConfig)
 	p.shortcutMgr = nil
+	p.hyper = nil
 	return p, files
 }
 

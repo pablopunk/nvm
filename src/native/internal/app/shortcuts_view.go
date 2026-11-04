@@ -46,7 +46,7 @@ func (p *App) shortcutRow(entry shortcuts.Entry) search.Item {
 		ID:        "shortcut:" + entry.ActionID,
 		Title:     entry.Title,
 		Icon:      "keyboard",
-		Accessory: shortcutLabelOf(entry.Accelerator),
+		Accessory: p.shortcutLabelOf(entry.Accelerator),
 	}
 	change := "Change Shortcut"
 	switch {
@@ -74,23 +74,28 @@ func (p *App) removeShortcut(h search.Host, actionID string) {
 	h.Refresh()
 }
 
-// shortcutLabelOf spells a canonical accelerator for this platform, or "" when there is none.
-func shortcutLabelOf(accelerator string) string {
-	return shortcuts.Label(accelerator, runtime.GOOS)
+// labeler spells shortcuts for this platform, with the Hyper key the app holds.
+func (p *App) labeler() shortcuts.Labeler {
+	return shortcuts.Labeler{GOOS: runtime.GOOS, Hyper: p.hyperKey()}
+}
+
+// shortcutLabelOf spells a canonical accelerator for this platform, with ✦ for the Hyper key, or "" when there is none.
+func (p *App) shortcutLabelOf(accelerator string) string {
+	return p.labeler().Label(accelerator)
 }
 
 // paletteAccessory is the Settings accessory of the palette shortcut. A blank palette shortcut means none.
-func paletteAccessory(accelerator string) string {
+func (p *App) paletteAccessory(accelerator string) string {
 	if accelerator == "" {
 		return "None"
 	}
-	return shortcutLabelOf(accelerator)
+	return p.shortcutLabelOf(accelerator)
 }
 
 // paletteChangeMessage is the toast after the palette shortcut changes. A system feature that also holds the key is
 // said out loud.
-func paletteChangeMessage(change shortcuts.PaletteChange) string {
-	label := shortcutLabelOf(change.Accelerator)
+func (p *App) paletteChangeMessage(change shortcuts.PaletteChange) string {
+	label := p.shortcutLabelOf(change.Accelerator)
 	switch {
 	case change.Unchanged:
 		return "Shortcut unchanged: " + label

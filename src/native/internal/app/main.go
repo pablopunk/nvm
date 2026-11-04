@@ -103,8 +103,10 @@ type App struct {
 	// sharedConfig is config.json in the folder 1.x shares: the palette shortcut, shortcuts, the diagnostics switch and the
 	// update channel live there.
 	sharedConfig *portable.Store
-	quitting     bool
-	edits        map[string]*noteEdit
+	// hyper is the Hyper key config.json holds, read on first use; nil until then. saveHyperKey keeps it in step.
+	hyper    *string
+	quitting bool
+	edits    map[string]*noteEdit
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 
