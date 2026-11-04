@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -116,23 +117,23 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// clipboardRows shows the two newest text copies that contain a query of three characters or more.
+// clipboardTextKinds are the history kinds the root answers with: copies that are text, with or without markup.
+var clipboardTextKinds = []clipboard.Kind{clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF}
+
+// clipboardRows shows the two best text copies that contain a query of three characters or more: pinned ones
+// first, then the newest. The history is read on the search goroutine; it locks its own state.
 func clipboardRows(p *App, in *rootInput, q string) []search.Item {
-	lq := strings.ToLower(q)
-	if len(lq) < 3 {
+	if len(strings.ToLower(q)) < 3 {
 		return nil
 	}
-	var out []search.Item
-	for _, e := range in.clips {
-		if len(out) >= 2 {
-			break
-		}
-		if e.Kind == "text" && strings.Contains(strings.ToLower(e.Text), lq) {
-			ci := p.clipItem(e)
-			ci.Kind = search.KindClipboard
-			ci.Score = scoreClipboard - len(out)
-			out = append(out, ci)
-		}
+	entries := in.clip.history.Find(clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: 2})
+	historyLen := in.clip.history.Len()
+	out := make([]search.Item, 0, len(entries))
+	for i, e := range entries {
+		ci := p.clipItem(e, historyLen)
+		ci.Kind = search.KindClipboard
+		ci.Score = scoreClipboard - i
+		out = append(out, ci)
 	}
 	return out
 }

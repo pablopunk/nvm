@@ -126,8 +126,10 @@ func (h *History) ImageNames() (map[string]bool, error) {
 		return nil, fmt.Errorf("clipboard: read saved history: %w", err)
 	}
 	for _, e := range snapshot.Entries {
-		if e.Kind == KindImage && e.ImageRef != "" {
-			names[e.ImageRef] = true
+		for _, name := range []string{imageRef(e), linkRef(e)} {
+			if name != "" {
+				names[name] = true
+			}
 		}
 	}
 	return names, nil

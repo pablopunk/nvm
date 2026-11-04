@@ -46,6 +46,7 @@ type Settings struct {
 	Engine      string
 	ClipOff     bool
 	ClipLimit   int
+	ClipNoLinks bool // link previews of copied web addresses are off
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
@@ -62,13 +63,13 @@ type Quicklink struct {
 }
 
 func loadSettings() *Settings {
-	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: 200, Disabled: map[string]bool{}}
+	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: clipDefaultLimit, Disabled: map[string]bool{}}
 	loadJSON("settings.json", s)
 	if s.Disabled == nil {
 		s.Disabled = map[string]bool{}
 	}
 	if s.ClipLimit <= 0 {
-		s.ClipLimit = 200
+		s.ClipLimit = clipDefaultLimit
 	}
 	return s
 }

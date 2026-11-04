@@ -27,8 +27,8 @@ func NewActions(clip platform.Clipboard, paster platform.Paster, images *ImageSt
 	return a
 }
 
-// Copy puts an entry on the clipboard and marks it used. Files cannot be written until the file-list write
-// lands (WP1.6b) and return platform.ErrUnsupported.
+// Copy puts an entry on the clipboard and marks it used. A file list needs a rich clipboard and returns
+// platform.ErrUnsupported without one.
 func (a *Actions) Copy(e Entry) error {
 	if err := a.write(e); err != nil {
 		return err
@@ -76,7 +76,10 @@ func (a *Actions) write(e Entry) error {
 		}
 		return a.clip.WriteImagePNG(png)
 	case KindFiles:
-		return platform.ErrUnsupported
+		if a.rich == nil {
+			return platform.ErrUnsupported
+		}
+		return a.rich.WriteFiles(e.Paths)
 	}
 	return ErrInvalidEntry
 }

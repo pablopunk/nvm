@@ -3,6 +3,7 @@ package app
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -150,10 +151,19 @@ func TestPasteRefusedLeavesTheSnippetOnTheClipboard(t *testing.T) {
 		t.Fatal("fixture snippet missing")
 	}
 
-	p.pasteSnippet(snip)
+	p.clip = clipEngineOver(p.ports)
+	p.pasteSnippet(&recordingHost{}, snip)
 
-	if got, _ := clip.ReadText(); got != snip.Text {
-		t.Fatalf("clipboard = %q, want the snippet text", got)
+	deadline := time.Now().Add(watchdog)
+	for {
+		got, _ := clip.ReadText()
+		if got == snip.Text {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("clipboard = %q, want the snippet text", got)
+		}
+		time.Sleep(time.Millisecond)
 	}
 }
 

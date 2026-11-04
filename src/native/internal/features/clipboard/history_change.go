@@ -104,14 +104,38 @@ func (h *History) indexLocked(r *record, sign int64) {
 	} else {
 		delete(h.byID, r.entry.ID)
 	}
-	if r.entry.Kind == KindImage && r.entry.ImageRef != "" {
-		h.imageRefs[r.entry.ImageRef] += int(sign)
-		if h.imageRefs[r.entry.ImageRef] <= 0 {
-			delete(h.imageRefs, r.entry.ImageRef)
-		}
-	}
+	h.refLocked(imageRef(r.entry), sign)
+	h.refLocked(linkRef(r.entry), sign)
 	h.memory += sign * r.memory
 	h.imageBytes += sign * r.image
+}
+
+// refLocked adds (sign +1) or removes (sign -1) one reference to an image file name. An empty name is nothing.
+// The caller holds h.mu.
+func (h *History) refLocked(name string, sign int64) {
+	if name == "" {
+		return
+	}
+	h.imageRefs[name] += int(sign)
+	if h.imageRefs[name] <= 0 {
+		delete(h.imageRefs, name)
+	}
+}
+
+// imageRef is the image file an entry references: its picture, when it is an image.
+func imageRef(e Entry) string {
+	if e.Kind != KindImage {
+		return ""
+	}
+	return e.ImageRef
+}
+
+// linkRef is the picture file of an entry's saved link preview, or "".
+func linkRef(e Entry) string {
+	if e.LinkPreview == nil {
+		return ""
+	}
+	return e.LinkPreview.ImageRef
 }
 
 // notifyLocked tells each subscriber about a change without blocking. The caller holds h.mu.

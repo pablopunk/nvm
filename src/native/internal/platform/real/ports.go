@@ -10,13 +10,14 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 
 // NewPorts returns the production port set. It has no side effects until a port method is called.
 func NewPorts() platform.Ports {
-	clock := realClock{}
 	return platform.Ports{
-		Clock:        clock,
+		Clock:        realClock{},
 		FS:           osFS{},
 		HTTP:         newHTTPClient(),
-		Clipboard:    newClipboard(clock),
-		Paster:       paster{},
+		PublicHTTP:   newPublicHTTP(),
+		Resolver:     resolver{},
+		Clipboard:    newClipboard(),
+		Paster:       NewPaster(helper{}, nil),
 		Shell:        shell{},
 		Screens:      screens{},
 		Notifier:     notifier{},

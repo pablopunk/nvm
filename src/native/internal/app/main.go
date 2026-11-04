@@ -46,14 +46,16 @@ type App struct {
 	appsvc   *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
-	clip        *ClipStore
-	snips       *snippets.Store
-	notes       *notes.Store
-	files       *fileService
-	chats       *ChatStore
-	timer       *Timer
-	learn       *usage.Learner
-	history     *palette.QueryHistory
+	clip        *clipEngine
+	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
+	paletteHidden chan struct{}
+	snips         *snippets.Store
+	notes         *notes.Store
+	files         *fileService
+	chats         *ChatStore
+	timer         *Timer
+	learn         *usage.Learner
+	history       *palette.QueryHistory
 
 	ports   platform.Ports
 	store   *store.Store
@@ -102,11 +104,16 @@ func (p *App) position(w, h int) (int, int) {
 
 func (p *App) ready() {
 	p.S = loadSettings()
-	p.attachServices(real.NewPorts(), configDir(), nil)
+	p.paletteHidden = make(chan struct{}, 1)
+	p.attachServices(p.appPorts(), configDir(), nil)
 	p.closeStoreOnQuit()
 	prepareCatalog()
-	p.clip = newClipStore()
+	p.clip = p.openClipboard()
 	p.openUserData()
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		p.clip.setEnabled(false)
+		p.clip.flush()
+	})
 	p.chats = newChatStore()
 	notices := p.openLearning()
 	p.startAppServices()
@@ -123,6 +130,7 @@ func (p *App) ready() {
 	p.restoreFloatingNotes()
 	p.panel.OnClose(func(e *mygo.CloseEvent) { e.PreventDefault(); p.Hide() })
 	p.panel.OnBlur(p.Hide)
+	p.panel.OnHide(p.notePaletteHidden)
 
 	err := mygo.GlobalShortcut.Register(p.S.Hotkey, p.Toggle)
 	for i := 0; err != nil && i < 8; i++ { // a previous instance may still hold the key
@@ -134,7 +142,6 @@ func (p *App) ready() {
 	}
 	p.reloadExtensions()
 	p.setUpTray()
-	p.startClipboardWatcher()
 	p.startFiles()
 	log.Println("ready")
 }

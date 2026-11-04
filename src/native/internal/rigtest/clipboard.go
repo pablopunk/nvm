@@ -16,11 +16,26 @@ const (
 	clipboardServeLoops = "200"
 )
 
+// concealedTarget is the X11 target a password manager offers with a copy (the KDE hint, which KeePassXC and
+// similar tools advertise). The app treats a clipboard that offers it as concealed and never reads its text.
+const concealedTarget = "x-kde-passwordManagerHint"
+
 // ClipboardSet puts text on the CLIPBOARD selection with xclip. xclip forks a child to keep serving
 // the selection, so the call returns once the parent exits. The child is detached (its own session,
 // no inherited pipes) so this never holds the test's terminal or output.
 func (a *App) ClipboardSet(text string) error {
-	cmd := exec.Command("xclip", "-selection", "clipboard", "-loops", clipboardServeLoops, "-i")
+	return a.clipboardServe(text, "-i")
+}
+
+// ClipboardSetConcealed puts text on the CLIPBOARD selection as a password manager copy: the only target the
+// selection offers is the concealed hint, so the text is not plain text to any reader that ignores the hint.
+func (a *App) ClipboardSetConcealed(text string) error {
+	return a.clipboardServe(text, "-t", concealedTarget, "-i")
+}
+
+// clipboardServe runs xclip with args on the CLIPBOARD selection, feeding text on stdin.
+func (a *App) clipboardServe(text string, args ...string) error {
+	cmd := exec.Command("xclip", append([]string{"-selection", "clipboard", "-loops", clipboardServeLoops}, args...)...)
 	cmd.Env = withDisplay(a.display)
 	cmd.Stdin = strings.NewReader(text)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

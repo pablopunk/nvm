@@ -54,7 +54,7 @@ func (p *App) snippetItem(sn snippets.Snippet) search.Item {
 	if sn.Keyword != "" {
 		sub = sn.Keyword + "  ·  " + sub
 	}
-	paste := search.Action{Title: "Paste", Run: func(h search.Host) { h.Hide(); p.pasteSnippet(sn) }}
+	paste := search.Action{Title: "Paste", Run: func(h search.Host) { p.pasteSnippet(h, sn) }}
 	copyAction := search.Action{Title: "Copy to Clipboard", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { p.copySnippet(sn); h.Hide() }}
 	it := search.Item{
 		ID: sn.ID, Title: sn.Name, Subtitle: sub, Icon: "type", Tone: "teal", LearnKey: "snippet:" + sn.ID,
@@ -91,8 +91,11 @@ func (p *App) canPaste() bool {
 
 // pasteSnippet expands the snippet, puts it on the clipboard and sends the paste gesture. When the gesture is
 // refused the text stays on the clipboard for a manual paste.
-func (p *App) pasteSnippet(sn snippets.Snippet) {
-	_, _ = snippets.Paste(sn, clock(), p.ports.Clipboard, p.ports.Paster, "")
+// pasteSnippet pastes the expanded snippet into the app that had focus. It goes through the clipboard engine, so the
+// paste waits for the palette to hide instead of blocking the UI thread on that hide.
+func (p *App) pasteSnippet(h search.Host, sn snippets.Snippet) {
+	clip, _ := p.ports.Clipboard.ReadText()
+	p.pasteAfterHide(h, textEntry(snippets.Expand(sn.Text, clip, clock())))
 }
 
 // copySnippet puts the expanded snippet on the clipboard.

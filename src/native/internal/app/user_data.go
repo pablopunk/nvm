@@ -1,8 +1,6 @@
 package app
 
 import (
-	"fmt"
-
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -64,7 +62,7 @@ func (p *App) showUserDataNotices() {
 				return
 			}
 			if notice.Kind == store.Quarantined {
-				p.Toast(fmt.Sprintf("Saved notes or snippets could not be read and were moved to %s", notice.Path))
+				p.Toast(quarantineToast(notice))
 			}
 		default:
 			return

@@ -91,6 +91,17 @@ func (c *Collection[T]) Load() (T, error) {
 	return snapshot, c.loadErr
 }
 
+// ReadOnly reports whether the document refuses writes: a newer build wrote the file, or it could not be read.
+// It loads the document first when that has not happened yet.
+func (c *Collection[T]) ReadOnly() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.loaded {
+		c.loadLocked()
+	}
+	return c.readOnly
+}
+
 // Update applies change to the document under its lock, then schedules a debounced write and a change
 // event. It returns ErrClosed, ErrReadOnly or ErrLeaseLost when the document cannot take changes, and then
 // change is not called.

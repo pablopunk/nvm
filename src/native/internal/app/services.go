@@ -48,7 +48,7 @@ func (c rateCache) Save(rates calc.Rates) error {
 func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Location) {
 	p.ports = ports
 	var cache calc.RateCache
-	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning).
+	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
 	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
 	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir, store.WithProcesses(ports.Processes))
 	p.userReadOnly = err != nil

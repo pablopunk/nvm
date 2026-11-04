@@ -87,16 +87,18 @@ func (a *Actions) SaveState() (ClipboardState, error) {
 	return state, nil
 }
 
-// RestoreState puts a saved clipboard back. A file list cannot be written yet (WP1.6b), so such a state is
+// RestoreState puts a saved clipboard back. A saved file list needs a rich clipboard; without one the state is
 // refused before anything changes. The restored text is suppressed, as a copy of the app is.
 func (a *Actions) RestoreState(state ClipboardState) error {
-	if len(state.Files) > 0 {
+	if len(state.Files) > 0 && a.rich == nil {
 		return platform.ErrUnsupported
 	}
 	if state.Text != "" {
 		a.suppress.Suppress(TextID(state.Text))
 	}
 	switch {
+	case len(state.Files) > 0:
+		return a.rich.WriteFiles(state.Files)
 	case len(state.PNG) > 0:
 		return a.clip.WriteImagePNG(state.PNG)
 	case state.HTML != "" && a.rich != nil:

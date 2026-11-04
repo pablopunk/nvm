@@ -157,6 +157,16 @@ func (c *Clipboard) SetFilePaths(paths ...string) {
 	c.notifyLocked()
 }
 
+// WriteFiles replaces the clipboard with a list of files, as the real port does.
+func (c *Clipboard) WriteFiles(paths []string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.clearLocked()
+	c.files = slices.Clone(paths)
+	c.notifyLocked()
+	return nil
+}
+
 // Formats lists the content kinds on the clipboard. Empty when the clipboard holds nothing.
 func (c *Clipboard) Formats() ([]platform.ClipboardFormat, error) {
 	if err := c.faults.take(OpClipboardFormats); err != nil {
