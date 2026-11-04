@@ -114,6 +114,7 @@ func trailingCommands(p *App, timerOn bool) []command {
 		builtInSlot(appcommands.ID, 1),
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
+	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.windowCommands()...)
