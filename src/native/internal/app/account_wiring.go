@@ -67,7 +67,12 @@ func deviceLabel() string {
 // refreshAccountPage redraws the palette after an account change. Flows report from their own goroutines, so the
 // redraw is queued on the UI thread.
 func (p *App) refreshAccountPage() {
-	p.onUI(p.Refresh)
+	p.onUI(func() {
+		p.Refresh()
+		if p.chats != nil {
+			p.chats.AccountChanged()
+		}
+	})
 }
 
 // onUI runs fn on the UI thread. Without a window, which only the goldens and tests have, fn runs directly.

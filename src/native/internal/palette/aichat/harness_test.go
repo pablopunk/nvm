@@ -140,12 +140,13 @@ func (r *rig) chatWith(title string, tier chat.Tier, messages ...chat.Message) c
 	if err != nil {
 		r.t.Fatalf("NewChat: %v", err)
 	}
-	if err := r.store.Mutate(record.ID, func(c *chat.Chat) {
+	if err := r.store.Mutate(record.ID, goldenNow, func(c *chat.Chat) {
 		c.Title = title
 		c.Messages = messages
 	}); err != nil {
 		r.t.Fatalf("seed chat: %v", err)
 	}
+	r.service.Reload()
 	record, _ = r.service.Chat(record.ID)
 	return record
 }
