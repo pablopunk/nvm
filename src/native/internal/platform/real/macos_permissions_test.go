@@ -69,7 +69,7 @@ func TestRequestAccessIsAnErrorWhenTheHelperCannotAnswer(t *testing.T) {
 	}
 }
 
-func TestMacPermissionsWiresAccessibilityOnly(t *testing.T) {
+func TestMacPermissionsWiresAccessibilityAndMicrophoneOnly(t *testing.T) {
 	granted := helperOK
 	bridge, helper := newScriptedMacHelper(fake.HelperScript{Stdout: []byte(granted)}, fake.HelperScript{Stdout: []byte(helperOK)})
 	permissions := macPermissions{access: bridge}
@@ -78,11 +78,11 @@ func TestMacPermissionsWiresAccessibilityOnly(t *testing.T) {
 	if err != nil || state != platform.PermissionAllowed {
 		t.Fatalf("State(accessibility) = %v, %v; want allowed", state, err)
 	}
-	if state, err := permissions.State(platform.PermissionCamera); state != platform.PermissionUnknown || !errors.Is(err, platform.ErrUnsupported) {
+	if state, err := permissions.State(platform.PermissionScreenRecording); state != platform.PermissionUnknown || !errors.Is(err, platform.ErrUnsupported) {
 		t.Fatalf("State(camera) = %v, %v; want unknown and unsupported", state, err)
 	}
-	if err := permissions.Request(platform.PermissionCamera); !errors.Is(err, platform.ErrUnsupported) {
-		t.Fatalf("Request(camera) = %v; want unsupported", err)
+	if err := permissions.Request(platform.PermissionScreenRecording); !errors.Is(err, platform.ErrUnsupported) {
+		t.Fatalf("Request(screen recording) = %v; want unsupported", err)
 	}
 	if err := permissions.Request(platform.PermissionAccessibility); err != nil {
 		t.Fatalf("Request(accessibility) = %v", err)
