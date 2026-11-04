@@ -12,6 +12,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/install"
@@ -44,6 +45,8 @@ type Ports struct {
 	OCR          *ocr.Service
 	History      func() *clipboard.History
 	Confirm      services.ConfirmFunc
+	// SettingsPanes lists the operating system's settings panes for the system service.
+	SettingsPanes func() []api.SettingsPane
 }
 
 // Options tune the child processes of every extension.
@@ -60,6 +63,8 @@ type Options struct {
 	OnChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
+	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
+	BuiltIns []api.Extension
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
@@ -77,8 +82,10 @@ type Manager struct {
 // services that runtime calls.
 type entry struct {
 	bundle  bundle.Bundle
-	runtime *supervisor.Runtime
+	runtime runner
 	host    *services.Handler
+	// builtin marks an entry compiled into the app: it has no folder, no review and no enabled state.
+	builtin bool
 }
 
 // New opens the extensions folder root, removes leftovers of interrupted installs, and loads every extension.
@@ -120,9 +127,12 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OCR:          ports.OCR,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
+
+			SettingsPanes: ports.SettingsPanes,
 		},
 		entries: map[string]*entry{},
 	}
+	m.registerBuiltIns(opts.BuiltIns)
 	if err := m.Refresh(); err != nil {
 		return nil, err
 	}
@@ -153,7 +163,7 @@ func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
 		m.replaceLocked(key, loaded)
 	}
 	for key, current := range m.entries {
-		if !seen[key] {
+		if !seen[key] && !current.builtin {
 			stopEntry(current)
 			delete(m.entries, key)
 		}

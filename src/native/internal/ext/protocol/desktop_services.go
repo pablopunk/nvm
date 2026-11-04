@@ -33,6 +33,7 @@ const (
 	OpHasCapability = "has-capability"
 	OpOS            = "os"
 	OpLabels        = "labels"
+	OpSettingsPanes = "settings-panes"
 	OpPalette       = "palette"
 	OpImage         = "image"
 	OpScreen        = "screen"

@@ -2,38 +2,29 @@ package app
 
 import (
 	"context"
-	"strings"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/safego"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// settingsPaneSubtitle labels the settings panes in the root, as the OS names its settings app.
-const settingsPaneSubtitle = "System Settings"
-
-// settingsPaneRows lists the System Settings panes that match a query. The panes show only for a query, never in
-// the empty root, and only where the OS has them.
-func settingsPaneRows(p *App, _ *rootInput, q string) []search.Item {
-	lq := strings.ToLower(q)
-	if lq == "" {
-		return nil
-	}
-	var out []search.Item
+// systemSettingsPanes lists the settings panes for the extension system service.
+func (p *App) systemSettingsPanes() []api.SettingsPane {
+	var out []api.SettingsPane
 	for _, pane := range p.systemSvc.SettingsPanes() {
-		score := search.Score(pane.Title, lq)
-		if score == 0 {
-			continue
-		}
-		out = append(out, search.Item{
-			Kind: search.KindCommands, Title: pane.Title, Subtitle: settingsPaneSubtitle, Icon: "settings", Score: score,
-			Actions: []search.Action{{Title: "Open", Run: func(h search.Host) {
-				h.Hide()
-				openSettingsPane(p, pane)
-			}}},
-		})
+		out = append(out, api.SettingsPane{ID: pane.ID, Title: pane.Title})
 	}
 	return out
+}
+
+// openSystemPaneByID opens the settings pane an extension names, if the OS has it.
+func (p *App) openSystemPaneByID(id string) {
+	for _, pane := range p.systemSvc.SettingsPanes() {
+		if pane.ID == id {
+			openSettingsPane(p, pane)
+			return
+		}
+	}
 }
 
 // openSettingsPane opens one settings pane off the UI thread.

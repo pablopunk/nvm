@@ -109,6 +109,9 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
 		Score: scoreExtension,
 	}
+	if m.IsBuiltIn(extID) {
+		row = builtInRow(row, item)
+	}
 	if item.Primary != nil {
 		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, *item.Primary))
 	}
@@ -123,4 +126,21 @@ func iconOr(icon, fallback string) string {
 		return icon
 	}
 	return fallback
+}
+
+// builtInRow applies the host-only presentation of a built-in's row: its section, tone, rank and learning key, which
+// a folder extension cannot set. A built-in row with no tone has none, as its native row had.
+func builtInRow(row search.Item, item api.Item) search.Item {
+	if item.Section != "" {
+		row.Kind = item.Section
+	}
+	row.Tone = ""
+	if item.Appearance != nil {
+		row.Tone = string(item.Appearance.Foreground)
+	}
+	if item.Score != 0 {
+		row.Score = int(item.Score)
+	}
+	row.LearnKey = item.LearnKey
+	return row
 }

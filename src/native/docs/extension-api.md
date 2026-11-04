@@ -1077,3 +1077,15 @@ Code: `internal/jobs` (scheduler, persisted state, wake detection), `internal/jo
 - **Rig.** J18 (`acme.triggers`) checks that one change, one burst of files and one clipboard copy each make one run.
 - **Not done.** Menu bar items do not get these triggers yet (section 19); the no-overlap guarantee is covered by unit tests only.
 
+
+## 23. Built-in extensions as built (WP3.10)
+
+Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<name>` (each built-in), `internal/app/builtins.go` (the list the app registers), `internal/ext/child/direct.go` (the context a built-in uses). Built-ins are trusted and compiled in.
+
+- **Runtime.** A built-in runs in the host process, not in a child. It answers the same protocol methods as a child (commands, root, search, run, load, menu bars) by calling its Go value's interfaces, and its services go through the same services handler a child's do. Calls run on their own goroutine under the caller's budget; a call that overruns is abandoned, not killed.
+- **Always on.** A built-in is enabled from the start. It has no folder, no review and no enabled state, so `Enable`, `Disable`, `Uninstall` and `Source` return `ErrBuiltIn`, and the Extensions list does not show it.
+- **Manifest.** Built-in ids use the reserved `nevermind.` prefix, checked by `Manifest.ValidateBuiltIn`. Folder extensions cannot use it.
+- **Host-only item fields.** `Item.Section` (the root section a row is listed under) and `Item.LearnKey` (the usage learner's key) are honoured for built-ins only. `Appearance.Foreground` sets the row tone for a built-in; a built-in row with no foreground has no tone.
+- **System services.** `System().SettingsPanes()` lists the OS settings panes. The `open-system-settings` system action opens one by id.
+
+Built-ins moved so far: System Settings panes (`nevermind.system-settings`). The rest of the WP3.10 list is not yet moved.

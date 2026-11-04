@@ -7,9 +7,9 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/update"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // attachUpdater builds the update service over MyGo's signed updater and starts its schedule. A build that MyGo was not

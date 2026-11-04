@@ -72,6 +72,10 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 	case api.ActionCamera:
 		op := action.Op
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.operateCamera(h, op) }}
+	case api.ActionSystem:
+		if pane := action.Setting; action.Op == "open-system-settings" && s.deps.OpenSettingsPane != nil {
+			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
+		}
 	}
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 }

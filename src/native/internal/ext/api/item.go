@@ -30,6 +30,10 @@ type Item struct {
 	// messages the user must read, such as errors. Passive status rows leave it off.
 	Contextual bool    `json:"contextual,omitempty"`
 	Detail     *Detail `json:"detail,omitempty"`
+	// Section and LearnKey are host-only presentation for built-in extensions: the root section a row is listed under
+	// (for example "Commands") and the key the usage learner ranks it by. The host ignores both for folder extensions.
+	Section  string `json:"section,omitempty"`
+	LearnKey string `json:"learnKey,omitempty"`
 	// Shortcut is a local shortcut that is active only while this item is selected.
 	Shortcut string `json:"shortcut,omitempty"`
 	// QueryFallback marks an open-ended row that echoes the query (for example a web search row).

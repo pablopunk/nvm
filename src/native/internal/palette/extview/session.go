@@ -25,10 +25,13 @@ type Deps struct {
 	LoadImage func(ref string, done func(*ui.Bitmap))
 	OpenURL   func(url string)
 	CopyText  func(text string)
-	Files     platform.FS
-	Clock     platform.Clock
-	Cache     Cache
-	OnUI      func(fn func())
+	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
+	// system action report unavailable.
+	OpenSettingsPane func(id string)
+	Files            platform.FS
+	Clock            platform.Clock
+	Cache            Cache
+	OnUI             func(fn func())
 	// Dialog shows the native file and folder choosers for path fields. Nil makes those fields report unavailable.
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
