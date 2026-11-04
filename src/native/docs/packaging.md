@@ -70,6 +70,16 @@ Without secrets each job writes an UNSIGNED note to its step summary. macOS pack
 are ad hoc signed: Gatekeeper blocks them on other Macs. Windows packages get
 SmartScreen warnings.
 
+## Updates
+
+Release runs (`release` set to true) with the repository variable
+`NATIVE_UPDATE_PUBLIC_KEY` stamp an `updates` block into `mygo.json` for the build:
+the public key and the repository, with the `native-v` release prefix. `mygo build`
+signs the update files with `NATIVE_UPDATE_PRIVATE_KEY`, and each release job uploads
+the manifests and archives beside the installers. `verify-updates.sh` checks that the
+public key is linked into the executable. Publishing and owner steps are in
+[release.md](release.md#updates).
+
 ## Checks in the workflow
 
 `actionlint` covers the workflow (run locally with `actionlint`). Each runnable

@@ -62,6 +62,7 @@ type App struct {
 	analytics *analytics.Client
 	failures  *analytics.FailureReporter
 	updater   update.Updater
+	updates   *update.Service
 	appsvc    *appfeat.Services
 	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
 	systemSvc     *systemfeat.Services
@@ -158,7 +159,6 @@ func (p *App) ready() {
 	p.paletteHidden = make(chan struct{}, 1)
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
-	p.attachUpdater()
 	p.attachServices(ports, configDir(), nil)
 	p.attachWindows()
 	p.attachDeepLinks()
@@ -166,6 +166,7 @@ func (p *App) ready() {
 	prepareCatalog()
 	p.clip = p.openClipboard()
 	p.openUserData()
+	p.attachUpdater()
 	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 		p.clip.setEnabled(false)
 		p.clip.flush()

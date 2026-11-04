@@ -23,7 +23,53 @@ and the first release waits for the owner actions below.
    then publish after review.
 
 Rollback: keep the previous packages. Stores are versioned and forward-compatible
-by one version (PLAN section 4), so a previous build opens current data.
+by one version (PLAN section 4), so a previous build opens current data. The
+updater never installs an older version; a rollback is a reinstall of the previous
+package by hand.
+
+## Updates
+
+A release run with `release` set to true and the two update settings below makes
+the update feed: `update-<target>.json` manifests, the signed archives and, from the
+second release, deltas. The run uploads them with the installers. Publishing is
+manual: the feed is what installed apps read.
+
+- Apps read the newest release whose tag starts with `native-v` (not a draft). They
+  never read the Electron releases, which use `v` tags in the same repository.
+- Stable: a final release such as `native-v2.0.0`. Nightly: a prerelease such as
+  `native-v2.0.1-next.3`, which the Nightly channel also offers.
+- Publish a final release with
+  `gh release edit native-v2.0.0 --draft=false --latest=false`, so that it does not
+  become the repository's latest release. Publish a prerelease with
+  `gh release edit native-v2.0.1-next.3 --draft=false --prerelease`.
+- An app downloads an update in the background after it finds one, verifies its
+  signature and size, and waits for a restart (Settings, the menu bar or the root
+  palette). Quitting without restarting also installs it: MyGo replaces the app on
+  quit on macOS and at once on other systems, and the new version runs next launch.
+- A build without the settings, or a release run without them, has no feed and says
+  so in the Updates page.
+- GitHub limits anonymous API calls to 60 an hour for each address. The build step
+  passes `GH_TOKEN`, which MyGo uses to read the previous releases for deltas.
+
+### Owner actions for updates
+
+1. Run `go tool mygo keygen` once on a trusted machine. It writes `mygo-update.key`
+   (secret) and `mygo-update.pub` (public). Store the private key in a password
+   manager. Losing it strands installed apps; anyone who has it can ship code to them.
+2. Add the public key as the repository variable `NATIVE_UPDATE_PUBLIC_KEY` (its
+   contents, one line).
+3. Add the private key as the repository secret `NATIVE_UPDATE_PRIVATE_KEY` (its
+   contents). The workflow passes it to `mygo build` as `MYGO_UPDATER_PRIVATE_KEY`.
+4. Dispatch **Native packages** with `release` set to true and `version` set. Read
+   each job's summary: it must say the feed is on and signed, and the update key check
+   must pass.
+5. Publish the draft release (above) only after the L7 checks below pass on the
+   candidate: install the N-1 package, launch, see the update found, downloaded and
+   ready, restart, and confirm the new version runs.
+
+Not done and not in the feed: staged rollouts (MyGo has none), an automatic rollback
+(a reinstall by hand), the Windows portable updater (the installer's per-user install
+is what MyGo updates), and signing Windows updates with Authenticode.
 
 ## Owner actions before the first release
 
@@ -42,5 +88,5 @@ by one version (PLAN section 4), so a previous build opens current data.
   the other runners by cross compiling libopus or drop them.
 - Approve the icon (taken from the Electron app's `build/Icon.icon`) and the libopus
   pin (1.5.2, BSD-3-Clause, notice in `THIRD_PARTY_NOTICES.md`).
-- Decide when the updater (WP5.2) starts. Until `updates` is set in `mygo.json`,
-  packages do not self-update.
+- Decide when the updater starts publishing. The feed needs the update owner actions
+  above; until a release is published, installed apps report that no update is found.

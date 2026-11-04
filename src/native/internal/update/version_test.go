@@ -1,0 +1,69 @@
+package update
+
+import "testing"
+
+func TestCompareFollowsSemverForTheVersionsTheAppShips(t *testing.T) {
+	cases := []struct {
+		a, b string
+		want int
+	}{
+		{"2.0.0", "2.0.0", 0},
+		{"2.10.0", "2.9.0", 1},
+		{"2.0.0-next.0", "2.0.0-next.1", -1},
+		{"2.0.0-next.10", "2.0.0-next.9", 1},
+		{"2.0.0-next.1", "2.0.0", -1},
+		{"2.0.0", "2.0.0-next.1", 1},
+		{"v2.1.0", "2.0.9", 1},
+		{"1.9.9", "2.0.0", -1},
+	}
+	for _, c := range cases {
+		if got := Compare(c.a, c.b); got != c.want {
+			t.Errorf("Compare(%q, %q) = %d, want %d", c.a, c.b, got, c.want)
+		}
+	}
+}
+
+func TestIsNewerRefusesSameAndOlderVersions(t *testing.T) {
+	if !IsNewer("2.0.1", "2.0.0") {
+		t.Error("2.0.1 is not newer than 2.0.0")
+	}
+	for _, older := range []string{"2.0.0", "1.9.0", "2.0.0-next.3"} {
+		if IsNewer(older, "2.0.0") {
+			t.Errorf("%s offered as newer than 2.0.0", older)
+		}
+	}
+}
+
+func TestChannelsParseLabelAndToggle(t *testing.T) {
+	if ParseChannel("nightly") != ChannelNightly || ParseChannel("") != ChannelStable || ParseChannel("dev") != ChannelStable {
+		t.Fatal("stored channels must parse, unknown values fall back to stable")
+	}
+	if ChannelNightly.Other() != ChannelStable || ChannelStable.Other() != ChannelNightly {
+		t.Fatal("Other must switch between the two channels")
+	}
+	if !ChannelNightly.Prereleases() || ChannelStable.Prereleases() {
+		t.Fatal("only nightly offers prereleases")
+	}
+	if ChannelNightly.Label() != "Nightly" || ChannelStable.Label() != "Stable" {
+		t.Fatal("channel labels changed")
+	}
+}
+
+func TestMessagesNameTheStageAndTheProgress(t *testing.T) {
+	cases := []struct {
+		name  string
+		state State
+		want  string
+	}{
+		{"downloading", State{Status: StatusDownloading, LatestVersion: "2.1.0", Progress: 0.426}, "Downloading Nevermind 2.1.0 (43%)"},
+		{"ready", State{Status: StatusDownloaded, LatestVersion: "2.1.0"}, "Nevermind 2.1.0 is ready. Restart to finish updating."},
+		{"install failed", State{Status: StatusFailed, Stage: StageInstall, Message: "not signed"}, "Update install failed: not signed"},
+		{"check failed", State{Status: StatusFailed, Stage: StageCheck, Message: "offline"}, "Update check failed: offline"},
+		{"checking", State{Status: StatusChecking}, "Checking for updates"},
+	}
+	for _, c := range cases {
+		if got := Message(c.state); got != c.want {
+			t.Errorf("%s: Message = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
