@@ -128,7 +128,7 @@ type ProgressSpec struct {
 type CameraSpec struct {
 	DeviceID           string `json:"deviceId,omitempty"`
 	ShowDeviceSwitcher *bool  `json:"showDeviceSwitcher,omitempty"` // default true
-	Muted              bool   `json:"muted,omitempty"`
+	Muted              *bool  `json:"muted,omitempty"`               // default true, as the Electron view
 	Controls           bool   `json:"controls,omitempty"`
 	Mirrored           bool   `json:"mirrored,omitempty"`
 	Framing            string `json:"framing,omitempty"` // cover (default) or contain

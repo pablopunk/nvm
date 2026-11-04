@@ -33,6 +33,16 @@ type Deps struct {
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
 	Drafts DraftStore
+	// Pages opens the web page of a webview or camera view. Nil, or a system without a web view, makes those views
+	// say the system cannot show them.
+	Pages platform.WebPages
+	// Permissions reads the OS camera permission before a camera view starts, and asks for camera and microphone
+	// access for a webview that declares them. Nil skips both.
+	Permissions platform.Permissions
+	// Cameras remembers the camera each camera view chose. Nil keeps the choice for the life of the session.
+	Cameras CameraMemory
+	// IsDark reports the palette's appearance, which a web page's theme follows. Nil means light.
+	IsDark func() bool
 }
 
 // Session is one open extension view. It is used on the UI thread only.
@@ -57,10 +67,16 @@ type Session struct {
 	refreshing   bool
 	stopInterval chan struct{}
 	form         *formState
+	media        *palette.View
+	page         platform.WebPage
+	camera       *cameraView
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
 func NewSession(deps Deps, extID string, view api.View) *Session {
+	if deps.Cameras == nil {
+		deps.Cameras = NewMemoryCameras()
+	}
 	s := &Session{
 		deps: deps, extID: extID, view: view,
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
@@ -74,6 +90,10 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 // Open shows the session on host: it starts the view's loads and refreshes, and returns the page to push.
 func (s *Session) Open(host search.Host) *palette.View {
 	s.host = host
+	if s.isMediaView() {
+		s.openMedia()
+		return s.media
+	}
 	s.start()
 	return s.Palette()
 }
@@ -101,6 +121,10 @@ func (s *Session) Palette() *palette.View {
 	case api.ViewEditor:
 		if s.view.Editor != nil {
 			return s.editorView(*s.view.Editor)
+		}
+	case api.ViewWebview, api.ViewCamera:
+		if s.media != nil {
+			return s.media
 		}
 	}
 	return s.unsupportedPage()
