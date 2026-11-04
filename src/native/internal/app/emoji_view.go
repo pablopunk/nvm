@@ -77,7 +77,7 @@ func (p *App) emojiView() *palette.View {
 		EmptySub:    "Try a name, keyword, character, or Unicode value.",
 		Limit:       emojiRowLimit,
 		Providers: func() []search.Provider {
-			return []search.Provider{search.NewRowsProvider("emoji", p.emojiRows(picker.current(), p.skinTone()))}
+			return p.emojiProviders(picker.current(), p.skinTone())
 		},
 		Footer: picker.footer,
 		OnKey:  picker.onKey,
