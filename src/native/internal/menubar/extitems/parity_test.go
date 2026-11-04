@@ -1,0 +1,112 @@
+package extitems
+
+import (
+	"bytes"
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/platform"
+)
+
+// showBars replaces the extension's items with bars and renders them now, as a refresh does.
+func (h *harness) showBars(bars ...api.MenuBar) {
+	h.t.Helper()
+	h.source.set(func(s *fakeSource) { s.bars = bars })
+	h.svc.Refresh("acme.menubar")
+	h.settle()
+}
+
+// rowWith is the menu row with id in the item's menu.
+func rowWith(t *testing.T, items []platform.MenuItem, id string) platform.MenuItem {
+	t.Helper()
+	for _, item := range items {
+		if item.ID == id {
+			return item
+		}
+	}
+	t.Fatalf("no row %q", id)
+	return platform.MenuItem{}
+}
+
+func TestSubtitleJoinsTheLabelAndShortcutShowsOffLinuxOnly(t *testing.T) {
+	bar := api.MenuBar{ID: "main", Icon: "timer", Sections: []api.MenuSection{{Rows: []api.MenuRow{
+		{ID: "count", Title: "Count", Subtitle: "last minute", Shortcut: "Command+K", Action: runAction("bump")},
+	}}}}
+	for _, tc := range []struct{ goos, accelerator string }{{"darwin", "Command+K"}, {"linux", ""}} {
+		h := newHarnessFor(t, tc.goos)
+		h.showBars(bar)
+		row := rowWith(t, h.item("main").Items(), "0.0")
+		if row.Label != "Count — last minute" {
+			t.Fatalf("%s label = %q, want the subtitle after an em dash", tc.goos, row.Label)
+		}
+		if row.Accelerator != tc.accelerator {
+			t.Fatalf("%s accelerator = %q, want %q", tc.goos, row.Accelerator, tc.accelerator)
+		}
+	}
+}
+
+func TestCheckedRowDrawsACheckbox(t *testing.T) {
+	h := newHarness(t)
+	h.showBars(api.MenuBar{ID: "main", Sections: []api.MenuSection{{Rows: []api.MenuRow{
+		{ID: "on", Title: "On", Checked: true, Action: runAction("on")},
+		{ID: "plain", Title: "Plain", Action: runAction("plain")},
+	}}}})
+	on := rowWith(t, h.item("main").Items(), "0.0")
+	if !on.Checkable || !on.Checked {
+		t.Fatalf("checked row = %+v, want a ticked checkbox", on)
+	}
+	if plain := rowWith(t, h.item("main").Items(), "0.1"); plain.Checkable {
+		t.Fatalf("plain row = %+v, want no checkbox", plain)
+	}
+}
+
+func TestRowIconIsTheGlyphOnMacOSOnly(t *testing.T) {
+	bar := api.MenuBar{ID: "main", Sections: []api.MenuSection{{Rows: []api.MenuRow{
+		{ID: "bell", Title: "Bell", Icon: "bell", Action: runAction("bell")},
+	}}}}
+	mac := newHarnessFor(t, "darwin")
+	mac.showBars(bar)
+	icon := rowWith(t, mac.item("main").Items(), "0.0").Icon
+	want := menubar.ChooseGlyph("bell", "darwin", false)
+	if icon == nil || !icon.Template || !bytes.Equal(icon.PNG, want.PNG) || len(want.PNG) == 0 {
+		t.Fatalf("macOS row icon = %+v, want the bell template", icon)
+	}
+	linux := newHarnessFor(t, "linux")
+	linux.showBars(bar)
+	if icon := rowWith(t, linux.item("main").Items(), "0.0").Icon; icon != nil {
+		t.Fatal("a Linux row has an icon; 1.x draws row icons on macOS only")
+	}
+}
+
+func TestBarGlyphFollowsItsNameAndTheBar(t *testing.T) {
+	mac := newHarnessFor(t, "darwin")
+	tray := mac.item("main")
+	icon, template := tray.Icon()
+	want := menubar.ChooseGlyph("timer", "darwin", false)
+	if !bytes.Equal(icon, want.PNG) || !template {
+		t.Fatalf("macOS bar glyph template=%v, want the timer template", template)
+	}
+
+	linux := newHarnessFor(t, "linux")
+	bar := linux.item("main")
+	bar.SetDark(true)
+	bar.ChangeAppearance()
+	icon, template = bar.Icon()
+	white := menubar.ChooseGlyph("timer", "linux", true)
+	if !bytes.Equal(icon, white.PNG) || template {
+		t.Fatalf("dark Linux bar glyph template=%v, want the white timer", template)
+	}
+}
+
+func TestOffMacOSTheTitleJoinsTheTooltip(t *testing.T) {
+	h := newHarnessFor(t, "linux")
+	h.showBars(clockBar("04:59"))
+	tray := h.item("main")
+	if tray.Title() != "" {
+		t.Fatalf("Linux title = %q, want none; the title joins the tooltip", tray.Title())
+	}
+	if tip := tray.Options().ToolTip; tip != "Clock — 04:59" {
+		t.Fatalf("Linux tooltip = %q, want the title after an em dash", tip)
+	}
+}

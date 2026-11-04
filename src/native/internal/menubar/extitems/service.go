@@ -2,6 +2,7 @@ package extitems
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -31,7 +32,8 @@ type Hooks struct {
 	ShowExtensions func(extensionID string)
 }
 
-// Options wire the service. OnUI runs a function on the UI thread; Scheduler runs the renders.
+// Options wire the service. OnUI runs a function on the UI thread; Scheduler runs the renders. GOOS is the platform the
+// items are drawn for; empty means this one.
 type Options struct {
 	Host      platform.TrayHost
 	Scheduler *menubar.Scheduler
@@ -39,6 +41,7 @@ type Options struct {
 	Source    Source
 	Hooks     Hooks
 	Logs      *logx.Logger
+	GOOS      string
 }
 
 const (
@@ -244,25 +247,34 @@ func (s *Service) redraw(ext *extension) {
 
 // showBar creates or updates the platform item of one declared bar.
 func (s *Service) showBar(ext *extension, bar api.MenuBar) {
+	title, tooltip := menubar.StatusText(s.goos(), bar.Title, bar.Tooltip)
 	current := ext.items[bar.ID]
-	if current != nil && (current.icon != bar.Icon || current.tooltip != bar.Tooltip) {
+	if current != nil && (current.icon != bar.Icon || current.tooltip != tooltip) {
 		current.item.Close()
 		delete(ext.items, bar.ID)
 		current = nil
 	}
 	if current == nil {
-		item, err := menubar.NewItem(s.opts.Host, platform.TrayOptions{
+		item, err := menubar.NewGlyphItem(s.opts.Host, platform.TrayOptions{
 			ID: "ext:" + ext.id + ":" + bar.ID, Title: bar.Title, ToolTip: bar.Tooltip,
-		}, menubar.DefaultIconStyle)
+		}, string(bar.Icon), s.goos())
 		if err != nil {
 			s.logs().Warn("menu bar item unavailable", fieldsOf(ext.id, err.Error()))
 			return
 		}
-		current = &barItem{item: item, icon: bar.Icon, tooltip: bar.Tooltip}
+		current = &barItem{item: item, icon: bar.Icon, tooltip: tooltip}
 		ext.items[bar.ID] = current
 	}
-	current.item.SetTitle(bar.Title)
+	current.item.SetTitle(title)
 	current.item.SetMenu(s.menu(ext, bar))
+}
+
+// goos is the platform the items are drawn for.
+func (s *Service) goos() string {
+	if s.opts.GOOS != "" {
+		return s.opts.GOOS
+	}
+	return runtime.GOOS
 }
 
 // menu is the menu of one bar: its sections, under a not-responding head while the extension is failing.
@@ -270,6 +282,7 @@ func (s *Service) menu(ext *extension, bar api.MenuBar) []platform.MenuItem {
 	builder := rowBuilder{
 		invoke: func(action api.Action) func() { return s.invoke(ext.id, action) },
 		onUI:   s.opts.OnUI,
+		goos:   s.goos(),
 	}
 	rows := builder.sectionRows(bar.Sections)
 	if ext.failure != nil {

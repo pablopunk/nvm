@@ -84,6 +84,12 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessFor(t, "darwin")
+}
+
+// newHarnessFor is newHarness drawing the items for goos.
+func newHarnessFor(t *testing.T, goos string) *harness {
+	t.Helper()
 	clock := fake.NewClock()
 	tray := fake.NewTrayHost()
 	sched := menubar.NewScheduler(clock, serialUI())
@@ -104,6 +110,7 @@ func newHarness(t *testing.T) *harness {
 			ShowExtensions: func(id string) { h.opened <- "extensions:" + id },
 		},
 		Logs: quietLogs(t, clock),
+		GOOS: goos,
 	})
 	h.svc.Start()
 	h.settle()
@@ -254,7 +261,7 @@ func TestFailureWithoutAnyGoodRenderStillShowsAnItem(t *testing.T) {
 	tray := fake.NewTrayHost()
 	sched := menubar.NewScheduler(clock, serialUI())
 	source := &fakeSource{ids: []string{"acme.menubar"}, failure: &api.Failure{Code: api.CodeInternal, Message: "never rendered"}, runs: make(chan api.Invocation, 1)}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()
@@ -332,7 +339,7 @@ func TestUnavailableTriggerIsDisabledAndTheItemStillShows(t *testing.T) {
 		triggers: []api.Trigger{{Type: api.TriggerWake}},
 		runs:     make(chan api.Invocation, 1),
 	}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()
@@ -352,7 +359,7 @@ func TestTrayFailureLeavesTheServiceRunning(t *testing.T) {
 	tray.FailNext(fake.OpTrayNewTray, errors.New("no tray host"))
 	sched := menubar.NewScheduler(clock, serialUI())
 	source := &fakeSource{ids: []string{"acme.menubar"}, bars: []api.MenuBar{clockBar("x")}, runs: make(chan api.Invocation, 1)}
-	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock)})
+	svc := New(Options{Host: tray, Scheduler: sched, OnUI: serialUI(), Source: source, Logs: quietLogs(t, clock), GOOS: "darwin"})
 	svc.Start()
 	for range 4 {
 		sched.Tick()

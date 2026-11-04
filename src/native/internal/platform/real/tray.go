@@ -90,6 +90,10 @@ func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 			}
 		},
 	}
+	if item.Checkable {
+		converted.Type = mygo.MenuItemCheckbox
+		converted.Checked = item.Checked
+	}
 	if len(item.Submenu) > 0 {
 		converted.Submenu = convertMenuItems(item.Submenu)
 	}

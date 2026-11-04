@@ -41,6 +41,9 @@ type Options struct {
 // Its glyph follows the bar: it is drawn again when the bar turns dark or light.
 type Item struct {
 	tray platform.Tray
+	goos string
+	// glyph names the extension glyph an item draws instead of an app style; empty for the app's own item.
+	glyph string
 
 	mu    sync.Mutex
 	style string
@@ -50,8 +53,19 @@ type Item struct {
 // NewItem creates an item over host, with its glyph drawn in style (see ChooseIcon). A host that cannot make one
 // returns its error, and the caller runs without it.
 func NewItem(host platform.TrayHost, options platform.TrayOptions, style string) (*Item, error) {
-	item := &Item{style: NormalizeIconStyle(style), title: options.Title}
-	options.Title = TitleFor(item.style, runtime.GOOS, options.Title)
+	return newItem(host, options, &Item{style: NormalizeIconStyle(style), goos: runtime.GOOS})
+}
+
+// NewGlyphItem creates an item that draws the extension glyph named glyph on goos, with its title and tooltip as
+// StatusText lays them out for goos.
+func NewGlyphItem(host platform.TrayHost, options platform.TrayOptions, glyph, goos string) (*Item, error) {
+	options.Title, options.ToolTip = StatusText(goos, options.Title, options.ToolTip)
+	return newItem(host, options, &Item{style: DefaultIconStyle, goos: goos, glyph: glyph})
+}
+
+func newItem(host platform.TrayHost, options platform.TrayOptions, item *Item) (*Item, error) {
+	item.title = options.Title
+	options.Title = TitleFor(item.style, item.goos, options.Title)
 	tray, err := host.NewTray(options)
 	if err != nil {
 		return nil, err
@@ -127,14 +141,18 @@ func (m *Item) snapshot() (style, title string) {
 // applyIcon draws the item's glyph for the bar as it is now.
 func (m *Item) applyIcon() error {
 	style, _ := m.snapshot()
-	choice := ChooseIcon(style, runtime.GOOS, m.tray.Dark())
+	dark := m.tray.Dark()
+	choice := ChooseIcon(style, m.goos, dark)
+	if m.glyph != "" {
+		choice = ChooseGlyph(m.glyph, m.goos, dark)
+	}
 	return m.tray.SetIcon(choice.PNG, choice.Template)
 }
 
 // renderTitle shows the title the current style gives it.
 func (m *Item) renderTitle() {
 	style, title := m.snapshot()
-	m.tray.SetTitle(TitleFor(style, runtime.GOOS, title))
+	m.tray.SetTitle(TitleFor(style, m.goos, title))
 }
 
 // refreshIcon redraws the glyph when the bar's appearance changes. The OS calls it without a caller to report to.

@@ -14,14 +14,6 @@ type UpdateRow struct {
 func (u UpdateRow) menuRow(goos string, onUI func(fn func())) platform.MenuItem {
 	item := row("update", u.Label, u.Action, onUI)
 	item.Disabled = u.Disabled
-	item.Icon = downloadIcon(goos)
+	item.Icon = MenuGlyph("download", goos)
 	return item
-}
-
-// downloadIcon is the template glyph of the update row. 1.x draws row icons on macOS only, so other platforms get none.
-func downloadIcon(goos string) *platform.MenuIcon {
-	if goos != "darwin" {
-		return nil
-	}
-	return &platform.MenuIcon{PNG: iconAsset("download@2x.png"), Template: true}
 }

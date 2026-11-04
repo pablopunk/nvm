@@ -13,6 +13,9 @@ type MenuItem struct {
 	Accelerator string
 	// Icon is the image beside the label, nil for none.
 	Icon *MenuIcon
+	// Checkable draws a checkbox beside the label, ticked when Checked is set.
+	Checkable bool
+	Checked   bool
 	// Submenu nests rows under this one; Action is then unused.
 	Submenu []MenuItem
 }
