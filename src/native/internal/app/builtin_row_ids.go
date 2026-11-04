@@ -14,6 +14,8 @@ var systemRowActionIDs = map[string]string{
 	"lock-screen": shortcuts.CommandLockScreen,
 	"sleep":       shortcuts.CommandSleep,
 	"restart":     shortcuts.CommandRestart,
+
+	"open-system-settings": shortcuts.CommandSystemSettings,
 }
 
 // placeRowActionIDs names the folder rows by their stable action ID, keyed by the folder's name.

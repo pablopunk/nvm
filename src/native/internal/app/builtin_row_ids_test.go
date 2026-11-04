@@ -9,6 +9,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
+// TestSystemSettingsRowHasItsStableID maps the System Settings row to the 1.x command key's ID.
+func TestSystemSettingsRowHasItsStableID(t *testing.T) {
+	if got := builtInRowActionID(systemcommands.ID, search.Item{ID: "open-system-settings"}); got != shortcuts.CommandSystemSettings {
+		t.Fatalf("stable ID of System Settings = %q", got)
+	}
+}
+
 // TestSystemCommandRowKeepsItsShortcutUnderAStableID binds Lock Screen by its stable ID and finds the row again: the
 // shortcut shows on the row and its menu offers Remove keyboard shortcut, whatever the row's title.
 func TestSystemCommandRowKeepsItsShortcutUnderAStableID(t *testing.T) {
