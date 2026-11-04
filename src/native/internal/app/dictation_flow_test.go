@@ -43,6 +43,8 @@ type dictationHarness struct {
 	// screenText reads the screen; nil means the screen cannot be read. screenReads counts the readings.
 	screenText  func(ctx context.Context) (string, error)
 	screenReads int
+	// recordings keeps each dictation's audio, as the app's store does.
+	recordings memoryRecordings
 }
 
 func newDictationHarness(t *testing.T) *dictationHarness {
@@ -51,6 +53,7 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 		set:         fake.NewSet(),
 		panel:       &fakeDictationPanel{},
 		transcriber: &fakeDictationTranscriber{},
+		recordings:  memoryRecordings{saved: map[string][][]byte{}},
 	}
 	h.set.Clipboard.WriteText("before")
 	h.account = &fakeDictationAccount{signedIn: true, transcriber: h.transcriber}
@@ -78,6 +81,7 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 			}
 			return h.completer(ctx, system, user)
 		},
+		Recorder: h.recordings,
 		ScreenText: func(ctx context.Context) (string, error) {
 			h.screenReads++
 			if h.screenText == nil {

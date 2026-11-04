@@ -8,9 +8,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
+// SavedRecordingNotice follows a failure whose recording was kept, so the user knows where to retry it.
+const SavedRecordingNotice = "Your recording was saved. Open Dictation History to retry."
+
 // FailureMessage says what went wrong in a dictation, in words the user can act on. It is the single copy source
 // for dictation failures, so the indicator, the toast and the account notice agree.
 func FailureMessage(err error) string {
+	var saved *SavedError
+	if errors.As(err, &saved) {
+		return FailureMessage(saved.Err) + " " + SavedRecordingNotice
+	}
 	if errors.Is(err, ErrCancelled) {
 		return ""
 	}

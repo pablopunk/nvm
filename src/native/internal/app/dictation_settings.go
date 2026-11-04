@@ -8,6 +8,9 @@ import (
 // dictationSettingsFile holds the dictation choices in the user's store.
 const dictationSettingsFile = "dictation.json"
 
+// dictationRecordingsFolder holds the audio of dictations whose text is not in yet, inside the data folder.
+const dictationRecordingsFolder = "dictation-recordings"
+
 // dictationSettings are the choices the Dictation Settings view edits. DeviceID "" is the system default microphone.
 type dictationSettings struct {
 	DeviceID        string `json:"deviceId"`

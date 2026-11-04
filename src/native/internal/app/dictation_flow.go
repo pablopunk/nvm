@@ -61,7 +61,9 @@ type dictationDeps struct {
 	// Complete answers the AI cleanup prompt on the fast model. It is used only while the account is signed in.
 	Complete cleanup.Completer
 	// ScreenText reads the text the screen shows, for the screen terms the cleanup prompt may use.
-	ScreenText   func(ctx context.Context) (string, error)
+	ScreenText func(ctx context.Context) (string, error)
+	// Recorder keeps the audio of each dictation until its text is in. Nil keeps none.
+	Recorder     dict.Recorder
 	RestoreDelay time.Duration
 	OnDevices    func()
 }
@@ -93,6 +95,7 @@ func newDictationFlow(deps dictationDeps) *dictationFlow {
 		OnLevel:     f.onLevel,
 		Background:  deps.Background,
 		Warn:        deps.Warn,
+		Recorder:    deps.Recorder,
 	})
 	return f
 }
@@ -196,6 +199,19 @@ func (f *dictationFlow) openMicrophoneSettings() {
 	if err := f.deps.OpenMicrophoneSettings(); err != nil {
 		f.report(err, dictationSettingsFailureMessage)
 	}
+}
+
+// Recover transcribes a saved dictation again in the background, and reports the text, or why it failed, on the UI
+// thread through done. The recording stays saved until the caller removes it.
+func (f *dictationFlow) Recover(id string, done func(text string, err error)) {
+	if !f.deps.Account.SignedIn() {
+		done("", errors.New(dictationSignInMessage))
+		return
+	}
+	f.deps.Background("dictation.recover", func() {
+		text, err := f.service.Retry(context.Background(), id)
+		f.deps.Dispatch(func() { done(text, err) })
+	})
 }
 
 // RefreshDevices lists the microphones in the background and reports them through OnDevices.

@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -10,6 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
+	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/logx"
@@ -96,6 +98,7 @@ func (p *App) dictationDeps() dictationDeps {
 		},
 		Complete:     p.dictationCompleter(),
 		ScreenText:   p.dictationScreenText,
+		Recorder:     p.dictationRecorder(),
 		RestoreDelay: dictationRestoreDelay,
 		OnDevices:    p.Refresh,
 	}
@@ -145,4 +148,13 @@ func (p *App) dictationScreenText(ctx context.Context) (string, error) {
 	service := ocr.New(ocr.Deps{Text: p.ports.Text, Capture: p.ports.Capture, FS: p.ports.FS, TempDir: os.TempDir()})
 	result, err := service.Screen(ctx, ocr.Options{})
 	return result.Text, err
+}
+
+// dictationRecorder keeps dictation audio in the data folder, so a failed dictation can be transcribed again. A store
+// that is read only keeps nothing; the interface is nil then, so the service keeps no audio.
+func (p *App) dictationRecorder() dict.Recorder {
+	if p.userReadOnly {
+		return nil
+	}
+	return recordings.New(p.ports.FS, filepath.Join(dataDir(), dictationRecordingsFolder), p.ports.Clock.Now)
 }

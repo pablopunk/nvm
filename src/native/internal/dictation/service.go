@@ -30,6 +30,7 @@ var (
 	ErrNotRecording = errors.New("dictation is not recording")
 	ErrCancelled    = errors.New("dictation was cancelled")
 	ErrCodec        = errors.New("dictation needs the Opus codec")
+	ErrNoRecordings = errors.New("dictation has no recording store")
 )
 
 // Config holds the ports a Service runs on. OnLevel receives the meter level about every 100 ms while recording,
@@ -43,6 +44,8 @@ type Config struct {
 	OnLevel     func(level float64)
 	Background  func(name string, fn func())
 	Warn        func(event string, fields map[string]any)
+	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
+	Recorder Recorder
 }
 
 // Snapshot is what the indicator draws: the phase and the level of the last captured frames.
@@ -231,11 +234,75 @@ func (s *Service) finish(op *operation) (string, error) {
 	case <-op.ctx.Done():
 		return "", ErrCancelled
 	}
-	text, err := transcribeSegments(op.ctx, s.cfg.Transcriber, op)
+	files := segmentFiles(op)
+	saved := s.keepRecording(op.id, files)
+	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, op.id, op.preparedOK, files)
 	if op.ctx.Err() != nil {
+		s.discardRecording(op.id, saved)
 		return "", ErrCancelled
 	}
-	return text, err
+	if err != nil {
+		if saved {
+			return "", &SavedError{Err: err}
+		}
+		return "", err
+	}
+	s.discardRecording(op.id, saved)
+	return text, nil
+}
+
+// keepRecording saves the audio of dictation id before it is sent. A save that fails is logged; the dictation goes on
+// without a recording to retry.
+func (s *Service) keepRecording(id string, files [][]byte) bool {
+	if s.cfg.Recorder == nil {
+		return false
+	}
+	if err := s.cfg.Recorder.Save(id, files); err != nil {
+		s.warn("dictation.recording-save-failed", err)
+		return false
+	}
+	return true
+}
+
+// discardRecording drops the saved audio of dictation id once its text is confirmed, or when it was cancelled.
+func (s *Service) discardRecording(id string, saved bool) {
+	if !saved {
+		return
+	}
+	if err := s.cfg.Recorder.Remove(id); err != nil {
+		s.warn("dictation.recording-remove-failed", err)
+	}
+}
+
+// Retry transcribes a saved dictation again. The request is new and billable, so every segment gets a fresh operation
+// ID, as the desktop app does. It runs only while the service is idle, and holds the service until it returns, so a
+// dictation cannot start over it. The caller decides what to do with the text; the recording is left as it is.
+func (s *Service) Retry(ctx context.Context, id string) (string, error) {
+	if s.cfg.Recorder == nil || s.cfg.Transcriber == nil {
+		return "", ErrNoRecordings
+	}
+	s.mu.Lock()
+	if s.phase != PhaseIdle {
+		s.mu.Unlock()
+		return "", ErrBusy
+	}
+	s.phase = PhaseTranscribing
+	s.mu.Unlock()
+	defer s.endRetry()
+	files, err := s.cfg.Recorder.Load(id)
+	if err != nil {
+		return "", err
+	}
+	return transcribeFiles(ctx, s.cfg.Transcriber, newRetryOperationID(), false, files)
+}
+
+// endRetry returns the service to idle after a retry, unless a dictation has taken it over meanwhile.
+func (s *Service) endRetry() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.phase == PhaseTranscribing && s.cur == nil && s.starting == nil {
+		s.phase = PhaseIdle
+	}
 }
 
 // release returns the service to idle when op is still the current operation. A cancel may already have done so.
@@ -280,7 +347,17 @@ func newOperation() *operation {
 
 // newOperationID returns a random key for one dictation, short enough for the backend's idempotency header.
 func newOperationID() string {
+	return "dictation-" + randomHex()
+}
+
+// newRetryOperationID returns a key for one retry of a saved dictation. It never reuses the failed attempt's key, which
+// the backend has already settled.
+func newRetryOperationID() string {
+	return "dictation-retry-" + randomHex()
+}
+
+func randomHex() string {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
-	return "dictation-" + hex.EncodeToString(raw[:])
+	return hex.EncodeToString(raw[:])
 }
