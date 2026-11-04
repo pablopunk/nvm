@@ -12,12 +12,12 @@ type MenuItem struct {
 	Submenu []MenuItem
 }
 
-// TrayOptions describes a menu bar or system tray icon. Icon is PNG; the empty Icon shows only the title.
+// TrayOptions describes a menu bar or system tray icon. The icon is set with Tray.SetIcon; an item without one
+// shows only its title.
 type TrayOptions struct {
 	ID      string
 	Title   string
 	ToolTip string
-	Icon    []byte
 }
 
 // TrayHost is the intent "keep a small item in the menu bar or system tray", for the app's own icon and
@@ -34,6 +34,14 @@ type Tray interface {
 	SetTitle(title string)
 	// SetMenu replaces the menu shown on click. An empty list removes the menu.
 	SetMenu(items []MenuItem)
+	// SetIcon replaces the icon with a PNG, at 16 points (32 pixels for Retina). A template icon is a black
+	// glyph with transparency that macOS tints to the menu bar; other icons keep their colors. An empty PNG
+	// leaves the icon as it is.
+	SetIcon(png []byte, template bool) error
+	// Dark reports whether the bar the icon sits on is dark, so a light or dark glyph can be picked.
+	Dark() bool
+	// OnAppearanceChange runs fn when the bar turns dark or light, on the platform's thread. Set the icon again there.
+	OnAppearanceChange(fn func())
 	// Close removes the item. Calls after Close do nothing.
 	Close()
 }

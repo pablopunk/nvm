@@ -3,7 +3,7 @@ package menubar
 import (
 	"bytes"
 	"errors"
-	"image/png"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -61,8 +61,9 @@ func TestNewCreatesTheItemWithIconTooltipAndMenu(t *testing.T) {
 	if opts.ToolTip != Tooltip || opts.ID != "nevermind" {
 		t.Fatalf("options = %+v", opts)
 	}
-	if _, err := png.Decode(bytes.NewReader(opts.Icon)); err != nil {
-		t.Fatalf("icon is not PNG: %v", err)
+	wantIcon := ChooseIcon(DefaultIconStyle, runtime.GOOS, false)
+	if icon, template := trays[0].Icon(); !bytes.Equal(icon, wantIcon.PNG) || template != wantIcon.Template {
+		t.Fatalf("icon = %d bytes template=%v, want %q template=%v", len(icon), template, wantIcon.Asset, wantIcon.Template)
 	}
 	if got := labels(trays[0].Items()); len(got) != 6 {
 		t.Fatalf("menu rows = %q", got)
