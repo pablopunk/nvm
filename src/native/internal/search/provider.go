@@ -51,6 +51,9 @@ type Batch struct {
 	Provider string
 	Items    []Item
 	Final    bool
+	// Pending says the provider has started a call that outlasts the moment the query was typed, and its rows are
+	// still to come. It carries no rows, and Snapshot.Pending holds until the provider's Final batch.
+	Pending bool
 }
 
 // RowsFunc computes the rows of one source for a query. An empty query asks for the root rows.

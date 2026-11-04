@@ -25,12 +25,14 @@ const (
 )
 
 // Snapshot is the merged result of one query at one moment. Settled is set once every provider has
-// finished or been cut off; until then more snapshots of the same generation may follow.
+// finished or been cut off; until then more snapshots of the same generation may follow. Pending is set while
+// a provider reports a call in flight (Batch.Pending), so the rows shown are not the whole answer yet.
 type Snapshot struct {
 	Gen     int
 	Query   string
 	Items   []Item
 	Settled bool
+	Pending bool
 }
 
 // Options configures a Coordinator.
@@ -87,6 +89,7 @@ type slot struct {
 	started  time.Time
 	budget   Budget
 	finished bool
+	pending  bool
 	slow     bool
 	cancel   context.CancelFunc
 	done     chan struct{}
@@ -259,6 +262,7 @@ func (c *Coordinator) deliver(ctx context.Context, gen, idx int, b Batch) {
 	}
 	s := c.slots[idx]
 	s.items = append(s.items, c.learned(b.Items, c.query)...)
+	s.pending = s.pending || b.Pending
 	if b.Final {
 		c.finishLocked(s)
 	}
@@ -315,6 +319,7 @@ func (c *Coordinator) finishLocked(s *slot) {
 		return
 	}
 	s.finished = true
+	s.pending = false
 	close(s.done)
 	c.pending--
 	elapsed := c.opts.Clock.Now().Sub(s.started)
@@ -331,10 +336,21 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 			ranked = append(ranked, s.items)
 		}
 	}
-	snap := Snapshot{Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat), Settled: c.pending == 0}
+	snap := Snapshot{Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat), Settled: c.pending == 0, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
 	return snap
+}
+
+// pendingCallsLocked reports whether a provider that has not finished has said its call is in flight. The caller
+// holds c.mu.
+func (c *Coordinator) pendingCallsLocked() bool {
+	for _, s := range c.slots {
+		if s.pending && !s.finished {
+			return true
+		}
+	}
+	return false
 }
 
 // current returns the merged result of gen, for a synchronous query.
