@@ -37,5 +37,5 @@ Ticked by the author from the goldens above, on Linux (the box), not on macOS or
 ## Not verified
 
 - macOS and Windows: goldens rendered on Linux in the box only.
-- Rig: J15 and J16 re-run for the change to the root rows (see the PR for the run). J14 (AI builder) and J27 (screen reader pass) are not run.
+- Rig (private display :82 in the box): J15 and J16 pass after the J15 journey was updated to the named-query contract for failed rows. J14 (AI builder) and J27 (screen reader pass) are not run.
 - Human review: the reviewer must re-check the checklist and record "ok" or the diffs found.
