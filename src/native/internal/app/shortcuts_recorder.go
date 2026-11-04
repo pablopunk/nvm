@@ -80,6 +80,15 @@ func (r *shortcutRecorder) draw(c *ui.Context) {
 	k := design.Tokens(c)
 	ui.Column(c).Bind(&r.focus).Focusable().HandleInput(r.handleInput).Padding(24).Gap(14).Center().Children(func() {
 		if r.accelerator == "" {
+			if held := shortcuts.ModifierNames(recordedModifiers(c.Modifiers())); len(held) > 0 {
+				ui.Row(c).Gap(6).Center().Children(func() {
+					for _, name := range held {
+						design.Keycap(c, shortcutLabelOf(name))
+					}
+				})
+				ui.Text(c, "Press a key with them").FontSize(11).TextColor(k.Muted)
+				return
+			}
 			ui.Text(c, "Press a keyboard shortcut").FontSize(13).FontWeight(600).TextColor(k.Strong)
 			ui.Text(c, "Use at least one modifier, then press Enter").FontSize(11).TextColor(k.Muted)
 			return

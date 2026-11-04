@@ -14,19 +14,25 @@ func Capture(mods Modifiers, key string) string {
 	if key == "" {
 		return ""
 	}
-	var parts []string
+	parts := ModifierNames(mods)
+	if len(parts) == 0 && !standsAlone(key) {
+		return ""
+	}
+	return strings.Join(append(parts, key), "+")
+}
+
+// ModifierNames lists the held modifiers in canonical order, as accelerators spell them.
+func ModifierNames(mods Modifiers) []string {
+	var names []string
 	for _, held := range []struct {
 		down bool
 		name string
 	}{{mods.Command, Command}, {mods.Control, Control}, {mods.Alt, Alt}, {mods.Shift, Shift}} {
 		if held.down {
-			parts = append(parts, held.name)
+			names = append(names, held.name)
 		}
 	}
-	if len(parts) == 0 && !standsAlone(key) {
-		return ""
-	}
-	return strings.Join(append(parts, key), "+")
+	return names
 }
 
 var arrowKeys = map[string]bool{"Up": true, "Down": true, "Left": true, "Right": true}
