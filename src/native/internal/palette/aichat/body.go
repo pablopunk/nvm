@@ -8,7 +8,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// body draws the transcript above the model pill. An empty chat says what it is for, or that sign-in comes first.
+// body draws the transcript above the composer on the pane's own surface, as every other palette view does. A chat with no messages is blank, as the
+// desktop app shows it, except for the sign-in line of an account that is not signed in.
 func (p *page) body(c *ui.Context, h search.Host) {
 	p.host = h
 	record, ok := p.deps.Service.Chat(p.id)
@@ -16,30 +17,32 @@ func (p *page) body(c *ui.Context, h search.Host) {
 		return
 	}
 	k := design.Tokens(c)
-	ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
-		if len(record.Messages) == 0 {
-			emptyTranscript(c, p.deps, record, k)
-		} else {
-			ui.List(c, &p.list, len(record.Messages), func(i int) {
-				ui.Column(c).Padding(6, 4).Children(func() {
-					renderMessage(c, p.deps, record.Messages[i], i == len(record.Messages)-1)
-				})
-			}).Grow(1)
-		}
+	ui.Column(c).Grow(1).MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
+		transcript(c, p, record, k)
 		composerRow(c, p, record, h)
 	})
 }
 
-// emptyTranscript is the hint shown in a chat with no messages.
-func emptyTranscript(c *ui.Context, deps Deps, record chat.Chat, k *design.TokenSet) {
-	text := "Ask anything. Replies stream in as Markdown."
-	if record.Kind == chat.KindBuilder {
-		text = "Describe what you want; the model writes a Go extension, it is checked and installed."
+// transcript is the scrolling list of messages, which follows the newest one. An empty chat is blank.
+func transcript(c *ui.Context, p *page, record chat.Chat, k *design.TokenSet) {
+	if len(record.Messages) == 0 {
+		signInLine(c, p.deps, k)
+		return
 	}
-	if !deps.SignedIn() {
-		text = "Not signed in: sign in from Nevermind Account to chat with AI."
+	ui.List(c, &p.list, len(record.Messages), func(i int) {
+		ui.Column(c).Padding(6, 4).Children(func() {
+			renderMessage(c, p.deps, record.Messages[i], i == len(record.Messages)-1)
+		})
+	}).Grow(1)
+}
+
+// signInLine is what an empty chat shows when the account is not signed in: the one thing a chat cannot do without.
+func signInLine(c *ui.Context, deps Deps, k *design.TokenSet) {
+	if deps.SignedIn() {
+		ui.Column(c).Grow(1)
+		return
 	}
-	ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
-		ui.Text(c, text).FontSize(13).TextColor(k.Tertiary)
+	ui.Column(c).Grow(1).Center().Children(func() {
+		ui.Text(c, "Not signed in: sign in from Nevermind Account to chat with AI.").FontSize(13).TextColor(k.Tertiary)
 	})
 }

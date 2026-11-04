@@ -44,11 +44,11 @@ func reply(c *ui.Context, deps Deps, m chat.Message, last bool) {
 }
 
 // thinking is the state of a reply that has no visible text yet, while the model works. It names the state only; the
-// model's reasoning is not shown, as in the desktop app.
+// model's reasoning is not shown, as in the desktop app, which glows the same word in the accent color.
 func thinking(c *ui.Context, k *design.TokenSet) {
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
 		ui.Spinner(c)
-		ui.Text(c, "Thinking").FontSize(12).TextColor(k.Tertiary)
+		ui.Text(c, "Thinking").FontSize(13).FontWeight(500).TextColor(k.Accent)
 	})
 }
 
