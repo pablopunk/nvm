@@ -96,6 +96,14 @@ func (s *Service) Refresh(id string) {
 	s.opts.Scheduler.Now(jobName(id))
 }
 
+// CloseAll closes the items of every extension and stops their render jobs, for the app's quit. It runs on the UI
+// thread, where the extension map is authoritative.
+func (s *Service) CloseAll() {
+	for _, ext := range s.exts {
+		s.drop(ext)
+	}
+}
+
 func jobName(id string) string {
 	return "extitems:" + id
 }

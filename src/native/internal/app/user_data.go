@@ -25,7 +25,6 @@ func (p *App) openUserData() {
 	p.notes = notes.New(st, searchClock, p.userReadOnly)
 	p.snips = snippets.New(st, searchClock, p.userReadOnly)
 	p.userNotices = st.Notices()
-	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) { p.quitting = true })
 	mygo.App.OnQuit(func() {
 		p.closeEdits()
 		_ = st.Close()
