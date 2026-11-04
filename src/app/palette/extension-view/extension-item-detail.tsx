@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import type { CommandItem } from '../model';
 import { themedImageSource, useSystemTheme } from '../system-theme';
 import type { ExtensionViewRendererProps } from './extension-view';
