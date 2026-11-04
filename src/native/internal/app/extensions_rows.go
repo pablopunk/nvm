@@ -108,6 +108,8 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	if m.IsBuiltIn(extID) {
 		row.ID = item.ID
 		row = builtInRow(row, item)
+	} else {
+		row.LearnKey = folderLearnKey(extID, item.LearnKey)
 	}
 	if item.Primary != nil {
 		row.Actions = append(row.Actions, extview.ActionFor(deps, extID, *item.Primary))
@@ -120,6 +122,15 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		row = p.withShortcutActions(row, item.CustomizeAs, bound)
 	}
 	return p.withAuthoringActions(row, extID, "")
+}
+
+// folderLearnKey namespaces a folder extension's learning key by its id, so its rows learn apart from built-in rows
+// and from other extensions that choose the same key. An empty key stays empty: the row is not learned.
+func folderLearnKey(extID, key string) string {
+	if key == "" {
+		return ""
+	}
+	return "ext:" + extID + ":" + key
 }
 
 func iconOr(icon, fallback string) string {
