@@ -18,7 +18,7 @@ func TestFailureMessagesSayWhatToDo(t *testing.T) {
 		want string
 	}{
 		{"no microphone", platform.ErrNotFound, "No microphone was found"},
-		{"microphone denied", platform.ErrDenied, "Allow Nevermind to use the microphone"},
+		{"microphone denied", platform.ErrDenied, "Microphone access is denied. Enable it in System Settings"},
 		{"microphone unsupported", platform.ErrUnsupported, "not available on this system yet"},
 		{"codec missing", fmt.Errorf("%w: %w", ErrCodec, platform.ErrUnsupported), "libopus"},
 		{"signed out", &backend.Error{Kind: backend.KindUnauthorized, Status: 401}, "Sign in to use API dictation."},

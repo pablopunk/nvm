@@ -34,7 +34,7 @@ func microphoneFailureMessage(err error) (string, bool) {
 	case errors.Is(err, platform.ErrNotFound):
 		return "No microphone was found. Connect one, or choose another in Dictation settings.", true
 	case errors.Is(err, platform.ErrDenied):
-		return "Allow Nevermind to use the microphone in System Settings to dictate.", true
+		return "Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.", true
 	case errors.Is(err, platform.ErrUnsupported):
 		return "Dictation is not available on this system yet.", true
 	}
