@@ -42,12 +42,17 @@ func gridRowKey(row int) any {
 	return strconv.Itoa(row)
 }
 
-// gridRow draws one row of cells.
+// gridRow draws one row of cells. Every row has Columns slots, so the cells of a short last row keep the columns
+// of the rows above; the slots past the last result are empty and share the width the same way.
 func (p *Palette) gridRow(c *ui.Context, g *Grid, row int) {
 	cols := max(g.Columns, 1)
 	ui.Row(c).Gap(2).Padding(2, 8).Children(func() {
-		for i := row * cols; i < min((row+1)*cols, len(p.results)); i++ {
-			p.gridCell(c, g, i)
+		for i := row * cols; i < (row+1)*cols; i++ {
+			if i < len(p.results) {
+				p.gridCell(c, g, i)
+				continue
+			}
+			ui.Row(c).Grow(1).Height(g.CellHeight)
 		}
 	})
 }
@@ -57,7 +62,7 @@ func (p *Palette) gridRow(c *ui.Context, g *Grid, row int) {
 func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	k := design.Tokens(c)
 	it := p.results[i]
-	cell := ui.Row(c).Width(g.CellWidth).Height(g.CellHeight).Radius(gridCellRadius).Center().Label(it.Title)
+	cell := ui.Row(c).Grow(1).Height(g.CellHeight).Radius(gridCellRadius).Center().Label(it.Title)
 	hovered := cell.Hovered()
 	switch {
 	case i == p.chosen:

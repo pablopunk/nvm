@@ -45,11 +45,16 @@ func openURL(tpl, q string) func(h search.Host) {
 }
 
 type command struct {
+	// ID names the command for shortcut bindings. Commands without a shortcut leave it empty.
+	ID                                    string
 	Title, Keywords, Icon, Subtitle, Tone string
-	Run                                   func(h search.Host)
-	Dismiss                               search.Dismissal
-	Order                                 int
-	Hidden                                bool
+	// PhraseMatch limits the title match to phrases and word prefixes, so a long list of commands does not answer
+	// every query with scattered letters. Keywords still match as aliases.
+	PhraseMatch bool
+	Run         func(h search.Host)
+	Dismiss     search.Dismissal
+	Order       int
+	Hidden      bool
 }
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
@@ -62,6 +67,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
 		{Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
+		{Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.toggleDictation() }},
 		{Title: "Snippets", Keywords: "snippets text expand template", Icon: "type", Subtitle: "Saved text you paste often", Run: func(h search.Host) { h.Push(p.snippetsView()) }},
 		{Title: "Create Snippet", Keywords: "snippet new add", Icon: "plus", Hidden: true, Run: func(h search.Host) { h.Push(p.snippetForm(nil)) }},
 		{Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
@@ -74,10 +80,14 @@ func (p *App) commands(timerOn bool) []command {
 	cmds = append(cmds, []command{
 		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
+		{Title: "Check for Updates", Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Look for a newer version of Nevermind", Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
+		{Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsView()) }},
+		{Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
 	cmds = append(cmds, p.placeCommands()...)
+	cmds = append(cmds, p.windowCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
@@ -134,6 +144,10 @@ func (p *App) settingsView() *palette.View {
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
 					p.S.save()
 					p.clip.setLimit(p.S.ClipLimit)
+					h.Refresh()
+				}}}},
+				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.S.DiagnosticsOff), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.toggleDiagnostics()
 					h.Refresh()
 				}}}},
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},

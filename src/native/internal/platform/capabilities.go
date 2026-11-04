@@ -37,6 +37,7 @@ const (
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
 	CapabilityFocusReturn      Capability = "focus.return"
+	CapabilityMicrophone       Capability = "microphone.capture"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -44,11 +45,12 @@ func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
 		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
-		CapabilityKeychain, CapabilityNotifications, CapabilityProcessList, CapabilityProcessSignal,
-		CapabilityScreensDisplays, CapabilityShellApps, CapabilityShellAppIcons, CapabilityShellBeep,
-		CapabilityShellReveal, CapabilityShellTrash, CapabilitySystemEmptyTrash, CapabilitySystemLock,
-		CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings, CapabilitySystemShutDown,
-		CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement, CapabilityWindowPlacement,
+		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
+		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
+		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySystemEmptyTrash,
+		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
+		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
+		CapabilityWindowPlacement,
 	}
 	slices.Sort(list)
 	return list

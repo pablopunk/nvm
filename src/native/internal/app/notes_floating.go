@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -33,7 +34,7 @@ func (p *App) openFloatingNote(id string) {
 	w := mygo.NewWindow(mygo.WindowOptions{
 		Title: n.Title(), Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
 		AlwaysOnTop: true, TitleBarStyle: mygo.TitleBarHidden,
-		Content: ui.View(func(c *ui.Context) { floatingNoteBody(c, edit) }),
+		Content: ui.View(func(c *ui.Context) { floatingNoteWindow(c, edit) }),
 	})
 	edit.window = w
 	w.OnMove(func() { p.rememberFloatingFrame(edit.id, w) })
@@ -109,6 +110,19 @@ func (p *App) floatingNoteClosed(edit *noteEdit) {
 		_ = p.notes.SetFloating(edit.id, false)
 	}
 	p.releaseEdit(edit)
+}
+
+// floatingNoteWindow is the content of a floating window: a title row that keeps clear of the window controls over
+// the hidden title bar and drags the window, then the note. Without the row the first line of text sits under the
+// controls. The row is themed with Nevermind's tokens, like the rest.
+func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
+	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Children(func() {
+		bar := c.TitleBar()
+		ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right, 0, bar.Left).Center().DragWindow().Children(func() {
+			ui.Text(c, notes.Title(edit.text)).FontSize(12).Bold().TextColor(design.Tokens(c).Secondary)
+		})
+		floatingNoteBody(c, edit)
+	})
 }
 
 // floatingNoteBody is the content of a floating window: the note's text, with the same autosave as the editor.

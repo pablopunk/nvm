@@ -64,7 +64,7 @@ func (p *App) pasteAfterHide(h search.Host, e clipboard.Entry) {
 func pasteFailureMessage(err error) string {
 	switch {
 	case errors.Is(err, platform.ErrUnsupported):
-		return "Paste is not available on this system yet. The item is on the clipboard; press Ctrl+V to paste it."
+		return "Paste is not available on this system yet. The item is on the clipboard; press " + shortcutLabelOf("Control+V") + " to paste it."
 	case errors.Is(err, platform.ErrConflict):
 		return "The focused app changed, so nothing was pasted."
 	case errors.Is(err, platform.ErrDenied):

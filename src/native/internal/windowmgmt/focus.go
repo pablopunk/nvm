@@ -31,3 +31,16 @@ func (s *Service) isFrontmost(ctx context.Context, pid int) bool {
 	app, found, err := s.windows.Frontmost(ctx)
 	return err == nil && found && app.PID == pid
 }
+
+// FrontmostTarget returns the app in front, which a shortcut acts on: the shortcut must not take focus, so the
+// target is whatever the user was already using when the key was pressed.
+func (s *Service) FrontmostTarget(ctx context.Context) (Target, bool) {
+	if !s.Available() {
+		return Target{}, false
+	}
+	app, found, err := s.windows.Frontmost(ctx)
+	if err != nil || !found {
+		return Target{}, false
+	}
+	return Target{PID: app.PID, BundleID: app.BundleID}, true
+}

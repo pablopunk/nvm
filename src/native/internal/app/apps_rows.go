@@ -70,10 +70,7 @@ func (p *App) appAction(a apps.App, act apps.Action) search.Action {
 	switch act.Kind {
 	case apps.ActionOpen:
 		return search.Action{Title: act.Title, Run: func(h search.Host) {
-			h.Hide()
-			if err := p.ports.Shell.LaunchApp(shellApp(a)); err != nil {
-				h.Toast(err.Error())
-			}
+			hideOrReport(h, p.ports.Shell.LaunchApp(shellApp(a)))
 		}}
 	case apps.ActionReveal:
 		return search.Action{Title: act.Title, Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {

@@ -26,6 +26,8 @@ type Set struct {
 	System       *System
 	Permissions  *Permissions
 	Windows      *WindowManager
+	Microphone   *Microphone
+	Opus         *OpusCodec
 	Capabilities platform.Capabilities
 }
 
@@ -54,6 +56,8 @@ func NewSet() *Set {
 		System:       NewSystem(),
 		Permissions:  NewPermissions(),
 		Windows:      NewWindowManager(),
+		Microphone:   NewMicrophone(),
+		Opus:         NewOpusCodec(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -83,6 +87,8 @@ func (s *Set) Ports() platform.Ports {
 		System:       s.System,
 		Permissions:  s.Permissions,
 		Windows:      s.Windows,
+		Microphone:   s.Microphone,
+		Opus:         s.Opus,
 		Capabilities: s.Capabilities,
 	}
 }

@@ -48,10 +48,11 @@ func quoteIsStale(quote Quote, now time.Time) bool {
 	return quote.FetchedAt.IsZero() || now.Sub(quote.FetchedAt) >= rateStaleAfter
 }
 
-// formatCurrencyAmount renders an amount in a currency the way the en-US currency style does: the symbol, grouped
-// thousands and two decimals (none for yen), at most four decimals.
+// formatCurrencyAmount renders an amount in a currency the way money is written: the symbol, grouped thousands
+// and exactly the currency's minor units (two decimals, none for yen). The raw text keeps four decimals.
 func formatCurrencyAmount(value float64, code string) string {
-	body := formatDecimal(math.Abs(value), currencyFractionDigits(code), 4, true)
+	digits := currencyFractionDigits(code)
+	body := formatDecimal(math.Abs(value), digits, digits, true)
 	text := currencyText(code, body)
 	if value < 0 {
 		return "-" + text

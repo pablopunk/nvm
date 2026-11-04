@@ -18,7 +18,7 @@ var rootSources = []rootSource{
 	{id: "timer", rows: timerRows},
 	{id: "quicklinks", rows: quicklinkRows},
 	{id: "snippets", rows: snippetRows},
-	{id: "extensions", rows: extensionRows},
+	{id: "extensions", provider: extensionProvider},
 	{id: "commands", rows: commandRows},
 	{id: "guide", rows: guideRootRows},
 	{id: "system-settings", rows: settingsPaneRows},

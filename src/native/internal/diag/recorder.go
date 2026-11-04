@@ -102,6 +102,11 @@ func (r *Recorder) Export(ref string) string {
 	if !ok {
 		return ""
 	}
+	return FormatExport(record)
+}
+
+// FormatExport renders one record as the plain text a support request copies. It reads only the record's fields.
+func FormatExport(record Record) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Reference: %s\n", record.Ref)
 	fmt.Fprintf(&b, "Component: %s\n", record.Component)

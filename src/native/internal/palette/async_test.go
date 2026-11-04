@@ -32,7 +32,7 @@ func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 	h := newHarness(t, root, false, withClock(clock))
 
 	h.typeText("q")
-	clock.AwaitTimers(1)
+	clock.AwaitTimerDueIn(search.HardBudget)
 	h.awaitRows(func(titles []string) bool { return slices.Contains(titles, "Quick") })
 	if h.p.Query() != "q" {
 		t.Fatalf("typing waited for the blocked provider: query = %q", h.p.Query())

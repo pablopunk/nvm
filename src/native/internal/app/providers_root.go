@@ -2,9 +2,9 @@ package app
 
 import (
 	"context"
-	"maps"
 	"slices"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -18,33 +18,26 @@ type rootInput struct {
 	engine     engine
 	quicklinks []Quicklink
 	learn      *usage.Learner
-	disabled   map[string]bool
-	exts       []loadedExt
 	apps       []appfeat.App
 	clip       *clipEngine
 	chats      []chatHead
 	timerOn    bool
 }
 
-// chatHead is what the conversation rows read from a chat. The chat itself is opened on the UI thread only.
+// chatHead is what the conversation rows read from a chat: its id, its title and whether it is a builder chat.
 type chatHead struct {
-	chat    *Chat
+	id      string
 	title   string
 	builder bool
 }
 
 // captureRoot copies the state the root's providers need. It runs on the UI thread.
 func (p *App) captureRoot() *rootInput {
-	chats := make([]chatHead, 0, len(p.chats.Chats))
-	for _, ch := range p.chats.Chats {
-		chats = append(chats, chatHead{chat: ch, title: ch.Title, builder: ch.Builder})
-	}
+	chats := p.chatHeads()
 	return &rootInput{
 		engine:     p.engine(),
 		quicklinks: slices.Clone(p.S.Quicklinks),
 		learn:      p.learn,
-		disabled:   maps.Clone(p.S.Disabled),
-		exts:       p.exts,
 		apps:       p.appsSnapshot(),
 		clip:       p.clip,
 		chats:      chats,
@@ -68,4 +61,18 @@ func (p *App) rootProviders() []search.Provider {
 		}))
 	}
 	return out
+}
+
+// chatHeads lists the saved conversations for the root's rows, most recently changed first. It reads the chat
+// service, so it runs on the UI thread.
+func (p *App) chatHeads() []chatHead {
+	if p.chats == nil {
+		return nil
+	}
+	records := p.chats.Chats()
+	heads := make([]chatHead, 0, len(records))
+	for _, record := range records {
+		heads = append(heads, chatHead{id: record.ID, title: record.Title, builder: record.Kind == chat.KindBuilder})
+	}
+	return heads
 }

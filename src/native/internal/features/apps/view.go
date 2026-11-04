@@ -84,7 +84,7 @@ func forceQuitAction(name string) Action {
 		Kind:           ActionForceQuit,
 		Title:          "Force Quit " + name,
 		Destructive:    true,
-		Confirm:        "Force Quit " + name + "?",
+		Confirm:        "Force Quit " + name,
 		ConfirmMessage: "Force quit " + name + "? Unsaved data may be lost.",
 	}
 }

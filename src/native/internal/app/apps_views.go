@@ -84,7 +84,7 @@ func (p *App) quitAllAction(chosen []apps.App) search.Item {
 				h.Toast("Select at least one app to quit")
 				return
 			}
-			h.Push(palette.Confirm("Quit All Apps?", "This will close the selected applications. Unsaved changes may be lost.", func() {
+			h.Push(palette.Confirm("Quit All Apps", "This will close the selected applications. Unsaved changes may be lost.", func() {
 				p.quitApps(chosen, false)
 			}))
 		}}}}

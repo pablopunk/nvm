@@ -57,6 +57,9 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	env := processSystemEnvironment()
 	env.goos = goos
 	supported = append(supported, systemCapabilities(env)...)
+	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
+		supported = append(supported, platform.CapabilityMicrophone)
+	}
 	return platform.NewCapabilities(supported...)
 }
 

@@ -250,9 +250,10 @@ func TestSpeaksChatCompletionsOnlyForOpenAIFormat(t *testing.T) {
 func TestUnknownRouteOnFixtureIsRejected(t *testing.T) {
 	h := newHarness(t)
 	h.withBackend(t)
-	_, err := h.client.ActiveModel(context.Background(), ActiveModelQuery{})
+	var out struct{}
+	err := h.client.callJSON(context.Background(), requestSpec{method: "GET", path: "/api/v1/not-served", auth: authRequired}, &out)
 	if !IsKind(err, KindRejected) || statusOf(err) != statusNotFound {
-		t.Fatalf("ActiveModel on an unserved route = %v, want KindRejected with status 404", err)
+		t.Fatalf("a call to an unserved route = %v, want KindRejected with status 404", err)
 	}
 }
 

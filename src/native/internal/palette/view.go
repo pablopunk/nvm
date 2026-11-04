@@ -52,12 +52,12 @@ type View struct {
 	OnKey func(c *ui.Context, h search.Host) bool
 }
 
-// Grid lays a view's rows out as cells, Columns to a row, as the emoji picker does. The palette moves the choice
-// in two dimensions with the arrows, Home, End, Page Up and Page Down, draws each cell's plate, selection and
-// clicks, and labels the cell with the row's title. Cell draws what a cell shows and nothing else.
+// Grid lays a view's rows out as cells, Columns to a row, as the emoji picker does. The cells share the pane's
+// width equally, so the grid fills the pane. The palette moves the choice in two dimensions with the arrows, Home,
+// End, Page Up and Page Down, draws each cell's plate, selection and clicks, and labels the cell with the row's
+// title. Cell draws what a cell shows and nothing else.
 type Grid struct {
 	Columns    int
-	CellWidth  float32
 	CellHeight float32
 	Cell       func(c *ui.Context, it search.Item)
 }

@@ -34,5 +34,7 @@ func NewPorts() platform.Ports {
 		Permissions:  permissions{},
 		Windows:      newWindowManager(helper{}),
 		Capabilities: Capabilities(),
+		Microphone:   newMicrophone(),
+		Opus:         opusCodec{},
 	}
 }
