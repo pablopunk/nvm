@@ -11,66 +11,61 @@ type Options struct {
 	Limit    int    // at most this many results; zero or negative means no limit
 }
 
-type scoredRecord struct {
+// The ranks of a matched entry, as 1.x's grid orders them: the entry whose name is the query, then the entries with a
+// keyword equal to it, then the rest.
+const (
+	rankTitle = iota
+	rankKeyword
+	rankPartial
+)
+
+// nameField is the position of the lowercase name among an entry's identity fields.
+const nameField = 1
+
+type rankedRecord struct {
 	index int
-	score int
-	// named is set when the entry's name is the query itself, as "fire" is for the fire character.
-	named bool
+	rank  int
 }
 
-// Search returns the entries matching query, best first. Each field (glyph, name, group, Unicode
-// values, keywords) scores with the shared bands and an entry takes its best field. Ties go to an entry
-// whose name is the query, then keep catalog order. An empty query lists the category in catalog order
-// without scoring.
+// Search returns the entries matching query in 1.x's order: the entry named by the query first, then the entries with
+// a keyword equal to it, then the rest, each group in catalog order. An empty query lists the category in catalog order
+// without matching.
 func (c *Catalog) Search(query string, opts Options) []Entry {
 	needle := newSearchQuery(normalizeQuery(query))
 	category := c.NormalizeCategory(opts.Category)
 	categoryID, filtered := categoryIDOf(category)
 	idx := builtinLookups()
-	var matches []scoredRecord
+	var matches []rankedRecord
 	var fields []string
 	for index, r := range records {
 		if filtered && r.group != categoryID {
 			continue
 		}
-		score := 1
-		named := false
-		if needle.text != "" {
-			if !idx.masks[index].covers(needle.mask) {
-				continue
-			}
-			fields = recordFields(fields[:0], r, idx, index)
-			score = recordScore(fields, needle)
-			if score == 0 {
-				continue
-			}
-			named = fields[1] == needle.text
+		if needle.text == "" {
+			matches = append(matches, rankedRecord{index: index})
+			continue
 		}
-		matches = append(matches, scoredRecord{index: index, score: score, named: named})
+		if !idx.masks[index].covers(needle.mask) {
+			continue
+		}
+		var identity int
+		fields, identity = recordFields(fields[:0], r, idx, index)
+		rank, matched := rankRecord(fields, identity, needle)
+		if matched {
+			matches = append(matches, rankedRecord{index: index, rank: rank})
+		}
 	}
 	if needle.text != "" {
-		slices.SortStableFunc(matches, compareScoredRecords)
+		slices.SortStableFunc(matches, compareRankedRecords)
 	}
 	return entriesOf(matches, opts.Limit)
 }
 
-// compareScoredRecords orders by score, best first. Among equal scores an entry named by the query comes first, so
-// "fire" lists the fire character before a firefighter, which matches only through a keyword.
-func compareScoredRecords(a, b scoredRecord) int {
-	if a.score != b.score {
-		return b.score - a.score
-	}
-	return boolRank(b.named) - boolRank(a.named)
+func compareRankedRecords(a, b rankedRecord) int {
+	return a.rank - b.rank
 }
 
-func boolRank(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
-func entriesOf(matches []scoredRecord, limit int) []Entry {
+func entriesOf(matches []rankedRecord, limit int) []Entry {
 	count := len(matches)
 	if limit > 0 {
 		count = min(count, limit)
@@ -82,25 +77,44 @@ func entriesOf(matches []scoredRecord, limit int) []Entry {
 	return out
 }
 
-// recordFields appends the searchable values of one record, lowercased where the scorer folds case.
-// The glyph is matched as written; the Unicode value and group forms are precomputed.
-func recordFields(dst []string, r record, idx *lookups, index int) []string {
+// recordFields appends the searchable values of one record, lowercased where the matcher folds case: the identity
+// fields (glyph, name, group, Unicode values, keywords), then the titles 1.x gives the record's actions, which its search
+// matches too. It returns the fields and how many of them are identity fields.
+func recordFields(dst []string, r record, idx *lookups, index int) ([]string, int) {
 	dst = append(dst, stringAt(r.glyph), strings.ToLower(stringAt(r.name)), idx.groups[index], idx.labels[index])
 	for offset := range int(r.keywordCount) {
 		dst = append(dst, strings.ToLower(stringAt(keywordIDs[int(r.keywordStart)+offset])))
 	}
-	return dst
+	identity := len(dst)
+	dst = append(dst, idx.copyTitles[index], copyUnicodeTitle)
+	if r.skinTone {
+		dst = append(dst, pasteSkinToneTitle)
+	}
+	return dst, identity
 }
 
-// recordScore returns the best ordered band over the fields. A query that matches no field in order matches nothing:
-// scattered letters are not a match for an emoji, so "thumbs" does not find an umbrella.
-func recordScore(fields []string, q searchQuery) int {
-	best := 0
+// rankRecord reports whether a record matches through any of its fields, and the rank of its identity fields.
+func rankRecord(fields []string, identity int, q searchQuery) (int, bool) {
 	for _, field := range fields {
-		best = max(best, orderedScore(field, q))
-		if best >= scoreExact {
-			return best
+		if matchesQuery(field, q) {
+			return rankOf(fields[:identity], q), true
 		}
 	}
-	return best
+	return 0, false
+}
+
+// rankOf returns the rank of a record by its identity fields: rankTitle when the name is the query, rankKeyword when
+// another identity field is, and rankPartial otherwise.
+func rankOf(identity []string, q searchQuery) int {
+	rank := rankPartial
+	for position, field := range identity {
+		if field != q.text {
+			continue
+		}
+		if position == nameField {
+			return rankTitle
+		}
+		rank = rankKeyword
+	}
+	return rank
 }

@@ -134,6 +134,46 @@ func TestEmojiKeysMoveTheChoiceAcrossTheGrid(t *testing.T) {
 	}
 }
 
+// TestEmojiArrowsMoveTheCellsWhileTheSearchFieldHasFocus shows the picker as the hotkey does, so the search field has
+// the keyboard, and walks the four arrows, first with an empty query and then with a typed one. The arrows move the
+// cells and leave the query alone, as 1.x's grid takes them from the field.
+func TestEmojiArrowsMoveTheCellsWhileTheSearchFieldHasFocus(t *testing.T) {
+	p := goldenPalette(t)
+	p.Attach(&queuedWindow{})
+	p.Open(p.emojiView())
+	tt := ui.NewTester(p.View, width, height)
+	tt.Frame()
+
+	steps := []struct {
+		key   ui.Key
+		delta int
+	}{
+		{ui.KeyRight, 1},
+		{ui.KeyDown, emojiColumns},
+		{ui.KeyLeft, -1},
+		{ui.KeyUp, -emojiColumns},
+	}
+	for _, query := range []string{"", "smile"} {
+		if query != "" {
+			tt.Type(query)
+			tt.Frame()
+		}
+		start := p.Chosen()
+		for _, step := range steps {
+			tt.Key(0, step.key)
+			tt.Frame()
+			start += step.delta
+			if got := p.Chosen(); got != start {
+				t.Fatalf("query %q: after key %v the choice is %d, want %d", query, step.key, got, start)
+			}
+		}
+		if p.Query() != query {
+			t.Fatalf("the arrows changed the query to %q, want %q", p.Query(), query)
+		}
+		p.SetQuery("")
+	}
+}
+
 // TestEmojiAnnouncesTheNameOfTheSelectedCell checks the screen reader contract (J27): moving the choice announces
 // the name of the cell it lands on.
 func TestEmojiAnnouncesTheNameOfTheSelectedCell(t *testing.T) {
@@ -150,16 +190,28 @@ func TestEmojiAnnouncesTheNameOfTheSelectedCell(t *testing.T) {
 	}
 }
 
-// TestEmojiGridBuildsOnlyTheCellsOnScreen renders the full catalog and checks that the frame draws a bounded number
-// of cells: the grid is virtualized, so the catalog size does not cost a frame.
+// TestEmojiGridShowsTheFirstMatchesAsThe1xGridDoes checks the 1.x cap: an empty query lists the first 160 characters
+// of the catalog, and the rest of the catalog is reached by searching.
+func TestEmojiGridShowsTheFirstMatchesAsThe1xGridDoes(t *testing.T) {
+	p := goldenPalette(t)
+	openEmojiPicker(p)
+	tt := ui.NewTester(p.View, width, height)
+	tt.Frame()
+	if n := len(p.Results()); n != 160 {
+		t.Fatalf("the picker holds %d entries, want the 160 that 1.x shows", n)
+	}
+	if n := len(emojiCatalog.All()); n <= 3000 {
+		t.Fatalf("the catalog holds %d entries, want more than 3000", n)
+	}
+}
+
+// TestEmojiGridBuildsOnlyTheCellsOnScreen renders the first matches and checks that the frame draws a bounded number
+// of cells: the grid is virtualized, so the row count does not cost a frame.
 func TestEmojiGridBuildsOnlyTheCellsOnScreen(t *testing.T) {
 	p := goldenPalette(t)
 	openEmojiPicker(p)
 	tt := ui.NewTester(p.View, width, height)
 	tt.Frame()
-	if n := len(p.Results()); n < 3000 {
-		t.Fatalf("the picker holds %d entries, want the whole catalog", n)
-	}
 	glyphs := emojiGlyphs()
 	drawn := 0
 	for _, text := range tt.Texts() {
@@ -184,7 +236,8 @@ func TestEmojiNoResultsShowsTheEmptyState(t *testing.T) {
 	}
 }
 
-// TestEmojiTabCyclesTheCategories checks that Tab narrows the grid to a category and Shift+Tab returns to all.
+// TestEmojiTabCyclesTheCategories checks that Tab narrows the grid to the first category, capped as 1.x caps it, and
+// Shift+Tab returns to all.
 func TestEmojiTabCyclesTheCategories(t *testing.T) {
 	p := goldenPalette(t)
 	win := &queuedWindow{}
@@ -198,8 +251,9 @@ func TestEmojiTabCyclesTheCategories(t *testing.T) {
 	win.drain()
 	tt.Frame()
 	narrowed := len(p.Results())
-	if narrowed == 0 || narrowed >= all {
-		t.Fatalf("after Tab the grid holds %d of %d entries, want a category", narrowed, all)
+	firstCategory := len(emojiCatalog.Search("", emoji.Options{Category: emojiCategoryNames[1]}))
+	if want := min(firstCategory, emojiRowLimit); narrowed == 0 || narrowed != want {
+		t.Fatalf("after Tab the grid holds %d entries, want %d of the first category", narrowed, want)
 	}
 
 	tt.Key(ui.Shift, ui.KeyTab)
