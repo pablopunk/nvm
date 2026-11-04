@@ -42,5 +42,6 @@ func NewPorts() platform.Ports {
 		Text:         newTextRecognizer(helper{}),
 		Capture:      newScreenCapturer(helper{}),
 		OutputMute:   newOutputMute(helper{}),
+		FileDrag:     fileDrag{},
 	}
 }

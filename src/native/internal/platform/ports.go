@@ -44,4 +44,6 @@ type Ports struct {
 	Capture ScreenCapturer
 	// OutputMute mutes the speakers while a dictation records. Only the dictation's audio mute uses it.
 	OutputMute OutputMuter
+	// FileDrag carries files out of the palette to other applications as a native drag.
+	FileDrag FileDrag
 }
