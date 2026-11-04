@@ -545,10 +545,6 @@
           {
             "title": "Open",
             "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
           }
         ]
       },
@@ -1061,10 +1057,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1591,10 +1583,6 @@
           {
             "title": "Open",
             "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
           }
         ]
       },
@@ -1705,10 +1693,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -2184,10 +2168,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -2700,10 +2680,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]

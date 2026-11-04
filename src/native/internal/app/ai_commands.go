@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
@@ -90,11 +91,11 @@ func (p *App) aiCommandRows() []command {
 	}
 	selection := p.ports.Capabilities.Supported(platform.CapabilitySelectionCopy)
 	return []command{
-		{Title: commands.FixTitle, Keywords: "fix grammar correct proofread spelling selected text ai", Icon: "sparkles", Subtitle: "Correct grammar, spelling, and punctuation", Hidden: !selection,
+		{ID: shortcuts.CommandFixSelectedText, Title: commands.FixTitle, Keywords: "fix grammar correct proofread spelling selected text ai", Icon: "sparkles", Subtitle: "Correct grammar, spelling, and punctuation", Hidden: !selection,
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Fix) }},
-		{Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
+		{ID: shortcuts.CommandTriageSelectedText, Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Triage) }},
-		{Title: commands.ClassifyTitle, Keywords: "classify image picture screenshot photograph ai", Icon: "image", Subtitle: "Copy an image, then identify its category",
+		{ID: shortcuts.CommandClassifyImage, Title: commands.ClassifyTitle, Keywords: "classify image picture screenshot photograph ai", Icon: "image", Subtitle: "Copy an image, then identify its category",
 			Run: func(h search.Host) { h.Hide(); p.aiCommands.ClassifyClipboardImage() }},
 	}
 }

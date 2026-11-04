@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 const clipboardCommandTitle = "Clipboard History"
@@ -74,7 +75,7 @@ func TestRootCommandRowOffersSetAndRemoveKeyboardShortcut(t *testing.T) {
 	if got, want := searchActionTitles(row.Actions), []string{"Open", setShortcutTitle}; !slices.Equal(got, want) {
 		t.Fatalf("unbound actions = %v, want %v", got, want)
 	}
-	mustSetShortcut(t, p.shortcutsManager(), shortcutCommandID(clipboardCommandTitle), "Command+Alt+V")
+	mustSetShortcut(t, p.shortcutsManager(), shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	row = searchedClipboardCommandRow(t, p)
 	if got, want := searchActionTitles(row.Actions), []string{"Open", setShortcutTitle, removeShortcutTitle}; !slices.Equal(got, want) {
 		t.Fatalf("bound actions = %v, want %v", got, want)
@@ -104,7 +105,7 @@ func TestCommandKSetShortcutRecordsAndBindsFromTheRootRow(t *testing.T) {
 	tt.Frame()
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if got := entryOf(t, p, shortcutCommandID(clipboardCommandTitle)).Accelerator; got != "Command+Alt+V" {
+	if got := entryOf(t, p, shortcuts.CommandClipboardHistory).Accelerator; got != "Command+Alt+V" {
 		t.Fatalf("saved accelerator = %q, want Command+Alt+V", got)
 	}
 	if got := p.Top().Title; got != rootViewTitle {
@@ -118,10 +119,10 @@ func TestCommandKSetShortcutRecordsAndBindsFromTheRootRow(t *testing.T) {
 // TestRemoveKeyboardShortcutFromTheRootRowUnbindsIt runs the Remove keyboard shortcut row of a bound command.
 func TestRemoveKeyboardShortcutFromTheRootRowUnbindsIt(t *testing.T) {
 	p := shownPalette(t)
-	mustSetShortcut(t, p.shortcutsManager(), shortcutCommandID(clipboardCommandTitle), "Command+Alt+V")
+	mustSetShortcut(t, p.shortcutsManager(), shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	row := openClipboardCommandRow(t, p)
 	row.Actions[2].Run(p)
-	if got := entryOf(t, p, shortcutCommandID(clipboardCommandTitle)).Accelerator; got != "" {
+	if got := entryOf(t, p, shortcuts.CommandClipboardHistory).Accelerator; got != "" {
 		t.Fatalf("accelerator after remove = %q", got)
 	}
 	if row := searchedClipboardCommandRow(t, p); row.Accessory != "" || len(row.Actions) != 2 {
@@ -132,7 +133,7 @@ func TestRemoveKeyboardShortcutFromTheRootRowUnbindsIt(t *testing.T) {
 // TestShortcutActionOfACommandOpensTheCommand resolves the action a shortcut runs for a command row and runs it.
 func TestShortcutActionOfACommandOpensTheCommand(t *testing.T) {
 	p := goldenPalette(t)
-	action, ok := p.shortcutAction(shortcutCommandID(clipboardCommandTitle))
+	action, ok := p.shortcutAction(shortcuts.CommandClipboardHistory)
 	if !ok {
 		t.Fatal("no action for the Clipboard History shortcut")
 	}
@@ -152,7 +153,7 @@ func TestPaletteRootRowActionMenuShowsTheShortcutActions(t *testing.T) {
 
 func TestPaletteRootRowActionMenuShowsTheRemoveShortcutAction(t *testing.T) {
 	p := goldenPalette(t)
-	mustSetShortcut(t, p.shortcutsManager(), shortcutCommandID(clipboardCommandTitle), "Command+Alt+V")
+	mustSetShortcut(t, p.shortcutsManager(), shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	openClipboardCommandRow(t, p)
 	p.OpenActionMenu(0)
 	golden.AssertMatrix(t, "root-row-actions-shortcut", p.View, paletteGoldens)

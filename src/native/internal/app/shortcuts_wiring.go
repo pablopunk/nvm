@@ -33,7 +33,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 // for the process.
 func (p *App) shortcutsDocument() shortcuts.Persistence {
 	if p.sharedConfig == nil {
-		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(shortcuts.DefaultPalette))
+		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(""))
 	}
 	return shortcuts.NewPortableDocument(p.sharedConfig)
 }
@@ -42,8 +42,8 @@ func (p *App) shortcutsDocument() shortcuts.Persistence {
 func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
 	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden {
-			actions = append(actions, shortcuts.Action{ID: commandShortcutID(cmd), Title: cmd.Title})
+		if !cmd.Hidden && cmd.ID != "" {
+			actions = append(actions, shortcuts.Action{ID: cmd.ID, Title: cmd.Title})
 		}
 	}
 	if p.windowManagementEnabled() {

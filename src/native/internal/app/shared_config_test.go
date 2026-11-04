@@ -90,8 +90,8 @@ func TestOneXShortcutsAppearAsBoundRowsInTwoOh(t *testing.T) {
 	want := map[string]string{
 		"palette":                     "Command+Space",
 		"app:/Applications/Slack.app": "Command+Control+Alt+D",
-		"command:Dictate":             "Command+Control+Alt+V",
-		"command:Emoji & Symbols":     "Command+Shift+E",
+		"command:dictate":             "Command+Control+Alt+V",
+		"command:emoji-symbols":       "Command+Shift+E",
 	}
 	for actionID, accelerator := range want {
 		if got := accelerators[actionID]; got != accelerator {
