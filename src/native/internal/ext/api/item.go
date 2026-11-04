@@ -36,10 +36,11 @@ type Item struct {
 	LearnKey string `json:"learnKey,omitempty"`
 	// Shortcut is a local shortcut that is active only while this item is selected.
 	Shortcut string `json:"shortcut,omitempty"`
-	// QueryFallback marks an open-ended row that echoes the query (for example a web search row).
-	// Only SearchProvider rows may set it.
+	// QueryFallback marks an open-ended row that echoes the query (for example a web search row). The host offers it
+	// for every typed query, below the rows whose words match the query and above loose letter matches. Its Score is
+	// ignored. RootItems ignore the flag, so the row never shows at the empty root.
 	QueryFallback bool `json:"queryFallback,omitempty"`
-	// Score is a ranking hint. The host caps it and combines it with usage signals.
+	// Score is a ranking hint. The host caps it and combines it with usage signals. Query fallbacks ignore it.
 	Score float64 `json:"score,omitempty"`
 	// LastUsedMs is epoch milliseconds for the item's last use, an intrinsic recency signal.
 	LastUsedMs int64 `json:"lastUsedMs,omitempty"`

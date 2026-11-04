@@ -205,7 +205,7 @@ type Item struct {
     Disabled, Contextual bool             // Contextual wraps full-contrast guidance text
     Detail              *Detail           // side or bottom inspector, and the inline preview (Cmd+Y)
     Shortcut            string            // local, shown while selected
-    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"
+    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"; fallback band, Score ignored (section 26)
     Score               float64
     LastUsedMs          int64
 }
@@ -1087,3 +1087,12 @@ Code: `internal/ai/extai` (the calls, attachments and decisions, no per-extensio
 - **Limits.** 4 open streams per extension. Attachments: at most 8 per call (a decision refuses more); text is cut at 80,000 characters; an image is at most 8 MiB for a prompt and 2 MiB decoded for a decision (PNG, JPEG or WebP).
 - **Not served yet.** `selectedText` and `selectedFiles` answer unavailable: the host has no selection port that reads the source app's selection for an extension, and no Finder selection port.
 - **Tests.** L1: `internal/ai/extai` (ask, stream, tier header, not signed in, timeout, attachments, decisions) and `internal/ext/services/ai_test.go` (refusal, quota, sign-out, stream events and abort, sessions, timeout, attachment capabilities). L2: `internal/ext/supervisor/ai_test.go` runs the `acme.ai` fixture in a child process against the fake backend.
+
+## 26. Query fallbacks as built (dogfood batch 1)
+
+Code: `internal/app/extensions_rows.go` (`searchRow`, `scoreQueryFallback`).
+
+- **Query fallbacks (`Item.QueryFallback`, SearchItems only).** A fallback row is offered for every typed query, as 1.x did. It takes the fallback band (score 40): below rows whose words match the query (50 and up), above loose letter matches (20 and 10). Its declared `Score` is ignored. Learned ranking does not apply to folder extensions yet (section 23: `LearnKey` is built-ins only), so a folder fallback does not climb with use.
+- **Root.** RootItems ignore the flag. A fallback never shows at the empty root.
+- **Ties.** Rows of equal score keep the order of their sources (the root's source order), not 1.x's last-used and title tie break.
+- **Tests.** L1 and L2: `internal/app/extensions_fallback_test.go` runs the `acme.fallback` fixture in a child process against the golden palette (band, order, root exclusion).

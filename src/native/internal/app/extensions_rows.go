@@ -66,9 +66,22 @@ func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchRe
 	}
 	var out []search.Item
 	for _, item := range result.Items {
-		out = append(out, extensionRow(p, m, result.ExtensionID, result.Title, item))
+		out = append(out, searchRow(p, m, result, item))
 	}
 	return out
+}
+
+// scoreQueryFallback is the band of a query-fallback row: the 1.x fallback band (840 on its scale) lies between a
+// substring match (50 here) and a scattered-letter match (20). A learned boost cannot lift the row past 50 (search.Boosted).
+const scoreQueryFallback = 40
+
+// searchRow is one search answer as a root row. A query fallback takes the fallback band whatever Score it declares.
+func searchRow(p *App, m *manager.Manager, result manager.SearchResult, item api.Item) search.Item {
+	row := extensionRow(p, m, result.ExtensionID, result.Title, item)
+	if item.QueryFallback {
+		row.Score = scoreQueryFallback
+	}
+	return row
 }
 
 // rootRowsFor turns one extension's empty-query rows into rows. A failed extension contributes none at the root, as
