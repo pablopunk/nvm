@@ -45,17 +45,26 @@ type BackendRequest struct {
 //	set.HTTP.Handle(backend)
 //	backend.SetMode(fixtures.ModeInsufficientCredits)
 type Backend struct {
-	mu       sync.Mutex
-	mode     FailureMode
-	requests []BackendRequest
-	hanging  chan struct{}
+	mu          sync.Mutex
+	mode        FailureMode
+	requests    []BackendRequest
+	hanging     chan struct{}
+	activeModel string
 }
 
 var _ http.Handler = (*Backend)(nil)
 
 // NewBackend returns a healthy backend that has received no requests.
 func NewBackend() *Backend {
-	return &Backend{mode: ModeHealthy, hanging: make(chan struct{}, 16)}
+	return &Backend{mode: ModeHealthy, hanging: make(chan struct{}, 16), activeModel: ActiveModelBody}
+}
+
+// SetActiveModel replaces the descriptor the active-model route answers with, for tests that need another route
+// shape or a spend-cap notice.
+func (b *Backend) SetActiveModel(body string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.activeModel = body
 }
 
 // SetMode changes how the backend answers from the next request on.
@@ -102,6 +111,8 @@ func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		serveChat(w, body, mode)
 	case r.Method == http.MethodGet && r.URL.Path == ModelsPath:
 		writeBody(w, http.StatusOK, "application/json", ModelsBody)
+	case r.Method == http.MethodGet && r.URL.Path == ActiveModelPath:
+		writeBody(w, http.StatusOK, "application/json", b.currentActiveModel())
 	case r.Method == http.MethodGet && r.URL.Path == MePath:
 		writeBody(w, http.StatusOK, "application/json", MeBody)
 	default:
@@ -131,6 +142,13 @@ func (b *Backend) applyHTTPFailure(w http.ResponseWriter, r *http.Request, mode 
 	return true
 }
 
+// currentActiveModel returns the descriptor the active-model route answers with.
+func (b *Backend) currentActiveModel() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.activeModel
+}
+
 // record stores the request for later assertions.
 func (b *Backend) record(r *http.Request, body string) {
 	b.mu.Lock()
@@ -141,7 +159,7 @@ func (b *Backend) record(r *http.Request, body string) {
 // isBackendRoute reports whether the request targets a route the fake implements at all.
 func isBackendRoute(r *http.Request) bool {
 	switch r.URL.Path {
-	case ChatCompletionsPath, ModelsPath, MePath:
+	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath:
 		return true
 	default:
 		return false
