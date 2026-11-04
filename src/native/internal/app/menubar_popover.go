@@ -64,7 +64,7 @@ func (h popoverHost) create(key string, tray platform.Tray, popover api.Popover,
 		Clock:   searchClock,
 		Icon:    h.p.fileIcon,
 		Learner: h.p.learn,
-		DragRow: dragFileRow,
+		DragRow: h.p.dragRow,
 	})
 	window, err := tray.OpenPopover(platform.PopoverOptions{Width: popover.Width, Height: popover.Height}, ui.View(pal.View))
 	if err != nil {

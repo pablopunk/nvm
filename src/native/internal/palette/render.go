@@ -187,12 +187,13 @@ func (p *Palette) row(c *ui.Context, i int) {
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
 	}
-	if len(it.DragPaths) > 0 && p.opts.DragRow != nil {
-		p.opts.DragRow(c, it.DragPaths, func() { design.Row(c, data) })
+	if src, ok := p.dragSourceOf(it); ok {
+		p.dragRow(c, i, src, func() { design.Row(c, data) })
 		return
 	}
 	design.Row(c, data)
 }
+
 
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon
 // or letters the design tile draws.

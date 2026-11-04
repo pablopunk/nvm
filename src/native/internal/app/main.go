@@ -173,7 +173,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,
-		DragRow:     dragFileRow,
+		DragRow:     p.dragRow,
 		Feedback:    p.showPaletteFeedback,
 	})
 }
