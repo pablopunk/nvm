@@ -297,6 +297,7 @@ Background mode per command: `view` (default), `noView`, `background`. The host 
 Rules:
 
 - Put per-second values in `Title`. Changing rows rebuilds the native menu.
+- `Checked` is a tri-state: `api.Checkbox(true)` draws a ticked checkbox, `api.Checkbox(false)` an empty one, and nil a plain row.
 - A render failure keeps the last good menu. Returning no menus shows nothing.
 - The host always adds a root `Show/Hide in Menu Bar` action; extensions do not write it.
 

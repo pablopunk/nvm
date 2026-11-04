@@ -33,12 +33,18 @@ type MenuRow struct {
 	Title    string      `json:"title"`
 	Subtitle string      `json:"subtitle,omitempty"`
 	Icon     MenuBarIcon `json:"icon,omitempty"`
-	Checked  bool        `json:"checked,omitempty"`
-	Disabled bool        `json:"disabled,omitempty"`
+	// Checked draws a checkbox: Checkbox(true) ticked, Checkbox(false) empty. Nil draws a plain row.
+	Checked  *bool `json:"checked,omitempty"`
+	Disabled bool  `json:"disabled,omitempty"`
 	// Shortcut is a display-only label such as "Command+Shift+K".
 	Shortcut string    `json:"shortcut,omitempty"`
 	Action   *Action   `json:"action,omitempty"`
 	Items    []MenuRow `json:"items,omitempty"`
+}
+
+// Checkbox is the Checked value of a row that shows a checkbox, ticked when on is true.
+func Checkbox(on bool) *bool {
+	return &on
 }
 
 // Popover is a view rendered under the status item.

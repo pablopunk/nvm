@@ -51,14 +51,18 @@ func TestSubtitleJoinsTheLabelAndShortcutShowsOffLinuxOnly(t *testing.T) {
 func TestCheckedRowDrawsACheckbox(t *testing.T) {
 	h := newHarness(t)
 	h.showBars(api.MenuBar{ID: "main", Sections: []api.MenuSection{{Rows: []api.MenuRow{
-		{ID: "on", Title: "On", Checked: true, Action: runAction("on")},
+		{ID: "on", Title: "On", Checked: api.Checkbox(true), Action: runAction("on")},
+		{ID: "off", Title: "Off", Checked: api.Checkbox(false), Action: runAction("off")},
 		{ID: "plain", Title: "Plain", Action: runAction("plain")},
 	}}}})
 	on := rowWith(t, h.item("main").Items(), "0.0")
 	if !on.Checkable || !on.Checked {
 		t.Fatalf("checked row = %+v, want a ticked checkbox", on)
 	}
-	if plain := rowWith(t, h.item("main").Items(), "0.1"); plain.Checkable {
+	if off := rowWith(t, h.item("main").Items(), "0.1"); !off.Checkable || off.Checked {
+		t.Fatalf("unchecked row = %+v, want an empty checkbox", off)
+	}
+	if plain := rowWith(t, h.item("main").Items(), "0.2"); plain.Checkable {
 		t.Fatalf("plain row = %+v, want no checkbox", plain)
 	}
 }

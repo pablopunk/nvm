@@ -43,8 +43,8 @@ func (b rowBuilder) row(path string, row api.MenuRow) platform.MenuItem {
 		Disabled:    row.Disabled,
 		Accelerator: rowAccelerator(row, b.goos),
 		Icon:        menubar.MenuGlyph(string(row.Icon), b.goos),
-		Checkable:   row.Checked,
-		Checked:     row.Checked,
+		Checkable:   row.Checked != nil,
+		Checked:     row.Checked != nil && *row.Checked,
 	}
 	if len(row.Items) > 0 {
 		for position, child := range row.Items {
