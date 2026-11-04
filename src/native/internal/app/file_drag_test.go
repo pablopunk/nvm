@@ -160,10 +160,13 @@ func TestPressDraggingARowChoosesNothing(t *testing.T) {
 	}
 }
 
-// TestAClickChoosesAndADoubleClickRunsARowWithADragPath checks the click path is unchanged by the drag: one click
-// chooses the row, and a double click runs it, as the list does for every row. A click starts no drag.
-func TestAClickChoosesAndADoubleClickRunsARowWithADragPath(t *testing.T) {
-	h := newDragHarness(t, search.Item{Title: "Safari", DragPaths: pathsOf("/Applications/Safari.app")})
+// TestAClickRunsARowWithADragPath checks the click path, as 1.x's cmdk item does: a single click chooses the row and
+// runs it, and starts no drag.
+func TestAClickRunsARowWithADragPath(t *testing.T) {
+	h := newDragHarness(t,
+		search.Item{Title: "Alpha"},
+		search.Item{Title: "Safari", DragPaths: pathsOf("/Applications/Safari.app")},
+	)
 	if err := h.tt.Click("Safari"); err != nil {
 		t.Fatal(err)
 	}
@@ -171,15 +174,84 @@ func TestAClickChoosesAndADoubleClickRunsARowWithADragPath(t *testing.T) {
 	if len(h.drag.Calls()) != 0 {
 		t.Fatalf("a click started a drag: %v", h.drag.Calls())
 	}
-	if len(*h.ran) != 0 || h.chosenTitle() != "Safari" {
-		t.Fatalf("one click ran %v or chose %q, want the row chosen and not run", *h.ran, h.chosenTitle())
+	if len(*h.ran) != 1 || (*h.ran)[0] != "Safari" || h.chosenTitle() != "Safari" {
+		t.Fatalf("one click ran %v and chose %q, want Safari run and chosen", *h.ran, h.chosenTitle())
 	}
-	if err := h.tt.Click("Safari"); err != nil {
+}
+
+// TestEachClickOfADoubleClickRunsTheRow checks 1.x parity: cmdk runs an item on every click, so a double click runs
+// the row twice, and the list's double-click submit adds no third run.
+func TestEachClickOfADoubleClickRunsTheRow(t *testing.T) {
+	h := newDragHarness(t, search.Item{Title: "Calc"})
+	if err := h.tt.Click("Calc"); err != nil {
 		t.Fatal(err)
 	}
 	h.tt.Frame()
-	if len(*h.ran) != 1 || (*h.ran)[0] != "Safari" {
-		t.Fatalf("a double click did not run the row: %v", *h.ran)
+	if err := h.tt.Click("Calc"); err != nil {
+		t.Fatal(err)
+	}
+	h.tt.Frame()
+	if len(*h.ran) != 2 {
+		t.Fatalf("double click ran the row %d times, want 2 as in 1.x: %v", len(*h.ran), *h.ran)
+	}
+}
+
+// TestPointerMovementChoosesTheRowUnderIt checks 1.x's pointer selection: moving the pointer onto a row chooses it,
+// and runs nothing.
+func TestPointerMovementChoosesTheRowUnderIt(t *testing.T) {
+	h := newDragHarness(t, search.Item{Title: "Alpha"}, search.Item{Title: "Beta"})
+	x, y := h.center("Beta")
+	h.tt.Move(x, y)
+	h.tt.Frame()
+	h.tt.Move(x+4, y)
+	h.tt.Frame()
+	if got := h.chosenTitle(); got != "Beta" {
+		t.Fatalf("chosen = %q after the pointer moved onto Beta, want Beta", got)
+	}
+	if len(*h.ran) != 0 {
+		t.Fatalf("pointer movement ran a row: %v", *h.ran)
+	}
+}
+
+// TestAStillPointerDoesNotUndoKeyboardMovement checks that a choice moved without the pointer moving is kept: a list
+// that scrolls under a still pointer must not choose the row that comes under it.
+func TestAStillPointerDoesNotUndoKeyboardMovement(t *testing.T) {
+	h := newDragHarness(t, search.Item{Title: "Alpha"}, search.Item{Title: "Beta"})
+	x, y := h.center("Alpha")
+	h.tt.Move(x, y)
+	h.tt.Frame()
+	h.tt.Move(x, y)
+	h.tt.Frame()
+	h.pal.Choose(1)
+	h.tt.Frame()
+	h.tt.Frame()
+	if got := h.chosenTitle(); got != "Beta" {
+		t.Fatalf("chosen = %q, want the keyboard's Beta kept while the pointer stands still", got)
+	}
+}
+
+// TestAPressThatDragsChoosesNothingEvenOverOtherRows checks a drag over other rows: the pointer's moves while the
+// press drags choose no row, so the choice stays where it was.
+func TestAPressThatDragsChoosesNothingEvenOverOtherRows(t *testing.T) {
+	h := newDragHarness(t,
+		search.Item{Title: "Alpha"},
+		search.Item{Title: "Beta", DragPaths: pathsOf("/Users/alice/Notes/beta.md")},
+		search.Item{Title: "Gamma"},
+	)
+	x, y := h.center("Beta")
+	h.tt.Press(x, y)
+	h.tt.Move(x+30, y+2)
+	h.tt.Frame()
+	gx, gy := h.center("Gamma")
+	h.tt.Move(gx, gy)
+	h.tt.Frame()
+	h.tt.Release(gx, gy)
+	h.tt.Frame()
+	if got := h.chosenTitle(); got != "Alpha" {
+		t.Fatalf("chosen = %q after a drag over other rows, want the first kept", got)
+	}
+	if len(*h.ran) != 0 {
+		t.Fatalf("a drag ran a row: %v", *h.ran)
 	}
 }
 

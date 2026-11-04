@@ -69,3 +69,46 @@ func centerOf(t *testing.T, tt *ui.Tester, title string) (float32, float32) {
 	}
 	return rect.X + rect.W/2, rect.Y + rect.H/2
 }
+
+// TestAGridCellChoosesOnPointerMovementAndRunsOnClick checks 1.x's grid: the pointer moving onto a cell chooses it, and a
+// click runs it.
+func TestAGridCellChoosesOnPointerMovementAndRunsOnClick(t *testing.T) {
+	set := fake.NewSet()
+	app := &App{ports: set.Ports()}
+	ran := &[]string{}
+	cells := []search.Item{
+		{Title: "a.txt", Actions: []search.Action{{Title: "Open", Run: func(search.Host) { *ran = append(*ran, "a.txt") }}}},
+		{Title: "b.txt", Actions: []search.Action{{Title: "Open", Run: func(search.Host) { *ran = append(*ran, "b.txt") }}}},
+	}
+	root := &palette.View{
+		Title:  "Grid",
+		Search: func(string) []search.Item { return cells },
+		Grid: &palette.Grid{Columns: 2, CellHeight: 96, Cell: func(c *ui.Context, it search.Item) {
+			ui.Text(c, it.Title)
+		}},
+	}
+	pal := palette.New(palette.Options{Root: root, Clock: fake.NewClock(), Synchronous: true, DragRow: app.dragRow})
+	pal.Attach(&dragWindow{})
+	pal.Show()
+	tt := ui.NewTester(pal.View, 720, 470)
+	tt.Frame()
+
+	x, y := centerOf(t, tt, "b.txt")
+	tt.Move(x, y)
+	tt.Frame()
+	tt.Move(x+4, y)
+	tt.Frame()
+	if got := pal.Chosen(); got != 1 {
+		t.Fatalf("pointer moved onto cell 1: chosen = %d, want 1", got)
+	}
+	if len(*ran) != 0 {
+		t.Fatalf("pointer movement ran a cell: %v", *ran)
+	}
+	if err := tt.Click("b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if len(*ran) != 1 || (*ran)[0] != "b.txt" {
+		t.Fatalf("a click did not run the cell: %v", *ran)
+	}
+}

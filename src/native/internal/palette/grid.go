@@ -72,13 +72,11 @@ func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	default:
 		cell.Background(ui.Transparent)
 	}
-	cell.Children(func() { p.gridCellContent(c, g, i) })
-	if cell.Clicked() {
-		p.choose(i)
-	}
-	if cell.DoubleClicked() {
-		p.runDefault()
-	}
+	clickTarget := cell
+	cell.Children(func() { clickTarget = p.cellContent(c, g, cell, i) })
+	p.notePress(clickTarget)
+	p.hoverChoose(cell, i)
+	p.clickRun(clickTarget, i)
 }
 
 // moveGridChoice moves the choice across the cells with the arrows, to the first or last cell with Home and
@@ -104,15 +102,4 @@ func (p *Palette) moveGridChoice(c *ui.Context, g *Grid) {
 	case c.Shortcut(0, ui.KeyEnd):
 		p.choose(len(p.results) - 1)
 	}
-}
-
-// gridCellContent draws what the cell shows. A cell whose item drags files wraps it, so the press that drags is the
-// wrapper's and a click on the cell still chooses it.
-func (p *Palette) gridCellContent(c *ui.Context, g *Grid, i int) {
-	it := p.results[i]
-	if src, ok := p.dragSourceOf(it); ok {
-		p.dragRow(c, i, src, func() { g.Cell(c, it) })
-		return
-	}
-	g.Cell(c, it)
 }
