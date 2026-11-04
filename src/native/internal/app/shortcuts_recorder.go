@@ -13,6 +13,7 @@ import (
 type shortcutRecorder struct {
 	entry       shortcuts.Entry
 	accelerator string
+	focus       ui.Handle
 }
 
 // shortcutRecorderView records the next key press as the shortcut of entry. Enter saves it and Escape goes back. The
@@ -72,10 +73,12 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 	h.Toast("Shortcut set: " + shortcutLabelOf(recorder.accelerator))
 }
 
-// draw shows the recorded shortcut as keycaps, or asks for one. The element takes the keys while it is focused.
+// draw shows the recorded shortcut as keycaps, or asks for one. The element takes the keys while it is focused. The
+// palette moves focus to its search field when a view is pushed, so the element asks for focus on every frame it
+// does not have it.
 func (r *shortcutRecorder) draw(c *ui.Context) {
 	k := design.Tokens(c)
-	ui.Column(c).Focusable().AutoFocus().HandleInput(r.handleInput).Padding(24).Gap(14).Center().Children(func() {
+	ui.Column(c).Bind(&r.focus).Focusable().HandleInput(r.handleInput).Padding(24).Gap(14).Center().Children(func() {
 		if r.accelerator == "" {
 			ui.Text(c, "Press a keyboard shortcut").FontSize(13).FontWeight(600).TextColor(k.Strong)
 			ui.Text(c, "Use at least one modifier, then press Enter").FontSize(11).TextColor(k.Muted)
@@ -88,6 +91,9 @@ func (r *shortcutRecorder) draw(c *ui.Context) {
 		})
 		ui.Text(c, "Save shortcut for “"+r.entry.Title+"”").FontSize(11).TextColor(k.Muted)
 	})
+	if !c.Focused(r.focus) {
+		r.focus.Focus(c)
+	}
 }
 
 // handleInput records the key a press makes, with the modifiers held. Enter and Escape go on to the palette.

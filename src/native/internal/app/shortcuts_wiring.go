@@ -75,10 +75,11 @@ func (p *App) runShortcutCommand(actionID string) {
 	}
 }
 
-// startShortcuts binds the palette hotkey and the actions. It runs once the palette exists.
+// startShortcuts binds the palette hotkey and the actions. It runs once the palette exists. A recovery key is only
+// accepted after the chosen key has been refused on every attempt, because a previous instance may release it soon.
 func (p *App) startShortcuts() {
 	status := p.shortcutsManager().Start()
-	for attempt := 1; !status.Registered && status.Recovery == "" && attempt < paletteBindAttempts; attempt++ {
+	for attempt := 1; !status.Registered && attempt < paletteBindAttempts; attempt++ {
 		time.Sleep(paletteBindDelay)
 		status = p.shortcutsManager().Start()
 	}
