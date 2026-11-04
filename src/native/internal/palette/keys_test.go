@@ -28,7 +28,9 @@ func twoActionView(title string, ran *[]string, names ...string) *View {
 	}
 }
 
-func TestEscapeClearsTheQueryThenPopsThenHides(t *testing.T) {
+// TestEscapeLeavesASubviewThenHidesTheRootWhateverTheQuery checks 1.x's Escape: a pushed page is left at once, even
+// with text in its field, and the root hides at once, even with text in its field.
+func TestEscapeLeavesASubviewThenHidesTheRootWhateverTheQuery(t *testing.T) {
 	var ran []string
 	root := rowsView("Root", &ran, "Alpha", "Beta")
 	h := newHarness(t, root, true)
@@ -40,18 +42,14 @@ func TestEscapeClearsTheQueryThenPopsThenHides(t *testing.T) {
 	}
 
 	h.key(0, ui.KeyEscape)
-	if h.p.Query() != "" || h.p.Top() != sub || !h.win.visible {
-		t.Fatalf("first Escape should only clear the query: query=%q top-is-sub=%v visible=%v", h.p.Query(), h.p.Top() == sub, h.win.visible)
-	}
-
-	h.key(0, ui.KeyEscape)
 	if h.p.Top() != root || !h.win.visible {
-		t.Fatalf("second Escape should pop to the root and keep the palette open")
+		t.Fatalf("Escape in a subview should go back to the root and keep the palette open: top-is-root=%v visible=%v", h.p.Top() == root, h.win.visible)
 	}
 
+	h.typeText("al")
 	h.key(0, ui.KeyEscape)
 	if h.win.visible || h.win.hides != 1 {
-		t.Fatalf("third Escape should hide the palette: visible=%v hides=%d", h.win.visible, h.win.hides)
+		t.Fatalf("Escape at the root should hide with text in the field: visible=%v hides=%d", h.win.visible, h.win.hides)
 	}
 }
 

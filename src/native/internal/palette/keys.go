@@ -69,16 +69,12 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 	}
 }
 
-// escape is the palette's Escape, in the order the contract fixes: the root's query walk ends, then the page may use
-// the key, then the query clears, then a pushed page is left, and at the root the palette hides. Checking Shortcut
-// consumes the key, so the page is asked only once the key is known to be pressed.
+// escape is the palette's Escape, as 1.x reads it: the root's history walk ends, then the page may use the key, then a
+// pushed page is left, and at the root the palette hides, whatever the query holds.
 func (p *Palette) escape(v *View) {
 	switch {
 	case p.restoreRootDraft():
 	case v.OnEscape != nil && v.OnEscape():
-	case p.query != "":
-		p.query = ""
-		p.search()
 	case len(p.stack) > 1:
 		p.Pop()
 	default:
