@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"log"
 	"time"
 
@@ -15,8 +16,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// attachChats opens the chat service over the app's one store, so chats share its lease and its notices. Chats the
-// retention window has passed are removed, and the account's model routes are read in the background.
+// attachChats opens the chat service over the app's one store, so chats share its lease and its notices. The account's
+// model routes are read in the background; the retention sweep is a host job.
 func (p *App) attachChats() {
 	if p.userStore == nil {
 		log.Println("chats: unavailable, the store did not open")
@@ -24,12 +25,30 @@ func (p *App) attachChats() {
 	}
 	p.chats = newChatService(p.userStore, p)
 	p.builder = p.newBuilder()
-	if removed, err := p.chats.Expire(); err != nil {
-		log.Println("chats: retention failed:", err)
-	} else if len(removed) > 0 {
-		log.Printf("chats: removed %d idle conversations", len(removed))
-	}
 	p.chats.RefreshModels()
+}
+
+// sweepAIConversations removes the conversations the retention window has passed. The chat store belongs to the UI
+// thread, so the sweep runs there, and it does nothing while the palette is open, as the desktop app's sweep does.
+func (p *App) sweepAIConversations(ctx context.Context) error {
+	done := make(chan error, 1)
+	p.onUI(func() {
+		if p.Palette != nil && p.Palette.Visible() {
+			done <- nil
+			return
+		}
+		removed, err := p.chats.Expire()
+		if len(removed) > 0 {
+			log.Printf("chats: removed %d idle conversations", len(removed))
+		}
+		done <- err
+	})
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // newChatService wires the chat service to the app: the account's client and sign-in, the UI thread, the spend-cap
