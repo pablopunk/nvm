@@ -23,8 +23,8 @@ type page struct {
 	// transcript entry.
 	thinkingOpen map[int]bool
 	resultOpen   map[int]bool
-	// showPreview is whether the extension preview is open beside a builder chat.
-	showPreview bool
+	// previewHidden is whether the user hid the extension preview beside a builder chat. The preview is open otherwise.
+	previewHidden bool
 }
 
 // ChatView is the page of the chat with id. Its body is the transcript and its composer; the palette has no search
@@ -49,6 +49,7 @@ func (p *page) view() *palette.View {
 		Input:        &p.input,
 		Actions:      p.chatActions,
 		Primary:      p.primaryKey,
+		Side:         p.sideFor,
 		SurvivesHide: true,
 	}
 }

@@ -1,7 +1,6 @@
 package app
 
 import (
-	"context"
 	"log"
 
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
@@ -65,35 +64,4 @@ func (p *App) builderReview(id string) *palette.View {
 		}
 	}
 	return nil
-}
-
-// extensionPreviewRows is the rows an extension shows in its builder chat's preview: the snapshot the last refresh kept.
-func (p *App) extensionPreviewRows(extension string) []aichat.PreviewRow {
-	return p.previewRows[extension]
-}
-
-// refreshPreviewRows reads the rows an extension shows now, off the UI thread, and keeps them on the UI thread, so the
-// preview shows the extension as it is after each write.
-func (p *App) refreshPreviewRows(extension string) {
-	m := p.extensionManager()
-	if m == nil {
-		return
-	}
-	go func() {
-		var rows []aichat.PreviewRow
-		for _, result := range m.Roots(context.Background()) {
-			if result.ExtensionID != extension {
-				continue
-			}
-			for _, item := range result.Items {
-				rows = append(rows, aichat.PreviewRow{Title: item.Title, Subtitle: item.Subtitle})
-			}
-		}
-		p.onUI(func() {
-			if p.previewRows == nil {
-				p.previewRows = map[string][]aichat.PreviewRow{}
-			}
-			p.previewRows[extension] = rows
-		})
-	}()
 }

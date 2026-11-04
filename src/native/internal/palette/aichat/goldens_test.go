@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design/golden"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // pageGoldens renders a chat page at the palette's size. Each golden is compared in light and dark, at 1x and 2x.
@@ -158,16 +159,18 @@ func TestBuilderWritingGoldens(t *testing.T) {
 	golden.AssertMatrix(t, "builder-writing", r.palette.View, streamingGoldens)
 }
 
-// TestBuilderPreviewGoldens renders a builder chat with the extension preview open beside it: the rows the extension
-// shows now are on the right of the transcript.
+// splitGoldens renders a page split beside its preview at the size 1.x gives that window.
+var splitGoldens = golden.Options{Group: "aichat", Width: palette.SplitWidth, Height: palette.SplitHeight}
+
+// TestBuilderPreviewGoldens renders a builder chat with the extension's preview open beside it: the extension's rows are
+// on the right of the transcript, at the split size, and the focused preview shows its edge.
 func TestBuilderPreviewGoldens(t *testing.T) {
-	r := newRig(t, nil)
-	r.previewRows = func(string) []PreviewRow {
-		return []PreviewRow{{Title: "Local time", Subtitle: "Clock"}, {Title: "Today's date", Subtitle: "Clock"}}
-	}
+	titles := []string{"Local time", "Today's date"}
+	r, side := previewRigWith(t, &titles)
 	record := r.builderWith("user.clock", user("A clock in the palette."), assistant("Installed the clock. It is not run yet."))
-	p := newPage(r.deps(), record.ID)
-	p.showPreview = true
-	r.open(p.view())
-	golden.AssertMatrix(t, "builder-preview", r.palette.View, pageGoldens)
+	r.open(ChatView(r.deps(), record.ID))
+	golden.AssertMatrix(t, "builder-preview", r.palette.View, splitGoldens)
+
+	side.Focus()
+	golden.AssertMatrix(t, "builder-preview-focused", r.palette.View, splitGoldens)
 }

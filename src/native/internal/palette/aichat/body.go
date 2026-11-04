@@ -23,16 +23,9 @@ func (p *page) body(c *ui.Context, h search.Host) {
 		})
 		return
 	}
-	ui.Column(c).Grow(1).MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
-		chatSide := func() {
-			transcript(c, p, record)
-			composerRow(c, p, record, h)
-		}
-		if p.previewing(record) {
-			splitWithPreview(c, p, record, chatSide)
-			return
-		}
-		chatSide()
+	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
+		transcript(c, p, record)
+		composerRow(c, p, record, h)
 	})
 }
 

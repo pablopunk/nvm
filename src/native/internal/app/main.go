@@ -30,7 +30,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -96,12 +95,11 @@ type App struct {
 	files          *fileService
 	chats          *chat.Service
 	builder        *builder.Workshop
-	// previewRows is the rows each extension shows in the preview beside its builder chat, read off the UI thread after
-	// each write and stored on the UI thread.
-	previewRows map[string][]aichat.PreviewRow
-	timer       *Timer
-	learn       *usage.Learner
-	history     *palette.QueryHistory
+	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
+	previews map[string]*extensionPreview
+	timer    *Timer
+	learn    *usage.Learner
+	history  *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session
@@ -179,7 +177,16 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
 		Feedback:    p.showPaletteFeedback,
+		Resize:      p.resizePalette,
 	})
+}
+
+// resizePalette sizes the palette window for the presentation it shows: the split beside a builder's preview, a side
+// preview, or the default size (palette.Options.Resize).
+func (p *App) resizePalette(width, height int) {
+	if p.panel != nil {
+		p.panel.SetSize(width, height)
+	}
 }
 
 // position places the window on the work area of the display under the pointer. It is nil on a session that

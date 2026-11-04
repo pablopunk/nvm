@@ -33,6 +33,9 @@ func (p *page) chatActions() []search.Action {
 	if p.previewable(record) {
 		acts = append(acts, p.previewAction(record))
 	}
+	if p.previewing(record) {
+		acts = append(acts, p.focusPreviewAction())
+	}
 	acts = append(acts, p.switchTierAction(record.Tier), p.newChatAction(), p.deleteChatAction(record))
 	if record.Kind == chat.KindBuilder && record.Extension != "" && p.deps.Review != nil {
 		acts = append(acts, p.reviewAction())

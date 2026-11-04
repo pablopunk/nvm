@@ -61,8 +61,8 @@ type rig struct {
 
 	signInStarts int
 	startErr     error
-	// previewRows is the extension rows the preview reads, when a test sets it.
-	previewRows func(extension string) []PreviewRow
+	// previewSide is the side the preview of a builder chat shows, when a test sets one.
+	previewSide *palette.Side
 
 	mu     sync.Mutex
 	queued []func()
@@ -155,17 +155,14 @@ func (r *rig) deps() Deps {
 			r.signInStarts++
 			return r.startErr
 		},
-		Now:         func() time.Time { return goldenNow },
-		PreviewRows: r.extensionRows,
+		Now:     func() time.Time { return goldenNow },
+		Preview: r.extensionPreview,
 	}
 }
 
-// extensionRows is the preview source of the rig: nil when the test sets none, so no chat offers a preview.
-func (r *rig) extensionRows(extension string) []PreviewRow {
-	if r.previewRows == nil {
-		return nil
-	}
-	return r.previewRows(extension)
+// extensionPreview is the preview source of the rig: nil when the test sets no side, so no chat offers a preview.
+func (r *rig) extensionPreview(string) *palette.Side {
+	return r.previewSide
 }
 
 // chatWith creates a conversation with a transcript, dated against goldenNow. With no transcript it is an opened chat.

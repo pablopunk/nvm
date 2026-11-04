@@ -111,7 +111,7 @@ func (p *App) chatDeps() aichat.Deps {
 		Review:      p.builderReview,
 		PickImages:  p.chooseChatImages,
 		PasteImage:  p.clipboardChatImage,
-		PreviewRows: p.extensionPreviewRows,
+		Preview:     p.previewSide,
 	}
 }
 
@@ -172,7 +172,7 @@ func (p *App) chatSettled(id string, outcome chat.Outcome) {
 			p.builder.Settled(id, outcome)
 		}
 		if record.Extension != "" {
-			p.refreshPreviewRows(record.Extension)
+			p.refreshPreview(record.Extension)
 		}
 	case chat.KindProofread:
 		if p.aiCommands != nil {

@@ -255,6 +255,8 @@ Presentation: `root`, `stacked`, `preview`, `side-preview`. A view-producing com
 
 A palette page can also draw a second page beside its own as a split: `palette.View.Side` returns a `palette.Side` (`internal/palette/side.go`), a palette of its own with its pages, search or title, rows and action menu. The split is equal halves, and the split page is sized 1080 by 760. While the side has the focus it takes the keys: arrows and typing reach its rows, Escape pops its pages and then gives the focus back, and `Side.Focus`, `Side.Blur`, `Side.SetRoot` and `Side.Refresh` move the focus, replace its page and search it again.
 
+The AI builder uses the split: a builder chat bound to an extension shows the extension's root rows and commands beside its transcript. The preview opens once the chat is bound, Hide Preview (⌃⇧P) and Show Preview toggle it, and Focus Preview in the Command-K menu gives the keyboard to it. The preview is an extview session of the extension's own list, and it is read again after each write, so it shows the extension as it is now (`internal/app/ai_builder_preview.go`).
+
 Item ids must be unique within a view (`Validate` checks). Collection record ids must not start with `__nvm:`, which the host reserves for its own rows.
 
 ## 8. Forms and the 16 field types
