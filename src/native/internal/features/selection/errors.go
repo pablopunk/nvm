@@ -14,6 +14,9 @@ var ErrSourceGone = errors.New("The source window is gone. Select the text and t
 // would lose. The read refuses rather than losing the user's clipboard.
 var ErrFormattedClipboard = errors.New("Cannot keep a formatted clipboard while reading selected text. Copy plain text first and try again")
 
+// ErrKeyboardHeld is returned when the palette keeps the keyboard after the source window was asked for it.
+var ErrKeyboardHeld = errors.New("The palette still has the keyboard. Select the text and try again")
+
 // ErrNothingToUndo is returned by Undo when no replacement has been made since the last undo.
 var ErrNothingToUndo = errors.New("There is no fix to undo")
 

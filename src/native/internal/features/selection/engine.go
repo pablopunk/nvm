@@ -64,7 +64,7 @@ func (e *Engine) Replace(text string) (bool, error) {
 	if err := writeConcealed(e.deps.Clipboard, text); err != nil {
 		return false, err
 	}
-	if err := restoreSource(e.deps.Focus, source); err != nil {
+	if err := restoreSource(e.deps.Clock, e.deps.Focus, source); err != nil {
 		return false, err
 	}
 	if err := e.paster().PasteIntoFrontmost(""); err != nil {
@@ -87,7 +87,7 @@ func (e *Engine) Undo() error {
 	if source.Window != landed.Window {
 		return ErrSourceChanged
 	}
-	if err := restoreSource(e.deps.Focus, source); err != nil {
+	if err := restoreSource(e.deps.Clock, e.deps.Focus, source); err != nil {
 		return err
 	}
 	return e.paster().UndoInFrontmost("")

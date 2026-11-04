@@ -35,7 +35,7 @@ func NewReader(clock platform.Clock, clip platform.Clipboard, selection platform
 // It returns ErrSourceGone when the source window has gone and ErrFormattedClipboard when the clipboard holds
 // content the restore could not preserve.
 func (r *Reader) Read(source platform.FocusTarget) (string, error) {
-	if err := restoreSource(r.focus, source); err != nil {
+	if err := restoreSource(r.clock, r.focus, source); err != nil {
 		return "", err
 	}
 	snapshot, err := r.snapshot()
@@ -53,16 +53,35 @@ func (r *Reader) Read(source platform.FocusTarget) (string, error) {
 	return r.awaitCopy(marker)
 }
 
-// restoreSource gives the keyboard back to the source window, so a copy or paste gesture reaches it. A window that has
-// gone is ErrSourceGone; an OS without the focus port keeps the keyboard where the palette left it.
-func restoreSource(focus platform.Focus, source platform.FocusTarget) error {
+// keyboardWait bounds the wait for the OS to report the source window as active after the keyboard is given back.
+const keyboardWait = time.Second
+
+// restoreSource gives the keyboard back to the source window, then waits until the OS reports it there, so a copy or
+// paste gesture reaches the source rather than a palette that is still up. A window that has gone is ErrSourceGone;
+// one that never takes the keyboard is ErrKeyboardHeld. An OS without the focus port keeps the keyboard where the
+// palette left it.
+func restoreSource(clock platform.Clock, focus platform.Focus, source platform.FocusTarget) error {
 	if source.Window == "" || focus == nil {
 		return nil
 	}
 	if err := focus.Restore(source); errors.Is(err, platform.ErrNotFound) {
 		return ErrSourceGone
 	}
-	return nil
+	return awaitKeyboard(clock, focus, source)
+}
+
+// awaitKeyboard polls the focus port until source has the keyboard, for at most keyboardWait.
+func awaitKeyboard(clock platform.Clock, focus platform.Focus, source platform.FocusTarget) error {
+	deadline := clock.Now().Add(keyboardWait)
+	for {
+		if active, err := focus.Active(); err == nil && active.Window == source.Window {
+			return nil
+		}
+		if !clock.Now().Before(deadline) {
+			return ErrKeyboardHeld
+		}
+		<-clock.After(pollInterval)
+	}
 }
 
 // awaitCopy polls until the clipboard holds something other than marker. The copied text is concealed at once, as
