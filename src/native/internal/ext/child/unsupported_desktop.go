@@ -38,10 +38,6 @@ func (unsupportedSelection) Files() ([]string, error) {
 	return nil, unsupported("ctx.desktop.selection.files")
 }
 
-func (remoteApps) Frontmost() (api.App, error) {
-	return api.App{}, unsupported("ctx.desktop.apps.frontmost")
-}
-
 func (remoteFiles) QuickLook(string) error { return unsupported("ctx.desktop.files.quickLook") }
 
 func (remoteFiles) ReadText(string) (string, error) {

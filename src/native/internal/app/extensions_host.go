@@ -78,6 +78,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Capabilities:  ports.Capabilities,
 		OS:            p.goos,
 		Windows:       p.extensionWindows(),
+		Frontmost:     ports.Windows,
 		Shortcuts:     p.extensionShortcuts(),
 		OCR:           textReader,
 		AI:            p.extensionAI(textReader),

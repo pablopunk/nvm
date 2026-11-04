@@ -22,6 +22,7 @@ const (
 	OpSearch        = "search"
 	OpLaunch        = "launch"
 	OpIcon          = "icon"
+	OpFrontmost     = "frontmost"
 	OpOpen          = "open"
 	OpReveal        = "reveal"
 	OpOpenExternal  = "open-external"
