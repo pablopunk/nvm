@@ -33,6 +33,9 @@ type Options struct {
 	Home string
 	// Run names this launch in the artifacts (app-<Run>.log), for a test that launches more than once.
 	Run string
+	// AllowUnboundHotkey lets the launch go on when the hotkey is taken, for a journey that starts a
+	// second copy on the same display on purpose (J11). Launch otherwise fails on the log line.
+	AllowUnboundHotkey bool
 }
 
 // App is one launched copy of the app, isolated from the user's and from other launches: its own
@@ -50,6 +53,8 @@ type App struct {
 	done      chan struct{}
 	exited    bool
 	client    *automationClient
+	// unboundOK is Options.AllowUnboundHotkey: a hotkey failure in the log is expected.
+	unboundOK bool
 }
 
 // Launch starts NVM_RIG_BIN (the app built with -tags automation) detached on DISPLAY and waits
@@ -83,6 +88,7 @@ func Launch(t *testing.T, opts Options) *App {
 		socket:    filepath.Join(base, "auto.sock"),
 		artifacts: ArtifactsDir(t),
 		done:      make(chan struct{}),
+		unboundOK: opts.AllowUnboundHotkey,
 	}
 	a.logPath = filepath.Join(a.artifacts, "app.log")
 	if opts.Run != "" {
@@ -183,7 +189,7 @@ func (a *App) waitReady(t *testing.T) {
 	deadline := time.Now().Add(readyTimeout)
 	for {
 		log := a.Log()
-		if strings.Contains(log, shortcutFailureMarker) {
+		if !a.unboundOK && strings.Contains(log, shortcutFailureMarker) {
 			t.Fatalf("hotkey registration failed; see %s:\n%s", a.logPath, tail(log, 15))
 		}
 		if hasLine(log, "ready") {

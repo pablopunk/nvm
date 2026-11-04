@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"log"
 	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -24,11 +25,14 @@ func (p *App) startSummon() {
 // summonChanged shows the status banner and, the first time the shortcut is known to be unavailable, the palette.
 func (p *App) summonChanged(st shortcuts.Status) {
 	p.showSummonNotice(st)
-	if p.launchShown || !st.Unavailable() {
+	if !st.Unavailable() {
 		return
 	}
-	p.launchShown = true
-	p.Show()
+	log.Println("shortcut", st.Accelerator, "is unavailable")
+	if !p.launchShown {
+		p.launchShown = true
+		p.Show()
+	}
 }
 
 // showSummonNotice shows the banner for st, or clears it when the shortcut works.
