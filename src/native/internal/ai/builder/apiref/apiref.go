@@ -29,25 +29,47 @@ var rootTypes = []string{"Manifest", "Context"}
 // signatures only, so the reference stays small while the model still sees every service it may call.
 const contextType = "Context"
 
-// Render returns the reference for the api package in dir, as plain text. Output is deterministic: sections and
-// entries are sorted by name.
-func Render(dir string) (string, error) {
+// Render returns the reference for the api package whose source files are at the root of sources, as plain text.
+// Output is deterministic: sections and entries are sorted by name.
+func Render(sources fs.FS) (string, error) {
 	fset := token.NewFileSet()
-	packages, err := parser.ParseDir(fset, dir, isSourceFile, parser.ParseComments)
+	files, err := parseAPIFiles(fset, sources)
 	if err != nil {
-		return "", fmt.Errorf("parse %s: %w", dir, err)
+		return "", err
 	}
-	pkg, ok := packages["api"]
-	if !ok {
-		return "", fmt.Errorf("no api package in %s", dir)
+	if len(files) == 0 {
+		return "", fmt.Errorf("no api package source files")
 	}
-	index := indexPackage(fset, pkg)
+	index := indexPackage(fset, files)
 	wire := index.reach(append(append([]string{}, entryInterfaces...), rootTypes...), map[string]bool{contextType: true})
 	return index.render(wire, index.services(wire)), nil
 }
 
-func isSourceFile(info fs.FileInfo) bool {
-	return !strings.HasSuffix(info.Name(), "_test.go")
+// parseAPIFiles parses the non-test Go files of package api at the root of sources, in name order.
+func parseAPIFiles(fset *token.FileSet, sources fs.FS) ([]*ast.File, error) {
+	entries, err := fs.ReadDir(sources, ".")
+	if err != nil {
+		return nil, fmt.Errorf("read api sources: %w", err)
+	}
+	var files []*ast.File
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		src, err := fs.ReadFile(sources, name)
+		if err != nil {
+			return nil, fmt.Errorf("read %s: %w", name, err)
+		}
+		file, err := parser.ParseFile(fset, name, src, parser.ParseComments)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", name, err)
+		}
+		if file.Name.Name == "api" {
+			files = append(files, file)
+		}
+	}
+	return files, nil
 }
 
 // pkgIndex is the package's declarations by name.
@@ -65,9 +87,9 @@ type constValue struct {
 	doc   string
 }
 
-func indexPackage(fset *token.FileSet, pkg *ast.Package) *pkgIndex {
+func indexPackage(fset *token.FileSet, files []*ast.File) *pkgIndex {
 	index := &pkgIndex{fset: fset, types: map[string]*ast.TypeSpec{}, docs: map[string]string{}, funcs: map[string]*ast.FuncDecl{}, consts: map[string][]constValue{}}
-	for _, file := range pkg.Files {
+	for _, file := range files {
 		for _, decl := range file.Decls {
 			switch d := decl.(type) {
 			case *ast.GenDecl:

@@ -15,16 +15,15 @@ import (
 // scriptedTranscriber records every segment it is sent and every preparation release, and answers with the scripted
 // texts in order.
 type scriptedTranscriber struct {
-	mu          sync.Mutex
-	texts       []string
-	err         error
-	block       chan struct{}
-	segments    []Segment
-	prepare     []string
-	prepareErr  error
-	released    []bool
-	releaseID   []string
-	releaseDone chan struct{}
+	mu         sync.Mutex
+	texts      []string
+	err        error
+	block      chan struct{}
+	segments   []Segment
+	prepare    []string
+	prepareErr error
+	released   []bool
+	releaseID  []string
 }
 
 func (s *scriptedTranscriber) Transcribe(ctx context.Context, segment Segment) (string, error) {

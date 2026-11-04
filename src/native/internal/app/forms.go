@@ -1,11 +1,7 @@
 package app
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -13,12 +9,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-// newID returns a short random-looking id for a chat or a form record: a hash of the seed and the time.
-func newID(seed string) string {
-	sum := sha1.Sum([]byte(fmt.Sprint(seed, time.Now().UnixNano())))
-	return hex.EncodeToString(sum[:6])
-}
 
 // ---- generic form view ----
 

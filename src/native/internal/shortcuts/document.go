@@ -1,7 +1,6 @@
 package shortcuts
 
 import (
-	"errors"
 	"fmt"
 	"maps"
 )
@@ -15,10 +14,15 @@ type Document struct {
 }
 
 // ErrMissingShortcut is returned when the accelerator to save is blank.
-var ErrMissingShortcut = errors.New("Missing shortcut")
+var ErrMissingShortcut error = userError("Missing shortcut")
 
 // ErrNoShortcut is returned when the action has no shortcut to remove.
-var ErrNoShortcut = errors.New("Shortcut not found")
+var ErrNoShortcut error = userError("Shortcut not found")
+
+// userError is an error whose text is shown to the user as written, so it starts with a capital letter.
+type userError string
+
+func (e userError) Error() string { return string(e) }
 
 // DefaultDocument is the document of a new installation, with palette as its palette hotkey.
 func DefaultDocument(palette string) Document {

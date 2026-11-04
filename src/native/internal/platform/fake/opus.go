@@ -2,7 +2,6 @@ package fake
 
 import (
 	"encoding/binary"
-	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -10,7 +9,6 @@ import (
 // OpusCodec is a platform.OpusCodec with no Opus library. Each packet is the frame's length and its first sample,
 // so tests can check frame order and sizes without decoding audio.
 type OpusCodec struct {
-	mu        sync.Mutex
 	lookahead int
 	faults    faultSet
 }

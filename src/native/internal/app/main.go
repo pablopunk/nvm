@@ -61,7 +61,6 @@ type App struct {
 	analytics *analytics.Client
 	failures  *analytics.FailureReporter
 	updater   update.Updater
-	summon    *shortcuts.Summon
 	appsvc    *appfeat.Services
 	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
 	systemSvc     *systemfeat.Services

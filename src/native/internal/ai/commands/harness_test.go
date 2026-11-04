@@ -25,7 +25,6 @@ func (t staticToken) Get() (string, error) { return string(t), nil }
 
 // recordingSurface keeps what the commands showed, in order.
 type recordingSurface struct {
-	mu        sync.Mutex
 	statuses  []Status
 	hidden    int
 	presented []Result

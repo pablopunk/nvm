@@ -1,13 +1,16 @@
 package auth
 
 import (
-	"errors"
-
 	"github.com/pablopunk/nvm/native/internal/backend"
 )
 
 // ErrEnvironmentPinned refuses a backend switch in a pinned session. The palette shows its message as it is.
-var ErrEnvironmentPinned = errors.New("Automation builds stay on the rig backend, so this switch is refused.")
+var ErrEnvironmentPinned error = userError("Automation builds stay on the rig backend, so this switch is refused.")
+
+// userError is an error whose text is shown to the user as written, so it reads as a sentence.
+type userError string
+
+func (e userError) Error() string { return string(e) }
 
 // Origins the environment rules name, so a deep link can say which backend it belongs to.
 const (

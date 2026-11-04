@@ -29,7 +29,7 @@ func main() {
 }
 
 func run(apiDir, out string) error {
-	text, err := apiref.Render(apiDir)
+	text, err := apiref.Render(os.DirFS(apiDir))
 	if err != nil {
 		return err
 	}

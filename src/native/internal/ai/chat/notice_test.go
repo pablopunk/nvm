@@ -2,7 +2,6 @@ package chat
 
 import (
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -31,7 +30,7 @@ func TestNoticeForMapsEveryFailureToItsOwnNotice(t *testing.T) {
 		{"cut off", &backend.Error{Kind: backend.KindBadResponse}, "Hel", NoticeCutOff},
 		{"failed without text", &backend.Error{Kind: backend.KindServer, Status: 500}, "", NoticeFailed},
 		{"empty reply", ErrEmptyReply, "", NoticeFailed},
-		{"unknown error", errors.New(fmt.Sprint("boom")), "", NoticeFailed},
+		{"unknown error", errors.New("boom"), "", NoticeFailed},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

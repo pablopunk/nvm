@@ -94,8 +94,6 @@ func swapForGolden(t *testing.T) {
 	t.Cleanup(func() { configDir, clock = previousConfig, previousClock })
 }
 
-func goldenConfigDirectory() string { return goldenConfig }
-
 // goldenUsage is the learned state the goldens and the root table read: Firefox used three times and Terminal
 // once, so the apps listed at the root are the ones used before. Nothing is written anywhere.
 func goldenUsage() *usage.Learner {

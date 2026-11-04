@@ -124,10 +124,3 @@ func iconOr(icon, fallback string) string {
 	}
 	return fallback
 }
-
-func orDefault(text, fallback string) string {
-	if text != "" {
-		return text
-	}
-	return fallback
-}

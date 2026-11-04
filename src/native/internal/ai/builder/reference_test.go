@@ -1,6 +1,7 @@
 package builder
 
 import (
+	"os"
 	"strings"
 	"testing"
 
@@ -10,7 +11,7 @@ import (
 // TestGeneratedReferenceMatchesTheAPI fails when the api package changed and go generate was not run, so the model's
 // reference cannot drift from the typed API.
 func TestGeneratedReferenceMatchesTheAPI(t *testing.T) {
-	want, err := apiref.Render("../../ext/api")
+	want, err := apiref.Render(os.DirFS("../../ext/api"))
 	if err != nil {
 		t.Fatal(err)
 	}

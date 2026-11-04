@@ -45,9 +45,9 @@ func (c clipboardTools) copy() agent.Tool {
 		Name:        "copy_text",
 		Description: "Put text on the clipboard, replacing what is there.",
 		Label:       "Copying text",
-		Schema: json.RawMessage(`{"type":"object","properties":{` +
-			`"text":{"type":"string","minLength":1,"maxLength":100000}},` +
-			`"required":["text"],"additionalProperties":false}`),
+		Schema: json.RawMessage(fmt.Sprintf(`{"type":"object","properties":{`+
+			`"text":{"type":"string","minLength":1,"maxLength":%d}},`+
+			`"required":["text"],"additionalProperties":false}`, maxClipboardRunes)),
 		Summarize: func(args json.RawMessage) string {
 			var in copyArgs
 			_ = json.Unmarshal(args, &in)
