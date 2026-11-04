@@ -178,7 +178,7 @@ func TestSetFrameMovesAndResizesThenReadsBackWhatTheWindowReached(t *testing.T) 
 	if reached != (platform.WindowFrame{Width: 500, Height: 800}) {
 		t.Fatalf("reached = %+v", reached)
 	}
-	if !desktop.called("xdotool windowmove --sync " + nevermindID + " 0 0") || !desktop.called("xdotool windowsize --sync " + nevermindID + " 500 800") {
+	if !desktop.called("xdotool windowmove --sync "+nevermindID+" 0 0") || !desktop.called("xdotool windowsize --sync "+nevermindID+" 500 800") {
 		t.Fatalf("move or resize was not issued: %v", desktop.calls)
 	}
 }

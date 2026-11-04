@@ -20,12 +20,12 @@ func TestOkEnvelopeDecodesItsDisplays(t *testing.T) {
 
 func TestFailedEnvelopesMapToPlatformCodes(t *testing.T) {
 	cases := map[string]platform.WindowErrorCode{
-		`{"ok":false,"code":"denied","message":"no access"}`:       platform.WindowErrorDenied,
-		`{"ok":false,"code":"no-window"}`:                          platform.WindowErrorNoWindow,
-		`{"ok":false,"code":"target-lost"}`:                        platform.WindowErrorTargetLost,
-		`{"ok":false,"code":"unsupported"}`:                        platform.WindowErrorUnsupported,
-		`{"ok":false,"code":"unapplied","message":"no change"}`:    platform.WindowErrorUnapplied,
-		`{"ok":false,"code":"error","message":"helper crashed"}`:   platform.WindowErrorFailed,
+		`{"ok":false,"code":"denied","message":"no access"}`:     platform.WindowErrorDenied,
+		`{"ok":false,"code":"no-window"}`:                        platform.WindowErrorNoWindow,
+		`{"ok":false,"code":"target-lost"}`:                      platform.WindowErrorTargetLost,
+		`{"ok":false,"code":"unsupported"}`:                      platform.WindowErrorUnsupported,
+		`{"ok":false,"code":"unapplied","message":"no change"}`:  platform.WindowErrorUnapplied,
+		`{"ok":false,"code":"error","message":"helper crashed"}`: platform.WindowErrorFailed,
 	}
 	for raw, want := range cases {
 		envelope, err := ParseEnvelope([]byte(raw))
