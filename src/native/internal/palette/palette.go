@@ -5,7 +5,6 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -100,6 +99,8 @@ type Palette struct {
 	shownQuery string
 	// pushes counts the views pushed, so an action can tell whether it opened one.
 	pushes int
+	// running is the title of the action that is running, which titles the toasts it raises.
+	running string
 	// announced is the selection assistive technology was last told about.
 	announced selection
 	// searchSpan is the search field's selection as the last frame drew it, and edge the arrow the field let go of
@@ -188,33 +189,6 @@ func (p *Palette) Hide() {
 	p.returnFocus()
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
-	}
-}
-
-// Feedback is a message for the user: the title of the action that raised it (empty for the app's name), its text
-// and how it reads.
-type Feedback struct {
-	Title, Message string
-	Tone           feedback.Tone
-}
-
-// Toast sets the one-line message shown under the search field on the next frame.
-func (p *Palette) Toast(msg string) {
-	p.Notify(Feedback{Message: msg})
-}
-
-// Notify shows f under the search field when the palette is up. A message raised while the palette is hidden is not
-// drawn under the field, which belongs to the presentation that is open: it goes to Feedback.
-func (p *Palette) Notify(f Feedback) {
-	if p.win == nil {
-		return
-	}
-	if p.win.IsVisible() {
-		p.toastMsg = f.Message
-		return
-	}
-	if p.opts.Feedback != nil {
-		p.opts.Feedback(f)
 	}
 }
 

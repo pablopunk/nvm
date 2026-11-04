@@ -5,6 +5,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // TestNotifyGoesToTheHUDOnlyWhenThePaletteIsHidden pins where a message raised with a title and a tone lands: under
@@ -44,5 +45,21 @@ func TestToastIsAFeedbackWithoutATitle(t *testing.T) {
 	p.Toast("Quitting Mail…")
 	if len(shown) != 1 || shown[0] != (Feedback{Message: "Quitting Mail…"}) {
 		t.Fatalf("hidden toast = %+v, want an untitled default message", shown)
+	}
+}
+
+// TestAToastRaisedByAnActionTakesItsTitle pins 1.x's action feedback: a toast an action raises while the palette is
+// hidden carries that action's title, and a toast raised afterwards carries none.
+func TestAToastRaisedByAnActionTakesItsTitle(t *testing.T) {
+	var shown []Feedback
+	p := New(Options{Root: &View{Title: "root"}, Clock: fake.NewClock(), Synchronous: true, Feedback: func(f Feedback) { shown = append(shown, f) }})
+	p.Attach(newFakeWindow())
+	p.runAction(search.Action{Title: "Quit Mail", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast("Quitting Mail…") }})
+	if len(shown) != 1 || shown[0].Title != "Quit Mail" || shown[0].Message != "Quitting Mail…" {
+		t.Fatalf("the action's toast = %+v, want the Quit Mail title", shown)
+	}
+	p.Toast("later")
+	if shown[1].Title != "" {
+		t.Fatalf("a toast after the action carries %q, want none", shown[1].Title)
 	}
 }
