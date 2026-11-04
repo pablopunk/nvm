@@ -1,9 +1,11 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"slices"
+	"strconv"
 	"strings"
+
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 
 	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
@@ -36,18 +38,17 @@ type command struct {
 	width   int
 }
 
-// commands lists the palette commands, without the placeholders of built-ins. timerOn tells whether a timer is running,
-// which adds the cancel command.
-func (p *App) commands(timerOn bool) []command {
-	return slices.DeleteFunc(p.commandSlots(timerOn), isBuiltInSlot)
+// commands lists the palette commands, without the placeholders of built-ins.
+func (p *App) commands() []command {
+	return slices.DeleteFunc(p.commandSlots(), isBuiltInSlot)
 }
 
 // commandSlots lists the palette commands in their tie order. Where a built-in's rows stand, the list holds a
 // placeholder (see commandRows). The placeholders take the Order places of the native commands they replaced.
-func (p *App) commandSlots(timerOn bool) []command {
+func (p *App) commandSlots() []command {
 	cmds := leadingCommands(p)
 	cmds = append(cmds, builtInSlot(systemcommands.ID, systemcommands.SupportedCount(p.systemCapability)))
-	cmds = append(cmds, trailingCommands(p, timerOn)...)
+	cmds = append(cmds, trailingCommands(p)...)
 	numberCommands(cmds)
 	return cmds
 }
@@ -66,12 +67,11 @@ func leadingCommands(p *App) []command {
 		{ID: shortcuts.CommandDictate, Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.dictationFlowFor().Toggle() }},
 		{ID: shortcuts.CommandDictationHistory, Title: "Dictation History", Keywords: "dictation history transcripts voice history", Icon: "history", Subtitle: "Browse and copy previous dictations", Run: func(h search.Host) { h.Push(p.dictationHistoryView()) }},
 		{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
-		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
 	}
 }
 
 // trailingCommands are the commands listed after the built-in system commands.
-func trailingCommands(p *App, timerOn bool) []command {
+func trailingCommands(p *App) []command {
 	cmds := p.meaningFilesCommands()
 	cmds = append(cmds, []command{
 		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
@@ -88,9 +88,6 @@ func trailingCommands(p *App, timerOn bool) []command {
 	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.classifyImageSlot()...)
 	cmds = append(cmds, p.windowCommands()...)
-	if timerOn {
-		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
-	}
 	return cmds
 }
 
@@ -103,8 +100,7 @@ func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
 var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Floating Notes": "yellow",
-	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", "Start Timer": "orange", "Cancel Timer": "orange",
-	aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
+	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
 
 // numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.
 func numberCommands(cmds []command) {
@@ -171,7 +167,7 @@ func (p *App) settingsView() *palette.View {
 					p.clip.setLinkPreviews(!p.S.ClipNoLinks)
 					h.Refresh()
 				}}}},
-				{Title: "Clipboard History Size", Accessory: itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				{Title: "Clipboard History Size", Accessory: strconv.Itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					sizes := []int{50, 300, 500, 1000}
 					i := slices.Index(sizes, p.S.ClipLimit)
 					p.S.ClipLimit = sizes[(i+1)%len(sizes)]

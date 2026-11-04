@@ -98,7 +98,6 @@ type App struct {
 	builder        *builder.Workshop
 	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
 	previews map[string]*extensionPreview
-	timer    *Timer
 	learn    *usage.Learner
 	history  *palette.QueryHistory
 

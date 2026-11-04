@@ -41,7 +41,7 @@ func (p *App) shortcutsDocument() shortcuts.Persistence {
 // shortcutCommands lists the commands that take a shortcut: the root commands that are visible.
 func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
-	for _, cmd := range p.commands(false) {
+	for _, cmd := range p.commands() {
 		if !cmd.Hidden && cmd.ID != "" {
 			actions = append(actions, shortcuts.Action{ID: cmd.ID, Title: cmd.Title})
 		}

@@ -122,7 +122,7 @@ func (p *App) extensionMayRun(extID string) bool {
 
 // shortcutCommand finds the palette command, shown at the root or only for a query, that actionID names.
 func (p *App) shortcutCommand(actionID string) (command, bool) {
-	for _, cmd := range p.commands(false) {
+	for _, cmd := range p.commands() {
 		if commandShortcutID(cmd) == actionID {
 			return cmd, true
 		}

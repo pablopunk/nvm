@@ -12,7 +12,6 @@ import (
 // Scores of the root's rows. A higher score sorts first; rows of equal score are ordered as 1.x orders them (compareRows).
 // The values are the bands the prototype used, so the root's order does not change.
 const (
-	scoreTimer        = 990
 	scoreExtension    = 960
 	scoreFileFirst    = 75
 	scoreClipboard    = 55
@@ -52,17 +51,6 @@ func rootCommandScore(title string) int {
 // on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
 // which run there.
 
-// timerRows offers to start a countdown for "timer 5m" and similar queries.
-func timerRows(p *App, _ *rootInput, q string) []search.Item {
-	d, ok := parseTimer(q)
-	if !ok || d <= 0 {
-		return nil
-	}
-	return []search.Item{{Kind: search.KindTimer, Title: "Start timer: " + d.String(), Subtitle: "Shows a countdown in the tray", Icon: "timer", Tone: "orange", Score: scoreTimer, Actions: []search.Action{
-		{Title: "Start", Run: func(h search.Host) { p.startTimer(d); h.Hide() }},
-	}}}
-}
-
 // commandTitleScore is how well a command named title, with keywords, answers the lowercase query lq. The title scores
 // first, and a query the keywords contain scores as an alias. phraseMatch limits the title to phrases and word prefixes.
 func commandTitleScore(title, keywords string, phraseMatch bool, lq string) int {
@@ -80,7 +68,7 @@ func commandTitleScore(title, keywords string, phraseMatch bool, lq string) int 
 func commandRows(p *App, in *rootInput, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
-	for _, cmd := range p.commandSlots(in.timerOn) {
+	for _, cmd := range p.commandSlots() {
 		if isBuiltInSlot(cmd) {
 			out = append(out, p.builtInRootRows(cmd.builtIn, q, in)...)
 			continue

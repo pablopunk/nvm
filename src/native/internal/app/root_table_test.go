@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -180,7 +181,7 @@ func firstDifference(want, got string) string {
 			g = gotLines[i]
 		}
 		if w != g {
-			return "line " + itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
+			return "line " + strconv.Itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
 		}
 	}
 	return "no line differs"

@@ -12,7 +12,7 @@ import (
 // toast raised while the palette is hidden is dropped, so Check for Updates must keep the palette open.
 func TestCheckForUpdatesKeepsThePaletteOpenToShowItsAnswer(t *testing.T) {
 	p := goldenPalette(t)
-	for _, cmd := range p.commands(false) {
+	for _, cmd := range p.commands() {
 		if cmd.Title == "Check for Updates" {
 			if cmd.Dismiss != search.DismissNever {
 				t.Fatalf("Check for Updates dismisses = %v, want DismissNever", cmd.Dismiss)

@@ -21,7 +21,6 @@ type rootInput struct {
 	// updatePrompt is whether the root shows an update prompt, which replaces the Check for Updates row, as in 1.x.
 	updatePrompt bool
 	chats        []chatHead
-	timerOn      bool
 	// shortcuts maps each root action that has a keyboard shortcut to its accelerator.
 	shortcuts map[string]string
 	// aliases maps each root action to the phrases that find it in the root search.
@@ -59,7 +58,6 @@ func (p *App) captureRoot() *rootInput {
 		clipSearch:   !p.S.ClipRootSearchOff,
 		updatePrompt: rootShowsUpdate(p.updateSnapshot().State),
 		chats:        chats,
-		timerOn:      p.timer != nil,
 		shortcuts:    p.boundShortcuts(),
 		aliases:      p.aliasStore().All(),
 	}

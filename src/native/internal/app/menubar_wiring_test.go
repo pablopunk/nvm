@@ -43,16 +43,12 @@ func (w *stubWindow) Focus()               {}
 func (w *stubWindow) Size() (int, int)     { return width, height }
 func (w *stubWindow) SetPosition(x, y int) {}
 
-func TestMenuBarCreatesItsItemOverTheTrayHostAndShowsTheTimer(t *testing.T) {
+func TestMenuBarCreatesItsItemOverTheTrayHostWithItsSixRows(t *testing.T) {
 	p, set := wiredApp(t)
 	p.setUpMenubar()
 	trays := set.Tray.Trays()
 	if len(trays) != 1 || len(trays[0].Items()) != 6 {
 		t.Fatalf("tray items = %d, rows = %d", len(trays), len(trays[0].Items()))
-	}
-	p.setTrayTitle("04:59")
-	if trays[0].Title() != "04:59" {
-		t.Fatalf("timer title = %q", trays[0].Title())
 	}
 }
 

@@ -7,7 +7,7 @@ import "testing"
 func TestVisibleCommandsHaveUniqueStableIDs(t *testing.T) {
 	p := goldenPalette(t)
 	titles := map[string]string{}
-	for _, cmd := range p.commands(false) {
+	for _, cmd := range p.commands() {
 		if cmd.Hidden {
 			continue
 		}
