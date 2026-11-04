@@ -82,7 +82,7 @@ type Palette struct {
 	chosen     int
 	list       ui.ListState
 	input      ui.Handle
-	interact interactionState // pointer and click state of rows and cells, see interact.go
+	interact   interactionState // pointer and click state of rows and cells, see interact.go
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
 	focusList bool
 
