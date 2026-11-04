@@ -2116,7 +2116,7 @@ function capabilities() {
     viewOptions: [
       'sections',
       'selectedItemId',
-      'onSelectionChange',
+      'onSelectionChange, onSearchChange (debounced, action.value is the search text; patch.searchResultIds names existing item ids shown after local matches)',
       'isLoading',
       'emptyView',
       'detail side pane',
