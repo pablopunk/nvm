@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   push:
     branches: [main]
     paths:
       - 'src/native/**'
+      - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   workflow_dispatch:
 
