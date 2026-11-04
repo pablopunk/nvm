@@ -127,7 +127,9 @@ func TestCorrectTextRetriesOnceThenRefuses(t *testing.T) {
 	if len(replies) != 2 || !strings.Contains(replies[1], "Your previous answer") {
 		t.Fatalf("the retry did not say the previous answer was off: %d calls", len(replies))
 	}
-	always := func(_, _ string) (string, error) { return "Sure! Here is an answer that is not a correction at all.", nil }
+	always := func(_, _ string) (string, error) {
+		return "Sure! Here is an answer that is not a correction at all.", nil
+	}
 	if _, err := CorrectText("i has dogs", always, nil); !errors.Is(err, ErrCorrectionRefused) {
 		t.Fatalf("two refusals returned %v, want ErrCorrectionRefused", err)
 	}
