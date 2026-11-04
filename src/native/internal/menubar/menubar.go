@@ -129,6 +129,14 @@ func (m *Item) SetMenu(rows []platform.MenuItem) {
 	m.applyMenu()
 }
 
+// Tray is the platform item the menu bar item wraps, for the popovers an extension opens under it.
+func (m *Item) Tray() platform.Tray {
+	if m == nil {
+		return nil
+	}
+	return m.tray
+}
+
 // SetPrimaryAction makes a click on the icon run fn, as an extension popover opens, and moves the menu to a right
 // click. Nil puts the menu back on the click.
 func (m *Item) SetPrimaryAction(fn func()) {

@@ -96,8 +96,10 @@ type App struct {
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
 	menuOS  string // the platform the menu bar draws its rows for; empty means the platform the app runs on
-	popover popoverState
 	compat  compatibility
+
+	// popovers are the menu bar popovers, by item; each keeps its palette until its item goes.
+	popovers map[string]*menuPopover
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.

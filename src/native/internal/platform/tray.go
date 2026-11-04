@@ -43,6 +43,23 @@ type TrayHost interface {
 	NewTray(opts TrayOptions) (Tray, error)
 }
 
+// PopoverOptions is the size of a tray item's popover, in DIPs.
+type PopoverOptions struct {
+	Width, Height int
+}
+
+// Popover is the window of a tray item's popover. It opens under the item, closes when the user presses outside it, and
+// is driven as the palette drives its own window.
+type Popover interface {
+	// Update runs fn on the UI thread, then redraws. It is safe from any goroutine.
+	Update(fn func())
+	Show()
+	Hide()
+	IsVisible() bool
+	Size() (width, height int)
+	SetPosition(x, y int)
+}
+
 // Tray is one menu bar or system tray item.
 type Tray interface {
 	// SetTitle changes the text shown next to (or instead of) the icon.
@@ -63,6 +80,9 @@ type Tray interface {
 	OnSecondaryClick(fn func())
 	// PopUpMenu shows items at the pointer as a context menu, without attaching them to the icon. No items shows nothing.
 	PopUpMenu(items []MenuItem)
+	// OpenPopover creates a hidden window of the given size under the icon, showing content: the native UI of a ui.View,
+	// as the real platform takes it. A fake ignores it.
+	OpenPopover(opts PopoverOptions, content any) (Popover, error)
 	// Close removes the item. Calls after Close do nothing.
 	Close()
 }

@@ -70,8 +70,16 @@ func normalizeBar(bar api.MenuBar, index int, extensionTitle string, issues *[]s
 	}, id, true
 }
 
-// normalizePopover keeps a popover whose view validates, and drops one that does not, with an issue. The popover's
-// size is the palette's, so the declared width and height are not read.
+// Popover size limits, in DIPs, as the Electron host bounds a popover: a default applies when none is declared.
+var (
+	popoverWidth  = sizeLimits{min: 240, max: 800, fallback: 360}
+	popoverHeight = sizeLimits{min: 120, max: 800, fallback: 420}
+)
+
+type sizeLimits struct{ min, max, fallback int }
+
+// normalizePopover keeps a popover whose view validates, and drops one that does not, with an issue. Its size is kept
+// within the limits.
 func normalizePopover(popover *api.Popover, issues *[]string) *api.Popover {
 	if popover == nil {
 		return nil
@@ -80,7 +88,15 @@ func normalizePopover(popover *api.Popover, issues *[]string) *api.Popover {
 		*issues = append(*issues, "menu bar popover is dropped: "+err.Error())
 		return nil
 	}
-	return popover
+	return &api.Popover{View: popover.View, Width: bounded(popover.Width, popoverWidth), Height: bounded(popover.Height, popoverHeight)}
+}
+
+// bounded returns size within the limits, or the fallback when none was declared.
+func bounded(size int, limits sizeLimits) int {
+	if size <= 0 {
+		return limits.fallback
+	}
+	return min(max(size, limits.min), limits.max)
 }
 
 // normalizeIcon keeps a curated glyph and falls back to the default one, with an issue for an unknown name.

@@ -1,56 +1,83 @@
 package app
 
 import (
+	"github.com/egoist/mygo/ui"
+
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// popoverState is the popover page the palette shows: the item it belongs to, and its view. The palette leaves the page
-// when it shows its root again, so the page counts as open only while it is on top.
-type popoverState struct {
-	key  string
-	view *palette.View
+// menuPopover is the popover of one menu bar item: a palette that draws into a window under the item.
+type menuPopover struct {
+	palette *palette.Palette
 }
 
-// popoverHost opens the popovers of the menu bar items in the palette. 1.x opens each view in a window under its icon.
-// MyGo's tray flyout needs the tray's own handle, which the platform port does not expose, so the palette shows the view
-// instead: the closest match this port allows.
+// popoverHost opens the popovers of the menu bar items under their icons, as 1.x does: each is a window of the declared
+// size that closes when the user presses outside it.
 type popoverHost struct{ p *App }
 
-// Toggle opens the popover of an item, or closes it when it is the page on top.
-func (h popoverHost) Toggle(extensionID, barID string, popover api.Popover) {
+// Toggle shows the popover of an item under its tray item, or closes it when it is shown.
+func (h popoverHost) Toggle(extensionID, barID string, tray platform.Tray, popover api.Popover) {
 	key := popoverKey(extensionID, barID)
-	if h.showing(key) {
-		h.p.popover = popoverState{}
-		h.p.Hide()
+	open := h.p.popovers[key]
+	if open != nil && open.palette.Visible() {
+		open.palette.Hide()
 		return
 	}
 	view := h.view(extensionID, popover)
 	if view == nil {
 		return
 	}
-	h.p.Root()
-	h.p.popover = popoverState{key: key, view: view}
-	h.p.Open(view)
-	h.p.focusPanel()
+	if open == nil {
+		open = h.create(key, tray, popover, view)
+		if open == nil {
+			return
+		}
+	}
+	open.palette.SetStack(view)
+	open.palette.Show()
 }
 
-// Refresh swaps in the popover's new view while it is open, so the page follows the extension's renders.
-func (h popoverHost) Refresh(extensionID, barID string, popover api.Popover) {
-	if !h.showing(popoverKey(extensionID, barID)) {
+// Refresh swaps in the popover's new view while it is shown, so it follows the extension's renders.
+func (h popoverHost) Refresh(extensionID, barID string, _ platform.Tray, popover api.Popover) {
+	open := h.p.popovers[popoverKey(extensionID, barID)]
+	if open == nil || !open.palette.Visible() {
 		return
 	}
 	view := h.view(extensionID, popover)
-	if view == nil || !h.p.ReplaceIf(h.p.popover.view, view) {
+	if view == nil {
 		return
 	}
-	h.p.popover.view = view
+	open.palette.SetStack(view)
+	open.palette.Refresh()
 }
 
-func (h popoverHost) showing(key string) bool {
-	return h.p.popover.key == key && h.p.popover.view != nil && h.p.Visible() && h.p.Top() == h.p.popover.view
+// create makes the popover window under the tray item and the palette that draws into it. It is kept until the item
+// goes, so reopening keeps the palette's state.
+func (h popoverHost) create(key string, tray platform.Tray, popover api.Popover, root *palette.View) *menuPopover {
+	pal := palette.New(palette.Options{
+		Root:    root,
+		Clock:   searchClock,
+		Icon:    h.p.fileIcon,
+		Learner: h.p.learn,
+		DragRow: dragFileRow,
+	})
+	window, err := tray.OpenPopover(platform.PopoverOptions{Width: popover.Width, Height: popover.Height}, ui.View(pal.View))
+	if err != nil {
+		logx.Default().Warn("menu bar popover unavailable", logx.F{"popover": key, "error": err.Error()})
+		return nil
+	}
+	pal.Attach(window)
+	if h.p.popovers == nil {
+		h.p.popovers = map[string]*menuPopover{}
+	}
+	open := &menuPopover{palette: pal}
+	h.p.popovers[key] = open
+	return open
 }
 
 // view builds the palette page of a popover. It is nil while the extension host is not running.

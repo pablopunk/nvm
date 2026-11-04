@@ -1,7 +1,10 @@
 package real
 
 import (
+	"fmt"
+
 	"github.com/egoist/mygo"
+	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -71,6 +74,25 @@ func (t *nativeTray) PopUpMenu(items []platform.MenuItem) {
 		return
 	}
 	mygo.NewMenu(convertMenuItems(items)).Popup(nil)
+}
+
+// OpenPopover creates the popover as a MyGo flyout under the icon: on macOS an NSPopover that closes as the user clicks
+// elsewhere, and elsewhere a focusable flyout that closes the same way. The content is the ui.View of the palette.
+func (t *nativeTray) OpenPopover(opts platform.PopoverOptions, content any) (platform.Popover, error) {
+	view, ok := content.(*ui.Content)
+	if !ok {
+		return nil, fmt.Errorf("popover content is %T, want the native UI of a ui.View", content)
+	}
+	return mygo.NewFlyout(mygo.FlyoutOptions{
+		Tray:      t.tray,
+		Placement: mygo.PlacementBottom,
+		Width:     opts.Width,
+		Height:    opts.Height,
+		Focusable: true,
+		Popover:   true,
+		Hidden:    true,
+		Content:   view,
+	}), nil
 }
 
 // Close removes the item from the menu bar or tray.

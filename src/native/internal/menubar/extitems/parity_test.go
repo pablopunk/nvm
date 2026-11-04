@@ -124,13 +124,13 @@ type recordedPopovers struct {
 	refreshes []string
 }
 
-func (r *recordedPopovers) Toggle(extensionID, barID string, _ api.Popover) {
+func (r *recordedPopovers) Toggle(extensionID, barID string, _ platform.Tray, _ api.Popover) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.toggles = append(r.toggles, extensionID+"/"+barID)
 }
 
-func (r *recordedPopovers) Refresh(extensionID, barID string, _ api.Popover) {
+func (r *recordedPopovers) Refresh(extensionID, barID string, _ platform.Tray, _ api.Popover) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.refreshes = append(r.refreshes, extensionID+"/"+barID)

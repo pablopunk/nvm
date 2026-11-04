@@ -69,6 +69,7 @@ type Tray struct {
 	primary    func()
 	secondary  func()
 	popUps     [][]platform.MenuItem
+	popovers   []*Popover
 }
 
 var _ platform.Tray = (*Tray)(nil)
@@ -94,6 +95,22 @@ func (t *Tray) PopUpMenu(items []platform.MenuItem) {
 	if len(items) > 0 && !t.closed {
 		t.popUps = append(t.popUps, slices.Clone(items))
 	}
+}
+
+// OpenPopover makes a hidden popover of the given size. The content is not used by the fake.
+func (t *Tray) OpenPopover(opts platform.PopoverOptions, _ any) (platform.Popover, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	popover := &Popover{options: opts}
+	t.popovers = append(t.popovers, popover)
+	return popover, nil
+}
+
+// Popovers returns the popovers opened on the item, in order.
+func (t *Tray) Popovers() []*Popover {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return append([]*Popover(nil), t.popovers...)
 }
 
 // PopUps returns the context menus shown, in order.
