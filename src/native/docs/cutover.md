@@ -69,13 +69,13 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 
 **Users keep** (in 1.x, untouched by 2.0):
 
-- Everything in 1.x, including clipboard history, snippets, notes, chats and extensions. 1.x keeps working.
+- Everything in 1.x, including clipboard history, notes, chats and extensions. 1.x keeps working.
 - Their account. Accounts and plans live on the backend, so a user who signs in to 2.0 sees the same account.
   2.0 holds its own token, in its own keychain entry.
 
 **Users lose** when they move to 2.0 (unless the optional importer, section 9, is built and they run it):
 
-- Clipboard history, snippets, quick notes, AI chats, palette query history and usage learning. 2.0 starts empty.
+- Clipboard history, quick notes, AI chats, palette query history and usage learning. 2.0 starts empty.
 - Extensions. 1.x extensions are JavaScript or TypeScript modules. 2.0 runs Go source bundles through its own API,
   so no 1.x extension runs in 2.0. Users rebuild them with Automate (the AI builder) or wait for a built-in.
 - Per-extension storage and secrets, settings, and shortcut customizations. Secrets and BYO keys must be entered
@@ -85,8 +85,8 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 
 **What to tell users** (draft; copy review is required, PLAN section 3.3):
 
-> Nevermind Next is a new app. It installs beside Nevermind and starts empty: no clipboard history, snippets, notes or
-> chats, and it does not run Nevermind extensions. Nothing in Nevermind changes. Sign in again in Nevermind Next. Keep
+> Nevermind Next is a new app. It installs beside Nevermind and starts empty: no clipboard history, notes or chats,
+> and it does not run Nevermind extensions. Nothing in Nevermind changes. Sign in again in Nevermind Next. Keep
 > Nevermind until Nevermind Next has what you use. Uninstalling one app never deletes the other's data.
 
 **Rollback of data.** 2.0 stores are versioned and forward-compatible by one version (PLAN section 4). Going back to 1.x
@@ -210,8 +210,8 @@ Support playbook (to be written as a short page before any outside user receives
 2. Sign-in trouble: the paste-code path always works. "consumed" means another app took the code; sign in again.
 3. "Where is my data?" Use the section 3 copy. 2.0 never reads 1.x data.
 4. "My extension stopped working." 2.0 does not run 1.x extensions. Point to Automate.
-5. A 426 `unsupported_client` answer shows an update prompt with the update URL. The user updates that app; no
-   support ticket is needed.
+5. A client the backend marks unsupported (`unsupported_desktop_version`) gets an update prompt. 2.0 derives it in
+   `internal/backend/compat.go`. The user updates that app; no support ticket is needed.
 6. Shortcut banner: change the palette hotkey in 2.0 or in 1.x (section 1).
 
 Communication steps:
@@ -225,7 +225,7 @@ Communication steps:
 
 ## 9. Optional importer (not built)
 
-WP5.5 lists an optional, read-only importer for extension source, snippets and notes, with a dry-run report. It is not
+WP5.5 lists an optional, read-only importer for extension source and notes, with a dry-run report. It is not
 built. If the owner wants it, it runs only after the dogfood gate, reads 1.x files without writing to them (the
 acceptance test is that no write reaches a 1.x path), and reports what it would import before importing anything.
 
@@ -257,7 +257,7 @@ Each decision blocks a step above. Recommendations are in brackets.
 4. **D4 Data directory.** Keep `~/.config/nvm-native` on every OS, or move to MyGo's per-OS user-data path
    (`mygo-practices.md` C10)? Permanent once users have data. [Decide before the first public build.]
 5. **D5 Keychain service.** Keep `nvm-native`? [Keep; renaming it strands tokens.]
-6. **D6 Importer.** Build the read-only importer for snippets, notes and extension source, or ship without it?
+6. **D6 Importer.** Build the read-only importer for notes and extension source, or ship without it?
    [Ship without it; revisit after beta feedback.]
 7. **D7 Cutover date and mechanism.** Who decides cutover, which download page changes, and whether 1.x receives a
    final release that points to 2.0? [Owner.]
