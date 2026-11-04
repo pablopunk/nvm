@@ -46,6 +46,8 @@ const (
 	CapabilityDesktopApps         Capability = "desktop.apps"
 	CapabilityDesktopFiles        Capability = "desktop.files"
 	CapabilityDesktopClipboard    Capability = "desktop.clipboard"
+	CapabilityDesktopSelection    Capability = "desktop.selection"
+	CapabilityDesktopKeyboard     Capability = "desktop.keyboard"
 	CapabilityWindowManagement    Capability = "desktop.window-management"
 	CapabilityClipboardHistory    Capability = "clipboard.history"
 	CapabilityAI                  Capability = "ai"
@@ -66,6 +68,7 @@ const (
 func KnownCapabilities() []Capability {
 	return []Capability{
 		CapabilityDesktopApps, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
+		CapabilityDesktopSelection, CapabilityDesktopKeyboard,
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
 		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,

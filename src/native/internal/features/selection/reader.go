@@ -1,4 +1,4 @@
-package commands
+package selection
 
 import (
 	"crypto/rand"
@@ -32,7 +32,7 @@ func NewReader(clock platform.Clock, clip platform.Clipboard, selection platform
 }
 
 // Read returns the text selected in source, or "" when nothing was selected. The clipboard is put back as it was.
-// It returns errSourceGone when the source window has gone and errFormattedClipboard when the clipboard holds
+// It returns ErrSourceGone when the source window has gone and ErrFormattedClipboard when the clipboard holds
 // content the restore could not preserve.
 func (r *Reader) Read(source platform.FocusTarget) (string, error) {
 	if err := restoreSource(r.focus, source); err != nil {
@@ -54,13 +54,13 @@ func (r *Reader) Read(source platform.FocusTarget) (string, error) {
 }
 
 // restoreSource gives the keyboard back to the source window, so a copy or paste gesture reaches it. A window that has
-// gone is errSourceGone; an OS without the focus port keeps the keyboard where the palette left it.
+// gone is ErrSourceGone; an OS without the focus port keeps the keyboard where the palette left it.
 func restoreSource(focus platform.Focus, source platform.FocusTarget) error {
 	if source.Window == "" || focus == nil {
 		return nil
 	}
 	if err := focus.Restore(source); errors.Is(err, platform.ErrNotFound) {
-		return errSourceGone
+		return ErrSourceGone
 	}
 	return nil
 }
@@ -100,7 +100,7 @@ func (r *Reader) snapshot() (clipboardSnapshot, error) {
 	}
 	for _, format := range formats {
 		if isFormatted(format) {
-			return clipboardSnapshot{}, errFormattedClipboard
+			return clipboardSnapshot{}, ErrFormattedClipboard
 		}
 	}
 	text, err := r.clip.ReadText()

@@ -17,6 +17,14 @@ func (d remoteDesktop) Clipboard() api.SystemClipboard {
 	return remoteSystemClipboard{link: d.link}
 }
 
+func (d remoteDesktop) Keyboard() api.Keyboard {
+	return remoteKeyboard{link: d.link}
+}
+
+func (d remoteDesktop) Selection() api.Selection {
+	return remoteSelection{link: d.link}
+}
+
 func (d remoteDesktop) Apps() api.Apps {
 	return remoteApps{link: d.link}
 }

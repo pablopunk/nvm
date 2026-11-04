@@ -64,6 +64,8 @@ type Deps struct {
 	Shortcuts ShortcutTable
 	// Indicators draws the passive indicators. Nil answers unavailable.
 	Indicators IndicatorSurface
+	// Selection reads, replaces and undoes the selected text of the summoned app. Nil answers unavailable.
+	Selection SelectionEngine
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
@@ -200,6 +202,10 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveDesktopShell(ctx, call)
 	case protocol.ServiceDesktopWindows:
 		return h.serveDesktopWindows(ctx, call)
+	case protocol.ServiceDesktopSelection:
+		return h.serveDesktopSelection(call)
+	case protocol.ServiceDesktopKeyboard:
+		return h.serveDesktopKeyboard(call)
 	case protocol.ServiceClipboardHistory:
 		return h.serveClipboardHistory(ctx, call)
 	case protocol.ServiceOCR:

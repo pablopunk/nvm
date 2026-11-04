@@ -9,35 +9,6 @@ import (
 // The desktop sub-surfaces the host does not serve yet. Each answers with the unsupported error, or with the empty
 // answer its signature allows, so an extension that calls one fails on that call and never panics.
 
-func (remoteDesktop) Keyboard() api.Keyboard { return unsupportedKeyboard{} }
-
-func (remoteDesktop) Selection() api.Selection { return unsupportedSelection{} }
-
-type unsupportedKeyboard struct{}
-
-func (unsupportedKeyboard) TypeText(string, api.TypeOptions) error {
-	return unsupported("ctx.desktop.keyboard.typeText")
-}
-
-// unsupportedSelection reports the selection as unsupported, the state the Access call exists to report.
-type unsupportedSelection struct{}
-
-func (unsupportedSelection) Access() (api.SelectionAccess, error) {
-	return api.SelectionAccess{State: api.SelectionUnsupported, Message: "Reading the selection is not available in this Nevermind version yet."}, nil
-}
-
-func (unsupportedSelection) Text() (string, bool, error) {
-	return "", false, unsupported("ctx.desktop.selection.text")
-}
-
-func (unsupportedSelection) ReplaceText(string) (bool, error) {
-	return false, unsupported("ctx.desktop.selection.replaceText")
-}
-
-func (unsupportedSelection) Files() ([]string, error) {
-	return nil, unsupported("ctx.desktop.selection.files")
-}
-
 func (remoteApps) Frontmost() (api.App, error) {
 	return api.App{}, unsupported("ctx.desktop.apps.frontmost")
 }

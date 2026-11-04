@@ -33,6 +33,19 @@ func (p paster) FrontmostAppID() (string, error) {
 	return frontmostAppID(ctx, p.helper, os.Getpid())
 }
 
+// UndoInFrontmost waits for the palette to hide, then sends the undo gesture. Like PasteIntoFrontmost, it never sends
+// the key to a window it cannot name when expectedAppID is set.
+func (p paster) UndoInFrontmost(expectedAppID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), pasteTimeout)
+	defer cancel()
+	if p.waitHidden != nil {
+		if err := p.waitHidden(ctx); err != nil {
+			return err
+		}
+	}
+	return undoGesture(ctx, p.helper, expectedAppID)
+}
+
 // PasteIntoFrontmost waits for the palette to hide, then sends the paste gesture. It returns
 // platform.ErrUnsupported when the OS or session cannot send it, and never types into a window it cannot
 // name when expectedAppID is set.

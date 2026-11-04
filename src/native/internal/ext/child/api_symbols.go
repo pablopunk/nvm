@@ -54,6 +54,8 @@ func init() {
 		"CapabilityDesktopApps":         reflect.ValueOf(api.CapabilityDesktopApps),
 		"CapabilityDesktopClipboard":    reflect.ValueOf(api.CapabilityDesktopClipboard),
 		"CapabilityDesktopFiles":        reflect.ValueOf(api.CapabilityDesktopFiles),
+		"CapabilityDesktopKeyboard":     reflect.ValueOf(api.CapabilityDesktopKeyboard),
+		"CapabilityDesktopSelection":    reflect.ValueOf(api.CapabilityDesktopSelection),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
 		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
@@ -66,6 +68,7 @@ func init() {
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
+		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
 		"CodeInternal":                  reflect.ValueOf(api.CodeInternal),
 		"CodeInvalid":                   reflect.ValueOf(api.CodeInvalid),
@@ -1073,10 +1076,14 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Input) Prompt(spec api
 type _github_com_pablopunk_nvm_native_internal_ext_api_Keyboard struct {
 	IValue    interface{}
 	WTypeText func(text string, options api.TypeOptions) error
+	WUndo     func() error
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Keyboard) TypeText(text string, options api.TypeOptions) error {
 	return W.WTypeText(text, options)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Keyboard) Undo() error {
+	return W.WUndo()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Logs is an interface wrapper for Logs type

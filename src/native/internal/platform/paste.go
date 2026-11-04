@@ -13,6 +13,9 @@ type Paster interface {
 	// PasteIntoFrontmost sends the paste gesture to the frontmost app if it is expectedAppID, or to any
 	// app when expectedAppID is "".
 	PasteIntoFrontmost(expectedAppID string) error
+	// UndoInFrontmost sends the undo gesture (Command+Z or Ctrl+Z) to the frontmost app, with the same expectedAppID
+	// rule as PasteIntoFrontmost. The caller decides what to undo; the port only sends the key.
+	UndoInFrontmost(expectedAppID string) error
 	// FrontmostAppID names the app that has the keyboard, in the form expectedAppID takes on this OS, so a caller
 	// can remember the app it will paste into. It returns "" when the app is not known (Nevermind itself has the
 	// keyboard, or no window does) and ErrUnsupported where the OS cannot name the app.
