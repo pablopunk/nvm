@@ -117,6 +117,8 @@ func SerializableTypes() []reflect.Type {
 		reflect.TypeFor[DecisionResult](),
 		reflect.TypeFor[ChatSummary](),
 		reflect.TypeFor[TweakRequest](),
+		reflect.TypeFor[FetchRequest](),
+		reflect.TypeFor[FetchResponse](),
 		reflect.TypeFor[Failure](),
 	}
 }

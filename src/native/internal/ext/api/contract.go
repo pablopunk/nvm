@@ -75,6 +75,7 @@ type Context interface {
 	Logs() Logs
 	Text() Text
 	Data() Data
+	Network() Network
 	Drafts() Drafts
 	Clipboard() ClipboardHistory
 	Desktop() Desktop

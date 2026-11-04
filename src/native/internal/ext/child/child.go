@@ -64,34 +64,62 @@ func serve(sourcePath string, memoryLimit uint64, identity api.Identity, in io.R
 			fmt.Fprintf(os.Stderr, "extension child: memory limit not applied: %v\n", err)
 		}
 	}
-	ext, err := load(sourcePath, identity, real.NewPorts().Clock)
+	link := newHostLink(out)
+	ext, err := load(sourcePath, identity, real.NewPorts().Clock, link)
 	if err != nil {
 		failure := api.FailureOf(err)
 		failure.Message = truncate(failure.Message)
-		writeLine(out, protocol.Ready{OK: false, Failure: &failure})
+		writeLineLocked(out, protocol.Ready{OK: false, Failure: &failure})
 		return 1
 	}
-	writeLine(out, protocol.Ready{OK: true})
-	return answerRequests(ext, in, out)
+	writeLineLocked(out, protocol.Ready{OK: true})
+	return answerRequests(ext, readInbound(in, link), link)
 }
 
-// answerRequests reads one request per line and writes one response per line, in order.
-func answerRequests(ext *extension, in io.Reader, out io.Writer) int {
-	scanner := bufio.NewScanner(in)
-	scanner.Buffer(make([]byte, 0, 64<<10), protocol.MaxLineBytes)
-	for scanner.Scan() {
-		var req protocol.Request
-		if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
-			writeLine(out, protocol.Response{Failure: &api.Failure{Code: api.CodeInvalid, Message: "request is not valid JSON"}})
-			continue
+// readInbound reads host lines until stdin ends. Service replies go straight to the call waiting for them, so
+// a request that is being answered can finish its service calls; every other line is a request, queued for the
+// answering loop. The host runs one request at a time, so the queue holds at most one line.
+func readInbound(in io.Reader, link *hostLink) <-chan protocol.Request {
+	requests := make(chan protocol.Request, 1)
+	go func() {
+		defer close(requests)
+		defer link.close()
+		scanner := bufio.NewScanner(in)
+		scanner.Buffer(make([]byte, 0, 64<<10), protocol.MaxLineBytes)
+		for scanner.Scan() {
+			routeInboundLine(scanner.Bytes(), link, requests)
 		}
-		writeLine(out, ext.answer(req))
+	}()
+	return requests
+}
+
+// routeInboundLine hands one host line to the call that awaits it, or queues it as a request.
+func routeInboundLine(line []byte, link *hostLink, requests chan<- protocol.Request) {
+	if protocol.IsServiceReply(line) {
+		var reply protocol.ServiceReply
+		if err := json.Unmarshal(line, &reply); err == nil {
+			link.deliver(reply)
+		}
+		return
+	}
+	var req protocol.Request
+	if err := json.Unmarshal(line, &req); err != nil {
+		link.send(protocol.Response{Failure: &api.Failure{Code: api.CodeInvalid, Message: "request is not valid JSON"}})
+		return
+	}
+	requests <- req
+}
+
+// answerRequests runs the queued requests in order and writes one response per request.
+func answerRequests(ext *extension, requests <-chan protocol.Request, link *hostLink) int {
+	for req := range requests {
+		link.send(ext.answer(req))
 	}
 	return 0
 }
 
-// writeLine marshals v and writes it as one line. A write error ends the child: the host has gone.
-func writeLine(out io.Writer, v any) {
+// writeLineLocked marshals v and writes it as one line. A write error ends the child: the host has gone.
+func writeLineLocked(out io.Writer, v any) {
 	data, err := json.Marshal(v)
 	if err != nil {
 		data = []byte(`{"failure":{"code":"internal","message":"response cannot be encoded"}}`)

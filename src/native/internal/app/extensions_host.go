@@ -8,6 +8,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -50,7 +51,14 @@ func newExtensionManager() (*manager.Manager, error) {
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,
-	}, extensionsDir(), enablement.Open(state), manager.Options{Executable: exe})
+		Keychain:  ports.Keychain,
+		Network:   ports.PublicHTTP,
+		Clipboard: ports.Clipboard,
+		Logs:      logx.Default(),
+	}, extensionsDir(), enablement.Open(state), manager.Options{
+		Executable: exe,
+		DataRoot:   filepath.Join(configDir(), "extension-data"),
+	})
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

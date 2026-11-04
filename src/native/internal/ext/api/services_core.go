@@ -56,7 +56,8 @@ type SettingDefinition struct {
 	Value       json.RawMessage `json:"value,omitempty"`
 }
 
-// Settings reads and writes host settings. Writes need the settings.write capability for review.
+// Settings reads and writes the settings the manifest declares. Writes need the settings.write capability, which
+// the host enforces, and an undeclared id is not found.
 type Settings interface {
 	Definitions() []SettingDefinition
 	Get(id string, into any) error
@@ -116,7 +117,7 @@ type TemplateOptions struct {
 	CursorToken   string `json:"cursorToken,omitempty"`
 }
 
-// TemplateResult is the expanded text, plus the cursor offset when the template had {cursor}.
+// TemplateResult is the expanded text, plus the cursor's UTF-8 byte offset into Text when the template had {cursor}.
 type TemplateResult struct {
 	Text    string   `json:"text"`
 	Cursor  *int     `json:"cursor,omitempty"`

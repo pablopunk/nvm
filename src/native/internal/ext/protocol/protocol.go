@@ -20,6 +20,17 @@ const (
 	MethodLoad     = "load"     // DataLoader.LoadItems, with Invocation.Ref.ID as the loader
 )
 
+// Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the
+// host answers with a ServiceReply carrying the same CallID. The host decides what each call may do.
+const (
+	ServiceStorage  = "storage"
+	ServiceSecrets  = "secrets"
+	ServiceSettings = "settings"
+	ServiceLogs     = "logs"
+	ServiceText     = "text"
+	ServiceNetwork  = "network"
+)
+
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the
 // extension source path, the address-space limit in bytes (0 for none) and the identity as JSON.
 const ChildFlag = "--nvm-ext-child"
@@ -49,4 +60,38 @@ type Response struct {
 	ID      uint64          `json:"id"`
 	Data    json.RawMessage `json:"data,omitempty"`
 	Failure *api.Failure    `json:"failure,omitempty"`
+}
+
+// ServiceCall is one call from the child to a host service. A child line is a ServiceCall when Service is set;
+// every other child line is a Response. CallID is chosen by the child and echoed in the reply.
+type ServiceCall struct {
+	CallID  uint64          `json:"callId"`
+	Service string          `json:"service"`
+	Op      string          `json:"op"`
+	Args    json.RawMessage `json:"args,omitempty"`
+}
+
+// ServiceReply answers one ServiceCall. Data holds the JSON result when Failure is nil. The host writes it on the
+// child's stdin, so a host line is a ServiceReply when ReplyTo is set and a Request otherwise.
+type ServiceReply struct {
+	ReplyTo uint64          `json:"replyTo"`
+	Data    json.RawMessage `json:"data,omitempty"`
+	Failure *api.Failure    `json:"failure,omitempty"`
+}
+
+// ParseServiceCall reports whether a child line is a service call and returns it.
+func ParseServiceCall(line []byte) (ServiceCall, bool) {
+	var call ServiceCall
+	if err := json.Unmarshal(line, &call); err != nil || call.Service == "" {
+		return ServiceCall{}, false
+	}
+	return call, true
+}
+
+// IsServiceReply reports whether a host line answers a service call rather than being a request.
+func IsServiceReply(line []byte) bool {
+	var probe struct {
+		ReplyTo *uint64 `json:"replyTo"`
+	}
+	return json.Unmarshal(line, &probe) == nil && probe.ReplyTo != nil
 }

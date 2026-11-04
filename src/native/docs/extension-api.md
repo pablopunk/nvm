@@ -94,10 +94,13 @@ Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one
 | `CapabilityDictation` | `dictation` | Microphone capture and transcription |
 | `CapabilityCamera` | `camera` | Camera views |
 | `CapabilityOCR` | `ocr` | Text recognition |
+| `CapabilityNetwork` | `network` | Fetching web resources through the public-address port (enforced, section 18) |
+| `CapabilitySecrets` | `secrets` | Keychain-backed secrets (enforced, section 18) |
 
 Review semantics:
 
-- Declared means "intends to use". The host does not block a call that was not declared. The host records a diagnostic when an undeclared capability is used (WP3.2 proposal; the TypeScript host does not do this yet).
+- Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and the diagnostic for an undeclared use is still a proposal (WP3.2).
+- Three capabilities are enforced, from WP3.7: `network`, `secrets` and `settings.write`. A call without its declaration fails with a permission failure that names the capability, and the refusal is logged. See section 18.
 - OS permissions (camera, microphone, screen recording, accessibility) remain real boundaries. The OS asks, and the answer is the enforcement.
 - An enabled extension has the full Context whether or not it declares anything. This matches the trust model.
 
@@ -313,6 +316,7 @@ Rules:
 | `Logs` | `Log`, `Recent` | File-backed; never log secrets or clipboard or file contents. |
 | `Text` | `Template` | Snippet and quicklink expansion. |
 | `Data` | `Loader`, `StaleWhileRevalidate` | Returns a `DataSource` to assign to `View.Source`. |
+| `Network` | `Fetch` | Public addresses only; needs `network`. Added in WP3.7. |
 | `Drafts` | `Commit`, `Discard` | Recovery state for editor drafts. |
 | `ClipboardHistory` | `List`, `Get`, `Remove`, `Clear` | Needs `clipboard.history`. |
 | `Desktop` | `Keyboard`, `Clipboard`, `Selection`, `Apps`, `WindowManagement`, `Files`, `Shell` | `WindowManagement()` is nil where unsupported. |
@@ -963,3 +967,33 @@ Code: `internal/ext/{bundle,install,enablement,protocol,child,supervisor,manager
 - **Isolation.** A recovered panic is an internal failure with a reference, and the child keeps running. A goroutine panic, a line over 1 MiB, a hard-budget overrun and a resident size over the limit end the child. The address-space cap is set inside the child on Linux only.
 - **Hot reload.** A changed folder replaces its runtime; the old child stops before the new one starts. A failed install changes nothing visible.
 - **Palette.** Extension rows join the root through a search provider, each within its own budget. A failed extension is one row that says why. Commands are listed at the root and run through the supervisor. The manager view lists state and reasons; a dropped-in extension opens a capability review before its first enable. Review metadata is not a sandbox.
+
+## 18. Context services as built (WP3.7)
+
+Code: `internal/ext/services` (host side, one `Handler` per extension), `internal/ext/child` (`link.go`, `remote_*.go`, `memo.go`, `cache.go`, `data.go`) and `internal/ext/protocol` (`service_ops.go`). Fixtures: `testdata/extensions/acme.services` (every service) and `acme.hostile` (every limit); end-to-end tests in `internal/ext/supervisor/services_test.go`.
+
+- **Exchange.** While a request runs, the child writes a `ServiceCall` line (`callId`, `service`, `op`, `args`) and blocks until the host writes the matching `ServiceReply` (`replyTo`, then `data` or `failure`). The host answers inside the request's budget, so a service call that overruns it gets the same hard-budget kill as any call. The child reads stdin on its own goroutine, so a reply reaches a blocked call. Still one request in flight per child.
+- **Namespacing.** Each extension has a folder `extension-data/<id>/` holding `storage.json`, `secrets-index.json`, `settings.json` and `data-cache.json`. Calls carry no extension id: the handler's manifest picks the namespace, so an extension cannot name another's data. Keychain entries use the service `nevermind.extension.<id>`.
+- **Enforced capabilities.** `network`, `secrets` and `settings.write` are checked by the host before the service runs. A refusal is `permission`, names the capability, and is logged as a warning. Storage, memo, cache, logs, text and data need no declaration: they are namespaced, not privileged.
+- **Storage.** `Get`, `Set`, `Delete`, `Clear`. `Memo` and `MemoStale` run in the child on top of storage (entries live under the `memo/` prefix). The load function runs in the child; `MemoStale` refreshes on one background goroutine per key, so a load must not depend on state the main path changes.
+- **Secrets.** The OS keychain only. Without one the call is `unavailable` and nothing is written to a file. The value crosses the exchange and nowhere else; a test asserts it never reaches the data folder.
+- **Settings.** Declared in `Manifest.Settings` (id, type `boolean`, `string`, `number`, or empty for any JSON, and a default). `Set` and `Toggle` are saved before the call returns. Values are type-checked. The settings view is not built yet (WP3.3, WP3.4).
+- **Logs.** The host stamps each record with `source: extension` and the extension id. `Recent` returns only the caller's records; a query cannot name another extension.
+- **Text.** `{name}` and `{{ name }}` read values; `{argument:name}` reads the same values; `{calculator:expr}` is evaluated offline (currency needs rates and is not offered); `{cursor}` marks the cursor. Standard variables: `date`, `time`, `datetime` (local), `uuid`, `clipboard` (only with `clipboard.history` and unless `IncludeClipboard` is false) and `selectedText` (empty until WP3.8). `TemplateResult.Cursor` is a UTF-8 byte offset into `Text`. Names with no value are listed in `Missing`, sorted and unique.
+- **Network.** Only the public-address port. Loopback, private and link-local destinations are refused at connect time. Redirects are followed by the host one hop at a time; each hop must be http or https with no user name, and a cross-host redirect drops `Authorization`. Methods: GET, HEAD, POST, PUT, PATCH, DELETE. `Host`, `Content-Length`, `Connection` and other hop-by-hop headers cannot be set. A body that is not UTF-8 comes back in `BodyBase64`.
+- **Data.** `Data()` describes sources and makes no call. The host runs the loader through `Runtime.Load`, which calls `DataLoader.LoadItems(ctx, loader)` in the child with a 10 s hard budget. `Handler.LoadSource` adds the cache: items saved within the TTL are returned without a load; a failed load within the stale window returns the saved items; otherwise the error. The view layer (WP3.3) calls it and owns `Retry`.
+
+Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
+
+| Service | Limit |
+|---|---|
+| storage | 1000 keys; 256-byte keys; 256 KiB per value; 4 MiB in total |
+| secrets | 64 names; 16 KiB per value; names must match `[A-Za-z_][A-Za-z0-9_.-]{0,127}` |
+| network | 60 requests a minute; 256 KiB request body; 1 MiB response (8 MiB cap); 10 s timeout (30 s cap); 5 redirects |
+| logs | 300 records a minute; 2 KiB message; 4 KiB data; `Recent` returns 100 by default, 500 at most |
+| data cache | 64 sources |
+| child cache | 1000 entries; a TTL of at most 24 h; oldest entry evicted first |
+
+Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
+
+Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` and `Views` (WP3.3, WP3.8, WP3.9). The settings view has no goldens yet.
