@@ -19,16 +19,19 @@ const (
 	MethodRun      = "run"      // ActionHandler.RunAction, with Invocation
 )
 
+// ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the
+// extension source path, the address-space limit in bytes (0 for none) and the identity as JSON.
+const ChildFlag = "--nvm-ext-child"
+
 // MaxLineBytes bounds one protocol line in either direction. A longer line is a failed call, not a
 // partial read: the host kills the child.
 const MaxLineBytes = 1 << 20
 
-// Ready is the child's first line. It reports whether the extension source compiled and its manifest
-// read cleanly. A child that sends Ready with OK false exits right after.
+// Ready is the child's first line. It reports whether the extension source loaded. A child that sends Ready
+// with OK false exits right after. The manifest is never read from the child: the host reviews extension.json.
 type Ready struct {
-	OK       bool          `json:"ok"`
-	Manifest *api.Manifest `json:"manifest,omitempty"`
-	Failure  *api.Failure  `json:"failure,omitempty"`
+	OK      bool         `json:"ok"`
+	Failure *api.Failure `json:"failure,omitempty"`
 }
 
 // Request is one call from the host. ID is echoed in the response, so a late answer is never mistaken
