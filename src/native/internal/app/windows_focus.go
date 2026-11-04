@@ -12,13 +12,11 @@ import (
 // focusCaptureTimeout bounds the window-system reads of the macOS path, the only capture that is not the palette's own.
 const focusCaptureTimeout = 150 * time.Millisecond
 
-// summonRecord is the window a palette window command acts on and how focus goes back to it. focus is the palette's
-// capture, restored with the Focus port (X11); window is the window raised instead where the palette captures nothing
-// (macOS).
+// summonRecord is the app a palette window command acts on and how the keyboard goes back to it. focus is the palette's
+// capture, restored with the Focus port (X11); where there is no focus port (macOS) the record holds only the app.
 type summonRecord struct {
 	target windowmgmt.Target
 	focus  platform.FocusTarget
-	window string
 	known  bool
 }
 
@@ -47,8 +45,8 @@ func (p *App) onPaletteShown() {
 	p.showApps()
 }
 
-// captureWindowFocus records the frontmost app and its focused window before the palette appears. It runs only where
-// the palette has no focus port: there the palette's summon capture is missing, and the window commands need one.
+// captureWindowFocus records the frontmost app before the palette appears. It runs only where the palette has no focus
+// port: there the palette's summon capture is missing, and the window commands need one.
 func (p *App) captureWindowFocus() {
 	if p.focusOption() != nil || !p.windowManagementEnabled() {
 		return
@@ -60,11 +58,7 @@ func (p *App) captureWindowFocus() {
 		p.windowFocus.store(summonRecord{})
 		return
 	}
-	window := ""
-	if record, err := p.ports.Windows.FocusedWindow(ctx, app.PID); err == nil {
-		window = record.Key
-	}
-	p.windowFocus.store(summonRecord{target: windowmgmt.Target{PID: app.PID, BundleID: app.BundleID}, window: window, known: true})
+	p.windowFocus.store(summonRecord{target: windowmgmt.Target{PID: app.PID, BundleID: app.BundleID}, known: true})
 }
 
 // windowTarget returns the window a palette window command acts on: the window that had the keyboard when the palette
@@ -91,15 +85,16 @@ func (p *App) PaletteFocusTarget() (windowmgmt.Target, bool) {
 	return record.target, record.known
 }
 
-// HidePaletteAndRestoreFocus hides the palette on the UI thread, then gives the keyboard back to the window the command
-// started from. It reports whether that window was restored; the engine then checks that the target is in front.
-func (p *App) HidePaletteAndRestoreFocus(ctx context.Context, target windowmgmt.Target) bool {
+// HidePaletteAndRestoreFocus hides the palette on the UI thread, then gives the keyboard back where the palette captured
+// it. Without a focus port (macOS) the palette is a nonactivating panel that never takes the app's front position, so
+// nothing needs giving back: the hand-off is requested, and the engine checks that the target is in front.
+func (p *App) HidePaletteAndRestoreFocus(ctx context.Context, _ windowmgmt.Target) bool {
 	record := p.windowFocus.load()
 	p.hidePaletteOnUI(ctx)
 	if focus := p.focusOption(); focus != nil {
 		return record.focus.Window != "" && focus.Restore(record.focus) == nil
 	}
-	return record.window != "" && p.ports.Windows.Raise(ctx, target.PID, record.window) == nil
+	return true
 }
 
 // hidePaletteOnUI runs the palette's hide on the UI thread and waits for it, or until ctx ends.
