@@ -220,7 +220,12 @@ func Run() {
 	mygo.App.SetName("Nevermind")
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
-	mygo.App.OnSecondInstance(func([]string, string) { p.panel.Update(p.Show) })
+	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		p.panel.Update(func() {
+			p.Show()
+			p.receiveSecondInstanceLink(args)
+		})
+	})
 	mygo.App.WhenReady(p.ready)
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
