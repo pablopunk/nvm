@@ -359,15 +359,17 @@ Go-specific decisions behind the table:
 
 ## 14. Author examples
 
-Runtime rule: the interpreter cannot call methods on interpreted struct values, so the entry points of an extension file are top-level functions named `Commands`, `RootItems`, `SearchItems`, `RunAction`, `LoadItems`, `MenuBars` and `MenuBarTriggers` (`internal/ext/child/interpret.go`). The examples below use the method form because `examples_test.go` checks them against the api interfaces at compile time. A file that loads in the host must add a top-level function per entry point that calls the method, for example `func SearchItems(ctx api.Context, query string) ([]api.Item, error) { return temperature{}.SearchItems(ctx, query) }`.
+Runtime rule: the interpreter cannot call methods on interpreted struct values, so an extension file declares its entry points as top-level functions named `Commands`, `RootItems`, `SearchItems`, `RunAction`, `LoadItems`, `MenuBars` and `MenuBarTriggers` (`internal/ext/child/interpret.go`). Each example below is a complete extension source in that form: no receiver types, no `Manifest` method (the manifest is `extension.json` beside `main.go`), and no interface assertions. The interpreter has no `max` builtin, so the examples write the comparison out.
 
-Each example is a compiled file in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, and `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper. Interpreter runs are not part of these tests.
+Each example is a complete extension source in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper, and `TestAuthorExamplesLoadAsInterpretedExtensions` (in `internal/ext/child`) evaluates each one in the interpreter and checks that it declares an entry point with the protocol signature.
 
 ### 14.1 Search provider (rows for a query, no commands)
 
 `testdata/examples/search_provider.go`
 
 ```go
+// Example: a search provider. Rows appear only for queries it recognises, and Enter copies the
+// converted value. It needs no commands because nothing here is durable or shortcut-able.
 package main
 
 import (
@@ -378,21 +380,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type temperature struct{}
-
-var (
-	_ api.Extension      = temperature{}
-	_ api.SearchProvider = temperature{}
-)
-
-func (temperature) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.temperature", Title: "Temperature"},
-	}
-}
-
-func (temperature) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	value, unit, ok := parseTemperature(query)
 	if !ok {
 		return nil, nil
@@ -438,6 +426,8 @@ func convertTemperature(value float64, unit string) (float64, string) {
 `testdata/examples/list_command.go`
 
 ```go
+// Example: a command that opens a list view of recent downloads. The command is durable (aliases,
+// a global shortcut); the rows are produced per open and are never registered as commands.
 package main
 
 import (
@@ -446,23 +436,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type downloads struct{}
-
-var (
-	_ api.Extension       = downloads{}
-	_ api.CommandProvider = downloads{}
-	_ api.ActionHandler   = downloads{}
-)
-
-func (downloads) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.downloads", Title: "Downloads"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:             "recent-downloads",
 		Title:          "Recent Downloads",
@@ -473,7 +447,7 @@ func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (downloads) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "recent-downloads":
 		return recentDownloadsView(ctx)
@@ -518,6 +492,8 @@ func recentDownloadsView(ctx api.Context) (api.Result, error) {
 `testdata/examples/form_command.go`
 
 ```go
+// Example: a command that opens a structured form. Values are validated with the same rules the
+// host applies, and the submit handler saves through Settings and closes the form.
 package main
 
 import (
@@ -526,23 +502,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type quickNote struct{}
-
-var (
-	_ api.Extension       = quickNote{}
-	_ api.CommandProvider = quickNote{}
-	_ api.ActionHandler   = quickNote{}
-)
-
-func (quickNote) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.quick-note", Title: "Quick Note"},
-		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
-	}
-}
-
-func (quickNote) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{ID: "settings", Title: "Quick Note Settings", Icon: "sticky-note", Aliases: []string{"qn"}}}, nil
 }
 
@@ -563,7 +523,7 @@ func noteFields() []api.Field {
 	return []api.Field{name, folder, format, tags, notify}
 }
 
-func (quickNote) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "settings":
 		submit := api.Run("save", "Save", nil)
@@ -593,6 +553,8 @@ func saveSettings(ctx api.Context, in api.Invocation) (api.Result, error) {
 `testdata/examples/menubar.go`
 
 ```go
+// Example: a menu bar status item for a pomodoro timer. The title changes every second, which is
+// why it lives in the title and not in the rows: changing rows rebuilds the native menu.
 package main
 
 import (
@@ -602,31 +564,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type pomodoro struct{}
-
 type timerState struct {
 	RunningSinceMs int64 `json:"runningSinceMs"`
 	RemainingMs    int64 `json:"remainingMs"`
 }
 
-var (
-	_ api.Extension       = pomodoro{}
-	_ api.MenuBarProvider = pomodoro{}
-	_ api.ActionHandler   = pomodoro{}
-)
-
-func (pomodoro) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.pomodoro", Title: "Pomodoro"},
-	}
-}
-
-func (pomodoro) MenuBarTriggers() []api.Trigger {
+func MenuBarTriggers() []api.Trigger {
 	return []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}}
 }
 
-func (pomodoro) MenuBars(ctx api.Context) ([]api.MenuBar, error) {
+func MenuBars(ctx api.Context) ([]api.MenuBar, error) {
 	state, err := loadTimer(ctx)
 	if err != nil {
 		return nil, err
@@ -652,7 +599,10 @@ func (state timerState) remaining(now time.Time) time.Duration {
 	if state.RunningSinceMs != 0 {
 		left -= now.Sub(time.UnixMilli(state.RunningSinceMs))
 	}
-	return max(left, 0)
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 func formatRemaining(d time.Duration) string {
@@ -667,7 +617,7 @@ func loadTimer(ctx api.Context) (timerState, error) {
 	return state, nil
 }
 
-func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "toggle" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -695,6 +645,9 @@ func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error
 `testdata/examples/background_job.go`
 
 ```go
+// Example: a trigger-driven background job. The host runs it when new screenshots land on the
+// Desktop (debounced, no overlap, bounded file list in LaunchContext) and it keeps a bounded
+// index in storage. It has no view, so it never shows the palette.
 package main
 
 import (
@@ -706,23 +659,7 @@ import (
 
 const maxIndexedScreenshots = 500
 
-type screenshotIndex struct{}
-
-var (
-	_ api.Extension       = screenshotIndex{}
-	_ api.CommandProvider = screenshotIndex{}
-	_ api.ActionHandler   = screenshotIndex{}
-)
-
-func (screenshotIndex) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.screenshot-index", Title: "Screenshot Index"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:    "index-new-screenshots",
 		Title: "Index New Screenshots",
@@ -737,7 +674,7 @@ func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (screenshotIndex) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "index-new-screenshots" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -1039,7 +976,7 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | --- | --- | --- |
 | `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
 | `desktop.apps` | `list`, `search`, `launch`, `icon` | `desktop.apps` |
-| `desktop.files` | `open`, `reveal` (absolute paths only) | `desktop.files` |
+| `desktop.files` | `open`, `reveal`, `find` (existing folders; missing and relative ones are skipped), `metadata`, `thumbnail` (a PNG data URL for pictures), `fileUrl` (a `file:` URL), `openWithApps` (bundles ranked by their document types through `mdls` and `plutil`, else every bundle by name), `writeBytes` (512 KiB per call; refuses an existing file unless `overwrite`, never creates folders). Absolute paths only. | `desktop.files` |
 | `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
 | `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
 | `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
@@ -1058,7 +995,7 @@ Decisions behind the table:
 - **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
-Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
@@ -1130,5 +1067,5 @@ A list does not show `View.Subtitle`. The Electron host shows it on grid views a
 - **Indicators.** `ctx.indicators` show, update and hide draw one passive panel for every extension. The host keys each indicator by extension id. Updates are limited to 120 a minute. A later show replaces the shown indicator. A timed indicator clears only while it is still the one shown. Code: `services/indicators.go`, `internal/app/extension_indicators.go`. The panel is shared with the AI commands, so the latest writer wins.
 - **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them. Window actions are served only where the host implements them, and otherwise show the palette's unavailable message.
 - **Not served.** `ctx.ai`, `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (keyboard, selection, extra file, clipboard and window-management operations, frontmost app) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
-- **Known gap.** The `unsupported` action kind, which AI builder action builders return, fails `Action.Validate`, so a view that contains one reports `unknown action kind` rather than a disabled row.
-- **Not yet served, from the converter reports.** `desktop.files` `find`, `thumbnail`, `metadata`, `fileUrl` and `openWithApps` (only `open` and `reveal` are served). A binary file write (a download to disk, for example a wallpaper). A redirect policy on `network`. Loaders receive only the loader id, not their arguments. `api.Command` has no `keywords`, and command aliases are not searched. Each of these needs its own change.
+- **Builder placeholders.** The AI builder action builders return `unavailable` actions. They validate, and the palette shows "This action is not available yet" when one runs, so the view that carries one still loads.
+- **Open items from the converter reports.** `desktop.files` `readText`, `writeText`, `quickLook`, the file index and `displayPath` (which returns the path unchanged), and thumbnails of videos. Thumbnails of every find result are not rendered: call `thumbnail` for the ones a view shows. A network redirect policy is not added: 1.x exposes none (its extensions called Node's `fetch` directly), so 2.0 follows up to five redirects one hop at a time, and the converted paperless extension's `redirect: 'error'` check reads `FinalURL`; the only difference is the message for a refused redirect target. Loaders keep their id as the only argument: 1.x loaders are closures, so a loader's arguments travel in its id, as the converted extensions do. Commands take `keywords` as well as `aliases`, and the root search matches both.

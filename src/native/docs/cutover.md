@@ -17,7 +17,7 @@ can see:
 |---|---|---|---|
 | Bundle identifier | `com.pablopunk.nvm` | `com.pablopunk.nvm.next` (permanent once shipped) | `mygo.json`, `release.md` |
 | App name, binary, slug | Nevermind | Nevermind Next, `nevermind-next`, `nevermind-next` | `mygo.json` |
-| Local data | the Electron user-data folder, `~/.config/nevermind/extensions` for extensions | `~/.config/nvm-native` on every OS | `store.go`, `extension-paths.ts` |
+| Local data | the Electron user-data folder; extensions in `~/.config/nevermind/extensions` | `~/.config/nvm-native` on every OS; Go extensions in the shared `~/.config/nevermind/extensions` folder | `store.go`, `extension-paths.ts` |
 | Keychain service | 1.x entries | `nvm-native` | `auth/vault.go` |
 | URL scheme | `nvm` | `nvm` today (collision, section 2) | `deep-link.ts`, `mygo.json` |
 | Update feed | GitHub releases `v...`, read through `release-pointers` and GitHub's latest stable | GitHub releases `native-v...` (never "latest") | `update-channels.md`, `release.md` |
@@ -64,8 +64,9 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 
 ## 3. Data
 
-2.0 is a breaking release. There is no automatic migration (PLAN D5). 2.0 never reads or writes `state.json`,
-`~/.config/nevermind/extensions`, or 1.x keychain entries (PLAN section 0.2). 1.x keeps every byte it has.
+2.0 is a breaking release. There is no automatic migration (PLAN D5). 2.0 never reads or writes `state.json`
+or 1.x keychain entries. It shares `~/.config/nevermind/extensions` with 1.x (PLAN section 0.2): its Go extensions are
+folders named after their ids, and 1.x `.ts` files, `package.json` and the `.d.ts` are never written by 2.0. 1.x keeps every byte it has.
 
 **Users keep** (in 1.x, untouched by 2.0):
 
@@ -217,7 +218,7 @@ Support playbook (to be written as a short page before any outside user receives
 1. Ask for the version (Settings, Updates), the platform and architecture, and the error reference from the
    Diagnostics page (copy the reference, not the log). Never ask for clipboard, screen or file contents.
 2. Sign-in trouble: the paste-code path always works. "consumed" means another app took the code; sign in again.
-3. "Where is my data?" Use the section 3 copy. 2.0 never reads 1.x data.
+3. "Where is my data?" Use the section 3 copy. 2.0 never reads 1.x settings or keychain entries; its extensions folder is shared with 1.x (section 3).
 4. "My extension stopped working." 2.0 does not run 1.x extensions. Point to Automate.
 5. A client the backend marks unsupported (`unsupported_desktop_version`) gets an update prompt. 2.0 derives it in
    `internal/backend/compat.go`. The user updates that app; no support ticket is needed.
