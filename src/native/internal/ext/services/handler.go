@@ -24,6 +24,9 @@ import (
 // maxFailureMessage bounds the text a failure carries back to the child.
 const maxFailureMessage = 512
 
+// errHandlerClosed answers calls made after Close.
+var errHandlerClosed = unavailable("this extension's services are closed")
+
 // Deps are the ports the services use. Keychain, Network and Clipboard may be nil: the services that need them
 // then answer unavailable, and nothing falls back to plaintext.
 type Deps struct {
@@ -58,6 +61,7 @@ type Handler struct {
 	logWrites    *rateLimiter
 	openOnce     sync.Once
 	openErr      error
+	closeOnce    sync.Once
 	docs         *documents
 	secretsMu    sync.Mutex
 }
@@ -82,12 +86,17 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 	}
 }
 
-// Close flushes and closes the extension's store. The handler must not be used afterwards.
+// Close flushes and closes the extension's store. A handler closed before its first call never opens the store,
+// and every later call answers unavailable. Close is safe to call more than once.
 func (h *Handler) Close() error {
-	if h.docs == nil {
-		return nil
-	}
-	return h.docs.store.Close()
+	h.openOnce.Do(func() { h.openErr = errHandlerClosed })
+	var closeErr error
+	h.closeOnce.Do(func() {
+		if h.docs != nil {
+			closeErr = h.docs.store.Close()
+		}
+	})
+	return closeErr
 }
 
 // Serve answers one call. It never panics on a bad argument: every failure is a Failure in the reply.

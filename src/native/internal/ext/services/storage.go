@@ -71,8 +71,11 @@ func (h *Handler) storageSet(docs *documents, args json.RawMessage) error {
 	if err := checkStorageKey(request.Key); err != nil {
 		return err
 	}
-	if len(request.Value) > maxStorageValueBytes || !json.Valid(request.Value) {
-		return quota(fmt.Errorf("a storage value must be valid JSON of at most %d KiB", maxStorageValueBytes>>10))
+	if !json.Valid(request.Value) {
+		return invalid("a storage value must be valid JSON")
+	}
+	if len(request.Value) > maxStorageValueBytes {
+		return quota(fmt.Errorf("a storage value must be at most %d KiB", maxStorageValueBytes>>10))
 	}
 	return storageUpdate(docs, func(doc *storageDoc) error {
 		if err := checkStorageRoom(*doc, request.Key, len(request.Value)); err != nil {
