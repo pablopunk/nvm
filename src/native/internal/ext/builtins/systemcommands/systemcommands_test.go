@@ -52,17 +52,17 @@ func TestEmptyQueryListsNoCommands(t *testing.T) {
 
 func TestTitleMatchRunsItsOpAndKeepsTheTone(t *testing.T) {
 	items := searchTitles(t, allSupported(), "restart")
-	if len(items) != 1 || items[0].Title != "Restart" {
+	if len(items) != 1 || items[0].Title != "Restart Computer" {
 		t.Fatalf("items = %+v, want the Restart command", items)
 	}
 	item := items[0]
-	if item.Section != "Commands" || item.LearnKey != "cmd:Restart" || item.Subtitle != "Restart this computer" {
+	if item.Section != "Commands" || item.LearnKey != "cmd:Restart Computer" || item.Subtitle != "Restart this computer" {
 		t.Errorf("row = section %q learn %q subtitle %q", item.Section, item.LearnKey, item.Subtitle)
 	}
 	if item.Appearance == nil || item.Appearance.Foreground != api.ColorOrange {
 		t.Errorf("appearance = %+v, want orange", item.Appearance)
 	}
-	if p := item.Primary; p == nil || p.Kind != api.ActionSystem || p.Op != "restart" || p.Title != "Restart" {
+	if p := item.Primary; p == nil || p.Kind != api.ActionSystem || p.Op != "restart" || p.Title != "Restart Computer" {
 		t.Errorf("primary = %+v, want the restart op", p)
 	}
 }
