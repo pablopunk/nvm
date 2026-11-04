@@ -13,7 +13,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
-	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -96,10 +95,10 @@ type App struct {
 	windowSettings *windowmgmt.SettingsStore
 	windowFocus    windowSummon
 	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
-	dictation       *dict.Service
+	dictation       *dictationFlow
+	dictationPref   dictationPrefs
 	dictationWindow *mygo.Window
 	dictationView   palindicator.State
-	dictationEpoch  int
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

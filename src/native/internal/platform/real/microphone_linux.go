@@ -13,6 +13,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -108,6 +109,13 @@ type parecStream struct {
 	out    *bufio.Reader
 	stderr *bytes.Buffer
 	carry  []byte
+	reaped sync.Once
+}
+
+// reap waits for parec once, however many paths ask. Close must not wait on it: a parec that is killed while a Read
+// is pending has been seen not to return from Wait, and Stop would then hang behind the capture.
+func (s *parecStream) reap() {
+	s.reaped.Do(func() { _ = s.cmd.Wait() })
 }
 
 // Read fills pcm with samples, blocking until parec writes some. When parec exits, the stream ends with io.EOF,
@@ -132,7 +140,7 @@ func (s *parecStream) Read(pcm []int16) (int, error) {
 
 func (s *parecStream) endError(readErr error) error {
 	if errors.Is(readErr, io.EOF) || errors.Is(readErr, io.ErrUnexpectedEOF) {
-		_ = s.cmd.Wait()
+		s.reap()
 		if message := strings.TrimSpace(s.stderr.String()); message != "" {
 			return fmt.Errorf("%w: %s", platform.ErrUnsupported, message)
 		}
@@ -141,12 +149,12 @@ func (s *parecStream) endError(readErr error) error {
 	return readErr
 }
 
-// Close kills parec and waits for it, which unblocks a pending Read.
+// Close kills parec, which ends a pending Read with the stream's end. It returns without waiting for the process.
 func (s *parecStream) Close() error {
 	if s.cmd.Process != nil {
 		_ = s.cmd.Process.Kill()
 	}
-	_ = s.cmd.Wait()
+	go s.reap()
 	return nil
 }
 

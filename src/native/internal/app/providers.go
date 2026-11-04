@@ -67,7 +67,7 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Quick Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
 		{Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
-		{Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.toggleDictation() }},
+		{Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.dictationFlowFor().Toggle() }},
 		{Title: "Snippets", Keywords: "snippets text expand template", Icon: "type", Subtitle: "Saved text you paste often", Run: func(h search.Host) { h.Push(p.snippetsView()) }},
 		{Title: "Create Snippet", Keywords: "snippet new add", Icon: "plus", Hidden: true, Run: func(h search.Host) { h.Push(p.snippetForm(nil)) }},
 		{Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
@@ -146,6 +146,7 @@ func (p *App) settingsView() *palette.View {
 					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
+				{Title: "Dictation", Accessory: deviceTitle(p.dictationFlowFor().Devices(), p.dictationSettings().DeviceID), Icon: "mic", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.dictationSettingsView()) }}}},
 				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.S.DiagnosticsOff), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					p.toggleDiagnostics()
 					h.Refresh()
@@ -153,11 +154,20 @@ func (p *App) settingsView() *palette.View {
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: p.displayPath(configDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
-			rows = slices.Insert(rows, 4, p.launchAtLoginRows()...)
+			rows = slices.Insert(rows, rowIndexAfter(rows, "Dictation"), p.launchAtLoginRows()...)
 			if lq == "" {
 				return rows
 			}
 			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
 		},
 	}
+}
+
+// rowIndexAfter is the position just after the row titled title, or the end when no row has that title, so an
+// optional group of rows can follow a named row without counting positions.
+func rowIndexAfter(rows []search.Item, title string) int {
+	if i := slices.IndexFunc(rows, func(it search.Item) bool { return it.Title == title }); i >= 0 {
+		return i + 1
+	}
+	return len(rows)
 }

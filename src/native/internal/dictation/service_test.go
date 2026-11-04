@@ -12,21 +12,24 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// scriptedTranscriber records every file it is sent and answers with the scripted texts, in order.
+// scriptedTranscriber records every segment it is sent and every preparation release, and answers with the scripted
+// texts in order.
 type scriptedTranscriber struct {
-	mu      sync.Mutex
-	texts   []string
-	err     error
-	block   chan struct{}
-	ids     []string
-	files   [][]byte
-	prepare []string
+	mu          sync.Mutex
+	texts       []string
+	err         error
+	block       chan struct{}
+	segments    []Segment
+	prepare     []string
+	prepareErr  error
+	released    []bool
+	releaseID   []string
+	releaseDone chan struct{}
 }
 
-func (s *scriptedTranscriber) Transcribe(ctx context.Context, operationID string, file []byte) (string, error) {
+func (s *scriptedTranscriber) Transcribe(ctx context.Context, segment Segment) (string, error) {
 	s.mu.Lock()
-	s.ids = append(s.ids, operationID)
-	s.files = append(s.files, file)
+	s.segments = append(s.segments, segment)
 	block := s.block
 	s.mu.Unlock()
 	if block != nil {
@@ -50,7 +53,35 @@ func (s *scriptedTranscriber) Prepare(_ context.Context, operationID string) err
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.prepare = append(s.prepare, operationID)
+	return s.prepareErr
+}
+
+func (s *scriptedTranscriber) CancelPreparation(_ context.Context, operationID string, userCancelled bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.releaseID = append(s.releaseID, operationID)
+	s.released = append(s.released, userCancelled)
 	return nil
+}
+
+func (s *scriptedTranscriber) ids() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []string
+	for _, segment := range s.segments {
+		out = append(out, segment.OperationID)
+	}
+	return out
+}
+
+func (s *scriptedTranscriber) files() [][]byte {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out [][]byte
+	for _, segment := range s.segments {
+		out = append(out, segment.File)
+	}
+	return out
 }
 
 // harness wires a Service to fakes and records the levels the indicator would draw.
@@ -75,6 +106,7 @@ func newHarness(t *testing.T) harness {
 		Codec:       h.codec,
 		Transcriber: h.transcriber,
 		OnLevel:     func(level float64) { h.levels <- level },
+		Background:  func(_ string, fn func()) { fn() },
 	})
 	return h
 }
@@ -102,11 +134,12 @@ func TestStopTranscribesTheCapturedSpeechAsOneWebMFile(t *testing.T) {
 	if text != "hello world" {
 		t.Fatalf("text = %q, want the trimmed transcript", text)
 	}
-	if len(h.transcriber.files) != 1 || !bytes.HasPrefix(h.transcriber.files[0], []byte{0x1A, 0x45, 0xDF, 0xA3}) {
-		t.Fatalf("transcriber got %d files; the first must be WebM", len(h.transcriber.files))
+	files := h.transcriber.files()
+	if len(files) != 1 || !bytes.HasPrefix(files[0], []byte{0x1A, 0x45, 0xDF, 0xA3}) {
+		t.Fatalf("transcriber got %d files; the first must be WebM", len(files))
 	}
-	if !strings.HasPrefix(h.transcriber.ids[0], "dictation-") {
-		t.Fatalf("operation id = %q, want a dictation- key", h.transcriber.ids[0])
+	if ids := h.transcriber.ids(); !strings.HasPrefix(ids[0], "dictation-") {
+		t.Fatalf("operation id = %q, want a dictation- key", ids[0])
 	}
 	if got := h.service.Snapshot().Phase; got != PhaseIdle {
 		t.Fatalf("phase after Stop = %s, want idle", got)
@@ -127,11 +160,12 @@ func TestLongDictationsAreSentAsOneMinuteSegmentsInOrder(t *testing.T) {
 	if text != "first part second part" {
 		t.Fatalf("text = %q, want both segments joined by a space", text)
 	}
-	if len(h.transcriber.ids) != 2 {
-		t.Fatalf("got %d requests, want 2 segments", len(h.transcriber.ids))
+	ids := h.transcriber.ids()
+	if len(ids) != 2 {
+		t.Fatalf("got %d requests, want 2 segments", len(ids))
 	}
-	if h.transcriber.ids[1] != h.transcriber.ids[0]+"-1" {
-		t.Fatalf("second segment id = %q, want the first id with a -1 suffix", h.transcriber.ids[1])
+	if ids[1] != ids[0]+"-1" {
+		t.Fatalf("second segment id = %q, want the first id with a -1 suffix", ids[1])
 	}
 }
 
@@ -144,12 +178,12 @@ func TestSilentRecordingSendsNothingAndReturnsNoText(t *testing.T) {
 	if err != nil || text != "" {
 		t.Fatalf("Stop = %q, %v; want an empty transcript and no error", text, err)
 	}
-	if len(h.transcriber.ids) != 0 {
-		t.Fatalf("a recording with no audio reached the backend: %v", h.transcriber.ids)
+	if ids := h.transcriber.ids(); len(ids) != 0 {
+		t.Fatalf("a recording with no audio reached the backend: %v", ids)
 	}
 }
 
-func TestStartPreparesTheBackendUnderTheSameOperationID(t *testing.T) {
+func TestStartPreparesTheBackendUnderTheSameOperationIDAndSendsItWithTheFirstSegment(t *testing.T) {
 	h := newHarness(t)
 	h.transcriber.texts = []string{"ok"}
 	h.mic.Queue(speech(0.1, 100)...)
@@ -161,8 +195,28 @@ func TestStartPreparesTheBackendUnderTheSameOperationID(t *testing.T) {
 	}
 	h.transcriber.mu.Lock()
 	defer h.transcriber.mu.Unlock()
-	if len(h.transcriber.prepare) != 1 || h.transcriber.prepare[0] != h.transcriber.ids[0] {
-		t.Fatalf("prepare = %v, transcribe = %v; want one preparation under the request's key", h.transcriber.prepare, h.transcriber.ids)
+	segments := h.transcriber.segments
+	if len(h.transcriber.prepare) != 1 || len(segments) != 1 || h.transcriber.prepare[0] != segments[0].OperationID {
+		t.Fatalf("prepare = %v, segments = %+v; want one preparation under the request's key", h.transcriber.prepare, segments)
+	}
+	if !segments[0].Prepared || segments[0].CancellationID != segments[0].OperationID {
+		t.Fatalf("segment = %+v, want Prepared with the dictation as its cancellation id", segments[0])
+	}
+}
+
+func TestAFailedPreparationIsNotSentAsPrepared(t *testing.T) {
+	h := newHarness(t)
+	h.transcriber.prepareErr = errors.New("admission refused")
+	h.transcriber.texts = []string{"ok"}
+	h.mic.Queue(speech(0.1, 100)...)
+	_ = h.service.Start("default")
+	if _, err := h.service.Stop(); err != nil {
+		t.Fatalf("Stop: %v", err)
+	}
+	h.transcriber.mu.Lock()
+	defer h.transcriber.mu.Unlock()
+	if h.transcriber.segments[0].Prepared {
+		t.Fatalf("a refused preparation was sent as prepared")
 	}
 }
 
@@ -215,8 +269,13 @@ func TestCancelDropsTheRecordingWithoutTranscribing(t *testing.T) {
 	if got := h.service.Snapshot().Phase; got != PhaseIdle {
 		t.Fatalf("phase after Cancel = %s, want idle", got)
 	}
-	if len(h.transcriber.ids) != 0 {
-		t.Fatalf("a cancelled dictation reached the backend")
+	if ids := h.transcriber.ids(); len(ids) != 0 {
+		t.Fatalf("a cancelled dictation reached the backend: %v", ids)
+	}
+	h.transcriber.mu.Lock()
+	defer h.transcriber.mu.Unlock()
+	if len(h.transcriber.released) != 1 || !h.transcriber.released[0] {
+		t.Fatalf("releases = %v, want one user-cancelled release of the preparation", h.transcriber.released)
 	}
 }
 

@@ -33,12 +33,14 @@ var (
 )
 
 // Config holds the ports a Service runs on. OnLevel receives the meter level about every 100 ms while recording,
-// from the capture goroutine, so it must only hand the value to the UI.
+// from the capture goroutine, so it must only hand the value to the UI. Background runs the backend calls that
+// nobody waits for (preparation and its cancellation); nil runs them on a supervised goroutine.
 type Config struct {
 	Microphone  platform.Microphone
 	Codec       platform.OpusCodec
 	Transcriber Transcriber
 	OnLevel     func(level float64)
+	Background  func(name string, fn func())
 }
 
 // Snapshot is what the indicator draws: the phase and the level of the last captured frames.
@@ -47,9 +49,9 @@ type Snapshot struct {
 	Level float64
 }
 
-// Service runs one dictation at a time: Start opens the microphone and begins capture, Stop ends it and returns
-// the transcript, Cancel drops it. It is safe for concurrent use; Stop blocks on the backend, so callers run it off
-// the UI thread.
+// Service runs one dictation at a time: Start prepares the backend and opens the microphone, Stop ends the capture and
+// returns the transcript, Cancel drops it. It is safe for concurrent use; Stop blocks on the backend, so callers run
+// it off the UI thread.
 type Service struct {
 	cfg   Config
 	mu    sync.Mutex
@@ -60,7 +62,14 @@ type Service struct {
 
 // NewService returns an idle service.
 func NewService(cfg Config) *Service {
+	if cfg.Background == nil {
+		cfg.Background = supervisedBackground
+	}
 	return &Service{cfg: cfg, phase: PhaseIdle}
+}
+
+func supervisedBackground(name string, fn func()) {
+	safego.Go(name, func(context.Context) { fn() })
 }
 
 // Snapshot returns the phase and the latest level.
@@ -71,8 +80,8 @@ func (s *Service) Snapshot() Snapshot {
 	return Snapshot{Phase: phase, Level: math.Float64frombits(s.level.Load())}
 }
 
-// Start opens deviceID, or the default device when it is "", and starts capturing. It returns once the stream is
-// open, so a missing or refused microphone is reported here and not later.
+// Start prepares the backend, opens deviceID (or the default device when it is "") and starts capturing. It returns
+// once the stream is open, so a missing or refused microphone is reported here and not later.
 func (s *Service) Start(deviceID string) error {
 	s.mu.Lock()
 	if s.phase != PhaseIdle {
@@ -93,38 +102,52 @@ func (s *Service) Start(deviceID string) error {
 	return nil
 }
 
-// open starts the stream, the encoder and the capture goroutine for one dictation.
+// open prepares the backend, then starts the stream, the encoder and the capture goroutine for one dictation. A
+// failure after the preparation releases it, as the desktop app does.
 func (s *Service) open(deviceID string) (*operation, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	op := &operation{id: newOperationID(), ctx: ctx, cancel: cancel, done: make(chan struct{}), onLevel: s.publishLevel}
+	s.prepare(op)
 	stream, err := s.cfg.Microphone.Open(ctx, deviceID, Format())
 	if err != nil {
-		cancel()
+		s.releasePreparation(op, false)
 		return nil, err
 	}
 	encoder, err := s.cfg.Codec.NewEncoder(Format())
 	if err != nil {
 		_ = stream.Close()
-		cancel()
+		s.releasePreparation(op, false)
 		return nil, fmt.Errorf("%w: %w", ErrCodec, err)
 	}
-	op := &operation{id: newOperationID(), ctx: ctx, cancel: cancel, stream: stream, encoder: encoder, done: make(chan struct{}), onLevel: s.publishLevel}
+	op.stream, op.encoder = stream, encoder
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
-	s.prepare(op)
 	return op, nil
 }
 
-// prepare warms the backend's admission while the user speaks. It runs on its own goroutine, and the transcription
-// waits for it to finish, so the backend sees the preparation first. Its failure is ignored, as the transcription
-// request repeats the check.
+// prepare warms the backend's admission while the user speaks. The transcription waits for it to finish, so the
+// backend sees the preparation first. A failed preparation is recorded as not prepared and otherwise ignored; the
+// transcription request repeats the admission check.
 func (s *Service) prepare(op *operation) {
 	op.prepared = make(chan struct{})
 	if s.cfg.Transcriber == nil {
 		close(op.prepared)
 		return
 	}
-	safego.Go("dictation.prepare", func(context.Context) {
+	s.cfg.Background("dictation.prepare", func() {
 		defer close(op.prepared)
-		_ = s.cfg.Transcriber.Prepare(op.ctx, op.id)
+		op.preparedOK = s.cfg.Transcriber.Prepare(op.ctx, op.id) == nil
+	})
+}
+
+// releasePreparation cancels op's context and releases its backend admission once the preparation has finished.
+func (s *Service) releasePreparation(op *operation, userCancelled bool) {
+	op.cancel()
+	if s.cfg.Transcriber == nil {
+		return
+	}
+	s.cfg.Background("dictation.cancel-preparation", func() {
+		<-op.prepared
+		_ = s.cfg.Transcriber.CancelPreparation(context.Background(), op.id, userCancelled)
 	})
 }
 
@@ -151,6 +174,9 @@ func (s *Service) Stop() (string, error) {
 	<-op.done
 	s.publishLevel(0)
 	text, err := s.finish(op)
+	if err != nil && !errors.Is(err, ErrCancelled) || !op.hasSpeechAudio() {
+		s.releasePreparation(op, false)
+	}
 	op.cancel()
 	s.release(op)
 	return text, err
@@ -190,8 +216,9 @@ func (s *Service) release(op *operation) {
 	}
 }
 
-// Cancel drops the current dictation: the microphone closes, nothing is transcribed, and a Stop that is waiting on
-// the backend returns ErrCancelled. Cancel on an idle service does nothing.
+// Cancel drops the current dictation: the microphone closes, nothing more is sent, the backend's preparation is
+// released as a user cancel, and a Stop that is waiting on the backend returns ErrCancelled. Cancel on an idle
+// service does nothing.
 func (s *Service) Cancel() {
 	s.mu.Lock()
 	op := s.cur
@@ -201,7 +228,7 @@ func (s *Service) Cancel() {
 	if op == nil {
 		return
 	}
-	op.cancel()
+	s.releasePreparation(op, true)
 	_ = op.stream.Close()
 	s.publishLevel(0)
 }
