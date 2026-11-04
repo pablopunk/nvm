@@ -8,8 +8,20 @@ type MenuItem struct {
 	Separator bool
 	Disabled  bool
 	Action    func()
+	// Accelerator is the row's shortcut in canonical form ("Command+Alt+K"), shown at the row's right edge. Empty
+	// shows none.
+	Accelerator string
+	// Icon is the image beside the label, nil for none.
+	Icon *MenuIcon
 	// Submenu nests rows under this one; Action is then unused.
 	Submenu []MenuItem
+}
+
+// MenuIcon is a PNG drawn beside a menu row. A template icon is a black glyph with transparency that the platform
+// tints to the menu's text, as macOS does; other icons keep their colors.
+type MenuIcon struct {
+	PNG      []byte
+	Template bool
 }
 
 // TrayOptions describes a menu bar or system tray icon. The icon is set with Tray.SetIcon; an item without one

@@ -74,13 +74,16 @@ func convertMenuItems(items []platform.MenuItem) []*mygo.MenuItem {
 	return converted
 }
 
-// convertMenuItem maps one row, wiring its action to MyGo's click callback.
+// convertMenuItem maps one row, wiring its action to MyGo's click callback. An icon MyGo cannot decode is left out,
+// so the row shows its label alone.
 func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 	action := item.Action
 	converted := &mygo.MenuItem{
-		ID:       item.ID,
-		Label:    item.Label,
-		Disabled: item.Disabled,
+		ID:          item.ID,
+		Label:       item.Label,
+		Disabled:    item.Disabled,
+		Accelerator: item.Accelerator,
+		Icon:        convertMenuIcon(item.Icon),
 		Click: func(*mygo.MenuItem, *mygo.Window) {
 			if action != nil {
 				action()
@@ -89,6 +92,18 @@ func convertMenuItem(item platform.MenuItem) *mygo.MenuItem {
 	}
 	if len(item.Submenu) > 0 {
 		converted.Submenu = convertMenuItems(item.Submenu)
+	}
+	return converted
+}
+
+// convertMenuIcon maps a row's icon to MyGo's, or nil when there is none or MyGo cannot decode it.
+func convertMenuIcon(icon *platform.MenuIcon) *mygo.MenuIcon {
+	if icon == nil {
+		return nil
+	}
+	converted, err := mygo.NewMenuIcon(icon.PNG, icon.Template)
+	if err != nil {
+		return nil
 	}
 	return converted
 }
