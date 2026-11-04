@@ -111,11 +111,12 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest) (*Stream, erro
 		header[RoleHeader] = req.Role
 	}
 	return c.openStream(ctx, requestSpec{
-		method: "POST",
-		path:   pathChatCompletions,
-		body:   body,
-		header: header,
-		auth:   authRequired,
+		method:      "POST",
+		path:        pathChatCompletions,
+		body:        body,
+		header:      header,
+		auth:        authRequired,
+		idleTimeout: StreamIdleTimeout,
 	})
 }
 

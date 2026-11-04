@@ -6,6 +6,9 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/logx"
 )
 
 // Stream is an open server-sent event response. Call Next until it returns io.EOF, and always call Close.
@@ -21,11 +24,15 @@ type Stream struct {
 	finishReason string
 	closed       atomic.Bool
 	release      sync.Once
+	path         string
+	started      time.Time
+	ended        sync.Once
 }
 
 // openStream sends spec and returns the open stream of a success response. A non-success response is read
 // for its envelope and returned as an error before any event is delivered.
 func (c *Client) openStream(ctx context.Context, spec requestSpec) (*Stream, error) {
+	started := c.clock.Now()
 	ex, err := c.send(ctx, spec)
 	if err != nil {
 		return nil, err
@@ -38,7 +45,7 @@ func (c *Client) openStream(ctx context.Context, spec requestSpec) (*Stream, err
 		}
 		return nil, errorFromResponse(ex.status, ex.retryAfter, body)
 	}
-	return &Stream{client: c, ex: ex, caller: ctx, frames: newFrameReader(ex.body)}, nil
+	return &Stream{client: c, ex: ex, caller: ctx, frames: newFrameReader(ex.body), path: spec.path, started: started}, nil
 }
 
 // Next returns the next event. It returns io.EOF after the terminal event, and after Close. Failures arrive as
@@ -70,6 +77,7 @@ func (s *Stream) Next() (Event, error) {
 // Close releases the connection. It is safe to call more than once and from any goroutine. Events already
 // decoded are dropped.
 func (s *Stream) Close() error {
+	s.logEnd("closed", nil)
 	s.closed.Store(true)
 	s.releaseOnce()
 	return nil
@@ -87,6 +95,7 @@ func (s *Stream) readError(err error) *Error {
 // finish the stream.
 func (s *Stream) handleFrame(frame sseFrame) {
 	if frame.data == doneMarker {
+		s.logEnd("done", nil)
 		s.queue(Event{Type: EventDone, FinishReason: s.finishReason})
 		s.finish()
 		return
@@ -106,6 +115,7 @@ func (s *Stream) handleFrame(frame sseFrame) {
 
 // fail ends the stream with an error event.
 func (s *Stream) fail(err *Error) {
+	s.logEnd("failed", err)
 	s.queue(Event{Type: EventError, Err: err})
 	s.finish()
 }
@@ -124,4 +134,23 @@ func (s *Stream) finish() {
 // releaseOnce releases the exchange exactly once.
 func (s *Stream) releaseOnce() {
 	s.release.Do(s.ex.release)
+}
+
+// logEnd writes how the stream ended to the app log, once: info for a complete or closed stream, warn for a failure.
+// Like the request line, it never carries headers or content.
+func (s *Stream) logEnd(outcome string, failure *Error) {
+	s.ended.Do(func() {
+		fields := logx.F{
+			"path":        s.path,
+			"status":      s.ex.status,
+			"duration_ms": s.client.clock.Now().Sub(s.started).Milliseconds(),
+			"outcome":     outcome,
+		}
+		if failure == nil {
+			s.client.logger.Info("backend stream ended", fields)
+			return
+		}
+		fields["kind"] = string(failure.Kind)
+		s.client.logger.Warn("backend stream failed", fields)
+	})
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -28,6 +29,8 @@ type Options struct {
 	OnSettled func(chatID string, outcome Outcome)
 	// Tools are what a conversation may call. The extension builder gets none.
 	Tools Toolset
+	// Logger receives the turns that fail. Nil means the process logger.
+	Logger *logx.Logger
 }
 
 // Toolset is the tools a conversation may call and the policy each call passes before it runs.
@@ -45,13 +48,18 @@ type Service struct {
 	models map[Tier]backend.ModelDescriptor
 }
 
-// New returns a service over opts. Expired conversations are removed by Expire, which the caller runs at start.
+// New returns a service over opts. Turns a quit cut off are settled as failed. Expired conversations are removed by
+// Expire, which the caller runs at start.
 func New(opts Options) *Service {
 	if opts.SystemPrompt == nil {
 		opts.SystemPrompt = func(Chat) string { return ConversationSystemPrompt }
 	}
+	if opts.Logger == nil {
+		opts.Logger = logx.Default()
+	}
 	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
 	s.Reload()
+	s.settleCutOffTurns()
 	return s
 }
 
