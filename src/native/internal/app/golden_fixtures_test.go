@@ -65,6 +65,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
 	}
 	p.attachServices(fake.NewSet().Ports(), goldenConfig, time.UTC)
+	p.exts.mgr.Store(newFixtureManager(t))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")

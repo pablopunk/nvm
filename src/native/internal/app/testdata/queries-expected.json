@@ -1369,8 +1369,8 @@
       },
       {
         "kind": "Commands",
-        "title": "Open Settings",
-        "subtitle": "Open system preferences",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
         "section": "Commands",
         "id": "",
         "icon": "settings",
@@ -1388,8 +1388,8 @@
       },
       {
         "kind": "Commands",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "title": "Open Settings",
+        "subtitle": "Open system preferences",
         "section": "Commands",
         "id": "",
         "icon": "settings",
@@ -1559,44 +1559,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Restart",
-        "subtitle": "Restart this computer",
-        "section": "Commands",
-        "id": "",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Empty Trash",
-        "subtitle": "Permanently delete trashed files",
-        "section": "Commands",
-        "id": "",
-        "icon": "trash-2",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "Keyboard Shortcuts",
         "subtitle": "View, change, or remove shortcuts",
         "section": "Commands",
@@ -1679,6 +1641,44 @@
         "id": "",
         "icon": "folder",
         "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart",
+        "subtitle": "Restart this computer",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Empty Trash",
+        "subtitle": "Permanently delete trashed files",
+        "section": "Commands",
+        "id": "",
+        "icon": "trash-2",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -1998,12 +1998,12 @@
       },
       {
         "kind": "Commands",
-        "title": "Empty Trash",
-        "subtitle": "Permanently delete trashed files",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
         "section": "Commands",
         "id": "",
-        "icon": "trash-2",
-        "tone": "red",
+        "icon": "message-circle",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -2017,12 +2017,12 @@
       },
       {
         "kind": "Commands",
-        "title": "Report a Problem",
-        "subtitle": "Record a problem reference without screen content",
+        "title": "Empty Trash",
+        "subtitle": "Permanently delete trashed files",
         "section": "Commands",
         "id": "",
-        "icon": "message-circle",
-        "tone": "",
+        "icon": "trash-2",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

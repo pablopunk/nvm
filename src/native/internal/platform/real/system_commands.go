@@ -87,14 +87,6 @@ func appleScript(line string) systemCommand {
 	return systemCommand{name: "osascript", args: []string{"-e", line}}
 }
 
-// SettingsTitle is the label of the command that opens the system settings on this OS.
-func SettingsTitle() string {
-	if runtime.GOOS == "darwin" {
-		return "Open System Settings"
-	}
-	return "Open Settings"
-}
-
 // systemEnvironment is what the capability report depends on: the OS, the user and home folder, and which
 // programs the system has. installed is an injection point; production asks the PATH.
 type systemEnvironment struct {

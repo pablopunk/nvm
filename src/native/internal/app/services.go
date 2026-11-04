@@ -13,7 +13,6 @@ import (
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -93,7 +92,7 @@ func newSystemServices(ports platform.Ports) *systemfeat.Services {
 		Ports:         ports,
 		Platform:      runtime.GOOS,
 		Home:          home,
-		SettingsTitle: real.SettingsTitle(),
+		SettingsTitle: platform.ShellLabelsFor(runtime.GOOS).SettingsCommand,
 	})
 }
 

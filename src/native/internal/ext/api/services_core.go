@@ -227,6 +227,8 @@ type SystemLabels struct {
 	PreviewFile         string `json:"previewFile"`
 	OpenSystemSettings  string `json:"openSystemSettings"`
 	KeyboardSettings    string `json:"keyboardSettings"`
+	// SettingsCommand is the OS's name for the command that opens its settings app.
+	SettingsCommand string `json:"settingsCommand"`
 }
 
 // System is read-only host metadata. Use HasCapability to omit unsupported rows from discovery

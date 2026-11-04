@@ -28,10 +28,17 @@ type Deps struct {
 	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
 	// system action report unavailable.
 	OpenSettingsPane func(id string)
-	Files            platform.FS
-	Clock            platform.Clock
-	Cache            Cache
-	OnUI             func(fn func())
+	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
+	// the action report unavailable.
+	OpenPath   func(path string)
+	RevealPath func(path string)
+	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
+	// run it, and "" when it did. Nil makes system ops report unavailable.
+	RunSystem func(op string, done func(failure string))
+	Files     platform.FS
+	Clock     platform.Clock
+	Cache     Cache
+	OnUI      func(fn func())
 	// Dialog shows the native file and folder choosers for path fields. Nil makes those fields report unavailable.
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
