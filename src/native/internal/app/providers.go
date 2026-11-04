@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/ai/commands"
 )
 
 type engine struct{ Key, Name, URL string }
@@ -87,13 +88,15 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
 	cmds = append(cmds, p.placeCommands()...)
+	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.windowCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
 	tones := map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
 		"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
-		"Start Timer": "orange", "Cancel Timer": "orange"}
+		"Start Timer": "orange", "Cancel Timer": "orange",
+		commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
 	for i := range cmds {
 		cmds[i].Order = i
 		if tone, ok := tones[cmds[i].Title]; ok {
