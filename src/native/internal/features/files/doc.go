@@ -7,9 +7,11 @@
 // every desktop action through platform.Shell.
 //
 // Watching: the real FS port wraps MyGo's recursive watch, which uses inotify on Linux, so no second backend exists
-// here. A watch that overflows or reaches its entry limit reports platform.EventOverflow; the index then runs a full
-// reconcile and stops watching that folder, so it is refreshed by the periodic reconcile alone. The watch count is
-// capped (maxWatchTargets). macOS and Windows use MyGo's watch too; their behavior is not verified in this package.
+// here. Each root is watched with the scan's own rules (hidden, ignore and depth), so a watch covers what the index
+// reads and nothing else. A root over the platform's entry limit is watched at the deepest level that fits, and the
+// rest is left to the periodic reconcile; a watch that overflows later reports platform.EventOverflow and its folder is
+// reconciled alone. The watch count is capped (maxWatchTargets). macOS and Windows use MyGo's watch too; their behavior
+// is not verified in this package.
 //
 // Persistence: the encoded snapshot is one binary file (files-index.bin in the app's local data folder), written through
 // the FS port with a temporary file, a sync and a rename, and capped at MaxSnapshotBytes. JSON was rejected because
