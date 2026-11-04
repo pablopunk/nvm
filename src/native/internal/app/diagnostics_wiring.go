@@ -41,11 +41,11 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 		Transport: ports.HTTP,
 		FS:        ports.FS,
 		Clock:     ports.Clock,
-		Dir:       configDir(),
+		Dir:       dataDir(),
 		Version:   nativeClientVersion,
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
-		Consent:   !p.S.DiagnosticsOff,
+		Consent:   !p.diagnosticsOff(),
 	})
 	p.failures = analytics.NewFailureReporter(diag.NewReporter(logx.Default(), p.recorder), p.analytics, p.recorder)
 	p.startAnalytics()
@@ -55,7 +55,7 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 // development run still shows it in the terminal. The standard library's log lines go to the same file at warn, so
 // an app launched from Finder, whose stderr goes nowhere, keeps them.
 func openLogFile(ports platform.Ports) {
-	logger, err := logx.New(ports.FS, ports.Clock, filepath.Join(configDir(), logDirectoryName), logx.Options{Stderr: os.Stderr})
+	logger, err := logx.New(ports.FS, ports.Clock, filepath.Join(dataDir(), logDirectoryName), logx.Options{Stderr: os.Stderr})
 	if err != nil {
 		log.Println("log file unavailable:", err)
 		return
@@ -135,9 +135,11 @@ func (p *App) reportProblem(h search.Host) {
 // toggleDiagnostics flips "Send Technical Diagnostics". The client gets the new consent at once, so a withdrawal drops
 // what is queued before the next batch goes out.
 func (p *App) toggleDiagnostics() {
-	p.S.DiagnosticsOff = !p.S.DiagnosticsOff
-	p.S.save()
-	p.analytics.SetConsent(!p.S.DiagnosticsOff)
+	off := !p.diagnosticsOff()
+	if err := p.setDiagnosticsOff(off); err != nil {
+		log.Println("diagnostics setting not saved:", err)
+	}
+	p.analytics.SetConsent(!off)
 }
 
 // diagnosticsLabel is the Settings accessory for the consent switch.

@@ -77,7 +77,7 @@ func newBenchPalette(b *testing.B) *App {
 	isolateUserFolders(b, b.TempDir())
 	data := benchData()
 	p := &App{
-		S:      &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
+		S:      &Settings{Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
 		appsvc: newFixtureAppServices(data.apps),
 		clip:   benchClipboard(b, data.clips),
 		calc:   calc.New(searchClock, time.UTC, nil),

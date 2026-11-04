@@ -2,6 +2,7 @@ package account
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -10,7 +11,7 @@ import (
 // connectedRows shows the signed-in account, its details, and the way out.
 func connectedRows(s auth.Snapshot, a Actions) []search.Item {
 	items := []search.Item{{
-		Title:    "Logged in as " + s.Email,
+		Title:    "Signed in as " + s.Email,
 		Subtitle: accountSummary(s),
 		Icon:     "user",
 	}}
@@ -24,22 +25,17 @@ func connectedRows(s auth.Snapshot, a Actions) []search.Item {
 	return items
 }
 
-// accountSummary is the one-line account description: the plan, which reads unknown until a route reports it, and
-// the balance when the backend reported it.
+// accountSummary is the one-line account description: the plan and the balance, each only when the backend reported
+// it. An unknown plan is left out rather than named, so the line never reads like an error.
 func accountSummary(s auth.Snapshot) string {
-	summary := "Signed in as " + s.Email + " · " + planLabel(s.Account.Plan)
+	var parts []string
+	if s.Account.Plan != "" {
+		parts = append(parts, "Plan "+s.Account.Plan)
+	}
 	if s.Account.HasBalance {
-		summary += fmt.Sprintf(" · %d credits", s.Account.Balance)
+		parts = append(parts, fmt.Sprintf("%d credits", s.Account.Balance))
 	}
-	return summary
-}
-
-// planLabel names the plan the account view shows.
-func planLabel(plan string) string {
-	if plan == "" {
-		return "Plan unknown"
-	}
-	return "Plan " + plan
+	return strings.Join(parts, " · ")
 }
 
 // signedOutRows shows the sign-in as it stands: the way in, a flow in progress, or how the last flow ended.

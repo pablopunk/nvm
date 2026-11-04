@@ -11,7 +11,7 @@
 // reconcile and stops watching that folder, so it is refreshed by the periodic reconcile alone. The watch count is
 // capped (maxWatchTargets). macOS and Windows use MyGo's watch too; their behavior is not verified in this package.
 //
-// Persistence: the encoded snapshot is one binary file (files-index.bin in the app's config folder), written through
+// Persistence: the encoded snapshot is one binary file (files-index.bin in the app's local data folder), written through
 // the FS port with a temporary file, a sync and a rename, and capped at MaxSnapshotBytes. JSON was rejected because
 // it would base64 the snapshot. Saves are throttled to one a minute and the index saves once more when it closes.
 //

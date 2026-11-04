@@ -14,8 +14,8 @@ import (
 
 const (
 	extensionFixtureRoot = "../ext/testdata/extensions"
-	// extensionsFolder is the folder under the launch's HOME where the app keeps its extensions (configDir/extensions).
-	extensionsFolder = ".config/nvm-native/extensions"
+	// extensionsFolder is the folder under the launch's HOME where the app keeps its extensions: the shared folder 1.x uses.
+	extensionsFolder = ".config/nevermind/extensions"
 	escapePresses    = 4
 )
 

@@ -35,13 +35,13 @@ type seededClip struct {
 // reads the history at start and indexes the files two seconds after ready.
 func seedJ29(t *testing.T, home string) {
 	t.Helper()
-	config := filepath.Join(home, ".config", "nvm-native")
-	if err := os.MkdirAll(config, 0o700); err != nil {
+	data := rigDataDir(home)
+	if err := os.MkdirAll(data, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	seedClipboardHistory(t, config)
+	seedClipboardHistory(t, data)
 	// The app trims history to its limit when a new copy arrives; the limit must hold the seeded items.
-	if err := os.WriteFile(filepath.Join(config, "settings.json"), []byte(`{"ClipLimit": 5000}`+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(data, "settings.json"), []byte(`{"ClipLimit": 5000}`+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	seedFileTree(t, home)

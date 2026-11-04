@@ -18,9 +18,6 @@ import (
 func wiredApp(t *testing.T) (*App, *fake.Set) {
 	t.Helper()
 	p := goldenPalette(t)
-	previous := configDir
-	configDir = func() string { return t.TempDir() }
-	t.Cleanup(func() { configDir = previous })
 	set := fake.NewSet()
 	p.recorder = diag.NewRecorder(set.Clock, logx.NewRedactor())
 	p.analytics = analytics.New(analytics.Config{
@@ -28,7 +25,7 @@ func wiredApp(t *testing.T) (*App, *fake.Set) {
 		Clock: set.Clock, Dir: "/config", Version: nativeClientVersion, OS: "linux", Arch: "amd64", Consent: true,
 	})
 	p.ports = set.Ports()
-	p.updater = updatefake.New(nativeClientVersion, update.State{Status: update.StatusIdle, CurrentVersion: nativeClientVersion})
+	p.updater = updatefake.New(nativeClientVersion, update.State{Status: update.StatusCurrent, CurrentVersion: nativeClientVersion})
 	return p, set
 }
 
@@ -99,11 +96,11 @@ func TestToggleDiagnosticsWithdrawsConsentAndDropsTheQueue(t *testing.T) {
 	p, _ := wiredApp(t)
 	p.analytics.AppLaunched()
 	p.toggleDiagnostics()
-	if !p.S.DiagnosticsOff || p.analytics.Consent() || p.analytics.Pending() != 0 {
-		t.Fatalf("off %v consent %v pending %d", p.S.DiagnosticsOff, p.analytics.Consent(), p.analytics.Pending())
+	if !p.diagnosticsOff() || p.analytics.Consent() || p.analytics.Pending() != 0 {
+		t.Fatalf("off %v consent %v pending %d", p.diagnosticsOff(), p.analytics.Consent(), p.analytics.Pending())
 	}
 	p.toggleDiagnostics()
-	if p.S.DiagnosticsOff || !p.analytics.Consent() {
+	if p.diagnosticsOff() || !p.analytics.Consent() {
 		t.Fatal("toggling back did not turn consent on")
 	}
 }

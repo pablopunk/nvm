@@ -202,7 +202,7 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Dictation", Accessory: deviceTitle(p.dictationFlowFor().Devices(), p.dictationSettings().DeviceID), Icon: "mic", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.dictationSettingsView()) }}}},
-				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.S.DiagnosticsOff), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.diagnosticsOff()), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					p.toggleDiagnostics()
 					h.Refresh()
 				}}}},
@@ -214,7 +214,7 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
-				{Title: "Open Config Folder", Subtitle: p.displayPath(configDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
+				{Title: "Open Config Folder", Subtitle: p.displayPath(sharedDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(sharedDir()) }}}},
 			}
 			rows = slices.Insert(rows, rowIndexAfter(rows, "Dictation"), p.launchAtLoginRows()...)
 			if lq == "" {

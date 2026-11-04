@@ -6,31 +6,29 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 )
 
-// configDir is the directory of the app's own files. Golden tests swap it for a fixed path.
-var configDir = defaultConfigDir
+// The app's folder names: the macOS and Windows data folder is named after the app, and the Linux one after its slug.
+const (
+	appFolderName = "Nevermind Next"
+	appFolderSlug = "nevermind-next"
+)
 
-func defaultConfigDir() string {
-	d := appConfigFolder(runtime.GOOS, os.UserHomeDir, os.UserConfigDir)
+// dataDir is the machine-local folder: the operating system's user-data folder, holding everything that never leaves
+// this machine. Golden tests swap it for a fixed path.
+var dataDir = defaultDataDir
+
+func defaultDataDir() string {
+	home, _ := os.UserHomeDir()
+	d := folders.Local(runtime.GOOS, home, os.Getenv, appFolderName, appFolderSlug)
 	_ = os.MkdirAll(d, 0o755)
 	return d
 }
 
-// appConfigFolder is the app's own folder for one OS: under the home folder, or on Windows under the per-user
-// application data folder, where Electron keeps its userData. Without a config folder it falls back to the home.
-func appConfigFolder(goos string, home, userConfig func() (string, error)) string {
-	if goos == "windows" {
-		if dir, err := userConfig(); err == nil {
-			return filepath.Join(dir, "nvm-native")
-		}
-	}
-	dir, _ := home()
-	return filepath.Join(dir, ".config", "nvm-native")
-}
-
 func loadJSON(name string, v any) {
-	data, err := os.ReadFile(filepath.Join(configDir(), name))
+	data, err := os.ReadFile(filepath.Join(dataDir(), name))
 	if err != nil {
 		return
 	}
@@ -44,17 +42,17 @@ func saveJSON(name string, v any) {
 	if err != nil {
 		return
 	}
-	path := filepath.Join(configDir(), name)
+	path := filepath.Join(dataDir(), name)
 	tmp := path + ".tmp"
 	if os.WriteFile(tmp, data, 0o600) == nil {
 		_ = os.Rename(tmp, path)
 	}
 }
 
-// Settings are persisted in settings.json. What the user chose in the root is not here: it is the usage
-// memory (usage.json) and the query history (queries.json), see learning.go.
+// Settings are persisted in settings.json, in the local folder. The settings 1.x shares (the palette shortcut, the
+// diagnostics switch, the update channel) are read from config.json, see shared_config.go. What the user chose in the
+// root is not here: it is the usage memory (usage.json) and the query history (queries.json), see learning.go.
 type Settings struct {
-	Hotkey      string
 	Engine      string
 	ClipOff     bool
 	ClipLimit   int
@@ -62,8 +60,6 @@ type Settings struct {
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
-	// DiagnosticsOff is the "Send Technical Diagnostics" switch, inverted so that a missing key means on.
-	DiagnosticsOff bool
 	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
 	EmojiSkinTone int
 	// FileRoots are the folders the Files index covers; empty means the standard personal folders.
@@ -79,7 +75,7 @@ type Quicklink struct {
 }
 
 func loadSettings() *Settings {
-	s := &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: clipDefaultLimit, Disabled: map[string]bool{}}
+	s := &Settings{Engine: "google", ClipLimit: clipDefaultLimit, Disabled: map[string]bool{}}
 	loadJSON("settings.json", s)
 	if s.Disabled == nil {
 		s.Disabled = map[string]bool{}

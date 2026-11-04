@@ -25,7 +25,7 @@ func catalog(settingsCommand string) []command {
 		{op: "log-out", title: "Log Out", subtitle: "End the current session", keywords: "logout sign out", icon: "log-out", capability: "system.logOut",
 			destructive: true, confirm: "End the current session. Unsaved work in open apps may be lost."},
 		{op: "restart", title: "Restart", subtitle: "Restart this computer", keywords: "reboot restart", icon: "rotate-ccw", tone: api.ColorOrange, capability: "system.restart",
-			destructive: true, confirm: "Reboot this computer. Unsaved work in open apps may be lost."},
+			destructive: true, confirm: "Restart this computer. Unsaved work in open apps may be lost."},
 		{op: "shut-down", title: "Shut Down", subtitle: "Power off this computer", keywords: "shutdown power off", icon: "power", tone: api.ColorRed, capability: "system.shutDown",
 			destructive: true, confirm: "Power off this computer. Unsaved work in open apps may be lost."},
 		{op: "empty-trash", title: "Empty Trash", subtitle: "Permanently delete trashed files", keywords: "trash delete bin empty", icon: "trash-2", tone: api.ColorRed, capability: "system.emptyTrash",

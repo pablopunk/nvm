@@ -30,6 +30,10 @@ type FS interface {
 	Stat(name string) (fs.FileInfo, error)
 	// Lstat describes a file or folder without following a symbolic link: a link describes itself.
 	Lstat(name string) (fs.FileInfo, error)
+	// EvalSymlinks returns name with every symbolic link in it replaced by its target, so a write can replace the
+	// file a link points at instead of the link. A link to a missing target returns an error matching
+	// fs.ErrNotExist.
+	EvalSymlinks(name string) (string, error)
 	// ReadFilePrefix returns at most max leading bytes of a file together with the file's full size. It
 	// never loads the rest of a large file, so previews stay bounded.
 	ReadFilePrefix(name string, max int64) (data []byte, size int64, err error)

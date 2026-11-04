@@ -67,7 +67,7 @@ func TestConfirmRunsOnlyWhenItsActionIsChosen(t *testing.T) {
 
 	h.win.Show()
 	h.p.Pop()
-	h.p.Push(Confirm("Restart", "Reboot this computer", func() { ran++ }))
+	h.p.Push(Confirm("Restart", "Restart this computer", func() { ran++ }))
 	h.frame()
 	h.p.Choose(1)
 	h.key(0, ui.KeyEnter)

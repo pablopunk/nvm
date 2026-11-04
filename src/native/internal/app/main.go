@@ -30,6 +30,7 @@ import (
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/portable"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -99,6 +100,9 @@ type App struct {
 	userStore    *store.Store
 	userNotices  <-chan store.Notice
 	userReadOnly bool
+	// sharedConfig is config.json in the folder 1.x shares: the palette shortcut, shortcuts, the diagnostics switch and the
+	// update channel live there.
+	sharedConfig *portable.Store
 	quitting     bool
 	edits        map[string]*noteEdit
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
@@ -162,7 +166,7 @@ func (p *App) ready() {
 	p.paletteHidden = make(chan struct{}, 1)
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
-	p.attachServices(ports, runtime.GOOS, configDir(), nil)
+	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
 	p.attachWindows()
 	p.attachDeepLinks()
 	prepareCatalog()

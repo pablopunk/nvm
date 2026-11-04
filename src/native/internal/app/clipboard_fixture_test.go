@@ -16,7 +16,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// clipFixtureDir is the config folder of a fixture engine. Nothing is written outside the fake file system.
+// clipFixtureDir is the local data folder of a fixture engine. Nothing is written outside the fake file system.
 const clipFixtureDir = "/config/nvm-native"
 
 // clipFixture is a clipboard engine over fake ports: the scripted clipboard, file system, clock, HTTP and resolver

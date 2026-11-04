@@ -91,7 +91,7 @@ func startSleeper(t *testing.T, program string) <-chan error {
 func treeSnapshot(t *testing.T, root string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
-	excluded := []string{filepath.Join(".config", "nvm-native"), filepath.Join(".local", "share", "Trash")}
+	excluded := []string{filepath.Join(".config", "nevermind"), filepath.Join(".local", "share", "nevermind-next"), filepath.Join(".local", "share", "Trash")}
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err

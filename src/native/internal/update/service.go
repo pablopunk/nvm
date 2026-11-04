@@ -51,8 +51,16 @@ func NewService(o Options) *Service {
 		channels: o.Channels,
 		onChange: o.OnChange,
 		channel:  channel,
-		state:    State{Status: StatusIdle, CurrentVersion: o.Current},
+		state:    initialState(o.Engine, o.Current),
 	}
+}
+
+// initialState is unsupported in a build that cannot update, so the page never waits for a check to say so.
+func initialState(engine Engine, current string) State {
+	if !engine.Enabled() {
+		return unsupportedState(current)
+	}
+	return State{Status: StatusIdle, CurrentVersion: current}
 }
 
 // State returns the current state without contacting anything.
@@ -102,6 +110,9 @@ func (s *Service) RestartToUpdate() error {
 // SetChannel switches the channel that checks follow and persists it. It drops an update that is downloading, and
 // refuses while a downloaded update waits for its restart. The caller checks again on the new channel.
 func (s *Service) SetChannel(channel Channel) error {
+	if !s.engine.Enabled() {
+		return ErrChannelUnavailable
+	}
 	s.mu.Lock()
 	if channel == s.channel {
 		s.mu.Unlock()
@@ -196,7 +207,7 @@ func (s *Service) answerLocked(offer Offer, found bool, err error) (State, bool)
 	case err != nil:
 		return State{Status: StatusFailed, CurrentVersion: current, Stage: StageCheck, Message: err.Error()}, false
 	case !found || !IsNewer(offer.Version, current):
-		return State{Status: StatusIdle, CurrentVersion: current}, false
+		return State{Status: StatusCurrent, CurrentVersion: current}, false
 	}
 	return State{Status: StatusAvailable, CurrentVersion: current, LatestVersion: offer.Version}, true
 }

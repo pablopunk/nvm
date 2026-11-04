@@ -56,12 +56,14 @@ type Palette struct {
 	opts Options
 	win  Window
 
-	stack   []*View
-	query   string
-	results []search.Item
-	chosen  int
-	list    ui.ListState
-	input   ui.Handle
+	stack []*View
+	query string
+	// caretToEnd is set when the query was replaced: the input takes the caret to the end of the text once.
+	caretToEnd bool
+	results    []search.Item
+	chosen     int
+	list       ui.ListState
+	input      ui.Handle
 
 	actionsOpen bool
 	actChosen   int
@@ -292,8 +294,22 @@ func (p *Palette) Query() string { return p.query }
 
 // SetQuery replaces the text of the search field and searches again (search.Host).
 func (p *Palette) SetQuery(q string) {
-	p.query = q
+	p.replaceQuery(q)
 	p.search()
+}
+
+// replaceQuery puts text the palette did not type into the search field, with the caret after its last rune. The
+// text is there to be continued, as a field's value is in Electron, so typing appends to it.
+func (p *Palette) replaceQuery(q string) {
+	p.query = q
+	p.caretToEnd = true
+}
+
+// takeCaretToEnd reports whether the caret moves to the end of the search text in this frame, and clears the request.
+func (p *Palette) takeCaretToEnd() bool {
+	atEnd := p.caretToEnd
+	p.caretToEnd = false
+	return atEnd
 }
 
 // Choose moves the cursor to row i, clamped to the rows that exist.

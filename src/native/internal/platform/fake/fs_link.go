@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"errors"
 	"io/fs"
 	"path"
 
@@ -31,4 +32,29 @@ func (f *FS) Symlink(target, name string) error {
 	f.kids = nil
 	f.notifyLocked(platform.Event{Op: platform.EventCreate, Path: key})
 	return nil
+}
+
+// maxLinkHops bounds how many links EvalSymlinks follows, as the OS does, so a loop of links fails instead of
+// spinning.
+const maxLinkHops = 40
+
+var errTooManyLinks = errors.New("too many levels of symbolic links")
+
+// EvalSymlinks follows the link at name, and the links it points at, to a node that is not a link. The fake models
+// links as whole-path nodes, so only the last element of name is resolved. A missing target matches fs.ErrNotExist.
+func (f *FS) EvalSymlinks(name string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := cleanKey(name)
+	for range maxLinkHops {
+		n, err := f.lookupLocked(key)
+		if err != nil {
+			return "", pathError("evalsymlinks", name, err)
+		}
+		if n.link == "" {
+			return key, nil
+		}
+		key = n.link
+	}
+	return "", pathError("evalsymlinks", name, errTooManyLinks)
 }
