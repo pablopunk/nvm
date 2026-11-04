@@ -3,7 +3,6 @@ package app
 import (
 	"github.com/egoist/mygo/ui"
 
-	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
@@ -87,35 +86,15 @@ func (p *App) saveRecorded(h search.Host, recorder *shortcutRecorder) {
 	h.Toast("Shortcut set: " + recorder.labels.Label(recorder.accelerator))
 }
 
-// draw shows the recorded shortcut as keycaps, or asks for one. The element takes the keys while it is focused. The
-// palette moves focus to its search field when a view is pushed, so the element asks for focus on every frame it
-// does not have it.
+// draw centres the page's stage in the body: the recorded keys, or the prompt for them. The element takes the keys
+// while it is focused. The palette moves focus to its search field when a view is pushed, so the element asks for
+// focus on every frame it does not have it.
 func (r *shortcutRecorder) draw(c *ui.Context) {
-	k := design.Tokens(c)
 	if r.hyper {
 		r.holdModifiers(recordedModifiers(c.Modifiers()))
 	}
-	ui.Column(c).Bind(&r.focus).Focusable().HandleInput(r.handleInput).Padding(24).Gap(14).Center().Children(func() {
-		if r.accelerator == "" {
-			if held := shortcuts.ModifierNames(recordedModifiers(c.Modifiers())); len(held) > 0 {
-				ui.Row(c).Gap(6).Center().Children(func() {
-					for _, name := range held {
-						design.Keycap(c, r.labels.Label(name))
-					}
-				})
-				ui.Text(c, "Press a key with them").FontSize(11).TextColor(k.Muted)
-				return
-			}
-			ui.Text(c, "Press a keyboard shortcut").FontSize(13).FontWeight(600).TextColor(k.Strong)
-			ui.Text(c, "Use at least one modifier, then press Enter").FontSize(11).TextColor(k.Muted)
-			return
-		}
-		ui.Row(c).Gap(6).Center().Children(func() {
-			for _, cap := range r.labels.Keycaps(r.accelerator) {
-				design.Keycap(c, cap)
-			}
-		})
-		ui.Text(c, "Save shortcut for “"+r.entry.Title+"”").FontSize(11).TextColor(k.Muted)
+	ui.Column(c).Bind(&r.focus).Focusable().HandleInput(r.handleInput).Grow(1).Padding(24).Gap(18).Center().Children(func() {
+		r.stage(c)
 	})
 	if !c.Focused(r.focus) {
 		r.focus.Focus(c)
