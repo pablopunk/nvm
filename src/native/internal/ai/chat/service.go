@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"slices"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -30,6 +31,7 @@ type Options struct {
 // and keeps the last model each tier resolved to. Its state is owned by the UI thread.
 type Service struct {
 	opts   Options
+	cache  cache
 	runs   map[string]*run
 	models map[Tier]backend.ModelDescriptor
 }
@@ -39,23 +41,73 @@ func New(opts Options) *Service {
 	if opts.SystemPrompt == nil {
 		opts.SystemPrompt = func(Kind) string { return ConversationSystemPrompt }
 	}
-	return &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
+	s := &Service{opts: opts, runs: map[string]*run{}, models: map[Tier]backend.ModelDescriptor{}}
+	s.Reload()
+	return s
 }
 
-// Chats returns every chat, most recently changed first.
+// Reload re-reads every chat from the store into the cache. Use it after the store changed outside the service.
+func (s *Service) Reload() {
+	all, _ := s.opts.Store.All()
+	s.cache.load(all)
+}
+
+// AccountChanged re-reads the model routes after the account connected, changed environment or signed out. A
+// disconnected account keeps no routes. It runs on the UI thread.
+func (s *Service) AccountChanged() {
+	if !s.opts.Connected() {
+		s.models = map[Tier]backend.ModelDescriptor{}
+		return
+	}
+	s.RefreshModels()
+}
+
+// Version counts the changes the service has made to its chats. A view can compare it to skip a rebuild.
+func (s *Service) Version() uint64 {
+	return s.cache.version
+}
+
+// Chats returns every chat, most recently changed first. The chats are copies of the cache's values; their
+// messages are shared and must not be modified.
 func (s *Service) Chats() []Chat {
-	chats, _ := s.opts.Store.All()
+	chats := slices.Clone(s.cache.chats)
+	slices.SortStableFunc(chats, func(a, b Chat) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 	return chats
 }
 
-// Chat returns the chat with id.
+// Chat returns the chat with id, without copying its transcript. The Messages slice is shared with the cache and
+// must not be modified.
 func (s *Service) Chat(id string) (Chat, bool) {
-	return s.opts.Store.Get(id)
+	return s.cache.get(id)
 }
 
 // NewChat adds an empty chat of kind that uses tier.
 func (s *Service) NewChat(kind Kind, tier Tier) (Chat, error) {
-	return s.opts.Store.Create(kind, tier)
+	chat, err := s.opts.Store.Create(kind, tier)
+	if err != nil {
+		return Chat{}, err
+	}
+	s.cache.put(chat)
+	return chat, nil
+}
+
+// mutate applies change to the chat with id, in the store and in the cache. The change runs once on each copy,
+// so it must be a pure function of the chat it is given.
+func (s *Service) mutate(id string, change func(*Chat)) error {
+	index := s.cache.indexOf(id)
+	if index < 0 {
+		return ErrNotFound
+	}
+	now := s.opts.Clock.Now()
+	if err := s.opts.Store.Mutate(id, now, change); err != nil {
+		return err
+	}
+	next := s.cache.chats[index]
+	next.Messages = slices.Clone(next.Messages)
+	change(&next)
+	next.UpdatedAt = now
+	s.cache.replace(index, next)
+	return nil
 }
 
 // Busy reports whether a turn of the chat is in flight.
@@ -69,7 +121,11 @@ func (s *Service) Delete(id string) error {
 	if s.Busy(id) {
 		return ErrBusy
 	}
-	return s.opts.Store.Remove(id)
+	if err := s.opts.Store.Remove(id); err != nil {
+		return err
+	}
+	s.cache.drop(id)
+	return nil
 }
 
 // SetTier changes the tier the chat's next turn uses.
@@ -77,7 +133,7 @@ func (s *Service) SetTier(id string, tier Tier) error {
 	if s.Busy(id) {
 		return ErrBusy
 	}
-	return s.opts.Store.Mutate(id, func(c *Chat) { c.Tier = tier })
+	return s.mutate(id, func(c *Chat) { c.Tier = tier })
 }
 
 // Model returns the descriptor the backend last resolved tier to, and whether there is one.
@@ -88,7 +144,9 @@ func (s *Service) Model(tier Tier) (backend.ModelDescriptor, bool) {
 
 // Expire removes the conversations idle past the retention window, except the ones answering now.
 func (s *Service) Expire() ([]string, error) {
-	return s.opts.Store.Expire(s.opts.Clock.Now(), s.Busy)
+	removed, err := s.opts.Store.Expire(s.opts.Clock.Now(), s.Busy)
+	s.Reload()
+	return removed, err
 }
 
 // Send adds text as the user's message and starts a reply. Without a connected account the message is kept and a
@@ -101,7 +159,7 @@ func (s *Service) Send(id, text string) error {
 	case s.Busy(id):
 		return ErrBusy
 	}
-	err := s.opts.Store.Mutate(id, func(c *Chat) {
+	err := s.mutate(id, func(c *Chat) {
 		c.Messages = append(c.Messages, s.message(AuthorUser, text, StatusComplete))
 		if c.Title == "" {
 			c.Title = TitleFor(text)
@@ -115,7 +173,7 @@ func (s *Service) Send(id, text string) error {
 
 // Note adds an informational notice to the transcript, such as the outcome of an action the chat started.
 func (s *Service) Note(id string, notice Notice) error {
-	return s.opts.Store.Mutate(id, func(c *Chat) {
+	return s.mutate(id, func(c *Chat) {
 		c.Messages = append(c.Messages, s.noticeMessage(notice))
 	})
 }
@@ -126,7 +184,7 @@ func (s *Service) Regenerate(id string) error {
 		return ErrBusy
 	}
 	asked := false
-	err := s.opts.Store.Mutate(id, func(c *Chat) { asked = truncateAfterLastUser(c) })
+	err := s.mutate(id, func(c *Chat) { asked = truncateAfterLastUser(c) })
 	if err != nil {
 		return err
 	}
@@ -171,12 +229,12 @@ func (s *Service) startTurn(id string) error {
 		return ErrNotFound
 	}
 	if !s.opts.Connected() {
-		return s.opts.Store.Mutate(id, func(c *Chat) {
+		return s.mutate(id, func(c *Chat) {
 			c.Messages = append(c.Messages, s.noticeMessage(SignInNotice()))
 		})
 	}
 	request := Request(s.opts.SystemPrompt(chat.Kind), chat)
-	err := s.opts.Store.Mutate(id, func(c *Chat) {
+	err := s.mutate(id, func(c *Chat) {
 		c.Messages = append(c.Messages, s.message(AuthorAssistant, "", StatusStreaming))
 	})
 	if err != nil {

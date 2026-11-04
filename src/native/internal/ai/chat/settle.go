@@ -15,7 +15,7 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 	if outcome.Ending == EndFinished && s.lastReplyEmpty(id) {
 		outcome = failed(ErrEmptyReply)
 	}
-	_ = s.opts.Store.Mutate(id, func(c *Chat) {
+	_ = s.mutate(id, func(c *Chat) {
 		finishTurn(c, outcome, s.opts.Clock.Now())
 	})
 	if outcome.Err != nil && s.opts.NoteError != nil {
@@ -28,7 +28,7 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 
 // lastReplyEmpty reports whether the streaming message of the chat has no text.
 func (s *Service) lastReplyEmpty(id string) bool {
-	chat, ok := s.opts.Store.Get(id)
+	chat, ok := s.Chat(id)
 	if !ok {
 		return false
 	}

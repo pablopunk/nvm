@@ -45,17 +45,6 @@ func (s *Store) All() ([]Chat, error) {
 	return chats, err
 }
 
-// Get returns the chat with id.
-func (s *Store) Get(id string) (Chat, bool) {
-	chats, _ := s.All()
-	for _, chat := range chats {
-		if chat.ID == id {
-			return chat, true
-		}
-	}
-	return Chat{}, false
-}
-
 // Create adds an empty chat of kind and tier and returns it.
 func (s *Store) Create(kind Kind, tier Tier) (Chat, error) {
 	now := s.clock.Now()
@@ -66,8 +55,8 @@ func (s *Store) Create(kind Kind, tier Tier) (Chat, error) {
 	return chat, nil
 }
 
-// Mutate applies change to the chat with id and stamps it as changed at the store clock's time.
-func (s *Store) Mutate(id string, change func(*Chat)) error {
+// Mutate applies change to the chat with id and stamps it as changed at now.
+func (s *Store) Mutate(id string, now time.Time, change func(*Chat)) error {
 	found := false
 	err := s.doc.Update(func(d *document) {
 		for i := range d.Chats {
@@ -75,7 +64,7 @@ func (s *Store) Mutate(id string, change func(*Chat)) error {
 				continue
 			}
 			change(&d.Chats[i])
-			d.Chats[i].UpdatedAt = s.clock.Now()
+			d.Chats[i].UpdatedAt = now
 			found = true
 			return
 		}

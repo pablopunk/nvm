@@ -72,7 +72,7 @@ var ErrEmptyReply = errors.New("chat: the reply had no text")
 
 // appendText adds a piece of reply text to the streaming message of the chat.
 func (s *Service) appendText(id, text string) {
-	_ = s.opts.Store.Mutate(id, func(c *Chat) {
+	_ = s.mutate(id, func(c *Chat) {
 		if index := streamingIndex(c); index >= 0 {
 			c.Messages[index].Text += text
 		}
