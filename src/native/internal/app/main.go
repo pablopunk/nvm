@@ -215,9 +215,10 @@ func (p *App) ready() {
 
 	p.panel = mygo.NewWindow(mygo.WindowOptions{
 		Title: "Nevermind", Panel: true, Hidden: true, Frameless: true, Transparent: true,
-		Vibrancy: mygo.VibrancyGlass, CornerRadius: cornerRadius,
+		Vibrancy: paletteWindowAppearance().Vibrancy, CornerRadius: cornerRadius,
 		Width: width, Height: height, DisableResize: true, Content: ui.View(p.View),
 	})
+	p.panel.SetActiveAppearance(paletteWindowAppearance().ActiveAppearance)
 	p.Attach(p.panel)
 	p.restoreFloatingNotes()
 	p.panel.OnClose(p.hidePanelUnlessQuitting)
