@@ -55,7 +55,7 @@ func TestNameMatchOpensTheFolder(t *testing.T) {
 	if item.Appearance == nil || item.Appearance.Foreground != api.ColorBlue {
 		t.Errorf("appearance = %+v, want blue", item.Appearance)
 	}
-	if p := item.Primary; p == nil || p.Kind != api.ActionOpenPath || p.Path != "/home/alice/Downloads" || p.Title != "Open" {
+	if p := item.Primary; p == nil || p.Kind != api.ActionOpenPath || p.Path != "/home/alice/Downloads" || p.Title != "Open Downloads" {
 		t.Errorf("primary = %+v, want an open-path action", p)
 	}
 }

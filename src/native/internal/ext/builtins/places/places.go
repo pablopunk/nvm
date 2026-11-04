@@ -52,8 +52,15 @@ func placeItem(place api.Place, score int) api.Item {
 		Title: place.Name, Subtitle: place.Path, Icon: placeIcon,
 		Score: float64(score), Section: search.KindCommands, LearnKey: "cmd:" + place.Name,
 		Appearance: &api.Appearance{Foreground: api.ColorBlue},
-		Primary:    primaryAction(place.Path),
+		Primary:    namedPrimaryAction(place),
 	}
+}
+
+// namedPrimaryAction opens the folder, and is titled Open with the folder's name as 1.x titles it.
+func namedPrimaryAction(place api.Place) *api.Action {
+	action := primaryAction(place.Path)
+	action.Title = "Open " + place.Name
+	return action
 }
 
 // primaryAction opens the folder when the row runs: the host hides the palette and hands the path to the file manager.

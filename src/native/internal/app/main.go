@@ -79,6 +79,7 @@ type App struct {
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
 	paletteHidden  chan struct{}
 	shortcutMgr    *shortcuts.Manager
+	aliasList      *shortcuts.Aliases
 	shortcutTitles shortcutTitles
 	snips          *snippets.Store
 	notes          *notes.Store

@@ -31,11 +31,6 @@ func (s *shortcutTitles) titleOr(actionID, fallback string) string {
 	return fallback
 }
 
-// builtInRowShortcutID keys a built-in row that stands among the commands by its title. Those rows have no stable ID yet.
-func builtInRowShortcutID(title string) string {
-	return commandShortcutPrefix + title
-}
-
 // commandShortcutID names a palette command for the shortcut document by its stable ID. A command without one takes no
 // shortcut.
 func commandShortcutID(cmd command) string {

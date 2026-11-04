@@ -118,6 +118,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		Score: scoreExtension,
 	}
 	if m.IsBuiltIn(extID) {
+		row.ID = item.ID
 		row = builtInRow(row, item)
 	}
 	if item.Primary != nil {

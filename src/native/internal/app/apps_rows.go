@@ -30,7 +30,10 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 			}
 			s = scoreAppSuggestion
 		} else if s = search.Score(a.Name, lq); s == 0 {
-			continue
+			s = aliasMatchScore(in.aliases[shortcuts.AppActionID(a.Path)], lq)
+			if s == 0 {
+				continue
+			}
 		}
 		list = append(list, a)
 		scores = append(scores, s)

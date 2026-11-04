@@ -3,6 +3,7 @@ package app
 import (
 	"slices"
 
+	"github.com/pablopunk/nvm/native/internal/palette/aliasview"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
@@ -11,11 +12,13 @@ import (
 const (
 	setShortcutTitle    = "Set keyboard shortcut"
 	removeShortcutTitle = "Remove keyboard shortcut"
+	setAliasTitle       = "Set alias"
 )
 
-// withShortcutActions gives a root row the shortcut actions of its action menu, and shows its shortcut at the end of
-// the row: Set keyboard shortcut opens the recorder, and Remove keyboard shortcut is there while it has one. bound is
-// the captured Accelerators of the manager, since rows are built off the UI thread.
+// withShortcutActions gives a root row the customization actions of its action menu, after its own actions: Set
+// keyboard shortcut opens the recorder, Remove keyboard shortcut is there while it has one, and Set alias opens the
+// alias view. It also shows the shortcut at the end of the row. bound is the captured Accelerators of the manager,
+// since rows are built off the UI thread.
 func (p *App) withShortcutActions(it search.Item, actionID string, bound map[string]string) search.Item {
 	if len(it.Actions) == 0 || it.Disabled {
 		return it
@@ -33,6 +36,9 @@ func (p *App) withShortcutActions(it search.Item, actionID string, bound map[str
 			p.removeShortcut(h, actionID)
 		}})
 	}
+	actions = append(actions, search.Action{Title: setAliasTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
+		h.Push(aliasview.View(aliasview.Target{ID: actionID, Title: it.Title}, p.aliasStore()))
+	}})
 	it.Actions = actions
 	return it
 }

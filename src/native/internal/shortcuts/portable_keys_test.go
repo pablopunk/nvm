@@ -10,7 +10,8 @@ var allBuiltInCommandIDs = []string{
 	CommandQuickNotes, CommandNewFloatingNote, CommandDictate, CommandSnippets, CommandExtensions, CommandForceQuitApps,
 	CommandQuitAllApps, CommandKeyboardShortcuts, CommandBackgroundTasks, CommandSettings, CommandCheckForUpdates,
 	CommandShowRecentErrors, CommandReportProblem, CommandOSPermissions, CommandFixSelectedText,
-	CommandTriageSelectedText, CommandClassifyImage,
+	CommandTriageSelectedText, CommandClassifyImage, CommandLockScreen, CommandSleep, CommandRestart,
+	CommandSystemSettings, CommandQuitNevermind, CommandPlaceDownloads, CommandPlaceDocuments, CommandPlaceDesktop,
 }
 
 func TestBuiltInCommandIDsAreStableNamesWithOneKeyEach(t *testing.T) {
