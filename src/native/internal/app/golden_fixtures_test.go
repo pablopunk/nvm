@@ -19,6 +19,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -61,7 +62,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 		snips:  userSnippets,
 		notes:  userNotes,
 		chats:  goldenChatService(t, set),
-		files:  newTestFiles(t, "/home/golden", nil),
+		files:  newTestFiles(t, testpath.Abs("home", "golden"), nil),
 		appsvc: newFixtureAppServices(goldenApps()),
 		ports:  set.Ports(),
 	}
