@@ -153,7 +153,7 @@ func launchPerfApp(t *testing.T, debugAddr string) (*App, time.Duration) {
 	}
 	seedJ29(t, home)
 	started := time.Now()
-	a.start(t, bin, home, runtimeDir, "")
+	a.start(t, bin, home, runtimeDir, "", "")
 	t.Cleanup(a.Stop)
 	deadline := started.Add(readyTimeout)
 	for !hasLine(a.Log(), "ready") {

@@ -2,10 +2,12 @@ package fixtures
 
 // Routes the fake backend serves.
 const (
-	ChatCompletionsPath = "/api/v1/chat/completions"
-	ModelsPath          = "/api/v1/models"
-	ActiveModelPath     = "/api/v1/active-model"
-	MePath              = "/api/me"
+	ChatCompletionsPath          = "/api/v1/chat/completions"
+	ModelsPath                   = "/api/v1/models"
+	ActiveModelPath              = "/api/v1/active-model"
+	MePath                       = "/api/me"
+	TranscriptionsPath           = "/api/v1/audio/transcriptions"
+	TranscriptionPreparationPath = "/api/v1/audio/transcription-preparations"
 )
 
 // RetryAfterSeconds is the Retry-After value sent with ModeRateLimited.
@@ -44,3 +46,12 @@ const ActiveModelBody = `{"id":"fixture-route","name":"Fixture Route","contextWi
 
 // MeBody is the signed-in account. The email uses the reserved example.test domain.
 const MeBody = `{"id":"user_fixture","email":"fixture@example.test","plan":"free","credits":{"balance":81}}`
+
+// TranscriptionBody is the answer of the transcription route for any recording.
+const TranscriptionBody = `{"text":"Fixture transcript of the recording."}`
+
+// OperationBody is the 200 answer of the transcription preparation route and of an approval.
+const OperationBody = `{"ok":true}`
+
+// InvalidDeviceCodeBody is the 400 answer to an approval of a code that is unknown, expired, used or approved.
+const InvalidDeviceCodeBody = "Invalid or expired code"

@@ -3,8 +3,11 @@ package fixtures
 import (
 	"io"
 	"net/http"
-	"strings"
 	"sync"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // FailureMode selects how the fake backend answers. HTTP errors apply to every /api route; the two stream
@@ -38,8 +41,8 @@ type BackendRequest struct {
 	Body   string
 }
 
-// Backend is an http.Handler that imitates the Nevermind backend's /api/v1 routes and /api/me. Its failure
-// mode can be switched between requests. Use it with fake.HTTP.Handle, or serve it from any listener.
+// Backend is an http.Handler that imitates the Nevermind backend's /api/v1 routes, /api/me and the device sign-in.
+// Its failure mode can be switched between requests. Use it with fake.HTTP.Handle, or serve it from any listener.
 //
 //	backend := fixtures.NewBackend()
 //	set.HTTP.Handle(backend)
@@ -50,13 +53,33 @@ type Backend struct {
 	requests    []BackendRequest
 	hanging     chan struct{}
 	activeModel string
+	reply       string
+	chunkDelay  time.Duration
+	device      *deviceSignIns
+	clock       platform.Clock
+
+	completedStreams int
+	abandonedStreams int
 }
 
 var _ http.Handler = (*Backend)(nil)
 
-// NewBackend returns a healthy backend that has received no requests.
+// NewBackend returns a healthy backend on the fixture clock, which starts at the fixture epoch, so its timestamps are
+// stable in golden files and tests. A rig that drives a real app uses NewBackendWithClock with a real clock.
 func NewBackend() *Backend {
-	return &Backend{mode: ModeHealthy, hanging: make(chan struct{}, 16), activeModel: ActiveModelBody}
+	return NewBackendWithClock(fake.NewClock())
+}
+
+// NewBackendWithClock returns a healthy backend that reads time from clock, for the expiry of sign-in codes.
+func NewBackendWithClock(clock platform.Clock) *Backend {
+	return &Backend{
+		mode:        ModeHealthy,
+		hanging:     make(chan struct{}, 16),
+		activeModel: ActiveModelBody,
+		reply:       FixtureReply,
+		device:      newDeviceSignIns(),
+		clock:       clock,
+	}
 }
 
 // SetActiveModel replaces the descriptor the active-model route answers with, for tests that need another route
@@ -106,15 +129,30 @@ func (b *Backend) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if b.applyHTTPFailure(w, r, mode) {
 		return
 	}
+	b.serveRoute(w, r, body, mode)
+}
+
+// serveRoute answers a route the fake implements, for the method the backend accepts on it.
+func (b *Backend) serveRoute(w http.ResponseWriter, r *http.Request, body string, mode FailureMode) {
 	switch {
 	case r.Method == http.MethodPost && r.URL.Path == ChatCompletionsPath:
-		serveChat(w, body, mode)
+		b.serveChat(w, r, body, mode)
 	case r.Method == http.MethodGet && r.URL.Path == ModelsPath:
 		writeBody(w, http.StatusOK, "application/json", ModelsBody)
 	case r.Method == http.MethodGet && r.URL.Path == ActiveModelPath:
 		writeBody(w, http.StatusOK, "application/json", b.currentActiveModel())
 	case r.Method == http.MethodGet && r.URL.Path == MePath:
 		writeBody(w, http.StatusOK, "application/json", MeBody)
+	case r.Method == http.MethodPost && r.URL.Path == DeviceInitiatePath:
+		b.serveDeviceInitiate(w, r)
+	case r.Method == http.MethodPost && r.URL.Path == DeviceExchangePath:
+		b.serveDeviceExchange(w, body)
+	case r.Method == http.MethodPost && r.URL.Path == DeviceApprovePath:
+		b.serveDeviceApprove(w, body)
+	case r.Method == http.MethodPost && r.URL.Path == TranscriptionsPath:
+		writeBody(w, http.StatusOK, "application/json", TranscriptionBody)
+	case r.URL.Path == TranscriptionPreparationPath && (r.Method == http.MethodPost || r.Method == http.MethodDelete):
+		writeBody(w, http.StatusOK, "application/json", OperationBody)
 	default:
 		writeBody(w, http.StatusMethodNotAllowed, "application/json", MethodNotAllowedBody)
 	}
@@ -159,7 +197,8 @@ func (b *Backend) record(r *http.Request, body string) {
 // isBackendRoute reports whether the request targets a route the fake implements at all.
 func isBackendRoute(r *http.Request) bool {
 	switch r.URL.Path {
-	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath:
+	case ChatCompletionsPath, ModelsPath, ActiveModelPath, MePath, DeviceInitiatePath, DeviceExchangePath,
+		DeviceApprovePath, TranscriptionsPath, TranscriptionPreparationPath:
 		return true
 	default:
 		return false
@@ -183,22 +222,4 @@ func writeBody(w http.ResponseWriter, status int, contentType, body string) {
 	w.Header().Set("Content-Type", contentType)
 	w.WriteHeader(status)
 	_, _ = io.WriteString(w, body)
-}
-
-// serveChat answers a chat completion: a stream of the fixture reply, or one of the stream failure modes.
-func serveChat(w http.ResponseWriter, body string, mode FailureMode) {
-	if !strings.Contains(body, `"messages"`) {
-		writeBody(w, http.StatusBadRequest, "application/json", InvalidRequestBody)
-		return
-	}
-	frames := StreamFrames(FixtureReply, 24)
-	switch mode {
-	case ModeMalformedSSE:
-		frames = MalformedStreamFrames(FixtureReply)
-	case ModeMidStreamError:
-		frames = MidStreamErrorFrames(FixtureReply)
-	default:
-		frames = append(frames, DoneFrame)
-	}
-	writeBody(w, http.StatusOK, "text/event-stream", strings.Join(frames, ""))
 }

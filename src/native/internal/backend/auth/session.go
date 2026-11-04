@@ -24,6 +24,9 @@ type Deps struct {
 	Browser func(url string) error
 	// Packaged reports a packaged build, which refuses development and private-network backends.
 	Packaged bool
+	// Origin, when set, is the backend the session starts on instead of the one the profile stores. The rig points
+	// automation builds at its fake backend this way; the stored profile is not changed.
+	Origin *backend.Environment
 	// ClientVersion is the desktop version the backend checks compatibility with.
 	ClientVersion string
 	// DeviceLabel names this device on the backend's sign-in page.
@@ -74,7 +77,7 @@ func New(deps Deps) (*Session, error) {
 		profile = loaded
 	}
 	s := &Session{deps: deps, vault: NewVault(deps.Keychain), profile: profile, byo: copyBYO(profile.BYO)}
-	env, err := backend.NewEnvironment(profile.Environment, profile.BaseURL, deps.Packaged)
+	env, err := startingEnvironment(deps, profile)
 	if err != nil {
 		deps.Logger.Warn("auth.environment_rejected", logx.F{"error": err.Error()})
 		env, err = backend.NewEnvironment(backend.EnvironmentProduction, "", deps.Packaged)
@@ -88,6 +91,15 @@ func New(deps Deps) (*Session, error) {
 	}
 	s.apply(bound)
 	return s, nil
+}
+
+// startingEnvironment is the backend a session starts on: Deps.Origin when the composition root names one, else the
+// backend the stored profile names.
+func startingEnvironment(deps Deps, profile Profile) (backend.Environment, error) {
+	if deps.Origin != nil {
+		return *deps.Origin, nil
+	}
+	return backend.NewEnvironment(profile.Environment, profile.BaseURL, deps.Packaged)
 }
 
 // bind builds the backend client for env and reads whether profile has a connected account for it. It touches

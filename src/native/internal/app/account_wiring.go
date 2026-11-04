@@ -26,7 +26,18 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 	if st != nil {
 		profile = auth.ProfileDocument(st)
 	}
-	session, err := auth.New(auth.Deps{
+	session, err := auth.New(p.accountDeps(ports, profile))
+	if err != nil {
+		log.Println("account: not connected to a backend:", err)
+		return
+	}
+	p.account = session
+}
+
+// accountDeps is the session wiring of this build. Only automation builds change it, to point the account at the
+// rig's fake backend (account_rig_on.go).
+func (p *App) accountDeps(ports platform.Ports, profile *store.Collection[auth.Profile]) auth.Deps {
+	deps := auth.Deps{
 		HTTP:          ports.HTTP,
 		Clock:         ports.Clock,
 		Keychain:      ports.Keychain,
@@ -37,12 +48,9 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 		ClientVersion: nativeClientVersion,
 		DeviceLabel:   deviceLabel(),
 		OnChange:      p.refreshAccountPage,
-	})
-	if err != nil {
-		log.Println("account: not connected to a backend:", err)
-		return
 	}
-	p.account = session
+	applyRigBackend(&deps)
+	return deps
 }
 
 // attachDeepLinks claims the sign-in scheme so that nvm:// links from the approval page reach the session.

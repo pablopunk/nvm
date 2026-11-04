@@ -93,7 +93,10 @@ func hidePalette(t *testing.T, app *App) {
 		time.Sleep(pollInterval)
 	}
 	_, err := app.WaitPalette(hideWait, "hidden", isHidden)
-	must(t, err)
+	if err != nil {
+		query, _ := app.SearchValue()
+		t.Fatalf("palette still shown after %d Escape presses (query %q): %v", escapePresses, query, err)
+	}
 }
 
 // assertNoRow fails when a palette row is labelled exactly label. Exact labels matter: the root also offers
