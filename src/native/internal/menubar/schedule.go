@@ -30,7 +30,8 @@ type job struct {
 
 // Scheduler runs status item renders on their own cadence. Renders never run on the UI thread and never overlap
 // themselves; their results return through OnUI. Time comes from the clock, so tests advance it instead of sleeping.
-// The app's timer title and extension menu bar items are both jobs here.
+// It stays apart from internal/jobs on purpose: a render's result is applied on the UI thread, the timer renders every
+// second, and renders are neither persisted, listed on Background Tasks nor halted (a broken item shows its own row).
 type Scheduler struct {
 	clock platform.Clock
 	onUI  func(fn func())

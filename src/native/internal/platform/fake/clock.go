@@ -96,6 +96,28 @@ func (c *Clock) Advance(d time.Duration) {
 	c.now = target
 }
 
+// Jump moves the clock forward by d as a machine that slept does: no timer fires while the time passes, and on
+// wake every overdue timer fires once at the new time. A ticker then continues from the wake, so a suspend never
+// produces a burst of ticks.
+func (c *Clock) Jump(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+	for _, timer := range c.timers {
+		if !timer.active || timer.deadline.After(c.now) {
+			continue
+		}
+		timer.deadline = c.now
+		fireTimer(timer)
+		if timer.period > 0 {
+			timer.deadline = c.now.Add(timer.period)
+		} else {
+			timer.active = false
+		}
+	}
+	c.cond.Broadcast()
+}
+
 // AwaitTimers blocks until at least n timers or tickers are pending. Tests use it instead of sleeping to
 // wait for a goroutine to start waiting on the clock.
 func (c *Clock) AwaitTimers(n int) {

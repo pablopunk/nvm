@@ -33,6 +33,7 @@ var commandVariants = map[string]string{
 	"Force Quit Apps":    "force-quit-apps",
 	"Quit All Apps":      "quit-all-apps",
 	"Keyboard Shortcuts": "keyboard-shortcuts",
+	"Background Tasks":   "background-tasks",
 	"Settings":           "settings",
 	"Check for Updates":  "check-for-updates",
 	"Show Recent Errors": "show-recent-errors",
