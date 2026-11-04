@@ -10,6 +10,10 @@ import (
 // view's own keys, then the menu's toggle and Tab, then Escape, then Backspace, then the list, and the shortcuts of the
 // actions. Command-K never strands focus: it toggles the menu, and the menu closes on Escape or Command-K.
 func (p *Palette) keys(c *ui.Context, v *View) {
+	if side := v.sideNow(); side.Focused() {
+		side.keys(c)
+		return
+	}
 	if edge := p.takeSearchEdge(); edge != edgeNone {
 		p.runSearchEdge(edge)
 		return

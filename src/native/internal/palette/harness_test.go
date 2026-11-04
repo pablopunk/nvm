@@ -102,6 +102,12 @@ type harness struct {
 // newHarness opens the palette on root, shown, with a fake clock and a synchronous or asynchronous search.
 func newHarness(t *testing.T, root *View, synchronous bool, opts ...func(*Options)) *harness {
 	t.Helper()
+	return newSizedHarness(t, root, synchronous, DefaultWidth, DefaultHeight, opts...)
+}
+
+// newSizedHarness is newHarness with a window of width by height, for the presentations that size the window.
+func newSizedHarness(t *testing.T, root *View, synchronous bool, width, height int, opts ...func(*Options)) *harness {
+	t.Helper()
 	o := Options{Root: root, Clock: fake.NewClock(), Synchronous: synchronous}
 	for _, apply := range opts {
 		apply(&o)
@@ -114,7 +120,7 @@ func newHarness(t *testing.T, root *View, synchronous bool, opts ...func(*Option
 	win := newFakeWindow()
 	p.Attach(win)
 	h := &harness{t: t, p: p, win: win, clock: clock}
-	h.tt = ui.NewTester(p.View, 720, 470)
+	h.tt = ui.NewTester(p.View, width, height)
 	p.Show()
 	h.frame()
 	return h

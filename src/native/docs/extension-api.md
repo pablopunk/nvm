@@ -251,7 +251,9 @@ Shared view parts:
 
 Presentation: `root`, `stacked`, `preview`, `side-preview`. A view-producing command invoked while another view is open is stacked below it, and dismissing it restores the parent without reopening it.
 
-`side-preview` shows the selected row's detail beside the list, the same inspector pane an item's `Detail` opens. The AI builder uses the same split: a builder chat that wrote an extension can show that extension's rows beside its transcript (Show Preview, ⌃⇧P), refreshed after each write. The preview reads a snapshot, so it never waits on the extension.
+`side-preview` puts the selected row's detail on the right half of the palette, beside the rows, and sizes the window for it (960 by 640, as 1.x does). `preview` takes the preview size (1080 by 760). `root` and `stacked` keep the default size (720 by 470). The palette maps these in `internal/palette/extview` (`palettePresentation`), and `presentation_test.go` checks each mapping with a side-preview fixture.
+
+A palette page can also draw a second page beside its own as a split: `palette.View.Side` returns a `palette.Side` (`internal/palette/side.go`), a palette of its own with its pages, search or title, rows and action menu. The split is equal halves, and the split page is sized 1080 by 760. While the side has the focus it takes the keys: arrows and typing reach its rows, Escape pops its pages and then gives the focus back, and `Side.Focus`, `Side.Blur`, `Side.SetRoot` and `Side.Refresh` move the focus, replace its page and search it again.
 
 Item ids must be unique within a view (`Validate` checks). Collection record ids must not start with `__nvm:`, which the host reserves for its own rows.
 

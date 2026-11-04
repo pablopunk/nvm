@@ -27,11 +27,13 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	design.Pane(c, func() {
 		p.header(c, v)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
-			if v.Body != nil {
-				v.Body(c, p)
-			} else {
-				p.listBody(c)
-			}
+			p.splitBody(c, v, func() {
+				if v.Body != nil {
+					v.Body(c, p)
+				} else {
+					p.listBody(c)
+				}
+			})
 		})
 		design.Etched(c)
 		p.footer(c, v)
@@ -140,13 +142,22 @@ func (p *Palette) listBody(c *ui.Context) {
 			p.chosen = 0
 		}
 		if it != nil && it.Detail != nil {
-			ui.Column(c).Width(320).FillHeight().Padding(8, 8, 8, 2).Children(func() {
+			detailColumn(c, v).FillHeight().Padding(8, 8, 8, 2).Children(func() {
 				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.Wash).Border(1, k.Lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.Lo).Children(func() {
 					it.Detail(c, p)
 				})
 			})
 		}
 	})
+}
+
+// detailColumn is the column of a chosen row's detail. A side-preview list gives the detail half of the pane, as 1.x's
+// side-preview card does; any other list keeps the detail at its narrow width.
+func detailColumn(c *ui.Context, v *View) ui.Element {
+	if v.Presentation == SidePreview {
+		return ui.Column(c).Grow(1)
+	}
+	return ui.Column(c).Width(320)
 }
 
 // selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.

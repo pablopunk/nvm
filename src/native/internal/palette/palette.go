@@ -59,6 +59,9 @@ type Options struct {
 	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
 	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, paths []string, draw func())
+	// Resize sizes the window for a presentation when the top view asks for another size (see desiredSize). Nil keeps
+	// the window's size.
+	Resize func(width, height int)
 }
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.
@@ -111,6 +114,8 @@ type Palette struct {
 	// keyboard for the palette (dialog.go); the palette stays open while one does.
 	blurred bool
 	dialogs atomic.Int32
+	// windowWidth and windowHeight are the size the window was last resized to for a presentation (split.go).
+	windowWidth, windowHeight int
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.
@@ -149,6 +154,7 @@ func (p *Palette) Show() {
 	p.shownView = nil
 	p.resetRootHistory()
 	p.leaveUnsurvivingPages()
+	p.syncPresentation()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
@@ -195,6 +201,7 @@ func (p *Palette) Refresh() {
 	p.win.Update(func() {
 		keep := p.chosen
 		p.invalidateRows()
+		p.syncPresentation()
 		p.search()
 		p.choose(keep)
 	})
@@ -238,6 +245,7 @@ func (p *Palette) push(v *View) {
 	p.query = ""
 	p.actionsOpen = false
 	p.syncActive(covered)
+	p.syncPresentation()
 	p.search()
 	p.focusInput()
 }
@@ -293,6 +301,7 @@ func (p *Palette) Pop() {
 	p.query = ""
 	p.actionsOpen = false
 	p.syncActive(nil)
+	p.syncPresentation()
 	p.search()
 	p.focusInput()
 }
