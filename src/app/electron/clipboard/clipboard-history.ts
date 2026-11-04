@@ -1,4 +1,5 @@
 import type { ClipboardApi, MaybePromise } from '../os/electron-clipboard';
+import { ClipboardHistoryViewChrome } from './clipboard-history-view';
 import { clipboardItemDetail } from './clipboard-item-detail';
 import { clipboardHistoryRemovalActions } from './clipboard-removal-actions';
 import {
@@ -504,21 +505,8 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
   function clipboardHistoryView() {
     const actions = clipboardHistoryRemovalActions(deps.getHistory().length);
     return {
-      type: 'list',
-      id: 'clipboard-history',
-      title: 'Clipboard History',
-      presentation: 'side-preview',
-      searchBarPlaceholder: 'Search Clipboard History',
-      onSelectionChange: {
-        type: 'loadClipboardLinkPreview',
-        title: 'Load link preview',
-      },
-      emptyView: {
-        title: 'No clipboard items found.',
-        subtitle: 'Copy text or images and they will appear here.',
-      },
+      ...ClipboardHistoryViewChrome,
       actions,
-      actionPanelVisibility: 'menu',
       actionPanel: actions.length
         ? { sections: [{ title: 'Manage History', actions }] }
         : undefined,

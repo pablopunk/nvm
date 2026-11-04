@@ -48,6 +48,7 @@ import { titleFromFirstContentLine } from './editor-title';
 import { ExtensionItemDetail } from './extension-item-detail';
 import { ExtensionWebviewFrame } from './extension-webview';
 import { formApplyRowId } from './form-fields';
+import { inlineViewActions, listEmptyContent } from './inline-view-actions';
 import { extensionListItemClassName } from './list-item-class-name';
 import type { usePaletteForm } from './palette-form';
 import { PreviewView } from './preview-view';
@@ -115,13 +116,6 @@ export type ExtensionViewRendererProps = {
   /** Rendering host; windows get compact headers and no palette chrome. */
   surface?: 'palette' | 'window';
 };
-
-function visibleActionPanelRows(view: CommandView, rows: unknown[]) {
-  return view.actionPanelVisibility === 'hidden' ||
-    view.actionPanelVisibility === 'menu'
-    ? []
-    : rows;
-}
 
 function gridStyle(view: CommandView) {
   return {
@@ -556,29 +550,6 @@ function GridExtensionView({
   );
 }
 
-function listEmptyContent({
-  view,
-  renderEmpty,
-  renderActionPanel,
-  actionPanelRows,
-}: Pick<
-  ExtensionViewSurfaceProps,
-  'view' | 'renderEmpty' | 'renderActionPanel' | 'actionPanelRows'
->) {
-  const emptyState = renderEmpty(view);
-  const actions = inlineViewActions({
-    view,
-    renderActionPanel,
-    actionPanelRows,
-  });
-  return (
-    <div className="extensionListEmpty">
-      {emptyState}
-      {actions}
-    </div>
-  );
-}
-
 function ListExtensionView({
   view,
   filterItems,
@@ -884,24 +855,6 @@ function CameraExtensionView(props: ExtensionViewSurfaceProps) {
   return (
     <CameraView view={view} actions={cameraActions} active={active !== false} />
   );
-}
-
-function inlineViewActions(
-  {
-    view,
-    renderActionPanel,
-    actionPanelRows,
-  }: Pick<
-    ExtensionViewSurfaceProps,
-    'view' | 'renderActionPanel' | 'actionPanelRows'
-  >,
-  prefix = 'extension-view',
-) {
-  const rows = visibleActionPanelRows(
-    view,
-    actionPanelRows(view.actionPanel, view.actions || [], prefix, false),
-  );
-  return rows.length ? renderActionPanel(rows) : null;
 }
 
 function PreviewExtensionView(props: ExtensionViewSurfaceProps) {
