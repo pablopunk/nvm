@@ -58,6 +58,18 @@ func chooseExtensionRow(t *testing.T, app *App, query, title string) {
 	must(t, app.Key("Down"))
 }
 
+// clearSearch deletes the palette's whole query, one BackSpace per character, and waits until the field is empty.
+// It does not assume where the query went after a view was popped.
+func clearSearch(t *testing.T, app *App) {
+	t.Helper()
+	value, err := app.SearchValue()
+	must(t, err)
+	for range len(value) {
+		must(t, app.Key("BackSpace"))
+	}
+	waitSearchValue(t, app, "")
+}
+
 // enableThroughReview opens the extension's review with Return and enables it with Return on the Enable row. The
 // review is the only way to turn an extension on, so this is the path every journey uses.
 func enableThroughReview(t *testing.T, app *App, query, title string) {
