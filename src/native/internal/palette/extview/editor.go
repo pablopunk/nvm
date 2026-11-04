@@ -72,15 +72,15 @@ func newEditorState(s *Session, title, text, placeholder string, readOnly bool) 
 func (ed *editorState) body(c *ui.Context, _ search.Host) {
 	t := design.Tokens(c)
 	ui.Column(c).Grow(1).Children(func() {
-		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
+		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus().OnChange(ed.noticeTextChange)
 		ed.noticeTextChange()
 		ui.Text(c, ed.statusLine()).FontSize(11).TextColor(t.Tertiary).Margin(12)
 	})
 }
 
-// noticeTextChange counts every change of the text as an edit, however the text area reported it: its Changed flag
-// can miss an input applied outside the pass that reads it (MyGo value_input.go, markChanged), so a key typed last
-// would never reach the draft.
+// noticeTextChange counts every change of the text as an edit. The body checks it after the area; OnChange checks it
+// again when MyGo applies a key after the view was built (runNoticeActions), which also makes the frame build once
+// more so the status line shows the edit.
 func (ed *editorState) noticeTextChange() {
 	if ed.text == ed.countedText {
 		return
