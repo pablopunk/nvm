@@ -30,6 +30,25 @@ func Local(goos, home string, getenv func(string) string, name, slug string) str
 	return filepath.Join(dataHomeOf(home, getenv), slug)
 }
 
+// ElectronUserData is the user-data folder 1.x (an Electron app named name) kept its state in: ~/Library/Application
+// Support on macOS, %APPDATA% on Windows, and $XDG_CONFIG_HOME or ~/.config on Linux.
+func ElectronUserData(goos, home string, getenv func(string) string, name string) string {
+	switch goos {
+	case "darwin":
+		return filepath.Join(home, "Library", "Application Support", name)
+	case "windows":
+		return filepath.Join(appDataOf(home, getenv), name)
+	}
+	return filepath.Join(configHomeOf(home, getenv), name)
+}
+
+func configHomeOf(home string, getenv func(string) string) string {
+	if dir := getenv("XDG_CONFIG_HOME"); filepath.IsAbs(dir) {
+		return dir
+	}
+	return filepath.Join(home, ".config")
+}
+
 func appDataOf(home string, getenv func(string) string) string {
 	if dir := getenv("APPDATA"); dir != "" {
 		return dir

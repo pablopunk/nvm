@@ -37,6 +37,10 @@ type Manifest struct {
 	// declares otherwise. The palette's Rename writes here, so renaming a command never edits the code. Only titles are
 	// renamed: a subtitle stays as the code declares it.
 	CommandTitles map[string]string `json:"commandTitles,omitempty"`
+	// ConvertedFrom names the 1.x source file this folder was converted from, such as toggle-system-theme-257c802c.ts.
+	// On its first scan the folder takes that file's enabled state from 1.x, so a converted extension that was on stays
+	// on. It is host metadata: extension code never reads it.
+	ConvertedFrom string `json:"convertedFrom,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -125,5 +129,19 @@ func (m Manifest) validateShape() error {
 			return fmt.Errorf("commandTitles.%s must not be empty", id)
 		}
 	}
+	if err := validateConvertedFrom(m.ConvertedFrom); err != nil {
+		return err
+	}
 	return CheckCompatibility(m.APIVersion, Current)
+}
+
+// validateConvertedFrom accepts "" or the plain name of a 1.x extension source file: it ends in .ts and names no folder.
+func validateConvertedFrom(name string) error {
+	if name == "" {
+		return nil
+	}
+	if !strings.HasSuffix(name, ".ts") || strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		return fmt.Errorf("convertedFrom %q must be the file name of a 1.x extension, such as toggle-system-theme.ts", name)
+	}
+	return nil
 }

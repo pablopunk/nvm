@@ -83,17 +83,19 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		AI:            p.extensionAI(textReader),
 		History:       p.extensionHistory,
 		Confirm:       p.askExtensionConfirmation,
+		Notify:        p.notifyExtensionFailure,
 		SettingsPanes: p.systemSettingsPanes,
 		Places:        p.systemPlaces,
 		Indicators:    p.extensionIndicators(),
 	}, extensionsDir(), enablement.Open(state), manager.Options{
-		Executable:     exe,
-		DataRoot:       filepath.Join(dataDir(), "extension-data"),
-		Home:           userHomeDir(),
-		MenuBarRefresh: p.refreshMenuBar,
-		OnChange:       p.extensionsStateChanged,
-		BuiltIns:       builtInExtensions(),
-		AIQuota:        p.aiQuotas(),
+		Executable:      exe,
+		DataRoot:        filepath.Join(dataDir(), "extension-data"),
+		Home:            userHomeDir(),
+		MenuBarRefresh:  p.refreshMenuBar,
+		OnChange:        p.extensionsStateChanged,
+		BuiltIns:        builtInExtensions(),
+		AIQuota:         p.aiQuotas(),
+		LegacyStatePath: p.legacyStatePath(),
 	})
 }
 

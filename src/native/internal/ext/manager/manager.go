@@ -56,6 +56,8 @@ type Ports struct {
 	Indicators services.IndicatorSurface
 	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
 	AI *extai.Service
+	// Notify shows a failure of an extension's action to the user, such as a refused AppleScript. Nil logs only.
+	Notify services.NotifyFunc
 }
 
 // Options tune the child processes of every extension.
@@ -78,6 +80,9 @@ type Options struct {
 	AIQuota *quota.Registry
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
+	// LegacyStatePath is the 1.x state file. A folder that names a 1.x source file takes its enabled state from it on
+	// its first scan. Empty means no 1.x state is read.
+	LegacyStatePath string
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
@@ -89,6 +94,8 @@ type Manager struct {
 	serviceDeps services.Deps
 	mu          sync.Mutex
 	entries     map[string]*entry
+	// legacyStatePath is the 1.x state file read by inheritLocked.
+	legacyStatePath string
 }
 
 // entry is one extension folder: the version on disk, the runtime that runs it when it can run, and the host
@@ -145,11 +152,13 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			AI:           ports.AI,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
+			Notify:       ports.Notify,
 
 			SettingsPanes: ports.SettingsPanes,
 			Places:        ports.Places,
 		},
-		entries: map[string]*entry{},
+		entries:         map[string]*entry{},
+		legacyStatePath: opts.LegacyStatePath,
 	}
 	m.registerBuiltIns(opts.BuiltIns)
 	if err := m.Refresh(); err != nil {
@@ -172,6 +181,7 @@ func (m *Manager) Refresh() error {
 }
 
 func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
+	m.inheritLocked(bundles)
 	seen := map[string]bool{}
 	for _, loaded := range bundles {
 		key := filepath.Base(loaded.Dir)

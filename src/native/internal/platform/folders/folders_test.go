@@ -46,3 +46,28 @@ func envOf(key, value string) func(string) string {
 		return ""
 	}
 }
+
+// TestElectronUserDataIsWhere1xKeptItsState: 1.x's state lives in the folder named after the app, under each system's
+// application-data folder.
+func TestElectronUserDataIsWhere1xKeptItsState(t *testing.T) {
+	none := func(string) string { return "" }
+	cases := []struct{ goos, home, want string }{
+		{"darwin", "/Users/acme", "/Users/acme/Library/Application Support/nvm"},
+		{"linux", "/home/acme", "/home/acme/.config/nvm"},
+		{"windows", "/Users/acme", "/Users/acme/AppData/Roaming/nvm"},
+	}
+	for _, c := range cases {
+		if got := ElectronUserData(c.goos, c.home, none, "nvm"); got != c.want {
+			t.Errorf("%s: ElectronUserData = %q; want %q", c.goos, got, c.want)
+		}
+	}
+	xdg := func(key string) string {
+		if key == "XDG_CONFIG_HOME" {
+			return "/srv/config"
+		}
+		return ""
+	}
+	if got := ElectronUserData("linux", "/home/acme", xdg, "nvm"); got != "/srv/config/nvm" {
+		t.Errorf("linux with XDG_CONFIG_HOME = %q; want /srv/config/nvm", got)
+	}
+}
