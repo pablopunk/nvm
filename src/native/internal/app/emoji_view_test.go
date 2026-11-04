@@ -136,6 +136,46 @@ func TestEmojiKeysMoveTheChoiceAcrossTheGrid(t *testing.T) {
 	}
 }
 
+// TestEmojiArrowsMoveTheCellsWhileTheSearchFieldHasFocus shows the picker as the hotkey does, so the search field has
+// the keyboard, and walks the four arrows, first with an empty query and then with a typed one. The arrows move the
+// cells and leave the query alone, as 1.x's grid takes them from the field.
+func TestEmojiArrowsMoveTheCellsWhileTheSearchFieldHasFocus(t *testing.T) {
+	p := goldenPalette(t)
+	p.Attach(&queuedWindow{})
+	p.Open(p.emojiView())
+	tt := ui.NewTester(p.View, width, height)
+	tt.Frame()
+
+	steps := []struct {
+		key   ui.Key
+		delta int
+	}{
+		{ui.KeyRight, 1},
+		{ui.KeyDown, emojiColumns},
+		{ui.KeyLeft, -1},
+		{ui.KeyUp, -emojiColumns},
+	}
+	for _, query := range []string{"", "smile"} {
+		if query != "" {
+			tt.Type(query)
+			tt.Frame()
+		}
+		start := p.Chosen()
+		for _, step := range steps {
+			tt.Key(0, step.key)
+			tt.Frame()
+			start += step.delta
+			if got := p.Chosen(); got != start {
+				t.Fatalf("query %q: after key %v the choice is %d, want %d", query, step.key, got, start)
+			}
+		}
+		if p.Query() != query {
+			t.Fatalf("the arrows changed the query to %q, want %q", p.Query(), query)
+		}
+		p.SetQuery("")
+	}
+}
+
 // TestEmojiAnnouncesTheNameOfTheSelectedCell checks the screen reader contract (J27): moving the choice announces
 // the name of the cell it lands on.
 func TestEmojiAnnouncesTheNameOfTheSelectedCell(t *testing.T) {
