@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -73,10 +75,32 @@ func menuCases(t *testing.T) []menuCase {
 			deps := aichat.Deps{Now: func() time.Time { return time.Date(2026, 11, 4, 12, 0, 0, 0, time.UTC) }}
 			return aichat.ConversationRow(deps, chat.Chat{ID: "chat-trip", Title: "Trip ideas", UpdatedAt: time.Date(2026, 11, 4, 11, 0, 0, 0, time.UTC)})
 		}, menu: []string{"Open", "Remove action"}},
+		{kind: "extension root item", row: func(t *testing.T) search.Item {
+			return extensionRootItemRow(t)
+		}, menu: []string{"Copy note", "Copy Text", renameTitle, tweakWithAITitle}, skipPrimary: true},
 		{kind: "extension command", row: func(t *testing.T) search.Item {
 			return extensionCommandRow(t, goldenPalette(t), "")
 		}, menu: []string{"New Note", setShortcutTitle, setAliasTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
 	}
+}
+
+// extensionRootItemRow runs the root item fixture in a real manager and returns its root row.
+func extensionRootItemRow(t *testing.T) search.Item {
+	t.Helper()
+	m := newFixtureManager(t, "acme.rootitem")
+	waitForState(t, m, "acme.rootitem", supervisor.StateRunning)
+	p := goldenPalette(t)
+	p.exts.mgr.Store(m)
+	for _, result := range m.Roots(context.Background()) {
+		if result.ExtensionID != "acme.rootitem" {
+			continue
+		}
+		if rows := rootRowsFor(p, m, result); len(rows) == 1 {
+			return rows[0]
+		}
+	}
+	t.Fatal("the root item fixture shows no root row")
+	return search.Item{}
 }
 
 // extensionCommandRow returns the root row of an extension command that the aliases match for query. A test passes ""
