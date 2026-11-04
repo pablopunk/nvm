@@ -167,19 +167,10 @@ func (m macWindows) FocusedWindow(ctx context.Context, pid int) (platform.Window
 	return window.PlatformWindow(pid, "", 0), nil
 }
 
-// Frontmost approximates the front app as the owner of the front-most window. The helper has no focus query;
-// the palette's own focus hand-off is verified against this, so L5 has to confirm it.
+// Frontmost names the app in front from Launch Services, as the Electron app does. The window listing has no
+// usable front app: its first window is often a system window that no listed app owns.
 func (m macWindows) Frontmost(ctx context.Context) (platform.WindowApp, bool, error) {
-	listed, err := call[[]swifthelper.ListedWindow](ctx, m.macHelper, "all")
-	if err != nil {
-		return platform.WindowApp{}, false, err
-	}
-	for _, window := range listed {
-		if window.ZIndex == 0 {
-			return platform.WindowApp{PID: window.PID, BundleID: window.BundleID, Name: window.AppName}, true, nil
-		}
-	}
-	return platform.WindowApp{}, false, nil
+	return frontmostApp(ctx, m.helper)
 }
 
 func (m macWindows) SetFrame(ctx context.Context, write platform.WindowWrite) (platform.WindowFrame, error) {
