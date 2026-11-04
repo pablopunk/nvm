@@ -249,6 +249,18 @@ func (p *Palette) PopIf(v *View) bool {
 	return true
 }
 
+// ReplaceIf swaps the top view for v when the top view is old, and searches again without showing the palette, so an
+// open page takes new items as its host changes them. It reports whether it swapped. It runs on the UI thread.
+func (p *Palette) ReplaceIf(old, v *View) bool {
+	if len(p.stack) < 2 || p.cur() != old {
+		return false
+	}
+	p.leave(old)
+	p.stack[len(p.stack)-1] = v
+	p.search()
+	return true
+}
+
 // Pop returns to the view below the current one. At the root it does nothing.
 func (p *Palette) Root() {
 	for len(p.stack) > 1 {

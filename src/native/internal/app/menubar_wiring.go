@@ -43,6 +43,7 @@ func (p *App) startExtensionItems() {
 			OpenURL:        func(url string) { _ = mygo.Shell.OpenExternal(url) },
 			CopyText:       func(text string) { mygo.Clipboard.WriteText(text) },
 			ShowExtensions: func(string) { p.Open(p.extensionsView()); p.focusPanel() },
+			Popover:        popoverHost{p: p},
 		},
 	})
 	p.menubarItems.Store(service)

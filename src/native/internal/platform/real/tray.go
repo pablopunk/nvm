@@ -55,6 +55,24 @@ func (t *nativeTray) OnAppearanceChange(fn func()) {
 	t.tray.OnAppearanceChange(fn)
 }
 
+// OnPrimaryClick forwards MyGo's click, which fires while the icon has no menu.
+func (t *nativeTray) OnPrimaryClick(fn func()) {
+	t.tray.OnClick(fn)
+}
+
+// OnSecondaryClick forwards MyGo's right click.
+func (t *nativeTray) OnSecondaryClick(fn func()) {
+	t.tray.OnRightClick(fn)
+}
+
+// PopUpMenu pops the rows up at the pointer, as the menu of a right click.
+func (t *nativeTray) PopUpMenu(items []platform.MenuItem) {
+	if len(items) == 0 {
+		return
+	}
+	mygo.NewMenu(convertMenuItems(items)).Popup(nil)
+}
+
 // Close removes the item from the menu bar or tray.
 func (t *nativeTray) Close() {
 	t.tray.Destroy()

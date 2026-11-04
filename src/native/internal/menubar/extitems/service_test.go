@@ -73,13 +73,39 @@ func (s *fakeSource) Run(_ context.Context, _ string, in api.Invocation) (api.Re
 }
 
 type harness struct {
-	t      *testing.T
-	clock  *fake.Clock
-	tray   *fake.TrayHost
-	sched  *menubar.Scheduler
-	source *fakeSource
-	svc    *Service
-	opened chan string
+	t        *testing.T
+	clock    *fake.Clock
+	tray     *fake.TrayHost
+	sched    *menubar.Scheduler
+	source   *fakeSource
+	svc      *Service
+	opened   chan string
+	popovers *recordedPopovers
+}
+
+// recordedPopovers is the popover host the tests give the service. It keeps what it was asked, in order.
+type recordedPopovers struct {
+	mu        sync.Mutex
+	toggles   []string
+	refreshes []string
+}
+
+func (r *recordedPopovers) Toggle(extensionID, barID string, _ api.Popover) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.toggles = append(r.toggles, extensionID+"/"+barID)
+}
+
+func (r *recordedPopovers) Refresh(extensionID, barID string, _ api.Popover) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.refreshes = append(r.refreshes, extensionID+"/"+barID)
+}
+
+func (r *recordedPopovers) counts() (toggles, refreshes int) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return len(r.toggles), len(r.refreshes)
 }
 
 func newHarness(t *testing.T) *harness {
@@ -99,7 +125,7 @@ func newHarnessFor(t *testing.T, goos string) *harness {
 		triggers: []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}},
 		runs:     make(chan api.Invocation, 8),
 	}
-	h := &harness{t: t, clock: clock, tray: tray, sched: sched, source: source, opened: make(chan string, 4)}
+	h := &harness{t: t, clock: clock, tray: tray, sched: sched, source: source, opened: make(chan string, 4), popovers: &recordedPopovers{}}
 	h.svc = New(Options{
 		Host:      tray,
 		Scheduler: sched,
@@ -108,6 +134,7 @@ func newHarnessFor(t *testing.T, goos string) *harness {
 		Hooks: Hooks{
 			OpenURL:        func(url string) { h.opened <- url },
 			ShowExtensions: func(id string) { h.opened <- "extensions:" + id },
+			Popover:        h.popovers,
 		},
 		Logs: quietLogs(t, clock),
 		GOOS: goos,

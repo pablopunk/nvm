@@ -30,6 +30,15 @@ type Hooks struct {
 	OpenURL        func(url string)
 	CopyText       func(text string)
 	ShowExtensions func(extensionID string)
+	// Popover shows the popovers of the items. Nil shows none, and an item with a popover keeps its menu.
+	Popover PopoverHost
+}
+
+// PopoverHost opens an item's popover on the UI thread. Toggle runs on a click and closes it when it is open; Refresh
+// runs after every render and redraws it only while it is open, as 1.x redraws an open popover.
+type PopoverHost interface {
+	Toggle(extensionID, barID string, popover api.Popover)
+	Refresh(extensionID, barID string, popover api.Popover)
 }
 
 // Options wire the service. OnUI runs a function on the UI thread; Scheduler runs the renders. GOOS is the platform the
@@ -243,6 +252,19 @@ func (s *Service) redraw(ext *extension) {
 			delete(ext.items, id)
 		}
 	}
+	s.refreshPopovers(ext, bars)
+}
+
+// refreshPopovers redraws the open popovers of an extension after its items changed.
+func (s *Service) refreshPopovers(ext *extension, bars []api.MenuBar) {
+	if s.opts.Hooks.Popover == nil {
+		return
+	}
+	for _, bar := range bars {
+		if bar.Popover != nil {
+			s.opts.Hooks.Popover.Refresh(ext.id, bar.ID, *bar.Popover)
+		}
+	}
 }
 
 // showBar creates or updates the platform item of one declared bar.
@@ -267,6 +289,19 @@ func (s *Service) showBar(ext *extension, bar api.MenuBar) {
 	}
 	current.item.SetTitle(title)
 	current.item.SetMenu(s.menu(ext, bar))
+	current.item.SetPrimaryAction(s.popoverClick(ext.id, bar))
+}
+
+// popoverClick is the primary click of an item with a popover. 1.x shows no popover on Linux, whose tray reports no
+// clicks, so the Linux menu opens it from its first row instead. Other items keep the menu on the click.
+func (s *Service) popoverClick(extensionID string, bar api.MenuBar) func() {
+	if bar.Popover == nil || s.goos() == "linux" || s.opts.Hooks.Popover == nil {
+		return nil
+	}
+	popover := *bar.Popover
+	return func() {
+		s.opts.OnUI(func() { s.opts.Hooks.Popover.Toggle(extensionID, bar.ID, popover) })
+	}
 }
 
 // goos is the platform the items are drawn for.
@@ -285,6 +320,9 @@ func (s *Service) menu(ext *extension, bar api.MenuBar) []platform.MenuItem {
 		goos:   s.goos(),
 	}
 	rows := builder.sectionRows(bar.Sections)
+	if bar.Popover != nil && s.goos() == "linux" && s.opts.Hooks.Popover != nil {
+		rows = append(linuxPopoverRows(ext.id, bar, s), rows...)
+	}
 	if ext.failure != nil {
 		showExtensions := func() { s.opts.Hooks.showExtensions(ext.id) }
 		head := builder.failureRows(boundedText(ext.failure.Message, maxRowText), showExtensions)
@@ -320,4 +358,11 @@ func (h Hooks) showExtensions(id string) {
 	if h.ShowExtensions != nil {
 		h.ShowExtensions(id)
 	}
+}
+
+// linuxPopoverRows is the Linux menu's head for an item with a popover: "Open" and a divider, as 1.x lays it out.
+func linuxPopoverRows(extensionID string, bar api.MenuBar, s *Service) []platform.MenuItem {
+	open := menubar.UIAction(func() { s.opts.Hooks.Popover.Toggle(extensionID, bar.ID, *bar.Popover) }, s.opts.OnUI)
+	rows := []platform.MenuItem{{ID: "popover-open", Label: "Open " + bar.Tooltip, Action: open}}
+	return append(rows, platform.MenuItem{Separator: true})
 }

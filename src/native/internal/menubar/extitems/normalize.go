@@ -60,16 +60,27 @@ func normalizeBar(bar api.MenuBar, index int, extensionTitle string, issues *[]s
 		}
 		id = mainBarID
 	}
-	if bar.Popover != nil {
-		*issues = append(*issues, "menu bar popovers are not shown yet; the menu is used instead")
-	}
 	return api.MenuBar{
 		ID:       id,
 		Icon:     normalizeIcon(bar.Icon, issues),
 		Title:    truncateTitle(bar.Title, issues),
 		Tooltip:  orDefault(boundedText(bar.Tooltip, maxRowText), boundedText(extensionTitle, maxRowText)),
 		Sections: normalizeSections(bar.Sections, issues),
+		Popover:  normalizePopover(bar.Popover, issues),
 	}, id, true
+}
+
+// normalizePopover keeps a popover whose view validates, and drops one that does not, with an issue. The popover's
+// size is the palette's, so the declared width and height are not read.
+func normalizePopover(popover *api.Popover, issues *[]string) *api.Popover {
+	if popover == nil {
+		return nil
+	}
+	if err := popover.View.Validate(); err != nil {
+		*issues = append(*issues, "menu bar popover is dropped: "+err.Error())
+		return nil
+	}
+	return popover
 }
 
 // normalizeIcon keeps a curated glyph and falls back to the default one, with an issue for an unknown name.

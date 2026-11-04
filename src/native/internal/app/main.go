@@ -96,6 +96,7 @@ type App struct {
 	rates   *store.Collection[rateDocument]
 	calc    *calc.Calculator
 	menuOS  string // the platform the menu bar draws its rows for; empty means the platform the app runs on
+	popover popoverState
 	compat  compatibility
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being

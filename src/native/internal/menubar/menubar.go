@@ -45,9 +45,11 @@ type Item struct {
 	// glyph names the extension glyph an item draws instead of an app style; empty for the app's own item.
 	glyph string
 
-	mu    sync.Mutex
-	style string
-	title string
+	mu      sync.Mutex
+	style   string
+	title   string
+	rows    []platform.MenuItem
+	primary func()
 }
 
 // NewItem creates an item over host, with its glyph drawn in style (see ChooseIcon). A host that cannot make one
@@ -71,6 +73,8 @@ func newItem(host platform.TrayHost, options platform.TrayOptions, item *Item) (
 		return nil, err
 	}
 	item.tray = tray
+	tray.OnPrimaryClick(item.primaryClicked)
+	tray.OnSecondaryClick(item.secondaryClicked)
 	if err := item.applyIcon(); err != nil {
 		tray.Close()
 		return nil, err
@@ -114,12 +118,59 @@ func (m *Item) SetIconStyle(style string) error {
 	return m.applyIcon()
 }
 
-// SetMenu replaces the menu shown on click. An empty list removes it.
+// SetMenu replaces the menu the item shows on click. An empty list removes it.
 func (m *Item) SetMenu(rows []platform.MenuItem) {
 	if m == nil {
 		return
 	}
+	m.mu.Lock()
+	m.rows = rows
+	m.mu.Unlock()
+	m.applyMenu()
+}
+
+// SetPrimaryAction makes a click on the icon run fn, as an extension popover opens, and moves the menu to a right
+// click. Nil puts the menu back on the click.
+func (m *Item) SetPrimaryAction(fn func()) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	m.primary = fn
+	m.mu.Unlock()
+	m.applyMenu()
+}
+
+// applyMenu attaches the menu to the icon, unless a primary action owns the click.
+func (m *Item) applyMenu() {
+	m.mu.Lock()
+	rows, primary := m.rows, m.primary
+	m.mu.Unlock()
+	if primary != nil {
+		m.tray.SetMenu(nil)
+		return
+	}
 	m.tray.SetMenu(rows)
+}
+
+// primaryClicked runs the primary action, if one is set. The platform calls it on its own thread.
+func (m *Item) primaryClicked() {
+	m.mu.Lock()
+	fn := m.primary
+	m.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+}
+
+// secondaryClicked shows the menu at the pointer while a primary action owns the click.
+func (m *Item) secondaryClicked() {
+	m.mu.Lock()
+	rows, primary := m.rows, m.primary
+	m.mu.Unlock()
+	if primary != nil {
+		m.tray.PopUpMenu(rows)
+	}
 }
 
 // Close removes the item from the menu bar or tray.

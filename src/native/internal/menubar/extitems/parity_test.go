@@ -2,6 +2,7 @@ package extitems
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -109,4 +110,73 @@ func TestOffMacOSTheTitleJoinsTheTooltip(t *testing.T) {
 	if tip := tray.Options().ToolTip; tip != "Clock — 04:59" {
 		t.Fatalf("Linux tooltip = %q, want the title after an em dash", tip)
 	}
+}
+
+// popoverBar is an item with a popover of one list and a menu of one row.
+func popoverBar() api.MenuBar {
+	bar := clockBar("04:59")
+	view := api.ListView("Timer", api.Item{ID: "row", Title: "Remaining"})
+	bar.Popover = &api.Popover{View: view, Width: 360, Height: 420}
+	return bar
+}
+
+func TestPopoverOpensOnClickAndTheMenuOnRightClickOnMacOS(t *testing.T) {
+	h := newHarnessFor(t, "darwin")
+	h.showBars(popoverBar())
+	tray := h.item("main")
+	if len(tray.Items()) != 0 {
+		t.Fatalf("a popover item attaches no menu, so the click can open it; it has %d rows", len(tray.Items()))
+	}
+	tray.Click()
+	if toggles, _ := h.popovers.counts(); toggles != 1 {
+		t.Fatalf("click toggled the popover %d times, want 1", toggles)
+	}
+	tray.RightClick()
+	popUps := tray.PopUps()
+	if len(popUps) != 1 || menuLabelsOf(popUps[0]) != "Counter|Count 1|Bump|-|More" {
+		t.Fatalf("right click showed %v, want the menu rows", popUps)
+	}
+}
+
+func TestPopoverOnLinuxOpensFromTheMenuFirstRow(t *testing.T) {
+	h := newHarnessFor(t, "linux")
+	h.showBars(popoverBar())
+	tray := h.item("main")
+	tray.Click()
+	if toggles, _ := h.popovers.counts(); toggles != 0 {
+		t.Fatalf("Linux trays report no clicks, but the click toggled the popover %d times", toggles)
+	}
+	if first := tray.Items()[0]; first.Label != "Open Clock" {
+		t.Fatalf("first Linux row = %q, want Open Clock", first.Label)
+	}
+	if err := tray.Invoke("popover-open"); err != nil {
+		t.Fatalf("Invoke popover-open: %v", err)
+	}
+	if toggles, _ := h.popovers.counts(); toggles != 1 {
+		t.Fatalf("the Open row toggled the popover %d times, want 1", toggles)
+	}
+}
+
+func TestOpenPopoverIsRefreshedAfterEveryRender(t *testing.T) {
+	h := newHarness(t)
+	h.showBars(popoverBar())
+	_, before := h.popovers.counts()
+	h.svc.Refresh("acme.menubar")
+	h.settle()
+	if _, after := h.popovers.counts(); after <= before {
+		t.Fatalf("refreshes = %d after a render, want more than %d", after, before)
+	}
+}
+
+// menuLabelsOf joins the labels of rows, dividers as "-", for one comparison.
+func menuLabelsOf(rows []platform.MenuItem) string {
+	labels := make([]string, 0, len(rows))
+	for _, row := range rows {
+		if row.Separator {
+			labels = append(labels, "-")
+			continue
+		}
+		labels = append(labels, row.Label)
+	}
+	return strings.Join(labels, "|")
 }

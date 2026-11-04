@@ -57,6 +57,12 @@ type Tray interface {
 	Dark() bool
 	// OnAppearanceChange runs fn when the bar turns dark or light, on the platform's thread. Set the icon again there.
 	OnAppearanceChange(fn func())
+	// OnPrimaryClick runs fn when the icon is clicked. A click reaches fn only while the item has no attached menu.
+	OnPrimaryClick(fn func())
+	// OnSecondaryClick runs fn when the icon is right-clicked.
+	OnSecondaryClick(fn func())
+	// PopUpMenu shows items at the pointer as a context menu, without attaching them to the icon. No items shows nothing.
+	PopUpMenu(items []MenuItem)
 	// Close removes the item. Calls after Close do nothing.
 	Close()
 }
