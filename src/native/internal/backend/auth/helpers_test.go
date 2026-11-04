@@ -48,6 +48,7 @@ type rigOptions struct {
 	browseErr     error
 	noBrowser     bool
 	clientOptions []backend.Option
+	origin        *backend.Environment
 }
 
 // newRig builds a session over fresh fakes. The store and the logs run on their own clocks, so the session clock
@@ -77,6 +78,7 @@ func newRig(t *testing.T, options rigOptions) *rig {
 		DeviceLabel:   "test device",
 		OnChange:      r.signalChange,
 		ClientOptions: options.clientOptions,
+		Origin:        options.origin,
 	}
 	if !options.noBrowser {
 		deps.Browser = r.browse
