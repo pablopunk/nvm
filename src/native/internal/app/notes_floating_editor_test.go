@@ -38,10 +38,10 @@ func TestFloatingNoteHeadingShortcutStylesTheLineAndSavesMarkdown(t *testing.T) 
 	typeKeys(tt, "# Hello")
 	tt.Frame()
 
-	if got := edit.doc.Text().PlainText(); got != "Hello" {
+	if got := edit.floatRich.doc.Text().PlainText(); got != "Hello" {
 		t.Fatalf("plain text = %q, want the heading text without its marker", got)
 	}
-	if level := edit.doc.Text().ParagraphStyleAt(0).Heading; level != 1 {
+	if level := edit.floatRich.doc.Text().ParagraphStyleAt(0).Heading; level != 1 {
 		t.Fatalf("heading level = %d, want 1", level)
 	}
 	if edit.text != "# Hello" || edit.sess.Text() != "# Hello" {
@@ -61,7 +61,7 @@ func TestFloatingNoteBoldShortcutStylesTheWordAndSavesMarkdown(t *testing.T) {
 	typeKeys(tt, "some **bold** text")
 	tt.Frame()
 
-	if got := edit.doc.Text().PlainText(); got != "some bold text" {
+	if got := edit.floatRich.doc.Text().PlainText(); got != "some bold text" {
 		t.Fatalf("plain text = %q", got)
 	}
 	if edit.sess.Text() != "some **bold** text" {
@@ -83,7 +83,7 @@ func TestFloatingNoteOpensSavedMarkdownAsStyledText(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { floatingPanes(c, p, edit) }, 360, 300)
 	tt.Frame()
 
-	text := edit.doc.Text()
+	text := edit.floatRich.doc.Text()
 	if got := text.PlainText(); got != "hello there\nasdf" {
 		t.Fatalf("plain text = %q, want the words without markers", got)
 	}

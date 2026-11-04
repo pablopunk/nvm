@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/richtext"
 
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -23,9 +22,8 @@ type noteEdit struct {
 	sess    *notes.Session
 	text    string
 	editors int
-	// doc is the rich text the floating window edits; docSource is the Markdown it was last made from or read into.
-	doc       *richtext.Document
-	docSource string
+	// floatRich and paletteRich are the rich text of the floating window and of the palette's editor.
+	floatRich, paletteRich noteRichText
 }
 
 // acquireEdit returns the shared edit of a note, opening its session on first use. It reports false when the note
@@ -99,10 +97,9 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 				return
 			}
 			ui.Column(c).Grow(1).Children(func() {
-				ta := ui.TextArea(c, &edit.text).Grow(1).Margin(12).Padding(10).FontSize(15).Placeholder(editorPlaceholder).AutoFocus()
-				if ta.Changed() {
-					_ = edit.sess.Edit(edit.text)
-				}
+				ui.Column(c).Grow(1).Margin(12).Padding(8, 4).Children(func() {
+					editNoteRich(c, edit, &edit.paletteRich, editorPlaceholder)
+				})
 				autosaveStatus(c, edit.sess.Status())
 			})
 		},

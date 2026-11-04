@@ -2,7 +2,6 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/richtext"
 
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -59,26 +58,7 @@ func floatingNoteHeader(c *ui.Context, p *App, edit *noteEdit) {
 
 // floatingNoteBody is the note's Markdown in the rich text editor, with the same autosave as the editor.
 func floatingNoteBody(c *ui.Context, edit *noteEdit) {
-	doc := noteDocument(edit)
 	ui.Column(c).Grow(1).Padding(8, 4).Children(func() {
-		editor := design.MarkdownEditor(c, doc, editorPlaceholder).AutoFocus()
-		if editor.Changed() {
-			markdown := doc.Text().Markdown()
-			edit.text, edit.docSource = markdown, markdown
-			_ = edit.sess.Edit(markdown)
-		}
+		editNoteRich(c, edit, &edit.floatRich, editorPlaceholder)
 	})
-}
-
-// noteDocument returns the rich text of a note, made from its text when it has none yet and remade when the text
-// changed under it, as a palette editor's typing or a conflict choice does.
-func noteDocument(edit *noteEdit) *richtext.Document {
-	switch {
-	case edit.doc == nil:
-		edit.doc = richtext.NewDocument(richtext.ParseMarkdown(edit.text))
-	case edit.docSource != edit.text:
-		edit.doc.SetText(richtext.ParseMarkdown(edit.text))
-	}
-	edit.docSource = edit.text
-	return edit.doc
 }
