@@ -159,8 +159,8 @@ func (p *App) conflictView(edit *noteEdit) *palette.View {
 				{Title: "Keep saved version", Subtitle: "Saved " + notes.RelativeTime(now, conflict.Saved.UpdatedAt), Icon: "file-text", Tone: "blue", Actions: []search.Action{
 					{Title: "Keep saved version", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepSaved) }},
 				}},
-				{Title: "Keep draft", Subtitle: "Unsaved text, edited " + notes.RelativeTime(now, conflict.Draft.Edited), Icon: "sticky-note", Tone: "yellow", Actions: []search.Action{
-					{Title: "Keep draft", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepDraft) }},
+				{Title: "Restore unsaved changes", Subtitle: "Unsaved text, edited " + notes.RelativeTime(now, conflict.Draft.Edited), Icon: "sticky-note", Tone: "yellow", Actions: []search.Action{
+					{Title: "Restore unsaved changes", Run: func(h search.Host) { p.resolveConflict(h, edit, edit.sess.KeepDraft) }},
 				}},
 				{Title: "Resolve unsaved changes", Subtitle: fmt.Sprintf("Compare: %s added, %s removed", plural(summary.Added, "line"), plural(summary.Removed, "line")), Icon: "scan-text", Tone: "blue", Actions: []search.Action{
 					{Title: "Compare", Run: func(h search.Host) { h.Push(p.conflictDiffView(edit)) }},

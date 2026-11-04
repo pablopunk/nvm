@@ -79,7 +79,7 @@ func TestKeepDraftReturnsToTheEditorWithTheUnsavedText(t *testing.T) {
 	goldenOpen(p, view)
 	p.Push(p.conflictView(edit))
 
-	goldenChoose(t, p, 1, "Keep draft")
+	goldenChoose(t, p, 1, "Restore unsaved changes")
 
 	if top := topView(p); top.Title != "Note" {
 		t.Fatalf("top view = %q, want the editor", top.Title)
