@@ -41,6 +41,14 @@ type Clipboard interface {
 	Changed() <-chan struct{}
 }
 
+// ConcealedClipboard is an optional extension of Clipboard: text that clipboard history must never record. The
+// dictation paste uses it so a transcript stays out of Clipboard History. A clipboard that cannot mark content as
+// concealed does not implement it, and the caller refuses to put the text on the clipboard instead.
+type ConcealedClipboard interface {
+	// WriteConcealedText replaces the clipboard with plain text that carries the concealed marker.
+	WriteConcealedText(text string) error
+}
+
 // RichClipboard is an optional extension of Clipboard for HTML, RTF and file lists. A clipboard that
 // cannot read or write these formats does not implement it; callers type-assert and treat a missing
 // implementation as "format absent", so plain-text behavior never depends on it.

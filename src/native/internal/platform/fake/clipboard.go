@@ -14,8 +14,10 @@ const (
 	OpClipboardWriteText  = "WriteText"
 	OpClipboardReadImage  = "ReadImagePNG"
 	OpClipboardWriteImage = "WriteImagePNG"
-	OpClipboardFormats    = "Formats"
-	OpClipboardClear      = "Clear"
+	// OpClipboardWriteConcealed fails WriteConcealedText.
+	OpClipboardWriteConcealed = "WriteConcealedText"
+	OpClipboardFormats        = "Formats"
+	OpClipboardClear          = "Clear"
 )
 
 // Clipboard is an in-memory platform.Clipboard holding one kind of content at a time, as the OS does:
@@ -24,7 +26,7 @@ const (
 // allows. It also implements platform.RichClipboard for HTML, RTF and file lists.
 //
 //	clip := fake.NewClipboard()
-//	clip.WriteConcealedText("hunter2") // a password manager's copy
+//	_ = clip.WriteConcealedText("hunter2") // a password manager's copy
 //	formats, _ := clip.Formats()       // includes platform.FormatConcealed
 type Clipboard struct {
 	mu        sync.Mutex
@@ -55,10 +57,14 @@ func (c *Clipboard) FailNext(op string, err error) {
 
 // WriteConcealedText puts text on the clipboard marked as concealed, as a password manager does. Clipboard
 // history must not record it.
-func (c *Clipboard) WriteConcealedText(text string) {
+func (c *Clipboard) WriteConcealedText(text string) error {
+	if err := c.faults.take(OpClipboardWriteConcealed); err != nil {
+		return err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.setTextLocked(text, true)
+	return nil
 }
 
 // WriteConcealedImagePNG puts an image on the clipboard marked as concealed.
@@ -234,3 +240,5 @@ func (c *Clipboard) notifyLocked() {
 	default:
 	}
 }
+
+var _ platform.ConcealedClipboard = (*Clipboard)(nil)

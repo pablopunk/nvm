@@ -19,11 +19,13 @@ type operation struct {
 	encoder  platform.OpusEncoder
 	done     chan struct{}
 	prepared chan struct{}
-	frames   int
-	current  [][]byte
-	segments [][][]byte
-	failure  error
-	onLevel  func(float64)
+	// preparedOK is set before prepared closes; it reports whether the backend accepted the preparation.
+	preparedOK bool
+	frames     int
+	current    [][]byte
+	segments   [][][]byte
+	failure    error
+	onLevel    func(float64)
 }
 
 // capture reads the microphone until the stream ends, frames its samples, encodes each frame and cuts the packets

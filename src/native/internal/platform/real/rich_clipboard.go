@@ -42,6 +42,18 @@ func (c *clipboard) WriteRich(text, html string) error {
 	)))
 }
 
+// concealedFormat is the nspasteboard name for content clipboard managers must skip. It carries the "concealed"
+// marker that isConcealedClipboard reads back, so the engine drops the copy on every OS.
+const concealedFormat transfer.Format = "org.nspasteboard.ConcealedType"
+
+// WriteConcealedText replaces the clipboard with plain text marked as concealed.
+func (c *clipboard) WriteConcealedText(text string) error {
+	return mygo.Clipboard.Write(transfer.New(transfer.NewItem(
+		transfer.Bytes(transfer.Text, []byte(text)),
+		transfer.Bytes(concealedFormat, []byte("1")),
+	)))
+}
+
 // WriteFiles replaces the clipboard with the file list of paths.
 func (c *clipboard) WriteFiles(paths []string) error {
 	return mygo.Clipboard.WriteFiles(paths...)

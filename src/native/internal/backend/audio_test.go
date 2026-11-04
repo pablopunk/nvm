@@ -15,7 +15,7 @@ var sampleWebM = append([]byte{0x1A, 0x45, 0xDF, 0xA3}, bytes.Repeat([]byte{7}, 
 func TestTranscribeSendsTheWebMFileWithItsKeyAndReturnsTheText(t *testing.T) {
 	h := newHarness(t)
 	h.http.Script(jsonBody(http.StatusOK, `{"text":" hello there "}`))
-	text, err := h.client.Transcribe(context.Background(), TranscriptionRequest{OperationID: "dictation-abc", Audio: sampleWebM})
+	text, err := h.client.Transcribe(context.Background(), TranscriptionRequest{OperationID: "dictation-abc", CancellationID: "dictation-root", Audio: sampleWebM})
 	if err != nil {
 		t.Fatalf("Transcribe: %v", err)
 	}
@@ -32,11 +32,28 @@ func TestTranscribeSendsTheWebMFileWithItsKeyAndReturnsTheText(t *testing.T) {
 	if got := request.Header.Get("Idempotency-Key"); got != "dictation-abc" {
 		t.Fatalf("Idempotency-Key = %q, want the operation id", got)
 	}
+	if got := request.Header.Get(operationIDHeader); got != "dictation-root" {
+		t.Fatalf("%s = %q, want the dictation's cancellation id", operationIDHeader, got)
+	}
+	if got := request.Header.Get(preparationHeader); got != "" {
+		t.Fatalf("%s = %q on an unprepared request, want none", preparationHeader, got)
+	}
 	if !bytes.Equal(request.Body, sampleWebM) {
 		t.Fatalf("body is not the raw WebM file")
 	}
 	if got := request.Header.Get("Authorization"); got != "Bearer "+canaryToken {
 		t.Fatalf("Authorization = %q, want the bearer token", got)
+	}
+}
+
+func TestTranscribeSendsThePreparationHeaderOnlyWhenPrepared(t *testing.T) {
+	h := newHarness(t)
+	h.http.Script(jsonBody(http.StatusOK, `{"text":"a"}`))
+	if _, err := h.client.Transcribe(context.Background(), TranscriptionRequest{OperationID: "dictation-abc", CancellationID: "dictation-abc", Prepared: true, Audio: sampleWebM}); err != nil {
+		t.Fatalf("Transcribe: %v", err)
+	}
+	if got := h.http.Requests()[0].Header.Get(preparationHeader); got != "dictation-abc" {
+		t.Fatalf("%s = %q, want the prepared operation id", preparationHeader, got)
 	}
 }
 
@@ -116,12 +133,15 @@ func TestPreparationPostsAndCancelDeletesTheOperation(t *testing.T) {
 	if err := h.client.PrepareTranscription(context.Background(), "dictation-abc"); err != nil {
 		t.Fatalf("PrepareTranscription: %v", err)
 	}
-	if err := h.client.CancelTranscriptionPreparation(context.Background(), "dictation-abc"); err != nil {
+	if err := h.client.CancelTranscriptionPreparation(context.Background(), "dictation-abc", true); err != nil {
 		t.Fatalf("CancelTranscriptionPreparation: %v", err)
 	}
 	requests := h.http.Requests()
 	if requests[0].Method != "POST" || requests[1].Method != "DELETE" {
 		t.Fatalf("methods = %s, %s; want POST then DELETE", requests[0].Method, requests[1].Method)
+	}
+	if got := requests[1].Header.Get(cancellationReasonHdr); got != userCancelReason {
+		t.Fatalf("cancellation reason = %q, want %s", got, userCancelReason)
 	}
 	for _, request := range requests {
 		if request.URL != "https://api.nvm.fyi/api/v1/audio/transcription-preparations" || string(request.Body) != `{"operationId":"dictation-abc"}` {

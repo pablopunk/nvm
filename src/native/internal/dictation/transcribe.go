@@ -8,23 +8,36 @@ import (
 	"github.com/pablopunk/nvm/native/internal/dictation/webm"
 )
 
-// Transcriber sends one WebM file to the backend and returns its text. operationID keys the request's idempotency,
-// so a retry of the same file is not billed twice; it must be unique per file.
-type Transcriber interface {
-	Transcribe(ctx context.Context, operationID string, file []byte) (string, error)
-	// Prepare warms the backend's admission for operationID before the recording ends. Its failure does not stop
-	// the dictation: the transcription request still goes through admission itself.
-	Prepare(ctx context.Context, operationID string) error
+// Segment is one WebM file of a dictation as the backend receives it. OperationID keys the request's idempotency;
+// CancellationID names the whole dictation; Prepared says the backend already checked admission for OperationID.
+type Segment struct {
+	OperationID    string
+	CancellationID string
+	Prepared       bool
+	File           []byte
 }
 
-// transcribeSegments sends every segment in order and joins the texts with spaces, as the desktop app does. A
-// failed segment fails the dictation; segments before it are dropped, since the user cannot paste half a sentence
-// without knowing where it stops.
+// Transcriber is the backend port. Prepare warms the backend's admission before the recording ends, Transcribe sends
+// one segment, and CancelPreparation releases an admission nobody will use. userCancelled marks a dictation the user
+// stopped, as opposed to one that failed on its own.
+type Transcriber interface {
+	Prepare(ctx context.Context, operationID string) error
+	Transcribe(ctx context.Context, segment Segment) (string, error)
+	CancelPreparation(ctx context.Context, operationID string, userCancelled bool) error
+}
+
+// transcribeSegments sends every segment in order and joins the texts with spaces, as the desktop app does. The
+// first segment is the one the preparation covers. A failed segment fails the dictation.
 func transcribeSegments(ctx context.Context, transcriber Transcriber, op *operation) (string, error) {
 	var texts []string
 	for index, packets := range op.segments {
 		file := webm.Mux(webm.Track{SampleRate: SampleRate, Channels: Channels, Lookahead: op.encoder.Lookahead()}, packets, FrameMillis)
-		text, err := transcriber.Transcribe(ctx, segmentOperationID(op.id, index), file)
+		text, err := transcriber.Transcribe(ctx, Segment{
+			OperationID:    segmentOperationID(op.id, index),
+			CancellationID: op.id,
+			Prepared:       index == 0 && op.preparedOK,
+			File:           file,
+		})
 		if err != nil {
 			return "", err
 		}
@@ -35,8 +48,8 @@ func transcribeSegments(ctx context.Context, transcriber Transcriber, op *operat
 	return strings.Join(texts, " "), nil
 }
 
-// segmentOperationID keeps the first segment's ID as the operation's, so the backend sees the same key the start
-// request prepared, and gives later segments a suffix.
+// segmentOperationID keeps the first segment's ID as the operation's, so the backend sees the key the preparation
+// used, and gives later segments a suffix.
 func segmentOperationID(operationID string, index int) string {
 	if index == 0 {
 		return operationID
