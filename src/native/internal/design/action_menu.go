@@ -26,10 +26,12 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 				SelectedFill(rowEl, k, false)
 			}
 			rowEl.Children(func() {
+				if r.Subtitle != "" {
+					disabledRowContent(c, k, r)
+					return
+				}
 				ui.Text(c, r.Title).FontSize(13).TextColor(actionTitleColor(k, r)).Grow(1).SingleLine()
 				switch {
-				case r.Subtitle != "":
-					ui.Text(c, r.Subtitle).FontSize(11).TextColor(k.Muted).SingleLine()
 				case r.Key != "":
 					ui.Text(c, r.Key).FontSize(11).FontWeight(500).TextColor(k.Muted).SingleLine()
 				case r.Enter:
@@ -37,6 +39,14 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 				}
 			})
 		}
+	})
+}
+
+// disabledRowContent draws a disabled menu row as 1.x does: the title muted, and the reason beneath it.
+func disabledRowContent(c *ui.Context, k *TokenSet, r MenuRow) {
+	ui.Column(c).Grow(1).Gap(2).Children(func() {
+		ui.Text(c, r.Title).FontSize(13).TextColor(actionTitleColor(k, r)).SingleLine()
+		ui.Text(c, r.Subtitle).FontSize(11).TextColor(k.Muted).SingleLine()
 	})
 }
 

@@ -63,3 +63,19 @@ func actionMenuLabelRects(t *testing.T, selected int) [2]ui.Rect {
 	tt.Frame()
 	return [2]ui.Rect{rectOf(t, tt, "Open"), rectOf(t, tt, "Set keyboard shortcut")}
 }
+
+// TestDisabledActionShowsItsReasonBelowItsTitle checks that a disabled action draws the reason on a second line under the
+// muted title, as 1.x does, and the enabled row beneath it keeps its single line.
+func TestDisabledActionShowsItsReasonBelowItsTitle(t *testing.T) {
+	rows := []MenuRow{
+		{Title: "Rename", Disabled: true, Subtitle: "Rename is not in 2.0 yet"},
+		{Title: "Tweak with AI", Selected: true},
+	}
+	tt := ui.NewTester(func(c *ui.Context) { ActionMenu(c, rows) }, 480, 240)
+	tt.Frame()
+	title := rectOf(t, tt, "Rename")
+	reason := rectOf(t, tt, "Rename is not in 2.0 yet")
+	if reason.Y <= title.Y {
+		t.Fatalf("the reason (y %v) is not below the title (y %v)", reason.Y, title.Y)
+	}
+}
