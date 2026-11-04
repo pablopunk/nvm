@@ -1058,11 +1058,11 @@
           },
           {
             "title": "Continue Calculation",
-            "label": ""
+            "label": "⌃↵"
           },
           {
             "title": "Paste Result",
-            "label": "⌃↵"
+            "label": ""
           }
         ]
       }
@@ -1090,15 +1090,15 @@
           },
           {
             "title": "Continue Calculation",
-            "label": ""
+            "label": "⌃↵"
           },
           {
             "title": "Swap Units",
-            "label": ""
+            "label": "⌃⇧↵"
           },
           {
             "title": "Paste Result",
-            "label": "⌃↵"
+            "label": ""
           }
         ]
       }
