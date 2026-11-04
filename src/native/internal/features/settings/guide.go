@@ -19,13 +19,18 @@ type GuideRow struct {
 	Action   GuideAction
 }
 
-// GuideEntry is the root row that opens the guide: Welcome until the user is done with it, Help afterwards. Score
-// keeps Welcome above the other root rows, and Help below them.
+// welcomeRootScore puts Welcome above every command suggestion, so a first run starts on it.
+const welcomeRootScore = 200
+
+// helpRootScore keeps Help below the suggestions once the guide is done.
+const helpRootScore = 14
+
+// GuideEntry is the root row that opens the guide: Welcome until the user is done with it, Help afterwards.
 func GuideEntry(completed bool) (title, subtitle string, score int) {
 	if completed {
-		return "Help", "Quick tips for finding and running commands", 14
+		return "Help", "Quick tips for finding and running commands", helpRootScore
 	}
-	return "Welcome to Nevermind", "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.", 90
+	return "Welcome to Nevermind", "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.", welcomeRootScore
 }
 
 // GuideRows lists the guide's items. shortcut is the palette shortcut the user set, or empty.

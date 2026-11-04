@@ -5,12 +5,12 @@ import "testing"
 // TestGuideEntryIsWelcomeUntilDismissedThenHelp keeps Welcome at the top of the root until the user is done with it.
 func TestGuideEntryIsWelcomeUntilDismissedThenHelp(t *testing.T) {
 	title, _, score := GuideEntry(false)
-	if title != "Welcome to Nevermind" || score != 90 {
-		t.Fatalf("pending guide = %q at %d, want Welcome at 90", title, score)
+	if title != "Welcome to Nevermind" || score != welcomeRootScore {
+		t.Fatalf("pending guide = %q at %d, want Welcome at %d", title, score, welcomeRootScore)
 	}
 	title, _, score = GuideEntry(true)
-	if title != "Help" || score != 14 {
-		t.Fatalf("done guide = %q at %d, want Help at 14", title, score)
+	if title != "Help" || score != helpRootScore {
+		t.Fatalf("done guide = %q at %d, want Help at %d", title, score, helpRootScore)
 	}
 }
 

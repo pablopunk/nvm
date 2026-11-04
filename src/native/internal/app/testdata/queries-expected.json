@@ -4,6 +4,29 @@
     "rows": [
       {
         "kind": "Commands",
+        "title": "Welcome to Nevermind",
+        "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Get Started",
+            "label": ""
+          },
+          {
+            "title": "Dismiss welcome",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Clipboard History",
         "subtitle": "Browse and paste what you copied",
         "section": "Suggestions",
@@ -150,29 +173,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Welcome to Nevermind",
-        "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
-        "section": "Suggestions",
-        "id": "",
-        "icon": "sparkles",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Get Started",
-            "label": ""
-          },
-          {
-            "title": "Dismiss welcome",
             "label": ""
           }
         ]
