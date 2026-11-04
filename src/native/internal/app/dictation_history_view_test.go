@@ -1,6 +1,10 @@
 package app
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/palette"
+)
 
 func TestHistoryListsTranscriptsNewestFirstAndDeletesOne(t *testing.T) {
 	p := &App{userReadOnly: true}
@@ -28,5 +32,20 @@ func TestClearHistoryEmptiesTheTranscripts(t *testing.T) {
 	p.clearTranscripts()
 	if got := p.dictationTranscripts().Entries(); len(got) != 0 {
 		t.Fatalf("entries after clear = %+v", got)
+	}
+}
+
+func TestTheTranscriptRowOpensItsPreview(t *testing.T) {
+	p := &App{userReadOnly: true}
+	p.rememberDictation("the whole transcript")
+	host := &recordingHost{}
+	p.dictationHistoryView().Search("")[0].Actions[0].Run(host)
+
+	if len(host.pushed) != 1 {
+		t.Fatalf("pushed %d views, want the preview", len(host.pushed))
+	}
+	preview, ok := host.pushed[0].(*palette.View)
+	if !ok || preview.Title != "Dictation" || preview.OnSubmit == nil || preview.Body == nil {
+		t.Fatalf("pushed = %#v, want the transcript preview view", host.pushed[0])
 	}
 }

@@ -5,6 +5,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/egoist/mygo/ui"
+
+	"github.com/pablopunk/nvm/native/internal/design"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	"github.com/pablopunk/nvm/native/internal/dictation/history"
 	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
@@ -67,13 +70,17 @@ func (p *App) unfinishedRow(recording recordings.Recording) search.Item {
 	}
 }
 
-// transcriptRow is one finished dictation: its title is the start of the text, and its first action copies it.
+// transcriptRow is one finished dictation: its title is the start of the text, and its first action opens the whole
+// transcript in a preview.
 func (p *App) transcriptRow(entry history.Entry) search.Item {
 	return search.Item{
 		Title:    history.Title(entry.Text),
 		Subtitle: historyTime(entry.CreatedAt),
 		Icon:     "file-text",
 		Actions: []search.Action{
+			{Title: "View Transcript", Dismiss: search.DismissNever, Run: func(h search.Host) {
+				h.Push(p.transcriptPreview(entry))
+			}},
 			{Title: "Copy Transcript", Dismiss: search.DismissNever, Run: func(h search.Host) {
 				p.copyText(h, entry.Text)
 			}},
@@ -83,6 +90,29 @@ func (p *App) transcriptRow(entry history.Entry) search.Item {
 					p.Refresh()
 				}))
 			}},
+		},
+	}
+}
+
+// transcriptPreview shows the whole transcript with its time, as the Electron app's preview does. Enter copies it.
+func (p *App) transcriptPreview(entry history.Entry) *palette.View {
+	return &palette.View{
+		Title:       "Dictation",
+		Placeholder: "Press Enter to copy the transcript",
+		Hint:        "Copy: Enter",
+		Body: func(c *ui.Context, _ search.Host) {
+			t := design.Tokens(c)
+			ui.Scroll(c).Grow(1).Padding(12).Gap(8).Children(func() {
+				ui.Text(c, historyTime(entry.CreatedAt)).FontSize(11).TextColor(t.Muted)
+				ui.Text(c, entry.Text).FontSize(13).TextColor(t.Primary)
+			})
+		},
+		OnSubmit: func(string) {
+			if err := p.ports.Clipboard.WriteText(entry.Text); err != nil {
+				p.Toast("Copy failed: " + err.Error())
+				return
+			}
+			p.Toast("Transcript copied")
 		},
 	}
 }
