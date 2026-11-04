@@ -51,10 +51,21 @@ type Message struct {
 	ToolCalls []ToolCall `json:"tool_calls,omitempty"`
 }
 
+// RoleHeader carries the model tier the backend routes the request to. The client names a tier, never a model.
+const RoleHeader = "X-Nevermind-AI-Model"
+
+// Model tiers the backend accepts in RoleHeader and in ActiveModelQuery.Role.
+const (
+	RoleFast  = "fast"
+	RoleSmart = "smart"
+)
+
 // ChatRequest is one streamed chat completion.
 type ChatRequest struct {
 	// Model is the model name. Empty means AutoModel.
 	Model string
+	// Role is the model tier, RoleFast or RoleSmart. Empty leaves the backend default, which is smart.
+	Role string
 	// Messages is the conversation, oldest first. At least one is required.
 	Messages []Message
 	// Tools is an optional JSON array of tool definitions, passed through unchanged.
@@ -92,13 +103,25 @@ func (c *Client) ChatStream(ctx context.Context, req ChatRequest) (*Stream, erro
 	if err != nil {
 		return nil, err
 	}
+	header := map[string]string{"Accept": "text/event-stream"}
+	if req.Role != "" {
+		if !isRole(req.Role) {
+			return nil, &Error{Kind: KindRejected, Message: fmt.Sprintf("unknown model role %q", req.Role)}
+		}
+		header[RoleHeader] = req.Role
+	}
 	return c.openStream(ctx, requestSpec{
 		method: "POST",
 		path:   pathChatCompletions,
 		body:   body,
-		header: map[string]string{"Accept": "text/event-stream"},
+		header: header,
 		auth:   authRequired,
 	})
+}
+
+// isRole reports whether role is a model tier the backend routes.
+func isRole(role string) bool {
+	return role == RoleFast || role == RoleSmart
 }
 
 // encodeChat validates req and returns its JSON body. Validation failures are local and never reach the

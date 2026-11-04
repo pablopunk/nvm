@@ -1,301 +1,144 @@
 package app
 
 import (
-	"bufio"
-	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
-	"github.com/pablopunk/nvm/native/internal/search"
-	"io"
 	"log"
-	"net/http"
-	"slices"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
 
-	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
+	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-type ChatMsg struct{ Role, Content string } // user | assistant | notice
-
-type Chat struct {
-	ID       string
-	Title    string
-	Messages []ChatMsg
-	Updated  time.Time
-	Builder  bool
+// attachChats opens the chat service over the app's one store, so chats share its lease and its notices. Chats the
+// retention window has passed are removed, and the account's model routes are read in the background.
+func (p *App) attachChats() {
+	if p.userStore == nil {
+		log.Println("chats: unavailable, the store did not open")
+		return
+	}
+	p.chats = newChatService(p.userStore, p)
+	if removed, err := p.chats.Expire(); err != nil {
+		log.Println("chats: retention failed:", err)
+	} else if len(removed) > 0 {
+		log.Printf("chats: removed %d idle conversations", len(removed))
+	}
+	p.chats.RefreshModels()
 }
 
-type ChatStore struct{ Chats []*Chat }
-
-func newChatStore() *ChatStore {
-	s := &ChatStore{}
-	loadJSON("chats.json", s)
-	return s
-}
-
-func (s *ChatStore) save() { saveJSON("chats.json", s) }
-
-// authInfo is the origin and bearer token a chat request carries.
-type authInfo struct{ BaseURL, Token string }
-
-// chatCredentials reads the signed-in origin and token from the account session. It reads the keychain, so it
-// runs off the UI thread; nil means the account is not connected.
-func (p *App) chatCredentials() *authInfo {
-	if p.account == nil {
-		return nil
-	}
-	origin, token, ok := p.account.Credentials()
-	if !ok {
-		return nil
-	}
-	return &authInfo{BaseURL: origin, Token: token.Reveal()}
-}
-
-type chatRun struct {
-	chat      *Chat
-	streaming bool
-	cancel    context.CancelFunc
-	list      ui.ListState
-	attempts  int
-}
-
-const baseSystem = "You are Nevermind, an assistant inside a desktop command palette. Be concise and direct; use Markdown."
-
-func (p *App) newChatView(first string) *palette.View {
-	ch := &Chat{ID: newID("chat"), Updated: time.Now()}
-	p.chats.Chats = append([]*Chat{ch}, p.chats.Chats...)
-	v := p.chatView(ch)
-	if first != "" {
-		p.panel.Update(func() { p.sendChat(p.runs[ch.ID], first) })
-	}
-	return v
-}
-
-func (p *App) chatView(ch *Chat) *palette.View {
-	run := &chatRun{chat: ch}
-	run.list.FollowEnd = true
-	if p.runs == nil {
-		p.runs = map[string]*chatRun{}
-	}
-	p.runs[ch.ID] = run
-	title := ch.Title
-	if title == "" {
-		title = "AI Chat"
-		if ch.Builder {
-			title = "Create Extension"
-		}
-	}
-	return &palette.View{
-		Title: title, Placeholder: chatPlaceholder(ch), TitleFn: func() string {
-			if ch.Title != "" {
-				return ch.Title
-			}
-			return title
-		},
-		OnLeave:  func() { p.chats.save() },
-		OnSubmit: func(q string) { p.sendChat(run, q) },
-		OnKey: func(c *ui.Context, h search.Host) bool {
-			if run.streaming && c.Shortcut(0, ui.KeyEscape) {
-				run.cancel()
-				return true
-			}
-			return false
-		},
-		Body: func(c *ui.Context, h search.Host) { p.transcript(c, run) },
-	}
-}
-
-func (p *App) transcript(c *ui.Context, run *chatRun) {
-	k := design.Tokens(c)
-	msgs := run.chat.Messages
-	ui.Column(c).Grow(1).Padding(8, 16, 8, 16).Children(func() {
-		if len(msgs) == 0 {
-			ui.Column(c).Grow(1).Center().Gap(4).Children(func() {
-				hint := "Ask anything. Replies stream in as Markdown."
-				if run.chat.Builder {
-					hint = "Describe what you want; the model writes a Go extension, it is checked and installed."
-				}
-				if !p.signedIn() {
-					hint = "Not signed in: log in from Settings > Account"
-				}
-				ui.Text(c, hint).FontSize(13).TextColor(k.Tertiary)
-			})
-		} else {
-			ui.List(c, &run.list, len(msgs), func(i int) {
-				m := msgs[i]
-				ui.Column(c).Padding(6, 4).Children(func() {
-					switch m.Role {
-					case "user":
-						design.UserBubble(c, m.Content)
-					case "notice":
-						ui.Text(c, m.Content).FontSize(12).TextColor(k.Tertiary)
-					default:
-						if m.Content == "" {
-							ui.Spinner(c)
-						} else {
-							replyMarkdown(c, m.Content, run.streaming && i == len(msgs)-1, &p.md)
-						}
-					}
-				})
-			}).Grow(1)
-		}
+// newChatService wires the chat service to the app: the account's client and sign-in, the UI thread, the spend-cap
+// note and the builder's follow-up.
+func newChatService(st *store.Store, p *App) *chat.Service {
+	return chat.New(chat.Options{
+		Store:        chat.OpenStore(st, searchClock),
+		Clock:        searchClock,
+		Client:       p.backendClient,
+		Connected:    p.signedIn,
+		Dispatch:     p.onUI,
+		NoteError:    p.noteAIError,
+		SystemPrompt: systemPromptFor,
+		OnSettled:    p.chatSettled,
 	})
 }
 
-func (p *App) sendChat(run *chatRun, text string) {
-	if run.streaming || strings.TrimSpace(text) == "" {
-		return
+// backendClient is the backend client of the active account, or nil when there is none.
+func (p *App) backendClient() *backend.Client {
+	if p.account == nil {
+		return nil
 	}
-	ch := run.chat
-	if ch.Title == "" {
-		ch.Title = oneLine(text)
-	}
-	ch.Messages = append(ch.Messages, ChatMsg{"user", text}, ChatMsg{"assistant", ""})
-	ch.Updated = time.Now()
-	run.streaming = true
-	system := baseSystem
-	if ch.Builder {
-		system = builderSystem
-	}
-	var api []map[string]string
-	api = append(api, map[string]string{"role": "system", "content": system})
-	for _, m := range ch.Messages[:len(ch.Messages)-1] {
-		if m.Role != "notice" {
-			api = append(api, map[string]string{"role": m.Role, "content": m.Content})
-		}
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	run.cancel = cancel
-	go func() {
-		finish, err := streamCompletion(ctx, p.chatCredentials(), api, func(chunk string) {
-			p.panel.Update(func() { ch.Messages[len(ch.Messages)-1].Content += chunk })
-		})
-		p.panel.Update(func() {
-			run.streaming = false
-			last := &ch.Messages[len(ch.Messages)-1]
-			if err != nil && ctx.Err() == nil {
-				last.Content += "\n\n⚠ " + err.Error()
-			}
-			if last.Content == "" {
-				ch.Messages = ch.Messages[:len(ch.Messages)-1]
-			}
-			p.chats.save()
-			if ch.Builder && err == nil {
-				if finish == "length" && extractGo(last.Content) == "" && run.attempts < 2 {
-					run.attempts++
-					p.notice(run, "Reply was cut off — asking for a shorter version…")
-					p.sendChat(run, "Your reply was cut off. Reply again with the complete extension in one ```go block, as short as possible, no commentary.")
-					return
-				}
-				p.builderDone(run)
-			}
-		})
-	}()
+	return p.account.Client()
 }
 
-func streamCompletion(ctx context.Context, a *authInfo, msgs []map[string]string, onChunk func(string)) (finish string, err error) {
-	if a == nil {
-		return "", fmt.Errorf("not signed in — log in from Settings > Account")
+// noteAIError records a spend-cap refusal on the account, so the account view explains it too.
+func (p *App) noteAIError(err error) {
+	if p.account != nil {
+		p.account.NoteError(err)
 	}
-	body, _ := json.Marshal(map[string]any{"model": "auto", "stream": true, "max_tokens": 4096, "messages": msgs})
-	req, _ := http.NewRequestWithContext(ctx, "POST", strings.TrimRight(a.BaseURL, "/")+"/api/v1/chat/completions", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+a.Token)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Nevermind-Client", "desktop")
-	req.Header.Set("X-Nevermind-Client-Version", "2.0.0-go")
-	req.Header.Set("X-Nevermind-API-Version", "1")
-	req.Header.Set("X-Nevermind-Platform", "linux")
-	resp, err := http.DefaultClient.Do(req)
+}
+
+// systemPromptFor is the instruction a chat of kind starts with: the builder writes extensions, a conversation talks.
+func systemPromptFor(kind chat.Kind) string {
+	if kind == chat.KindBuilder {
+		return builderSystem
+	}
+	return chat.ConversationSystemPrompt
+}
+
+// chatDeps is what the chat pages draw from and act through.
+func (p *App) chatDeps() aichat.Deps {
+	return aichat.Deps{
+		Service:  p.chats,
+		Reply:    p.drawReply,
+		Copy:     p.copyChatReply,
+		SignedIn: p.signedIn,
+		Now:      time.Now,
+	}
+}
+
+// newChatView starts a conversation and returns its page. A first message is sent at once ("Ask AI" from the
+// clipboard passes the copied text).
+func (p *App) newChatView(first string) *palette.View {
+	return p.openChat(chat.KindConversation, chat.TierFast, first)
+}
+
+// openChat starts a chat of kind on tier, sends first when it is not empty, and returns its page.
+func (p *App) openChat(kind chat.Kind, tier chat.Tier, first string) *palette.View {
+	if p.chats == nil {
+		return unavailableChatView()
+	}
+	record, err := p.chats.NewChat(kind, tier)
 	if err != nil {
-		return "", err
+		log.Println("chat: could not start a chat:", err)
+		return unavailableChatView()
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		var e struct{ Error struct{ Message string } }
-		if json.Unmarshal(b, &e) == nil && e.Error.Message != "" {
-			return "", fmt.Errorf("%s", e.Error.Message)
-		}
-		return "", fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-	got := false
-	sc := bufio.NewScanner(resp.Body)
-	sc.Buffer(make([]byte, 1<<20), 8<<20)
-	for sc.Scan() {
-		line := sc.Text()
-		data, ok := strings.CutPrefix(line, "data: ")
-		if !ok || data == "[DONE]" {
-			continue
-		}
-		var ev struct {
-			Choices []struct {
-				Delta        struct{ Content string }
-				FinishReason string `json:"finish_reason"`
+	if first != "" {
+		p.onUI(func() {
+			if err := p.chats.Send(record.ID, first); err != nil {
+				log.Println("chat: could not send:", err)
 			}
-			Error struct{ Message string }
-		}
-		if json.Unmarshal([]byte(data), &ev) != nil {
-			continue
-		}
-		if ev.Error.Message != "" {
-			return finish, fmt.Errorf("%s", ev.Error.Message)
-		}
-		if len(ev.Choices) > 0 {
-			if ev.Choices[0].Delta.Content != "" {
-				got = true
-				onChunk(ev.Choices[0].Delta.Content)
-			}
-			if r := ev.Choices[0].FinishReason; r != "" {
-				finish = r
-			}
-		}
+		})
 	}
-	if err := sc.Err(); err != nil {
-		return finish, err
-	}
-	if !got {
-		log.Printf("empty completion, finish_reason=%q", finish)
-		return finish, fmt.Errorf("the model returned no answer (finish: %s) — try again", finish)
-	}
-	return finish, nil
+	return aichat.ChatView(p.chatDeps(), record.ID)
 }
 
+// chatHistoryView lists the saved conversations.
 func (p *App) chatHistoryView() *palette.View {
+	if p.chats == nil {
+		return unavailableChatView()
+	}
+	return aichat.HistoryView(p.chatDeps())
+}
+
+// unavailableChatView is the page shown when the chat store did not open: it says so, and nothing else.
+func unavailableChatView() *palette.View {
 	return &palette.View{
-		Title: "AI Chats", Placeholder: "Search AI Chats",
-		Search: func(q string) []search.Item {
-			lq := strings.ToLower(q)
-			out := []search.Item{{Title: "New Chat", Icon: "plus", Actions: []search.Action{{Title: "Start", Run: func(h search.Host) { h.Push(p.newChatView("")) }}}}}
-			for _, ch := range p.chats.Chats {
-				if ch.Builder || (lq != "" && !strings.Contains(strings.ToLower(ch.Title), lq)) {
-					continue
-				}
-				ch := ch
-				out = append(out, search.Item{
-					ID: ch.ID, Title: ch.Title, Subtitle: "AI conversation · " + ago(ch.Updated), Icon: "message-circle", Tone: "yellow", TintTitle: true,
-					Actions: []search.Action{
-						{Title: "Open", Run: func(h search.Host) { h.Push(p.chatView(ch)) }},
-						{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
-							p.chats.Chats = slices.DeleteFunc(p.chats.Chats, func(x *Chat) bool { return x.ID == ch.ID })
-							p.chats.save()
-							h.Refresh()
-						}},
-					},
-				})
-			}
-			return out
+		Title:       "AI Chat",
+		Placeholder: "AI chats are unavailable",
+		Search: func(string) []search.Item {
+			return []search.Item{{Title: "AI chats are unavailable", Subtitle: "The chat store did not open. Restart Nevermind."}}
 		},
 	}
 }
 
-func chatPlaceholder(ch *Chat) string {
-	if ch.Builder {
-		return "Describe the extension you want"
+// chatSettled runs after a chat's turn ends on the UI thread. Only the extension builder reacts to it.
+func (p *App) chatSettled(id string, outcome chat.Outcome) {
+	if record, ok := p.chats.Chat(id); ok && record.Kind == chat.KindBuilder {
+		p.builderDone(id, outcome)
 	}
-	return "Message AI"
+}
+
+// drawReply draws a chat reply as Markdown with the app's reply options.
+func (p *App) drawReply(c *ui.Context, src string, streaming bool) {
+	replyMarkdown(c, src, streaming, &p.md)
+}
+
+// copyChatReply writes a reply to the clipboard. A failure is logged; the palette has already said the copy happened.
+func (p *App) copyChatReply(text string) {
+	if err := p.ports.Clipboard.WriteText(text); err != nil {
+		log.Println("chat: copy failed:", err)
+	}
 }

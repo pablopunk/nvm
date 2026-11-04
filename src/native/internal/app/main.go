@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
@@ -44,7 +45,6 @@ type App struct {
 
 	md   markdown.Options
 	exts extensionHost
-	runs map[string]*chatRun
 	// menubar is the app's own menu bar item; nil when the platform has no tray host.
 	menubar  *menubar.Item
 	recorder *diag.Recorder
@@ -64,7 +64,8 @@ type App struct {
 	snips         *snippets.Store
 	notes         *notes.Store
 	files         *fileService
-	chats         *ChatStore
+	chats         *chat.Service
+	builderTries  map[string]int
 	timer         *Timer
 	learn         *usage.Learner
 	history       *palette.QueryHistory
@@ -153,7 +154,7 @@ func (p *App) ready() {
 		p.clip.setEnabled(false)
 		p.clip.flush()
 	})
-	p.chats = newChatStore()
+	p.attachChats()
 	notices := p.openLearning()
 	p.startAppServices()
 	p.newPalette(searchClock, false)

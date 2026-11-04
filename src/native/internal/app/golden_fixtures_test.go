@@ -3,6 +3,8 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/backend"
 	"image"
 	"image/color"
 	"image/png"
@@ -53,7 +55,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 		clip:   goldenClipboard(t),
 		snips:  userSnippets,
 		notes:  userNotes,
-		chats:  &ChatStore{Chats: goldenChats()},
+		chats:  goldenChatService(t, set),
 		files:  newTestFiles(t, "/home/golden", nil),
 		appsvc: newFixtureAppServices(goldenApps()),
 		ports:  set.Ports(),
@@ -181,11 +183,25 @@ func goldenSnippetRecords() []map[string]any {
 	}
 }
 
-func goldenChats() []*Chat {
-	return []*Chat{
-		{ID: "c-release", Title: "Release notes", Updated: goldenNow.Add(-5 * time.Hour)},
-		{ID: "c-tokyo", Title: "Time zones", Updated: goldenNow.Add(-26 * time.Hour)},
+// goldenChatService is the chat service over the two fixture chats the root's rows show.
+func goldenChatService(t *testing.T, set *fake.Set) *chat.Service {
+	t.Helper()
+	set.FS.Seed(goldenConfig+"/chats.json", goldenEnvelope(t, map[string]any{"chats": []map[string]any{
+		{"id": "c-release", "kind": "conversation", "title": "Release notes", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-5 * time.Hour), "updatedAt": goldenNow.Add(-5 * time.Hour)},
+		{"id": "c-tokyo", "kind": "conversation", "title": "Time zones", "tier": "fast", "messages": []any{}, "createdAt": goldenNow.Add(-26 * time.Hour), "updatedAt": goldenNow.Add(-26 * time.Hour)},
+	}}))
+	st, err := store.Open(set.FS, set.Clock, goldenConfig)
+	if err != nil {
+		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = st.Close() })
+	return chat.New(chat.Options{
+		Store:     chat.OpenStore(st, set.Clock),
+		Clock:     set.Clock,
+		Client:    func() *backend.Client { return nil },
+		Connected: func() bool { return false },
+		Dispatch:  func(fn func()) { fn() },
+	})
 }
 
 // goldenQuery sets the query and runs the search, as typing does.
@@ -197,21 +213,4 @@ func goldenQuery(p *App, q string) {
 func goldenOpen(p *App, view *palette.View) {
 	p.SetStack(p.rootView(), view)
 	goldenQuery(p, "")
-}
-
-// goldenChatView opens a chat with a fixed transcript. When streaming, the last reply is still arriving.
-func goldenChatView(p *App, streaming bool) *palette.View {
-	ch := &Chat{
-		ID: "c-stream", Title: "Release notes", Updated: goldenNow,
-		Messages: []ChatMsg{
-			{Role: "user", Content: "Summarize what changed in the palette this week."},
-			{Role: "assistant", Content: "## This week\n\n- Clipboard history shows **previews** for images\n- Search ranks *apps* above files\n- `Command+K` keeps focus in the palette"},
-		},
-	}
-	if streaming {
-		ch.Messages = append(ch.Messages, ChatMsg{Role: "user", Content: "And what is next?"}, ChatMsg{Role: "assistant", Content: "Next up: **snippets** with keywords and a faster emoji grid"})
-	}
-	view := p.chatView(ch)
-	p.runs[ch.ID].streaming = streaming
-	return view
 }

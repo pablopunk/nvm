@@ -3,16 +3,24 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // ---- extension builder: the model writes a manifest and a Go source file, the host installs and checks them ----
+//
+// The builder is a chat of kind builder on the smart tier. Its replies are read from the chat service; install and
+// the load check stay on the extension manager. Results and retries are notes and sends on the same chat.
+
+// builderFixAttempts bounds how many times a rejected extension goes back to the model.
+const builderFixAttempts = 2
 
 var (
 	goBlockRe   = regexp.MustCompile("(?s)```(?:go|golang)?\\s*\\n(.*?)```")
@@ -41,44 +49,40 @@ func (p *App) builderView() *palette.View { return p.builderViewWith("") }
 
 // builderViewWith opens the extension builder and, given a prompt, sends it at once ("Automate ...").
 func (p *App) builderViewWith(prompt string) *palette.View {
-	ch := &Chat{ID: newID("builder"), Updated: time.Now(), Builder: true}
-	p.chats.Chats = append([]*Chat{ch}, p.chats.Chats...)
-	v := p.chatView(ch)
-	if prompt != "" {
-		ch.Title = `Automate "` + prompt + `"`
-		p.panel.Update(func() { p.sendChat(p.runs[ch.ID], prompt) })
+	return p.openChat(chat.KindBuilder, chat.TierSmart, prompt)
+}
+
+// builderDone installs the extension the finished reply describes. A reply the host cannot install, or an extension
+// that does not load, goes back to the model with the reason, up to builderFixAttempts retries.
+func (p *App) builderDone(id string, outcome chat.Outcome) {
+	if outcome.Ending != chat.EndFinished {
+		return
 	}
-	return v
-}
-
-func (p *App) notice(run *chatRun, text string) {
-	run.chat.Messages = append(run.chat.Messages, ChatMsg{"notice", text})
-}
-
-// builderDone installs the extension the model wrote. A reply the host cannot install, or an extension that
-// does not load, goes back to the model with the reason, up to two retries.
-func (p *App) builderDone(run *chatRun) {
-	last := run.chat.Messages[len(run.chat.Messages)-1].Content
-	code := extractGo(last)
-	manifest := extractManifest(last)
+	record, ok := p.chats.Chat(id)
+	if !ok {
+		return
+	}
+	text, _ := chat.LastReply(record)
+	code := extractGo(text)
+	manifest := extractManifest(text)
 	if code == "" || manifest == "" {
 		return
 	}
 	m := p.extensionManager()
 	if m == nil {
-		p.notice(run, "✗ Extensions are still loading; try again in a moment")
+		p.noteBuilder(id, chat.NoticeFailed, "✗ Extensions are still loading; try again in a moment")
 		return
 	}
-	id, title, err := manifestIdentity(manifest)
+	extID, title, err := manifestIdentity(manifest)
 	if err == nil {
-		err = m.Install(id, map[string][]byte{bundle.ManifestFile: []byte(manifest), bundle.SourceFile: []byte(code)}, true)
+		err = m.Install(extID, map[string][]byte{bundle.ManifestFile: []byte(manifest), bundle.SourceFile: []byte(code)}, true)
 	}
 	if err != nil {
-		p.retryBuilder(run, err.Error())
+		p.retryBuilder(id, err.Error())
 		return
 	}
-	p.notice(run, "Installed “"+title+"” — checking that it runs…")
-	go p.checkBuiltExtension(run, id, title)
+	p.noteBuilder(id, chat.NoticeNote, "Installed “"+title+"” — checking that it runs…")
+	go p.checkBuiltExtension(id, extID, title)
 }
 
 // manifestIdentity reads the id and title of the manifest the model wrote.
@@ -95,36 +99,57 @@ func manifestIdentity(manifest string) (id, title string, err error) {
 
 // checkBuiltExtension waits, off the UI thread, for the new extension's child to load or fail, then reports on
 // the UI thread.
-func (p *App) checkBuiltExtension(run *chatRun, id, title string) {
+func (p *App) checkBuiltExtension(chatID, extID, title string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	m := p.extensionManager()
 	var status supervisor.Status
-	err := m.WaitFor(ctx, id, func(s supervisor.Status) bool {
+	err := m.WaitFor(ctx, extID, func(s supervisor.Status) bool {
 		status = s
 		return s.State == supervisor.StateRunning || s.State == supervisor.StateBroken || s.State == supervisor.StateFailed
 	})
-	p.panel.Update(func() {
+	p.onUI(func() {
 		switch {
 		case err != nil:
-			p.retryBuilder(run, "the extension did not start in time")
+			p.retryBuilder(chatID, "the extension did not start in time")
 		case status.State == supervisor.StateRunning:
-			p.notice(run, "✓ “"+title+"” is running")
+			p.noteBuilder(chatID, chat.NoticeNote, "✓ “"+title+"” is running")
 		default:
-			p.retryBuilder(run, status.Reason)
+			p.retryBuilder(chatID, status.Reason)
 		}
 	})
 }
 
-// retryBuilder sends a failure back to the model, or reports it when the retries are used up.
-func (p *App) retryBuilder(run *chatRun, reason string) {
-	if run.attempts < 2 {
-		run.attempts++
-		p.notice(run, "Extension failed ("+oneLine(reason)+") — asking the model to fix it…")
-		p.sendChat(run, "The extension was rejected with this error:\n\n"+reason+"\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block.")
+// retryBuilder sends a failure back to the model, or notes it when the retries are used up. It runs on the UI thread.
+func (p *App) retryBuilder(id, reason string) {
+	if p.builderTries == nil {
+		p.builderTries = map[string]int{}
+	}
+	if p.builderTries[id] < builderFixAttempts {
+		p.builderTries[id]++
+		p.noteBuilder(id, chat.NoticeNote, "Extension failed ("+oneLine(reason)+") — asking the model to fix it…")
+		fix := "The extension was rejected with this error:\n\n" + reason + "\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block."
+		if err := p.chats.Send(id, fix); err != nil {
+			log.Println("builder: could not send the fix:", err)
+		}
 		return
 	}
-	p.notice(run, "✗ Could not produce a working extension: "+oneLine(reason))
+	p.noteBuilder(id, chat.NoticeFailed, "✗ Could not produce a working extension: "+oneLine(reason))
+}
+
+// noteBuilder writes a builder result into the transcript as a notice.
+func (p *App) noteBuilder(id string, kind chat.NoticeKind, text string) {
+	if err := p.chats.Note(id, chat.Notice{Kind: kind, Title: builderNoticeTitle(kind), Message: text}); err != nil {
+		log.Println("builder: could not note the result:", err)
+	}
+}
+
+// builderNoticeTitle is the heading of a builder result: a failure reads as a failure, anything else as a note.
+func builderNoticeTitle(kind chat.NoticeKind) string {
+	if kind == chat.NoticeFailed {
+		return "Extension not installed"
+	}
+	return "Extension"
 }
 
 // builderTemplate describes the extension API to the model. ~~~ stands for a Markdown code fence.
