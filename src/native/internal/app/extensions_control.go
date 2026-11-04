@@ -14,10 +14,41 @@ type extensionController interface {
 }
 
 // currentExtensionController returns the running manager as the views' controller, or nil while extensions are
-// still loading. The nil interface is returned explicitly so a nil manager never reads as a live controller.
+// still loading. The nil interface is returned explicitly so a nil manager never reads as a live controller. Every
+// change the views make tells the background scheduler to bring the extension triggers up to date.
 func (p *App) currentExtensionController() extensionController {
 	if m := p.extensionManager(); m != nil {
-		return m
+		return notifyingController{extensionController: m, changed: p.extensionsChanged}
 	}
 	return nil
+}
+
+// notifyingController runs each change on the manager and then calls changed.
+type notifyingController struct {
+	extensionController
+	changed func()
+}
+
+func (c notifyingController) Refresh() error {
+	err := c.extensionController.Refresh()
+	c.changed()
+	return err
+}
+
+func (c notifyingController) Enable(id string) error {
+	err := c.extensionController.Enable(id)
+	c.changed()
+	return err
+}
+
+func (c notifyingController) Disable(id string) error {
+	err := c.extensionController.Disable(id)
+	c.changed()
+	return err
+}
+
+func (c notifyingController) Uninstall(id string) error {
+	err := c.extensionController.Uninstall(id)
+	c.changed()
+	return err
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	"github.com/pablopunk/nvm/native/internal/jobs"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -62,6 +63,8 @@ type App struct {
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
+	// background runs the host jobs and the extension triggers; nil until ready has started it.
+	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
 	paletteHidden chan struct{}
 	shortcutMgr   *shortcuts.Manager
@@ -177,6 +180,7 @@ func (p *App) ready() {
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()
+	p.startJobs()
 	go p.startExtensions()
 	p.setUpMenubar()
 	p.startFiles()

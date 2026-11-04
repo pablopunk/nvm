@@ -997,3 +997,20 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
 Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` and `Views` (WP3.3, WP3.8, WP3.9). The settings view has no goldens yet.
+
+## 19. Triggers and background jobs as built (WP3.6)
+
+Code: `internal/jobs` (scheduler, persisted state, wake detection), `internal/jobs/extjobs` (extension triggers and folder watches), `internal/jobs/hostjobs` (host jobs), `internal/palette/background` (the Background Tasks page). The API types in section 9 are unchanged; the host runs them.
+
+- **One scheduler.** Host jobs and extension commands are jobs on the same scheduler, so the Background Tasks page lists both. A job's ID is `extension.<extension id>.<command id>` for extensions.
+- **Triggers.** `startup`, `interval` (first run after `delayMs`, else one period), `files.changed` (folder watches, filtered by hidden, extension, kind and ignore on the file name), `clipboard.changed`, `wake` and `login`. `app.frontmost.changed` is not run yet: the trigger is left out and the rest of the command still runs.
+- **Which commands become jobs.** A command with a trigger the host runs, or a `background` or `noView` mode, becomes a job. A `view` command without triggers stays a palette command.
+- **Runs.** One run at a time per job. A period that falls due during a run is dropped; an event that arrives during a run runs once after it, with the merged payload. A run has a timeout (one minute by default); its context is cancelled when the timeout passes, and the job stays busy until its function returns.
+- **Failures.** A failed run starts an exponential backoff (30 s, doubling to 15 min). Three failures within a minute halt the job until the user enables it again. The halt reason is shown in the palette and survives a restart.
+- **Budgets.** A job can limit its runs per window. A run over the limit is recorded as skipped, not as a failure.
+- **Missed runs.** At startup, an interval job whose period passed while the app was closed runs once (`catch-up-once`) or waits for its next period (`skip`).
+- **Sleep.** A heartbeat that arrives much later than the previous one means the machine slept; the scheduler then emits `wake`. Overdue interval ticks fire once after the wake.
+- **State.** Enabled choices, halt reasons and the last 20 runs of each job are saved in `jobs.json` in the user store. Without a writable store the state lasts for the session.
+- **Host jobs migrated.** The clipboard image cleanup (`clipboard.images.gc`) runs hourly, 30 seconds after launch, as the 1.x job did. Its sweep is the feature's own; the job only schedules it.
+- **Extension sync.** The `extensions.triggers` host job re-reads the running extensions' commands at startup, after an extension is enabled, disabled, removed or reloaded, and every 15 seconds. An extension that does not answer keeps its jobs; one that stops loses them and its folder watches.
+- **Not done.** `app.frontmost.changed` (needs a frontmost poll that runs only while subscribed, as 1.x did); live refresh of the Background Tasks page while it is open; a rig journey for triggers (J18).
