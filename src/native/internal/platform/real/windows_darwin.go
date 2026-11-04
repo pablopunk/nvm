@@ -32,6 +32,9 @@ func newWindowManager(helper platform.Helper) platform.WindowManager {
 }
 
 func macosHelperPath() string {
+	if bundled := existingBundledResource(macosHelperName); bundled != "" {
+		return bundled
+	}
 	executable, err := os.Executable()
 	if err != nil {
 		return macosHelperName

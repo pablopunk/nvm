@@ -46,7 +46,7 @@ var (
 
 func loadLibopus() (*libopus, error) {
 	libopusOnce.Do(func() {
-		handle, err := openFirstLibrary(libopusNames)
+		handle, err := openFirstLibrary(append(bundledLibopusPaths(), libopusNames...))
 		if err != nil {
 			libopusErr = fmt.Errorf("%w: libopus is not installed (%v)", platform.ErrUnsupported, err)
 			return
@@ -59,6 +59,18 @@ func loadLibopus() (*libopus, error) {
 		libopusLib = lib
 	})
 	return libopusLib, libopusErr
+}
+
+// bundledLibopusPaths are the copies a packaged build ships in its resources (lib/ beside the other natives), so the
+// app does not depend on a system libopus. Only the file that exists is tried.
+func bundledLibopusPaths() []string {
+	var paths []string
+	for _, name := range []string{"libopus.dylib", "libopus.so.0"} {
+		if path := existingBundledResource("lib", name); path != "" {
+			paths = append(paths, path)
+		}
+	}
+	return paths
 }
 
 func openFirstLibrary(names []string) (uintptr, error) {
