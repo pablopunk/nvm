@@ -65,7 +65,10 @@ type Palette struct {
 	actList     ui.ListState
 
 	toastMsg string
-	phIndex  int
+	// toastsStale is set when the palette hid or showed: the window's toasts of the last presentation are closed
+	// on the next frame, because the window freezes their timers while it is hidden.
+	toastsStale bool
+	phIndex     int
 	// settled is false while the providers of the shown query are still answering: the list then shows the
 	// rows it has, and no empty state.
 	settled    bool
@@ -110,6 +113,7 @@ func (p *Palette) Show() {
 	p.actionsOpen = false
 	p.shownView = nil
 	p.resetRootHistory()
+	p.dropToasts()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
@@ -135,14 +139,26 @@ func (p *Palette) Open(v *View) {
 
 // Hide closes the palette window and runs OnHide.
 func (p *Palette) Hide() {
+	p.dropToasts()
 	p.win.Hide()
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
 	}
 }
 
-// Toast sets the one-line message shown under the search field on the next frame.
-func (p *Palette) Toast(msg string) { p.toastMsg = msg }
+// Toast sets the one-line message shown under the search field on the next frame. A message raised while the
+// palette is hidden is dropped: toasts belong to the presentation that is open.
+func (p *Palette) Toast(msg string) {
+	if p.win == nil || p.win.IsVisible() {
+		p.toastMsg = msg
+	}
+}
+
+// dropToasts forgets the message and the window toasts of the presentation that is ending.
+func (p *Palette) dropToasts() {
+	p.toastMsg = ""
+	p.toastsStale = true
+}
 
 // Refresh runs the current search again and keeps the cursor where it is. It is safe from any goroutine.
 func (p *Palette) Refresh() {
