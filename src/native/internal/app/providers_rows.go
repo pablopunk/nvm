@@ -46,7 +46,8 @@ const (
 const checkForUpdatesTitle = "Check for Updates"
 
 // rootCommandScores are the 1.x scores of the commands the empty root lists.
-var rootCommandScores = map[string]int{"Clipboard History": 14, "Force Quit Apps": 14, "Keyboard Shortcuts": 16, "AI Chats": 16, checkForUpdatesTitle: 23}
+var rootCommandScores = map[string]int{"Clipboard History": 14, "Force Quit Apps": 14, "Keyboard Shortcuts": 16, "AI Chats": 16,
+	checkForUpdatesTitle: 23, "Log in to Nevermind": 18, "Log out of Nevermind": 18}
 
 // rootCommandScore is the score of a command at the empty root.
 func rootCommandScore(title string) int {

@@ -512,6 +512,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Documents",
         "subtitle": "$HOME/Documents",
         "section": "",
@@ -746,25 +765,6 @@
         "id": "",
         "icon": "sticky-note",
         "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictate",
-        "subtitle": "Start or stop cloud voice dictation",
-        "section": "",
-        "id": "",
-        "icon": "mic",
-        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,

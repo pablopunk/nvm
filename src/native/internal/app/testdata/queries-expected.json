@@ -512,6 +512,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Documents",
         "subtitle": "$HOME/Documents",
         "section": "",
@@ -746,25 +765,6 @@
         "id": "",
         "icon": "mic",
         "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Snippets",
-        "subtitle": "Saved text you paste often",
-        "section": "",
-        "id": "",
-        "icon": "type",
-        "tone": "teal",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
