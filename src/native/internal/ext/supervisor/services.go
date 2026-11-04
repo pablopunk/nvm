@@ -26,8 +26,8 @@ func serviceCallFrom(line lineResult, open bool) (protocol.ServiceCall, bool) {
 
 // answerService runs one service call and writes its reply to the child. The services get the request's hard
 // budget as their deadline, so a slow service ends with the call instead of outliving it.
-func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget) error {
-	ctx, cancel := context.WithTimeout(context.Background(), budget.Hard)
+func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget, method string) error {
+	ctx, cancel := context.WithTimeout(protocol.WithRequestMethod(context.Background(), method), budget.Hard)
 	defer cancel()
 	reply := r.serveCall(ctx, call)
 	reply.ReplyTo = call.CallID

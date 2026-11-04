@@ -1,0 +1,59 @@
+package services
+
+import (
+	"encoding/json"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/features/ocr"
+	"github.com/pablopunk/nvm/native/internal/platform"
+)
+
+// serveSystem answers read-only host metadata. It needs no declaration: it reveals nothing an extension could misuse.
+func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
+	switch call.Op {
+	case protocol.OpOS:
+		return h.deps.OS, nil
+	case protocol.OpHasCapability:
+		return h.hasCapability(call.Args)
+	case protocol.OpLabels:
+		return systemLabelsOf(platform.ShellLabelsFor(h.deps.OS)), nil
+	}
+	return nil, invalid("system has no operation %q", call.Op)
+}
+
+func (h *Handler) hasCapability(raw json.RawMessage) (bool, error) {
+	var args protocol.CapabilityArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return false, err
+	}
+	return h.publicCapability(args.Name), nil
+}
+
+// publicCapability maps the names extensions check to host capabilities. An unknown name is false, so an extension
+// that asks about a feature this host lacks omits it.
+func (h *Handler) publicCapability(name string) bool {
+	switch name {
+	case "ocr":
+		return ocr.Availability(h.deps.Capabilities).Image
+	case "ocr.screen":
+		return ocr.Availability(h.deps.Capabilities).Screen
+	case "window-management":
+		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
+	case "shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed":
+		return h.deps.Capabilities.Supported(platform.Capability(name))
+	case "clipboard.concealed":
+		_, ok := h.deps.Clipboard.(platform.ConcealedClipboard)
+		return ok
+	}
+	return false
+}
+
+func systemLabelsOf(labels platform.ShellLabels) api.SystemLabels {
+	return api.SystemLabels{
+		RevealInFileManager: labels.RevealInFileManager,
+		PreviewFile:         labels.PreviewFile,
+		OpenSystemSettings:  labels.OpenSystemSettings,
+		KeyboardSettings:    labels.KeyboardSettings,
+	}
+}

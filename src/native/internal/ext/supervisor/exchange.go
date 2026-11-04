@@ -103,7 +103,7 @@ func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budge
 		select {
 		case line, open := <-child.lines:
 			if call, ok := serviceCallFrom(line, open); ok {
-				if err := r.answerService(child, call, budget); err != nil {
+				if err := r.answerService(child, call, budget, req.Method); err != nil {
 					return protocol.Response{}, err
 				}
 				continue
