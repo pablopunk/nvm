@@ -65,6 +65,7 @@ type Palette struct {
 	actList     ui.ListState
 
 	toastMsg string
+	notice   *Notice
 	phIndex  int
 	// settled is false while the providers of the shown query are still answering: the list then shows the
 	// rows it has, and no empty state.

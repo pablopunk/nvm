@@ -184,11 +184,8 @@ func (p *App) hotkeyView() *palette.View {
 				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
 			}
 			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
-				old := p.S.Hotkey
-				mygo.GlobalShortcut.Unregister(old)
-				if err := mygo.GlobalShortcut.Register(q, p.Toggle); err != nil {
-					_ = mygo.GlobalShortcut.Register(old, p.Toggle)
-					h.Toast("Invalid or taken: " + err.Error())
+				if err := p.summon.Change(q); err != nil {
+					h.Toast(changeHotkeyMessage(q, p.S.Hotkey))
 					return
 				}
 				p.S.Hotkey = q
