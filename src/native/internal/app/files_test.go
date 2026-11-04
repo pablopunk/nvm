@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -192,22 +193,22 @@ func TestPreviewsOfEachKind(t *testing.T) {
 	}
 }
 
-// TestFileActionsDriveTheDesktop checks Open, Show in Folder, Copy Path and Trash against the fake shell and clipboard.
-// Trash must ask first, and cancelling must not touch the file.
+// TestFileActionsDriveTheDesktop checks Open, Show in File Manager, Copy Path and Trash against the fake shell and
+// clipboard. Trash must ask first, and cancelling must not touch the file.
 func TestFileActionsDriveTheDesktop(t *testing.T) {
 	svc := newTestFiles(t, testFileHome, fixturePaths())
 	fakeShell := svc.shell.(*fake.Shell)
 	clip := svc.clipboard.(*fake.Clipboard)
 	target := fixturePaths()[0]
 	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf")})
-	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents") {
+	if row.Title != "report-2024.pdf" || row.Subtitle != filepath.Join("~", "Documents", "report-2024.pdf") || row.Actions[0].Title != "Open report-2024.pdf" {
 		t.Fatalf("row = %q / %q", row.Title, row.Subtitle)
 	}
 
 	open := &recordingHost{}
 	row.Actions[0].Run(open)
 	reveal := &recordingHost{}
-	row.Actions[1].Run(reveal)
+	row.Actions[2].Run(reveal)
 	copyPath := &recordingHost{}
 	row.Actions[3].Run(copyPath)
 	calls := fakeShell.Calls()
@@ -237,5 +238,37 @@ func TestIndexStatusLabelsTheFilesFooter(t *testing.T) {
 	}
 	if got := svc.emptyTitle(); got != "No files found." {
 		t.Fatalf("empty title = %q", got)
+	}
+}
+
+// The file actions follow 1.x: Open first, then the preview and Quick Look where the system has one, then the reveal
+// under the OS's own label. Quick Look runs the shell's quick preview and leaves the palette open.
+func TestFileActionsFollowThe1xOrderAndMacLabels(t *testing.T) {
+	svc := newTestFiles(t, testFileHome, fixturePaths())
+	svc.labels = platform.ShellLabelsFor("darwin")
+	svc.quickLook = true
+	target := fixturePaths()[0]
+	row := svc.fileItem(files.Result{Path: target, Name: "report-2024.pdf", DisplayPath: filepath.Join("~", "Documents", "report-2024.pdf"), Kind: files.KindFile})
+	want := []string{"Open report-2024.pdf", "Preview Contents", "Quick Look", "Show in Finder", "Copy Path", "Copy File", "Move to Trash"}
+	if got := actionTitles(row.Actions); !slices.Equal(got, want) {
+		t.Fatalf("actions = %v, want %v", got, want)
+	}
+	quickLook := &recordingHost{}
+	row.Actions[2].Run(quickLook)
+	if quickLook.hidden {
+		t.Fatal("Quick Look must leave the palette open")
+	}
+	if calls := svc.shell.(*fake.Shell).Calls(); len(calls) != 1 || calls[0] != (fake.ShellCall{Op: fake.OpShellQuickLook, Arg: target}) {
+		t.Fatalf("shell calls = %+v", calls)
+	}
+}
+
+// Pictures and videos get the in-palette "Preview", and no Quick Look is offered where the system has none.
+func TestFileActionsOmitQuickLookWithoutTheCapabilityAndNameMediaPreview(t *testing.T) {
+	svc := newTestFiles(t, testFileHome, fixturePaths())
+	image := svc.fileItem(files.Result{Path: fixturePaths()[0], Name: "cat.png", DisplayPath: "~/cat.png", Kind: files.KindImage})
+	want := []string{"Open cat.png", "Preview", "Show in File Manager", "Copy Path", "Copy File", "Move to Trash"}
+	if got := actionTitles(image.Actions); !slices.Equal(got, want) {
+		t.Fatalf("actions = %v, want %v", got, want)
 	}
 }

@@ -41,6 +41,8 @@ type fileDeps struct {
 	Redraw     func()
 	Background context.Context
 	Logger     *logx.Logger
+	// Labels are the names of the OS actions the rows offer, such as Show in Finder.
+	Labels platform.ShellLabels
 }
 
 // fileService is the Files feature of the app: the index of file names, the pictures the rows and the preview pane
@@ -54,6 +56,8 @@ type fileService struct {
 	clipboard  platform.Clipboard
 	copyFiles  func(paths ...string) error
 	home       string
+	labels     platform.ShellLabels
+	quickLook  bool
 	thumbDir   string
 	thumbOnce  sync.Once
 	thumbCache *thumbs.Cache
@@ -101,6 +105,8 @@ func newFileService(d fileDeps) (*fileService, error) {
 		clipboard: d.Clipboard,
 		copyFiles: d.CopyFiles,
 		home:      d.Home,
+		labels:    d.Labels,
+		quickLook: d.Ports.Capabilities.Supported(platform.CapabilityShellQuickLook),
 		thumbDir:  d.ThumbDir,
 		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
 		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),

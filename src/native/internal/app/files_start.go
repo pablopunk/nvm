@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // startFiles builds the Files feature from the settings and starts it. The index loads its saved copy and scans the
@@ -24,6 +26,7 @@ func (p *App) startFiles() {
 		Clipboard: ports.Clipboard,
 		CopyFiles: func(paths ...string) error { return mygo.Clipboard.WriteFiles(paths...) },
 		Redraw:    p.redrawPanel,
+		Labels:    platform.ShellLabelsFor(p.goos),
 	})
 	if err != nil {
 		log.Println("files:", err)

@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"path/filepath"
 
 	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -104,7 +103,7 @@ func (s *fileService) fileItem(r files.Result) search.Item {
 	return search.Item{
 		ID:           r.Path,
 		Title:        r.Name,
-		Subtitle:     filepath.Dir(r.DisplayPath),
+		Subtitle:     r.DisplayPath,
 		IconPath:     r.Path,
 		IconFallback: fileKindIcon(r.Kind),
 		DragPaths:    []string{r.Path},

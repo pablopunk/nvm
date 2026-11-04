@@ -587,7 +587,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -598,16 +598,16 @@
         "iconPath": "$HOME/Downloads/clipboard-export.csv",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open clipboard-export.csv",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -626,7 +626,7 @@
       {
         "kind": "Files",
         "title": "cloud-setup.jpg",
-        "subtitle": "~/Pictures",
+        "subtitle": "~/Pictures/cloud-setup.jpg",
         "section": "Files",
         "id": "$HOME/Pictures/cloud-setup.jpg",
         "icon": "",
@@ -637,16 +637,16 @@
         "iconPath": "$HOME/Pictures/cloud-setup.jpg",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open cloud-setup.jpg",
             "label": ""
-          },
-          {
-            "title": "Show in Folder",
-            "label": "⌃↵"
           },
           {
             "title": "Preview",
             "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -727,7 +727,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -738,16 +738,16 @@
         "iconPath": "$HOME/Downloads/clipboard-export.csv",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open clipboard-export.csv",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -828,7 +828,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -839,16 +839,16 @@
         "iconPath": "$HOME/Downloads/clipboard-export.csv",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open clipboard-export.csv",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -960,7 +960,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -971,16 +971,16 @@
         "iconPath": "$HOME/Downloads/clipboard-export.csv",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open clipboard-export.csv",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -1693,7 +1693,7 @@
       {
         "kind": "Files",
         "title": "Settings.png",
-        "subtitle": "~/Desktop",
+        "subtitle": "~/Desktop/Settings.png",
         "section": "Files",
         "id": "$HOME/Desktop/Settings.png",
         "icon": "",
@@ -1704,16 +1704,16 @@
         "iconPath": "$HOME/Desktop/Settings.png",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open Settings.png",
             "label": ""
-          },
-          {
-            "title": "Show in Folder",
-            "label": "⌃↵"
           },
           {
             "title": "Preview",
             "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -1732,7 +1732,7 @@
       {
         "kind": "Files",
         "title": "cloud-setup.jpg",
-        "subtitle": "~/Pictures",
+        "subtitle": "~/Pictures/cloud-setup.jpg",
         "section": "Files",
         "id": "$HOME/Pictures/cloud-setup.jpg",
         "icon": "",
@@ -1743,16 +1743,16 @@
         "iconPath": "$HOME/Pictures/cloud-setup.jpg",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open cloud-setup.jpg",
             "label": ""
-          },
-          {
-            "title": "Show in Folder",
-            "label": "⌃↵"
           },
           {
             "title": "Preview",
             "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -1771,7 +1771,7 @@
       {
         "kind": "Files",
         "title": "release-plan.txt",
-        "subtitle": "~/Documents",
+        "subtitle": "~/Documents/release-plan.txt",
         "section": "Files",
         "id": "$HOME/Documents/release-plan.txt",
         "icon": "",
@@ -1782,16 +1782,16 @@
         "iconPath": "$HOME/Documents/release-plan.txt",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open release-plan.txt",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -1810,7 +1810,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -1821,16 +1821,16 @@
         "iconPath": "$HOME/Downloads/clipboard-export.csv",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open clipboard-export.csv",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -2211,7 +2211,7 @@
       {
         "kind": "Files",
         "title": "meeting-notes.md",
-        "subtitle": "~/Documents",
+        "subtitle": "~/Documents/meeting-notes.md",
         "section": "Top Hit",
         "id": "$HOME/Documents/meeting-notes.md",
         "icon": "",
@@ -2222,16 +2222,16 @@
         "iconPath": "$HOME/Documents/meeting-notes.md",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open meeting-notes.md",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -2390,7 +2390,7 @@
       {
         "kind": "Files",
         "title": "release-plan.txt",
-        "subtitle": "~/Documents",
+        "subtitle": "~/Documents/release-plan.txt",
         "section": "Files",
         "id": "$HOME/Documents/release-plan.txt",
         "icon": "",
@@ -2401,16 +2401,16 @@
         "iconPath": "$HOME/Documents/release-plan.txt",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open release-plan.txt",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",
@@ -2560,7 +2560,7 @@
       {
         "kind": "Files",
         "title": "meeting-notes.md",
-        "subtitle": "~/Documents",
+        "subtitle": "~/Documents/meeting-notes.md",
         "section": "Files",
         "id": "$HOME/Documents/meeting-notes.md",
         "icon": "",
@@ -2571,16 +2571,16 @@
         "iconPath": "$HOME/Documents/meeting-notes.md",
         "actions": [
           {
-            "title": "Open",
+            "title": "Open meeting-notes.md",
             "label": ""
           },
           {
-            "title": "Show in Folder",
-            "label": "⌃↵"
+            "title": "Preview Contents",
+            "label": "⌃Y"
           },
           {
-            "title": "Preview",
-            "label": "⌃Y"
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Copy Path",

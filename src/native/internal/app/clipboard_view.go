@@ -219,8 +219,6 @@ func (p *App) runClipCopy(h search.Host, id string) {
 	h.Hide()
 }
 
-
-
 // clipChangeMessage says why a change to the history was refused.
 func clipChangeMessage(err error) string {
 	if err == clipboard.ErrReadOnly {
