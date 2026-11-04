@@ -48,9 +48,7 @@ func TestJourneyAIFixInTextEditor(t *testing.T) {
 	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	focusEditor(t, display, window)
-	saveEditor(t, display, window)
-	waitFileHolds(t, file, editorCorrected)
+	saveUntilFileHolds(t, display, window, file, editorCorrected)
 	waitClipboardEquals(t, app, editorClipboard)
 	shoot(t, app, "ai-fix-editor-1-fixed")
 
@@ -59,9 +57,7 @@ func TestJourneyAIFixInTextEditor(t *testing.T) {
 	_, err = app.WaitFor("Undo Fix", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	focusEditor(t, display, window)
-	saveEditor(t, display, window)
-	waitFileHolds(t, file, strings.TrimSpace(editorInput))
+	saveUntilFileHolds(t, display, window, file, strings.TrimSpace(editorInput))
 	waitClipboardEquals(t, app, editorClipboard)
 	shoot(t, app, "ai-fix-editor-2-undone")
 }
@@ -114,6 +110,24 @@ func saveEditor(t *testing.T, display, window string) {
 	t.Helper()
 	focusEditor(t, display, window)
 	must(t, editorKey(display, "ctrl+s"))
+}
+
+// saveUntilFileHolds saves the editor until file holds want. The fix and the undo replace the text after the palette
+// hides, so a save sent right after Enter can run before the replacement; each save writes what the editor holds then.
+func saveUntilFileHolds(t *testing.T, display, window, file, want string) {
+	t.Helper()
+	deadline := time.Now().Add(editorSaveWait)
+	for {
+		saveEditor(t, display, window)
+		if data, err := os.ReadFile(file); err == nil && strings.Contains(string(data), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			data, _ := os.ReadFile(file)
+			t.Fatalf("%s does not hold %q; it holds %q", file, want, string(data))
+		}
+		time.Sleep(pollInterval)
+	}
 }
 
 // waitFileHolds polls file until it holds want, failing after editorSaveWait.
