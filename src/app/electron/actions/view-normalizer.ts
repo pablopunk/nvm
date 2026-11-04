@@ -249,6 +249,11 @@ export function createViewNormalizer(deps: ViewNormalizerDeps) {
         entry,
         actionCache,
       ),
+      onSearchChange: normalizeViewAction(
+        view.onSearchChange,
+        entry,
+        actionCache,
+      ),
       submitAction: normalizeViewAction(view.submitAction, entry, actionCache),
       searchAccessory: view.searchAccessory
         ? {

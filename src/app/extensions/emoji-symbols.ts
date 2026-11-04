@@ -1,10 +1,11 @@
 import {
   CHARACTER_RECORDS,
+  type CharacterCatalogRecord,
   characterCodePoints,
   characterId,
   characterWithSkinTone,
-  type CharacterCatalogRecord,
 } from '../electron/app/emoji-symbol-catalog';
+import { semanticCharacterMatches } from './emoji-symbols-semantic';
 
 type CharacterPickerState = {
   category: string;
@@ -151,6 +152,31 @@ function pickerSubtitle(ctx: any) {
     : 'Enter to copy. Search to narrow the catalog.';
 }
 
+function semanticSearchAction(ctx: any, state: CharacterPickerState) {
+  return ctx.actions.run(
+    'Search by Meaning',
+    async function searchCharactersByMeaning(innerCtx: any, action: any) {
+      try {
+        const matches = innerCtx.ai
+          ? await semanticCharacterMatches(
+              innerCtx.ai,
+              state.category,
+              String(action.value ?? ''),
+            )
+          : [];
+        return {
+          patch: {
+            searchResultIds: matches.map(characterId),
+          },
+        };
+      } catch (error) {
+        innerCtx.logs.warn('Semantic character search failed', error);
+        return { patch: { searchResultIds: [] } };
+      }
+    },
+  );
+}
+
 async function pickerView(ctx: any, providedState?: CharacterPickerState) {
   const state = providedState || (await readPickerState(ctx));
   const items = orderedRecords(state).map((record) =>
@@ -165,6 +191,7 @@ async function pickerView(ctx: any, providedState?: CharacterPickerState) {
     columns: 8,
     maxVisibleItems: MAX_VISIBLE_ITEMS,
     items,
+    onSearchChange: semanticSearchAction(ctx, state),
     searchAccessory: {
       id: 'category',
       tooltip: 'Character category',
@@ -197,6 +224,7 @@ export function createEmojiSymbolsExtension() {
   return {
     id: 'nevermind.emoji-symbols',
     title: 'Emoji & Symbols',
+    capabilities: ['ai'] as const,
     commands: [
       {
         id: 'emoji-symbols',

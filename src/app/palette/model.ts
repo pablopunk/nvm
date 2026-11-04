@@ -564,6 +564,7 @@ export interface CommandViewPatch {
   items?: CommandItemPatch[];
   mode?: PatchMode;
   removeItemIds?: string[];
+  searchResultIds?: string[];
   isLoading?: boolean;
   selectedItemId?: string;
 }
@@ -624,6 +625,7 @@ export interface CommandView extends CameraViewFields {
   selectedItemId?: string;
   maxVisibleItems?: number;
   onSelectionChange?: CommandAction;
+  onSearchChange?: CommandAction;
   pagination?: {
     hasMore?: boolean;
     pageSize?: number;
@@ -689,9 +691,7 @@ export function actionPanelFromActions(
   actions?: CommandAction[],
   title?: string,
 ): CommandActionPanel | undefined {
-  if (!actions || actions.length === 0) {
-    return;
-  }
+  if (!actions || actions.length === 0) return;
   return { title, sections: [{ actions }] };
 }
 
