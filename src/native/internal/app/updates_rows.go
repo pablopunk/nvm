@@ -93,8 +93,8 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	return []search.Item{item}
 }
 
-// rootUpdateScore ranks an update row above every command, so it is the first row of the root.
-const rootUpdateScore = 95
+// rootUpdateScore is the update prompt's score, as 1.x's update prompt has it: above every other root row.
+const rootUpdateScore = 1000
 
 func rootShowsUpdate(state update.State) bool {
 	switch state.Status {

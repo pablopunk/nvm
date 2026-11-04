@@ -19,10 +19,10 @@ type GuideRow struct {
 	Action   GuideAction
 }
 
-// welcomeRootScore puts Welcome above every command suggestion, so a first run starts on it.
-const welcomeRootScore = 200
+// welcomeRootScore is Welcome's score at the root, as 1.x's getting-started item has it, so it leads the commands.
+const welcomeRootScore = 90
 
-// helpRootScore keeps Help below the suggestions once the guide is done.
+// helpRootScore is Help's score once the guide is done, as 1.x has it, below the commands.
 const helpRootScore = 14
 
 // GuideEntry is the root row that opens the guide: Welcome until the user is done with it, Help afterwards.

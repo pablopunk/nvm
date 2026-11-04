@@ -42,8 +42,11 @@ const (
 	rootSearchClipboardLimit = 5
 )
 
+// checkForUpdatesTitle names the command that checks for an update.
+const checkForUpdatesTitle = "Check for Updates"
+
 // rootCommandScores are the 1.x scores of the commands the empty root lists.
-var rootCommandScores = map[string]int{"Clipboard History": 14, "Force Quit Apps": 14, "Keyboard Shortcuts": 16, "AI Chats": 16}
+var rootCommandScores = map[string]int{"Clipboard History": 14, "Force Quit Apps": 14, "Keyboard Shortcuts": 16, "AI Chats": 16, checkForUpdatesTitle: 23}
 
 // rootCommandScore is the score of a command at the empty root.
 func rootCommandScore(title string) int {
@@ -105,7 +108,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		cmd := cmd
 		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
 		if lq == "" {
-			if !cmd.Hidden {
+			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
 				it.Score = rootCommandScore(cmd.Title)
 				out = append(out, it)
 			}

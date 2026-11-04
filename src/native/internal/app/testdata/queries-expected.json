@@ -398,6 +398,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Current version: ",
+        "section": "",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Lock Screen",
         "subtitle": "Secure this computer",
         "section": "",
@@ -746,25 +765,6 @@
         "id": "",
         "icon": "type",
         "tone": "teal",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Extensions",
-        "subtitle": "Manage and create extensions",
-        "section": "",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -2040,7 +2040,7 @@
       {
         "kind": "Commands",
         "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
+        "subtitle": "Current version: ",
         "section": "",
         "id": "",
         "icon": "rotate-ccw",
@@ -2829,7 +2829,7 @@
       {
         "kind": "Commands",
         "title": "Check for Updates",
-        "subtitle": "Look for a newer version of Nevermind",
+        "subtitle": "Current version: ",
         "section": "",
         "id": "",
         "icon": "rotate-ccw",

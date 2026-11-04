@@ -20,8 +20,10 @@ type rootInput struct {
 	clip       *clipEngine
 	clipInRoot bool
 	clipSearch bool
-	chats      []chatHead
-	timerOn    bool
+	// updatePrompt is whether the root shows an update prompt, which replaces the Check for Updates row, as in 1.x.
+	updatePrompt bool
+	chats        []chatHead
+	timerOn      bool
 }
 
 // chatHead is what the conversation rows read from a chat: its id, its title and whether it is a builder chat.
@@ -35,14 +37,15 @@ type chatHead struct {
 func (p *App) captureRoot() *rootInput {
 	chats := p.chatHeads()
 	return &rootInput{
-		engine:     p.engine(),
-		quicklinks: slices.Clone(p.S.Quicklinks),
-		apps:       p.appsSnapshot(),
-		clip:       p.clip,
-		clipInRoot: !p.S.ClipRootOff,
-		clipSearch: !p.S.ClipRootSearchOff,
-		chats:      chats,
-		timerOn:    p.timer != nil,
+		engine:       p.engine(),
+		quicklinks:   slices.Clone(p.S.Quicklinks),
+		apps:         p.appsSnapshot(),
+		clip:         p.clip,
+		clipInRoot:   !p.S.ClipRootOff,
+		clipSearch:   !p.S.ClipRootSearchOff,
+		updatePrompt: rootShowsUpdate(p.updateSnapshot().State),
+		chats:        chats,
+		timerOn:      p.timer != nil,
 	}
 }
 
