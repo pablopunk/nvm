@@ -9,53 +9,18 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// emojiRows returns the picker's search: the catalog entries that match the query in the category, with the recent
-// characters first when the query is empty. Glyphs carry the remembered skin tone. The search runs off the UI thread,
-// so the category and the tone are the values captured when the query starts, and it reads only the documents,
-// which lock themselves.
+// emojiRows returns the picker's search: the catalog entries that match the query in the category, in 1.x's order.
+// Glyphs carry the remembered skin tone. The search runs off the UI thread, so the category and the tone are the values
+// captured when the query starts.
 func (p *App) emojiRows(category string, tone emoji.SkinTone) search.RowsFunc {
 	return func(_ context.Context, q string) []search.Item {
 		entries := emojiCatalog.Search(q, emoji.Options{Category: category})
-		if q == "" {
-			entries = recentFirst(p.recentEntries(category), entries)
-		}
 		items := make([]search.Item, len(entries))
 		for i, e := range entries {
 			items[i] = p.emojiItem(e, tone, len(entries)-i)
 		}
 		return items
 	}
-}
-
-// recentEntries returns the recent characters of the category, newest first.
-func (p *App) recentEntries(category string) []emoji.Entry {
-	recent := emojiCatalog.Recents(recentIDSource{app: p}, emojiRecentLimit)
-	if category == emoji.AllCategory {
-		return recent
-	}
-	var out []emoji.Entry
-	for _, e := range recent {
-		if e.Category() == category {
-			out = append(out, e)
-		}
-	}
-	return out
-}
-
-// recentFirst lists the recent entries first, then the rest in catalog order, each entry once.
-func recentFirst(recent, entries []emoji.Entry) []emoji.Entry {
-	seen := make(map[string]bool, len(recent))
-	out := make([]emoji.Entry, 0, len(recent)+len(entries))
-	for _, e := range recent {
-		seen[e.ID()] = true
-		out = append(out, e)
-	}
-	for _, e := range entries {
-		if !seen[e.ID()] {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 // emojiItem is the row of one character. Enter runs the first action: Paste where the platform can paste, else Copy.
@@ -82,9 +47,9 @@ func (p *App) emojiItem(e emoji.Entry, tone emoji.SkinTone, score int) search.It
 func (p *App) emojiActions(e emoji.Entry, glyph string) []search.Action {
 	var actions []search.Action
 	if p.canPaste() {
-		actions = append(actions, search.Action{Title: "Paste " + e.Title(), Run: func(h search.Host) { p.emitEmoji(h, e, glyph, true) }})
+		actions = append(actions, search.Action{Title: "Paste " + e.Title(), Run: func(h search.Host) { p.emitEmoji(h, glyph, true) }})
 	}
-	actions = append(actions, search.Action{Title: "Copy " + e.Title(), Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.emitEmoji(h, e, glyph, false) }})
+	actions = append(actions, search.Action{Title: "Copy " + e.Title(), Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.emitEmoji(h, glyph, false) }})
 	if e.SupportsSkinTone() {
 		actions = append(actions, search.Action{Title: "Skin Tone…", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.skinToneView(e)) }})
 	}
@@ -100,9 +65,8 @@ func emojiKind(e emoji.Entry) string {
 	return "Symbol"
 }
 
-// emitEmoji copies or pastes a character, and remembers it as recent.
-func (p *App) emitEmoji(h search.Host, e emoji.Entry, glyph string, paste bool) {
-	p.rememberEmoji(e)
+// emitEmoji copies or pastes a character.
+func (p *App) emitEmoji(h search.Host, glyph string, paste bool) {
 	if paste {
 		p.pasteAfterHide(h, pasteActionTitle, textEntry(glyph))
 		return

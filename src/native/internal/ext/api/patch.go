@@ -12,4 +12,7 @@ type ViewPatch struct {
 	// IsLoading is a pointer so that nil means "leave loading unchanged".
 	IsLoading      *bool  `json:"isLoading,omitempty"`
 	SelectedItemID string `json:"selectedItemId,omitempty"`
+	// SearchResultIds is read only from an onSearchChange result: ids of items already in the view, best first. The host
+	// shows them after the local matches of the search text, and drops them when the text changes.
+	SearchResultIds []string `json:"searchResultIds,omitempty"`
 }

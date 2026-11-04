@@ -1,62 +1,10 @@
 package app
 
 import (
-	"log"
-
 	"github.com/pablopunk/nvm/native/internal/features/emoji"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-const (
-	// emojiRecentLimit is how many recent characters lead the picker.
-	emojiRecentLimit = 24
-	// emojiRecentKeep is how many recent characters are remembered.
-	emojiRecentKeep = 64
-)
-
-// emojiRecents is emoji-recents.json: the ids of the characters copied or pasted, newest first.
-type emojiRecents struct {
-	IDs []string
-}
-
-// recentIDSource exposes the remembered characters to the catalog (emoji.RecentSource).
-type recentIDSource struct {
-	app *App
-}
-
-// RecentIDs returns the remembered ids, newest first. Without a store there are none.
-func (s recentIDSource) RecentIDs() []string {
-	if s.app.recents == nil {
-		return nil
-	}
-	v, _ := s.app.recents.Load()
-	return v.IDs
-}
-
-// rememberEmoji moves a character to the front of the recents, once.
-func (p *App) rememberEmoji(e emoji.Entry) {
-	if p.recents == nil {
-		return
-	}
-	id := e.ID()
-	err := p.recents.Update(func(v *emojiRecents) { v.IDs = prependUniqueID(v.IDs, id, emojiRecentKeep) })
-	if err != nil {
-		log.Println("emoji recents:", err)
-	}
-}
-
-// prependUniqueID returns ids with id first, the other ids in their order, at most keep of them.
-func prependUniqueID(ids []string, id string, keep int) []string {
-	out := make([]string, 0, min(len(ids)+1, keep))
-	out = append(out, id)
-	for _, other := range ids {
-		if other != id && len(out) < keep {
-			out = append(out, other)
-		}
-	}
-	return out
-}
 
 // skinTone is the skin tone the picker applies to every character that has variants. A stored value that names no
 // tone reads as the default.

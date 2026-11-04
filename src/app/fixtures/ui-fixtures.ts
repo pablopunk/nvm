@@ -18,7 +18,7 @@ import {
   floatingWindowView,
 } from './ui/floating-window-fixture.ts';
 import { formView } from './ui/form-fixture.ts';
-import { gridView } from './ui/grid-fixture.ts';
+import { gridView, searchResultsGridView } from './ui/grid-fixture.ts';
 import {
   disabledRowsView,
   emptyListView,
@@ -147,6 +147,12 @@ const extension: NevermindExtension = {
       title: 'Dev UI: Grid',
       icon: 'grid',
       run: (ctx) => gridView(ctx),
+    },
+    {
+      id: 'grid-search-results',
+      title: 'Dev UI: Grid Search Results',
+      icon: 'search',
+      run: (ctx) => searchResultsGridView(ctx),
     },
     {
       id: 'ocr',

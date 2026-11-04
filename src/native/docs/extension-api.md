@@ -140,7 +140,7 @@ type Invocation struct {
     SelectedItemID string              // focused item, for item actions and selection changes
     Form           FormValues          // form submit values
     EditorContent  string              // editor submit or autosave
-    Value          string              // search accessory selection
+    Value          string              // search accessory selection, or the trimmed text for onSearchChange
     DraftConflict  *DraftConflict      // only for a draft's conflict handler
     Launch         LaunchContext       // why the handler runs (trigger, files, refresh)
 }
@@ -244,6 +244,7 @@ Shared view parts:
 - `Refresh`: interval, patch mode, `Immediate` (paint the cache first, refresh after paint), and a handler reference.
 - `Pagination`: `HasMore`, `PageSize`, `Next` reference.
 - `SearchAccessory`: a filter control with options; its selection arrives as `Invocation.Value`.
+- `OnSearchChange` (list and grid views): runs for the trimmed search text once typing rests for 350 ms; the text arrives as `Invocation.Value`. Local filtering stays instant and owns the first rows. The handler's patch `SearchResultIds` names existing item ids that follow those rows, best first, without repeating them and without being filtered by the query. The second batch takes its room from `MaxVisibleItems` first. A result for text the user has since changed is dropped, and a failure adds nothing and shows no toast. An empty text never runs the handler.
 - `Detail` (`DetailPane`): side or bottom, visible or not.
 - `EmptyView`: shown for an active empty list only. Reserve it for active result lists.
 - `OnSelectionChange`, `SelectedItemID`, `MaxVisibleItems`, `WindowCompact`.

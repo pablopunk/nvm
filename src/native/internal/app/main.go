@@ -77,6 +77,8 @@ type App struct {
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
+	// characterSearch is the Emoji & Symbols picker's meaning batch; see emoji_meaning.go.
+	characterSearch *characterSearch
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
 	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
@@ -99,7 +101,6 @@ type App struct {
 	// backendReport is the last compatibility report the active backend gave; the status row reads it.
 	backendReport atomic.Pointer[backend.CompatReport]
 	store         *store.Store
-	recents       *store.Collection[emojiRecents]
 	rates         *store.Collection[rateDocument]
 	calc          *calc.Calculator
 	menuOS        string // the platform the menu bar draws its rows for; empty means the platform the app runs on

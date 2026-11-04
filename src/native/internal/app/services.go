@@ -54,7 +54,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 	p.systemSvc = newSystemServices(ports, goos)
 	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
-	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
+	// One store serves every persisted document of the app (rates, notes, snippets, learning, clipboard history).
 	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
 	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir, store.WithProcesses(ports.Processes))
 	p.userReadOnly = err != nil
@@ -71,7 +71,6 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 		p.userStore = st
 		if !p.userReadOnly {
 			p.store = st
-			p.recents = store.Doc(st, "emoji-recents.json", 1, func() emojiRecents { return emojiRecents{} })
 			p.rates = store.Doc(st, "rates.json", 1, defaultRateDocument)
 			p.restoreCompatibility(st)
 			p.restoreMenuBarVisibility(st)

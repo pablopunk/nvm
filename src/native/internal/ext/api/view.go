@@ -75,6 +75,9 @@ type View struct {
 	SelectedItemID    string           `json:"selectedItemId,omitempty"`
 	MaxVisibleItems   int              `json:"maxVisibleItems,omitempty"`
 	OnSelectionChange *ActionRef       `json:"onSelectionChange,omitempty"`
+	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch's SearchResultIds are a
+	// second batch of item ids, shown after the local matches. Only list and grid views carry it.
+	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
 
 	Actions               []Action        `json:"actions,omitempty"`
 	ActionPanel           *ActionPanel    `json:"actionPanel,omitempty"`
@@ -118,6 +121,9 @@ func (v View) Validate() error {
 	}
 	if v.Title == "" {
 		return errors.New("view title is required")
+	}
+	if v.OnSearchChange != nil && v.Kind != ViewList && v.Kind != ViewGrid {
+		return fmt.Errorf("view %q: onSearchChange needs a list or grid view, not %q", v.Title, v.Kind)
 	}
 	for kind, present := range v.specKinds() {
 		if present != (kind == v.Kind) {

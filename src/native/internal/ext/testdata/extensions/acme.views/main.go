@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
@@ -31,6 +32,7 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 		{ID: "image-file", Title: "Image file fixture"},
 		{ID: "confirm", Title: "Confirm fixture"},
 		{ID: "root", Title: "Root fixture"},
+		{ID: "search-results", Title: "Grid search results fixture"},
 	}, nil
 }
 
@@ -42,6 +44,10 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		return api.Result{View: &sectionsView}, nil
 	case "grid":
 		return api.Result{View: &gridView}, nil
+	case "search-results":
+		return api.Result{View: &searchResultsView}, nil
+	case "search-meaning":
+		return api.Result{Patch: &api.ViewPatch{SearchResultIds: meaningMatches(in.Value)}}, nil
 	case "collection":
 		return api.Result{View: &collectionView}, nil
 	case "preview":
@@ -184,6 +190,29 @@ var moreNotes = []api.Item{
 }
 
 var refreshedNote = api.Item{ID: "n1", Title: "Standup notes", Subtitle: "Refreshed just now", Icon: "file-text"}
+
+var fruit = []api.Item{
+	{ID: "apple", Title: "Apple", Glyph: "🍎"},
+	{ID: "banana", Title: "Banana", Glyph: "🍌"},
+	{ID: "cherry", Title: "Cherry", Glyph: "🍒"},
+	{ID: "lemon", Title: "Lemon", Glyph: "🍋"},
+}
+
+// meaningMatches answers the second batch: a search for "yellow" finds the fruit whose colour is yellow, which the
+// name match cannot.
+func meaningMatches(text string) []string {
+	if strings.Contains(strings.ToLower(text), "yellow") {
+		return []string{"banana", "lemon"}
+	}
+	return nil
+}
+
+var searchResultsView = api.View{
+	Kind: api.ViewGrid, Title: "Fruit", Placeholder: "Search fruit", Grid: &api.GridSpec{Columns: 4},
+	Items:          fruit,
+	OnSearchChange: &api.ActionRef{ID: "search-meaning"},
+	EmptyView:      &api.EmptyState{Title: "No fruit found", Subtitle: "Try yellow."},
+}
 
 var accessoryOptions = []api.SearchAccessoryOption{
 	{Title: "All", Value: "all"},

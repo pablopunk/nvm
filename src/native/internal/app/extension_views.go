@@ -56,6 +56,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		RevealPath:       func(path string) { _ = ports.Shell.Reveal(path) },
 		RunSystem:        p.runSystemOp,
 		HyperKey:         p.hyperKey,
+		OnUI:             p.onUI,
 		Files:            ports.FS,
 		Clock:            ports.Clock,
 		Cache:            extensionSnapshots,
