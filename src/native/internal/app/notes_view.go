@@ -59,7 +59,7 @@ func (p *App) noteItem(n notes.Note) search.Item {
 	}
 	it.Actions = []search.Action{
 		{Title: "Open note", Run: func(h search.Host) { p.openNoteFromList(h, id) }},
-		{Title: "Open as Floating Window", Label: "⌃F", Mods: mod, Key: ui.KeyF, Run: func(h search.Host) { h.Hide(); p.openFloatingNote(id) }},
+		{Title: "Open as Floating Window", Label: "⌃F", Mods: mod, Key: ui.KeyF, Run: func(h search.Host) { h.Hide(); p.openFloatingNote(id, floatingWindowTitle) }},
 		{Title: "Copy Text", Label: "⌃C", Mods: mod, Key: ui.KeyC, Run: func(h search.Host) { mygo.Clipboard.WriteText(text); h.Hide() }},
 		{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			h.Push(p.confirmDeleteNote(id, title))

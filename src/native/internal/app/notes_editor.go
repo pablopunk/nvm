@@ -131,7 +131,7 @@ func (p *App) noteEditorKeys(c *ui.Context, h search.Host, edit *noteEdit) bool 
 		h.Push(p.notesView())
 	case c.Shortcut(mod, ui.KeyF):
 		h.Hide()
-		p.openFloatingNote(edit.id)
+		p.openFloatingNote(edit.id, floatingWindowTitle)
 	case c.Shortcut(mod, ui.KeyBackspace):
 		h.Push(p.confirmDeleteNote(edit.id, notes.Title(edit.text)))
 	default:

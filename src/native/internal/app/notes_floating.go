@@ -13,8 +13,12 @@ import (
 // Floating notes: a note in its own always-on-top window. The window's frame is remembered per note and the
 // windows that were open are opened again at launch, on the displays that are connected then.
 
-// openFloatingNote shows a note in a floating window, or brings its window forward when it is open already.
-func (p *App) openFloatingNote(id string) {
+// floatingWindowTitle is the window's title when it opens from the command, as 1.x titles it.
+const floatingWindowTitle = "Floating Notes"
+
+// openFloatingNote shows a note in a floating window, or brings its window forward when it is open already. title is
+// the window's title; the page's title bar is hidden, with the window controls over the page.
+func (p *App) openFloatingNote(id, title string) {
 	if p.notes == nil {
 		return
 	}
@@ -33,9 +37,10 @@ func (p *App) openFloatingNote(id string) {
 	}
 	frame := p.floatingFrame(n)
 	w := mygo.NewWindow(mygo.WindowOptions{
-		Title: n.Title(), Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
-		AlwaysOnTop: true, TitleBarStyle: mygo.TitleBarHidden,
-		Content: ui.View(func(c *ui.Context) { floatingNoteWindow(c, edit) }),
+		Title: title, Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
+		AlwaysOnTop: true, TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 12, Y: 12},
+		MinWidth: floatingMinWidth, MinHeight: floatingMinHeight,
+		Content: ui.View(func(c *ui.Context) { floatingNoteWindow(c, p, edit) }),
 	})
 	edit.window = w
 	w.OnMove(func() { p.rememberFloatingFrame(edit.id, w) })
@@ -63,7 +68,7 @@ func (p *App) toggleFloatingNotes() {
 		p.Toast(noteErrorMessage(err))
 		return
 	}
-	p.openFloatingNote(id)
+	p.openFloatingNote(id, floatingWindowTitle)
 }
 
 // openFloatingEdits lists the notes that have a floating window open.
@@ -97,7 +102,7 @@ func (p *App) newFloatingNote() {
 		p.Toast(noteErrorMessage(err))
 		return
 	}
-	p.openFloatingNote(n.ID)
+	p.openFloatingNote(n.ID, n.Title())
 }
 
 // restoreFloatingNotes opens the windows that were open when the app last ran.
@@ -106,7 +111,7 @@ func (p *App) restoreFloatingNotes() {
 		return
 	}
 	for _, n := range p.notes.Floating() {
-		p.openFloatingNote(n.ID)
+		p.openFloatingNote(n.ID, floatingWindowTitle)
 	}
 }
 
@@ -154,16 +159,40 @@ func (p *App) floatingNoteClosed(edit *noteEdit) {
 	p.releaseEdit(edit)
 }
 
-// floatingNoteWindow is the content of a floating window: a title row that keeps clear of the window controls over
-// the hidden title bar and drags the window, then the note. Without the row the first line of text sits under the
-// controls. The row is themed with Nevermind's tokens, like the rest.
-func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
-	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Children(func() {
-		bar := c.TitleBar()
-		ui.Row(c).Height(max(bar.Height, 32)).Padding(0, bar.Right, 0, bar.Left).Center().DragWindow().Children(func() {
-			ui.Text(c, notes.Title(edit.text)).FontSize(12).Bold().TextColor(design.Tokens(c).Secondary)
+// Floating window metrics of the 1.x window: the strip under the window controls, the minimum size, and the room
+// around the header and the editor.
+const (
+	floatingMinWidth    = 320
+	floatingMinHeight   = 240
+	floatingControlsGap = 36
+)
+
+// floatingNoteWindow is the content of a floating window, laid out as the 1.x window is: a strip under the window
+// controls that drags the window, then the note's header (its title and when it was edited), then the editor.
+func floatingNoteWindow(c *ui.Context, p *App, edit *noteEdit) {
+	k := design.Tokens(c)
+	ui.Themed(c, design.WindowTheme(c.Theme().Dark)).Fill().Background(k.Canvas).Children(func() {
+		ui.Column(c).Fill().Children(func() {
+			ui.Row(c).Height(floatingControlsGap).Fill().DragWindow()
+			ui.Column(c).Grow(1).Padding(0, 12, 12, 12).Gap(8).Children(func() {
+				floatingNoteHeader(c, p, edit)
+				floatingNoteBody(c, edit)
+			})
 		})
-		floatingNoteBody(c, edit)
+	})
+}
+
+// floatingNoteHeader is the note's title over its state: "Markdown · Edited 3m ago", as 1.x's editor header shows.
+// The row drags the window, as the 1.x strip does.
+func floatingNoteHeader(c *ui.Context, p *App, edit *noteEdit) {
+	k := design.Tokens(c)
+	title, subtitle := notes.Title(edit.text), "Markdown"
+	if n, ok := p.notes.Get(edit.id); ok {
+		subtitle += " · Edited " + notes.RelativeTime(clock(), n.UpdatedAt)
+	}
+	ui.Row(c).Padding(2, 4, 0, 4).Gap(10).AlignItems(ui.Baseline).DragWindow().Children(func() {
+		ui.Text(c, title).FontSize(13).FontWeight(600).TextColor(k.Primary).SingleLine().Grow(1)
+		ui.Text(c, subtitle).FontSize(12).TextColor(k.Muted).SingleLine()
 	})
 }
 
@@ -176,12 +205,14 @@ func floatingNoteBody(c *ui.Context, edit *noteEdit) {
 		return
 	}
 	doc := noteDocument(edit)
-	editor := design.MarkdownEditor(c, doc, editorPlaceholder).AutoFocus()
-	if editor.Changed() {
-		markdown := doc.Text().Markdown()
-		edit.text, edit.docSource = markdown, markdown
-		_ = edit.sess.Edit(markdown)
-	}
+	ui.Column(c).Grow(1).Padding(8, 4).Children(func() {
+		editor := design.MarkdownEditor(c, doc, editorPlaceholder).AutoFocus()
+		if editor.Changed() {
+			markdown := doc.Text().Markdown()
+			edit.text, edit.docSource = markdown, markdown
+			_ = edit.sess.Edit(markdown)
+		}
+	})
 }
 
 // noteDocument returns the rich text of a note, made from its text when it has none yet and remade when the text
