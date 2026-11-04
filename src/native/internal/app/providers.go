@@ -156,6 +156,13 @@ func (p *App) settingsView() *palette.View {
 					p.toggleDiagnostics()
 					h.Refresh()
 				}}}},
+				{Title: "Updates", Accessory: updateAccessory(p.updateSnapshot().State), Icon: "rotate-ccw", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.updatesView()) }}}},
+				{Title: "Update Channel", Accessory: p.updateSnapshot().Channel.Label(), Icon: "shield-check", Actions: []search.Action{{Title: "Switch", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					if err := p.toggleUpdateChannel(); err != nil {
+						h.Toast(err.Error())
+					}
+					h.Refresh()
+				}}}},
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: p.displayPath(configDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
