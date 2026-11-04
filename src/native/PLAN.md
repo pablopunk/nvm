@@ -23,7 +23,7 @@ blockers are in [docs/cutover.md](docs/cutover.md) section 4.
 
 Blockers found while writing the cutover plan (not in any WP row yet): the backend applies one minimum version to every
 client, and 1.x release strings (`2026.MMDD.N`) sort above 2.0 (cutover.md section 4); both apps claim `nvm://` (section
-2); `/api/me` is cookie-only (section 4); the 2.0 client calls `GET /api/v1/models`, which has no route (section 4).
+2); `/api/me` is cookie-only, so 2.0 shows the plan as unknown until the backend adds a bearer route (section 4); the client no longer calls `/api/me` or `GET /api/v1/models`, and a contract test checks every route it calls exists in the backend.
 
 ---
 
@@ -95,7 +95,7 @@ client, and 1.x release strings (`2026.MMDD.N`) sort above 2.0 (cutover.md secti
 | WP1.6 Clipboard engine | WP1.6b wired; ready for review (Linux) | engine in the app on the one shared store (history, watcher, paste through the palette-hide wait, link previews over the public port, file-list copies); read-only instances keep it in memory and do not watch; Linux box: `go vet` and `go test ./...` green, rig J01, J02, J03, J05, J06, J08, J09, J10, J22 green on a private display; not verified: paste into another app on the rig, live link fetch, macOS paste and concealed markers (untested), Windows paste (unsupported) |
 | WP1.7 File index engine | done (library) | wiring, real watchers, previews pending (WP1.7b) |
 | WP1.7b Files wiring | partial (Linux; L1, L2, box checks) | index at launch, root and Files view, previews, thumbnails, icons, drag-out (untested at runtime); open-with, Quick Look, folders, rig J07 not done; macOS/Windows watch unverified |
-| WP2.1 Backend client | done | live smoke not run; `/api/me` and `/api/v1/models` findings open |
+| WP2.1 Backend client | done | live smoke not run; the client calls only routes the backend serves (route contract test); the plan needs a bearer route on the backend (cutover.md section 4) |
 | WP2.4a Agent loop spike | done | D2: native Go loop; owner checks tier `api` via `active-model` |
 | WP2.4 Agent loop and tools | partial (Linux: L1, L2, goldens; `-race` on ai, palette and app; L4 rig not run; macOS and Windows compile only) | `internal/ai/agent`: the turn loop over the backend chat wire (steps, tool calls, approval, cancel, timeouts on the clock, panic guard, output cap, 8-step limit, JSON Schema argument checks); `internal/ai/guard`: credential, dotenv, root and symlink checks; `internal/ai/tools`: search, read and list files, list and open apps, open web links, read (asks) and copy the clipboard, move to Trash (asks). The chat service runs conversation turns through the loop; the transcript shows steps, calls, approvals and results; Enter allows and ⌘D refuses a waiting call; tool-row goldens light and dark, 1x and 2x. Spike package removed. Not done: web search and fetch with egress approval, Responses and Messages wires, compaction, window and quit tools, usage in the UI, rig journeys J13 and J14, live backend smoke, recorded streams from the live backend |
 | WP3.1 Extension API + runtime spike | done | D1: supervised child process; Go/Yaegi provisional |
