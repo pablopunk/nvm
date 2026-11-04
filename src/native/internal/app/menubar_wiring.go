@@ -109,7 +109,7 @@ func (p *App) menubarActions() menubar.Actions {
 		Open:            func() { p.Show(); p.focusPanel() },
 		CheckForUpdates: func() { p.checkForUpdates(p.notifyUpdate) },
 		Settings:        func() { p.Open(p.settingsView()); p.focusPanel() },
-		Quit:            func() { mygo.App.Quit() },
+		Quit:            p.requestQuit,
 	}
 }
 

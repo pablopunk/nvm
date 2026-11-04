@@ -92,10 +92,6 @@ func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
 	})
 }
 
-// closeStoreOnQuit is kept for the call order in ready; the store is closed once, by openUserData, after the
-// note windows have closed.
-func (p *App) closeStoreOnQuit() {}
-
 // prepareCatalog builds the emoji search indexes off the UI path, so the first keystroke does not pay for them.
 func prepareCatalog() {
 	safego.Go("emoji.prepare", func(context.Context) { emojiCatalog.Prepare() })

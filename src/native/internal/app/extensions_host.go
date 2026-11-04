@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
+	"github.com/egoist/mygo"
+
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
@@ -56,6 +58,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	mygo.App.OnQuit(closeStoreOnQuit(state))
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
