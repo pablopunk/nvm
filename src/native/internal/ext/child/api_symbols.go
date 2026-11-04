@@ -161,6 +161,7 @@ func init() {
 		"NavPush":                       reflect.ValueOf(api.NavPush),
 		"NavReplace":                    reflect.ValueOf(api.NavReplace),
 		"NavRoot":                       reflect.ValueOf(api.NavRoot),
+		"NewInput":                      reflect.ValueOf(api.NewInput),
 		"OpenPath":                      reflect.ValueOf(api.OpenPath),
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
 		"Panel":                         reflect.ValueOf(api.Panel),

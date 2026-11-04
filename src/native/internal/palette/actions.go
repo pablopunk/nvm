@@ -30,9 +30,10 @@ func (p *Palette) runDefault() {
 		return
 	}
 	query, key := strings.TrimSpace(p.query), it.LearnKey
+	concealed := p.cur().Concealed
 	p.rememberQuery(query)
 	p.runAction(it.Actions[0])
-	if key != "" && p.opts.Learner != nil {
+	if key != "" && p.opts.Learner != nil && !concealed {
 		p.opts.Learner.Record(key, query)
 	}
 }

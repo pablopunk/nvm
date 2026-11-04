@@ -37,6 +37,7 @@ func NewPorts() platform.Ports {
 		Capabilities: Capabilities(),
 		Microphone:   newMicrophone(),
 		Opus:         opusCodec{},
+		FileDialog:   fileDialog{},
 		Text:         newTextRecognizer(helper{}),
 		Capture:      newScreenCapturer(helper{}),
 	}

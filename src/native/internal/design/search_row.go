@@ -17,6 +17,8 @@ type SearchData struct {
 	Accessory string
 	// AIHint shows the "Tab to ask AI" chip beside the input.
 	AIHint bool
+	// Concealed masks the text while a secret is typed; the query still holds the real text.
+	Concealed bool
 }
 
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
@@ -39,6 +41,9 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 		}
 		in := ui.TextInputBase(c, d.Query).Bind(d.Input).Grow(1).FontSize(21).TextColor(k.Strong).
 			Placeholder(d.Placeholder).PlaceholderColor(k.Faint).Label("Search")
+		if d.Concealed {
+			in = in.Password()
+		}
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
 		if d.Accessory != "" {

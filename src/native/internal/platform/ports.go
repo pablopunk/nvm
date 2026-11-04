@@ -35,6 +35,8 @@ type Ports struct {
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone
 	Opus       OpusCodec
+	// FileDialog shows the operating system's file and folder choosers for extension form fields.
+	FileDialog FileDialog
 	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
 	Text    TextRecognizer
 	Capture ScreenCapturer
