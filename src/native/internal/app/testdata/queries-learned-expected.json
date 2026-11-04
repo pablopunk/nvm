@@ -3,6 +3,33 @@
     "query": "",
     "rows": [
       {
+        "kind": "AI Commands",
+        "title": "Fix Selected Text with AI",
+        "subtitle": "Correct grammar, spelling, and punctuation",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Fix Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Welcome to Nevermind",
         "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
@@ -737,33 +764,6 @@
         "actions": [
           {
             "title": "Emoji \u0026 Symbols",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search Files",
             "label": ""
           },
           {
