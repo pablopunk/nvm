@@ -4,7 +4,8 @@ import "github.com/pablopunk/nvm/native/internal/search"
 
 // Confirm returns a view that asks before a destructive run: its first row is the action, its second cancels.
 // Cancel and Escape leave the view without running anything. The palette is the only place a confirmation
-// happens (CLAUDE.md: no native dialogs).
+// happens (CLAUDE.md: no native dialogs). Confirm adds the question mark to the title, so callers pass the bare
+// title ("Log Out", not "Log Out?").
 func Confirm(title, detail string, run func()) *View {
 	return &View{
 		Title:       "Confirm",
