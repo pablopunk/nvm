@@ -55,9 +55,6 @@ func TestTextRowBuildsPasteAction(t *testing.T) {
 	if !hasAction(row.Actions, ActionPaste) {
 		t.Fatal("text row has no paste action")
 	}
-	if !hasAction(RowExtraActions(entry), ActionPin) {
-		t.Fatal("entry has no pin action")
-	}
 	if row.Primary.Type != ActionCopy {
 		t.Fatalf("primary = %s, want copy", row.Primary.Type)
 	}
@@ -135,14 +132,6 @@ func TestDetailOfSingleWebAddressCarriesLink(t *testing.T) {
 	row = BuildRow(Entry{ID: "text:m", Kind: KindText, Text: "see https://github.com"}, 1)
 	if row.Detail.LinkURL != "" {
 		t.Fatalf("LinkURL = %q for text with words", row.Detail.LinkURL)
-	}
-}
-
-// TestPinnedEntryOffersUnpin: the menu offers the action that changes the current state.
-func TestPinnedEntryOffersUnpin(t *testing.T) {
-	extra := RowExtraActions(Entry{ID: "text:p", Kind: KindText, Text: "p", Pinned: true})
-	if !hasAction(extra, ActionUnpin) || hasAction(extra, ActionPin) {
-		t.Fatalf("actions = %+v", extra)
 	}
 }
 

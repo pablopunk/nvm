@@ -25,8 +25,6 @@ const (
 	ActionCopy    ActionType = "copy"
 	ActionPaste   ActionType = "paste"
 	ActionPreview ActionType = "preview"
-	ActionPin     ActionType = "pin"
-	ActionUnpin   ActionType = "unpin"
 	ActionRemove  ActionType = "remove"
 	ActionSubmenu ActionType = "submenu"
 )
@@ -108,9 +106,7 @@ func BuildView(entries []Entry, historyLen int) View {
 }
 
 // BuildRow describes one entry: its title and subtitle, its detail, the copy action it runs on Enter, and
-// the actions on its menu. historyLen decides whether the removal actions appear at all. The pin and ask
-// actions are not in the row: RowExtraActions computes them when the action panel opens, so every row
-// stays small.
+// the actions on its menu. historyLen decides whether the removal actions appear at all.
 func BuildRow(e Entry, historyLen int) Row {
 	title := entryTitle(e)
 	subtitle := entrySubtitle(e)
@@ -130,15 +126,6 @@ func BuildRow(e Entry, historyLen int) Row {
 		Actions:  actions,
 		Manage:   RemovalActions(historyLen, &e),
 	}
-}
-
-// RowExtraActions returns the actions of an entry's menu that are not part of the row: pin or unpin, which 2.0 keeps
-// from the clipboard journey (PLAN J05). The palette calls it when the action panel opens.
-func RowExtraActions(e Entry) []Action {
-	if e.Pinned {
-		return []Action{{Type: ActionUnpin, Title: "Unpin", ItemID: e.ID}}
-	}
-	return []Action{{Type: ActionPin, Title: "Pin", ItemID: e.ID}}
 }
 
 // isRichText reports whether an entry holds text that can be pasted as text.

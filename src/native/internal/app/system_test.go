@@ -31,7 +31,7 @@ func systemRow(t *testing.T, p *App, title string) search.Item {
 // confirms.
 func TestRestartAsksBeforeItRestarts(t *testing.T) {
 	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
+	systemRow(t, p, "Restart Computer").Actions[0].Run(p)
 	if title := p.Top().Title; title != "Confirm" {
 		t.Fatalf("top view = %q, want the confirmation", title)
 	}
@@ -115,7 +115,7 @@ func TestPaletteOSPermissions(t *testing.T) {
 
 func TestPaletteRestartConfirmation(t *testing.T) {
 	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
+	systemRow(t, p, "Restart Computer").Actions[0].Run(p)
 	golden.AssertMatrix(t, "system-confirm", p.View, systemGoldens)
 }
 

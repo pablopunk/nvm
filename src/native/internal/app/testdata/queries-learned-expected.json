@@ -673,7 +673,7 @@
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -693,7 +693,19 @@
           },
           {
             "title": "Show in File Manager",
-            "label": ""
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },
@@ -813,6 +825,33 @@
         "actions": [
           {
             "title": "Start Timer",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "Commands",
+        "id": "restart",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Restart Computer",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1181,7 +1220,7 @@
       },
       {
         "kind": "Commands",
-        "title": "Restart",
+        "title": "Restart Computer",
         "subtitle": "Restart this computer",
         "section": "Commands",
         "id": "restart",
@@ -1193,7 +1232,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Restart",
+            "title": "Restart Computer",
             "label": ""
           },
           {
@@ -1355,7 +1394,7 @@
       {
         "kind": "Files",
         "title": "Settings.png",
-        "subtitle": "~/Desktop",
+        "subtitle": "~/Desktop/Settings.png",
         "section": "Files",
         "id": "$HOME/Desktop/Settings.png",
         "icon": "",
@@ -1375,14 +1414,26 @@
           },
           {
             "title": "Show in File Manager",
-            "label": ""
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },
       {
         "kind": "Files",
         "title": "cloud-setup.jpg",
-        "subtitle": "~/Pictures",
+        "subtitle": "~/Pictures/cloud-setup.jpg",
         "section": "Files",
         "id": "$HOME/Pictures/cloud-setup.jpg",
         "icon": "",
@@ -1402,14 +1453,26 @@
           },
           {
             "title": "Show in File Manager",
-            "label": ""
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },
       {
         "kind": "Files",
         "title": "release-plan.txt",
-        "subtitle": "~/Documents",
+        "subtitle": "~/Documents/release-plan.txt",
         "section": "Files",
         "id": "$HOME/Documents/release-plan.txt",
         "icon": "",
@@ -1429,14 +1492,26 @@
           },
           {
             "title": "Show in File Manager",
-            "label": ""
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },
       {
         "kind": "Files",
         "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads",
+        "subtitle": "~/Downloads/clipboard-export.csv",
         "section": "Files",
         "id": "$HOME/Downloads/clipboard-export.csv",
         "icon": "",
@@ -1456,7 +1531,19 @@
           },
           {
             "title": "Show in File Manager",
-            "label": ""
+            "label": "⌃↵"
+          },
+          {
+            "title": "Copy Path",
+            "label": "⌃C"
+          },
+          {
+            "title": "Copy File",
+            "label": "⌃⇧C"
+          },
+          {
+            "title": "Move to Trash",
+            "label": "⌃⌫"
           }
         ]
       },

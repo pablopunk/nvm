@@ -2,7 +2,6 @@ package app
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -113,21 +112,6 @@ func TestClipboardHistoryEmptyStateUsesThe1xCopy(t *testing.T) {
 	}
 }
 
-// TestClipboardHistoryPinnedRowsComeFirst: pinning a row moves it above the newer unpinned rows; the pinned rows keep
-// their copy order among themselves.
-func TestClipboardHistoryPinnedRowsComeFirst(t *testing.T) {
-	p, _, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Pin").Run(p)
-	goldenQuery(p, "")
-	rows := p.Results()
-	if rows[0].Title != goldenRebaseTitle || !strings.HasPrefix(rows[1].Title, "Meeting notes: ship the design") {
-		t.Fatalf("the pinned rows are not first: %v", rowTitles(p))
-	}
-	if rows[0].Accessory != "Pinned" || rows[1].Accessory != "Pinned" || rows[2].Accessory == "Pinned" {
-		t.Fatalf("accessories = %q, %q, %q", rows[0].Accessory, rows[1].Accessory, rows[2].Accessory)
-	}
-}
-
 // TestClipboardHistoryDeleteNeedsAConfirmation: Remove Item opens a confirmation and removes nothing until it is
 // confirmed; Cancel leaves the entry.
 func TestClipboardHistoryDeleteNeedsAConfirmation(t *testing.T) {
@@ -189,7 +173,7 @@ func TestClipboardActionMenuOffersTheRowActions(t *testing.T) {
 	for _, a := range p.Results()[1].Actions {
 		titles = append(titles, a.Title)
 	}
-	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Pin", "Remove Item", "Remove Last..."} {
+	for _, want := range []string{"Copy Text", "Preview", "Paste Text", "Remove Item", "Remove Last..."} {
 		if !slices.Contains(titles, want) {
 			t.Fatalf("actions = %v, missing %q", titles, want)
 		}
@@ -229,7 +213,7 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	// so Remove Item is four rows down.
 	tt.Key(mod, ui.KeyK)
 	tt.Frame()
-	for range 4 {
+	for range 3 {
 		tt.Key(0, ui.KeyDown)
 		tt.Frame()
 	}

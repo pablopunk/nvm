@@ -124,9 +124,6 @@ func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) 
 		actions = append(actions, search.Action{Title: "Paste Text", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Dismiss: search.DismissNever,
 			Run: func(h search.Host) { p.runClipPaste(h, id) }})
 	}
-	for _, extra := range clipboard.RowExtraActions(e) {
-		actions = append(actions, p.clipExtraAction(extra, e))
-	}
 	for _, removal := range row.Manage {
 		actions = append(actions, p.clipRemovalAction(removal))
 	}
@@ -136,22 +133,6 @@ func (p *App) clipActions(e clipboard.Entry, row clipboard.Row, historyLen int) 
 // isTextCopy reports whether a copy is text, with or without markup. Only those have a Paste Text action in 1.x.
 func isTextCopy(e clipboard.Entry) bool {
 	return e.Kind == clipboard.KindText || e.Kind == clipboard.KindHTML || e.Kind == clipboard.KindRTF
-}
-
-// clipExtraAction is the pin or unpin action of a row.
-func (p *App) clipExtraAction(a clipboard.Action, e clipboard.Entry) search.Action {
-	return p.clipPinAction(e.ID, a.Type == clipboard.ActionPin, a.Title)
-}
-
-// clipPinAction pins or unpins an entry and runs the search again, so the pinned rows move.
-func (p *App) clipPinAction(id string, pinned bool, title string) search.Action {
-	return search.Action{Title: title, Label: "⌃P", Mods: mod, Key: ui.KeyP, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		if _, err := p.clip.history.SetPinned(id, pinned); err != nil {
-			h.Toast(clipChangeMessage(err))
-			return
-		}
-		h.Refresh()
-	}}
 }
 
 // clipRemovalAction is a removal from the history. It needs a confirmation, which the palette shows as a view
