@@ -76,3 +76,38 @@ func TestJourneyDesktopClearNeedsTheUsersAnswer(t *testing.T) {
 	}
 	shoot(t, app, "desktop-clear-confirmed")
 }
+
+// TestJourneyDesktopClearEscapeCancelsAtOnce presses Escape on the host's question. The call must be refused at once:
+// the history is unchanged, and a second clear shows its question within the usual wait, which it could not do if the
+// first call still held the extension for the confirmation timeout.
+func TestJourneyDesktopClearEscapeCancelsAtOnce(t *testing.T) {
+	home := t.TempDir()
+	seedExtensionFolder(t, home, "acme.desktop")
+	app := Launch(t, Options{Home: home})
+
+	openExtensionsView(t, app)
+	clearSearch(t, app)
+	enableThroughReview(t, app, "desktop", "Desktop fixture")
+	hidePalette(t, app)
+
+	must(t, app.ClipboardSet("escape probe entry"))
+	must(t, app.SummonPalette())
+	before := waitForHistoryCopy(t, app)
+	if strings.HasSuffix(before, "entries=0") {
+		t.Fatalf("the clipboard copy did not reach history: %q", before)
+	}
+
+	runFixtureClear(t, app)
+	waitForRow(t, app, "Clear clipboard history", elementWait)
+	must(t, app.Key("Escape"))
+	if after := historyEntriesLabel(t, app); after != before {
+		t.Fatalf("Escape on the question changed history: %q, was %q", after, before)
+	}
+
+	runFixtureClear(t, app)
+	waitForRow(t, app, "Clear clipboard history", elementWait)
+	must(t, app.Key("Escape"))
+	if after := historyEntriesLabel(t, app); after != before {
+		t.Fatalf("the second Escape changed history: %q, was %q", after, before)
+	}
+}
