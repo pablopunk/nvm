@@ -40,7 +40,9 @@ scripts/boxgo.sh wp03 'RIG_DISPLAY=:95 RIG_ARTIFACTS=/root/wp/wp03-logs NVM_RIG_
 
 | Helper | What it does |
 | --- | --- |
-| `Launch(t, Options)` | Starts `$NVM_RIG_BIN` detached (own session) on `$DISPLAY` with an isolated `HOME`, `XDG_RUNTIME_DIR` (which keys MyGo's single-instance socket) and automation socket. Waits for the `ready` log line and for the socket. `Options.Hotkey` writes an isolated `settings.json`. |
+| `Launch(t, Options)` | Starts `$NVM_RIG_BIN` detached (own session) on `$DISPLAY` with an isolated `HOME`, `XDG_RUNTIME_DIR` (which keys MyGo's single-instance socket) and automation socket. Waits for the `ready` log line and for the socket. `Options.Hotkey` writes an isolated `settings.json`. `Options.Backend` names the fake backend the app talks to (see below). |
+| `StartFakeBackend(t)`, `FakeBackend` | The recorded fake backend (`internal/fixtures`) served on a loopback listener for one test: `SetMode`, `SetReply`, `SetChunkDelay`, `SetActiveModel`, `Requests`, `WaitForDeviceCode`, `ApproveDeviceCode`. |
+| `signInThroughAccount(t, app, fake)` | Runs the device flow from the Account page, approves the code on the fake and waits for `Logged in as fixture@example.test`. |
 | `Stop`, `KillHard` | SIGTERM then SIGKILL for the launched pid only; `KillHard` is SIGKILL for crash tests. |
 | `SummonPalette`, `DismissWithEscape`, `ClickAway` | Hotkey summon that waits for visible and focused; Escape and desktop click that wait for hidden. |
 | `PressHotkey`, `Type`, `Key`, `Click` | xdotool input on the app's display. `PressHotkey` converts `Alt+Shift+Space` to xdotool keys and rejects unknown names. |
@@ -64,9 +66,29 @@ scripts/boxgo.sh wp03 'RIG_DISPLAY=:95 RIG_ARTIFACTS=/root/wp/wp03-logs NVM_RIG_
 
 Each journey test saves `*-palette.png` and `*-desktop.png` per step (names start with the journey id, for example `j01-1-summoned`). A WP that touches a journey attaches the palette PNGs of that journey to its PR, from the `linux-rig-artifacts` artifact of the CI run, and names the commit and run id they came from. Screenshots from a local run are not evidence for a PR.
 
+## Fake backend (J12, J13, J28)
+
+The account and AI journeys run against the fake backend, never the real one. `StartFakeBackend` serves `internal/fixtures.Backend` on `127.0.0.1`, and `Launch` passes its origin in `NVM_RIG_BACKEND`. The override exists only in `-tags automation` builds (`internal/app/account_rig_on.go`). In those builds the account starts on that loopback origin, unpackaged, with no browser and an in-memory keychain. A launch without `Options.Backend` gets the discard port `127.0.0.1:9`, so it never reaches production. A default build ignores the variable and keeps the production origin, packaged (`internal/app/account_rig_off_test.go`).
+
+The fake serves device sign-in (initiate, exchange, approval), `/api/v1/active-model`, `/api/me`, chat completions as SSE (the scripted reply, or the 401, 402, 429, 5xx, malformed and mid-stream failure modes) and the audio transcription routes. A device code is approved with `ApproveDeviceCode`, which stands in for the verification page. `SetChunkDelay` paces a reply so Escape can stop it while it streams.
+
+Run the three journeys on a private display in the box:
+
+```sh
+scripts/boxgo.sh rigbe 'mkdir -p /root/wp/rigbe-home; export HOME=/root/wp/rigbe-home MISE_DATA_DIR=/root/.local/share/mise MISE_CACHE_DIR=/root/.cache/mise GOPATH=/root/go GOMODCACHE=/root/go/pkg/mod GOCACHE=/root/.cache/go-build; RIG_DISPLAY=:77 RIG_ARTIFACTS=/root/wp/rigbe-logs NVM_RIG_BIN=/root/wp/rigbe/nvm-rig NVM_RIG_ARTIFACTS=/root/wp/rigbe-artifacts bash scripts/rig/entrypoint.sh bash scripts/rig/run-journeys.sh -count=1 -run "TestJourney(J12|J13|J28)" -v'
+```
+
+The `HOME` override is for the test process; each launch still gets its own isolated `HOME`. `MISE_DATA_DIR` and `MISE_CACHE_DIR` keep the box's installed Go toolchain in use when `HOME` changes, and `GOMODCACHE` and `GOCACHE` keep the module and build caches in place. The box disk fills up often because all agents share it: a run that fails with `No space left on device` needs the caches cleared, not a code change.
+
+- **J12** signs in from the Account page: the pending code appears, the fake approves it, the page shows `Logged in as fixture@example.test`, and the app log does not hold the token. Not covered: sign-out, the repeat offline, and the denied and expired states.
+- **J13** asks with Tab, sees the reply stream, presses Escape while frames are still due, and checks three things: the fake backend counts the chat stream as abandoned, not completed (the stop is proven on the backend side), the palette stays open, and the question stays in the transcript. The last word never appears. Not covered: continuing the conversation after a restart and the first-token progress.
+- **J28** shows the notices for a 402 (`Credits needed`, with the balance from the body) and for a route the free pool has paused (`Free AI temporarily paused`). Dismissing the palette from the chat page after a notice is not covered yet. Offline, the expired token, and the 429 notice are not covered either.
+
+The fake's approve route is not the backend's. The real approval needs the web session, and the rig does not drive a browser.
+
 ## What the rig does not cover yet
 
-Scripted journeys are J01, J02, J03, J05, J06, J08, J09, J10, J15, J16 and J22. Each covers the smoke part of its pass condition. Not covered: no focus restoration, frecency, paste into another app, pinning, or restart durability. J15 checks the failed rows and the reasons the palette shows, but after a child's first failure the reason is the generic `not running: failed`, and J15 does not check the first failure's own reason. J16 covers a folder dropped before launch, not one dropped while the app runs. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
+Scripted journeys are J01, J02, J03, J05, J06, J08, J09, J10, J12, J13, J15, J16, J22 and J28. Each covers the smoke part of its pass condition. Not covered: no focus restoration, frecency, paste into another app, pinning, or restart durability. J15 checks the failed rows and the reasons the palette shows, but after a child's first failure the reason is the generic `not running: failed`, and J15 does not check the first failure's own reason. J16 covers a folder dropped before launch, not one dropped while the app runs. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
 
 ## Performance budgets (WP0.5)
 

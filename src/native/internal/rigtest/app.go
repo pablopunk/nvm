@@ -36,6 +36,9 @@ type Options struct {
 	// AllowUnboundHotkey lets the launch go on when the hotkey is taken, for a journey that starts a
 	// second copy on the same display on purpose (J11). Launch otherwise fails on the log line.
 	AllowUnboundHotkey bool
+	// Backend is the origin of the fake backend the app talks to (StartFakeBackend). Empty points the app
+	// at an unreachable port, so a launch never reaches the production backend.
+	Backend string
 }
 
 // App is one launched copy of the app, isolated from the user's and from other launches: its own
@@ -110,7 +113,7 @@ func Launch(t *testing.T, opts Options) *App {
 			t.Fatal(err)
 		}
 	}
-	a.start(t, bin, home, runtimeDir, opts.Theme)
+	a.start(t, bin, home, runtimeDir, opts.Theme, opts.Backend)
 	t.Cleanup(a.Stop)
 	a.waitReady(t)
 	a.client, err = dialAutomation(a.socket, readyTimeout)
@@ -121,7 +124,7 @@ func Launch(t *testing.T, opts Options) *App {
 	return a
 }
 
-func (a *App) start(t *testing.T, bin, home, runtimeDir, theme string) {
+func (a *App) start(t *testing.T, bin, home, runtimeDir, theme, backend string) {
 	t.Helper()
 	logFile, err := os.Create(a.logPath)
 	if err != nil {
@@ -129,7 +132,7 @@ func (a *App) start(t *testing.T, bin, home, runtimeDir, theme string) {
 	}
 	cmd := exec.Command(bin)
 	cmd.Dir = home
-	cmd.Env = launchEnvironment(os.Environ(), home, runtimeDir, a.socket, theme)
+	cmd.Env = launchEnvironment(os.Environ(), home, runtimeDir, a.socket, theme, backend)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -146,14 +149,20 @@ func (a *App) start(t *testing.T, bin, home, runtimeDir, theme string) {
 	}()
 }
 
-// launchEnvironment replaces the variables that decide where the app keeps its state, and keeps
-// the display and session bus of the rig.
-func launchEnvironment(parent []string, home, runtimeDir, socket, theme string) []string {
-	env := make([]string, 0, len(parent)+6)
+// unreachableBackend is the origin of a launch without a fake backend: the discard port refuses every connection.
+const unreachableBackend = "http://127.0.0.1:9"
+
+// launchEnvironment replaces the variables that decide where the app keeps its state and which backend it talks to,
+// and keeps the display and session bus of the rig.
+func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend string) []string {
+	if backend == "" {
+		backend = unreachableBackend
+	}
+	env := make([]string, 0, len(parent)+7)
 	for _, kv := range parent {
 		key, _, _ := strings.Cut(kv, "=")
 		switch key {
-		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID":
+		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID", "NVM_RIG_BACKEND":
 			continue
 		}
 		env = append(env, kv)
@@ -166,6 +175,7 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme string) 
 		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
 		"XDG_RUNTIME_DIR="+runtimeDir,
 		"MYGO_AUTOMATION="+socket,
+		"NVM_RIG_BACKEND="+backend,
 	)
 	if theme != "" {
 		env = append(env, "NVM_THEME="+theme)
