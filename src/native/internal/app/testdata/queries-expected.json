@@ -156,6 +156,29 @@
       },
       {
         "kind": "Commands",
+        "title": "Welcome to Nevermind",
+        "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Get Started",
+            "label": ""
+          },
+          {
+            "title": "Dismiss welcome",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Quit All Apps",
         "subtitle": "Review and quit running apps",
         "section": "Suggestions",
@@ -376,7 +399,7 @@
       {
         "kind": "Commands",
         "title": "Lock Screen",
-        "subtitle": "",
+        "subtitle": "Secure this computer",
         "section": "Commands",
         "id": "",
         "icon": "lock",
@@ -1308,6 +1331,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Open Settings",
+        "subtitle": "Open system preferences",
+        "section": "Commands",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Commands",
@@ -1423,7 +1465,7 @@
       {
         "kind": "Commands",
         "title": "Restart",
-        "subtitle": "",
+        "subtitle": "Restart this computer",
         "section": "Commands",
         "id": "",
         "icon": "rotate-ccw",
@@ -1442,7 +1484,7 @@
       {
         "kind": "Commands",
         "title": "Empty Trash",
-        "subtitle": "",
+        "subtitle": "Permanently delete trashed files",
         "section": "Commands",
         "id": "",
         "icon": "trash-2",
@@ -1824,7 +1866,7 @@
       {
         "kind": "Commands",
         "title": "Empty Trash",
-        "subtitle": "",
+        "subtitle": "Permanently delete trashed files",
         "section": "Commands",
         "id": "",
         "icon": "trash-2",

@@ -17,7 +17,9 @@ import (
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
+	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -44,6 +46,9 @@ type App struct {
 	runs     map[string]*chatRun
 	tray     *mygo.Tray
 	appsvc   *appfeat.Services
+	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
+	systemSvc     *systemfeat.Services
+	launchAtLogin settingsfeat.LaunchAtLogin
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine

@@ -2,9 +2,6 @@ package app
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -14,27 +11,6 @@ import (
 )
 
 func itoa(i int) string { return strconv.Itoa(i) }
-
-// ---- system commands ----
-
-func run(name string, args ...string) {
-	go func() {
-		if err := exec.Command(name, args...).Run(); err != nil {
-			fmt.Fprintln(os.Stderr, name, err)
-		}
-	}()
-}
-
-func (p *App) emptyTrash() {
-	home, _ := os.UserHomeDir()
-	for _, sub := range []string{"files", "info"} {
-		dir := filepath.Join(home, ".local/share/Trash", sub)
-		ents, _ := os.ReadDir(dir)
-		for _, e := range ents {
-			_ = os.RemoveAll(filepath.Join(dir, e.Name()))
-		}
-	}
-}
 
 // ---- timer ----
 

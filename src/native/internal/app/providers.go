@@ -3,7 +3,6 @@ package app
 import (
 	"github.com/pablopunk/nvm/native/internal/search"
 	"net/url"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -56,11 +55,6 @@ type command struct {
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
 func (p *App) commands(timerOn bool) []command {
-	home, _ := os.UserHomeDir()
-	place := func(name string) command {
-		dir := filepath.Join(home, name)
-		return command{Title: name, Keywords: "open folder places go", Icon: "folder", Subtitle: dir, Hidden: true, Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(dir) }}
-	}
 	cmds := []command{
 		{Title: "Clipboard History", Keywords: "clipboard paste copy history", Icon: "clipboard", Tone: "blue", Subtitle: "Browse and paste what you copied", Run: func(h search.Host) { h.Push(p.clipboardView()) }},
 		{Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
@@ -76,34 +70,22 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Quit All Apps", Keywords: "quit all apps close everything", Icon: "power", Subtitle: "Review and quit running apps", Run: func(h search.Host) { h.Push(p.quitAllView()) }},
 		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
 		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
-		{Title: "Lock Screen", Keywords: "lock screen security", Icon: "lock", Hidden: true, Run: func(h search.Host) { h.Hide(); run("loginctl", "lock-session") }},
-		{Title: "Sleep", Keywords: "sleep suspend", Icon: "moon", Hidden: true, Run: func(h search.Host) { h.Hide(); run("systemctl", "suspend") }},
-		{Title: "Log Out", Keywords: "logout sign out", Icon: "log-out", Hidden: true, Run: func(h search.Host) {
-			h.Push(palette.Confirm("Log Out", "End the current session", func() { run("loginctl", "terminate-user", os.Getenv("USER")) }))
-		}},
-		{Title: "Restart", Keywords: "reboot restart", Icon: "rotate-ccw", Hidden: true, Run: func(h search.Host) {
-			h.Push(palette.Confirm("Restart", "Reboot this computer", func() { run("systemctl", "reboot") }))
-		}},
-		{Title: "Shut Down", Keywords: "shutdown power off", Icon: "power", Hidden: true, Run: func(h search.Host) {
-			h.Push(palette.Confirm("Shut Down", "Power off this computer", func() { run("systemctl", "poweroff") }))
-		}},
-		{Title: "Empty Trash", Keywords: "trash delete bin empty", Icon: "trash-2", Tone: "red", Hidden: true, Run: func(h search.Host) {
-			h.Push(palette.Confirm("Empty Trash", "Permanently delete trashed files", func() { p.emptyTrash() }))
-		}},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
-		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
+		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "lock", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}
+	cmds = append(cmds, p.systemCommands()...)
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
 	tones := map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
 		"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
-		"Start Timer": "orange", "Sleep": "indigo", "Restart": "orange", "Shut Down": "red", "Empty Trash": "red", "Downloads": "blue", "Documents": "blue",
-		"Desktop": "blue", "Pictures": "blue", "Cancel Timer": "orange"}
+		"Start Timer": "orange", "Cancel Timer": "orange"}
 	for i := range cmds {
 		cmds[i].Order = i
-		cmds[i].Tone = tones[cmds[i].Title]
+		if tone, ok := tones[cmds[i].Title]; ok {
+			cmds[i].Tone = tone
+		}
 	}
 	return cmds
 }
@@ -133,10 +115,6 @@ func (p *App) settingsView() *palette.View {
 			if p.S.ClipOff {
 				clip = "Off"
 			}
-			login := "Off"
-			if autostartEnabled() {
-				login = "On"
-			}
 			rows := []search.Item{
 				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
@@ -164,10 +142,10 @@ func (p *App) settingsView() *palette.View {
 					p.clip.setLimit(p.S.ClipLimit)
 					h.Refresh()
 				}}}},
-				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
 				{Title: "Account", Accessory: auth, Icon: "user", Actions: []search.Action{{Title: "Show Auth File", Run: func(h search.Host) { h.Hide(); mygo.Shell.ShowItemInFolder(filepath.Join(configDir(), "auth.json")) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}
+			rows = slices.Insert(rows, 4, p.launchAtLoginRows()...)
 			if lq == "" {
 				return rows
 			}
@@ -198,21 +176,4 @@ func (p *App) hotkeyView() *palette.View {
 			}}}}}
 		},
 	}
-}
-
-func autostartPath() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".config", "autostart", "nvm-native.desktop")
-}
-
-func autostartEnabled() bool { _, err := os.Stat(autostartPath()); return err == nil }
-
-func setAutostart(on bool) {
-	if !on {
-		_ = os.Remove(autostartPath())
-		return
-	}
-	exe, _ := os.Executable()
-	_ = os.MkdirAll(filepath.Dir(autostartPath()), 0o755)
-	_ = os.WriteFile(autostartPath(), []byte("[Desktop Entry]\nType=Application\nName=Nevermind\nExec="+exe+"\nX-GNOME-Autostart-enabled=true\n"), 0o644)
 }

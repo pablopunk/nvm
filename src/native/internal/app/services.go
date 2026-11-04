@@ -3,12 +3,17 @@ package app
 import (
 	"context"
 	"log"
+	"os"
+	"runtime"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/emoji"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
+	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -47,6 +52,8 @@ func (c rateCache) Save(rates calc.Rates) error {
 // writer could overwrite the first.
 func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Location) {
 	p.ports = ports
+	p.systemSvc = newSystemServices(ports)
+	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
 	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
 	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
@@ -75,6 +82,18 @@ func (p *App) attachServices(ports platform.Ports, dir string, zone *time.Locati
 		log.Println("calculator rates:", err)
 	}
 	p.calc = calc.New(ports.Clock, zone, rates)
+}
+
+// newSystemServices builds the OS capability services over the ports. The home folder is the process's, and the
+// settings label is the one the OS uses.
+func newSystemServices(ports platform.Ports) *systemfeat.Services {
+	home, _ := os.UserHomeDir()
+	return systemfeat.NewServices(systemfeat.Options{
+		Ports:         ports,
+		Platform:      runtime.GOOS,
+		Home:          home,
+		SettingsTitle: real.SettingsTitle(),
+	})
 }
 
 // closeStoreOnQuit is kept for the call order in ready; the store is closed once, by openUserData, after the
