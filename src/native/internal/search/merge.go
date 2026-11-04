@@ -8,23 +8,6 @@ import (
 // DefaultLimit is how many rows a merged result keeps: the first rows by score, as the prototype kept.
 const DefaultLimit = 40
 
-// merge combines the rows of several providers into one result: rows with an ID are de-duplicated by ID
-// and Kind (the first provider wins), the rows are sorted by score, highest first, with ties in provider
-// order, the result is cut to limit, and the rows are sectioned. searching tells sectioning whether the
-// query is typed, which changes the top hit and the grouping of commands.
-func merge(batches [][]Item, limit int, searching bool) []Item {
-	var all []Item
-	for _, items := range batches {
-		all = append(all, items...)
-	}
-	all = dedupe(all)
-	slices.SortStableFunc(all, func(a, b Item) int { return cmp.Compare(b.Score, a.Score) })
-	if limit > 0 && len(all) > limit {
-		all = all[:limit]
-	}
-	return sectioned(all, searching)
-}
-
 // dedupeKey identifies a row for de-duplication.
 type dedupeKey struct{ id, kind string }
 

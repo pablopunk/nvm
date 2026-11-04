@@ -80,6 +80,7 @@ type Coordinator struct {
 // slot is one provider's part of the current generation.
 type slot struct {
 	id       string
+	appended bool
 	items    []Item
 	started  time.Time
 	budget   Budget
@@ -114,7 +115,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.query = q
 	c.slots = make([]*slot, len(providers))
 	for i, p := range providers {
-		c.slots[i] = &slot{id: p.ID(), started: c.opts.Clock.Now(), budget: budgetOf(p), done: make(chan struct{})}
+		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), done: make(chan struct{})}
 	}
 	c.pending = len(providers)
 	c.emitted = false
@@ -320,11 +321,15 @@ func (c *Coordinator) finishLocked(s *slot) {
 
 // snapshotLocked merges the current generation and remembers the result for its query. The caller holds c.mu.
 func (c *Coordinator) snapshotLocked() Snapshot {
-	batches := make([][]Item, len(c.slots))
-	for i, s := range c.slots {
-		batches[i] = s.items
+	var ranked, appended [][]Item
+	for _, s := range c.slots {
+		if s.appended {
+			appended = append(appended, s.items)
+		} else {
+			ranked = append(ranked, s.items)
+		}
 	}
-	snap := Snapshot{Gen: c.gen, Query: c.query, Items: merge(batches, c.limit(), c.query != ""), Settled: c.pending == 0}
+	snap := Snapshot{Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != ""), Settled: c.pending == 0}
 	c.emitted = true
 	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
 	return snap
