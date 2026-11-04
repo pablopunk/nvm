@@ -133,7 +133,7 @@ func (p *Palette) Show() {
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
 	}
-	p.input.Focus()
+	p.focusInput()
 	p.win.Show()
 	p.syncActive(nil)
 }
@@ -232,7 +232,7 @@ func (p *Palette) push(v *View) {
 	p.actionsOpen = false
 	p.syncActive(covered)
 	p.search()
-	p.input.Focus()
+	p.focusInput()
 }
 
 // Visible reports whether the palette window is shown.
@@ -264,7 +264,7 @@ func (p *Palette) Pop() {
 	p.actionsOpen = false
 	p.syncActive(nil)
 	p.search()
-	p.input.Focus()
+	p.focusInput()
 }
 
 // leaveUnsurvivingPages pops the pages above the topmost page that survives a hide, down to the root when none does.
@@ -344,4 +344,14 @@ func (p *Palette) enabledNear(i, requested int) int {
 		}
 	}
 	return i
+}
+
+// focusInput gives the keyboard to the text input of the page on top: the input the page draws itself when it owns
+// one, otherwise the search field.
+func (p *Palette) focusInput() {
+	if owned := p.cur().Input; owned != nil {
+		owned.Focus()
+		return
+	}
+	p.input.Focus()
 }

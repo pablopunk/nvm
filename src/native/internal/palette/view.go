@@ -70,6 +70,9 @@ type View struct {
 	// SurvivesHide keeps the page open across a hide, as Electron keeps the last live AI chat: the next summon shows it
 	// and the pages pushed above it are dropped. Every other page is left when the palette hides.
 	SurvivesHide bool
+	// Input, when set, is the handle of a text input the Body draws itself, as a chat's composer does. The palette then
+	// draws no search row, focuses this input instead of its own, and the Body keeps the text.
+	Input *ui.Handle
 	// OnActive reports whether the view is the page on top of a shown palette. It is called when the view is pushed
 	// or covered, when the palette shows or hides, and when the view is the top page at either. A covered or hidden
 	// view must stop what only a visible page may do, such as a camera.

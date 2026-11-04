@@ -19,22 +19,34 @@ const (
 // page is the state of one open chat: which chat it shows, the scroll of its transcript and the host it last drew
 // with, so keys and submits can answer on the palette.
 type page struct {
-	deps Deps
-	id   string
-	list ui.ListState
-	host search.Host
+	deps  Deps
+	id    string
+	list  ui.ListState
+	host  search.Host
+	draft string
+	input ui.Handle
 }
 
-// ChatView is the page of the chat with id. Its body is the transcript; the palette input is the composer.
+// ChatView is the page of the chat with id. Its body is the transcript and its composer; the palette has no search
+// field of its own here.
 func ChatView(deps Deps, id string) *palette.View {
+	return newPage(deps, id).view()
+}
+
+// newPage is the state of a chat page, before the palette shows it.
+func newPage(deps Deps, id string) *page {
 	p := &page{deps: deps, id: id}
 	p.list.FollowEnd = true
+	return p
+}
+
+// view is the palette view of the page: the transcript and composer body, with the page's keys and footer.
+func (p *page) view() *palette.View {
 	return &palette.View{
 		Title:        "AI Chat",
 		TitleFn:      p.title,
-		Placeholder:  placeholderFor(deps.Service, id),
 		Body:         p.body,
-		OnSubmit:     p.submit,
+		Input:        &p.input,
 		OnKey:        p.key,
 		OnEscape:     p.escape,
 		SurvivesHide: true,
@@ -68,16 +80,6 @@ func placeholderFor(service *chat.Service, id string) string {
 		return "Describe the extension you want"
 	}
 	return "Message AI"
-}
-
-// submit sends the typed text as the next message. Enter on an empty input allows a tool call that waits for the user.
-// A refusal is said on the palette, not in the transcript.
-func (p *page) submit(text string) {
-	if text == "" && p.deps.Service.Awaiting(p.id) {
-		p.report(p.deps.Service.Decide(p.id, true))
-		return
-	}
-	p.report(p.deps.Service.Send(p.id, text))
 }
 
 // footerHint is the right footer of the page: it names the answers a waiting tool call takes, as the transcript shows,

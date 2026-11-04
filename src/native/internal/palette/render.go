@@ -33,9 +33,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
-		p.searchRow(c, v)
-		p.noticeRow(c)
-		design.Etched(c)
+		p.header(c, v)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
 			if v.Body != nil {
 				v.Body(c, p)
@@ -49,6 +47,18 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	if p.actionsOpen {
 		p.actionPanel(c)
 	}
+}
+
+// header is the top of the pane: the search field and the notices under it. A page that draws its own input has no
+// search field, only the notices.
+func (p *Palette) header(c *ui.Context, v *View) {
+	if v.Input != nil {
+		p.noticeRow(c)
+		return
+	}
+	p.searchRow(c, v)
+	p.noticeRow(c)
+	design.Etched(c)
 }
 
 // searchRow is the field at the top of the pane; the design package draws it and reports what happened.

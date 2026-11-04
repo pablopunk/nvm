@@ -1,6 +1,8 @@
 package aichat
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -8,23 +10,82 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// composerRow is the row under the transcript: the tier picker, and Stop while a reply is in flight.
+// composerRow is the composer under the transcript: a card that holds the palette's text input, with the tier picker
+// and the send or stop control under the text, as the desktop app's composer is.
 func composerRow(c *ui.Context, p *page, record chat.Chat, h search.Host) {
-	ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
-		tierPicker(c, p, record, h)
-		if p.deps.Service.Busy(p.id) && ui.Button(c, "Stop").Clicked() {
+	k := design.Tokens(c)
+	ui.Column(c).Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+		ui.TextAreaBase(c, &p.draft).Bind(&p.input).Lines(1, 6).Placeholder(placeholderFor(p.deps.Service, p.id)).
+			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
+			OnTextKey(func(key ui.TextKey) bool { return p.composerKey(key, h) })
+		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Children(func() {
+			tierPicker(c, p, record, h)
+			ui.Spacer(c)
+			sendOrStop(c, p, h)
+		})
+	})
+}
+
+// composerKey answers the keys of the composer's text: Enter sends what is typed and clears it, and Shift+Enter breaks
+// the line, as the desktop app's composer does.
+func (p *page) composerKey(key ui.TextKey, h search.Host) bool {
+	if key.Key != ui.KeyEnter || key.Mods != 0 {
+		return false
+	}
+	if p.send(key.Text(), h) {
+		key.SetText("")
+	}
+	return true
+}
+
+// sendOrStop is the control at the end of the composer: Stop while a reply streams, otherwise send.
+func sendOrStop(c *ui.Context, p *page, h search.Host) {
+	k := design.Tokens(c)
+	if p.deps.Service.Busy(p.id) {
+		stop := ui.ButtonBase(c).Padding(4, 10).Radius(6).Background(k.Interactive)
+		stop.Children(func() {
+			ui.Text(c, "Stop").FontSize(12).FontWeight(600).TextColor(k.Danger)
+		})
+		if stop.Clicked() {
 			p.deps.Service.Stop(p.id)
 		}
+		return
+	}
+	send := ui.ButtonBase(c).Padding(4).Radius(14).Background(k.AccentFill)
+	send.Children(func() {
+		ui.Icon(c, design.Icon("corner-down-left")).FontSize(14).TextColor(k.AccentContrast)
 	})
+	if send.Clicked() && p.send(p.draft, h) {
+		p.draft = ""
+	}
+}
+
+// send sends text as the next message, or answers a waiting tool call when there is no text. It reports whether the
+// text was taken, so the composer clears it; a refused send keeps the text, and the palette says why.
+func (p *page) send(text string, h search.Host) bool {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		if p.deps.Service.Awaiting(p.id) {
+			p.report(p.deps.Service.Decide(p.id, true))
+		}
+		return false
+	}
+	err := p.deps.Service.Send(p.id, text)
+	if err != nil {
+		p.host = h
+		p.report(err)
+		return false
+	}
+	return true
 }
 
 // tierPicker names the tier the next reply uses, and switches it on a click. The backend's model and route names are
 // never shown.
 func tierPicker(c *ui.Context, p *page, record chat.Chat, h search.Host) {
 	k := design.Tokens(c)
-	picker := ui.ButtonBase(c).Padding(3, 8).Radius(6).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi)
+	picker := ui.ButtonBase(c).Padding(3, 8).Radius(6)
 	picker.Children(func() {
-		ui.Text(c, tierLabel(record.Tier)+" ⌄").FontSize(12).FontWeight(600).TextColor(k.Muted)
+		ui.Text(c, tierLabel(record.Tier)+" ⌄").FontSize(12).FontWeight(600).TextColor(k.Secondary)
 	})
 	if picker.Clicked() {
 		p.toggleTier(h)

@@ -158,10 +158,10 @@ func (r *rig) chatWith(title string, tier chat.Tier, messages ...chat.Message) c
 	return record
 }
 
-// open shows view above the root with an empty query, as a push does.
+// open shows view above the root with an empty query, as a push does: the palette gives the keyboard to the page.
 func (r *rig) open(view *palette.View) {
-	r.palette.SetStack(r.root, view)
-	r.palette.SetQuery("")
+	r.palette.SetStack(r.root)
+	r.palette.Push(view)
 }
 
 // user, assistant, streaming, stopped and notice build transcript entries for the goldens and tests.
