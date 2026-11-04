@@ -193,6 +193,12 @@ type Shortcuts interface {
 	Palette() ShortcutRecord
 }
 
+// Account reads whether the palette is signed in to a Nevermind account. Signing in is the ActionAccount action with the
+// sign-in op, which the host runs; the credentials never reach an extension.
+type Account interface {
+	SignedIn() bool
+}
+
 // IndicatorStatus is the visual state of a passive indicator.
 type IndicatorStatus string
 

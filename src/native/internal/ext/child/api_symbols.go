@@ -22,6 +22,8 @@ func init() {
 		"AIEventStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
 		"AIEventToolEnd":                reflect.ValueOf(constant.MakeFromLiteral("\"tool_end\"", token.STRING, 0)),
 		"AIEventToolStart":              reflect.ValueOf(constant.MakeFromLiteral("\"tool_start\"", token.STRING, 0)),
+		"AccountSignIn":                 reflect.ValueOf(constant.MakeFromLiteral("\"sign-in\"", token.STRING, 0)),
+		"ActionAccount":                 reflect.ValueOf(api.ActionAccount),
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
@@ -269,6 +271,7 @@ func init() {
 		"AIStream":                reflect.ValueOf((*api.AIStream)(nil)),
 		"AIStreamEvent":           reflect.ValueOf((*api.AIStreamEvent)(nil)),
 		"Accessory":               reflect.ValueOf((*api.Accessory)(nil)),
+		"Account":                 reflect.ValueOf((*api.Account)(nil)),
 		"Action":                  reflect.ValueOf((*api.Action)(nil)),
 		"ActionHandler":           reflect.ValueOf((*api.ActionHandler)(nil)),
 		"ActionKind":              reflect.ValueOf((*api.ActionKind)(nil)),
@@ -460,6 +463,7 @@ func init() {
 		"_AIBuilder":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder)(nil)),
 		"_AISession":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AISession)(nil)),
 		"_AIStream":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIStream)(nil)),
+		"_Account":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Account)(nil)),
 		"_ActionHandler":     reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler)(nil)),
 		"_Apps":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Apps)(nil)),
 		"_AttachmentBuilder": reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder)(nil)),
@@ -607,6 +611,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIStream) Result() (st
 	return W.WResult()
 }
 
+// _github_com_pablopunk_nvm_native_internal_ext_api_Account is an interface wrapper for Account type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Account struct {
+	IValue    interface{}
+	WSignedIn func() bool
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Account) SignedIn() bool {
+	return W.WSignedIn()
+}
+
 // _github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler is an interface wrapper for ActionHandler type
 type _github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler struct {
 	IValue     interface{}
@@ -750,6 +764,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	IValue      interface{}
 	WAI         func() api.AI
 	WAIBuilder  func() api.AIBuilder
+	WAccount    func() api.Account
 	WCache      func() api.Cache
 	WClipboard  func() api.ClipboardHistory
 	WClock      func() api.Clock
@@ -783,6 +798,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AI() api.AI {
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AIBuilder() api.AIBuilder {
 	return W.WAIBuilder()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Account() api.Account {
+	return W.WAccount()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Cache() api.Cache {
 	return W.WCache()

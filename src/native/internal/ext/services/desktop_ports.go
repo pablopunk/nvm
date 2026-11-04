@@ -22,6 +22,11 @@ type WindowEngine interface {
 	ApplyTo(ctx context.Context, handle api.WindowHandle, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error)
 }
 
+// AccountState reports whether the palette is signed in to a Nevermind account.
+type AccountState interface {
+	SignedIn() bool
+}
+
 // ShortcutTable reads the shortcuts the user has set up. The shortcuts manager implements it.
 type ShortcutTable interface {
 	List() []api.ShortcutRecord

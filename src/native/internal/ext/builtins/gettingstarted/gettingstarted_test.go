@@ -2,6 +2,7 @@ package gettingstarted
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -49,6 +50,14 @@ func (s fakeShortcuts) Palette() api.ShortcutRecord {
 	return api.ShortcutRecord{Accelerator: "Command+Alt+K", Label: s.label}
 }
 
+// fakeAccount reports the signed-in state the test sets.
+type fakeAccount struct {
+	api.Account
+	signedIn bool
+}
+
+func (a fakeAccount) SignedIn() bool { return a.signedIn }
+
 type fakeNavigation struct {
 	api.Navigation
 }
@@ -65,11 +74,13 @@ type fakeContext struct {
 	storage   *fakeStorage
 	views     *fakeViews
 	shortcuts fakeShortcuts
+	account   fakeAccount
 }
 
 func (c fakeContext) Storage() api.Storage       { return c.storage }
 func (c fakeContext) Views() api.Views           { return c.views }
 func (c fakeContext) Shortcuts() api.Shortcuts   { return c.shortcuts }
+func (c fakeContext) Account() api.Account       { return c.account }
 func (c fakeContext) Navigation() api.Navigation { return fakeNavigation{} }
 
 func newContext(label string) fakeContext {
@@ -157,7 +168,7 @@ func TestGuideOpensWithTheLiveShortcutLabel(t *testing.T) {
 }
 
 func TestGuideWithoutAShortcutOffersToSetOne(t *testing.T) {
-	rows := guideRows("")
+	rows := guideRows("", false)
 	for _, row := range rows {
 		if row.ID == "getting-started-shortcut" && (row.Title != "Open Nevermind from anywhere" || row.action != actionSetShortcut) {
 			t.Fatalf("unset shortcut row = %+v", row)
@@ -166,7 +177,7 @@ func TestGuideWithoutAShortcutOffersToSetOne(t *testing.T) {
 }
 
 func TestGuideEndsWithDoneForNow(t *testing.T) {
-	rows := guideRows("")
+	rows := guideRows("", false)
 	last := rows[len(rows)-1]
 	if last.ID != "getting-started-done" || last.action != actionFinish {
 		t.Fatalf("last guide row = %+v, want Done for now", last)
@@ -196,4 +207,40 @@ func itemWithTitle(t *testing.T, view *api.View, title string) api.Item {
 	}
 	t.Fatalf("no guide row titled %q", title)
 	return api.Item{}
+}
+
+// guideTitles lists the titles of the guide's rows, in order.
+func guideTitles(t *testing.T, ctx api.Context) []string {
+	t.Helper()
+	var titles []string
+	for _, item := range guideView(ctx).Items {
+		titles = append(titles, item.Title)
+	}
+	return titles
+}
+
+func TestGuideOffersSignInWhileSignedOutAfterTheShortcutRow(t *testing.T) {
+	ctx := newContext("")
+	want := []string{"Find a command", "Run it", "Open Nevermind from anywhere", "Sign in to Nevermind", "Permissions when needed", "Done for now"}
+	if got := strings.Join(guideTitles(t, ctx), "|"); got != strings.Join(want, "|") {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+	view := guideView(ctx)
+	row := itemWithTitle(t, &view, "Sign in to Nevermind")
+	if row.Subtitle != "Optional: connect your account to use AI chats." || row.Disabled {
+		t.Fatalf("sign-in row = %+v", row)
+	}
+	if row.Primary == nil || row.Primary.Kind != api.ActionAccount || row.Primary.Op != api.AccountSignIn || row.Primary.Title != "Sign in" {
+		t.Fatalf("primary = %+v, want the account sign-in action", row.Primary)
+	}
+}
+
+func TestGuideShowsTheAccountAsDisabledWhenSignedIn(t *testing.T) {
+	ctx := newContext("")
+	ctx.account.signedIn = true
+	view := guideView(ctx)
+	row := itemWithTitle(t, &view, "Nevermind account")
+	if row.Subtitle != "You are already signed in. Account access is only needed for AI chats." || !row.Disabled || row.Primary != nil {
+		t.Fatalf("account row = %+v, want a disabled information row", row)
+	}
 }

@@ -49,6 +49,7 @@ type Ports struct {
 	// Notifier shows the notifications of the system service. Nil answers unavailable.
 	Notifier  platform.Notifier
 	Shortcuts services.ShortcutTable
+	Account   services.AccountState
 	OCR       *ocr.Service
 	History   func() *clipboard.History
 	Confirm   services.ConfirmFunc
@@ -161,6 +162,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Frontmost:    ports.Frontmost,
 			Notifier:     ports.Notifier,
 			Shortcuts:    ports.Shortcuts,
+			Account:      ports.Account,
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,
 			AI:           ports.AI,
