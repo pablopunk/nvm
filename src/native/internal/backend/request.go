@@ -14,11 +14,9 @@ import (
 // place they are written.
 const (
 	pathChatCompletions           = "/api/v1/chat/completions"
-	pathModels                    = "/api/v1/models"
 	pathActiveModel               = "/api/v1/active-model"
 	pathDecisions                 = "/api/v1/decisions"
 	pathCompatibility             = "/api/compatibility"
-	pathMe                        = "/api/me"
 	pathDeviceInitiate            = "/api/auth/device/initiate"
 	pathDeviceExchange            = "/api/auth/device/exchange"
 	pathAudioTranscriptions       = "/api/v1/audio/transcriptions"

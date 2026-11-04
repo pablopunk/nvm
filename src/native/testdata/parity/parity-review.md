@@ -24,8 +24,8 @@ the review itself: no side-by-side run, no 20-query comparison and no owner sign
 | Status | Count |
 |---|---|
 | done | 5 |
-| partial | 78 |
-| missing | 7 |
+| partial | 79 |
+| missing | 6 |
 | unknown | 4 |
 
 The five `done` rows are three palette core rows (A2, A3, A5), the generated API reference (E14) and the reference
@@ -39,7 +39,7 @@ Gap column before deciding a row.
 | A1 | Palette window, summon hotkey, placement on the cursor's display (`src/app/electron/app/palette-window.ts`, `palette-shortcuts.ts`) | partial | Linux; macOS and Windows compile | WP1.3; `internal/shortcuts`, `internal/palette/placement.go`; rig J01, J11 | J25 and J26 (multi-display, Spaces, full screen), focus return to the previous app, remembered offset (owner decision), tiling-manager check, hotkey does not hide a shown palette |
 | A2 | Command-K action panel and keyboard contract (`src/app/palette/action-panel.tsx`) | done | Linux (L1, L2) | WP1.1; `internal/palette/actions.go`, `keys.go`, `focus.go` | none listed |
 | A3 | Search coordinator: cached results first, cancellation, stale-result guard (`electron/search/search-coordinator.ts`) | done | Linux (L2) | WP1.1; `internal/search`; provider that blocks 2 s does not delay typing | none listed |
-| A4 | Ranking and the 20 canned queries (`src/app/palette/search-ranking.ts`, `testdata/queries.txt`) | partial | Linux (L1) | WP1.2; `internal/search` ranking tests | `testdata/queries.txt` is missing, so the 20-query comparison has not run |
+| A4 | Ranking and the 20 canned queries (`src/app/palette/search-ranking.ts`, `testdata/queries.txt`) | partial | Linux (L1) | WP1.2; `internal/search` ranking tests | The 20 queries are in `testdata/queries.txt`, read by the root table test; the 20-query comparison with 1.x has not run |
 | A5 | Usage learning, frecency, query history of 100 entries (`electron/state/learning-store.ts`) | done | Linux (L1, L2) | WP1.2; `internal/search/usage` | none listed |
 | A6 | "No shortcut set" banner (`palette-hotkey-notice.tsx`) | partial | Linux (rig) | WP1.3; `internal/palette/notice.go` | saving a taken shortcut in the rig is not done |
 | A7 | Keyboard shortcuts manager and recorder (`electron/shortcuts/*`, `palette/shortcut-manager.tsx`) | partial | Linux (rig J01, J11, J22) | WP1.11; `internal/shortcuts` | extension-declared shortcuts (no extension host shortcut path), J11 launch-at-login, macOS and Windows runs |
@@ -73,7 +73,7 @@ Gap column before deciding a row.
 | B22 | Settings: hotkey, engine, clipboard, launch at login, Welcome and Help (`settings.ts`, `electron/app/settings*.ts`) | partial | Linux (rig J11 for hotkey) | WP1.10, WP1.3; `internal/features/settings` | launch-at-login J11 not done, appearance not ported (no 1.x behavior), macOS and Windows runs |
 | B23 | Background tasks: status, triggers, run history, Run Now, enable or disable (`background-tasks.ts`) | partial | Linux (rig J15, J16, J18 on :73) | WP3.6; `internal/jobs`, `internal/palette/background` | no-overlap guarantee only in unit tests, interval and wake triggers not in the rig, menu bar items on the trigger host, macOS and Windows runs, frontmost poll cost not measured |
 | B24 | Diagnostics: recent errors, copy reference, report a problem, analytics consent (`diagnostics.ts`, `electron/diagnostics/*`, `docs/posthog-observability.md`) | partial | Linux (L1, L2, goldens) | WP1.12; `internal/diag`, `internal/diag/analytics` | performance traces, `$pageview` and sessions, owner events, live ingest smoke, rig J25 and J28 not run, macOS and Windows runs |
-| B25 | Account: device sign-in, deep link, sign-out, environment switch, BYO key, spend-cap notice (`account.ts`, `nevermind-sign-in.ts`, `byo-key.ts`) | partial | Linux (L1, L2, L3 goldens) | WP2.2; `internal/backend/auth`, `internal/palette/account` | live sign-in not run; `nvm://` collides with 1.x (cutover.md section 2); `/api/me` is cookie-only on the backend, so the plan and credits fail (cutover.md section 4) |
+| B25 | Account: device sign-in, deep link, sign-out, environment switch, BYO key, spend-cap notice (`account.ts`, `nevermind-sign-in.ts`, `byo-key.ts`) | partial | Linux (L1, L2, L3 goldens) | WP2.2; `internal/backend/auth`, `internal/palette/account` | live sign-in not run; `nvm://` collides with 1.x (cutover.md section 2); the plan shows as unknown until the backend has a bearer route that reports it (cutover.md section 4) |
 | B26 | Getting Started guide and the Welcome row (`getting-started.ts`) | partial | Linux (L3 goldens) | WP1.10 | rig J25 (first run, permissions only when needed) not run |
 | B27 | Menu bar item: Open, Settings, Check for Updates, Quit, timer title (`menubar.ts`, `electron/app/menubar-composition.ts`) | partial | Linux (rig J-tray) | WP1.12, WP3.5; `internal/menubar` | popovers, subtitles, checkmarks, shortcuts, glyph icons (placeholder disc), triggers other than interval and startup, visibility toggle, macOS and Windows runs |
 
@@ -83,7 +83,7 @@ Gap column before deciding a row.
 |---|---|---|---|---|---|
 | C1 | AI chat: Tab to ask, streaming, stop, regenerate, chat list, model tiers, 24 h retention (`src/app/electron/ai/ai-chat-*.ts`, `palette/ai-chat/*`) | partial | Linux (L1, L2, L3 goldens) | WP2.3; `internal/ai/chat`, `internal/palette/aichat` | rig J13 and J28 not run (packaged builds refuse the fake origin), images and thumbnails, per-message copy and retry, macOS and Windows runs, live smoke |
 | C2 | Agent tools in chat: search and read files, open apps and links, read and copy the clipboard, move to Trash, with approvals (`src/app/electron/ai/ai-tool-policy.ts`) | partial | Linux (L1, L2, goldens) | WP2.4; `internal/ai/agent`, `internal/ai/tools` | web search and fetch with egress approval, Responses and Messages wires, compaction, window and quit tools, rig J13 and J14, live backend smoke |
-| C3 | Compatibility and update-recommended notices from the backend (`src/backend/src/lib/compatibility.ts`) | partial | Linux (L1) | WP2.1; `internal/backend/compat.go` | live smoke not run; the manifest's `latestVersion` and `updateUrl` belong to the 1.x line (cutover.md section 4) |
+| C3 | Compatibility and update-recommended notices from the backend (`src/backend/src/lib/compatibility.ts`) | partial | Linux (L1) | WP2.1; `internal/backend/compat.go` | live smoke not run; the manifest's `latestVersion` and `updateUrl` are not read until the 2.0 client name ships (cutover.md section 4) |
 | C4 | Ask-AI image classification and OCR command (`electron/files/ocr.ts`) | partial | Linux (L1, L2, goldens; Tesseract when installed) | WP4.2; `internal/features/ocr` | macOS Vision and screen capture unrun (L5), Windows OCR missing, rig journeys |
 | C5 | Camera and webview views (`camera-view.tsx`, `extension-webview.tsx`) | partial | Linux (rig camera refusal, webview paints) | WP4.3; `internal/palette/extview` | capture to file or clipboard (no 1.x parity), saved camera not kept on disk, macOS and Windows runs, camera permission copy (WP5.1) |
 | C6 | Launch at login (`electron/app/settings-service.ts`) | partial | Linux (rig J11 not run) | WP1.10 (Autostart port) | J11 launch-at-login not run; macOS and Windows runs |
@@ -154,7 +154,7 @@ does not expose here. Service handlers live in `src/native/internal/ext/services
 
 | ID | Asset | Go status | Platforms run | Location | Gap |
 |---|---|---|---|---|---|
-| F1 | 20 canned queries for the parity comparison (PLAN WP1.2, section 3.3) | missing | none | `testdata/queries.txt` (absent) | create it from real use and compare with 1.x |
+| F1 | 20 canned queries for the parity comparison (PLAN WP1.2, section 3.3) | partial | none | `testdata/queries.txt`, read by the root table test in `internal/app` | the side-by-side comparison with 1.x has not run |
 | F2 | Electron reference screenshots (WP0.4) | done | Linux | `src/native/testdata/reference/` (`ai-chat.png`, `clipboard-history-preview.png`, `palette-dotted-connectors-*.png`, `root-search-automate.png`, `root-automate-tab-hint.png`) | references are for human review only |
 | F3 | Rig journeys J01-J32 (PLAN section 3.1) | partial | Linux | `src/native/internal/rigtest/journeys_test.go`, `scripts/rig/` | J13, J14 (partial), J23, J25, J26, J27, J28, J29, J30 (rig) not run or not green; macOS and Windows journeys not run |
 | F4 | Performance budgets B1-B8 (WP0.5) | partial | Linux (box numbers) | `src/native/testdata/budgets.json`, `perf-baseline.json` | budgets measured on Linux; B1 not measured on macOS or Windows; B6 size tracking not done (WP5.1); B7 soak not run |

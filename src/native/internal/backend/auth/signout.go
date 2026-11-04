@@ -41,9 +41,9 @@ func (s *Session) SignOut(ctx context.Context) (revoked bool) {
 	return revoked
 }
 
-// Refresh reads the credit balance and the spend-cap state of the active backend, and the plan when the backend
-// reports it. It makes network calls, so callers run it off the UI thread. A refusal from the backend is shown
-// in the account view and returned.
+// Refresh reads the credit balance and the spend-cap state from the active-model route, the one account read the
+// bearer token is accepted on. The plan has no such route, so it stays unknown. It makes network calls, so callers
+// run it off the UI thread. A refusal from the backend is shown in the account view and returned.
 func (s *Session) Refresh(ctx context.Context) error {
 	client := s.Client()
 	descriptor, err := client.ActiveModel(ctx, backend.ActiveModelQuery{})
@@ -59,9 +59,6 @@ func (s *Session) Refresh(ctx context.Context) error {
 		if spendCap, ok := SpendCapNoticeFromModel(descriptor); ok {
 			notice = &spendCap
 		}
-	}
-	if account, meErr := client.Me(ctx); meErr == nil {
-		info.Plan = account.Plan
 	}
 
 	s.mu.Lock()

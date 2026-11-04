@@ -184,33 +184,6 @@ func clientWithTokens(t *testing.T, h harness, tokens TokenSource) *Client {
 	return client
 }
 
-// TestModelsReadsTheFixtureBackend checks the list call decodes the fixture backend's model list.
-func TestModelsReadsTheFixtureBackend(t *testing.T) {
-	h := newHarness(t)
-	h.withBackend(t)
-	models, err := h.client.Models(context.Background())
-	if err != nil {
-		t.Fatalf("Models: %v", err)
-	}
-	if len(models) != 2 || models[0].ID != "fixture-fast" {
-		t.Fatalf("Models = %+v, want the two fixture models", models)
-	}
-}
-
-// TestMeReadsTheFixtureAccount checks the account call decodes identity and plan. The balance is not asserted:
-// the fixture's account shape differs from the route, which is noted in the package report.
-func TestMeReadsTheFixtureAccount(t *testing.T) {
-	h := newHarness(t)
-	h.withBackend(t)
-	account, err := h.client.Me(context.Background())
-	if err != nil {
-		t.Fatalf("Me: %v", err)
-	}
-	if account.Email != "fixture@example.test" || account.Plan != "free" {
-		t.Fatalf("Me = %+v, want the fixture account", account)
-	}
-}
-
 // TestActiveModelSendsTheQueryAndDecodesTheDescriptor checks the query parameters the route reads and the
 // descriptor fields the desktop app uses.
 func TestActiveModelSendsTheQueryAndDecodesTheDescriptor(t *testing.T) {

@@ -7,37 +7,8 @@ import (
 	"time"
 )
 
-// modelsTimeout bounds the model list and the active-model descriptor, which the backend answers from cache.
-const modelsTimeout = 10 * time.Second
-
-// ModelInfo is one model the backend lists.
-type ModelInfo struct {
-	// ID is the model identifier as the backend names it.
-	ID string `json:"id"`
-	// Name is the display name.
-	Name string `json:"name"`
-}
-
-// modelsWire is the list response: {"data": [...]}.
-type modelsWire struct {
-	Data []ModelInfo `json:"data"`
-}
-
-// Models lists the models the backend offers. The call is an idempotent GET and retries transient failures.
-func (c *Client) Models(ctx context.Context) ([]ModelInfo, error) {
-	var wire modelsWire
-	err := c.callJSON(ctx, requestSpec{
-		method:     "GET",
-		path:       pathModels,
-		auth:       authRequired,
-		timeout:    modelsTimeout,
-		idempotent: true,
-	}, &wire)
-	if err != nil {
-		return nil, err
-	}
-	return wire.Data, nil
-}
+// activeModelTimeout bounds the active-model descriptor, which the backend answers from cache.
+const activeModelTimeout = 10 * time.Second
 
 // ActiveModelQuery selects the model role and the request size the backend should price.
 type ActiveModelQuery struct {
@@ -104,7 +75,8 @@ func (d ModelDescriptor) SpeaksChatCompletions() bool {
 	return d.API == "openai-completions"
 }
 
-// ActiveModel returns the model the backend routes this account to for query. It is an idempotent GET.
+// ActiveModel returns the model the backend routes this account to for query, with the credit balance and the
+// spend-cap notice. It is an idempotent GET on the route the desktop app uses.
 func (c *Client) ActiveModel(ctx context.Context, query ActiveModelQuery) (ModelDescriptor, error) {
 	values := url.Values{}
 	if query.Role != "" {
@@ -122,7 +94,7 @@ func (c *Client) ActiveModel(ctx context.Context, query ActiveModelQuery) (Model
 		path:       pathActiveModel,
 		query:      values,
 		auth:       authRequired,
-		timeout:    modelsTimeout,
+		timeout:    activeModelTimeout,
 		idempotent: true,
 	}, &descriptor)
 	if err != nil {

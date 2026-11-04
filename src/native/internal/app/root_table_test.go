@@ -15,30 +15,25 @@ import (
 // must reproduce it, so it is regenerated only by a deliberate change of the root ranking.
 var updateRootTable = flag.Bool("update-root-table", false, "rewrite testdata/queries-expected.json")
 
-// rootTableQueries are the twenty canned queries of the parity review (PLAN.md section 3.3): empty,
-// application and command matches, calculator and units, timers, quicklinks, snippets, extensions,
-// files, clipboard text, conversations, URLs and the automate fallback.
-var rootTableQueries = []string{
-	"",
-	"cl",
-	"clip",
-	"clipboard",
-	"calc",
-	"2+2",
-	"12 km to mi",
-	"timer 5m",
-	"hn rust",
-	";sig",
-	"fixture",
-	"set",
-	"term",
-	"fire",
-	"meeting",
-	"release",
-	"time",
-	"github.com",
-	"open github.com",
-	"show the current time in tokyo and london",
+// rootTableQueriesFile is the canned query list of the parity review, one query per line. The first line is the empty
+// query. The parity sheet (testdata/parity/parity-review.md) and cutover.md cite the same file.
+const rootTableQueriesFile = "../../testdata/queries.txt"
+
+// rootTableQueryCount is the number of canned queries the parity review compares.
+const rootTableQueryCount = 20
+
+// loadRootTableQueries reads the canned queries, in file order.
+func loadRootTableQueries(t *testing.T) []string {
+	t.Helper()
+	data, err := os.ReadFile(rootTableQueriesFile)
+	if err != nil {
+		t.Fatalf("read %s: %v", rootTableQueriesFile, err)
+	}
+	queries := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	if len(queries) != rootTableQueryCount {
+		t.Fatalf("%s has %d queries, want %d", rootTableQueriesFile, len(queries), rootTableQueryCount)
+	}
+	return queries
 }
 
 // rootRow is the part of a result row the parity table compares: what the row says and what its actions
@@ -126,11 +121,12 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 // TestRootResultsMatchRecordedTable compares the root search for the twenty canned queries with the table
 // recorded from the prototype. Any reordering, dropped row or changed section fails it.
 func TestRootResultsMatchRecordedTable(t *testing.T) {
+	queries := loadRootTableQueries(t)
 	got := map[string][]rootRow{}
-	for _, q := range rootTableQueries {
+	for _, q := range queries {
 		got[q] = rootTableRows(t, rootTableFixture(t), q)
 	}
-	encoded, err := json.MarshalIndent(orderedTable(got), "", "  ")
+	encoded, err := json.MarshalIndent(orderedTable(got, queries), "", "  ")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,9 +153,9 @@ type tableEntry struct {
 	Rows  []rootRow `json:"rows"`
 }
 
-func orderedTable(got map[string][]rootRow) []tableEntry {
-	out := make([]tableEntry, 0, len(rootTableQueries))
-	for _, q := range rootTableQueries {
+func orderedTable(got map[string][]rootRow, queries []string) []tableEntry {
+	out := make([]tableEntry, 0, len(queries))
+	for _, q := range queries {
 		rows := got[q]
 		if rows == nil {
 			rows = []rootRow{}
