@@ -31,7 +31,8 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 	return out
 }
 
-// Search emits the rows of every running extension for q, in one batch.
+// Search emits, for q, the commands of the running extensions whose titles match it and their search rows, in
+// one batch. A command is found by typing its title, as a built-in command is.
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m == nil {
@@ -39,6 +40,9 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 		return
 	}
 	var out []search.Item
+	for _, result := range m.SearchCommands(ctx) {
+		out = append(out, matchingCommandRows(e.p, m, result, q)...)
+	}
 	for _, result := range m.Search(ctx, q) {
 		out = append(out, searchRowsFor(e.p, m, q, result)...)
 	}
@@ -61,11 +65,20 @@ func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchRe
 // commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
 // for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
 func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult) []search.Item {
+	return matchingCommandRows(p, m, result, "")
+}
+
+// matchingCommandRows lists a running extension's commands whose title matches q as a phrase, or every command
+// for the empty query. A failed extension declares none.
+func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string) []search.Item {
 	if result.Failure != nil {
 		return nil
 	}
 	var out []search.Item
 	for _, command := range result.Commands {
+		if q != "" && search.Score(command.Title, q) < search.PhraseScoreFloor {
+			continue
+		}
 		out = append(out, search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,

@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -27,7 +28,7 @@ func (p *App) extensionManager() *manager.Manager {
 // startExtensions builds the manager from the extensions folder and publishes it. It runs on its own goroutine:
 // scanning the folder and starting enabled children never waits the palette's first paint.
 func (p *App) startExtensions() {
-	m, err := newExtensionManager()
+	m, err := newExtensionManager(p.extensionsStateChanged)
 	if err != nil {
 		log.Println("extensions:", err)
 		return
@@ -36,7 +37,7 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
-func newExtensionManager() (*manager.Manager, error) {
+func newExtensionManager(onChange func()) (*manager.Manager, error) {
 	ports := real.NewPorts()
 	exe, err := os.Executable()
 	if err != nil {
@@ -58,7 +59,14 @@ func newExtensionManager() (*manager.Manager, error) {
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(configDir(), "extension-data"),
+		OnChange:   onChange,
 	})
+}
+
+// extensionsStateChanged redraws the Extensions list when it is the view on top, so a child that finishes starting
+// shows as Running without the user reopening the list. It runs on the goroutine that changed the state.
+func (p *App) extensionsStateChanged() {
+	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

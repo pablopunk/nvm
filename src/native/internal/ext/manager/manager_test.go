@@ -43,7 +43,7 @@ type harness struct {
 	enabled *enablement.Set
 }
 
-func newHarness(t *testing.T) *harness {
+func newHarness(t *testing.T, tune ...func(*Options)) *harness {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -58,17 +58,21 @@ func newHarness(t *testing.T) *harness {
 	if err != nil {
 		t.Fatalf("executable: %v", err)
 	}
+	opts := Options{
+		Executable: exe,
+		Budgets: map[string]supervisor.Budget{
+			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: searchBudget},
+		},
+	}
+	for _, change := range tune {
+		change(&opts)
+	}
 	m, err := New(Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,
-	}, root, set, Options{
-		Executable: exe,
-		Budgets: map[string]supervisor.Budget{
-			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: searchBudget},
-		},
-	})
+	}, root, set, opts)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -323,5 +327,28 @@ func TestMalformedFolderIsListedWithProblemsAndNeverStarts(t *testing.T) {
 	}
 	if err := h.m.Enable("acme.bad"); err == nil {
 		t.Fatal("Enable of a folder that does not load succeeded")
+	}
+}
+
+// TestRuntimeStateChangeNotifiesTheOwner is the signal a view waits for to redraw: a child that becomes ready
+// reports a change, so the Extensions list shows Running without being reopened.
+func TestRuntimeStateChangeNotifiesTheOwner(t *testing.T) {
+	changes := make(chan struct{}, 16)
+	h := newHarness(t, func(o *Options) {
+		o.OnChange = func() {
+			select {
+			case changes <- struct{}{}:
+			default:
+			}
+		}
+	})
+	if err := h.m.Install("acme.views", fixtureContents(t, "acme.views"), true); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	h.waitRunning("acme.views")
+	select {
+	case <-changes:
+	case <-time.After(waitTimeout):
+		t.Fatal("no state change reported for a child that became ready")
 	}
 }

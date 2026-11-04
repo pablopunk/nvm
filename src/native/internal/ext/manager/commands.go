@@ -17,11 +17,20 @@ type CommandResult struct {
 	Failure     *api.Failure
 }
 
-// Commands asks every running extension for its durable commands, each within the Commands budget. Commands
-// are declared rather than searched; the palette lists them at the root and runs them through Run.
+// Commands asks every running extension for its durable commands, each within the Commands budget. The root
+// lists them when the query is empty.
 func (m *Manager) Commands(ctx context.Context) []CommandResult {
+	return m.commandsWithin(ctx, m.config.BudgetFor(protocol.MethodCommands))
+}
+
+// SearchCommands asks every running extension for its durable commands within the Search budget, so a typed
+// query that also matches commands is never held up by a slow extension for longer than a search is.
+func (m *Manager) SearchCommands(ctx context.Context) []CommandResult {
+	return m.commandsWithin(ctx, m.config.BudgetFor(protocol.MethodSearch))
+}
+
+func (m *Manager) commandsWithin(ctx context.Context, budget supervisor.Budget) []CommandResult {
 	targets, _ := m.searchTargets()
-	budget := m.config.BudgetFor(protocol.MethodCommands)
 	results := make([]CommandResult, 0, len(targets))
 	for _, target := range targets {
 		results = append(results, m.commandsOf(ctx, target, budget))

@@ -8,6 +8,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -102,7 +103,24 @@ func (r *Runtime) adopt(generation uint64, child *childProcess) {
 	r.reason = ""
 	r.notifyLocked()
 	r.mu.Unlock()
+	r.logLifecycle(logx.Info, "extension running", nil)
 	go r.watchResident(child)
+}
+
+// logLifecycle writes one lifecycle line for the extension, with its reason when it has one.
+func (r *Runtime) logLifecycle(level logx.Level, msg string, fields logx.F) {
+	if r.cfg.Log == nil {
+		return
+	}
+	if fields == nil {
+		fields = logx.F{}
+	}
+	fields["extension"] = r.identity.ID
+	if level == logx.Warn {
+		r.cfg.Log.Warn(msg, fields)
+		return
+	}
+	r.cfg.Log.Info(msg, fields)
 }
 
 // startFailed records a child that never became ready. A broken source stops retries; anything else counts as
@@ -118,6 +136,7 @@ func (r *Runtime) startFailed(generation uint64, reason string, broken bool) {
 		r.reason = reason
 		r.addDiagnosticLocked("does not load: " + reason)
 		r.notifyLocked()
+		r.logLifecycle(logx.Warn, "extension does not load", logx.F{"reason": reason})
 		return
 	}
 	r.recordFailureLocked(reason)
@@ -151,10 +170,12 @@ func (r *Runtime) recordFailureLocked(reason string) {
 	if len(r.failures) >= r.cfg.maxFailures() {
 		r.state = StateDisabled
 		r.reason = fmt.Sprintf("disabled after %d failures in %s; last: %s", len(r.failures), window, reason)
+		r.logLifecycle(logx.Warn, "extension disabled after repeated failures", logx.F{"reason": r.reason})
 		return
 	}
 	r.state = StateFailed
 	r.retryAt = now.Add(backoffFor(len(r.failures)))
+	r.logLifecycle(logx.Warn, "extension failed; restart after backoff", logx.F{"reason": reason})
 }
 
 // backoffFor is the wait after the n-th failure: 250 ms, doubling, capped at 30 s.
