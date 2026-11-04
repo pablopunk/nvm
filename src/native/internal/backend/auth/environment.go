@@ -1,8 +1,13 @@
 package auth
 
 import (
+	"errors"
+
 	"github.com/pablopunk/nvm/native/internal/backend"
 )
+
+// ErrEnvironmentPinned refuses a backend switch in a pinned session. The palette shows its message as it is.
+var ErrEnvironmentPinned = errors.New("Automation builds stay on the rig backend, so this switch is refused.")
 
 // Origins the environment rules name, so a deep link can say which backend it belongs to.
 const (
@@ -12,8 +17,11 @@ const (
 
 // SwitchEnvironment makes another backend the active one and remembers the choice. It validates the origin for
 // this build, stops a running sign-in, and keeps the token of every origin, so switching back does not sign the
-// user out. Development is refused in packaged builds.
+// user out. Development is refused in packaged builds, and a pinned session refuses every switch.
 func (s *Session) SwitchEnvironment(kind backend.EnvironmentKind, rawURL string) error {
+	if s.deps.Pinned {
+		return ErrEnvironmentPinned
+	}
 	env, err := backend.NewEnvironment(kind, rawURL, s.deps.Packaged)
 	if err != nil {
 		return err

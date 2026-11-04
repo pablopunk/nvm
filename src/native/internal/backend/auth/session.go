@@ -27,6 +27,8 @@ type Deps struct {
 	// Origin, when set, is the backend the session starts on instead of the one the profile stores. The rig points
 	// automation builds at its fake backend this way; the stored profile is not changed.
 	Origin *backend.Environment
+	// Pinned refuses every switch of backend, so a build that starts on Origin stays on it. Automation builds set it.
+	Pinned bool
 	// ClientVersion is the desktop version the backend checks compatibility with.
 	ClientVersion string
 	// DeviceLabel names this device on the backend's sign-in page.
