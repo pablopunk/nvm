@@ -70,6 +70,10 @@ type View struct {
 	// SurvivesHide keeps the page open across a hide, as Electron keeps the last live AI chat: the next summon shows it
 	// and the pages pushed above it are dropped. Every other page is left when the palette hides.
 	SurvivesHide bool
+	// OnActive reports whether the view is the page on top of a shown palette. It is called when the view is pushed
+	// or covered, when the palette shows or hides, and when the view is the top page at either. A covered or hidden
+	// view must stop what only a visible page may do, such as a camera.
+	OnActive func(active bool)
 }
 
 // Grid lays a view's rows out as cells, Columns to a row, as the emoji picker does. The cells share the pane's

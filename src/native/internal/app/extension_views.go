@@ -49,15 +49,31 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(bitmap) })
 			}()
 		},
-		OpenURL:  func(url string) { _ = mygo.Shell.OpenExternal(url) },
-		CopyText: func(text string) { mygo.Clipboard.WriteText(text) },
-		Files:    ports.FS,
-		Clock:    ports.Clock,
-		Cache:    extensionSnapshots,
-		Dialog:   ports.FileDialog,
-		Drafts:   m,
+		OpenURL:     func(url string) { _ = mygo.Shell.OpenExternal(url) },
+		CopyText:    func(text string) { mygo.Clipboard.WriteText(text) },
+		Files:       ports.FS,
+		Clock:       ports.Clock,
+		Cache:       extensionSnapshots,
+		Dialog:      ports.FileDialog,
+		Drafts:      m,
+		Pages:       real.NewWebPages(p.paletteWebWindow),
+		Permissions: ports.Permissions,
+		Cameras:     extensionCameras,
+		IsDark:      func() bool { return mygo.Theme.IsDark() },
 	}
+}
+
+// paletteWebWindow is the palette's window, which web pages of views go in. It is nil until the window exists, so
+// a page opened before then is refused rather than placed nowhere.
+func (p *App) paletteWebWindow() real.WebWindow {
+	if p.panel == nil {
+		return nil
+	}
+	return p.panel
 }
 
 // extensionSnapshots keeps data-source snapshots for the life of the process, so reopening a view shows its items at once.
 var extensionSnapshots = extview.NewMemoryCache()
+
+// extensionCameras keeps the camera each camera view chose for the life of the process, as the snapshots do.
+var extensionCameras = extview.NewMemoryCameras()

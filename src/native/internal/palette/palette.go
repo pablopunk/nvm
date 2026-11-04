@@ -135,6 +135,7 @@ func (p *Palette) Show() {
 	}
 	p.input.Focus()
 	p.win.Show()
+	p.syncActive(nil)
 }
 
 // Toggle shows the palette when it is hidden and hides it when it is shown: the hotkey's action.
@@ -161,6 +162,7 @@ func (p *Palette) Hide() {
 		}
 	}
 	p.win.Hide()
+	p.syncActive(nil)
 	p.returnFocus()
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
@@ -223,10 +225,12 @@ func (p *Palette) Push(v any) {
 }
 
 func (p *Palette) push(v *View) {
+	covered := p.cur()
 	p.stack = append(p.stack, v)
 	p.pushes++
 	p.query = ""
 	p.actionsOpen = false
+	p.syncActive(covered)
 	p.search()
 	p.input.Focus()
 }
@@ -258,6 +262,7 @@ func (p *Palette) Pop() {
 	p.stack = p.stack[:len(p.stack)-1]
 	p.query = ""
 	p.actionsOpen = false
+	p.syncActive(nil)
 	p.search()
 	p.input.Focus()
 }
