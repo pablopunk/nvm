@@ -2,6 +2,7 @@ package windows
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -33,13 +34,39 @@ func windowRows(ctx context.Context, d Deps, q string) []search.Item {
 	if err != nil {
 		return []search.Item{{Kind: search.KindWindows, Title: "Could not list windows", Subtitle: err.Error(), Icon: "triangle-alert"}}
 	}
-	rows := []search.Item{}
+	matched := []windowmgmt.WindowDescriptor{}
 	for _, window := range windows {
 		if matchesWindow(window, q) {
-			rows = append(rows, windowRow(d, window))
+			matched = append(matched, window)
 		}
 	}
+	subtitles := windowSubtitles(matched)
+	rows := make([]search.Item, 0, len(matched))
+	for i, window := range matched {
+		rows = append(rows, windowRow(d, window, subtitles[i]))
+	}
 	return rows
+}
+
+// windowSubtitles names each row's app. A window whose app and title match another listed window is numbered among
+// those, so two Terminal "~" windows read as Window 1 and Window 2.
+func windowSubtitles(windows []windowmgmt.WindowDescriptor) []string {
+	type identity struct{ app, title string }
+	counts := map[identity]int{}
+	for _, window := range windows {
+		counts[identity{window.AppName, window.Title}]++
+	}
+	numbered := map[identity]int{}
+	subtitles := make([]string, len(windows))
+	for i, window := range windows {
+		key := identity{window.AppName, window.Title}
+		subtitles[i] = window.AppName
+		if counts[key] > 1 {
+			numbered[key]++
+			subtitles[i] = fmt.Sprintf("%s · Window %d", window.AppName, numbered[key])
+		}
+	}
+	return subtitles
 }
 
 func matchesWindow(window windowmgmt.WindowDescriptor, q string) bool {
@@ -48,7 +75,7 @@ func matchesWindow(window windowmgmt.WindowDescriptor, q string) bool {
 		strings.Contains(strings.ToLower(window.AppName), needle)
 }
 
-func windowRow(d Deps, window windowmgmt.WindowDescriptor) search.Item {
+func windowRow(d Deps, window windowmgmt.WindowDescriptor, subtitle string) search.Item {
 	title := window.Title
 	if title == "" {
 		title = window.AppName
@@ -58,7 +85,7 @@ func windowRow(d Deps, window windowmgmt.WindowDescriptor) search.Item {
 		actions = append(actions, layoutAction(d, id, window.Handle))
 	}
 	return search.Item{
-		Kind: search.KindWindows, Title: title, Subtitle: window.AppName, Icon: "app-window",
+		Kind: search.KindWindows, Title: title, Subtitle: subtitle, Icon: "app-window",
 		Accessory: stateOf(window), Actions: actions,
 	}
 }

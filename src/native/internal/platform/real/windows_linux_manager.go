@@ -4,6 +4,7 @@ package real
 
 import (
 	"context"
+	"os"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/x11"
@@ -113,7 +114,8 @@ func (x x11Windows) Frontmost(ctx context.Context) (platform.WindowApp, bool, er
 	return platform.WindowApp{PID: window.PID, BundleID: window.Class, Name: window.Class}, true, nil
 }
 
-// AllWindows lists every stacked window of every app, front to back, with ZIndex set.
+// AllWindows lists every stacked window of every app that the user switches to, front to back, with ZIndex set.
+// Nevermind's own windows, docks, panels and desktop windows are left out.
 func (x x11Windows) AllWindows(ctx context.Context) ([]platform.WindowRecord, error) {
 	ids, err := x.stackedWindows(ctx)
 	if err != nil {
@@ -126,7 +128,7 @@ func (x x11Windows) AllWindows(ctx context.Context) ([]platform.WindowRecord, er
 	var records []platform.WindowRecord
 	for index := len(ids) - 1; index >= 0; index-- {
 		window, ok := x.readWindow(ctx, ids[index])
-		if !ok || window.PID == 0 {
+		if !ok || window.PID == 0 || !window.isSwitchableWindow(os.Getpid()) {
 			continue
 		}
 		records = append(records, window.record(monitors, len(ids)-1-index))

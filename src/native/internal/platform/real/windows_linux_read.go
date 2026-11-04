@@ -25,12 +25,15 @@ type x11Window struct {
 	Minimized  bool
 	Movable    bool
 	Resizable  bool
+	// Shell is a dock, panel or desktop window; SkipTaskbar is one the window asks the taskbar to leave out.
+	Shell       bool
+	SkipTaskbar bool
 }
 
 // readWindow reads a window's properties and geometry. A window that vanished between listing and reading
 // reports false, so callers skip it.
 func (x x11Windows) readWindow(ctx context.Context, id uint32) (x11Window, bool) {
-	properties, err := x.call(ctx, "xprop", "-id", windowIDArg(id), "_NET_WM_PID", "WM_CLASS", "_NET_WM_NAME", "WM_NAME", "_NET_WM_STATE", "_NET_WM_ALLOWED_ACTIONS", "_NET_FRAME_EXTENTS")
+	properties, err := x.call(ctx, "xprop", "-id", windowIDArg(id), "_NET_WM_PID", "WM_CLASS", "_NET_WM_NAME", "WM_NAME", "_NET_WM_STATE", "_NET_WM_WINDOW_TYPE", "_NET_WM_ALLOWED_ACTIONS", "_NET_FRAME_EXTENTS")
 	if err != nil {
 		return x11Window{}, false
 	}
@@ -46,17 +49,31 @@ func (x x11Windows) readWindow(ctx context.Context, id uint32) (x11Window, bool)
 		title = parsed.String("WM_NAME")
 	}
 	return x11Window{
-		ID:         id,
-		PID:        pid,
-		Class:      parsed.WMClass(),
-		Title:      title,
-		Frame:      client.Framed(extents),
-		Extents:    extents,
-		FullScreen: parsed.HasAtom("_NET_WM_STATE", "_NET_WM_STATE_FULLSCREEN"),
-		Minimized:  parsed.HasAtom("_NET_WM_STATE", "_NET_WM_STATE_HIDDEN"),
-		Movable:    allowsAction(parsed, "_NET_WM_ACTION_MOVE"),
-		Resizable:  allowsAction(parsed, "_NET_WM_ACTION_RESIZE"),
+		ID:          id,
+		PID:         pid,
+		Class:       parsed.WMClass(),
+		Title:       title,
+		Frame:       client.Framed(extents),
+		Extents:     extents,
+		FullScreen:  parsed.HasAtom("_NET_WM_STATE", "_NET_WM_STATE_FULLSCREEN"),
+		Minimized:   parsed.HasAtom("_NET_WM_STATE", "_NET_WM_STATE_HIDDEN"),
+		Movable:     allowsAction(parsed, "_NET_WM_ACTION_MOVE"),
+		Resizable:   allowsAction(parsed, "_NET_WM_ACTION_RESIZE"),
+		Shell:       isShellWindow(parsed),
+		SkipTaskbar: parsed.HasAtom("_NET_WM_STATE", "_NET_WM_STATE_SKIP_TASKBAR"),
 	}, true
+}
+
+// isShellWindow reports whether a window is a dock, panel or desktop, which the desktop draws around the apps.
+func isShellWindow(properties x11.Properties) bool {
+	return properties.HasAtom("_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_DOCK") ||
+		properties.HasAtom("_NET_WM_WINDOW_TYPE", "_NET_WM_WINDOW_TYPE_DESKTOP")
+}
+
+// isSwitchableWindow reports whether a window is an app window the user can switch to: not Nevermind's own (self is
+// its process), not a dock, panel or desktop, and not one that asks to be left off the taskbar.
+func (w x11Window) isSwitchableWindow(self int) bool {
+	return w.PID != self && !w.Shell && !w.SkipTaskbar
 }
 
 // allowsAction reports whether a window may perform an action. A window that publishes no allowed-actions

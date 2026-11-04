@@ -71,9 +71,9 @@ const (
 	nevermindID       = "0x400010"
 	panelID           = "0xa00003"
 	stackingCommand   = "xprop -root _NET_CLIENT_LIST_STACKING"
-	nevermindProps    = "xprop -id " + nevermindID + " _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE _NET_WM_ALLOWED_ACTIONS _NET_FRAME_EXTENTS"
+	nevermindProps    = "xprop -id " + nevermindID + " _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE _NET_WM_WINDOW_TYPE _NET_WM_ALLOWED_ACTIONS _NET_FRAME_EXTENTS"
 	nevermindGeometry = "xwininfo -id " + nevermindID
-	panelProps        = "xprop -id " + panelID + " _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE _NET_WM_ALLOWED_ACTIONS _NET_FRAME_EXTENTS"
+	panelProps        = "xprop -id " + panelID + " _NET_WM_PID WM_CLASS _NET_WM_NAME WM_NAME _NET_WM_STATE _NET_WM_WINDOW_TYPE _NET_WM_ALLOWED_ACTIONS _NET_FRAME_EXTENTS"
 	panelGeometry     = "xwininfo -id " + panelID
 	monitorsCommand   = "xrandr --query"
 	workAreaCommand   = "xprop -root _NET_WORKAREA"
@@ -84,12 +84,13 @@ const (
 WM_CLASS(STRING) = "nvm-clone", "Nvm-clone"
 _NET_WM_NAME(UTF8_STRING) = "Nevermind"
 WM_NAME(STRING) = "Nevermind"
-_NET_WM_STATE(ATOM) = _NET_WM_STATE_SKIP_TASKBAR, _NET_WM_STATE_ABOVE
+_NET_WM_STATE(ATOM) = _NET_WM_STATE_ABOVE
 _NET_WM_ALLOWED_ACTIONS(ATOM) = _NET_WM_ACTION_MOVE, _NET_WM_ACTION_RESIZE
 `
 	panelPropsOutput = `_NET_WM_PID(CARDINAL) = 91819
 WM_CLASS(STRING) = "xfce4-panel", "Xfce4-panel"
 _NET_WM_NAME(UTF8_STRING) = "xfce4-panel"
+_NET_WM_WINDOW_TYPE(ATOM) = _NET_WM_WINDOW_TYPE_DOCK
 `
 	nevermindGeometryOutput = `  Absolute upper-left X:  280
   Absolute upper-left Y:  128
