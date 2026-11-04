@@ -38,6 +38,8 @@ const (
 	CapabilityWindowManagement Capability = "windows.manage"
 	CapabilityFocusReturn      Capability = "focus.return"
 	CapabilityMicrophone       Capability = "microphone.capture"
+	CapabilityTextRecognize    Capability = "text.recognize"
+	CapabilityScreenCapture    Capability = "screen.capture"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -50,7 +52,7 @@ func AllCapabilities() []Capability {
 		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySystemEmptyTrash,
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
-		CapabilityWindowPlacement,
+		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
 	}
 	slices.Sort(list)
 	return list
