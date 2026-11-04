@@ -121,3 +121,10 @@ type ThumbnailResult struct {
 	URL   string `json:"url,omitempty"`
 	Found bool   `json:"found"`
 }
+
+// WriteBytesArgs names a file to write and its content. Overwrite replaces an existing file.
+type WriteBytesArgs struct {
+	Path      string `json:"path"`
+	Data      []byte `json:"data"`
+	Overwrite bool   `json:"overwrite,omitempty"`
+}

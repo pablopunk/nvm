@@ -50,6 +50,12 @@ func (f remoteFiles) FileURL(path string) string {
 	return url
 }
 
+func (f remoteFiles) WriteBytes(path string, data []byte, overwrite bool) (api.FileRef, error) {
+	var ref api.FileRef
+	err := f.link.Call(protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: path, Data: data, Overwrite: overwrite}, &ref)
+	return ref, err
+}
+
 func (f remoteFiles) OpenWithApps(path string) ([]api.App, error) {
 	var apps []api.App
 	err := f.link.Call(protocol.ServiceDesktopFiles, protocol.OpOpenWithApps, protocol.PathArgs{Path: path}, &apps)

@@ -194,3 +194,35 @@ func TestOpenWithAppsListsEveryBundleWhenNoToolAnswers(t *testing.T) {
 		t.Fatalf("apps %+v; want Arc then Zed", apps)
 	}
 }
+
+func TestWriteBytesCreatesReplacesAndRefusesAsDocumented(t *testing.T) {
+	root := t.TempDir()
+	target := filepath.Join(root, "wall.jpg")
+	_, deps := newDesktopHost(t)
+	handler := realFilesHandler(t, deps)
+	var ref api.FileRef
+	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: target, Data: []byte{0xff, 0xd8, 0xff}})), &ref); err != nil {
+		t.Fatal(err)
+	}
+	if ref.Size != 3 || ref.Name != "wall.jpg" || ref.Kind != "image" {
+		t.Fatalf("written ref %+v", ref)
+	}
+	if got, _ := os.ReadFile(target); !bytes.Equal(got, []byte{0xff, 0xd8, 0xff}) {
+		t.Fatalf("content %x", got)
+	}
+	requireCode(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: target, Data: []byte{1}}), api.CodeInvalid, "overwrite")
+	mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: target, Data: []byte{1, 2}, Overwrite: true}))
+	if got, _ := os.ReadFile(target); !bytes.Equal(got, []byte{1, 2}) {
+		t.Fatalf("overwritten content %x", got)
+	}
+	requireCode(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: filepath.Join(root, "missing", "a.bin"), Data: []byte{1}}), api.CodeNotFound, "folder")
+	requireCode(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: "wall.jpg", Data: []byte{1}}), api.CodeInvalid, "absolute")
+	big := make([]byte, maxWriteBytes+1)
+	requireCode(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpWriteBytes, protocol.WriteBytesArgs{Path: filepath.Join(root, "big.bin"), Data: big}), api.CodeInvalid, "per call")
+	entries, _ := os.ReadDir(root)
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".part") {
+			t.Fatalf("temporary file %s left behind", entry.Name())
+		}
+	}
+}

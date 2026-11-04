@@ -29,6 +29,8 @@ func (h *Handler) serveDesktopFiles(ctx context.Context, call protocol.ServiceCa
 		return h.fileURLOf(call.Args)
 	case protocol.OpOpenWithApps:
 		return h.openWithApps(ctx, call.Args)
+	case protocol.OpWriteBytes:
+		return h.writeBytes(call.Args)
 	}
 	return nil, invalid("desktop.files has no operation %q", call.Op)
 }

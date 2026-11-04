@@ -977,6 +977,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Files struct {
 	WReveal        func(path string) error
 	WSearchIndex   func(query string, options api.IndexOptions) []api.IndexedFile
 	WThumbnail     func(path string) (url string, found bool)
+	WWriteBytes    func(path string, data []byte, overwrite bool) (api.FileRef, error)
 	WWriteText     func(path string, text string, overwrite bool) (api.FileRef, error)
 }
 
@@ -1024,6 +1025,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) SearchIndex(que
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) Thumbnail(path string) (url string, found bool) {
 	return W.WThumbnail(path)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) WriteBytes(path string, data []byte, overwrite bool) (api.FileRef, error) {
+	return W.WWriteBytes(path, data, overwrite)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) WriteText(path string, text string, overwrite bool) (api.FileRef, error) {
 	return W.WWriteText(path, text, overwrite)

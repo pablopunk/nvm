@@ -48,4 +48,5 @@ const (
 	OpMetadata      = "metadata"
 	OpFileURL       = "file-url"
 	OpOpenWithApps  = "open-with-apps"
+	OpWriteBytes    = "write-bytes"
 )

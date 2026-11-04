@@ -149,6 +149,9 @@ type Files interface {
 	ReadText(path string) (string, error)
 	// WriteText fails when the file exists unless overwrite is set. It never creates folders.
 	WriteText(path, text string, overwrite bool) (FileRef, error)
+	// WriteBytes saves raw bytes, such as a downloaded image. It fails when the file exists unless overwrite is set,
+	// never creates folders and replaces the file atomically. The host accepts at most 512 KiB per call.
+	WriteBytes(path string, data []byte, overwrite bool) (FileRef, error)
 	DisplayPath(path string) string
 	FileURL(path string) string
 	Thumbnail(path string) (url string, found bool)
