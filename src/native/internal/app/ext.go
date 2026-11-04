@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/traefik/yaegi/interp"
 	"github.com/traefik/yaegi/stdlib"
@@ -181,7 +182,7 @@ func (p *App) setUpExtensionTrays() {
 			continue
 		}
 		e := e
-		tray, err := mygo.NewTray(mygo.TrayOptions{ID: e.ID, Icon: trayIcon(), ToolTip: e.Title})
+		tray, err := mygo.NewTray(mygo.TrayOptions{ID: e.ID, Icon: menubar.Icon(), ToolTip: e.Title})
 		if err != nil {
 			log.Println("ext tray:", err)
 			continue

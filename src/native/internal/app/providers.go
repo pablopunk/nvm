@@ -92,6 +92,9 @@ func (p *App) commands(timerOn bool) []command {
 		}},
 		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
+		{Title: "Check for Updates", Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Look for a newer version of Nevermind", Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
+		{Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsView()) }},
+		{Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
 		place("Downloads"), place("Documents"), place("Desktop"), place("Pictures"),
 	}
@@ -157,6 +160,10 @@ func (p *App) settingsView() *palette.View {
 					h.Refresh()
 				}}}},
 				{Title: "Launch at Login", Accessory: login, Icon: "power", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) { setAutostart(!autostartEnabled()); h.Refresh() }}}},
+				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.S.DiagnosticsOff), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
+					p.toggleDiagnostics()
+					h.Refresh()
+				}}}},
 				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
 				{Title: "Open Config Folder", Subtitle: configDir(), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(configDir()) }}}},
 			}

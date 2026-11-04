@@ -2,10 +2,6 @@
 package app
 
 import (
-	"bytes"
-	"image"
-	"image/color"
-	"image/png"
 	"log"
 
 	"github.com/egoist/mygo"
@@ -14,16 +10,20 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/snippets"
+	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
+	"github.com/pablopunk/nvm/native/internal/update"
 )
 
 // The palette card is 720 by 470 DIPs (PLAN.md section 2), and its corners are the pane's radius.
@@ -43,9 +43,16 @@ type App struct {
 	exts     []loadedExt
 	extTrays []*extTray
 	runs     map[string]*chatRun
-	tray     *mygo.Tray
-	summon   *shortcuts.Summon
-	appsvc   *appfeat.Services
+	// menubar is the app's own menu bar item; nil when the platform has no tray host.
+	menubar  *menubar.Item
+	recorder *diag.Recorder
+	// analytics sends technical diagnostics when the consent switch is on; failures reports each safego failure
+	// through the recorder and then to analytics.
+	analytics *analytics.Client
+	failures  *analytics.FailureReporter
+	updater   update.Updater
+	summon    *shortcuts.Summon
+	appsvc    *appfeat.Services
 	// stopAppPoll stops the running-status poll while the palette is visible; nil when it is not running.
 	stopAppPoll func()
 	clip        *clipEngine
@@ -120,7 +127,10 @@ func (p *App) placementOption() func(w, h int) (int, int) {
 func (p *App) ready() {
 	p.S = loadSettings()
 	p.paletteHidden = make(chan struct{}, 1)
-	p.attachServices(p.appPorts(), configDir(), nil)
+	ports := p.appPorts()
+	p.openDiagnostics(ports)
+	p.attachUpdater()
+	p.attachServices(ports, configDir(), nil)
 	p.attachDeepLinks()
 	p.closeStoreOnQuit()
 	prepareCatalog()
@@ -150,51 +160,9 @@ func (p *App) ready() {
 
 	p.startShortcuts()
 	p.reloadExtensions()
-	p.setUpTray()
+	p.setUpMenubar()
 	p.startFiles()
 	log.Println("ready")
-}
-
-func (p *App) setUpTray() {
-	tray, err := mygo.NewTray(mygo.TrayOptions{Icon: trayIcon(), ToolTip: "Nevermind"})
-	if err != nil {
-		log.Println("no tray:", err)
-		return
-	}
-	p.tray = tray
-	item := func(label string, f func()) *mygo.MenuItem {
-		return &mygo.MenuItem{Label: label, Click: func(*mygo.MenuItem, *mygo.Window) { p.panel.Update(f) }}
-	}
-	tray.SetMenu(mygo.NewMenu([]*mygo.MenuItem{
-		item("Open Nevermind", p.Show),
-		item("Clipboard History", func() { p.Open(p.clipboardView()) }),
-		item("Quick Notes", func() { p.Open(p.notesView()) }),
-		item("Ask AI", func() { p.Open(p.newChatView("")) }),
-		mygo.Separator(),
-		{Role: mygo.RoleQuit},
-	}))
-}
-
-func (p *App) setTrayTitle(s string) {
-	if p.tray != nil {
-		p.tray.SetTitle(s)
-	}
-}
-
-func trayIcon() []byte {
-	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
-	ink := color.NRGBA{R: 230, G: 180, B: 30, A: 255}
-	for y := 0; y < 32; y++ {
-		for x := 0; x < 32; x++ {
-			dx, dy := float64(x)-16, float64(y)-16
-			if dx*dx+dy*dy <= 12*12 {
-				img.Set(x, y, ink)
-			}
-		}
-	}
-	var b bytes.Buffer
-	_ = png.Encode(&b, img)
-	return b.Bytes()
 }
 
 // searchClock measures the search budgets of the running app.

@@ -50,6 +50,8 @@ type Settings struct {
 	Quicklinks  []Quicklink
 	Disabled    map[string]bool // extension ids
 	LoginAtOpen bool
+	// DiagnosticsOff is the "Send Technical Diagnostics" switch, inverted so that a missing key means on.
+	DiagnosticsOff bool
 	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
 	EmojiSkinTone int
 	// FileRoots are the folders the Files index covers; empty means the standard personal folders.

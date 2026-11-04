@@ -212,6 +212,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "rotate-ccw",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
@@ -606,6 +625,25 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Report a Problem",
+        "subtitle": "Record a problem reference without screen content",
+        "section": "Commands",
+        "id": "",
+        "icon": "message-circle",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
@@ -694,6 +732,25 @@
         "id": "",
         "icon": "plus",
         "tone": "teal",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Show Recent Errors",
+        "subtitle": "Find and copy safe error references",
+        "section": "Commands",
+        "id": "",
+        "icon": "circle-alert",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
@@ -826,6 +883,25 @@
         "section": "Commands",
         "id": "",
         "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Check for Updates",
+        "subtitle": "Look for a newer version of Nevermind",
+        "section": "Commands",
+        "id": "",
+        "icon": "rotate-ccw",
         "tone": "",
         "accessory": "",
         "prominent": false,
