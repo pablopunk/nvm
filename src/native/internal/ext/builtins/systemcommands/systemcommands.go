@@ -9,17 +9,14 @@ import (
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/commandmatch"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // ID is the built-in's identity. The root lists its rows at the place the native system commands had, so the app asks for them by it.
 const ID = "nevermind.system-commands"
 
-// keywordMatchScore ranks a command found by a keyword rather than its title, below any title match.
-const keywordMatchScore = 45
-
-// minKeywordQuery is the shortest query that matches a command's keywords.
-const minKeywordQuery = 2
+const keywordMatchScore = commandmatch.KeywordScore
 
 // Extension is the system commands built-in.
 type Extension struct{}
@@ -51,13 +48,7 @@ func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) 
 // matchScore ranks a command for the lowercased query: its title's score, or the keyword band when only a keyword
 // contains the query. Zero means no match.
 func matchScore(c command, lq string) int {
-	if score := search.Score(c.title, lq); score > 0 {
-		return score
-	}
-	if len(lq) >= minKeywordQuery && strings.Contains(strings.ToLower(c.keywords), lq) {
-		return keywordMatchScore
-	}
-	return 0
+	return commandmatch.Score(c.title, c.keywords, lq)
 }
 
 // commandItem is the row of one command: its title, subtitle and tone, an Open action that runs it, and its usage key.

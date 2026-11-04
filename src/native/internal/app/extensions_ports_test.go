@@ -27,9 +27,11 @@ func appWithCapabilities(t *testing.T, names ...platform.Capability) *App {
 // reach the built-in through the same ports).
 func TestBuiltInCommandsFollowTheAppsCapabilities(t *testing.T) {
 	without := appWithCapabilities(t, platform.CapabilitySystemSleep)
-	if rows := collectExtensionRows(t, without, "restart"); len(rows) != 0 {
-		t.Fatalf("Restart shown without its capability: %d rows", len(rows))
+	for _, row := range commandRows(without, &rootInput{}, "restart") {
+		if row.Title == "Restart" {
+			t.Fatal("Restart shown without its capability")
+		}
 	}
 	with := appWithCapabilities(t, platform.CapabilitySystemSleep, platform.CapabilitySystemRestart)
-	findRowTitled(t, collectExtensionRows(t, with, "restart"), "Restart")
+	findRowTitled(t, commandRows(with, &rootInput{}, "restart"), "Restart")
 }

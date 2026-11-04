@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/egoist/mygo"
+
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -35,6 +38,11 @@ func (p *App) placeCommand(place systemfeat.Place) command {
 // runSystemOp runs the OS command an extension names, off the UI thread. done runs on the UI thread with the sentence to
 // show when the command did not run, and "" when the OS accepted it.
 func (p *App) runSystemOp(op string, done func(failure string)) {
+	if op == appcommands.QuitOp {
+		mygo.App.Quit()
+		done("")
+		return
+	}
 	id, ok := systemfeat.CommandForOp(op)
 	if !ok {
 		done(unknownSystemOpMessage)

@@ -24,7 +24,7 @@ func fakeSystem(t *testing.T, p *App) *fake.System {
 // systemRow finds the root row of a system command by its title, the way the palette finds it.
 func systemRow(t *testing.T, p *App, title string) search.Item {
 	t.Helper()
-	return findRowTitled(t, collectExtensionRows(t, p, strings.ToLower(title)), title)
+	return findRowTitled(t, commandRows(p, &rootInput{}, strings.ToLower(title)), title)
 }
 
 // TestRestartAsksBeforeItRestarts pushes a confirmation for a destructive command and runs nothing until the user

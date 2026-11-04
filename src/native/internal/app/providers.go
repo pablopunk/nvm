@@ -1,14 +1,16 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/search"
 	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 type engine struct{ Key, Name, URL string }
@@ -56,23 +58,25 @@ type command struct {
 	Dismiss     search.Dismissal
 	Order       int
 	Hidden      bool
+	// builtIn names the built-in whose rows stand here, and width is how many Order places they take; see commandSlots.
+	builtIn string
+	width   int
 }
 
-// commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
+// commands lists the palette commands, without the placeholders of built-ins. timerOn tells whether a timer is running,
+// which adds the cancel command.
 func (p *App) commands(timerOn bool) []command {
-	before, after := p.commandsAroundBuiltIns(timerOn)
-	return slices.Concat(before, after)
+	return slices.DeleteFunc(p.commandSlots(timerOn), isBuiltInSlot)
 }
 
-// commandsAroundBuiltIns splits the commands where the built-in system commands sit in the tie order: the commands
-// before the split, the built-ins (see commandRows), then the rest. Each command's Order counts the built-ins it
-// stands behind, so the root's suggestions do not move when the system commands moved out of the list.
-func (p *App) commandsAroundBuiltIns(timerOn bool) (before, after []command) {
-	before = leadingCommands(p)
-	after = trailingCommands(p, timerOn)
-	numberCommands(before, 0)
-	numberCommands(after, len(before)+p.builtInCommandSlot())
-	return before, after
+// commandSlots lists the palette commands in their tie order. Where a built-in's rows stand, the list holds a
+// placeholder (see commandRows). The placeholders take the Order places of the native commands they replaced.
+func (p *App) commandSlots(timerOn bool) []command {
+	cmds := leadingCommands(p)
+	cmds = append(cmds, builtInSlot(systemcommands.ID, systemcommands.SupportedCount(p.systemCapability)))
+	cmds = append(cmds, trailingCommands(p, timerOn)...)
+	numberCommands(cmds)
+	return cmds
 }
 
 // leadingCommands are the commands listed before the built-in system commands.
@@ -106,7 +110,7 @@ func trailingCommands(p *App, timerOn bool) []command {
 		{Title: "Check for Updates", Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Look for a newer version of Nevermind", Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
 		{Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsView()) }},
 		{Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
-		{Title: "Quit Nevermind", Keywords: "quit exit nevermind", Icon: "x", Hidden: true, Run: func(h search.Host) { mygo.App.Quit() }},
+		builtInSlot(appcommands.ID, 1),
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
 	cmds = append(cmds, p.placeCommands()...)
@@ -118,20 +122,36 @@ func trailingCommands(p *App, timerOn bool) []command {
 	return cmds
 }
 
+// builtInSlot is the placeholder of a built-in's rows in the command list. width is how many Order places they take.
+func builtInSlot(id string, width int) command {
+	return command{builtIn: id, width: width}
+}
+
+func isBuiltInSlot(c command) bool { return c.builtIn != "" }
+
 // commandTones colors the commands the root shows in a tone of their own.
 var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
 	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
 	"Start Timer": "orange", "Cancel Timer": "orange",
 	commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
 
-// numberCommands sets the Order of cmds from first on, and their tones.
-func numberCommands(cmds []command, first int) {
+// numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.
+func numberCommands(cmds []command) {
+	order := 0
 	for i := range cmds {
-		cmds[i].Order = first + i
+		cmds[i].Order = order
+		order += commandSpan(cmds[i])
 		if tone, ok := commandTones[cmds[i].Title]; ok {
 			cmds[i].Tone = tone
 		}
 	}
+}
+
+func commandSpan(c command) int {
+	if isBuiltInSlot(c) {
+		return c.width
+	}
+	return 1
 }
 
 // rootViewTitle names the palette's first level, so a refresh can find it among the views pushed on it.
