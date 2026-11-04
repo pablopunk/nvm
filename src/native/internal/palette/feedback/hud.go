@@ -54,9 +54,10 @@ type HUD struct {
 	panel    func() Window
 	clock    platform.Clock
 	position func(w, h int) (x, y int)
-	// title and message are what the panel draws; generation counts the messages shown, so a hide scheduled for an
+	// title, message and tone are what the panel draws; generation counts the messages shown, so a hide scheduled for an
 	// earlier message does not close a newer one.
 	title, message string
+	tone           Tone
 	generation     int
 	height         int
 }
@@ -74,8 +75,8 @@ func (h *HUD) Show(title, message string, tone Tone) {
 	w := h.panel()
 	h.generation++
 	generation := h.generation
-	w.Update(func() { h.draw(title, message) })
-	if height := Height(message); height != h.height {
+	w.Update(func() { h.draw(title, message, tone) })
+	if height := Height(message, tone); height != h.height {
 		h.height = height
 		w.SetSize(Width, height)
 		x, y := h.position(Width, height)
@@ -98,11 +99,11 @@ func (h *HUD) hideAfterDuration(w Window, generation int, d time.Duration) {
 }
 
 // draw keeps the text the panel shows, for the next frame.
-func (h *HUD) draw(title, message string) {
-	h.title, h.message = title, message
+func (h *HUD) draw(title, message string, tone Tone) {
+	h.title, h.message, h.tone = title, message, tone
 }
 
 // View draws the message the HUD holds. The panel's content is this view.
 func (h *HUD) View(c *ui.Context) {
-	Indicator(c, h.title, h.message)
+	Indicator(c, h.title, h.message, h.tone)
 }

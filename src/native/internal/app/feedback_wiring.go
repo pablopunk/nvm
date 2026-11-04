@@ -45,7 +45,7 @@ func (p *App) hudPanel() feedback.Window {
 		p.hudWindow = mygo.NewWindow(mygo.WindowOptions{
 			Title:             "Nevermind Feedback",
 			Width:             feedback.Width,
-			Height:            feedback.Height(""),
+			Height:            feedback.Height("", feedback.ToneDefault),
 			Hidden:            true,
 			Frameless:         true,
 			Transparent:       true,

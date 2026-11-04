@@ -91,8 +91,8 @@ func TestShowPutsTheMessageUpWithoutTheKeyboardAndHidesItAfterDuration(t *testin
 	if !panel.visible || panel.shows != 1 || hud.title != "Nevermind" || hud.message != "Pasted" {
 		t.Fatalf("after Show: visible=%v shows=%d title=%q message=%q", panel.visible, panel.shows, hud.title, hud.message)
 	}
-	if panel.w != Width || panel.h != Height("Pasted") || panel.x != 10 || panel.y != 20 {
-		t.Fatalf("panel placed at %dx%d+%d+%d, want %dx%d+10+20", panel.w, panel.h, panel.x, panel.y, Width, Height("Pasted"))
+	if panel.w != Width || panel.h != Height("Pasted", ToneDefault) || panel.x != 10 || panel.y != 20 {
+		t.Fatalf("panel placed at %dx%d+%d+%d, want %dx%d+10+20", panel.w, panel.h, panel.x, panel.y, Width, Height("Pasted", ToneDefault))
 	}
 
 	clock.AwaitTimers(1)
@@ -131,13 +131,13 @@ func TestANewerMessageRestartsTheWaitAndSurvivesAnOlderHide(t *testing.T) {
 }
 
 func TestHeightGrowsWithTheMessageUpToThreeLines(t *testing.T) {
-	if got := Height(""); got != baseHeight {
+	if got := Height("", ToneDefault); got != baseHeight {
 		t.Fatalf("an empty message is %d high, want the base %d", got, baseHeight)
 	}
-	if got := Height(strings.Repeat("x", charsPerLine+1)); got != baseHeight+lineHeight {
+	if got := Height(strings.Repeat("x", charsPerLine+1), ToneDefault); got != baseHeight+lineHeight {
 		t.Fatalf("two lines are %d high, want %d", got, baseHeight+lineHeight)
 	}
-	if got := Height(strings.Repeat("x", 10*charsPerLine)); got != baseHeight+(maxLines-1)*lineHeight {
+	if got := Height(strings.Repeat("x", 10*charsPerLine), ToneDefault); got != baseHeight+(maxLines-1)*lineHeight {
 		t.Fatalf("a long message is %d high, want the three-line height", got)
 	}
 }
@@ -174,5 +174,17 @@ func TestAnErrorIsStillUpAfterTheDurationOfOtherMessages(t *testing.T) {
 	panel.drain()
 	if panel.visible {
 		t.Fatal("the error did not hide after its own duration")
+	}
+}
+
+// TestAStatusMarkNarrowsTheTextSoItWrapsSooner pins the height of a message that shows a status mark: its text wraps at
+// fewer characters, so the panel gets the extra line.
+func TestAStatusMarkNarrowsTheTextSoItWrapsSooner(t *testing.T) {
+	message := strings.Repeat("x", charsPerLineStatus+1)
+	if got := Height(message, ToneError); got != baseHeight+lineHeight {
+		t.Fatalf("an error of %d characters is %d high, want %d", len(message), got, baseHeight+lineHeight)
+	}
+	if got := Height(message, ToneDefault); got != baseHeight {
+		t.Fatalf("the same text without a mark is %d high, want the base %d", got, baseHeight)
 	}
 }
