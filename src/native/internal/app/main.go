@@ -77,16 +77,17 @@ type App struct {
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
 	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
-	paletteHidden chan struct{}
-	shortcutMgr   *shortcuts.Manager
-	snips         *snippets.Store
-	notes         *notes.Store
-	files         *fileService
-	chats         *chat.Service
-	builder       *builder.Workshop
-	timer         *Timer
-	learn         *usage.Learner
-	history       *palette.QueryHistory
+	paletteHidden  chan struct{}
+	shortcutMgr    *shortcuts.Manager
+	shortcutTitles shortcutTitles
+	snips          *snippets.Store
+	notes          *notes.Store
+	files          *fileService
+	chats          *chat.Service
+	builder        *builder.Workshop
+	timer          *Timer
+	learn          *usage.Learner
+	history        *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session

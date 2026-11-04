@@ -10,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // applicationRows matches installed applications by name, and at the root shows the ones used before. The rows and
@@ -37,7 +38,7 @@ func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	rows := apps.AppRows(list, p.appsvc.Running.RunningAmong(list), p.appsvc.SupportsUninstall())
 	out := make([]search.Item, 0, len(rows))
 	for i, row := range rows {
-		out = append(out, p.appItem(list[i], row, scores[i]))
+		out = append(out, p.withShortcutActions(p.appItem(list[i], row, scores[i]), shortcuts.AppActionID(list[i].Path), in.shortcuts))
 	}
 	return out
 }

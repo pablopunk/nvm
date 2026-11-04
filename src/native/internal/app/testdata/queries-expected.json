@@ -41,6 +41,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -59,6 +63,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -79,6 +87,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -97,6 +109,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -117,6 +133,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -135,6 +155,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -155,6 +179,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -173,6 +201,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -193,6 +225,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -211,6 +247,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -231,6 +271,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -249,6 +293,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -269,6 +317,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -287,6 +339,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -319,6 +375,10 @@
           {
             "title": "Uninstall Firefox…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -349,6 +409,10 @@
           },
           {
             "title": "Uninstall Terminal…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -412,6 +476,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -430,6 +498,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -450,6 +522,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -469,6 +545,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -487,6 +567,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -519,6 +603,10 @@
           {
             "title": "Uninstall Clocks…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -550,6 +638,10 @@
           {
             "title": "Uninstall Calculator…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -580,6 +672,10 @@
           },
           {
             "title": "Uninstall Calendar…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -721,6 +817,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -821,6 +921,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -935,6 +1039,10 @@
           {
             "title": "Uninstall Calculator…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -953,6 +1061,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1364,6 +1476,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1382,6 +1498,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1402,6 +1522,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1420,6 +1544,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1440,6 +1568,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1458,6 +1590,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1478,6 +1614,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1496,6 +1636,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1516,6 +1660,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1534,6 +1682,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1554,6 +1706,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1572,6 +1728,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1592,6 +1752,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1610,6 +1774,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1630,6 +1798,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1648,6 +1820,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1668,6 +1844,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1686,6 +1866,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1955,6 +2139,10 @@
           {
             "title": "Uninstall Terminal…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -1973,6 +2161,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -1993,6 +2185,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2012,6 +2208,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2030,6 +2230,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -2105,6 +2309,10 @@
           {
             "title": "Uninstall Firefox…",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2124,6 +2332,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2142,6 +2354,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -2361,6 +2577,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2481,6 +2701,10 @@
           {
             "title": "Open",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
           }
         ]
       },
@@ -2499,6 +2723,10 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]
@@ -2530,6 +2758,10 @@
           },
           {
             "title": "Uninstall Terminal…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
             "label": ""
           }
         ]

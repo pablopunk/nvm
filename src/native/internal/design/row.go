@@ -47,7 +47,7 @@ func Row(c *ui.Context, d RowData) {
 				title = col
 			}
 		}
-		rowEl := ui.Row(c).Padding(5, 8).Gap(10).AlignItems(ui.Center).Radius(12)
+		rowEl := PlatePadding(ui.Row(c).Gap(10).AlignItems(ui.Center).Radius(12), d.Selected, 5, 8)
 		hovered := rowEl.Hovered()
 		switch {
 		case d.Disabled:

@@ -38,6 +38,10 @@ func (p *Palette) runDefault() {
 	}
 }
 
+// RunAction runs an action the way choosing it in the palette does, dismissal policy included. A global shortcut
+// runs its row's action through it.
+func (p *Palette) RunAction(a search.Action) { p.runAction(a) }
+
 // runAction runs an action and then applies its dismissal policy. Every way of running an action goes through
 // here, so the policy holds for Enter, for the action menu and for a row's own shortcut.
 func (p *Palette) runAction(a search.Action) {

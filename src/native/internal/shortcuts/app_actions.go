@@ -15,7 +15,7 @@ func AppPathOf(actionID string) (string, bool) {
 	return strings.CutPrefix(actionID, appIDPrefix)
 }
 
-// DescribeApp gives the title of an app action: the app's name, from its file name. It is the Describe hook of Setup.
+// DescribeApp gives the title of an app action from its file name, for an app that is not in the app index.
 func DescribeApp(actionID string) (string, bool) {
 	path, ok := AppPathOf(actionID)
 	if !ok {

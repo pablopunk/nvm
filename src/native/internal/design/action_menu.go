@@ -18,7 +18,7 @@ func ActionMenu(c *ui.Context, rows []MenuRow) {
 	k := Tokens(c)
 	Popover(c, ActionPlacement, func() {
 		for _, r := range rows {
-			rowEl := ui.Row(c).Padding(6, 10).Radius(8).AlignItems(ui.Center).Gap(8)
+			rowEl := PlatePadding(ui.Row(c).Radius(8).AlignItems(ui.Center).Gap(8), r.Selected, 6, 10)
 			if r.Selected {
 				SelectedFill(rowEl, k, false)
 			}

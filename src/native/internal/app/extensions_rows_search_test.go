@@ -25,7 +25,7 @@ func TestRootStillListsTheCommandsOfARunningExtension(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	findRowTitled(t, extensionProvider(p).Root(context.Background()), "List fixture")
+	findRowTitled(t, extensionProvider(p, &rootInput{}).Root(context.Background()), "List fixture")
 }
 
 func TestRootShowsTheRootItemsOfARunningExtension(t *testing.T) {
@@ -34,5 +34,5 @@ func TestRootShowsTheRootItemsOfARunningExtension(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	findRowTitled(t, extensionProvider(p).Root(context.Background()), "Good root")
+	findRowTitled(t, extensionProvider(p, &rootInput{}).Root(context.Background()), "Good root")
 }

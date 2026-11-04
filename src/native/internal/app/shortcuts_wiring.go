@@ -1,12 +1,9 @@
 package app
 
 import (
-	"log"
 	"runtime"
 
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
-	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
@@ -25,7 +22,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
-		Describe:  shortcuts.DescribeApp,
+		Resolve:   p.resolveShortcutTitle,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,
@@ -46,43 +43,13 @@ func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
 	for _, cmd := range p.commands(false) {
 		if !cmd.Hidden {
-			actions = append(actions, shortcuts.Action{ID: shortcutCommandID(cmd.Title), Title: cmd.Title})
+			actions = append(actions, shortcuts.Action{ID: commandShortcutID(cmd), Title: cmd.Title})
 		}
 	}
 	if p.windowManagementEnabled() {
 		actions = append(actions, windows.ShortcutActions()...)
 	}
 	return actions
-}
-
-func shortcutCommandID(title string) string {
-	return "command:" + title
-}
-
-// runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does. An app
-// shortcut opens its app without the palette.
-func (p *App) runShortcutCommand(actionID string) {
-	if windows.RunShortcut(p.windowDeps(), actionID) {
-		return
-	}
-	if path, ok := shortcuts.AppPathOf(actionID); ok {
-		p.launchShortcutApp(path)
-		return
-	}
-	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
-			p.Show()
-			p.trackedRun(cmd)(search.Host(p))
-			return
-		}
-	}
-}
-
-func (p *App) launchShortcutApp(path string) {
-	name, _ := shortcuts.DescribeApp(shortcuts.AppActionID(path))
-	if err := p.ports.Shell.LaunchApp(platform.App{Name: name, Path: path}); err != nil {
-		log.Println("shortcut app:", err)
-	}
 }
 
 // startShortcuts binds the palette shortcut and the actions. It runs once the palette exists. Summon retries a shortcut

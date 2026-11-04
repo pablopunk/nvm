@@ -22,6 +22,8 @@ type rootInput struct {
 	clip       *clipEngine
 	chats      []chatHead
 	timerOn    bool
+	// shortcuts maps each root action that has a keyboard shortcut to its accelerator.
+	shortcuts map[string]string
 }
 
 // chatHead is what the conversation rows read from a chat: its id, its title and whether it is a builder chat.
@@ -42,6 +44,7 @@ func (p *App) captureRoot() *rootInput {
 		clip:       p.clip,
 		chats:      chats,
 		timerOn:    p.timer != nil,
+		shortcuts:  p.boundShortcuts(),
 	}
 }
 
@@ -52,7 +55,7 @@ func (p *App) rootProviders() []search.Provider {
 	out := make([]search.Provider, 0, len(rootSources))
 	for _, source := range rootSources {
 		if source.provider != nil {
-			out = append(out, source.provider(p))
+			out = append(out, source.provider(p, in))
 			continue
 		}
 		rows := source.rows
