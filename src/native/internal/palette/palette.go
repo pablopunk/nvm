@@ -93,8 +93,10 @@ type Palette struct {
 	announcedNotice *Notice
 	phIndex         int
 	// settled is false while the providers of the shown query are still answering: the list then shows the
-	// rows it has, and no empty state.
+	// rows it has, and no empty state. pending is true while a provider reports a call in flight (View.Pending
+	// covers the views that are not provider-backed).
 	settled    bool
+	pending    bool
 	shownView  *View
 	shownQuery string
 	// pushes counts the views pushed, so an action can tell whether it opened one.

@@ -61,6 +61,10 @@ type View struct {
 	OnHide func()
 	// Loading reports that the view has no rows yet because they are still arriving; no empty state shows meanwhile.
 	Loading func() bool
+	// Pending reports that the view's second batch is still in flight, such as the answer to an onSearchChange call the
+	// host has started. It is read on every frame: while it holds, the palette shows a loading placeholder after the
+	// rows, which never takes the choice.
+	Pending func() bool
 	// Accessory is a small choice at the end of the search field, such as a category. Its change is passed to OnChange.
 	Accessory *Accessory
 	// SelectID names the row to choose once the view's rows first show, such as an item the extension selected.
