@@ -11,9 +11,10 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
-const tempFolder = "/work/tmp"
+var tempFolder = testpath.Abs("work", "tmp")
 
 // deskWith returns a service over fakes, with the recognizer scripted to answer for every path it is asked about.
 func deskWith(t *testing.T) (*Service, *fake.TextRecognizer, *fake.ScreenCapturer, *fake.FS) {
@@ -33,8 +34,9 @@ func invoiceResult() platform.TextResult {
 
 func TestImageReadsAnImageFileThroughTheEngine(t *testing.T) {
 	svc, text, _, _ := deskWith(t)
-	text.Script("/photos/invoice.PNG", invoiceResult())
-	got, err := svc.Image(context.Background(), "/photos/invoice.PNG", Options{Languages: []string{"en"}})
+	photo := testpath.Abs("photos", "invoice.PNG")
+	text.Script(photo, invoiceResult())
+	got, err := svc.Image(context.Background(), photo, Options{Languages: []string{"en"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,14 +44,14 @@ func TestImageReadsAnImageFileThroughTheEngine(t *testing.T) {
 		t.Fatalf("text = %q", got.Text)
 	}
 	calls := text.Calls()
-	if len(calls) != 1 || calls[0].Path != "/photos/invoice.PNG" || calls[0].Languages[0] != "en" {
+	if len(calls) != 1 || calls[0].Path != photo || calls[0].Languages[0] != "en" {
 		t.Fatalf("calls = %+v", calls)
 	}
 }
 
 func TestImageRefusesFilesThatAreNotImagesWithoutRunningAnEngine(t *testing.T) {
 	svc, text, _, _ := deskWith(t)
-	if _, err := svc.Image(context.Background(), "/docs/report.pdf", Options{}); !errors.Is(err, ErrNotImage) {
+	if _, err := svc.Image(context.Background(), testpath.Abs("docs", "report.pdf"), Options{}); !errors.Is(err, ErrNotImage) {
 		t.Fatalf("err = %v, want ErrNotImage", err)
 	}
 	if len(text.Calls()) != 0 {
