@@ -91,6 +91,10 @@ type Palette struct {
 	pushes int
 	// announced is the selection assistive technology was last told about.
 	announced selection
+	// searchSpan is the search field's selection as the last frame drew it, and edge the arrow the field let go of
+	// at its end, which the next frame acts on (keys_arrows.go).
+	searchSpan [2]int
+	edge       searchEdge
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.

@@ -60,6 +60,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 		Input:     &p.input,
 		AIHint:    len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
 		Concealed: v.Concealed,
+		OnKey:     p.onSearchKey,
 	}
 	if v.HideInput {
 		data.Title = v.Title
@@ -74,6 +75,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	}
 	data.Accessory = accessoryLabel(v)
 	events := design.SearchRow(c, data)
+	p.searchSpan = events.Selection
 	if events.Accessory {
 		v.Accessory.Value = v.Accessory.Next()
 		v.Accessory.OnChange(v.Accessory.Value)

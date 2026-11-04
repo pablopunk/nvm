@@ -196,3 +196,50 @@ func TestTabOpensAskAIOnlyAtTheRootWithAQuery(t *testing.T) {
 		t.Fatal("Tab below the root must not open the AI view")
 	}
 }
+
+// TestArrowRightOpensTheActionMenuOnlyWhenTheCaretIsAtTheEnd checks the 1.x rule: inside the query ArrowRight moves the
+// caret, and at its end it opens the action menu of the chosen row.
+func TestArrowRightOpensTheActionMenuOnlyWhenTheCaretIsAtTheEnd(t *testing.T) {
+	var ran []string
+	h := newHarness(t, twoActionView("Root", &ran, "Alpha", "Beta"), true)
+	h.typeText("al")
+	h.key(0, ui.KeyLeft)
+	h.key(0, ui.KeyRight)
+	if h.p.actionsOpen {
+		t.Fatal("ArrowRight before the end of the query should move the caret, not open the menu")
+	}
+	h.key(0, ui.KeyRight)
+	if !h.p.actionsOpen {
+		t.Fatal("ArrowRight at the end of the query should open the action menu")
+	}
+}
+
+// TestArrowLeftClosesTheMenuAndGoesBackOnlyAtTheStartOfTheQuery checks the 1.x rule for ArrowLeft: it moves the caret
+// until the start of the query, then closes the open menu or goes back a page.
+func TestArrowLeftClosesTheMenuAndGoesBackOnlyAtTheStartOfTheQuery(t *testing.T) {
+	var ran []string
+	root := rowsView("Root", &ran, "Alpha")
+	h := newHarness(t, root, true)
+	sub := rowsView("Sub", &ran, "Gamma")
+	h.p.Push(sub)
+	h.typeText("ga")
+	h.key(0, ui.KeyLeft)
+	h.key(0, ui.KeyLeft)
+	if h.p.Top() != sub {
+		t.Fatal("ArrowLeft inside the query should move the caret, not go back")
+	}
+	h.key(0, ui.KeyLeft)
+	if h.p.Top() != root {
+		t.Fatal("ArrowLeft at the start of the query should go back to the root")
+	}
+}
+
+func TestArrowLeftAtTheStartClosesTheActionMenu(t *testing.T) {
+	var ran []string
+	h := newHarness(t, twoActionView("Root", &ran, "Alpha"), true)
+	h.key(Mod, ui.KeyK)
+	h.key(0, ui.KeyLeft)
+	if h.p.actionsOpen || !h.win.visible || h.p.Top() != h.p.stack[0] {
+		t.Fatalf("ArrowLeft at the start should close the menu and stay on the root: open=%v visible=%v", h.p.actionsOpen, h.win.visible)
+	}
+}

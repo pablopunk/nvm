@@ -19,12 +19,17 @@ type SearchData struct {
 	AIHint bool
 	// Concealed masks the text while a secret is typed; the query still holds the real text.
 	Concealed bool
+	// OnKey sees the keys the input would take before it takes them, and reports whether it took one. Nil leaves
+	// every key to the input.
+	OnKey func(k ui.TextKey) bool
 }
 
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
 type SearchEvents struct {
 	Back, Changed, Submitted bool
 	Accessory                bool
+	// Selection is the start and end, in characters, of the input's selection as this frame built it; start <= end.
+	Selection [2]int
 }
 
 // SearchRow draws the search field and reports its events. It draws no state of its own: the query and the
@@ -44,6 +49,11 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 		if d.Concealed {
 			in = in.Password()
 		}
+		if d.OnKey != nil {
+			in = in.OnTextKey(d.OnKey)
+		}
+		anchor, caret := in.TextAnchorCaret()
+		events.Selection = [2]int{min(anchor, caret), max(anchor, caret)}
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
 		if d.Accessory != "" {
