@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -68,5 +70,31 @@ func TestRunningExtensionYieldsItsItemRows(t *testing.T) {
 		if row.Accessory == "Failed" {
 			t.Fatalf("running extension yielded a failed row %q", row.Title)
 		}
+	}
+}
+
+// pendingCommandDeps starts a command's invocation and never answers it, so the palette is observed while the run is
+// still in flight: whatever has closed it by then was the dispatch-time dismissal, not the result.
+func pendingCommandDeps() extview.Deps {
+	return extview.Deps{Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) {}}
+}
+
+// commandLeavesPaletteOpen runs a command row's action through the palette and reports whether the palette is still shown.
+func commandLeavesPaletteOpen(t *testing.T, command api.Command) bool {
+	t.Helper()
+	p := shownPalette(t)
+	p.RunAction(extview.ActionFor(pendingCommandDeps(), "acme.commands", commandAction(command)))
+	return p.Visible()
+}
+
+func TestCommandThatDismissesAfterRunClosesThePalette(t *testing.T) {
+	if commandLeavesPaletteOpen(t, api.Command{ID: "run", Title: "Run", DismissAfterRun: true}) {
+		t.Fatal("a command with DismissAfterRun left the palette open after its run")
+	}
+}
+
+func TestCommandWithoutDismissAfterRunKeepsThePaletteOpen(t *testing.T) {
+	if !commandLeavesPaletteOpen(t, api.Command{ID: "run", Title: "Run"}) {
+		t.Fatal("a command without DismissAfterRun closed the palette after its run")
 	}
 }
