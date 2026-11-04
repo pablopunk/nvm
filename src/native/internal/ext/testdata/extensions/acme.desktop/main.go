@@ -9,6 +9,9 @@ import (
 // SearchItems answers one query per desktop service. Each row's title says what the host answered, so a rig journey
 // can read the outcome from the palette.
 func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+	if query == clearQuery {
+		return []api.Item{{ID: clearActionID, Title: "Fixture clear history", Primary: &api.Action{Kind: api.ActionRun, Title: "Fixture clear history", Ref: &api.ActionRef{ID: clearActionID}}}}, nil
+	}
 	check, ok := checks[query]
 	if !ok {
 		return nil, nil
@@ -29,6 +32,22 @@ var checks = map[string]func(api.Context) string{
 }
 
 const fixtureClipboardText = "nvm desktop fixture"
+
+// clearQuery and clearActionID name the row that clears clipboard history. The fixture does not declare a
+// confirmation: the host must ask the user anyway, which is what the rig journey checks.
+const (
+	clearQuery    = "fixture clear"
+	clearActionID = "clear-history"
+)
+
+// RunAction clears clipboard history when the user runs the clear row. The host asks before the call runs.
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+	if in.Ref.ID != clearActionID {
+		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
+	}
+	_, err := ctx.Clipboard().Clear(nil, 0)
+	return api.Result{}, err
+}
 
 func clipboardCheck(ctx api.Context) string {
 	if err := ctx.Desktop().Clipboard().WriteText(fixtureClipboardText, false); err != nil {
