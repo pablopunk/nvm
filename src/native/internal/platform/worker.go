@@ -1,5 +1,10 @@
 package platform
 
+import "errors"
+
+// ErrLineTooLong is returned by WorkerProcess.ReadLine when a line exceeds WorkerSpec.MaxLineBytes.
+var ErrLineTooLong = errors.New("worker line is longer than the limit")
+
 // MaxWorkerStderrBytes bounds the stderr text kept from a worker. Only the last bytes are kept, because a
 // crash message is printed last.
 const MaxWorkerStderrBytes = 8 << 10

@@ -71,7 +71,9 @@ func (p *workerProcess) WriteLine(line []byte) error {
 // ReadLine returns a copy of the next line, because the scanner reuses its buffer.
 func (p *workerProcess) ReadLine() ([]byte, error) {
 	if !p.lines.Scan() {
-		if err := p.lines.Err(); err != nil {
+		if err := p.lines.Err(); errors.Is(err, bufio.ErrTooLong) {
+			return nil, platform.ErrLineTooLong
+		} else if err != nil {
 			return nil, err
 		}
 		return nil, io.EOF

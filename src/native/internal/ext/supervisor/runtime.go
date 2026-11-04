@@ -1,0 +1,206 @@
+package supervisor
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+)
+
+// Runtime owns the child process of one extension. Calls are serialized: a child answers one request at a
+// time. Every method is safe for concurrent use; Call never blocks past its context.
+type Runtime struct {
+	cfg         Config
+	sourcePath  string
+	identity    api.Identity
+	slots       chan struct{}
+	mu          sync.Mutex
+	state       State
+	reason      string
+	generation  uint64
+	child       *childProcess
+	failures    []time.Time
+	retryAt     time.Time
+	diagnostics []string
+	nextRequest uint64
+	changed     chan struct{}
+}
+
+// New prepares a runtime for the extension source at sourcePath. Nothing runs until Start.
+func New(cfg Config, identity api.Identity, sourcePath string) *Runtime {
+	return &Runtime{
+		cfg:        cfg,
+		sourcePath: sourcePath,
+		identity:   identity,
+		slots:      make(chan struct{}, 1),
+		state:      StateIdle,
+		changed:    make(chan struct{}),
+	}
+}
+
+// Start launches the child in the background and returns at once. It does nothing while the extension is
+// running, starting, broken or disabled, and while a failed child's backoff has not passed.
+func (r *Runtime) Start() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.startLocked()
+}
+
+// Stop kills the child and returns the extension to idle. Calls already waiting see a stopped extension.
+func (r *Runtime) Stop() {
+	r.mu.Lock()
+	r.generation++
+	child := r.detachChildLocked()
+	r.state = StateIdle
+	r.reason = ""
+	r.notifyLocked()
+	r.mu.Unlock()
+	if child != nil {
+		_ = child.proc.Kill()
+	}
+}
+
+// Reset clears recorded failures and a disabled or broken state. The extension stays idle; Start runs it again.
+func (r *Runtime) Reset() {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state == StateDisabled || r.state == StateBroken || r.state == StateFailed {
+		r.state = StateIdle
+	}
+	r.failures = nil
+	r.reason = ""
+	r.retryAt = time.Time{}
+	r.notifyLocked()
+}
+
+// Status returns the current state, the reason for a failed, broken or disabled state, and recent diagnostics.
+func (r *Runtime) Status() Status {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.statusLocked()
+}
+
+func (r *Runtime) statusLocked() Status {
+	return Status{
+		State:       r.state,
+		Reason:      r.reason,
+		Failures:    len(r.failures),
+		Diagnostics: append([]string(nil), r.diagnostics...),
+	}
+}
+
+// WaitFor blocks until pred holds for the status, or until ctx ends. It wakes on every state change, so callers
+// never poll.
+func (r *Runtime) WaitFor(ctx context.Context, pred func(Status) bool) error {
+	for {
+		r.mu.Lock()
+		status := r.statusLocked()
+		changed := r.changed
+		r.mu.Unlock()
+		if pred(status) {
+			return nil
+		}
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// notifyLocked wakes every WaitFor caller. The caller holds r.mu and has changed the state.
+func (r *Runtime) notifyLocked() {
+	close(r.changed)
+	r.changed = make(chan struct{})
+}
+
+// Call sends one request and returns the child's response. A child-side failure comes back inside the
+// response; a host-side failure (not running, timed out, crashed, cancelled) comes back as an error that is
+// a *CallError. The ctx bounds the wait only: a call that outlives its context still finishes inside its
+// budget, so the next call never overlaps it.
+func (r *Runtime) Call(ctx context.Context, method, query string, invocation *api.Invocation) (protocol.Response, error) {
+	if err := r.checkRunnable(); err != nil {
+		return protocol.Response{}, err
+	}
+	select {
+	case r.slots <- struct{}{}:
+	case <-ctx.Done():
+		return protocol.Response{}, ctx.Err()
+	}
+	req := protocol.Request{ID: r.newRequestID(), Method: method, Query: query, Invocation: invocation}
+	result := make(chan callResult, 1)
+	go func() {
+		defer func() { <-r.slots }()
+		response, err := r.exchange(req)
+		result <- callResult{response: response, err: err}
+	}()
+	select {
+	case outcome := <-result:
+		return outcome.response, outcome.err
+	case <-ctx.Done():
+		return protocol.Response{}, ctx.Err()
+	}
+}
+
+type callResult struct {
+	response protocol.Response
+	err      error
+}
+
+// checkRunnable returns the reason a call cannot run now, or nil when a running child exists. An expired
+// backoff starts a new child in the background; the call still fails fast so the palette never waits on it.
+func (r *Runtime) checkRunnable() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	switch r.state {
+	case StateRunning:
+		return nil
+	case StateFailed:
+		if r.cfg.Clock.Now().Before(r.retryAt) {
+			return unavailable("restarting after a failure: " + r.reason)
+		}
+		r.startLocked()
+		return unavailable("restarting after a failure: " + r.reason)
+	case StateIdle:
+		return unavailable("stopped")
+	case StateStarting:
+		return unavailable("starting")
+	case StateBroken:
+		return unavailable("does not load: " + r.reason)
+	case StateDisabled:
+		return unavailable("disabled: " + r.reason)
+	}
+	return unavailable("not available")
+}
+
+func (r *Runtime) newRequestID() uint64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.nextRequest++
+	return r.nextRequest
+}
+
+// addDiagnosticLocked keeps the newest diagnostics only.
+func (r *Runtime) addDiagnosticLocked(text string) {
+	r.diagnostics = append(r.diagnostics, text)
+	if extra := len(r.diagnostics) - maxDiagnostics; extra > 0 {
+		r.diagnostics = r.diagnostics[extra:]
+	}
+}
+
+// unavailable is the error for a call that cannot reach a running child.
+func unavailable(reason string) error {
+	return &CallError{Failure: api.Failure{Code: api.CodeUnavailable, Message: reason}}
+}
+
+// CallError is a host-side call failure, such as a timeout, a crash or an extension that is not running.
+type CallError struct {
+	Failure api.Failure
+}
+
+func (e *CallError) Error() string {
+	return fmt.Sprintf("%s: %s", e.Failure.Code, e.Failure.Message)
+}
