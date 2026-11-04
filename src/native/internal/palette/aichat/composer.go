@@ -26,11 +26,20 @@ func composerRow(c *ui.Context, p *page, record chat.Chat, h search.Host) {
 	})
 }
 
-// composerKey answers the keys of the composer's text: Enter sends what is typed and clears it, and Shift+Enter breaks
-// the line, as the desktop app's composer does.
+// menuRunner is the palette's port for running the action its open menu chose. The composer's text takes Enter before
+// the palette's keys, so Enter reaches the menu through this.
+type menuRunner interface {
+	RunChosenAction() bool
+}
+
+// composerKey answers the keys of the composer's text: Enter runs the chosen action of an open menu, otherwise it sends
+// what is typed and clears it; Shift+Enter breaks the line, as the desktop app's composer does.
 func (p *page) composerKey(key ui.TextKey, h search.Host) bool {
 	if key.Key != ui.KeyEnter || key.Mods != 0 {
 		return false
+	}
+	if menu, ok := h.(menuRunner); ok && menu.RunChosenAction() {
+		return true
 	}
 	if p.send(key.Text(), h) {
 		key.SetText("")
@@ -66,17 +75,13 @@ func (p *page) send(text string, h search.Host) bool {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		if p.deps.Service.Awaiting(p.id) {
-			p.report(p.deps.Service.Decide(p.id, true))
+			report(h, p.deps.Service.Decide(p.id, true))
 		}
 		return false
 	}
 	err := p.deps.Service.Send(p.id, text)
-	if err != nil {
-		p.host = h
-		p.report(err)
-		return false
-	}
-	return true
+	report(h, err)
+	return err == nil
 }
 
 // tierPicker names the tier the next reply uses, and switches it on a click. The backend's model and route names are

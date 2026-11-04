@@ -6,10 +6,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// actions returns the actions of the chosen row, or nil when there is no row to act on.
+// actions returns the actions of the chosen row, or of the page on top when it is a Body page with a menu, or nil.
 func (p *Palette) actions() []search.Action {
 	if it := p.chosenItem(); it != nil {
 		return it.Actions
+	}
+	if v := p.cur(); v.Actions != nil {
+		return v.Actions()
 	}
 	return nil
 }

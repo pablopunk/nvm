@@ -3,41 +3,29 @@ package aichat
 import (
 	"errors"
 
-	"github.com/egoist/mygo/ui"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Copy for the palette's answers to keys and refusals. Each names the state and says what happened.
+// Copy for the palette's answers to actions and refusals. Each names the state and says what happened.
 const (
 	toastStillAnswering  = "This chat is still answering. Stop it with Escape first."
 	toastNothingToAsk    = "There is no question to ask again yet."
 	toastCopied          = "Copied the last reply."
+	toastCopiedMessage   = "Copied the last message."
 	toastNoReply         = "There is no reply to copy yet."
+	toastNoMessage       = "There is no message to copy yet."
 	toastFailed          = "That did not work. Try again."
 	toastNothingToReview = "This extension is not installed any more."
 )
 
-// key answers the keys of a chat page before the palette does. It reports whether it used one. Escape is not here: the
-// palette asks the page's escape hook for it, so a key the page does not take stays for the palette.
-func (p *page) key(c *ui.Context, h search.Host) bool {
-	p.host = h
-	switch {
-	case p.deps.Service.Awaiting(p.id) && c.Shortcut(palette.Mod, ui.KeyD):
-		p.report(p.deps.Service.Decide(p.id, false))
-	case c.Shortcut(palette.Mod, ui.KeyR):
-		p.report(p.deps.Service.Regenerate(p.id))
-	case c.Shortcut(palette.Mod|ui.Alt, ui.KeyC):
-		p.copyLastReply(h)
-	case c.Shortcut(palette.Mod|ui.Shift, ui.KeyM):
-		p.toggleTier(h)
-	case c.Shortcut(palette.Mod, ui.KeyE):
-		p.review(h)
-	default:
+// escape stops a reply in flight. With no reply in flight it reports false, and the palette goes back as it does on
+// any page, as Electron's popExtensionView does.
+func (p *page) escape() bool {
+	if !p.deps.Service.Busy(p.id) {
 		return false
 	}
+	p.deps.Service.Stop(p.id)
 	return true
 }
 
@@ -55,16 +43,6 @@ func (p *page) review(h search.Host) {
 	h.Push(view)
 }
 
-// escape stops a reply in flight. With no reply in flight it reports false, and the palette goes back as it does on
-// any page, as Electron's popExtensionView does.
-func (p *page) escape() bool {
-	if !p.deps.Service.Busy(p.id) {
-		return false
-	}
-	p.deps.Service.Stop(p.id)
-	return true
-}
-
 // copyLastReply copies the newest reply's text and says so on the palette.
 func (p *page) copyLastReply(h search.Host) {
 	record, ok := p.deps.Service.Chat(p.id)
@@ -78,6 +56,31 @@ func (p *page) copyLastReply(h search.Host) {
 	}
 	p.deps.Copy(text)
 	h.Toast(toastCopied)
+}
+
+// copyLastMessage copies the text of the newest message the user sent and says so on the palette.
+func (p *page) copyLastMessage(h search.Host) {
+	record, ok := p.deps.Service.Chat(p.id)
+	if !ok {
+		return
+	}
+	text, found := lastUserText(record)
+	if !found {
+		h.Toast(toastNoMessage)
+		return
+	}
+	p.deps.Copy(text)
+	h.Toast(toastCopiedMessage)
+}
+
+// lastUserText is the text of the newest message the user sent, and whether there is one.
+func lastUserText(record chat.Chat) (string, bool) {
+	for i := len(record.Messages) - 1; i >= 0; i-- {
+		if record.Messages[i].Author == chat.AuthorUser {
+			return record.Messages[i].Text, true
+		}
+	}
+	return "", false
 }
 
 // toggleTier switches the chat between the fast and smart tiers. The next reply uses the new tier.
@@ -95,6 +98,14 @@ func (p *page) toggleTier(h search.Host) {
 		return
 	}
 	h.Toast("Next replies use the " + tierLabel(next) + " model.")
+}
+
+// report toasts a refusal the transcript does not show. A nil error is silent.
+func report(h search.Host, err error) {
+	if err == nil {
+		return
+	}
+	h.Toast(refusalCopy(err))
 }
 
 // refusalCopy is the palette line for a refusal the transcript does not carry.

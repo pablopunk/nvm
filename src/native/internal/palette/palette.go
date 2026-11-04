@@ -235,6 +235,17 @@ func (p *Palette) push(v *View) {
 	p.focusInput()
 }
 
+// RunChosenAction runs the action the open action menu has chosen and closes the menu. A page whose text input takes
+// Enter calls it, since such an input takes the key before the palette's own keys see it. It reports false when no menu
+// is open.
+func (p *Palette) RunChosenAction() bool {
+	if !p.actionsOpen {
+		return false
+	}
+	p.onEnter()
+	return true
+}
+
 // Visible reports whether the palette window is shown.
 func (p *Palette) Visible() bool { return p.win.IsVisible() }
 

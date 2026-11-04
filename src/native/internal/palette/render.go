@@ -227,12 +227,30 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
 		if len(it.Actions) > 1 {
-			data.Secondary = &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
+			data.Secondary = actionsKeyHint()
 		}
+	} else if v.Body != nil && (v.Primary != nil || len(p.actions()) > 0) {
+		p.bodyFooterKeys(v, &data)
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
 	}
 	design.Footer(c, data)
+}
+
+// bodyFooterKeys says what the primary control of a Body page does and that its action menu opens with Command-K, as
+// a list's footer does for its rows.
+func (p *Palette) bodyFooterKeys(v *View, data *design.FooterData) {
+	if v.Primary != nil {
+		data.Primary = v.Primary()
+	}
+	if len(p.actions()) > 0 {
+		data.Secondary = actionsKeyHint()
+	}
+}
+
+// actionsKeyHint is the footer's "Actions" entry: the key that opens the action menu.
+func actionsKeyHint() *design.KeyHint {
+	return &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
 }
 
 // actionPanel is the action menu, a popover over the pane.

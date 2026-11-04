@@ -11,7 +11,6 @@ import (
 // body draws the transcript above the composer on the pane's own surface, as every other palette view does. A chat with no messages is blank, as the
 // desktop app shows it, except for the sign-in line of an account that is not signed in.
 func (p *page) body(c *ui.Context, h search.Host) {
-	p.host = h
 	record, ok := p.deps.Service.Chat(p.id)
 	if !ok {
 		return

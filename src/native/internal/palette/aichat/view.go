@@ -4,25 +4,16 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// hint is the right footer of a chat page: the keys the page answers beyond typing. awaitingHint replaces it while a
-// tool call waits for the user's answer, and reviewHint while a builder chat has an extension to review.
-const (
-	hint         = "⌘R ask again · ⌘⌥C copy reply · ⌘⇧M model"
-	awaitingHint = "↵ allow · ⌘D refuse · Esc stop"
-	reviewHint   = "⌘E review extension · ⌘R ask again · ⌘⇧M model"
-)
-
-// page is the state of one open chat: which chat it shows, the scroll of its transcript and the host it last drew
-// with, so keys and submits can answer on the palette.
+// page is the state of one open chat: which chat it shows, the scroll of its transcript, the composer's text and the
+// input the composer draws, which the palette focuses.
 type page struct {
 	deps  Deps
 	id    string
 	list  ui.ListState
-	host  search.Host
 	draft string
 	input ui.Handle
 }
@@ -40,18 +31,17 @@ func newPage(deps Deps, id string) *page {
 	return p
 }
 
-// view is the palette view of the page: the transcript and composer body, with the page's keys and footer.
+// view is the palette view of the page: the transcript and composer body, its action menu and its footer.
 func (p *page) view() *palette.View {
 	return &palette.View{
 		Title:        "AI Chat",
 		TitleFn:      p.title,
 		Body:         p.body,
 		Input:        &p.input,
-		OnKey:        p.key,
+		Actions:      p.chatActions,
+		Primary:      p.primaryKey,
 		OnEscape:     p.escape,
 		SurvivesHide: true,
-		Hint:         hint,
-		HintFn:       p.footerHint,
 	}
 }
 
@@ -82,23 +72,14 @@ func placeholderFor(service *chat.Service, id string) string {
 	return "Message AI"
 }
 
-// footerHint is the right footer of the page: it names the answers a waiting tool call takes, as the transcript shows,
-// and the review key of a builder chat that wrote an extension.
-func (p *page) footerHint() string {
-	record, ok := p.deps.Service.Chat(p.id)
+// primaryKey is the footer's primary action: the answer a waiting tool call takes, Stop while a reply streams, or Send.
+func (p *page) primaryKey() *design.KeyHint {
+	record, _ := p.deps.Service.Chat(p.id)
 	switch {
-	case ok && chat.AwaitingAnswer(record):
-		return awaitingHint
-	case ok && record.Extension != "":
-		return reviewHint
+	case chat.AwaitingAnswer(record):
+		return &design.KeyHint{Title: "Allow", Key: palette.KeyLabel("↵")}
+	case p.deps.Service.Busy(p.id):
+		return &design.KeyHint{Title: "Stop", Key: palette.KeyLabel("Esc")}
 	}
-	return hint
-}
-
-// report toasts a refusal the transcript does not show. A nil error is silent.
-func (p *page) report(err error) {
-	if err == nil || p.host == nil {
-		return
-	}
-	p.host.Toast(refusalCopy(err))
+	return &design.KeyHint{Title: "Send", Key: palette.KeyLabel("↵")}
 }
