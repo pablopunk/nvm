@@ -96,21 +96,30 @@ func notRunningReason(state State, reason string) string {
 	return reason
 }
 
-// awaitResponse waits for the child's answer to req. The soft budget only records a diagnostic; the hard budget
-// kills the child.
+// awaitResponse waits for the child's answer to req. The budgets count the child's own time only: the time the host
+// spends answering a service call is added back to both the soft and the hard deadline, because an extension that
+// waits for a shell command, a network reply or a palette confirmation is not busy. The soft budget only records a
+// diagnostic; the hard budget kills the child.
 func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budget Budget) (protocol.Response, error) {
+	clock := r.cfg.Clock
+	started := clock.Now()
+	var blocked time.Duration
 	soft := r.softTimer(budget)
-	hard := r.cfg.Clock.After(budget.Hard)
+	hard := clock.After(budget.Hard)
 	for {
 		select {
 		case line, open := <-child.lines:
 			if call, ok := serviceCallFrom(line, open); ok {
-				waited, err := r.answerService(child, call, budget, req.Method)
+				callStart := clock.Now()
+				_, err := r.answerService(child, call, budget, req.Method)
+				blocked += clock.Now().Sub(callStart)
 				if err != nil {
 					return protocol.Response{}, err
 				}
-				if waited {
-					hard = r.cfg.Clock.After(budget.Hard)
+				computed := clock.Now().Sub(started) - blocked
+				hard = clock.After(remainingBudget(budget.Hard, computed))
+				if soft != nil {
+					soft = clock.After(remainingBudget(budget.Soft, computed))
 				}
 				continue
 			}
@@ -122,6 +131,14 @@ func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budge
 			return protocol.Response{}, r.failChild(child, api.CodeTimeout, fmt.Sprintf("%s did not finish within %s", req.Method, budget.Hard))
 		}
 	}
+}
+
+// remainingBudget is what is left of a budget after computed time of child work. It is never negative.
+func remainingBudget(budget, computed time.Duration) time.Duration {
+	if remaining := budget - computed; remaining > 0 {
+		return remaining
+	}
+	return 0
 }
 
 func (r *Runtime) softTimer(budget Budget) <-chan time.Time {
