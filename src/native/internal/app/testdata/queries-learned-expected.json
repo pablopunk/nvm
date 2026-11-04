@@ -890,6 +890,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"cal\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Create Quicklink",
         "subtitle": "",
@@ -958,25 +977,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"cal\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -1059,6 +1059,25 @@
         "actions": [
           {
             "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"term\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -1245,25 +1264,6 @@
         ]
       },
       {
-        "kind": "Search",
-        "title": "Search the web for \"term\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
@@ -1410,6 +1410,25 @@
         "actions": [
           {
             "title": "Automate",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"set\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -1829,25 +1848,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"set\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]

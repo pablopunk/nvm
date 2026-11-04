@@ -180,8 +180,10 @@ type ShortcutRecord struct {
 	Title       string `json:"title"`
 	Subtitle    string `json:"subtitle,omitempty"`
 	Accelerator string `json:"accelerator"`
-	Scope       string `json:"scope"`
-	Source      string `json:"source"` // user or extension
+	// Label is the accelerator as the user reads it on this platform, such as ⌘⌥K. It is empty when none is bound.
+	Label  string `json:"label,omitempty"`
+	Scope  string `json:"scope"`
+	Source string `json:"source"` // user or extension
 }
 
 // Shortcuts reads the active shortcut table. Registering shortcuts happens through Commands.
@@ -189,6 +191,12 @@ type Shortcuts interface {
 	List() []ShortcutRecord
 	// Palette returns the app-wide shortcut that opens Nevermind.
 	Palette() ShortcutRecord
+}
+
+// Account reads whether the palette is signed in to a Nevermind account. Signing in is the ActionAccount action with the
+// sign-in op, which the host runs; the credentials never reach an extension.
+type Account interface {
+	SignedIn() bool
 }
 
 // IndicatorStatus is the visual state of a passive indicator.

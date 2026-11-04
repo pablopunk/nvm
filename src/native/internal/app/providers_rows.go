@@ -1,11 +1,7 @@
 package app
 
 import (
-	"fmt"
-	"slices"
 	"strings"
-
-	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
@@ -17,15 +13,12 @@ import (
 // The values are the bands the prototype used, so the root's order does not change.
 const (
 	scoreTimer        = 990
-	scoreQuicklink    = 980
 	scoreSnippetExact = 975
 	scoreSnippet      = 970
 	scoreExtension    = 960
 	scoreFileFirst    = 75
 	scoreClipboard    = 55
-	scoreWebURL       = 150
 	scoreAutomate     = 40
-	scoreWebSearch    = 10
 	scoreCommandAlias = 45
 )
 
@@ -57,9 +50,6 @@ func rootCommandScore(title string) int {
 	return scoreRootCommand
 }
 
-// keyWebSearch is the usage key of the web search row. Commands and applications key themselves by title and id.
-const keyWebSearch = "web:search"
-
 // Each row function is one source of the root: it returns the rows for q, or the root rows for "". They run
 // on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
 // which run there.
@@ -75,26 +65,23 @@ func timerRows(p *App, _ *rootInput, q string) []search.Item {
 	}}}
 }
 
-// quicklinkRows answers "keyword search terms" with a search on the quicklink's site.
-func quicklinkRows(_ *App, in *rootInput, q string) []search.Item {
-	kw, rest, ok := strings.Cut(q, " ")
-	if !ok || strings.TrimSpace(rest) == "" {
-		return nil
-	}
-	var out []search.Item
-	for _, ql := range append(slices.Clone(in.quicklinks), builtinLinks...) {
-		if strings.EqualFold(kw, ql.Keyword) {
-			out = append(out, search.Item{Kind: search.KindQuicklinks, Title: fmt.Sprintf("Search %s for “%s”", ql.Name, strings.TrimSpace(rest)), Subtitle: "Quicklink", Icon: "link", Tone: "blue", Score: scoreQuicklink,
-				Actions: []search.Action{{Title: "Open", Run: openURL(ql.URL, strings.TrimSpace(rest))}}})
-		}
-	}
-	return out
-}
-
 // snippetRows matches snippets by keyword, exact first and then prefix; a snippet with no keyword is found by the
 // snippets view.
 func snippetRows(p *App, _ *rootInput, q string) []search.Item {
 	return snippetRootRows(p, q)
+}
+
+// commandTitleScore is how well a command named title, with keywords, answers the lowercase query lq. The title scores
+// first, and a query the keywords contain scores as an alias. phraseMatch limits the title to phrases and word prefixes.
+func commandTitleScore(title, keywords string, phraseMatch bool, lq string) int {
+	s := search.Score(title, lq)
+	if phraseMatch && s < search.PhraseScoreFloor {
+		s = 0
+	}
+	if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(keywords), lq) {
+		s = scoreCommandAlias
+	}
+	return s
 }
 
 // commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
@@ -122,13 +109,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			}
 			continue
 		}
-		s := search.Score(cmd.Title, lq)
-		if cmd.PhraseMatch && s < search.PhraseScoreFloor {
-			s = 0
-		}
-		if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(cmd.Keywords), lq) {
-			s = scoreCommandAlias
-		}
+		s := commandTitleScore(cmd.Title, cmd.Keywords, cmd.PhraseMatch, lq)
 		if s == 0 {
 			s = aliasMatchScore(in.aliases[commandShortcutID(cmd)], lq)
 		}
@@ -199,22 +180,16 @@ func conversationRows(p *App, in *rootInput, q string) []search.Item {
 	return out
 }
 
-// webRows turns a query into a website when it names one, and otherwise offers the two fallbacks: Automate
-// and a web search. The fallbacks are query fallbacks: an answer row of the search, such as a calculation, leaves them out.
-func webRows(p *App, in *rootInput, q string) []search.Item {
-	if q == "" {
+// automateRows offers Automate for a typed query that does not name a website: the AI builder writes a command for it.
+// The web built-in answers the same query with the search and the website rows. Automate stays native, because the
+// builder's write path is host-only (docs/extension-api.md, section 4). It is a query fallback, which an answer row
+// leaves out.
+func automateRows(p *App, _ *rootInput, q string) []search.Item {
+	if q == "" || search.URLFromQuery(q) != "" {
 		return nil
 	}
-	if u := search.URLFromQuery(q); u != "" {
-		return []search.Item{{Kind: search.KindWeb, Title: "Open " + strings.TrimPrefix(strings.TrimPrefix(u, "https://"), "http://"), Subtitle: "Open website", Icon: "globe", Tone: "blue", Score: scoreWebURL,
-			Actions: []search.Action{{Title: "Open Website", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenExternal(u) }}}}}
-	}
-	return []search.Item{
-		{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
-			Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}},
-		{Kind: search.KindSearch, Title: `Search the web for "` + oneLine(q) + `"`, Subtitle: "Search instead", Icon: "search", Tone: "blue", Score: scoreWebSearch, LearnKey: keyWebSearch, QueryFallback: true,
-			Actions: []search.Action{{Title: "Search the Web", Run: openURL(in.engine.URL, q)}}},
-	}
+	return []search.Item{{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
+		Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}}}
 }
 
 // conversationTiePriority puts builder chats after conversations at equal score and last use, as 1.x does

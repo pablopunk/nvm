@@ -3,11 +3,13 @@ package app
 import (
 	"encoding/json"
 	"flag"
-	"github.com/pablopunk/nvm/native/internal/search"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // updateRootTable rewrites testdata/queries-expected.json from the current root search. The file was
@@ -69,7 +71,8 @@ func rootTableFixture(t *testing.T) *App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.S.Quicklinks = []Quicklink{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
+	hackerNews := []quicklinks.Link{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
+	p.exts.mgr.Store(newManagerOver(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews})))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),

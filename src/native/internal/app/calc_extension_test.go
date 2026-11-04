@@ -115,7 +115,7 @@ func TestCalculatorLabelsAStaleRateWithItsCacheAge(t *testing.T) {
 	fetched := set.Clock.Now().Add(-72 * time.Hour)
 	seedRates(t, set, dir, calc.Rates{"USD/EUR": {Rate: 0.5, Provider: "Frankfurter", UpdatedAt: fetched, FetchedAt: fetched}})
 	p.attachServices(set.Ports(), "linux", dir, time.UTC)
-	p.exts.mgr.Store(newManagerOverNetwork(t, builtInExtensions(p.rateCache, time.UTC), set.Clock, set.PublicHTTP))
+	p.exts.mgr.Store(newManagerOverNetwork(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: time.UTC}), set.Clock, set.PublicHTTP))
 
 	goldenQuery(p, "10 usd to eur")
 	rows := p.Results()
@@ -135,7 +135,7 @@ func TestRateRefreshStoresTheQuoteInRatesJSON(t *testing.T) {
 	set := fake.NewSet()
 	const dir = "/nvm-test/config"
 	p.attachServices(set.Ports(), "linux", dir, time.UTC)
-	p.exts.mgr.Store(newManagerOverNetwork(t, builtInExtensions(p.rateCache, time.UTC), set.Clock, set.PublicHTTP))
+	p.exts.mgr.Store(newManagerOverNetwork(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: time.UTC}), set.Clock, set.PublicHTTP))
 	set.PublicHTTP.Script(fake.Response{Status: 200, Body: []byte(`{"rate": 0.5, "date": "2026-01-01"}`)})
 
 	goldenQuery(p, "10 usd to eur")

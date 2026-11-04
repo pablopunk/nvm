@@ -9,7 +9,7 @@ func TestExtensionListLeavesThePaletteHotkeyOutAndPaletteReportsIt(t *testing.T)
 	if err := f.manager.SetAction("command:notes", "Command+Alt+N"); err != nil {
 		t.Fatal(err)
 	}
-	table := NewExtensionTable(f.manager)
+	table := NewExtensionTable(f.manager, func() Labeler { return Labeler{GOOS: "darwin"} })
 	records := table.List()
 	if len(records) != 1 || records[0].ActionID != "command:notes" {
 		t.Fatalf("extension list = %+v, want only Quick Notes", records)

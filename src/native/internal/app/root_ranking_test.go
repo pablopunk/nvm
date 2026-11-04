@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -19,8 +20,8 @@ func TestPortedLeadingQueryWordsOutrankFallbacks(t *testing.T) {
 	if command != 95 {
 		t.Fatalf("Score(Fix Selected Text with AI) = %d, want 95", command)
 	}
-	if command <= scoreAutomate || command <= scoreWebSearch {
-		t.Fatalf("the command (%d) must outrank Automate (%d) and web search (%d)", command, scoreAutomate, scoreWebSearch)
+	if command <= scoreAutomate || command <= scoreQueryFallback {
+		t.Fatalf("the command (%d) must outrank Automate (%d) and the web search fallback (%d)", command, scoreAutomate, scoreQueryFallback)
 	}
 }
 
@@ -40,7 +41,7 @@ func TestPortedFrequentFallbackUseDoesNotOvertakeAStrongCommand(t *testing.T) {
 	p := rootTableFixture(t)
 	learn := usage.NewMemory(fake.NewClock())
 	for range 100 {
-		learn.Record(keyWebSearch, "apps")
+		learn.Record(websearch.SearchLearnKey, "apps")
 	}
 	p = withLearner(p, learn)
 

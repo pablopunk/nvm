@@ -110,6 +110,10 @@ func (c hostContext) Shortcuts() api.Shortcuts {
 	return remoteShortcuts{link: c.link}
 }
 
+func (c hostContext) Account() api.Account {
+	return remoteAccount{link: c.link}
+}
+
 func (c hostContext) Indicators() api.Indicators {
 	return remoteIndicators{link: c.link}
 }

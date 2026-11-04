@@ -50,8 +50,8 @@ func TestFailedExtensionNeverShowsAtTheRootOrAboveRealRows(t *testing.T) {
 		}
 	}
 	pointer := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
-	if pointer.Score >= scoreWebSearch {
-		t.Fatalf("failed row score %d must rank below the web search fallback (%d)", pointer.Score, scoreWebSearch)
+	if pointer.Score >= scoreQueryFallback {
+		t.Fatalf("failed row score %d must rank below the query fallback band (%d)", pointer.Score, scoreQueryFallback)
 	}
 }
 

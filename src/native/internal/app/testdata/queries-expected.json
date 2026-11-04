@@ -886,6 +886,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"cl\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Calculator",
         "subtitle": "",
@@ -1016,25 +1035,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"cl\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -1343,25 +1343,6 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Create Quicklink",
-        "subtitle": "",
-        "section": "",
-        "id": "",
-        "icon": "link",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Create Quicklink",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Search",
         "title": "Search the web for \"calc\"",
         "subtitle": "Search instead",
@@ -1376,6 +1357,25 @@
         "actions": [
           {
             "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Create Quicklink",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "link",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Create Quicklink",
             "label": ""
           }
         ]
@@ -1849,6 +1849,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"set\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Conversations",
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
@@ -2268,25 +2287,6 @@
         ]
       },
       {
-        "kind": "Search",
-        "title": "Search the web for \"set\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
@@ -2515,6 +2515,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"term\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Log in to Nevermind",
         "subtitle": "Connect this device to your Nevermind account",
@@ -2696,25 +2715,6 @@
         ]
       },
       {
-        "kind": "Search",
-        "title": "Search the web for \"term\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "Start Timer",
         "subtitle": "Type e.g. “timer 5m”",
@@ -2789,6 +2789,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"fire\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Force Quit Apps",
         "subtitle": "Force quit running applications",
@@ -2838,25 +2857,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"fire\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -2921,6 +2921,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"meeting\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Log in to Nevermind",
         "subtitle": "Connect this device to your Nevermind account",
@@ -2943,25 +2962,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"meeting\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -3172,6 +3172,25 @@
         ]
       },
       {
+        "kind": "Search",
+        "title": "Search the web for \"time\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Nevermind: Switch Backend Environment",
         "subtitle": "Switch Development, Preview, Production, or custom backend",
@@ -3306,25 +3325,6 @@
           },
           {
             "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"time\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
             "label": ""
           }
         ]

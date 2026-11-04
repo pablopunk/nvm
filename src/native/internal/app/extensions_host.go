@@ -81,6 +81,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Frontmost:     ports.Windows,
 		Notifier:      ports.Notifier,
 		Shortcuts:     p.extensionShortcuts(),
+		Account:       extensionAccount{p: p},
 		OCR:           textReader,
 		AI:            p.extensionAI(textReader),
 		History:       p.extensionHistory,
@@ -98,7 +99,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		RootRefresh:     p.refreshRootRows,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,
-		BuiltIns:        builtInExtensions(p.rateCache, p.zone),
+		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: p.S.Quicklinks, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine}),
 		AIQuota:         p.aiQuotas(),
 		LegacyStatePath: p.legacyStatePath(),
 	})
@@ -136,7 +137,7 @@ func (p *App) extensionWindows() services.WindowEngine {
 
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.
 func (p *App) extensionShortcuts() services.ShortcutTable {
-	return shortcuts.NewExtensionTable(p.shortcutsManager())
+	return shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler)
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.

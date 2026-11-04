@@ -82,6 +82,7 @@ type Context interface {
 	OCR() OCR
 	Dictation() Dictation
 	Shortcuts() Shortcuts
+	Account() Account
 	Indicators() Indicators
 	System() System
 	Updates() Updates
