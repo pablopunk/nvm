@@ -199,7 +199,7 @@
       {
         "kind": "Commands",
         "title": "Quit All Apps",
-        "subtitle": "Review and quit running apps",
+        "subtitle": "Closes all visible GUI applications",
         "section": "Suggestions",
         "id": "",
         "icon": "power",
@@ -418,7 +418,7 @@
       {
         "kind": "Commands",
         "title": "Quit All Apps",
-        "subtitle": "Review and quit running apps",
+        "subtitle": "Closes all visible GUI applications",
         "section": "Commands",
         "id": "",
         "icon": "power",

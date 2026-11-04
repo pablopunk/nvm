@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"testing"
 
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
@@ -47,5 +48,34 @@ func TestForceQuitEnterAsksForTheForceQuitConfirmation(t *testing.T) {
 	}
 	if confirm := p.Results()[0]; confirm.Title != "Force Quit" || confirm.Subtitle != "Force quit Firefox? Unsaved data may be lost." {
 		t.Fatalf("confirmation row = %q / %q", confirm.Title, confirm.Subtitle)
+	}
+}
+
+// TestQuitAllAsksOnceAndTargetsTheRunningAppsItLeavesNevermindOut: Quit All Apps from the root asks once with the 1.x
+// question, and the apps it closes are the running ones, in index order.
+func TestQuitAllAsksOnceAndTargetsTheRunningAppsItLeavesNevermindOut(t *testing.T) {
+	p := runningGoldenPalette(t, goldenFirefoxPath, "/usr/share/applications/org.gnome.Terminal.desktop")
+	goldenQuery(p, "quit all apps")
+	index := indexOfItem(p.Results(), "Quit All Apps")
+	if index < 0 {
+		t.Fatalf("no Quit All Apps command in %v", rowTitles(p))
+	}
+	if subtitle := p.Results()[index].Subtitle; subtitle != "Closes all visible GUI applications" {
+		t.Fatalf("subtitle = %q", subtitle)
+	}
+	p.Results()[index].Actions[0].Run(p)
+	confirm := p.Top()
+	if confirm.Title != "Confirm" || confirm.Placeholder != "Quit All Apps?" {
+		t.Fatalf("top view = %q / %q, want the Quit All Apps question", confirm.Title, confirm.Placeholder)
+	}
+	if row := p.Results()[0]; row.Title != "Quit All Apps" || row.Subtitle != "This will close all visible applications. Unsaved changes may be lost." {
+		t.Fatalf("confirmation row = %q / %q", row.Title, row.Subtitle)
+	}
+	var names []string
+	for _, a := range p.runningAppsToQuitAll() {
+		names = append(names, a.Name)
+	}
+	if want := []string{"Firefox", "Terminal"}; !slices.Equal(names, want) {
+		t.Fatalf("quit targets = %v, want %v", names, want)
 	}
 }

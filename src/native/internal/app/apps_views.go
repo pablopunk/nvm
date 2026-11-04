@@ -4,7 +4,6 @@ import (
 	"context"
 	"maps"
 	"os"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -37,57 +36,19 @@ func (p *App) forceQuitView() *palette.View {
 	}
 }
 
-// quitAllView lists the running apps with a checkbox each, the exceptions it leaves running, and one action that
-// confirms the quit of the selected ones. Every app starts selected.
-func (p *App) quitAllView() *palette.View {
-	selected := map[string]bool{}
-	return &palette.View{
-		Title: "Quit All Apps", Placeholder: "Search running apps",
-		EmptyTitle: "No apps to quit", EmptySub: "No running applications are open.",
-		Search: func(q string) []search.Item {
-			list := p.appsvc.Index.Apps()
-			quit, excepted := apps.QuitAllPlan(list, p.appsvc.Running.RunningAmong(list), apps.App{})
-			var chosen []apps.App
-			for _, a := range quit {
-				if _, seen := selected[a.Path]; !seen {
-					selected[a.Path] = true
-				}
-				if selected[a.Path] {
-					chosen = append(chosen, a)
-				}
-			}
-			items := []search.Item{p.quitAllAction(chosen)}
-			for _, a := range quit {
-				path := a.Path
-				items = append(items, search.Item{
-					Title: a.Name, Subtitle: "Running", Icon: "app-window", Accessory: checkLabel(selected[path]),
-					Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-						selected[path] = !selected[path]
-						h.Refresh()
-					}}},
-				})
-			}
-			for _, a := range excepted {
-				items = append(items, search.Item{Title: a.Name, Subtitle: "Left running: the desktop shell or file manager", Icon: "lock"})
-			}
-			return items
-		},
-	}
+// quitAllConfirm asks once before every visible app is asked to quit, as 1.x does. The apps are read when the user
+// confirms, so the quit closes what is running at that moment.
+func (p *App) quitAllConfirm() *palette.View {
+	return palette.Confirm("Quit All Apps", "This will close all visible applications. Unsaved changes may be lost.", func() {
+		p.quitApps(p.runningAppsToQuitAll(), false)
+	})
 }
 
-// quitAllAction asks to quit the chosen apps. Nothing is quit without the confirmation.
-func (p *App) quitAllAction(chosen []apps.App) search.Item {
-	title := "Quit " + pluralWithForms(len(chosen), "App", "Apps")
-	return search.Item{Title: title, Subtitle: "Ask each selected app to quit", Icon: "power", Tone: "red", Prominent: true,
-		Actions: []search.Action{{Title: "Quit Selected Apps", Run: func(h search.Host) {
-			if len(chosen) == 0 {
-				h.Toast("Select at least one app to quit")
-				return
-			}
-			h.Push(palette.Confirm("Quit All Apps", "This will close the selected applications. Unsaved changes may be lost.", func() {
-				p.quitApps(chosen, false)
-			}))
-		}}}}
+// runningAppsToQuitAll lists the running apps Quit All Apps closes: every running app but Nevermind and the exceptions.
+func (p *App) runningAppsToQuitAll() []apps.App {
+	list := p.appsvc.Index.Apps()
+	quit, _ := apps.QuitAllPlan(list, p.appsvc.Running.RunningAmong(list), apps.App{})
+	return quit
 }
 
 func checkLabel(on bool) string {
@@ -223,12 +184,4 @@ func appsByPath(list []apps.App) map[string]apps.App {
 		out[a.Path] = a
 	}
 	return out
-}
-
-// pluralWithForms returns "1 one" or "N many" for a count.
-func pluralWithForms(n int, one, many string) string {
-	if n == 1 {
-		return "1 " + one
-	}
-	return strconv.Itoa(n) + " " + many
 }
