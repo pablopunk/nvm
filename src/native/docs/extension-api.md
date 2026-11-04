@@ -996,4 +996,33 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
-Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` and `Views` (WP3.3, WP3.8, WP3.9). The settings view has no goldens yet.
+Not wired in this build (still an internal failure when called, with a reference): `Drafts` (WP3.4), `Dictation`, `Indicators`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, `Input` and `Views` (WP3.3, WP3.9), and the desktop surfaces section 19 does not list. The settings view has no goldens yet.
+
+## 19. Desktop, clipboard, OCR, system and shortcut services as built (WP3.8)
+
+Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`, `system.go`, `shortcuts.go`, `desktop_ports.go` for the window and shortcut ports), `internal/ext/child` (`remote_desktop.go`, `remote_history.go`, `remote_ocr.go`, `remote_system.go`), `internal/ext/protocol` (`desktop_services.go`, `desktop_args.go`, `request_method.go`), the adapters `internal/windowmgmt/extension.go` and `internal/shortcuts/extension_table.go`. Fixtures: `acme.desktop` (every service) and `acme.undeclared` (declares nothing). Rig journey: `TestJourneyDesktopFixtureWritesTheClipboardAndListsWindows`.
+
+| Service | Surface served | Declaration |
+| --- | --- | --- |
+| `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
+| `desktop.apps` | `list`, `search`, `launch`, `icon` | `desktop.apps` |
+| `desktop.files` | `open`, `reveal` (absolute paths only) | `desktop.files` |
+| `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
+| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
+| `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
+| `ocr` | `image`, `screen`, `region` | `ocr` |
+| `shortcuts` | `list`, `palette` (read only) | `shortcuts` |
+| `system` | `os`, `hasCapability`, `labels` | none: read-only metadata, as storage needs none |
+
+Decisions behind the table:
+
+- **Declarations are enforced.** Electron does not gate these namespaces by declaration. This host does, as WP3.7 does for `network`, `secrets` and `settings.write`; a refusal is `permission`, names the capability and is logged.
+- **Concealed writes never land unmarked.** A clipboard that cannot mark content as concealed refuses the write. Clipboard history never stores concealed copies, so no read returns them.
+- **Launch and icon read the app index only.** An extension cannot start a binary by naming its path; the path must be an app the index lists.
+- **Destructive history calls run only under a palette run.** `remove` and `clear` are refused unless the request is a run (`protocol.RequestMethodOf`, set by the supervisor). The host does not yet see whether the action declared `Confirm`; extensions should return `WithConfirmation` actions for them. This is the known gap of this slice.
+- **History images stay on the host.** An image entry carries its type only; no bytes or paths leave the host.
+- **Rates.** Opens, launches, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
+- **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
+- **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
+
+Not built in this slice: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
