@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
+	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -77,6 +79,7 @@ func newBenchPalette(b *testing.B) *App {
 		S:      &Settings{Hotkey: "Alt+Shift+Space", Engine: "google", ClipLimit: benchClipCount, Disabled: map[string]bool{}},
 		appsvc: newFixtureAppServices(data.apps),
 		clip:   benchClipboard(b, data.clips),
+		calc:   calc.New(searchClock, time.UTC, nil),
 
 		files: newTestFiles(b, b.TempDir(), data.files),
 	}
