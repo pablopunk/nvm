@@ -68,7 +68,6 @@ type Row struct {
 	Title    string
 	Subtitle string
 	Kind     Kind
-	Pinned   bool
 	Detail   Detail
 	Primary  Action
 	Actions  []Action
@@ -120,7 +119,6 @@ func BuildRow(e Entry, historyLen int) Row {
 		Title:    title,
 		Subtitle: subtitle,
 		Kind:     e.Kind,
-		Pinned:   e.Pinned,
 		Detail:   detailFor(e, title, subtitle),
 		Primary:  copyAction,
 		Actions:  actions,

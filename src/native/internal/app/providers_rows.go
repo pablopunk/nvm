@@ -114,8 +114,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 // clipboardTextKinds are the history kinds the root answers with: copies that are text, with or without markup.
 var clipboardTextKinds = []clipboard.Kind{clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF}
 
-// clipboardRows shows the two best text copies that contain a query of three characters or more: pinned ones
-// first, then the newest. The history is read on the search goroutine; it locks its own state.
+// clipboardRows shows the two newest text copies that contain a query of three characters or more. The history is read on the search goroutine; it locks its own state.
 func clipboardRows(p *App, in *rootInput, q string) []search.Item {
 	if len(strings.ToLower(q)) < 3 {
 		return nil

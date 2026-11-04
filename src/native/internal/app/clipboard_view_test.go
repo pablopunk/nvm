@@ -85,7 +85,7 @@ func TestClipboardHistoryRowsUse1xTitlesAndCopyFirst(t *testing.T) {
 	if len(rows) != 4 {
 		t.Fatalf("rows = %v", rowTitles(p))
 	}
-	rebase := rows[1]
+	rebase := rows[0]
 	if rebase.Title != goldenRebaseTitle || rebase.Subtitle != "Copied 3m ago · Text" {
 		t.Fatalf("row = %q / %q", rebase.Title, rebase.Subtitle)
 	}
@@ -95,8 +95,8 @@ func TestClipboardHistoryRowsUse1xTitlesAndCopyFirst(t *testing.T) {
 	if rebase.Actions[0].Title != "Copy Text" {
 		t.Fatalf("first action = %q, want Copy Text", rebase.Actions[0].Title)
 	}
-	if rows[0].Accessory != "Pinned" {
-		t.Fatalf("pinned row accessory = %q", rows[0].Accessory)
+	if rows[0].Accessory != "" {
+		t.Fatalf("a row shows an accessory it should not: %q", rows[0].Accessory)
 	}
 }
 
@@ -132,7 +132,7 @@ func TestClipboardHistoryDeleteNeedsAConfirmation(t *testing.T) {
 // TestClipboardHistoryDeleteRemovesAfterConfirm: the confirmation's action removes the entry and hides the palette.
 func TestClipboardHistoryDeleteRemovesAfterConfirm(t *testing.T) {
 	p, win, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Remove Item").Run(p)
+	actionTitled(t, p.Results()[0], "Remove Item").Run(p)
 	p.Results()[0].Actions[0].Run(p)
 	if _, ok := p.clip.history.Get(goldenRebaseID); ok {
 		t.Fatal("the confirmed removal kept the entry")
@@ -195,12 +195,10 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	tt := ui.NewTester(p.View, width, height)
 	tt.Frame()
 	topOfList(tt)
-	tt.Key(0, ui.KeyDown)
-	tt.Frame()
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
 	if text, _ := f.set.Clipboard.ReadText(); text != goldenRebaseTitle {
-		t.Fatalf("Enter on the second row copied %q", text)
+		t.Fatalf("Enter on the first row copied %q", text)
 	}
 	if win.hides == 0 {
 		t.Fatal("copying did not hide the palette")
@@ -209,8 +207,8 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	openClipboardView(p)
 	tt.Frame()
 	topOfList(tt)
-	// The action menu opens on Copy; for a pinned text row the order is Copy, Paste, Ask AI, Unpin, Remove Item,
-	// so Remove Item is four rows down.
+	// The action menu opens on Copy; for a text row the order is Copy, Preview, Paste Text, Remove Item, so Remove
+	// Item is three rows down.
 	tt.Key(mod, ui.KeyK)
 	tt.Frame()
 	for range 3 {
@@ -224,7 +222,7 @@ func TestClipboardHistoryKeyboardOnlyFlow(t *testing.T) {
 	}
 	tt.Key(0, ui.KeyEnter)
 	tt.Frame()
-	if _, ok := p.clip.history.Get(goldenNotesID); ok {
+	if _, ok := p.clip.history.Get(goldenRebaseID); ok {
 		t.Fatal("the keyboard removal kept the entry")
 	}
 }

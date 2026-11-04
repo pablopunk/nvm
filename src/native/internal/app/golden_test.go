@@ -32,15 +32,15 @@ func TestPaletteRootFallbackAutomate(t *testing.T) {
 func TestPaletteClipboardPreviewSelection(t *testing.T) {
 	p := goldenPalette(t)
 	goldenOpen(p, p.clipboardView())
-	p.Choose(1)
+	p.Choose(0)
 	golden.AssertMatrix(t, "clipboard-preview", p.View, paletteGoldens)
 }
 
 func TestPaletteClipboardActionMenu(t *testing.T) {
 	p := goldenPalette(t)
 	goldenOpen(p, p.clipboardView())
-	p.Choose(1)
-	p.OpenActionMenu(1)
+	p.Choose(0)
+	p.OpenActionMenu(0)
 	golden.AssertMatrix(t, "clipboard-actions", p.View, paletteGoldens)
 }
 

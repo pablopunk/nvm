@@ -45,8 +45,7 @@ func oneLine(s string) string {
 	return s
 }
 
-// clipboardView is the Clipboard History view: the entries that match the query, pinned first and then newest
-// first. An empty result shows the 1.x empty state.
+// clipboardView is the Clipboard History view: the entries that match the query, newest first. An empty result shows the 1.x empty state.
 func (p *App) clipboardView() *palette.View {
 	return &palette.View{
 		Title: clipboard.ViewTitle, Placeholder: clipboard.ViewPlaceholder,
@@ -82,9 +81,6 @@ func (p *App) clipItem(e clipboard.Entry, historyLen int) search.Item {
 		TintTitle: true,
 		Actions:   p.clipActions(e, row, historyLen),
 		Detail:    func(c *ui.Context, _ search.Host) { p.clipDetail(c, e) },
-	}
-	if e.Pinned {
-		it.Accessory = "Pinned"
 	}
 	return it
 }
@@ -189,16 +185,6 @@ func (p *App) clipSubmenuView(submenu *clipboard.Submenu) *palette.View {
 // removeEntries removes the entries a range selects and says how many went.
 func (p *App) removeEntries(q clipboard.RangeQuery) {
 	n, err := p.clip.history.Remove(q)
-	if err != nil {
-		p.Toast(clipChangeMessage(err))
-		return
-	}
-	p.Toast(clipboard.RemovedMessage(n))
-}
-
-// clearUnpinned removes every unpinned entry.
-func (p *App) clearUnpinned() {
-	n, err := p.clip.history.ClearUnpinned()
 	if err != nil {
 		p.Toast(clipChangeMessage(err))
 		return

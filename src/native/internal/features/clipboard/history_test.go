@@ -252,59 +252,6 @@ func TestConcealedEntryIsRefused(t *testing.T) {
 	}
 }
 
-// TestPinningSurvivesRetentionAndUnpinningEnforces covers pinned entries: pins are kept through expiry and
-// the entry cap, and unpinning applies retention again.
-func TestPinningSurvivesRetentionAndUnpinningEnforces(t *testing.T) {
-	h := newHarness(t)
-	h.history.policy = Retention{MaxEntries: 2, MaxAge: time.Hour, MaxImageBytes: DefaultMaxImageBytes, MaxMemoryBytes: DefaultMaxMemoryBytes}
-	h.mustRemember(Entry{ID: "text:keep", Kind: KindText, Text: "keep"})
-	if found, err := h.history.SetPinned("text:keep", true); err != nil || !found {
-		t.Fatalf("SetPinned = %v, %v", found, err)
-	}
-	for i := range 3 {
-		h.mustRemember(Entry{ID: fmt.Sprintf("text:%d", i), Kind: KindText, Text: fmt.Sprintf("%d", i)})
-	}
-	if _, ok := h.history.Get("text:keep"); !ok {
-		t.Fatal("pinned entry was evicted by the entry cap")
-	}
-	if got := h.history.Len(); got != 3 {
-		t.Fatalf("Len = %d, want the pinned entry plus two unpinned", got)
-	}
-	h.clock.Advance(2 * time.Hour)
-	if _, err := h.history.SetPinned("text:keep", false); err != nil {
-		t.Fatalf("unpin: %v", err)
-	}
-	if got := h.history.Len(); got != 0 {
-		t.Fatalf("Len after unpin and expiry = %d, want 0", got)
-	}
-}
-
-// TestClearUnpinnedKeepsPinned covers the clear action.
-func TestClearUnpinnedKeepsPinned(t *testing.T) {
-	h := newHarness(t)
-	h.mustRemember(Entry{ID: "text:pin", Kind: KindText, Text: "pin", Pinned: true})
-	h.mustRemember(Entry{ID: "text:a", Kind: KindText, Text: "a"})
-	removed, err := h.history.ClearUnpinned()
-	if err != nil || removed != 1 {
-		t.Fatalf("ClearUnpinned = %d, %v", removed, err)
-	}
-	if got := ids(h.history.Find(Query{})); len(got) != 1 || got[0] != "text:pin" {
-		t.Fatalf("remaining = %v", got)
-	}
-}
-
-// TestRememberKeepsPinnedWhenRecopied: copying a pinned text again keeps it pinned and moves it to the top.
-func TestRememberKeepsPinnedWhenRecopied(t *testing.T) {
-	h := newHarness(t)
-	h.mustRemember(Entry{ID: "text:pin", Kind: KindText, Text: "pin", Pinned: true})
-	h.mustRemember(Entry{ID: "text:other", Kind: KindText, Text: "other"})
-	h.mustRemember(Entry{ID: "text:pin", Kind: KindText, Text: "pin"})
-	entry, _ := h.history.Get("text:pin")
-	if !entry.Pinned {
-		t.Fatal("re-copy dropped the pin")
-	}
-}
-
 func ids(entries []Entry) []string {
 	out := make([]string, 0, len(entries))
 	for _, e := range entries {
@@ -316,4 +263,15 @@ func ids(entries []Entry) []string {
 // fakeClock returns a clock for tests that open a history without the harness.
 func fakeClock() platform.Clock {
 	return fake.NewClock()
+}
+
+// TestClearRemovesEveryEntry covers the clear action: it removes every entry and reports how many went.
+func TestClearRemovesEveryEntry(t *testing.T) {
+	h := newHarness(t)
+	h.mustRemember(Entry{ID: "text:a", Kind: KindText, Text: "a"})
+	h.mustRemember(Entry{ID: "text:b", Kind: KindText, Text: "b"})
+	removed, err := h.history.Clear()
+	if err != nil || removed != 2 || h.history.Len() != 0 {
+		t.Fatalf("Clear = %d, %v; Len %d", removed, err, h.history.Len())
+	}
 }

@@ -110,7 +110,7 @@ func (h *Handler) clearHistory(ctx context.Context, history *clipboard.History, 
 		return 0, err
 	}
 	if len(kinds) == 0 && args.OlderThanMs == 0 {
-		return history.ClearUnpinned()
+		return history.Clear()
 	}
 	query := clipboard.RangeQuery{Range: clipboard.RangeAll, Kinds: kinds}
 	if args.OlderThanMs > 0 {

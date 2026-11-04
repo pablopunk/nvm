@@ -2447,7 +2447,7 @@
         "id": "clipboard:e-notes",
         "icon": "clipboard",
         "tone": "blue",
-        "accessory": "Pinned",
+        "accessory": "",
         "prominent": false,
         "tintTitle": true,
         "iconPath": "",
