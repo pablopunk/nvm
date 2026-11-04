@@ -60,3 +60,18 @@ func TestFloatingNoteWindowAllNotes(t *testing.T) {
 	p.floatPane = floatingPaneState{pane: paneAllNotes}
 	golden.AssertMatrix(t, "all-notes", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
 }
+
+// The ⌘K menu over the note: its actions with their key caps, the first row selected, and the footer's Back hint.
+func TestFloatingNoteWindowActionsMenu(t *testing.T) {
+	p := goldenPalette(t)
+	n, err := p.notes.Create(goldenNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit, _ := p.acquireEdit(n.ID)
+	if err := edit.sess.Edit(floatingGoldenMarkdown); err != nil {
+		t.Fatal(err)
+	}
+	p.floatPane.actionsOpen = true
+	golden.AssertMatrix(t, "actions-menu", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
+}

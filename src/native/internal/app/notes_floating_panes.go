@@ -25,6 +25,9 @@ type floatingPaneState struct {
 	pane     floatingPane
 	query    string
 	selected int
+	// actionsOpen shows the ⌘K menu over the pane; actionSelected is its selected row.
+	actionsOpen    bool
+	actionSelected int
 }
 
 // floatingRow is one row of a window list that acts when clicked. The row is drawn by the palette's row design.
@@ -40,9 +43,9 @@ func floatingRow(c *ui.Context, d design.RowData, activate func()) {
 // for the note shown.
 func floatingEditActions(c *ui.Context, p *App) {
 	ui.Column(c).Children(func() {
-		floatingRow(c, design.RowData{Section: "Notes", Title: "New note", Subtitle: "Start a fresh Markdown note", Accessory: "⌘N", Tile: design.TileData{Icon: "plus"}}, p.createFloatingNote)
-		floatingRow(c, design.RowData{Title: "All notes", Subtitle: "Search and switch notes", Accessory: "⌘O", Tile: design.TileData{Icon: "list"}}, p.showAllNotesInFloatingWindow)
-		floatingRow(c, design.RowData{Section: "This note", Title: "Delete note", TintTitle: true, Tone: "red", Accessory: "⌘⌫", Tile: design.TileData{Icon: "trash-2", Tone: "red"}}, p.askToDeleteFloatingNote)
+		floatingRow(c, design.RowData{Section: "Notes", Title: "New note", Subtitle: "Start a fresh Markdown note", Key: "⌘N", Tile: design.TileData{Icon: "plus"}}, p.createFloatingNote)
+		floatingRow(c, design.RowData{Title: "All notes", Subtitle: "Search and switch notes", Key: "⌘O", Tile: design.TileData{Icon: "list"}}, p.showAllNotesInFloatingWindow)
+		floatingRow(c, design.RowData{Section: "This note", Title: "Delete note", TintTitle: true, Tone: "red", Tile: design.TileData{Icon: "trash-2", Tone: "red"}}, p.askToDeleteFloatingNote)
 	})
 }
 
@@ -67,7 +70,7 @@ func floatingAllNotes(c *ui.Context, p *App) {
 			return
 		}
 		ui.Scroll(c).Grow(1).Children(func() {
-			floatingRow(c, design.RowData{Title: "New note", Subtitle: "Start a fresh Markdown note", Selected: p.floatPane.selected == 0, Tile: design.TileData{Icon: "plus"}}, p.createFloatingNote)
+			floatingRow(c, design.RowData{Title: "New note", Subtitle: "Start a fresh Markdown note", Key: "⌘N", Selected: p.floatPane.selected == 0, Tile: design.TileData{Icon: "plus"}}, p.createFloatingNote)
 			for i, n := range items {
 				floatingRow(c, floatingNoteRow(n, p.floatPane.selected == i+1), func() { p.showFloatingNoteFromList(n.ID) })
 			}

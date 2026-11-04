@@ -18,8 +18,12 @@ func floatingNoteWindow(c *ui.Context, p *App, edit *noteEdit) {
 			ui.Row(c).Height(floatingControlsGap).FillWidth().DragWindow()
 			ui.Column(c).Grow(1).Padding(0, 12, 12, 12).Gap(8).Children(func() {
 				floatingPanes(c, p, edit)
+				design.HintBar(c, floatingHints(p, edit))
 			})
 		})
+		if p.floatPane.actionsOpen {
+			floatingActionsMenu(c, p, edit)
+		}
 	})
 }
 

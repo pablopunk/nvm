@@ -6,19 +6,21 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 )
 
-// floatingKeys runs the window's shortcuts before its content takes the keys, as 1.x's window does: Command+N makes a
-// note, Command+O lists the notes, Command+Backspace deletes the note shown or the one selected in the list, Escape
-// backs out of a pane and then closes the window, and the arrows and Enter move through the list.
+// floatingKeys runs the window's shortcuts before its content takes the keys, as 1.x's window does: Command+K opens
+// the actions menu, Command+N makes a note, Command+O lists the notes, Escape backs out of a menu, a search or a pane
+// and then closes the window, and the arrows and Enter move through the menu or the list.
 func (p *App) floatingKeys(c *ui.Context) {
 	switch {
+	case c.Shortcut(mod, ui.KeyK):
+		p.toggleFloatingActions()
 	case c.Shortcut(mod, ui.KeyN):
 		p.createFloatingNote()
 	case c.Shortcut(mod, ui.KeyO):
 		p.showAllNotesInFloatingWindow()
-	case c.Shortcut(mod, ui.KeyBackspace):
-		p.floatingBackspace()
 	case c.Shortcut(0, ui.KeyEscape):
 		p.escapeFloatingWindow()
+	case p.floatPane.actionsOpen:
+		p.floatingActionsKeys(c)
 	case p.floatPane.pane == paneAllNotes:
 		p.floatingListKeys(c)
 	}
@@ -48,22 +50,12 @@ func (p *App) activateFloatingListRow() {
 	}
 }
 
-// floatingBackspace asks to delete the note the window shows, or deletes the note selected in the list, as the 1.x
-// list does without asking.
-func (p *App) floatingBackspace() {
-	switch p.floatPane.pane {
-	case paneEditor:
-		p.askToDeleteFloatingNote()
-	case paneAllNotes:
-		if items := p.floatingListNotes(); p.floatPane.selected > 0 && p.floatPane.selected-1 < len(items) {
-			p.deleteNote(items[p.floatPane.selected-1].ID)
-		}
-	}
-}
-
-// escapeFloatingWindow backs out of the confirmation or a list search first, then closes the window, as 1.x does.
+// escapeFloatingWindow backs out of the actions menu, the confirmation or a list search first, then closes the
+// window, as 1.x does.
 func (p *App) escapeFloatingWindow() {
 	switch {
+	case p.floatPane.actionsOpen:
+		p.floatPane.actionsOpen = false
 	case p.floatPane.pane == paneConfirmDelete:
 		p.floatPane.pane = paneEditor
 	case p.floatPane.pane == paneAllNotes && p.floatPane.query != "":
@@ -107,6 +99,15 @@ func (p *App) showFloatingNoteFromList(id string) {
 		return
 	}
 	p.showInFloatingWindow(edit)
+}
+
+// floatingSelectedNote is the note selected in the list, when a note row is selected.
+func (p *App) floatingSelectedNote() (notes.Note, bool) {
+	items := p.floatingListNotes()
+	if p.floatPane.selected < 1 || p.floatPane.selected-1 >= len(items) {
+		return notes.Note{}, false
+	}
+	return items[p.floatPane.selected-1], true
 }
 
 // floatingListNotes is the list's notes: those whose text contains the search, newest first.
