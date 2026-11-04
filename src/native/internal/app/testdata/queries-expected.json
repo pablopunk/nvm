@@ -236,6 +236,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Background Tasks",
+        "subtitle": "Run, pause, and inspect background work",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "activity",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
         "section": "Suggestions",
