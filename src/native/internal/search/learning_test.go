@@ -134,3 +134,5 @@ func TestCoordinatorRaisesOnlyLearnedRows(t *testing.T) {
 		t.Fatalf("the boosted row should sort first, got %q", snap.Items[0].Title)
 	}
 }
+
+func (l *fixedLearner) LastUsed(string) int64 { return 0 }

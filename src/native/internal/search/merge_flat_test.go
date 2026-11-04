@@ -2,8 +2,8 @@ package search
 
 import "testing"
 
-// TestFlatMergeKeepsScoreOrderWithoutSections pins the empty root's layout: rows sort by score alone and carry no
-// section labels, where a typed query is grouped by kind under a top hit.
+// TestFlatMergeKeepsScoreOrderWithoutSections pins the empty root's layout: rows sort by score, then by title as 1.x
+// does, and carry no section labels, where a typed query is grouped by kind under a top hit.
 func TestFlatMergeKeepsScoreOrderWithoutSections(t *testing.T) {
 	batches := [][]Item{
 		{{Kind: KindCommands, Title: "Settings", Score: 14}},
@@ -11,7 +11,7 @@ func TestFlatMergeKeepsScoreOrderWithoutSections(t *testing.T) {
 		{{Kind: KindClipboard, Title: "copied", Score: 60}},
 	}
 	flat := mergeAppended(batches, nil, 30, false, true)
-	wantTitles := []string{"copied", "Safari", "Mail", "Settings"}
+	wantTitles := []string{"copied", "Mail", "Safari", "Settings"}
 	for i, it := range flat {
 		if it.Title != wantTitles[i] || it.Section != "" {
 			t.Fatalf("row %d = %q in section %q, want %q with no section", i, it.Title, it.Section, wantTitles[i])

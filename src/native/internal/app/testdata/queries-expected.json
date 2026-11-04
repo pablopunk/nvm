@@ -62,6 +62,37 @@
       },
       {
         "kind": "Clipboard",
+        "title": "Clipboard image",
+        "subtitle": "Image copied Nov 3, 9:20 AM",
+        "section": "",
+        "id": "clipboard:e-shot",
+        "icon": "image",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Copy Image",
+            "label": ""
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Remove Item",
+            "label": "⌃⌫"
+          },
+          {
+            "title": "Remove Last...",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Clipboard",
         "title": "Meeting notes: ship the design package by Friday and review the goldens …",
         "subtitle": "Copied Nov 3, 8:00 AM",
         "section": "",
@@ -84,37 +115,6 @@
           {
             "title": "Paste Text",
             "label": "⌃↵"
-          },
-          {
-            "title": "Remove Item",
-            "label": "⌃⌫"
-          },
-          {
-            "title": "Remove Last...",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Clipboard",
-        "title": "Clipboard image",
-        "subtitle": "Image copied Nov 3, 9:20 AM",
-        "section": "",
-        "id": "clipboard:e-shot",
-        "icon": "image",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Copy Image",
-            "label": ""
-          },
-          {
-            "title": "Preview",
-            "label": "⌃Y"
           },
           {
             "title": "Remove Item",
@@ -383,25 +383,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Restart Computer",
-        "subtitle": "Restart this computer",
-        "section": "",
-        "id": "restart",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Restart Computer",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "Nevermind: Switch Backend Environment",
         "subtitle": "Switch Development, Preview, Production, or custom backend",
         "section": "",
@@ -423,6 +404,25 @@
           },
           {
             "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
+        "section": "",
+        "id": "restart",
+        "icon": "rotate-ccw",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Restart Computer",
             "label": ""
           }
         ]
@@ -513,25 +513,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Desktop",
-        "subtitle": "$HOME/Desktop",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open Desktop",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "AI Chats",
         "subtitle": "Chat with the assistant",
         "section": "",
@@ -553,6 +534,25 @@
           },
           {
             "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Desktop",
+        "subtitle": "$HOME/Desktop",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open Desktop",
             "label": ""
           }
         ]
@@ -697,19 +697,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Emoji \u0026 Symbols",
-        "subtitle": "Search and paste emoji",
+        "title": "Background Tasks",
+        "subtitle": "Run, pause, and inspect background work",
         "section": "",
         "id": "",
-        "icon": "smile",
-        "tone": "yellow",
+        "icon": "activity",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Emoji \u0026 Symbols",
+            "title": "Background Tasks",
             "label": ""
           },
           {
@@ -724,19 +724,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
+        "title": "Dictate",
+        "subtitle": "Start or stop cloud voice dictation",
         "section": "",
         "id": "",
-        "icon": "folder",
-        "tone": "blue",
+        "icon": "mic",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Search Files",
+            "title": "Dictate",
             "label": ""
           },
           {
@@ -751,19 +751,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Floating Notes",
-        "subtitle": "Jot something down",
+        "title": "Dictation History",
+        "subtitle": "Browse and copy previous dictations",
         "section": "",
         "id": "",
-        "icon": "sticky-note",
-        "tone": "yellow",
+        "icon": "history",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Floating Notes",
+            "title": "Dictation History",
             "label": ""
           },
           {
@@ -886,52 +886,6 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search Files",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Create Quicklink",
-        "subtitle": "",
-        "section": "",
-        "id": "",
-        "icon": "link",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Create Quicklink",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Applications",
         "title": "Calculator",
         "subtitle": "",
@@ -981,6 +935,52 @@
           },
           {
             "title": "Uninstall Calendar…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Create Quicklink",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "link",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Create Quicklink",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Search Files",
+        "subtitle": "Find files in your home folder",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search Files",
             "label": ""
           },
           {
@@ -1849,28 +1849,20 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Snippets",
-        "subtitle": "Saved text you paste often",
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
         "section": "",
         "id": "",
-        "icon": "type",
-        "tone": "teal",
+        "icon": "message-circle",
+        "tone": "yellow",
         "accessory": "",
         "prominent": false,
-        "tintTitle": false,
+        "tintTitle": true,
         "iconPath": "",
         "actions": [
           {
-            "title": "Snippets",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
+            "title": "Open",
             "label": ""
           }
         ]
@@ -1890,6 +1882,33 @@
         "actions": [
           {
             "title": "Create Snippet",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Nevermind: Switch Backend Environment",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1923,19 +1942,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Nevermind: Switch Backend Environment",
-        "subtitle": "Switch Development, Preview, Production, or custom backend",
+        "title": "Snippets",
+        "subtitle": "Saved text you paste often",
         "section": "",
         "id": "",
-        "icon": "globe",
-        "tone": "",
+        "icon": "type",
+        "tone": "teal",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Nevermind: Switch Backend Environment",
+            "title": "Snippets",
             "label": ""
           },
           {
@@ -1950,7 +1969,7 @@
       },
       {
         "kind": "Conversations",
-        "title": "Continue conversation: Release notes",
+        "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
         "id": "",
@@ -1963,198 +1982,6 @@
         "actions": [
           {
             "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Floating Notes",
-        "subtitle": "Jot something down",
-        "section": "",
-        "id": "",
-        "icon": "sticky-note",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Floating Notes",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Toggle Floating Notes",
-        "subtitle": "Show or hide your floating Markdown notes",
-        "section": "",
-        "id": "",
-        "icon": "sticky-note",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Toggle Floating Notes",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Extensions",
-        "subtitle": "Manage and create extensions",
-        "section": "",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Extensions",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Force Quit Apps",
-        "subtitle": "Force quit running applications",
-        "section": "",
-        "id": "",
-        "icon": "stop-circle",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Force Quit Apps",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Start Timer",
-        "subtitle": "Type e.g. “timer 5m”",
-        "section": "",
-        "id": "",
-        "icon": "timer",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Start Timer",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Restart Computer",
-        "subtitle": "Restart this computer",
-        "section": "",
-        "id": "restart",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Restart Computer",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Empty Trash",
-        "subtitle": "Permanently delete trashed files",
-        "section": "",
-        "id": "empty-trash",
-        "icon": "trash-2",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Empty Trash",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Keyboard Shortcuts",
-        "subtitle": "View, change, or remove shortcuts",
-        "section": "",
-        "id": "",
-        "icon": "keyboard",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Keyboard Shortcuts",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2174,60 +2001,6 @@
         "actions": [
           {
             "title": "Check for Updates",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Backend Status",
-        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Backend Status",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Documents",
-        "subtitle": "$HOME/Documents",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open Documents",
             "label": ""
           },
           {
@@ -2269,6 +2042,187 @@
       },
       {
         "kind": "Commands",
+        "title": "Documents",
+        "subtitle": "$HOME/Documents",
+        "section": "",
+        "id": "",
+        "icon": "folder",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open Documents",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Empty Trash",
+        "subtitle": "Permanently delete trashed files",
+        "section": "",
+        "id": "empty-trash",
+        "icon": "trash-2",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Empty Trash",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Extensions",
+        "subtitle": "Manage and create extensions",
+        "section": "",
+        "id": "",
+        "icon": "puzzle",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Extensions",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Floating Notes",
+        "subtitle": "Jot something down",
+        "section": "",
+        "id": "",
+        "icon": "sticky-note",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Floating Notes",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Force Quit Apps",
+        "subtitle": "Force quit running applications",
+        "section": "",
+        "id": "",
+        "icon": "stop-circle",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Force Quit Apps",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "View, change, or remove shortcuts",
+        "section": "",
+        "id": "",
+        "icon": "keyboard",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Keyboard Shortcuts",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Nevermind: Backend Status",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Pictures",
         "subtitle": "$HOME/Pictures",
         "section": "",
@@ -2287,20 +2241,28 @@
         ]
       },
       {
-        "kind": "Conversations",
-        "title": "Continue conversation: Time zones",
-        "subtitle": "AI conversation",
+        "kind": "Commands",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
         "section": "",
-        "id": "",
-        "icon": "message-circle",
-        "tone": "yellow",
+        "id": "restart",
+        "icon": "rotate-ccw",
+        "tone": "orange",
         "accessory": "",
         "prominent": false,
-        "tintTitle": true,
+        "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Open",
+            "title": "Restart Computer",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -2320,6 +2282,44 @@
         "actions": [
           {
             "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Start Timer",
+        "subtitle": "Type e.g. “timer 5m”",
+        "section": "",
+        "id": "",
+        "icon": "timer",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Start Timer",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Toggle Floating Notes",
+        "subtitle": "Show or hide your floating Markdown notes",
+        "section": "",
+        "id": "",
+        "icon": "sticky-note",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Toggle Floating Notes",
             "label": ""
           }
         ]
@@ -2516,33 +2516,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Quit Nevermind",
-        "subtitle": "",
-        "section": "",
-        "id": "quit",
-        "icon": "x",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "Log in to Nevermind",
         "subtitle": "Connect this device to your Nevermind account",
         "section": "",
@@ -2597,38 +2570,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Start Timer",
-        "subtitle": "Type e.g. “timer 5m”",
+        "title": "Quit Nevermind",
+        "subtitle": "",
         "section": "",
-        "id": "",
-        "icon": "timer",
-        "tone": "orange",
+        "id": "quit",
+        "icon": "x",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Start Timer",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Restart Computer",
-        "subtitle": "Restart this computer",
-        "section": "",
-        "id": "restart",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Restart Computer",
+            "title": "Open",
             "label": ""
           },
           {
@@ -2662,6 +2616,33 @@
       },
       {
         "kind": "Commands",
+        "title": "Nevermind: Backend Status",
+        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "section": "",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Nevermind: Backend Status",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Report a Problem",
         "subtitle": "Record a problem reference without screen content",
         "section": "",
@@ -2689,19 +2670,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Nevermind: Backend Status",
-        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
+        "title": "Restart Computer",
+        "subtitle": "Restart this computer",
         "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
+        "id": "restart",
+        "icon": "rotate-ccw",
+        "tone": "orange",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Nevermind: Backend Status",
+            "title": "Restart Computer",
             "label": ""
           },
           {
@@ -2729,6 +2710,25 @@
         "actions": [
           {
             "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Start Timer",
+        "subtitle": "Type e.g. “timer 5m”",
+        "section": "",
+        "id": "",
+        "icon": "timer",
+        "tone": "orange",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Start Timer",
             "label": ""
           }
         ]
@@ -2790,19 +2790,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
+        "title": "Force Quit Apps",
+        "subtitle": "Force quit running applications",
         "section": "",
         "id": "",
-        "icon": "folder",
-        "tone": "blue",
+        "icon": "stop-circle",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Search Files",
+            "title": "Force Quit Apps",
             "label": ""
           },
           {
@@ -2817,19 +2817,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Force Quit Apps",
-        "subtitle": "Force quit running applications",
+        "title": "Search Files",
+        "subtitle": "Find files in your home folder",
         "section": "",
         "id": "",
-        "icon": "stop-circle",
-        "tone": "red",
+        "icon": "folder",
+        "tone": "blue",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Force Quit Apps",
+            "title": "Search Files",
             "label": ""
           },
           {
@@ -3231,33 +3231,6 @@
       },
       {
         "kind": "Commands",
-        "title": "Quit Nevermind",
-        "subtitle": "",
-        "section": "",
-        "id": "quit",
-        "icon": "x",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
         "title": "Log in to Nevermind",
         "subtitle": "Connect this device to your Nevermind account",
         "section": "",
@@ -3298,6 +3271,33 @@
         "actions": [
           {
             "title": "Nevermind: Backend Status",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Quit Nevermind",
+        "subtitle": "",
+        "section": "",
+        "id": "quit",
+        "icon": "x",
+        "tone": "red",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
             "label": ""
           },
           {

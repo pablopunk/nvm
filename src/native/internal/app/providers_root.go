@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"slices"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
@@ -32,11 +33,25 @@ type rootInput struct {
 	aliases map[string][]string
 }
 
-// chatHead is what the conversation rows read from a chat: its id, its kind and its title.
+// chatHead is what the conversation rows read from a chat: its id, its kind, its title and its last use.
 type chatHead struct {
-	id    string
-	kind  chat.Kind
-	title string
+	id       string
+	kind     chat.Kind
+	title    string
+	lastUsed int64
+}
+
+// chatLastUsed is the later of a chat's creation and its last change, the time 1.x sorts AI builder rows by
+// (src/app/extensions/ai-builder.ts:31). A chat with no time has none.
+func chatLastUsed(created, updated time.Time) int64 {
+	latest := created
+	if updated.After(latest) {
+		latest = updated
+	}
+	if latest.IsZero() {
+		return 0
+	}
+	return latest.UnixMilli()
 }
 
 // captureRoot copies the state the root's providers need. It runs on the UI thread.
@@ -85,7 +100,7 @@ func (p *App) chatHeads() []chatHead {
 	records := p.chats.Chats()
 	heads := make([]chatHead, 0, len(records))
 	for _, record := range records {
-		heads = append(heads, chatHead{id: record.ID, kind: record.Kind, title: record.Title})
+		heads = append(heads, chatHead{id: record.ID, kind: record.Kind, title: record.Title, lastUsed: chatLastUsed(record.CreatedAt, record.UpdatedAt)})
 	}
 	return heads
 }
