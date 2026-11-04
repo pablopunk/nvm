@@ -6,16 +6,19 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // page is the state of one open chat: which chat it shows, the scroll of its transcript, the composer's text and the
 // input the composer draws, which the palette focuses.
 type page struct {
-	deps  Deps
-	id    string
-	list  ui.ListState
-	draft string
-	input ui.Handle
+	deps        Deps
+	id          string
+	list        ui.ListState
+	draft       string
+	input       ui.Handle
+	attachments []chat.Image
+	host        search.Host
 }
 
 // ChatView is the page of the chat with id. Its body is the transcript and its composer; the palette has no search

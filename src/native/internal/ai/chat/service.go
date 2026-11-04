@@ -180,17 +180,24 @@ func (s *Service) Expire() ([]string, error) {
 // Send adds text as the user's message and starts a reply. Without a connected account the message is kept and a
 // sign-in notice follows it, so the transcript shows what happened.
 func (s *Service) Send(id, text string) error {
+	return s.SendWithImages(id, text, nil)
+}
+
+// SendWithImages is Send with pictures the message carries. A message may be pictures alone.
+func (s *Service) SendWithImages(id, text string, images []Image) error {
 	text = strings.TrimSpace(text)
 	switch {
-	case text == "":
+	case text == "" && len(images) == 0:
 		return ErrEmpty
 	case s.Busy(id):
 		return ErrBusy
 	}
 	err := s.mutate(id, func(c *Chat) {
-		c.Messages = append(c.Messages, s.message(AuthorUser, text, StatusComplete))
+		message := s.message(AuthorUser, text, StatusComplete)
+		message.Images = images
+		c.Messages = append(c.Messages, message)
 		if c.Title == "" {
-			c.Title = TitleFor(text)
+			c.Title = TitleFor(titleText(text))
 		}
 	})
 	if err != nil {
@@ -361,4 +368,12 @@ func truncateAfterLastUser(c *Chat) bool {
 		}
 	}
 	return false
+}
+
+// titleText is the text a chat is titled from: its message, or a name for a message of pictures alone.
+func titleText(text string) string {
+	if text == "" {
+		return "Image"
+	}
+	return text
 }

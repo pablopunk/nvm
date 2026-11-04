@@ -14,7 +14,12 @@ import (
 func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
 	switch m.Author {
 	case chat.AuthorUser:
-		design.UserBubble(c, m.Text)
+		if len(m.Images) > 0 {
+			messagePictures(c, m.Images)
+		}
+		if m.Text != "" {
+			design.UserBubble(c, m.Text)
+		}
 	case chat.AuthorNotice:
 		noticeCard(c, *m.Notice)
 	case chat.AuthorTool:

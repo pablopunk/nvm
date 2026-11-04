@@ -80,6 +80,7 @@ type Message struct {
 	Notice *Notice            `json:"notice,omitempty"`
 	Calls  []backend.ToolCall `json:"calls,omitempty"`
 	Tool   *ToolRun           `json:"tool,omitempty"`
+	Images []Image            `json:"images,omitempty"`
 	At     time.Time          `json:"at"`
 }
 

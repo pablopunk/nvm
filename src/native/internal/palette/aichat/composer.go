@@ -15,11 +15,21 @@ import (
 func composerRow(c *ui.Context, p *page, record chat.Chat, h search.Host) {
 	k := design.Tokens(c)
 	ui.Column(c).Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+		ui.Column(c).Children(func() {
+			if len(p.attachments) > 0 {
+				attachmentsRow(c, p)
+			}
+		})
 		ui.TextAreaBase(c, &p.draft).Bind(&p.input).Lines(1, 6).Placeholder(placeholderFor(p.deps.Service, p.id)).
 			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
-			OnTextKey(func(key ui.TextKey) bool { return p.composerKey(key, h) })
-		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Children(func() {
+			OnPaste(p.paste).OnTextKey(func(key ui.TextKey) bool { return p.composerKey(key, h) })
+		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
 			tierPicker(c, p, record, h)
+			ui.Row(c).Children(func() {
+				if record.Tier == chat.TierSmart && p.deps.PickImages != nil {
+					attachButton(c, p)
+				}
+			})
 			ui.Spacer(c)
 			sendOrStop(c, p, h)
 		})
@@ -60,7 +70,7 @@ func sendOrStop(c *ui.Context, p *page, h search.Host) {
 		}
 		return
 	}
-	empty := strings.TrimSpace(p.draft) == ""
+	empty := strings.TrimSpace(p.draft) == "" && len(p.attachments) == 0
 	send := ui.ButtonBase(c).Padding(4).Radius(14).Background(k.AccentFill).Disabled(empty)
 	if empty {
 		send.Opacity(0.35)
@@ -73,19 +83,24 @@ func sendOrStop(c *ui.Context, p *page, h search.Host) {
 	}
 }
 
-// send sends text as the next message, or answers a waiting tool call when there is no text. It reports whether the
-// text was taken, so the composer clears it; a refused send keeps the text, and the palette says why.
+// send sends text and the pictures attached to it as the next message, or answers a waiting tool call when there is
+// neither. It reports whether the text was taken, so the composer clears it; a refused send keeps the text and the
+// pictures, and the palette says why.
 func (p *page) send(text string, h search.Host) bool {
 	text = strings.TrimSpace(text)
-	if text == "" {
+	if text == "" && len(p.attachments) == 0 {
 		if p.deps.Service.Awaiting(p.id) {
 			report(h, p.deps.Service.Decide(p.id, true))
 		}
 		return false
 	}
-	err := p.deps.Service.Send(p.id, text)
+	err := p.deps.Service.SendWithImages(p.id, text, p.attachments)
 	report(h, err)
-	return err == nil
+	if err != nil {
+		return false
+	}
+	p.attachments = nil
+	return true
 }
 
 // tierPicker names the tier the next reply uses, and switches it on a click. Like the desktop app's select, it is
