@@ -24,6 +24,8 @@ type Set struct {
 	Tray         *TrayHost
 	Autostart    *Autostart
 	Windows      *WindowManager
+	Microphone   *Microphone
+	Opus         *OpusCodec
 	Capabilities platform.Capabilities
 }
 
@@ -50,6 +52,8 @@ func NewSet() *Set {
 		Tray:         NewTrayHost(),
 		Autostart:    NewAutostart(),
 		Windows:      NewWindowManager(),
+		Microphone:   NewMicrophone(),
+		Opus:         NewOpusCodec(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -77,6 +81,8 @@ func (s *Set) Ports() platform.Ports {
 		Tray:         s.Tray,
 		Autostart:    s.Autostart,
 		Windows:      s.Windows,
+		Microphone:   s.Microphone,
+		Opus:         s.Opus,
 		Capabilities: s.Capabilities,
 	}
 }

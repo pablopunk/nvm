@@ -54,6 +54,9 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if isX11FocusSession(goos, getenv) && hasTool("xdotool") {
 		supported = append(supported, platform.CapabilityFocusReturn)
 	}
+	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
+		supported = append(supported, platform.CapabilityMicrophone)
+	}
 	return platform.NewCapabilities(supported...)
 }
 

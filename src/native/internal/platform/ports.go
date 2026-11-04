@@ -29,4 +29,7 @@ type Ports struct {
 	Autostart    Autostart
 	Windows      WindowManager
 	Capabilities Capabilities
+	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
+	Microphone Microphone
+	Opus       OpusCodec
 }
