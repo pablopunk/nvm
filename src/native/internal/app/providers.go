@@ -162,10 +162,13 @@ const rootViewTitle = "Nevermind"
 // rootRowLimit is how many rows the root keeps, as 1.x's SEARCH_RESULT_LIMIT.
 const rootRowLimit = 30
 
-// rootView is the palette's first level: the providers of every source, merged by the coordinator. An empty query
-// lists its rows by score alone, with no section labels, as 1.x's root does.
+// rootEmptyTitle is what the root says when it has no rows, for an empty query or a typed one, as 1.x's root list does.
+const rootEmptyTitle = "Type anything"
+
+// rootView is the palette's first level: the providers of every source, merged by the coordinator. Its rows are in
+// score order with no section labels, as 1.x's root list shows them.
 func (p *App) rootView() *palette.View {
-	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true}
+	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true, EmptyTitle: rootEmptyTitle}
 }
 
 // ---- settings ----

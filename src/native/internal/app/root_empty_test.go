@@ -46,6 +46,14 @@ func TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty(t *testing.T) {
 	}
 }
 
+// TestRootEmptyStateSaysTypeAnything pins the root's empty state to 1.x's copy: "Type anything", with no subtitle.
+func TestRootEmptyStateSaysTypeAnything(t *testing.T) {
+	v := goldenPalette(t).rootView()
+	if v.EmptyTitle != "Type anything" || v.EmptySub != "" {
+		t.Fatalf("the root's empty state is %q and %q, want \"Type anything\" with no subtitle", v.EmptyTitle, v.EmptySub)
+	}
+}
+
 // TestRootEmptyShowsTenCopiesAndSixRecentFiles pins how many copies and recent files the empty root lists inline.
 func TestRootEmptyShowsTenCopiesAndSixRecentFiles(t *testing.T) {
 	p := goldenPalette(t)
