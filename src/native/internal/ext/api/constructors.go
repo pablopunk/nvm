@@ -121,3 +121,9 @@ func Section(title string, actions ...Action) ActionSection {
 func Panel(sections ...ActionSection) *ActionPanel {
 	return &ActionPanel{Sections: sections}
 }
+
+// ErrorView is the failure or invalid-input view with a title and the corrective message the user must read. The
+// message is one contextual item, which the palette draws at full contrast and wraps.
+func ErrorView(title, message string) View {
+	return ListView(title, Item{ID: "error", Title: title, Subtitle: message, Disabled: true, Contextual: true})
+}

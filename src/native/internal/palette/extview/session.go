@@ -32,6 +32,9 @@ type Deps struct {
 	// the action report unavailable.
 	OpenPath   func(path string)
 	RevealPath func(path string)
+	// Indicate shows a result's toast as a passive indicator owned by the extension. Nil shows the message under the
+	// search field instead.
+	Indicate func(extID string, input api.IndicatorInput)
 	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
 	// run it, and "" when it did. Nil makes system ops report unavailable.
 	RunSystem func(op string, done func(failure string))

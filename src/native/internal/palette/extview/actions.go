@@ -144,7 +144,7 @@ func (s *Session) invoke(h search.Host, r route) {
 	}
 	in := api.Invocation{Ref: *r.action.Ref}
 	s.deps.Invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
-		s.finish(h, r.extID, result, failure)
+		s.finish(h, r.extID, r.action.Title, result, failure)
 	})
 }
 
@@ -154,12 +154,14 @@ const maxFollowUps = 4
 // finish applies a result on the UI thread. A failure stays on screen under the search field. A follow-up action runs
 // instead of the rest of the result, as Electron does. A view opens above the current page, replaces it, or becomes
 // the root; a patch refreshes the visible rows; a pop goes back a page; an empty result closes the palette.
-func (s *Session) finish(h search.Host, extID string, result api.Result, failure *api.Failure) {
-	s.finishAt(h, extID, result, failure, 0)
+func (s *Session) finish(h search.Host, extID, title string, result api.Result, failure *api.Failure) {
+	s.finishAt(h, extID, title, result, failure, 0)
 }
 
-// finishAt is finish after depth follow-up actions have already run in this chain.
-func (s *Session) finishAt(h search.Host, extID string, result api.Result, failure *api.Failure, depth int) {
+// finishAt is finish after depth follow-up actions have already run in this chain. title titles the toast the result
+// carries, as the action that produced it does.
+func (s *Session) finishAt(h search.Host, extID, title string, result api.Result, failure *api.Failure, depth int) {
+	s.showToast(h, extID, title, result.Toast)
 	switch {
 	case failure != nil:
 		h.Toast(failure.Message)
@@ -224,7 +226,7 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 		if afterRun != nil {
 			afterRun(failure != nil)
 		}
-		s.finish(h, s.extID, result, failure)
+		s.finish(h, s.extID, "", result, failure)
 	})
 }
 
@@ -248,6 +250,30 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		return
 	}
 	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
-		s.finishAt(h, extID, result, failure, depth)
+		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})
+}
+
+// showToast shows a result's toast as a passive indicator titled with the action's title. Without an indicator
+// surface the message shows under the search field.
+func (s *Session) showToast(h search.Host, extID, title string, toast *api.Toast) {
+	if toast == nil || toast.Message == "" {
+		return
+	}
+	if s.deps.Indicate == nil {
+		h.Toast(toast.Message)
+		return
+	}
+	s.deps.Indicate(extID, toastIndicator(title, *toast))
+}
+
+// toastIndicator is the indicator a toast draws. Errors stay four seconds and other tones 2.2 seconds, as the Electron
+// host shows them. A toast with no tone reads as success.
+func toastIndicator(title string, toast api.Toast) api.IndicatorInput {
+	input := api.IndicatorInput{ID: "feedback", Title: orDefault(title, "Nevermind"), Subtitle: toast.Message, Status: api.IndicatorSuccess, DurationMs: 2200}
+	if toast.Tone == "error" {
+		input.Status = api.IndicatorError
+		input.DurationMs = 4000
+	}
+	return input
 }

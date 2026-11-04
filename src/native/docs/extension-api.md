@@ -359,6 +359,8 @@ Go-specific decisions behind the table:
 
 ## 14. Author examples
 
+Runtime rule: the interpreter cannot call methods on interpreted struct values, so the entry points of an extension file are top-level functions named `Commands`, `RootItems`, `SearchItems`, `RunAction`, `LoadItems`, `MenuBars` and `MenuBarTriggers` (`internal/ext/child/interpret.go`). The examples below use the method form because `examples_test.go` checks them against the api interfaces at compile time. A file that loads in the host must add a top-level function per entry point that calls the method, for example `func SearchItems(ctx api.Context, query string) ([]api.Item, error) { return temperature{}.SearchItems(ctx, query) }`.
+
 Each example is a compiled file in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, and `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper. Interpreter runs are not part of these tests.
 
 ### 14.1 Search provider (rows for a query, no commands)

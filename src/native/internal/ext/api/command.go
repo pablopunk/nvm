@@ -104,6 +104,8 @@ type Result struct {
 	Next       *Action        `json:"next,omitempty"`
 	Patch      *ViewPatch     `json:"patch,omitempty"`
 	Navigation NavigationMode `json:"navigation,omitempty"`
+	// Toast shows a short message as a passive indicator, titled with the action that produced the result.
+	Toast *Toast `json:"toast,omitempty"`
 	// Draft resolves an editor draft conflict; Migrate needs replacement content.
 	Draft *DraftResolution `json:"draft,omitempty"`
 }
@@ -115,4 +117,11 @@ type DraftResolution struct {
 	Content    string         `json:"content,omitempty"`
 	View       *View          `json:"view,omitempty"`
 	Navigation NavigationMode `json:"navigation,omitempty"`
+}
+
+// Toast is a one-line message from an action result. Tone is "success", "error" or "default" (the default when empty).
+// The host shows it as a passive indicator for a few seconds: errors stay four seconds, other tones 2.2 seconds.
+type Toast struct {
+	Message string `json:"message"`
+	Tone    string `json:"tone,omitempty"`
 }

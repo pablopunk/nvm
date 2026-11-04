@@ -59,6 +59,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Clock:            ports.Clock,
 		Cache:            extensionSnapshots,
 		Dialog:           ports.FileDialog,
+		Indicate:         p.extensionIndicators().ShowIndicator,
 		Drafts:           m,
 		Pages:            real.NewWebPages(p.paletteWebWindow),
 		Permissions:      ports.Permissions,
