@@ -138,7 +138,7 @@ func (p *App) settingsView() *palette.View {
 				login = "On"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: p.S.Hotkey, Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
+				{Title: "Palette Hotkey", Accessory: palette.ShortcutLabel(p.S.Hotkey), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hotkeyView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key
@@ -178,12 +178,12 @@ func (p *App) settingsView() *palette.View {
 
 func (p *App) hotkeyView() *palette.View {
 	return &palette.View{
-		Title: "Hotkey", Placeholder: "Press keys, e.g. Alt+Shift+Space",
+		Title: "Hotkey", Placeholder: "Press keys, e.g. " + palette.ShortcutLabel("Alt+Shift+Space"),
 		Search: func(q string) []search.Item {
 			if q == "" {
-				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + p.S.Hotkey, Icon: "keyboard"}}
+				return []search.Item{{Title: "Type a new accelerator", Subtitle: "Current: " + palette.ShortcutLabel(p.S.Hotkey), Icon: "keyboard"}}
 			}
-			return []search.Item{{Title: "Use “" + q + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
+			return []search.Item{{Title: "Use “" + palette.ShortcutLabel(q) + "”", Icon: "keyboard", Actions: []search.Action{{Title: "Save", Dismiss: search.DismissNever, Run: func(h search.Host) {
 				old := p.S.Hotkey
 				mygo.GlobalShortcut.Unregister(old)
 				if err := mygo.GlobalShortcut.Register(q, p.Toggle); err != nil {
@@ -194,7 +194,7 @@ func (p *App) hotkeyView() *palette.View {
 				p.S.Hotkey = q
 				p.S.save()
 				h.Pop()
-				h.Toast("Hotkey set to " + q)
+				h.Toast("Hotkey set to " + palette.ShortcutLabel(q))
 			}}}}}
 		},
 	}
