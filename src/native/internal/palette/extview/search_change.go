@@ -14,12 +14,15 @@ const searchChangeDebounce = 350 * time.Millisecond
 
 // searchChange is the second batch of a list or grid view: the item ids its onSearchChange handler named for the text
 // the user last paused on. The ids answer only that text, so a new text shows the local matches until its own answer
-// arrives. asked is the text the handler was last scheduled for, and gen drops the timers of texts already left.
+// arrives. asked is the text the handler was last scheduled for, and gen drops the timers and answers of texts already
+// left. inFlight is true from the moment the handler is called for asked until its answer, so the palette shows the
+// batch as loading; typing another text clears it.
 type searchChange struct {
-	asked string
-	query string
-	ids   []string
-	gen   int
+	asked    string
+	query    string
+	ids      []string
+	gen      int
+	inFlight bool
 }
 
 // scheduleSearchChange asks the handler about query once it rests. Asking again for the text already asked does
@@ -32,6 +35,7 @@ func (s *Session) scheduleSearchChange(query string) {
 	}
 	s.searchChange.asked = text
 	s.searchChange.gen++
+	s.searchChange.inFlight = false
 	if text == "" {
 		s.searchChange.query, s.searchChange.ids = "", nil
 		return
@@ -44,21 +48,30 @@ func (s *Session) scheduleSearchChange(query string) {
 	}()
 }
 
-// runSearchChange invokes the handler for text, unless the text has been left since the timer started.
+// runSearchChange invokes the handler for text, unless the text has been left since the timer started. The batch is
+// in flight until the handler answers or fails.
 func (s *Session) runSearchChange(gen int, ref api.ActionRef, text string) {
 	if gen != s.searchChange.gen {
 		return
 	}
+	s.searchChange.inFlight = true
+	s.refreshHost()
 	s.invokeRaw(ref, text, func(result api.Result, failure *api.Failure) {
 		if gen != s.searchChange.gen {
 			return
 		}
+		s.searchChange.inFlight = false
 		s.searchChange.query, s.searchChange.ids = text, nil
 		if failure == nil && result.Patch != nil {
 			s.searchChange.ids = result.Patch.SearchResultIds
 		}
 		s.refreshHost()
 	})
+}
+
+// searchChangePending reports whether the handler's second batch for the shown text is still in flight.
+func (s *Session) searchChangePending() bool {
+	return s.searchChange.inFlight
 }
 
 // searchChangeRows returns the second batch for query: the items the handler named, in its order, skipping any row

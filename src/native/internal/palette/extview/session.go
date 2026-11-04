@@ -155,6 +155,7 @@ func (s *Session) listPage() *palette.View {
 		return s.rows(q)
 	}
 	page.Loading = s.isLoadingEmpty
+	page.Pending = s.searchChangePending
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
