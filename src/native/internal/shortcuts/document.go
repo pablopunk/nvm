@@ -5,7 +5,7 @@ import (
 	"maps"
 )
 
-// Document is what shortcuts.json holds: the palette hotkey and the user's choices. Actions maps an action to the
+// Document is the shortcut state: the palette hotkey and the user's choices, stored in config.json by NewPortableDocument. Actions maps an action to the
 // accelerator the user chose for it. Disabled marks the declared shortcuts the user removed.
 type Document struct {
 	Palette  string            `json:"palette"`

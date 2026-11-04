@@ -17,7 +17,7 @@ can see:
 |---|---|---|---|
 | Bundle identifier | `com.pablopunk.nvm` | `com.pablopunk.nvm.next` (permanent once shipped) | `mygo.json`, `release.md` |
 | App name, binary, slug | Nevermind | Nevermind Next, `nevermind-next`, `nevermind-next` | `mygo.json` |
-| Local data | the Electron user-data folder, `~/.config/nevermind/extensions` for extensions | `~/.config/nvm-native` on every OS | `store.go`, `extension-paths.ts` |
+| Local data | the Electron user-data folder; `~/.config/nevermind` for `config.json` and `extensions/` | `~/.config/nevermind` (shared, 1.x format) for `config.json` and `extensions/`; machine-local state in the OS user-data folder: `~/Library/Application Support/Nevermind Next`, `$XDG_DATA_HOME` or `~/.local/share/nevermind-next`, `%APPDATA%\Nevermind Next` | `portable/`, `platform/folders`, `app/store.go`, `extension-paths.ts` |
 | Keychain service | 1.x entries | `nvm-native` | `auth/vault.go` |
 | URL scheme | `nvm` | `nvm` today (collision, section 2) | `deep-link.ts`, `mygo.json` |
 | Update feed | GitHub releases `v...`, read through `release-pointers` and GitHub's latest stable | GitHub releases `native-v...` (never "latest") | `update-channels.md`, `release.md` |
@@ -25,9 +25,9 @@ can see:
 
 Things to settle before both apps run on one machine:
 
-- **Palette hotkey.** 2.0 defaults to `Alt+Shift+Space` (`internal/shortcuts/system.go`). If 1.x uses the same
-  default, the second app fails to register it and shows the "No shortcut set" banner. Check the 1.x default and,
-  if they match, give 2.0 a different default for the overlap period.
+- **Shared shortcuts.** 2.0 and 1.x read one `config.json`, so both apps bind the same palette shortcut and the same
+  app, dictation, emoji and window shortcuts. Two apps running at once cannot both register a key, and the second
+  one shows a conflict banner. Quit one app, or give one app a different key, while both run.
 - **Launch at login.** Each app has its own setting. Check the 2.0 default: two apps launching at login means two
   menu bar items.
 - **macOS privacy grants** (Accessibility, Apple Events, microphone, camera) belong to the bundle identifier. A
@@ -64,12 +64,16 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 
 ## 3. Data
 
-2.0 is a breaking release. There is no automatic migration (PLAN D5). 2.0 never reads or writes `state.json`,
-`~/.config/nevermind/extensions`, or 1.x keychain entries (PLAN section 0.2). 1.x keeps every byte it has.
+2.0 is a breaking release for local data. There is no automatic migration (PLAN D5). 2.0 never reads or writes
+`state.json`, or 1.x keychain entries (PLAN section 0.2). It reads and writes `config.json` and `extensions/` in the
+folder 1.x uses, in 1.x's format, and keeps every key it does not use. 1.x keeps every byte it has.
 
 **Users keep** (in 1.x, untouched by 2.0):
 
 - Everything in 1.x, including clipboard history, notes, chats and extensions. 1.x keeps working.
+- The palette shortcut, the shortcuts for apps, dictation, emoji and window layouts, the diagnostics switch and the
+  update channel. 2.0 reads them from `config.json`; they map to 2.0's actions by the 1.x keys in
+  `internal/shortcuts/portable_keys.go`.
 - Their account. Accounts and plans live on the backend, so a user who signs in to 2.0 sees the same account.
   2.0 holds its own token, in its own keychain entry.
 
@@ -77,9 +81,9 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 
 - Clipboard history, quick notes, AI chats, palette query history and usage learning. 2.0 starts empty.
 - Extensions. 1.x extensions are JavaScript or TypeScript modules. 2.0 runs Go source bundles through its own API,
-  so no 1.x extension runs in 2.0. Users rebuild them with Automate (the AI builder) or wait for a built-in.
-- Per-extension storage and secrets, settings, and shortcut customizations. Secrets and BYO keys must be entered
-  again.
+  so no 1.x extension runs in 2.0. 2.0 scans the same `extensions/` folder, so a 1.x extension shows in 2.0's
+  Extensions list as not loadable, until the user removes it. Users rebuild them with Automate (the AI builder) or wait for a built-in.
+- Per-extension storage and secrets, and settings. Secrets and BYO keys must be entered again.
 - Dictation settings and recordings. Window-management settings are reset to 2.0 defaults.
 - Sign-in. The user signs in to 2.0 once.
 
@@ -90,8 +94,8 @@ changing the bundle identifier. The bundle identifier cannot change after the fi
 > Nevermind until Nevermind Next has what you use. Uninstalling one app never deletes the other's data.
 
 **Rollback of data.** 2.0 stores are versioned and forward-compatible by one version (PLAN section 4). Going back to 1.x
-loses nothing from 1.x, because 2.0 never wrote there. 2.0 data stays in `~/.config/nvm-native` until the owner
-decides otherwise (section 10).
+loses nothing from 1.x: 2.0 writes `config.json` in 1.x's format and keeps the keys it does not use. Machine-local 2.0
+data stays in the OS user-data folder, which 1.x never reads.
 
 ## 4. Backend compatibility while both clients run
 
@@ -263,11 +267,15 @@ Each decision blocks a step above. Recommendations are in brackets.
 3. **D3 Backend identity.** Approve the client-name split (`nevermind-next`) and its three environment variables, and
    read the production values of `NEVERMIND_MIN_DESKTOP_VERSION`, `NEVERMIND_LATEST_DESKTOP_VERSION` and
    `NEVERMIND_DESKTOP_UPDATE_URL`. [Approve; read the values before the next backend deploy.]
-4. **D4 Data directory.** Keep `~/.config/nvm-native` on every OS, or move to MyGo's per-OS user-data path
-   (`mygo-practices.md` C10)? Permanent once users have data. [Decide before the first public build.]
+4. **D4 Data directory.** Decided: portable settings and extensions stay in `~/.config/nevermind`, the folder 1.x
+   uses, and `config.json` keeps 1.x's format. Machine-local state moves to the OS user-data folder. MyGo's
+   `PathUserData` matches on macOS and Windows; on Linux 2.0 uses `$XDG_DATA_HOME` or `~/.local/share`, because
+   `PathUserData` there is `~/.config` (`mygo-practices.md` C10). Permanent once users have data. [Decided by the owner,
+   2026-11-04; the Linux path is an exception to MyGo's convention.]
 5. **D5 Keychain service.** Keep `nvm-native`? [Keep; renaming it strands tokens.]
-6. **D6 Importer.** Build the read-only importer for notes and extension source, or ship without it?
-   [Ship without it; revisit after beta feedback.]
+6. **D6 Importer.** Build the read-only importer for machine-local data (clipboard, notes, chats), or ship without it?
+   Shortcuts, the palette, the diagnostics switch, the update channel and the extensions folder need no importer,
+   because 2.0 reads them where 1.x keeps them. [Ship without it; revisit after beta feedback.]
 7. **D7 Cutover date and mechanism.** Who decides cutover, which download page changes, and whether 1.x receives a
    final release that points to 2.0? [Owner.]
 8. **D8 Channel mapping.** Use the updater's nightly channel for beta, or add a beta channel (WP5.2 change)?

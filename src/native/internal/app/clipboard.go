@@ -11,7 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// clipImageDirName is the folder, under the app's config folder, that holds the copied pictures.
+// clipImageDirName is the folder, under the app's local data folder, that holds the copied pictures.
 const (
 	clipImageDirName = "clipboard-images"
 	clipDefaultLimit = 300
@@ -39,7 +39,7 @@ type clipEngine struct {
 }
 
 // clipDeps are what a clipboard engine is built from. Ports come from the composition root (the real set at
-// launch, the fakes in tests). Dir is the app's config folder, where the picture files go. Store is the app's one
+// launch, the fakes in tests). Dir is the app's local data folder, where the picture files go. Store is the app's one
 // store (nil keeps the history in memory). Redraw runs a function on the palette's UI thread and redraws.
 type clipDeps struct {
 	ports   platform.Ports

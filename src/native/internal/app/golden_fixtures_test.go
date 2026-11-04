@@ -96,7 +96,7 @@ func goldenAppColor(name string) color.NRGBA {
 }
 
 // isolateUserFolders points every per-user folder the app reads at home for the rest of the test. os.UserHomeDir
-// reads HOME on Unix and USERPROFILE on Windows, and the config folder is under APPDATA there, so all three move.
+// reads HOME on Unix and USERPROFILE on Windows, and the local data folder is under APPDATA there, so all three move.
 func isolateUserFolders(tb testing.TB, home string) {
 	tb.Helper()
 	tb.Setenv("HOME", home)

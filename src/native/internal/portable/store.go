@@ -40,11 +40,6 @@ func Open(files platform.FS, path string) *Store {
 	return &Store{files: files, path: path}
 }
 
-// Path is the file the store reads and writes.
-func (s *Store) Path() string {
-	return s.path
-}
-
 // Load returns the document on disk. A missing file is an empty document, with no error. An unreadable or invalid
 // file returns an empty document and the reason.
 func (s *Store) Load() (Document, error) {

@@ -9,11 +9,8 @@ func noEnv(string) string { return "" }
 
 func TestSharedFolderIsTheOneOneXUses(t *testing.T) {
 	home := filepath.Join("/", "home", "owner")
-	if got, want := PortableConfig(home), filepath.Join(home, ".config", "nevermind", "config.json"); got != want {
-		t.Errorf("PortableConfig = %q; want %q", got, want)
-	}
-	if got, want := Extensions(home), filepath.Join(home, ".config", "nevermind", "extensions"); got != want {
-		t.Errorf("Extensions = %q; want %q", got, want)
+	if got, want := Shared(home), filepath.Join(home, ".config", "nevermind"); got != want {
+		t.Errorf("Shared = %q; want %q", got, want)
 	}
 }
 

@@ -17,16 +17,6 @@ func Shared(home string) string {
 	return filepath.Join(home, ".config", "nevermind")
 }
 
-// PortableConfig is the path of config.json in the shared folder.
-func PortableConfig(home string) string {
-	return filepath.Join(Shared(home), PortableConfigName)
-}
-
-// Extensions is the path of the shared extensions folder.
-func Extensions(home string) string {
-	return filepath.Join(Shared(home), ExtensionsName)
-}
-
 // Local is the operating system's user-data folder for the app's machine-local state: ~/Library/Application Support on
 // macOS, %APPDATA% on Windows, and $XDG_DATA_HOME or ~/.local/share on Linux. name names the folder on macOS and
 // Windows, and slug names it on Linux. MyGo's PathUserData puts Linux data under ~/.config, so it is not used there.
