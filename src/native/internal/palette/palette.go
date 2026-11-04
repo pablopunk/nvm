@@ -66,7 +66,11 @@ type Palette struct {
 
 	toastMsg string
 	notice   *Notice
-	phIndex  int
+	// shows counts the times the palette was shown, so a delayed dismissal can tell it was shown again.
+	shows int
+	// announcedNotice is the alert assistive technology was last told about.
+	announcedNotice *Notice
+	phIndex         int
 	// settled is false while the providers of the shown query are still answering: the list then shows the
 	// rows it has, and no empty state.
 	settled    bool
@@ -97,6 +101,7 @@ func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 
 // Show shows the palette on the first level with every search reset, then runs OnShow.
 func (p *Palette) Show() {
+	p.shows++
 	if p.opts.Position != nil {
 		w, h := p.win.Size()
 		x, y := p.opts.Position(w, h)
