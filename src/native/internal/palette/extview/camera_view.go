@@ -238,18 +238,29 @@ func drawCameraOverlay(c *ui.Context, cam *cameraView) {
 	t := design.Tokens(c)
 	state := cam.engine.state
 	if state.Status == cameraError {
-		ui.Column(c).Absolute().Top(12).Left(12).Right(12).Padding(12).Gap(4).Radius(12).Background(t.Raised).Children(func() {
-			ui.Text(c, "Camera Issue").FontSize(13).TextColor(t.Strong)
-			ui.Text(c, state.Message).FontSize(11).TextColor(t.Secondary)
-		})
+		drawCameraIssue(c, state.Message)
+	} else {
+		ui.Text(c, cameraStatusText(state)).Absolute().Bottom(10).Left(12).FontSize(11).TextColor(t.Secondary)
 	}
-	ui.Text(c, cameraStatusText(state)).Absolute().Bottom(10).Left(12).FontSize(11).TextColor(t.Secondary)
 	if cam.showsSwitcher() {
 		switchButton := ui.Button(c, cameraSwitchTitle(state.Label)).Absolute().Bottom(8).Right(12)
 		if switchButton.Clicked() {
 			cam.switchDevice("next")
 		}
 	}
+}
+
+// drawCameraIssue is the notice state of the camera card: the reason the capture stopped and its status, centered
+// where the picture would be, so the status is never a stray line apart from the card.
+func drawCameraIssue(c *ui.Context, message string) {
+	t := design.Tokens(c)
+	ui.Column(c).Absolute().Top(0).Bottom(0).Left(0).Right(0).Center().Children(func() {
+		ui.Column(c).Padding(16).Gap(6).Radius(12).Background(t.Raised).Children(func() {
+			ui.Text(c, "Camera Issue").FontSize(13).TextColor(t.Strong)
+			ui.Text(c, message).FontSize(11).TextColor(t.Secondary)
+			ui.Text(c, cameraStatusText(cameraState{Status: cameraError})).FontSize(11).TextColor(t.Secondary)
+		})
+	})
 }
 
 // cameraStatusText is the status line of the view: what the capture is doing, or that it is paused.
