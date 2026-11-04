@@ -37,7 +37,6 @@ var (
 // probe to reach the left half of the work area.
 func TestJourneyJ19LayoutFromPaletteOnX11(t *testing.T) {
 	probeID := startProbe(t)
-	workX, workY, workWidth, workHeight := readWorkArea(t)
 	must(t, exec.Command("xdotool", "windowactivate", "--sync", probeID).Run())
 
 	app := Launch(t, Options{})
@@ -48,17 +47,24 @@ func TestJourneyJ19LayoutFromPaletteOnX11(t *testing.T) {
 	shoot(t, app, "j19-palette-left-half")
 	must(t, app.Key("Return"))
 
-	want := geometryRect{
+	waitProbeFrame(t, probeID, leftHalfOfWorkArea(t))
+	shoot(t, app, "j19-left-half")
+}
+
+type geometryRect struct{ x, y, width, height int }
+
+// leftHalfOfWorkArea is the frame the Left Half layout gives a window with the default gaps: the outer gap on the left,
+// top and bottom, and half of the work area less the outer gaps and the inner gap.
+func leftHalfOfWorkArea(t *testing.T) geometryRect {
+	t.Helper()
+	workX, workY, workWidth, workHeight := readWorkArea(t)
+	return geometryRect{
 		x:      workX + defaultOuterGap,
 		y:      workY + defaultOuterGap,
 		width:  (workWidth - 2*defaultOuterGap - defaultInnerGap) / 2,
 		height: workHeight - 2*defaultOuterGap,
 	}
-	waitProbeFrame(t, probeID, want)
-	shoot(t, app, "j19-left-half")
 }
-
-type geometryRect struct{ x, y, width, height int }
 
 // startProbe shows a feh window with the probe title and returns its X window ID once it is mapped.
 func startProbe(t *testing.T) string {

@@ -33,7 +33,7 @@ func (p *App) attachWindows() {
 // windowCommands are the window management entries of the command list. They exist only where the system can
 // manage other apps' windows; elsewhere the commands are omitted rather than shown disabled.
 func (p *App) windowCommands() []command {
-	if !p.ports.Capabilities.Supported(platform.CapabilityWindowManagement) {
+	if !p.windowManagementEnabled() {
 		return nil
 	}
 	entries := windows.Entries(p.windowDeps())
@@ -47,11 +47,16 @@ func (p *App) windowCommands() []command {
 	return commands
 }
 
+// windowManagementEnabled reports whether the system can manage other apps' windows.
+func (p *App) windowManagementEnabled() bool {
+	return p.ports.Capabilities.Supported(platform.CapabilityWindowManagement)
+}
+
 func (p *App) windowDeps() windows.Deps {
 	return windows.Deps{
 		Engine:   p.windows,
 		Settings: p.windowSettings,
-		Target:   p.PaletteFocusTarget,
+		Target:   p.windowTarget,
 		OnUI:     p.onUI,
 		Notify:   p.notifyWindowOutcome,
 		Go:       func(name string, fn func(context.Context)) { safego.Go(name, fn) },

@@ -1346,6 +1346,25 @@
       },
       {
         "kind": "Commands",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "Commands",
+        "id": "",
+        "icon": "move-horizontal",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Commands",

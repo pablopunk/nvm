@@ -3,6 +3,7 @@ package app
 import (
 	"runtime"
 
+	"github.com/pablopunk/nvm/native/internal/palette/windows"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -50,6 +51,9 @@ func (p *App) shortcutCommands() []shortcuts.Action {
 			actions = append(actions, shortcuts.Action{ID: shortcutCommandID(cmd.Title), Title: cmd.Title})
 		}
 	}
+	if p.windowManagementEnabled() {
+		actions = append(actions, windows.ShortcutActions()...)
+	}
 	return actions
 }
 
@@ -59,6 +63,9 @@ func shortcutCommandID(title string) string {
 
 // runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does.
 func (p *App) runShortcutCommand(actionID string) {
+	if windows.RunShortcut(p.windowDeps(), actionID) {
+		return
+	}
 	for _, cmd := range p.commands(false) {
 		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
 			p.Show()

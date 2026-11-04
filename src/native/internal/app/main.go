@@ -80,7 +80,7 @@ type App struct {
 
 	windows        *windowmgmt.Service
 	windowSettings *windowmgmt.SettingsStore
-	focusCapture   paletteFocusCapture
+	windowFocus    windowSummon
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
