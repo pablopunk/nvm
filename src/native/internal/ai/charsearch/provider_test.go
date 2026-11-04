@@ -50,10 +50,37 @@ func TestAWithoutADeciderEmitsNothing(t *testing.T) {
 	}
 }
 
-func TestTheMatchesBecomeRowsOfOneFinalBatch(t *testing.T) {
+func TestTheMatchesBecomeRowsOfTheFinalBatchAfterThePendingOne(t *testing.T) {
 	batches := collect(providerFor(cuteModel(), fake.NewClock(), 0), context.Background(), "Cute ")
-	if len(batches) != 1 || !batches[0].Final || len(batches[0].Items) != 3 || batches[0].Items[0].ID != "cat" {
-		t.Fatalf("batches = %+v, want the three matches in one final batch", batches)
+	if len(batches) != 2 || !batches[0].Pending || !batches[1].Final || len(batches[1].Items) != 3 || batches[1].Items[0].ID != "cat" {
+		t.Fatalf("batches = %+v, want a pending batch, then the three matches in the final batch", batches)
+	}
+}
+
+func TestTheDecisionIsPendingOnlyOnceTheTextRests(t *testing.T) {
+	clock := fake.NewClock()
+	emitted := make(chan search.Batch, 4)
+	go providerFor(cuteModel(), clock, TypingPause).Search(context.Background(), "Cute ", func(b search.Batch) { emitted <- b })
+	clock.AwaitTimers(1)
+	if len(emitted) != 0 {
+		t.Fatal("a batch was emitted before the text rested")
+	}
+	clock.Advance(TypingPause)
+	select {
+	case first := <-emitted:
+		if !first.Pending || len(first.Items) != 0 {
+			t.Fatalf("first batch = %+v, want a pending batch with no rows", first)
+		}
+	case <-time.After(watchdog):
+		t.Fatal("the search never reported the decision as pending")
+	}
+	select {
+	case final := <-emitted:
+		if !final.Final || len(final.Items) != 3 {
+			t.Fatalf("final batch = %+v, want the three matches", final)
+		}
+	case <-time.After(watchdog):
+		t.Fatal("the search never emitted its matches")
 	}
 }
 
@@ -101,7 +128,8 @@ func TestACancelledSearchNeverAsks(t *testing.T) {
 func TestAFailedDecisionEmitsNothingAndTheLocalRowsStand(t *testing.T) {
 	model := &fakeModel{failure: errUnavailable}
 	batches := collect(providerFor(model, fake.NewClock(), 0), context.Background(), "kitten time")
-	if len(batches) != 1 || len(batches[0].Items) != 0 || !batches[0].Final {
-		t.Fatalf("batches = %+v, want one final empty batch", batches)
+	last := batches[len(batches)-1]
+	if len(batches) != 2 || len(last.Items) != 0 || !last.Final {
+		t.Fatalf("batches = %+v, want the pending batch, then one final empty batch", batches)
 	}
 }
