@@ -93,8 +93,14 @@ func rootResultsForTable(p *App, q string) []search.Item {
 	return p.Results()
 }
 
+// homeRelativeSlashes writes text with forward slashes and the home folder replaced by $HOME.
+func homeRelativeSlashes(text, home string) string {
+	return strings.ReplaceAll(filepath.ToSlash(text), filepath.ToSlash(home), "$HOME")
+}
+
 // rootTableRows runs the root search for q and reduces each row to its comparable part. Home-relative
-// paths are rewritten to $HOME, since the fixture home is a temporary directory.
+// paths are rewritten to $HOME with forward slashes, since the fixture home is a temporary directory and
+// Windows joins paths with backslashes.
 func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 	t.Helper()
 	home, err := os.UserHomeDir()
@@ -105,9 +111,9 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 	rows := make([]rootRow, 0, len(items))
 	for _, it := range items {
 		row := rootRow{
-			Kind: it.Kind, Title: it.Title, Subtitle: strings.ReplaceAll(it.Subtitle, home, "$HOME"), Section: it.Section,
-			ID: strings.ReplaceAll(it.ID, home, "$HOME"), Icon: it.Icon, Tone: it.Tone, Accessory: it.Accessory, Prominent: it.Prominent, TintTitle: it.TintTitle,
-			IconPath: strings.ReplaceAll(it.IconPath, home, "$HOME"),
+			Kind: it.Kind, Title: it.Title, Subtitle: homeRelativeSlashes(it.Subtitle, home), Section: it.Section,
+			ID: homeRelativeSlashes(it.ID, home), Icon: it.Icon, Tone: it.Tone, Accessory: it.Accessory, Prominent: it.Prominent, TintTitle: it.TintTitle,
+			IconPath: homeRelativeSlashes(it.IconPath, home),
 		}
 		for _, a := range it.Actions {
 			row.Actions = append(row.Actions, rootAction{Title: a.Title, Label: a.Label})

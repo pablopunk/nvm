@@ -76,15 +76,24 @@ func goldenAppColor(name string) color.NRGBA {
 	return color.NRGBA{R: uint8(40 + 7*len(name)), G: 110, B: uint8(200 - 5*len(name)), A: 255}
 }
 
+// isolateUserFolders points every per-user folder the app reads at home for the rest of the test. os.UserHomeDir
+// reads HOME on Unix and USERPROFILE on Windows, and the config folder is under APPDATA there, so all three move.
+func isolateUserFolders(tb testing.TB, home string) {
+	tb.Helper()
+	tb.Setenv("HOME", home)
+	tb.Setenv("USERPROFILE", home)
+	tb.Setenv("APPDATA", filepath.Join(home, "AppData", "Roaming"))
+	tb.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
+	tb.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+}
+
 // swapForGolden gives the test a temporary HOME and points configDir and clock at their fixtures for the rest of
 // the test. The config folder sits at the same place under every temporary HOME, so what a golden shows of it
 // ("~/.config/nvm-native") never depends on the run.
 func swapForGolden(t *testing.T) {
 	t.Helper()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	t.Setenv("XDG_DATA_HOME", filepath.Join(home, ".local", "share"))
+	isolateUserFolders(t, home)
 	previousConfig, previousClock := configDir, clock
 	dir := filepath.Join(home, ".config", "nvm-native")
 	if err := os.MkdirAll(dir, 0o700); err != nil {
