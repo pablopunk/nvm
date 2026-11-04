@@ -7,6 +7,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
+
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // accountCommands are the root commands that log in or out, as 1.x's account root item does. Only the one the session
@@ -18,10 +20,10 @@ func (p *App) accountCommands() []command {
 // signInOrOutCommands is the one sign-in row the session needs.
 func (p *App) signInOrOutCommands() []command {
 	if p.signedIn() {
-		return []command{{Title: "Log out of Nevermind", Keywords: "logout log out sign out account nevermind disconnect", Icon: "user",
+		return []command{{ID: shortcuts.CommandSignInOut, Title: "Log out of Nevermind", Keywords: "logout log out sign out account nevermind disconnect", Icon: "user",
 			Subtitle: "Signed in as " + p.accountSource().Email, Run: p.signOutFromRoot}}
 	}
-	return []command{{Title: "Log in to Nevermind", Keywords: "login log in sign in account nevermind connect", Icon: "user",
+	return []command{{ID: shortcuts.CommandSignInOut, Title: "Log in to Nevermind", Keywords: "login log in sign in account nevermind connect", Icon: "user",
 		Subtitle: "Connect this device to your Nevermind account", Dismiss: search.DismissNever, Run: p.signInFromRoot}}
 }
 

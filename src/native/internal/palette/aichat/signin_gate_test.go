@@ -14,10 +14,10 @@ func TestEnterOnTheSignedOutGateStartsTheSignInAndSendsNothing(t *testing.T) {
 	r := newRig(t, nil)
 	record := r.chatWith("", chat.TierFast)
 	r.signed = false
-	view := ChatView(r.deps(), record.ID)
-	r.open(view)
+	page := newPage(r.deps(), record.ID)
+	r.open(page.view())
 
-	view.OnSubmit("hello")
+	page.submit("hello")
 
 	if r.signInStarts != 1 {
 		t.Fatalf("sign-ins started = %d, want one", r.signInStarts)
@@ -32,10 +32,10 @@ func TestSignedOutGateNamesTheEnterAction(t *testing.T) {
 	r := newRig(t, nil)
 	record := r.chatWith("", chat.TierFast)
 	r.signed = false
-	view := ChatView(r.deps(), record.ID)
+	page := newPage(r.deps(), record.ID)
 
-	if got := view.HintFn(); got != signInHint {
-		t.Fatalf("footer = %q, want %q", got, signInHint)
+	if got := page.primaryKey().Title; got != signInTitle {
+		t.Fatalf("footer = %q, want %q", got, signInTitle)
 	}
 }
 

@@ -129,8 +129,8 @@ func TestNinthPictureIsRefusedWithTheLimit(t *testing.T) {
 		t.Fatalf("click Attach images: %v", err)
 	}
 	tt.Frame()
-	if len(p.attachments) != chat.ImageLimit || !tt.HasText(chat.ImageLimitCopy) {
-		t.Fatalf("attached %d, toast shown %v; want %d and the limit copy", len(p.attachments), tt.HasText(chat.ImageLimitCopy), chat.ImageLimit)
+	if len(p.attachments) != chat.ImageLimit || !r.said(chat.ImageLimitCopy) {
+		t.Fatalf("attached %d, said %v; want %d and the limit copy", len(p.attachments), r.said(chat.ImageLimitCopy), chat.ImageLimit)
 	}
 }
 

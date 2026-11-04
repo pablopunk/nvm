@@ -1,6 +1,7 @@
 package aichat
 
 import (
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -44,15 +45,17 @@ func (testWindow) SetPosition(x, y int) {}
 // rig is a palette over a chat service on a fake store and clock. The service's dispatched work waits in a queue
 // that the test runs with settle, so every change happens on the test goroutine, as on the UI thread.
 type rig struct {
-	t       *testing.T
-	clock   *fake.Clock
-	store   *chat.Store
-	service *chat.Service
-	palette *palette.Palette
-	root    *palette.View
-	copied  []string
-	signed  bool
-	sign    auth.SignInState
+	// feedback is what the actions said to the HUD, in order.
+	feedback []palette.Feedback
+	t        *testing.T
+	clock    *fake.Clock
+	store    *chat.Store
+	service  *chat.Service
+	palette  *palette.Palette
+	root     *palette.View
+	copied   []string
+	signed   bool
+	sign     auth.SignInState
 
 	signInStarts int
 	startErr     error
@@ -88,7 +91,7 @@ func newRigWithTools(t *testing.T, client *backend.Client, tools chat.Toolset) *
 		Tools:     tools,
 	})
 	r.root = &palette.View{Title: "Nevermind", Search: func(string) []search.Item { return nil }}
-	r.palette = palette.New(palette.Options{Root: r.root, Clock: clock, Synchronous: true})
+	r.palette = palette.New(palette.Options{Root: r.root, Clock: clock, Synchronous: true, Feedback: func(f palette.Feedback) { r.feedback = append(r.feedback, f) }})
 	r.palette.Attach(testWindow{})
 	return r
 }
@@ -205,4 +208,14 @@ func drawReply(c *ui.Context, src string, streaming bool) {
 		return
 	}
 	markdown.View(c, src, options)
+}
+
+// said reports whether the HUD was told text, in a message of its own or in a feedback's title.
+func (r *rig) said(text string) bool {
+	for _, f := range r.feedback {
+		if strings.Contains(f.Message, text) {
+			return true
+		}
+	}
+	return false
 }

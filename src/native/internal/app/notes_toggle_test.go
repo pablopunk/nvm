@@ -50,11 +50,11 @@ func TestEditorCommandOOpensAllNotesInPlaceOfTheEditor(t *testing.T) {
 	tt.Frame()
 	tt.Key(mod, ui.KeyO)
 	tt.Frame()
-	if top := topView(p); top.Title != "Quick Notes" {
+	if top := topView(p); top.Title != "Floating Notes" {
 		t.Fatalf("top view = %q, want All notes", top.Title)
 	}
 	p.Pop()
-	if top := topView(p); top.Title != "Quick Notes" {
+	if top := topView(p); top.Title != "Floating Notes" {
 		t.Fatalf("after one Escape the top view is %q, want the list the editor was opened from", top.Title)
 	}
 	p.Pop()

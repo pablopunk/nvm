@@ -10,6 +10,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
+
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // The root scores of the two backend rows, as 1.x's account items have them.
@@ -47,7 +49,7 @@ func environmentChoices(packaged bool) []environmentChoice {
 // listed and says so when the server and the app disagree.
 func (p *App) backendRootCommands() []command {
 	return []command{
-		{Title: "Nevermind: Switch Backend Environment", Keywords: "backend environment production preview custom url", Icon: "globe",
+		{ID: shortcuts.CommandSwitchBackend, Title: "Nevermind: Switch Backend Environment", Keywords: "backend environment production preview custom url", Icon: "globe",
 			Subtitle: "Switch Development, Preview, Production, or custom backend", rootScore: backendEnvironmentRootScore,
 			Run: func(h search.Host) { h.Push(p.backendEnvironmentView()) }},
 		p.backendStatusCommand(),
@@ -58,7 +60,7 @@ func (p *App) backendRootCommands() []command {
 func (p *App) backendStatusCommand() command {
 	snap := p.accountSource()
 	title, subtitle, icon := backendStatusRow(snap.Environment, snap.BaseURL, p.lastBackendReport())
-	return command{Title: title, Keywords: "debug backend status environment status", Icon: icon, Subtitle: subtitle,
+	return command{ID: shortcuts.CommandBackendStatus, Title: title, Keywords: "debug backend status environment status", Icon: icon, Subtitle: subtitle,
 		rootScore: backendStatusRootScore, Dismiss: search.DismissNever, Run: func(search.Host) {}}
 }
 

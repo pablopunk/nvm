@@ -106,7 +106,7 @@ func (p *page) report(err error) {
 // primaryKey is the footer's primary action: the answer a waiting tool call takes, Stop while a reply streams, or Send.
 func (p *page) primaryKey() *design.KeyHint {
 	if !p.deps.SignedIn() {
-		return &design.KeyHint{Title: "Sign in to Nevermind", Key: palette.KeyLabel("↵")}
+		return &design.KeyHint{Title: signInTitle, Key: palette.KeyLabel("↵")}
 	}
 	record, _ := p.deps.Service.Chat(p.id)
 	switch {

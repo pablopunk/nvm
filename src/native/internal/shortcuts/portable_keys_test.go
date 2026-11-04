@@ -12,6 +12,7 @@ var allBuiltInCommandIDs = []string{
 	CommandShowRecentErrors, CommandReportProblem, CommandOSPermissions, CommandFixSelectedText,
 	CommandTriageSelectedText, CommandClassifyImage, CommandLockScreen, CommandSleep, CommandRestart,
 	CommandSystemSettings, CommandQuitNevermind, CommandPlaceDownloads, CommandPlaceDocuments, CommandPlaceDesktop,
+	CommandSignInOut, CommandSwitchBackend, CommandBackendStatus,
 }
 
 func TestBuiltInCommandIDsAreStableNamesWithOneKeyEach(t *testing.T) {

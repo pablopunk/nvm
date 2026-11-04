@@ -36,7 +36,7 @@ func TestSignedOutChatSaysSignInFirst(t *testing.T) {
 	tt := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
 	tt.Frame()
 
-	if !tt.HasText("Not signed in: sign in from Nevermind Account to chat with AI.") {
+	if !tt.HasText(signInTitle) {
 		t.Fatal("a signed-out chat does not say to sign in first")
 	}
 }

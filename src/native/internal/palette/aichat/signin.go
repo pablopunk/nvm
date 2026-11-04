@@ -14,7 +14,6 @@ import (
 const (
 	signInTitle     = "Sign in to Nevermind"
 	signInSubtitle  = "Connect this device to your Nevermind account to use AI chats."
-	signInHint      = "↵ Sign in to Nevermind"
 	toastSignInBusy = "A sign-in is already running. Approve it in your browser."
 )
 

@@ -36,6 +36,9 @@ const (
 	CommandPlaceDownloads     = "command:place-downloads"
 	CommandPlaceDocuments     = "command:place-documents"
 	CommandPlaceDesktop       = "command:place-desktop"
+	CommandSignInOut          = "command:sign-in-out"
+	CommandSwitchBackend      = "command:switch-backend"
+	CommandBackendStatus      = "command:backend-status"
 )
 
 // config.json keys shortcuts by 1.x action ID, so both apps read one file. The 2.0 IDs of window layouts and apps

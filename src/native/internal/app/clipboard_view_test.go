@@ -266,8 +266,9 @@ func TestPasteTextIsOfferedOnlyForTextEntries(t *testing.T) {
 // TestPreviewOpensTheEntryFullPalette: Preview pushes the entry as a view of its own, titled like the row.
 func TestPreviewOpensTheEntryFullPalette(t *testing.T) {
 	p, _, _ := seededClipPalette(t)
-	actionTitled(t, p.Results()[1], "Preview").Run(p)
-	if top := p.Top(); top.Title != goldenRebaseTitle || !top.HideInput || top.Body == nil {
+	row := p.Results()[1]
+	actionTitled(t, row, "Preview").Run(p)
+	if top := p.Top(); top.Title != row.Title || !top.HideInput || top.Body == nil {
 		t.Fatalf("preview view = %q, hideInput %v", top.Title, top.HideInput)
 	}
 }

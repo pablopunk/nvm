@@ -47,7 +47,7 @@ func TestSwitchWhileAReplyStreamsSaysWhy(t *testing.T) {
 	if got := mustChat(t, r, record.ID).Tier; got != chat.TierFast {
 		t.Fatalf("tier = %s while a reply streams, want it unchanged", got)
 	}
-	if !tt.HasText(toastStillAnswering) {
+	if !r.said(toastStillAnswering) {
 		t.Fatal("the palette does not say why the tier stayed")
 	}
 }

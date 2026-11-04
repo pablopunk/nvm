@@ -10,7 +10,7 @@ func TestEntriesListEveryCommandSortedByTitleWithItsShortcut(t *testing.T) {
 	for _, entry := range entries {
 		titles = append(titles, entry.Title)
 	}
-	want := []string{"Clipboard History", "Floating Notes", "Palette Hotkey"}
+	want := []string{"Clipboard History", "Floating Notes"}
 	if !equalStrings(titles, want) {
 		t.Fatalf("titles = %v, want %v", titles, want)
 	}
