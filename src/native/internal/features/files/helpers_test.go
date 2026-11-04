@@ -71,13 +71,22 @@ func waitFor(t *testing.T, changes <-chan struct{}, cond func() bool) {
 }
 
 // settle applies the events the file system has delivered so far. It waits until the index has armed its debounce
-// window, which only happens once it has received an event, advances the fake clock past the window and then waits for
-// cond. Use it after a change that produces at least one event.
+// window, which only happens once it has received an event, then advances the fake clock past the window until cond
+// holds. Events still arriving after an advance re-arm the window, so a single advance can leave the last batch
+// waiting forever on a slow machine; each round advances again. Use it after a change that produces at least one event.
 func settle(t *testing.T, clock *fake.Clock, changes <-chan struct{}, cond func() bool) {
 	t.Helper()
 	clock.AwaitTimers(2)
-	clock.Advance(testDebounce)
-	waitFor(t, changes, cond)
+	timeout := time.After(waitTimeout)
+	for !cond() {
+		clock.Advance(testDebounce)
+		select {
+		case <-changes:
+		case <-time.After(20 * time.Millisecond):
+		case <-timeout:
+			t.Fatal("timed out waiting for the index to reach the expected state")
+		}
+	}
 }
 
 // hasPaths reports whether every path is in the snapshot.
