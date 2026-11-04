@@ -19,12 +19,12 @@ const (
 
 // Dismissal delays: a result the user should read stays longer than a failure's one-line copy would need.
 const (
-	successDismiss = 2 * time.Second
-	triageDismiss  = 6 * time.Second
-	failureDismiss = 4 * time.Second
-	triageTimeout  = 30 * time.Second
+	successDismiss  = 2 * time.Second
+	triageDismiss   = 6 * time.Second
+	failureDismiss  = 4 * time.Second
+	triageTimeout   = 30 * time.Second
 	classifyTimeout = 30 * time.Second
-	restoreDelay   = 500 * time.Millisecond
+	restoreDelay    = 500 * time.Millisecond
 )
 
 // Surface is what the commands draw on. The indicator is shown while a command works, and a result or a failure is
@@ -43,19 +43,19 @@ type Surface interface {
 // runs one off it, and After schedules a function on the UI thread. Chats is the one chat service of the app; Client
 // returns the backend client of the account, or nil when it is signed out.
 type Options struct {
-	Clock         platform.Clock
-	Clipboard     platform.Clipboard
-	SelectedText  platform.SelectedText
-	Paster        platform.Paster
-	Focus         platform.Focus
-	Chats         *chat.Service
-	Client        func() *backend.Client
-	Connected     func() bool
-	Surface       Surface
-	Dispatch      func(fn func())
-	Background    func(name string, fn func())
-	After         func(d time.Duration, fn func())
-	RestoreDelay  time.Duration
+	Clock        platform.Clock
+	Clipboard    platform.Clipboard
+	SelectedText platform.SelectedText
+	Paster       platform.Paster
+	Focus        platform.Focus
+	Chats        *chat.Service
+	Client       func() *backend.Client
+	Connected    func() bool
+	Surface      Surface
+	Dispatch     func(fn func())
+	Background   func(name string, fn func())
+	After        func(d time.Duration, fn func())
+	RestoreDelay time.Duration
 }
 
 // Service runs the AI commands. It owns the state of the indicator and of the proofread attempts, so only the UI

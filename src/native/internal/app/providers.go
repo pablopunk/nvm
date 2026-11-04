@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo"
-	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 type engine struct{ Key, Name, URL string }

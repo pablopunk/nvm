@@ -48,16 +48,16 @@ type BackendRequest struct {
 //	set.HTTP.Handle(backend)
 //	backend.SetMode(fixtures.ModeInsufficientCredits)
 type Backend struct {
-	mu          sync.Mutex
-	mode        FailureMode
-	requests    []BackendRequest
-	hanging     chan struct{}
-	activeModel string
-	reply         string
-	decisionBody  string
-	chunkDelay  time.Duration
-	device      *deviceSignIns
-	clock       platform.Clock
+	mu           sync.Mutex
+	mode         FailureMode
+	requests     []BackendRequest
+	hanging      chan struct{}
+	activeModel  string
+	reply        string
+	decisionBody string
+	chunkDelay   time.Duration
+	device       *deviceSignIns
+	clock        platform.Clock
 
 	completedStreams int
 	abandonedStreams int

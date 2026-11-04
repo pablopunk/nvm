@@ -117,5 +117,7 @@ func TestReadKeepsTheClipboardWhenTheGestureFails(t *testing.T) {
 // goneFocus is a focus port whose source window has closed.
 type goneFocus struct{}
 
-func (goneFocus) Active() (platform.FocusTarget, error) { return platform.FocusTarget{}, platform.ErrNotFound }
-func (goneFocus) Restore(platform.FocusTarget) error     { return platform.ErrNotFound }
+func (goneFocus) Active() (platform.FocusTarget, error) {
+	return platform.FocusTarget{}, platform.ErrNotFound
+}
+func (goneFocus) Restore(platform.FocusTarget) error { return platform.ErrNotFound }
