@@ -80,6 +80,7 @@ type Session struct {
 	media        *palette.View
 	page         platform.WebPage
 	camera       *cameraView
+	searchChange searchChange
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
@@ -145,6 +146,7 @@ func (s *Session) listPage() *palette.View {
 	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder}
 	page.Search = func(q string) []search.Item {
 		page.SelectID = s.takeSelectID()
+		s.scheduleSearchChange(q)
 		return s.rows(q)
 	}
 	page.Loading = s.isLoadingEmpty
@@ -212,10 +214,24 @@ func (s *Session) rows(query string) []search.Item {
 	} else {
 		out = s.appendSectionRows(out, "", s.items, query)
 	}
+	out = s.withSecondBatch(out, query)
 	if s.hasMore {
 		out = append(out, s.loadMoreRow())
 	}
 	return out
+}
+
+// withSecondBatch appends the handler's second batch after the local matches. As 1.x does, the batch takes its room
+// from MaxVisibleItems first, so a long local list cannot push it out of view.
+func (s *Session) withSecondBatch(local []search.Item, query string) []search.Item {
+	extra := s.searchChangeRows(local, query)
+	if len(extra) == 0 {
+		return local
+	}
+	if limit := s.view.MaxVisibleItems; limit > 0 {
+		local = local[:min(len(local), max(0, limit-len(extra)))]
+	}
+	return append(local, extra...)
 }
 
 func (s *Session) appendSectionRows(out []search.Item, title string, items []api.Item, query string) []search.Item {

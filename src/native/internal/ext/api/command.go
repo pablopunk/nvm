@@ -67,7 +67,7 @@ type Invocation struct {
 	Form FormValues `json:"form,omitempty"`
 	// EditorContent is the editor text for an editor's submit or autosave action.
 	EditorContent string `json:"editorContent,omitempty"`
-	// Value is the search accessory selection for its onChange action.
+	// Value is the search accessory selection for its onChange action, or the trimmed search text for onSearchChange.
 	Value string `json:"value,omitempty"`
 	// DraftConflict is injected only into a draft's OnConflict handler.
 	DraftConflict *DraftConflict `json:"draftConflict,omitempty"`
