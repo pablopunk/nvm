@@ -23,8 +23,8 @@ func refusingLink() *hostLink {
 func everyService() map[string]any {
 	link := refusingLink()
 	return map[string]any{
-		"ai":               unsupportedAI{},
-		"attachments":      attachmentBuilder{},
+		"ai":               remoteAI{link: link},
+		"attachments":      remoteAttachments{link: link},
 		"dictation":        unsupportedDictation{},
 		"aiBuilder":        unsupportedAIBuilder{},
 		"ownership":        unsupportedOwnership{},

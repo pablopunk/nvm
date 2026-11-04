@@ -15,6 +15,13 @@ import (
 func init() {
 	Symbols["github.com/pablopunk/nvm/native/internal/ext/api/api"] = map[string]reflect.Value{
 		// function, constant and variable definitions
+		"AIEventAborted":                reflect.ValueOf(constant.MakeFromLiteral("\"aborted\"", token.STRING, 0)),
+		"AIEventDelta":                  reflect.ValueOf(constant.MakeFromLiteral("\"delta\"", token.STRING, 0)),
+		"AIEventDone":                   reflect.ValueOf(constant.MakeFromLiteral("\"done\"", token.STRING, 0)),
+		"AIEventError":                  reflect.ValueOf(constant.MakeFromLiteral("\"error\"", token.STRING, 0)),
+		"AIEventStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
+		"AIEventToolEnd":                reflect.ValueOf(constant.MakeFromLiteral("\"tool_end\"", token.STRING, 0)),
+		"AIEventToolStart":              reflect.ValueOf(constant.MakeFromLiteral("\"tool_start\"", token.STRING, 0)),
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),

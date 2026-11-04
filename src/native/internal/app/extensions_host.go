@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
@@ -56,6 +57,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	textReader := ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()})
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
 		Clock:     ports.Clock,
@@ -72,7 +74,8 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		OS:            p.goos,
 		Windows:       p.extensionWindows(),
 		Shortcuts:     p.extensionShortcuts(),
-		OCR:           ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
+		OCR:           textReader,
+		AI:            p.extensionAI(textReader),
 		History:       p.extensionHistory,
 		Confirm:       p.askExtensionConfirmation,
 		SettingsPanes: p.systemSettingsPanes,
@@ -85,6 +88,20 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
+	})
+}
+
+// extensionAI is the model call service extensions use. It shares the app's account and OCR, so a call made while
+// signed out is refused the same way the palette's AI features refuse it.
+func (p *App) extensionAI(textReader *ocr.Service) *extai.Service {
+	return extai.New(extai.Deps{
+		Client:    p.backendClient,
+		Connected: p.signedIn,
+		Clock:     p.ports.Clock,
+		Clipboard: p.ports.Clipboard,
+		Files:     p.ports.FS,
+		OCR:       textReader,
+		Home:      userHomeDir(),
 	})
 }
 

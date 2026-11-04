@@ -12,6 +12,7 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -52,6 +53,8 @@ type Ports struct {
 	Places func() []api.Place
 	// Indicators draws the passive indicators of extensions.
 	Indicators services.IndicatorSurface
+	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
+	AI *extai.Service
 }
 
 // Options tune the child processes of every extension.
@@ -135,6 +138,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Shortcuts:    ports.Shortcuts,
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,
+			AI:           ports.AI,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
 

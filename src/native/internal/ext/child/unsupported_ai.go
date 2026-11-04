@@ -12,63 +12,6 @@ func unsupported(service string) error {
 	return fmt.Errorf("%s is not available in this Nevermind version yet: %w", service, api.ErrNotAvailable)
 }
 
-// unsupportedAI answers every model call with the unsupported error. The AI service is not served by the host yet.
-type unsupportedAI struct{}
-
-func (unsupportedAI) IsAvailable() (bool, error) { return false, unsupported("ctx.ai") }
-
-func (unsupportedAI) Decide(api.DecisionRequest) (api.DecisionResult, error) {
-	return api.DecisionResult{}, unsupported("ctx.ai.decide")
-}
-
-func (unsupportedAI) Ask(string, api.AIOptions) (string, error) {
-	return "", unsupported("ctx.ai.ask")
-}
-
-func (unsupportedAI) Stream(string, api.AIOptions) (api.AIStream, error) {
-	return nil, unsupported("ctx.ai.stream")
-}
-
-func (unsupportedAI) Prepare(api.AIOptions) error { return unsupported("ctx.ai.prepare") }
-
-func (unsupportedAI) Attachments() api.AttachmentBuilder { return attachmentBuilder{} }
-
-func (unsupportedAI) Session(string, api.AIOptions) (api.AISession, error) {
-	return nil, unsupported("ctx.ai.session")
-}
-
-// attachmentBuilder builds the attachments of a prompt as data. Reading the selection, the clipboard or OCR needs the
-// host, so those fail with the unsupported error.
-type attachmentBuilder struct{}
-
-func (attachmentBuilder) Text(text, title string) api.Attachment {
-	return api.Attachment{Kind: "text", Text: text, Title: title}
-}
-
-func (attachmentBuilder) Image(pathOrDataURL, title string, ocr bool) api.Attachment {
-	return api.Attachment{Kind: "image", Path: pathOrDataURL, Title: title, OCR: ocr}
-}
-
-func (attachmentBuilder) File(path, as, title string) api.Attachment {
-	return api.Attachment{Kind: "file", Path: path, As: as, Title: title}
-}
-
-func (attachmentBuilder) SelectedText(string) (api.Attachment, error) {
-	return api.Attachment{}, unsupported("ctx.ai.attachments.selectedText")
-}
-
-func (attachmentBuilder) SelectedFiles(string) ([]api.Attachment, error) {
-	return nil, unsupported("ctx.ai.attachments.selectedFiles")
-}
-
-func (attachmentBuilder) Clipboard(string) ([]api.Attachment, error) {
-	return nil, unsupported("ctx.ai.attachments.clipboard")
-}
-
-func (attachmentBuilder) OCRImage(string, string) (api.Attachment, error) {
-	return api.Attachment{}, unsupported("ctx.ai.attachments.ocrImage")
-}
-
 // unsupportedDictation answers every dictation call with the unsupported error.
 type unsupportedDictation struct{}
 

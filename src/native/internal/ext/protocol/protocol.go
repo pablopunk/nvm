@@ -35,6 +35,7 @@ const (
 	ServiceDrafts     = "drafts"
 	ServiceViews      = "views"
 	ServiceIndicators = "indicators"
+	ServiceAI         = "ai"
 )
 
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the

@@ -115,7 +115,7 @@ func (c hostContext) Indicators() api.Indicators {
 }
 
 func (c hostContext) AI() api.AI {
-	return unsupportedAI{}
+	return remoteAI{link: c.link}
 }
 
 func (c hostContext) AIBuilder() api.AIBuilder {
