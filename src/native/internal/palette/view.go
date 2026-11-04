@@ -45,8 +45,10 @@ type View struct {
 	Status               func() string // not drawn; kept for the views that set it
 	// Footer is the left footer text when the view follows its chosen row, such as the picker's character name.
 	// It receives the chosen row, or nil without one, and replaces the title.
-	Footer  func(chosen *search.Item) string
-	Hint    string // right footer text
+	Footer func(chosen *search.Item) string
+	Hint   string // right footer text
+	// HintFn, when set, gives the right footer text instead of Hint; it is read on every frame.
+	HintFn  func() string
 	OnLeave func()
 	// OnKey sees the keys before the list and the action menu do; it returns true when it used one.
 	OnKey func(c *ui.Context, h search.Host) bool

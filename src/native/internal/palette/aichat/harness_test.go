@@ -58,6 +58,12 @@ type rig struct {
 // newRig builds the rig. client is the backend client of the account, or nil when there is none.
 func newRig(t *testing.T, client *backend.Client) *rig {
 	t.Helper()
+	return newRigWithTools(t, client, chat.Toolset{})
+}
+
+// newRigWithTools builds the rig with tools offered to conversations.
+func newRigWithTools(t *testing.T, client *backend.Client, tools chat.Toolset) *rig {
+	t.Helper()
 	clock := fake.NewClock()
 	st, err := store.Open(fake.NewFS(), clock, "/chats")
 	if err != nil {
@@ -72,6 +78,7 @@ func newRig(t *testing.T, client *backend.Client) *rig {
 		Client:    func() *backend.Client { return client },
 		Connected: func() bool { return r.signed },
 		Dispatch:  r.dispatch,
+		Tools:     tools,
 	})
 	r.root = &palette.View{Title: "Nevermind", Search: func(string) []search.Item { return nil }}
 	r.palette = palette.New(palette.Options{Root: r.root, Clock: clock, Synchronous: true})
