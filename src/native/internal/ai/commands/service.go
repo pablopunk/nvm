@@ -12,19 +12,17 @@ import (
 
 // Titles of the commands, as the palette and the indicator name them.
 const (
-	FixTitle      = "Fix Selected Text with AI"
-	TriageTitle   = "Triage Selected Text with AI"
-	ClassifyTitle = "Classify Image with AI"
+	FixTitle    = "Fix Selected Text with AI"
+	TriageTitle = "Triage Selected Text with AI"
 )
 
 // Dismissal delays: a result the user should read stays longer than a failure's one-line copy would need.
 const (
-	successDismiss  = 2 * time.Second
-	triageDismiss   = 6 * time.Second
-	failureDismiss  = 4 * time.Second
-	triageTimeout   = 30 * time.Second
-	classifyTimeout = 30 * time.Second
-	restoreDelay    = 500 * time.Millisecond
+	successDismiss = 2 * time.Second
+	triageDismiss  = 6 * time.Second
+	failureDismiss = 4 * time.Second
+	triageTimeout  = 30 * time.Second
+	restoreDelay   = 500 * time.Millisecond
 )
 
 // Surface is what the commands draw on. The indicator is shown while a command works, and a result or a failure is
@@ -45,7 +43,6 @@ type Surface interface {
 type Options struct {
 	Clock        platform.Clock
 	Clipboard    platform.Clipboard
-	Files        platform.FS
 	SelectedText platform.SelectedText
 	Paster       platform.Paster
 	Focus        platform.Focus
@@ -204,49 +201,6 @@ func (s *Service) triageRead(text string, err error) {
 	s.decide(TriageTitle, decisionFor(text), func(result backend.DecisionResult) {
 		s.finish(Status{Title: TriageTitle, Subtitle: TriageSummary(result.Answers), Tone: ToneSuccess}, triageDismiss)
 	}, triageTimeout)
-}
-
-// ClassifyImageFile classifies the picture file at path, which the user chose, and presents the category, which Copy
-// takes.
-func (s *Service) ClassifyImageFile(path string) {
-	if !s.opts.Connected() {
-		s.fail(ClassifyTitle, errNotSignedIn)
-		return
-	}
-	s.show(Status{Title: ClassifyTitle, Subtitle: "Reading Image", Tone: ToneLoading})
-	s.opts.Background("ai-commands.classify.read", func() {
-		data, err := s.opts.Files.ReadFile(path)
-		s.opts.Dispatch(func() { s.classifyRead(path, data, err) })
-	})
-}
-
-// classifyRead sends the picture a file read returned to the decision route, typed by its extension.
-func (s *Service) classifyRead(path string, data []byte, err error) {
-	mediaType := mediaTypeOf(path)
-	switch {
-	case err != nil || mediaType == "":
-		s.fail(ClassifyTitle, errNoImage)
-		return
-	case len(data) > MaximumImageBytes:
-		s.fail(ClassifyTitle, errImageTooLarge)
-		return
-	}
-	s.show(Status{Title: ClassifyTitle, Subtitle: "Classifying", Tone: ToneLoading})
-	request := backend.DecisionRequest{Input: classifyInput, Images: []backend.DecisionImage{imageOf(mediaType, data)}, Questions: ClassifyQuestions}
-	s.decide(ClassifyTitle, request, func(result backend.DecisionResult) {
-		s.presentCategory(result)
-	}, classifyTimeout)
-}
-
-// presentCategory shows the category an image classification answered with, or fails when there is none.
-func (s *Service) presentCategory(result backend.DecisionResult) {
-	category, ok := result.Answers["category"]
-	if !ok || category.Type != "choice" {
-		s.fail(ClassifyTitle, errNoCategory)
-		return
-	}
-	s.hide()
-	s.opts.Surface.Present(Result{Title: "Image Classification", Text: func() string { return category.Choice }, Copy: s.Copy})
 }
 
 // decide sends request off the UI thread and hands the answer to done on the UI thread. A failure is shown under title.

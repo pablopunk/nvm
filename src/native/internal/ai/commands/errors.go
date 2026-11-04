@@ -20,9 +20,6 @@ const (
 	errFormattedClipboard = userError("Cannot keep a formatted clipboard while reading selected text. Copy plain text first and try again")
 	errNoCorrection       = userError("AI returned no corrected text")
 	errInvalidCorrection  = userError("AI did not return a valid correction")
-	errNoImage            = userError("Choose a PNG, JPEG or WebP image and try again")
-	errImageTooLarge      = userError("That image is too large to classify. Choose a smaller one")
-	errNoCategory         = userError("Image classification failed")
 )
 
 // signInCopy is the message of every command that needs an account.

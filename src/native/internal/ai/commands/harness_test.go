@@ -115,7 +115,6 @@ func (h *harness) build(transport platform.HTTP) {
 	h.service = NewService(Options{
 		Clock:        h.set.Clock,
 		Clipboard:    h.set.Clipboard,
-		Files:        h.set.FS,
 		SelectedText: h.set.SelectedText,
 		Paster:       h.set.Paster,
 		Focus:        h.set.Focus,
@@ -213,11 +212,6 @@ func (h *harness) waitForPresented() Result {
 	h.t.Helper()
 	h.await("a result is presented", func() bool { return len(h.surface.presented) > 0 })
 	return h.surface.presented[0]
-}
-
-// pngOfSize returns bytes that stand in for a PNG of n bytes, for the image size limit.
-func pngOfSize(n int) []byte {
-	return make([]byte, n)
 }
 
 // awaitTimer advances the fake clock once a timer of d is pending, so a background wait on the clock ends.
