@@ -24,11 +24,17 @@ const (
 	OpDiscard     = "discard"
 
 	OpRefreshMenuBar = "refreshMenuBar"
+	OpRefreshSearch  = "refreshSearch"
 )
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.
 type KeyArgs struct {
 	Key string `json:"key"`
+}
+
+// SearchRefreshArgs names the search query a refresh is for.
+type SearchRefreshArgs struct {
+	Query string `json:"query"`
 }
 
 // KeyValueArgs stores one JSON value under a key, secret name or setting id.

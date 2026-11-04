@@ -37,8 +37,11 @@ type Item struct {
 	// Shortcut is a local shortcut that is active only while this item is selected.
 	Shortcut string `json:"shortcut,omitempty"`
 	// QueryFallback marks an open-ended row that echoes the query (for example a web search row).
-	// Only SearchProvider rows may set it.
+	// Only SearchProvider rows may set it. The host leaves it out while a row with AnswersQuery is shown.
 	QueryFallback bool `json:"queryFallback,omitempty"`
+	// AnswersQuery marks a row that answers the query outright, such as a calculation. The host then leaves out the
+	// QueryFallback rows of the same search. Only SearchProvider rows may set it.
+	AnswersQuery bool `json:"answersQuery,omitempty"`
 	// Score is a ranking hint. The host caps it and combines it with usage signals.
 	Score float64 `json:"score,omitempty"`
 	// LastUsedMs is epoch milliseconds for the item's last use, an intrinsic recency signal.
@@ -79,15 +82,24 @@ type Appearance struct {
 
 // Detail is the inspector content for a side or bottom pane.
 type Detail struct {
-	Title    string     `json:"title,omitempty"`
-	Subtitle string     `json:"subtitle,omitempty"`
-	Text     string     `json:"text,omitempty"`
-	Markdown string     `json:"markdown,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Subtitle string `json:"subtitle,omitempty"`
+	Text     string `json:"text,omitempty"`
+	Markdown string `json:"markdown,omitempty"`
+	// Facts are labelled values drawn large, one pair after another, below the other content. Use them for the
+	// answer a row gives, such as the lines of a calculation.
+	Facts    []Fact     `json:"facts,omitempty"`
 	Metadata []Metadata `json:"metadata,omitempty"`
 	Image    *Image     `json:"image,omitempty"`
 	Video    string     `json:"video,omitempty"`
 	Link     *LinkCard  `json:"link,omitempty"`
 	Actions  []Action   `json:"actions,omitempty"`
+}
+
+// Fact is one labelled value in a detail pane: a small label above the value.
+type Fact struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
 }
 
 // MetadataKind selects the shape of a Metadata row.

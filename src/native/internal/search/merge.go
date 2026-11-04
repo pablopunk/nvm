@@ -9,20 +9,31 @@ import (
 const DefaultLimit = 40
 
 // merge combines the rows of several providers into one result: rows with an ID are de-duplicated by ID
-// and Kind (the first provider wins), the rows are sorted by score, highest first, with ties in provider
-// order, the result is cut to limit, and the rows are sectioned. searching tells sectioning whether the
-// query is typed, which changes the top hit and the grouping of commands.
-func merge(batches [][]Item, limit int, searching bool) []Item {
+// and Kind (the first provider wins), query fallbacks are held or dropped, the rows are sorted by score, highest
+// first, with ties in provider order, the result is cut to limit, and the rows are sectioned. searching tells
+// sectioning whether the query is typed, which changes the top hit and the grouping of commands. settled is false
+// while some provider is still running.
+func merge(batches [][]Item, limit int, searching, settled bool) []Item {
 	var all []Item
 	for _, items := range batches {
 		all = append(all, items...)
 	}
-	all = dedupe(all)
+	all = withoutQueryFallbacks(dedupe(all), settled)
 	slices.SortStableFunc(all, func(a, b Item) int { return cmp.Compare(b.Score, a.Score) })
 	if limit > 0 && len(all) > limit {
 		all = all[:limit]
 	}
 	return sectioned(all, searching)
+}
+
+// withoutQueryFallbacks drops the query fallbacks an answer makes unnecessary. While a provider is still running, it
+// drops every fallback too: a fallback shown early would vanish when the answer it loses to arrives a moment later.
+func withoutQueryFallbacks(items []Item, settled bool) []Item {
+	answered := slices.ContainsFunc(items, func(it Item) bool { return it.Answers })
+	if answered || !settled {
+		return slices.DeleteFunc(items, func(it Item) bool { return it.QueryFallback })
+	}
+	return items
 }
 
 // dedupeKey identifies a row for de-duplication.

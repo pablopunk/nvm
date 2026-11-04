@@ -65,6 +65,8 @@ type Options struct {
 	OnChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
+	// SearchRefresh receives an extension's RefreshSearch calls. It must not block.
+	SearchRefresh func(extensionID, query string)
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
 }
@@ -120,6 +122,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Clipboard:      ports.Clipboard,
 			Logs:           ports.Logs,
 			MenuBarRefresh: opts.MenuBarRefresh,
+			SearchRefresh:  opts.SearchRefresh,
 
 			Shell:        ports.Shell,
 			Capabilities: ports.Capabilities,

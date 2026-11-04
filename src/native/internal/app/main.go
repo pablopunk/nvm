@@ -5,6 +5,7 @@ import (
 	"log"
 	"runtime"
 	"sync/atomic"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -92,7 +93,10 @@ type App struct {
 	store   *store.Store
 	recents *store.Collection[emojiRecents]
 	rates   *store.Collection[rateDocument]
-	calc    *calc.Calculator
+	// rateCache keeps the exchange rates of the calculator built-in in rates.json; zone is where its calendar answers
+	// are computed (nil means the machine's zone).
+	rateCache calc.RateCache
+	zone      *time.Location
 
 	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
 	// edited, shared by the palette and the floating windows.

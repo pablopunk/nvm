@@ -42,7 +42,7 @@ func syncViewDeps(m *manager.Manager) extview.Deps {
 		},
 		LoadImage: func(ref string, done func(*ui.Bitmap)) { done(loadExtensionBitmap(real.NewPorts().FS, ref)) },
 		OpenURL:   func(string) {},
-		CopyText:  func(string) {},
+		CopyText:  func(search.Host, string) {},
 		Files:     real.NewPorts().FS,
 	}
 }

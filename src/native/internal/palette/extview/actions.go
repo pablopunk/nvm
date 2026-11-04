@@ -58,7 +58,13 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenURL(url) }}
 	case api.ActionCopyText:
 		text := action.Text
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyText(text); h.Hide() }}
+		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyText(h, text) }}
+	case api.ActionPasteText:
+		if s.deps.PasteText == nil {
+			break
+		}
+		text := action.Text
+		return search.Action{Title: title, Run: func(h search.Host) { s.deps.PasteText(h, text) }}
 	case api.ActionPushView:
 		if action.View == nil {
 			break

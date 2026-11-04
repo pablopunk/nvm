@@ -108,18 +108,20 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 }
 
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {
+	deps := p.extensionViewDeps(m)
 	row := search.Item{
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
-		Score: scoreExtension,
+		Score: scoreExtension, Detail: extview.DetailFor(deps, extID, item.Detail),
+		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery,
 	}
 	if m.IsBuiltIn(extID) {
 		row = builtInRow(row, item)
 	}
 	if item.Primary != nil {
-		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, *item.Primary))
+		row.Actions = append(row.Actions, extview.ActionFor(deps, extID, *item.Primary))
 	}
 	for _, action := range item.Actions {
-		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, action))
+		row.Actions = append(row.Actions, extview.ActionFor(deps, extID, action))
 	}
 	return row
 }

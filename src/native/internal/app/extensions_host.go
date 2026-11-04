@@ -80,8 +80,9 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),
 		MenuBarRefresh: p.refreshMenuBar,
+		SearchRefresh:  func(_, query string) { p.RefreshSearch(query) },
 		OnChange:       p.extensionsStateChanged,
-		BuiltIns:       builtInExtensions(),
+		BuiltIns:       builtInExtensions(p.rateCache, p.zone),
 	})
 }
 

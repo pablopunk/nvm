@@ -11,6 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // extensionRunTimeout bounds one action an extension runs from the palette. Actions run off the UI thread.
@@ -50,7 +51,8 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			}()
 		},
 		OpenURL:          func(url string) { _ = mygo.Shell.OpenExternal(url) },
-		CopyText:         func(text string) { mygo.Clipboard.WriteText(text) },
+		CopyText:         func(h search.Host, text string) { p.copyText(h, text) },
+		PasteText:        func(h search.Host, text string) { p.pasteAfterHide(h, textEntry(text)) },
 		OpenSettingsPane: p.openSystemPaneByID,
 		OpenPath:         func(path string) { _ = ports.Shell.OpenPath(path) },
 		RevealPath:       func(path string) { _ = ports.Shell.Reveal(path) },

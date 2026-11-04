@@ -324,7 +324,8 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	for i, s := range c.slots {
 		batches[i] = s.items
 	}
-	snap := Snapshot{Gen: c.gen, Query: c.query, Items: merge(batches, c.limit(), c.query != ""), Settled: c.pending == 0}
+	settled := c.pending == 0
+	snap := Snapshot{Gen: c.gen, Query: c.query, Items: merge(batches, c.limit(), c.query != "", settled), Settled: settled}
 	c.emitted = true
 	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
 	return snap

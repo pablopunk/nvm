@@ -65,6 +65,9 @@ type Deps struct {
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
+	// SearchRefresh asks the palette to search again for a query, for one extension's background data. It must not
+	// block. Nil makes the request a no-op.
+	SearchRefresh func(extensionID, query string)
 }
 
 // documents are the extension's files: one store folder holds all of them.

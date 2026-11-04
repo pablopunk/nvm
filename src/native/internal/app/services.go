@@ -53,6 +53,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 	p.systemSvc = newSystemServices(ports, goos)
 	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
+	p.zone = zone
 	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
 	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
 	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir, store.WithProcesses(ports.Processes))
@@ -76,11 +77,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 		}
 	}
 	p.attachAccount(ports, st)
-	rates, err := calc.NewRateService(ports.HTTP, ports.Clock, cache)
-	if err != nil {
-		log.Println("calculator rates:", err)
-	}
-	p.calc = calc.New(ports.Clock, zone, rates)
+	p.rateCache = cache
 }
 
 // newSystemServices builds the OS capability services over the ports for goos. The settings label is the one goos uses.

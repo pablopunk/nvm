@@ -24,6 +24,7 @@ func SerializableTypes() []reflect.Type {
 		reflect.TypeFor[Image](),
 		reflect.TypeFor[Appearance](),
 		reflect.TypeFor[Detail](),
+		reflect.TypeFor[Fact](),
 		reflect.TypeFor[Metadata](),
 		reflect.TypeFor[LinkCard](),
 		reflect.TypeFor[Action](),

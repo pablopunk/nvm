@@ -311,6 +311,7 @@ func init() {
 		"ErrorCode":               reflect.ValueOf((*api.ErrorCode)(nil)),
 		"ExactFrame":              reflect.ValueOf((*api.ExactFrame)(nil)),
 		"Extension":               reflect.ValueOf((*api.Extension)(nil)),
+		"Fact":                    reflect.ValueOf((*api.Fact)(nil)),
 		"Failure":                 reflect.ValueOf((*api.Failure)(nil)),
 		"FetchRequest":            reflect.ValueOf((*api.FetchRequest)(nil)),
 		"FetchResponse":           reflect.ValueOf((*api.FetchResponse)(nil)),
@@ -1419,6 +1420,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Views struct {
 	WInvalidate     func()
 	WRefresh        func() api.Action
 	WRefreshMenuBar func()
+	WRefreshSearch  func(query string)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) Invalidate() {
@@ -1429,6 +1431,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) Refresh() api.A
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) RefreshMenuBar() {
 	W.WRefreshMenuBar()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Views) RefreshSearch(query string) {
+	W.WRefreshSearch(query)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement is an interface wrapper for WindowManagement type
