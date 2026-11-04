@@ -84,12 +84,13 @@ func (p *App) shortcutLabelOf(accelerator string) string {
 	return p.labeler().Label(accelerator)
 }
 
-// paletteAccessory is the Settings accessory of the palette shortcut. A blank palette shortcut means none.
-func (p *App) paletteAccessory(accelerator string) string {
-	if accelerator == "" {
-		return "None"
+// paletteSettingAccessory is the Settings accessory of the palette shortcut, as 1.x shows it: nothing, or Not active
+// when the OS refused the shortcut.
+func (p *App) paletteSettingAccessory() string {
+	if p.shortcutsManager().PaletteStatus().Unavailable() {
+		return "Not active"
 	}
-	return p.shortcutLabelOf(accelerator)
+	return ""
 }
 
 // paletteChangeMessage is the toast after the palette shortcut changes. A system feature that also holds the key is

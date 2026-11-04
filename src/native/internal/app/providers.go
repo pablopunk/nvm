@@ -177,8 +177,8 @@ func (p *App) settingsView() *palette.View {
 				clip = "Off"
 			}
 			rows := []search.Item{
-				{Title: "Palette Hotkey", Accessory: p.paletteAccessory(p.shortcutsManager().PaletteAccelerator()), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
-				{Title: hyperKeyTitle, Subtitle: hyperKeySubtitle, Accessory: p.hyperAccessory(), Icon: "command", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hyperRecorderView()) }}}},
+				{Title: paletteSettingTitle, Subtitle: paletteSettingSubtitle, Accessory: p.paletteSettingAccessory(), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
+				{Title: hyperKeyTitle, Subtitle: hyperKeySubtitle, Icon: "command", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hyperRecorderView()) }}}},
 				{Title: "Default Search Engine", Accessory: p.engine().Name, Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					i := slices.IndexFunc(engines, func(e engine) bool { return e.Key == p.S.Engine })
 					p.S.Engine = engines[(i+1)%len(engines)].Key

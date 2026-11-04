@@ -15,6 +15,12 @@ const (
 	hyperKeySubtitle = "Key combination displayed as Hyper in shortcut labels"
 )
 
+// paletteSettingTitle and paletteSettingSubtitle are the copy of the palette shortcut setting, as 1.x words it.
+const (
+	paletteSettingTitle    = "Open Nevermind Shortcut"
+	paletteSettingSubtitle = "Optional global keyboard shortcut to open the palette"
+)
+
 // hyperKey is the Hyper key config.json holds. It is read once and kept in step by saveHyperKey. Without a config store
 // it is the default and nothing is cached.
 func (p *App) hyperKey() string {
@@ -30,14 +36,6 @@ func (p *App) hyperKey() string {
 	}
 	p.hyper = &key
 	return key
-}
-
-// hyperAccessory is the Settings accessory of the Hyper Key: the key as it is spelled, or None when it is blank.
-func (p *App) hyperAccessory() string {
-	if key := p.hyperKey(); key != "" {
-		return shortcuts.Label(key, runtime.GOOS)
-	}
-	return "None"
 }
 
 // hyperRecorderView records the Hyper key. Modifiers alone are a Hyper key, and the recording shows no ✦ of its own.

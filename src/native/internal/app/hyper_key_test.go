@@ -1,7 +1,6 @@
 package app
 
 import (
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -9,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
@@ -99,16 +99,23 @@ func TestKeyboardShortcutsRowShowsTheHyperSparkle(t *testing.T) {
 	}
 }
 
-func TestSettingsListShowsTheHyperKeyRow(t *testing.T) {
+// TestSettingsShortcutRowsMatchOneX checks the two shortcut settings: 1.x copy, and no accessory, as 1.x shows none.
+func TestSettingsShortcutRowsMatchOneX(t *testing.T) {
 	p := goldenPalette(t)
+	rows := map[string]search.Item{}
 	for _, row := range p.settingsView().Search("") {
-		if row.Title != hyperKeyTitle {
-			continue
-		}
-		if want := shortcuts.Label(shortcuts.DefaultHyperKey, runtime.GOOS); row.Accessory != want || row.Subtitle != hyperKeySubtitle {
-			t.Fatalf("hyper row = %q / %q, want %q / %q", row.Accessory, row.Subtitle, want, hyperKeySubtitle)
-		}
-		return
+		rows[row.Title] = row
 	}
-	t.Fatal("the settings list has no Hyper Key row")
+	for title, subtitle := range map[string]string{
+		paletteSettingTitle: paletteSettingSubtitle,
+		hyperKeyTitle:       hyperKeySubtitle,
+	} {
+		row, ok := rows[title]
+		if !ok {
+			t.Fatalf("the settings list has no %q row", title)
+		}
+		if row.Subtitle != subtitle || row.Accessory != "" {
+			t.Fatalf("%q row = accessory %q, subtitle %q; want no accessory and subtitle %q", title, row.Accessory, row.Subtitle, subtitle)
+		}
+	}
 }
