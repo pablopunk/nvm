@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -12,21 +13,30 @@ import (
 // takes the keyboard, and the palette's hide does not close it.
 const feedbackBottomGap = 96
 
-// feedbackMessage shows a message the palette could not draw because it was hidden.
-func (p *App) feedbackMessage(message string) {
-	p.showFeedback("Nevermind", message)
+// showPaletteFeedback shows a message the palette could not draw because it was hidden.
+func (p *App) showPaletteFeedback(f palette.Feedback) {
+	p.showFeedback(f.Title, f.Message, f.Tone)
 }
 
-// showFeedback shows title and message in the HUD. It runs on the UI thread. Without the app's window, which only the
-// goldens and tests have, there is no display to show it on, so nothing is shown.
-func (p *App) showFeedback(title, message string) {
+// showFeedback shows title and message in the HUD, read as tone. A message no action named carries the app's name as
+// its title. It runs on the UI thread. Without the app's window, which only the goldens and tests have, there is no
+// display to show it on, so nothing is shown.
+func (p *App) showFeedback(title, message string, tone feedback.Tone) {
 	if p.panel == nil {
 		return
 	}
 	if p.hud == nil {
 		p.hud = feedback.New(p.hudPanel, searchClock, p.hudPosition)
 	}
-	p.hud.Show(title, message)
+	p.hud.Show(feedbackTitle(title), message, tone)
+}
+
+// feedbackTitle is the title a message shows: the action's, or the app's name when no action named it, as 1.x's HUD does.
+func feedbackTitle(title string) string {
+	if title == "" {
+		return "Nevermind"
+	}
+	return title
 }
 
 // hudPanel returns the HUD's window, created on first use and created again once the user has closed it.

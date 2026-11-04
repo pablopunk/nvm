@@ -5,6 +5,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -55,7 +56,7 @@ type Options struct {
 	Focus platform.Focus
 	// Feedback shows a message raised while the palette is hidden, where it outlives the hide, as 1.x's HUD does. Nil
 	// drops such messages.
-	Feedback func(message string)
+	Feedback func(f Feedback)
 	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
 	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, paths []string, draw func())
@@ -190,18 +191,30 @@ func (p *Palette) Hide() {
 	}
 }
 
-// Toast sets the one-line message shown under the search field on the next frame. A message raised while the
-// palette is hidden is not drawn under the field, which belongs to the presentation that is open: it goes to Feedback.
+// Feedback is a message for the user: the title of the action that raised it (empty for the app's name), its text
+// and how it reads.
+type Feedback struct {
+	Title, Message string
+	Tone           feedback.Tone
+}
+
+// Toast sets the one-line message shown under the search field on the next frame.
 func (p *Palette) Toast(msg string) {
+	p.Notify(Feedback{Message: msg})
+}
+
+// Notify shows f under the search field when the palette is up. A message raised while the palette is hidden is not
+// drawn under the field, which belongs to the presentation that is open: it goes to Feedback.
+func (p *Palette) Notify(f Feedback) {
 	if p.win == nil {
 		return
 	}
 	if p.win.IsVisible() {
-		p.toastMsg = msg
+		p.toastMsg = f.Message
 		return
 	}
 	if p.opts.Feedback != nil {
-		p.opts.Feedback(msg)
+		p.opts.Feedback(f)
 	}
 }
 

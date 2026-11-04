@@ -39,7 +39,7 @@ func calcItem(p *App, r calc.Result) search.Item {
 	if r.Raw != r.Display {
 		actions = append(actions, search.Action{Title: "Copy Unformatted Result", Run: func(h search.Host) { p.copyText(h, r.Raw) }})
 	}
-	actions = append(actions, search.Action{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.pasteAfterHide(h, textEntry(r.Copy)) }})
+	actions = append(actions, search.Action{Title: "Paste Result", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) { p.pasteAfterHide(h, "Paste Result", textEntry(r.Copy)) }})
 	return search.Item{
 		Kind: search.KindCalculator, Title: r.Title, Subtitle: r.Subtitle, Icon: "calculator", Tone: "orange",
 		Score: scoreCalculator, Detail: calcDetail(r.Detail), Actions: actions,

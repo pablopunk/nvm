@@ -29,13 +29,13 @@ func TestToastShowsOnTheOpenPalette(t *testing.T) {
 // TestToastRaisedWhileHiddenGoesToFeedback checks a message from a background job while the palette is hidden reaches the
 // feedback HUD, which outlives the hide, instead of being dropped.
 func TestToastRaisedWhileHiddenGoesToFeedback(t *testing.T) {
-	var fed []string
+	var fed []Feedback
 	h := newHarness(t, rowsView("Root", new([]string), "Alpha"), true, func(o *Options) {
-		o.Feedback = func(msg string) { fed = append(fed, msg) }
+		o.Feedback = func(f Feedback) { fed = append(fed, f) }
 	})
 	h.p.Hide()
 	h.p.Toast("Paste failed. The item is on the clipboard.")
-	if len(fed) != 1 || fed[0] != "Paste failed. The item is on the clipboard." {
-		t.Fatalf("feedback got %q while the palette was hidden", fed)
+	if len(fed) != 1 || fed[0].Message != "Paste failed. The item is on the clipboard." {
+		t.Fatalf("feedback got %+v while the palette was hidden", fed)
 	}
 }

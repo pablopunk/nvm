@@ -96,7 +96,7 @@ func emojiKind(e emoji.Entry) string {
 func (p *App) emitEmoji(h search.Host, e emoji.Entry, glyph string, paste bool) {
 	p.rememberEmoji(e)
 	if paste {
-		p.pasteAfterHide(h, textEntry(glyph))
+		p.pasteAfterHide(h, pasteActionTitle, textEntry(glyph))
 		return
 	}
 	p.copyText(h, glyph)

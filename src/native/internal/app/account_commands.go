@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -37,9 +38,17 @@ func (p *App) signOutFromRoot(search.Host) {
 		revoked := session.SignOut(ctx)
 		p.onUI(func() {
 			p.refreshAccountPage()
-			p.showFeedback("Nevermind Account", signOutMessage(email, revoked))
+			p.showFeedback("Nevermind Account", signOutMessage(email, revoked), signOutTone(revoked))
 		})
 	})
+}
+
+// signOutTone reads a sign-out the server did not revoke as an error, as 1.x does.
+func signOutTone(revoked bool) feedback.Tone {
+	if revoked {
+		return feedback.ToneSuccess
+	}
+	return feedback.ToneError
 }
 
 // signOutMessage says what signing out did. A token the backend did not revoke is said out loud, because the session

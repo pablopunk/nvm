@@ -243,7 +243,7 @@ func (p *App) runClipPaste(h search.Host, id string) {
 		h.Toast("That item is no longer in clipboard history.")
 		return
 	}
-	p.pasteAfterHide(h, entry)
+	p.pasteAfterHide(h, pasteActionTitle, entry)
 }
 
 // clipChangeMessage says why a change to the history was refused.

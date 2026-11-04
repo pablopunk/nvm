@@ -14,8 +14,29 @@ import (
 // Width is the panel's width in DIPs; its height follows the message.
 const Width = 320
 
-// Duration is how long a message stays on the HUD, as 1.x's feedback does for a message without an error.
+// Tone is how a message reads. An error stays up longer than the rest, as 1.x's feedback does.
+type Tone int
+
+// The tones a message can have.
+const (
+	ToneDefault Tone = iota
+	ToneSuccess
+	ToneError
+)
+
+// Duration is how long a message without an error stays on the HUD, as 1.x's feedback does.
 const Duration = 2200 * time.Millisecond
+
+// ErrorDuration is how long an error stays on the HUD, as 1.x's feedback does.
+const ErrorDuration = 4000 * time.Millisecond
+
+// DurationOf returns how long a message of tone stays on the HUD.
+func DurationOf(tone Tone) time.Duration {
+	if tone == ToneError {
+		return ErrorDuration
+	}
+	return Duration
+}
 
 // Window is the HUD's panel. The composition root creates it and it runs on the UI thread, as the palette's does.
 type Window interface {
@@ -47,8 +68,9 @@ func New(panel func() Window, clock platform.Clock, position func(w, h int) (x, 
 }
 
 // Show puts title and message on the panel, sizes the panel to fit the message, shows it without taking the keyboard,
-// and hides it after Duration. A message that arrives while another is up replaces it and starts the wait again.
-func (h *HUD) Show(title, message string) {
+// and hides it after the duration of tone. A message that arrives while another is up replaces it and starts the wait
+// again.
+func (h *HUD) Show(title, message string, tone Tone) {
 	w := h.panel()
 	h.generation++
 	generation := h.generation
@@ -62,12 +84,12 @@ func (h *HUD) Show(title, message string) {
 	if !w.IsVisible() {
 		w.ShowInactive()
 	}
-	go h.hideAfterDuration(w, generation)
+	go h.hideAfterDuration(w, generation, DurationOf(tone))
 }
 
-// hideAfterDuration waits for Duration and hides the panel, unless a newer message has taken it over.
-func (h *HUD) hideAfterDuration(w Window, generation int) {
-	<-h.clock.After(Duration)
+// hideAfterDuration waits for d and hides the panel, unless a newer message has taken it over.
+func (h *HUD) hideAfterDuration(w Window, generation int, d time.Duration) {
+	<-h.clock.After(d)
 	w.Update(func() {
 		if generation == h.generation {
 			w.Hide()

@@ -86,7 +86,7 @@ func TestShowPutsTheMessageUpWithoutTheKeyboardAndHidesItAfterDuration(t *testin
 	clock := fake.NewClock()
 	hud, panel := newTestHUD(clock)
 
-	hud.Show("Nevermind", "Pasted")
+	hud.Show("Nevermind", "Pasted", ToneDefault)
 	panel.drain()
 	if !panel.visible || panel.shows != 1 || hud.title != "Nevermind" || hud.message != "Pasted" {
 		t.Fatalf("after Show: visible=%v shows=%d title=%q message=%q", panel.visible, panel.shows, hud.title, hud.message)
@@ -108,11 +108,11 @@ func TestANewerMessageRestartsTheWaitAndSurvivesAnOlderHide(t *testing.T) {
 	clock := fake.NewClock()
 	hud, panel := newTestHUD(clock)
 
-	hud.Show("Nevermind", "Paste failed.")
+	hud.Show("Nevermind", "Paste failed.", ToneDefault)
 	panel.drain()
 	clock.AwaitTimers(1)
 	clock.Advance(Duration - 100*time.Millisecond)
-	hud.Show("Nevermind", "Pasted")
+	hud.Show("Nevermind", "Pasted", ToneDefault)
 	panel.drain()
 	clock.AwaitTimers(2)
 	clock.Advance(200 * time.Millisecond)
@@ -139,5 +139,40 @@ func TestHeightGrowsWithTheMessageUpToThreeLines(t *testing.T) {
 	}
 	if got := Height(strings.Repeat("x", 10*charsPerLine)); got != baseHeight+(maxLines-1)*lineHeight {
 		t.Fatalf("a long message is %d high, want the three-line height", got)
+	}
+}
+
+// TestDurationOfKeepsErrorsUpLongerThanTheRest pins 1.x's durations: an error stays four seconds, anything else 2.2.
+func TestDurationOfKeepsErrorsUpLongerThanTheRest(t *testing.T) {
+	if got := DurationOf(ToneError); got != 4*time.Second {
+		t.Fatalf("an error stays up %v, want 4s", got)
+	}
+	for _, tone := range []Tone{ToneDefault, ToneSuccess} {
+		if got := DurationOf(tone); got != 2200*time.Millisecond {
+			t.Fatalf("tone %d stays up %v, want 2.2s", tone, got)
+		}
+	}
+}
+
+// TestAnErrorIsStillUpAfterTheDurationOfOtherMessages checks the HUD on the clock: an error hides only after its own
+// four seconds.
+func TestAnErrorIsStillUpAfterTheDurationOfOtherMessages(t *testing.T) {
+	clock := fake.NewClock()
+	hud, panel := newTestHUD(clock)
+
+	hud.Show("Paste", "Paste failed. The item is on the clipboard.", ToneError)
+	panel.drain()
+	clock.AwaitTimers(1)
+	clock.Advance(Duration)
+	panel.drain()
+	if !panel.visible {
+		t.Fatal("an error hid after the duration of an ordinary message")
+	}
+
+	clock.Advance(ErrorDuration - Duration)
+	panel.awaitUpdate(t)
+	panel.drain()
+	if panel.visible {
+		t.Fatal("the error did not hide after its own duration")
 	}
 }

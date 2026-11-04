@@ -5,6 +5,8 @@ import (
 	"errors"
 
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -43,10 +45,13 @@ func (p *App) waitPaletteHidden(ctx context.Context) error {
 	}
 }
 
-// pasteAfterHide hides the palette and pastes e into the app that had focus. Stale hide signals are dropped
-// first, so the paste waits for this hide. The paste runs on its own goroutine, because it waits for the hide the
-// UI thread is in the middle of.
-func (p *App) pasteAfterHide(h search.Host, e clipboard.Entry) {
+// pasteActionTitle is the title of the paste action that copies, emoji and snippets offer. The HUD names a paste by it.
+const pasteActionTitle = "Paste"
+
+// pasteAfterHide hides the palette and pastes e into the app that had focus, for the action titled title. Stale hide
+// signals are dropped first, so the paste waits for this hide. The paste runs on its own goroutine, because it waits
+// for the hide the UI thread is in the middle of.
+func (p *App) pasteAfterHide(h search.Host, title string, e clipboard.Entry) {
 	select {
 	case <-p.paletteHidden:
 	default:
@@ -55,11 +60,16 @@ func (p *App) pasteAfterHide(h search.Host, e clipboard.Entry) {
 	clip := p.clip
 	safego.Go(clipPasteName, func(context.Context) {
 		if err := clip.paste(e); err != nil {
-			p.toastFromBackground(pasteFailureMessage(err))
+			p.feedbackFromBackground(pasteFailedFeedback(title, err))
 			return
 		}
-		p.redraw(func() { p.showFeedback("Nevermind", "Pasted") })
+		p.redraw(func() { p.showFeedback(title, "Pasted", feedback.ToneDefault) })
 	})
+}
+
+// pasteFailedFeedback is the error the HUD shows for a paste that failed, under the title of the action that tried it.
+func pasteFailedFeedback(title string, err error) palette.Feedback {
+	return palette.Feedback{Title: title, Message: pasteFailureMessage(err), Tone: feedback.ToneError}
 }
 
 // pasteFailureMessage says what went wrong in a paste, in words the user can act on.
@@ -98,6 +108,11 @@ func (p *App) redraw(fn func()) {
 		return
 	}
 	p.panel.Update(fn)
+}
+
+// feedbackFromBackground shows f from a background goroutine, under the field or in the HUD, as the palette is up.
+func (p *App) feedbackFromBackground(f palette.Feedback) {
+	p.redraw(func() { p.Notify(f) })
 }
 
 // toastFromBackground shows a one-line message from a background goroutine.
