@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"image"
 	"io/fs"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,7 @@ type outcome struct {
 // golden or a size mismatch, and writes the actual frame and a diff image under testdata/golden/_failures/.
 func Assert(t *testing.T, name string, view func(c *ui.Context), opts Options) {
 	t.Helper()
+	requireGoldenHost(t)
 	result, err := check(name, view, withDefaults(opts), t.Name())
 	if err != nil {
 		t.Fatal(err)
@@ -69,6 +71,7 @@ func Assert(t *testing.T, name string, view func(c *ui.Context), opts Options) {
 // light-1x, light-2x, dark-1x and dark-2x. The Dark and Scale fields of opts are replaced.
 func AssertMatrix(t *testing.T, name string, view func(c *ui.Context), opts Options) {
 	t.Helper()
+	requireGoldenHost(t)
 	for _, dark := range []bool{false, true} {
 		for _, scale := range []float32{1, 2} {
 			variant := opts
@@ -78,6 +81,19 @@ func AssertMatrix(t *testing.T, name string, view func(c *ui.Context), opts Opti
 				Assert(t, name, view, variant)
 			})
 		}
+	}
+}
+
+// goldenHost is the only OS whose text rendering matches the committed goldens: Linux with the Debian 13 fonts the
+// CI job and the rig image install. Other systems draw text with their own fonts and rasterizers.
+const goldenHost = "linux"
+
+// requireGoldenHost skips the calling test when the host is not goldenHost. Every comparison in this package calls
+// it, so tests that render views never repeat a platform check of their own.
+func requireGoldenHost(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != goldenHost {
+		t.Skipf("golden %s: goldens are rendered on %s with Debian 13 fonts; %s draws text differently, so the frame is not compared", t.Name(), goldenHost, runtime.GOOS)
 	}
 }
 

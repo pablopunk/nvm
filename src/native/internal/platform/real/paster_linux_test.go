@@ -15,7 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// installFakeXdotool puts an executable named xdotool on a private PATH and points DISPLAY at it, so pasteSupported
+// installFakeXdotool puts an executable named xdotool on a private PATH and points DISPLAY at it, so pasteCapable
 // sees an X11 session with the tool installed. The tool itself is never run: the helper is scripted.
 func installFakeXdotool(t *testing.T) {
 	t.Helper()
@@ -69,13 +69,13 @@ func TestX11PasteIsUnsupportedWithoutXdotoolOrOnWayland(t *testing.T) {
 
 	installFakeXdotool(t)
 	t.Setenv("XDG_SESSION_TYPE", "wayland")
-	if pasteSupported() {
+	if pasteCapable("linux", os.Getenv, programInstalled) {
 		t.Fatal("a Wayland session reports paste as supported")
 	}
 
 	installFakeXdotool(t)
 	t.Setenv("DISPLAY", "")
-	if pasteSupported() {
+	if pasteCapable("linux", os.Getenv, programInstalled) {
 		t.Fatal("a session without DISPLAY reports paste as supported")
 	}
 }

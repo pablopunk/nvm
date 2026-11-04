@@ -9,10 +9,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
+// requireUnixShell skips the tests that run /bin/sh on Windows, which has no such program. macOS and Linux both ship it.
 func requireUnixShell(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS != "linux" {
-		t.Skip("helper tests run /bin/sh and are verified on Linux only")
+	if runtime.GOOS == "windows" {
+		t.Skip("helper tests run /bin/sh, which Windows does not have")
 	}
 }
 

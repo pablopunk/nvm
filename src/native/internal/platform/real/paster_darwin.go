@@ -14,12 +14,6 @@ import (
 // closest port error, because System Events reports a missing permission as a script error.
 const macPasteScript = `tell application "System Events" to keystroke "v" using command down`
 
-// pasteSupported reports whether this build pastes on macOS. It is reported as supported so the paste action
-// appears; it is UNTESTED until the L5 macOS run passes.
-func pasteSupported() bool {
-	return true
-}
-
 // pasteGesture runs the osascript paste. expectedAppID is not checked on macOS in this build.
 func pasteGesture(ctx context.Context, helper platform.Helper, _ string) error {
 	result, err := helper.Run(ctx, "osascript", []string{"-e", macPasteScript}, nil)

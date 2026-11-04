@@ -21,12 +21,6 @@ const macosCallTimeout = 5 * time.Second
 // helperUnreadable is the copy when the helper's answer is not an envelope.
 const helperUnreadable = "The window helper returned an unreadable response."
 
-// windowManagementSupported is true on macOS. Access is reported per call, so a missing Accessibility grant
-// shows as denied in the commands rather than hiding them.
-func windowManagementSupported() bool {
-	return true
-}
-
 func newWindowManager(helper platform.Helper) platform.WindowManager {
 	return macWindows{helper: helper, binary: macosHelperPath()}
 }

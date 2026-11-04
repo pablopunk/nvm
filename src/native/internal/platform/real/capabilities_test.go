@@ -43,7 +43,8 @@ func TestFocusReturnNeedsAnX11SessionAndXdotool(t *testing.T) {
 		tools map[string]bool
 		wants bool
 	}{
-		{"X11 with xdotool", "linux", map[string]string{"XDG_SESSION_TYPE": "x11"}, map[string]bool{"xdotool": true}, true},
+		{"X11 with xdotool", "linux", map[string]string{"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}, map[string]bool{"xdotool": true}, true},
+		{"X11 tools without a display", "linux", map[string]string{"XDG_SESSION_TYPE": "x11"}, map[string]bool{"xdotool": true}, false},
 		{"X11 without xdotool", "linux", nil, nil, false},
 		{"Wayland with xdotool", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, map[string]bool{"xdotool": true}, false},
 		{"macOS keeps its own focus", "darwin", nil, map[string]bool{"xdotool": true}, false},

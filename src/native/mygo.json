@@ -23,7 +23,7 @@
     "maintainer": "Pablo Varela <pablo@pablopunk.com>",
     "comment": "Command palette for files, apps, the clipboard and AI",
     "categories": ["Utility"],
-    "depends": ["libsecret-1-0", "libayatana-appindicator3-1", "pulseaudio-utils"],
+    "depends": ["libsecret-1-0", "libayatana-appindicator3-1", "libgtk-layer-shell0", "pulseaudio-utils"],
     "webview": false,
     "command": "nevermind-next"
   }
