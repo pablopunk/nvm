@@ -25,6 +25,7 @@ func NewPorts() platform.Ports {
 		Processes:    processes{},
 		Helper:       helper{},
 		Hotkeys:      hotkeys{},
+		Focus:        newFocus(),
 		Tray:         trayHost{},
 		Autostart:    autostart{},
 		Capabilities: Capabilities(),

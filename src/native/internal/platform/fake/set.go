@@ -19,6 +19,7 @@ type Set struct {
 	Processes    *Processes
 	Helper       *Helper
 	Hotkeys      *Hotkeys
+	Focus        *Focus
 	Tray         *TrayHost
 	Autostart    *Autostart
 	Capabilities platform.Capabilities
@@ -42,6 +43,7 @@ func NewSet() *Set {
 		Processes:    NewProcesses(),
 		Helper:       NewHelper(),
 		Hotkeys:      NewHotkeys(),
+		Focus:        NewFocus(),
 		Tray:         NewTrayHost(),
 		Autostart:    NewAutostart(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
@@ -66,6 +68,7 @@ func (s *Set) Ports() platform.Ports {
 		Processes:    s.Processes,
 		Helper:       s.Helper,
 		Hotkeys:      s.Hotkeys,
+		Focus:        s.Focus,
 		Tray:         s.Tray,
 		Autostart:    s.Autostart,
 		Capabilities: s.Capabilities,

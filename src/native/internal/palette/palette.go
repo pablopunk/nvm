@@ -43,6 +43,9 @@ type Options struct {
 	History *QueryHistory
 	// Learner ranks and records the rows that carry a LearnKey. Nil disables learning.
 	Learner search.Learner
+	// Focus gives the keyboard back to the window that had it when the palette was shown, when the palette hides
+	// without an action that chose its own destination. Nil disables it.
+	Focus platform.Focus
 	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
 	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, paths []string, draw func())
@@ -66,6 +69,8 @@ type Palette struct {
 
 	toastMsg string
 	notice   *Notice
+	// returnTo is the window the keyboard goes back to when the palette hides, captured when it was shown.
+	returnTo *platform.FocusTarget
 	// shows counts the times the palette was shown, so a delayed dismissal can tell it was shown again.
 	shows int
 	// announcedNotice is the alert assistive technology was last told about.
@@ -101,6 +106,9 @@ func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 
 // Show shows the palette on the first level with every search reset, then runs OnShow.
 func (p *Palette) Show() {
+	if !p.win.IsVisible() {
+		p.captureFocus()
+	}
 	p.shows++
 	if p.opts.Position != nil {
 		w, h := p.win.Size()
@@ -142,6 +150,7 @@ func (p *Palette) Open(v *View) {
 // Hide closes the palette window and runs OnHide.
 func (p *Palette) Hide() {
 	p.win.Hide()
+	p.returnFocus()
 	if p.opts.OnHide != nil {
 		p.opts.OnHide()
 	}
