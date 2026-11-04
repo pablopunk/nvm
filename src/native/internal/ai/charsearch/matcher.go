@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 )
 
 // allCategory is the category that searches every group, as the picker's "All Characters" does.
@@ -24,17 +24,18 @@ const cacheLimit = 32
 type Matcher struct {
 	groups  []string
 	byGroup map[string][]Record
-	window  *callWindow
+	window  *quota.Window
 
 	mu    sync.Mutex
 	cache map[string][]Record
 	order []string
 }
 
-// NewMatcher returns a matcher over the catalog, in the order the records are given.
-func NewMatcher(records []Record, clock platform.Clock) *Matcher {
+// NewMatcher returns a matcher over the catalog, in the order the records are given. Its decision calls count against
+// window, the owner's shared call count.
+func NewMatcher(records []Record, window *quota.Window) *Matcher {
 	groups, byGroup := semanticGroupsOf(records)
-	return &Matcher{groups: groups, byGroup: byGroup, window: newCallWindow(clock), cache: map[string][]Record{}}
+	return &Matcher{groups: groups, byGroup: byGroup, window: window, cache: map[string][]Record{}}
 }
 
 // Matches returns the characters the model finds a match for the text in category, best first. Text shorter than

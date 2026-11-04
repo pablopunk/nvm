@@ -3,17 +3,26 @@ package services
 import (
 	"errors"
 
+	aiquota "github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
 // Per-extension limits of the AI service. A model call, a decision and a stream each count once; a stream's pulls and
-// an abort do not. The call rate is 1.x's: 30 a minute.
+// an abort do not. The call rate is 1.x's: 30 a minute, counted with the picker's decisions.
 const (
-	aiCallsPerMinute = 30
-	maxOpenStreams   = 4
-	maxSessions      = 8
-	sessionMessages  = 40
+	maxOpenStreams  = 4
+	maxSessions     = 8
+	sessionMessages = 40
 )
+
+// aiCallWindow is the call count of one extension. With a registry it is the count the app shares with the picker's
+// decisions for the same owner; without one the extension counts alone.
+func aiCallWindow(deps Deps, extensionID string) *aiquota.Window {
+	if deps.AIQuota == nil {
+		return aiquota.NewWindow(deps.Clock, aiquota.CallsPerMinute)
+	}
+	return deps.AIQuota.For(extensionID)
+}
 
 // aiRateExceeded is the quota refusal of the AI call limiter, in the words 1.x uses.
 func aiRateExceeded() error {

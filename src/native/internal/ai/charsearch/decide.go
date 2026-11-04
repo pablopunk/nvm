@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/backend"
 )
 
@@ -24,11 +25,11 @@ type Decider interface {
 // askFunc sends one batch of questions about the search text and returns the answers.
 type askFunc func(questions []backend.DecisionQuestion) (backend.DecisionResult, error)
 
-// askModel is the askFunc of one search: each batch is counted against the rate limit, then sent with the decision
-// timeout, as 1.x's ai.decide does.
-func askModel(ctx context.Context, decider Decider, window *callWindow, query string) askFunc {
+// askModel is the askFunc of one search: each batch is counted against the owner's shared call window, then sent with
+// the decision timeout, as 1.x's ai.decide does.
+func askModel(ctx context.Context, decider Decider, window *quota.Window, query string) askFunc {
 	return func(questions []backend.DecisionQuestion) (backend.DecisionResult, error) {
-		if !window.allow() {
+		if !window.Allow() {
 			return backend.DecisionResult{}, ErrRateLimited
 		}
 		ctx, cancel := context.WithTimeout(ctx, DecisionTimeout)

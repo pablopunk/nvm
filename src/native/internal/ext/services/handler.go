@@ -3,7 +3,7 @@
 // with that extension's namespace, its declared capabilities and its quotas. Nothing here takes an extension id
 // from the call, so one extension cannot name another's data.
 //
-// Layer: ext. The package imports api, protocol, store, logx, features/calc, platform and the standard library.
+// Layer: ext. The package imports api, protocol, store, logx, features/calc, ai/extai, ai/quota, platform and the standard library.
 package services
 
 import (
@@ -15,6 +15,7 @@ import (
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	aiquota "github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
@@ -71,6 +72,9 @@ type Deps struct {
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.
 	AI *extai.Service
+	// AIQuota shares each extension's model-call count with the app's other callers of the same owner. Nil counts
+	// each extension alone.
+	AIQuota *aiquota.Registry
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
@@ -99,7 +103,7 @@ type Handler struct {
 	indicatorUpdates *rateLimiter
 	ocrReads         *rateLimiter
 	screenReads      *rateLimiter
-	aiCalls          *rateLimiter
+	aiCalls          *aiquota.Window
 	ai               *aiState
 	openOnce         sync.Once
 	openErr          error
@@ -130,7 +134,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
 		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
 		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
-		aiCalls:          newRateLimiter(deps.Clock, aiCallsPerMinute),
+		aiCalls:          aiCallWindow(deps, manifest.ID),
 		ai:               newAIState(),
 	}
 }

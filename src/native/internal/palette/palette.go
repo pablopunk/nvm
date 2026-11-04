@@ -389,16 +389,3 @@ func (p *Palette) enabledNear(i, requested int) int {
 	}
 	return i
 }
-
-// focusInput gives the keyboard to the text input of the page on top: the input the page draws itself when it owns
-// one, otherwise the search field. A view that hides its field hands the keyboard to its list once the list is built.
-func (p *Palette) focusInput() {
-	if owned := p.cur().Input; owned != nil {
-		owned.Focus()
-		p.focusList = false
-		return
-	}
-	p.input.Focus()
-	v := p.cur()
-	p.focusList = v.HideInput && v.Body == nil
-}

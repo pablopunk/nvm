@@ -23,10 +23,14 @@ func (p *App) characters() *characterSearch {
 		p.characterSearch = &characterSearch{}
 	}
 	if p.characterSearch.matcher == nil {
-		p.characterSearch.matcher = charsearch.NewMatcher(characterRecords(), p.ports.Clock)
+		p.characterSearch.matcher = charsearch.NewMatcher(characterRecords(), p.aiQuotas().For(emojiPickerQuotaOwner))
 	}
 	return p.characterSearch
 }
+
+// emojiPickerQuotaOwner is the owner of the picker's decision calls: the emoji built-in's extension id, so its calls
+// count against the same limit as that extension's own model calls.
+const emojiPickerQuotaOwner = "emoji-symbols"
 
 // characterRecords is the emoji catalog as the matcher reads it, in catalog order.
 func characterRecords() []charsearch.Record {

@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"log"
 	"runtime"
 	"sync/atomic"
@@ -79,6 +80,8 @@ type App struct {
 	clip        *clipEngine
 	// characterSearch is the Emoji & Symbols picker's meaning batch; see emoji_meaning.go.
 	characterSearch *characterSearch
+	// quotas are the model-call counts by owner, shared by the extensions and the picker's decisions.
+	quotas *quota.Registry
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
 	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.

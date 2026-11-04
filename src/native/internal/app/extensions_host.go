@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/platform/folders"
 	"log"
 	"os"
@@ -92,7 +93,16 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		MenuBarRefresh: p.refreshMenuBar,
 		OnChange:       p.extensionsStateChanged,
 		BuiltIns:       builtInExtensions(),
+		AIQuota:        p.aiQuotas(),
 	})
+}
+
+// aiQuotas is the app's model-call counts, one per owner: each extension, and the picker under its built-in id.
+func (p *App) aiQuotas() *quota.Registry {
+	if p.quotas == nil {
+		p.quotas = quota.NewRegistry(p.ports.Clock, quota.CallsPerMinute)
+	}
+	return p.quotas
 }
 
 // extensionAI is the model call service extensions use. It shares the app's account and OCR, so a call made while

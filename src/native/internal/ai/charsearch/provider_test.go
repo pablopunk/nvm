@@ -23,7 +23,7 @@ func rowsOf(matches []Record) []search.Item {
 
 // providerFor returns the provider over the test catalog, with the typing pause of the clock.
 func providerFor(model Decider, clock *fake.Clock, pause time.Duration) Provider {
-	return NewProvider(Options{Decider: model, Matcher: NewMatcher(testCatalog, fake.NewClock()), Category: allCategory, Clock: clock, Pause: pause, Rows: rowsOf})
+	return NewProvider(Options{Decider: model, Matcher: NewMatcher(testCatalog, testWindow(fake.NewClock())), Category: allCategory, Clock: clock, Pause: pause, Rows: rowsOf})
 }
 
 // collect runs a search and returns the batches it emitted.

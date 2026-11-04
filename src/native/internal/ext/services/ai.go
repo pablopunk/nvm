@@ -107,7 +107,7 @@ func (h *Handler) requireAIReads(attachments []api.Attachment) error {
 
 // allowAICall takes one call from the extension's AI rate limit.
 func (h *Handler) allowAICall() error {
-	if !h.aiCalls.allow() {
+	if !h.aiCalls.Allow() {
 		return aiRateExceeded()
 	}
 	return nil

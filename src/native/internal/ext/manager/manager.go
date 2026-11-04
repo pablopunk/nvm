@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -73,6 +74,8 @@ type Options struct {
 	OnChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
+	// AIQuota shares each extension's model-call count with the app's other callers of the same owner.
+	AIQuota *quota.Registry
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
 }
@@ -128,6 +131,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Clipboard:      ports.Clipboard,
 			Logs:           ports.Logs,
 			MenuBarRefresh: opts.MenuBarRefresh,
+			AIQuota:        opts.AIQuota,
 
 			Shell:        ports.Shell,
 			Commands:     ports.Commands,
