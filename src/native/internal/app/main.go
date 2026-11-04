@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
@@ -104,6 +105,9 @@ type App struct {
 	dictationPref   dictationPrefs
 	dictationWindow *mygo.Window
 	dictationView   palindicator.State
+	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
+	aiCommands *commands.Service
+	aiPanel    *aiIndicator
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -164,6 +168,7 @@ func (p *App) ready() {
 		p.clip.flush()
 	})
 	p.attachChats()
+	p.attachAICommands()
 	notices := p.openLearning()
 	p.startAppServices()
 	p.newPalette(searchClock, false)

@@ -45,6 +45,9 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if pasteSupported() {
 		supported = append(supported, platform.CapabilityClipboardPaste)
 	}
+	if selectionCopySupported(goos, getenv, hasTool) {
+		supported = append(supported, platform.CapabilitySelectionCopy)
+	}
 	if !isWaylandSession(goos, getenv) {
 		supported = append(supported, platform.CapabilityWindowPlacement)
 	}
@@ -91,4 +94,16 @@ func isWaylandSession(goos string, getenv func(string) string) bool {
 // restores the focused window. Wayland and other systems have no such tool here.
 func isX11FocusSession(goos string, getenv func(string) string) bool {
 	return goos == "linux" && !isWaylandSession(goos, getenv)
+}
+
+// selectionCopySupported reports whether the copy gesture can run: on Linux the X11 session with xdotool (the same
+// rule as paste), on macOS always (the osascript gesture is marked UNTESTED until the L5 run), and nowhere else.
+func selectionCopySupported(goos string, getenv func(string) string, hasTool func(string) bool) bool {
+	switch goos {
+	case "linux":
+		return isX11FocusSession(goos, getenv) && hasTool("xdotool")
+	case "darwin":
+		return true
+	}
+	return false
 }
