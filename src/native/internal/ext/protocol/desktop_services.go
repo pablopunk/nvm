@@ -12,6 +12,7 @@ const (
 	ServiceOCR              = "ocr"
 	ServiceSystem           = "system"
 	ServiceShortcuts        = "shortcuts"
+	ServiceAccount          = "account"
 	ServiceDesktopSelection = "desktop.selection"
 	ServiceDesktopKeyboard  = "desktop.keyboard"
 	ServiceDesktopPaste     = "desktop.paste"
@@ -19,6 +20,7 @@ const (
 
 // Operations of the desktop-side services. The names are the host's own; a child never sends a method name.
 const (
+	OpSignedIn      = "signed-in"
 	OpReadText      = "read-text"
 	OpWriteText     = "write-text"
 	OpList          = "list"

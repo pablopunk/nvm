@@ -15,15 +15,13 @@ type rootSource struct {
 // providers_rows.go.
 var rootSources = []rootSource{
 	{id: "timer", rows: timerRows},
-	{id: "quicklinks", rows: quicklinkRows},
 	{id: "snippets", rows: snippetRows},
 	{id: "extensions", provider: extensionProvider},
 	{id: "commands", rows: commandRows},
-	{id: "guide", rows: guideRootRows},
 	{id: "updates", rows: updateRootRows},
 	{id: "applications", rows: applicationRows},
 	{id: "files", provider: rootFileProvider},
 	{id: "clipboard", rows: clipboardRows},
 	{id: "conversations", rows: conversationRows},
-	{id: "web", rows: webRows},
+	{id: "web", rows: automateRows},
 }

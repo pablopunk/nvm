@@ -62,3 +62,14 @@ func (s remoteShortcuts) Palette() api.ShortcutRecord {
 	_ = s.link.Call(protocol.ServiceShortcuts, protocol.OpPalette, nil, &record)
 	return record
 }
+
+// remoteAccount reads whether the palette is signed in. A failed exchange reads as signed out.
+type remoteAccount struct {
+	link *hostLink
+}
+
+func (a remoteAccount) SignedIn() bool {
+	var signedIn bool
+	_ = a.link.Call(protocol.ServiceAccount, protocol.OpSignedIn, nil, &signedIn)
+	return signedIn
+}

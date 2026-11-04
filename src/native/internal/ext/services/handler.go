@@ -66,6 +66,8 @@ type Deps struct {
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
 	Shortcuts ShortcutTable
+	// Account reads the signed-in state of the palette's account. Nil answers unavailable.
+	Account AccountState
 	// Indicators draws the passive indicators. Nil answers unavailable.
 	Indicators IndicatorSurface
 	// Selection reads, replaces and undoes the selected text of the summoned app. Nil answers unavailable.
@@ -236,6 +238,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveSystem(call)
 	case protocol.ServiceShortcuts:
 		return h.serveShortcuts(call)
+	case protocol.ServiceAccount:
+		return h.serveAccount(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

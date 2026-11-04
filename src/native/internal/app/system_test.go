@@ -117,6 +117,6 @@ func TestPaletteOSPermissions(t *testing.T) {
 
 func TestPaletteGettingStartedGuide(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.guideView())
+	openGuide(t, p)
 	golden.AssertMatrix(t, "getting-started", p.View, systemGoldens)
 }

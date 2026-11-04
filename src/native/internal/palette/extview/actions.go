@@ -82,6 +82,16 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		return s.hostOperation(action, title)
 	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery:
 		return s.hostOperation(action, title)
+	case api.ActionAccount:
+		if action.Op != api.AccountSignIn || s.deps.SignIn == nil {
+			break
+		}
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.SignIn(h) }}
+	case api.ActionRecordPaletteShortcut:
+		if s.deps.RecordPaletteShortcut == nil {
+			break
+		}
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.RecordPaletteShortcut(h) }}
 	}
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 }

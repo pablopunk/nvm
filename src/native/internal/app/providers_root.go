@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"slices"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -13,11 +12,9 @@ import (
 
 // rootInput is what the root's providers read. The palette captures it on the UI thread when a query
 // starts and the providers work on it on other goroutines, so nothing in it is edited while they run: maps
-// are copied, the snippets and quicklinks are cloned, and the slices the UI thread replaces as a whole (apps,
+// are copied, the snippets are cloned, and the slices the UI thread replaces as a whole (apps,
 // extensions, file paths) are shared as they are. The clipboard history locks its own state, so it is shared too.
 type rootInput struct {
-	engine     engine
-	quicklinks []Quicklink
 	learn      *usage.Learner
 	apps       []appfeat.App
 	clip       *clipEngine
@@ -58,8 +55,6 @@ func chatLastUsed(created, updated time.Time) int64 {
 func (p *App) captureRoot() *rootInput {
 	chats := p.chatHeads()
 	return &rootInput{
-		engine:       p.engine(),
-		quicklinks:   slices.Clone(p.S.Quicklinks),
 		learn:        p.learn,
 		apps:         p.appsSnapshot(),
 		clip:         p.clip,

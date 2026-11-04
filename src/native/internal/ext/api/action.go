@@ -35,17 +35,25 @@ const (
 	ActionCamera        ActionKind = "camera"
 	ActionOpenPalette   ActionKind = "open-palette"
 	ActionSetQuery      ActionKind = "set-query"
+	// ActionAccount runs an account operation the host owns, such as sign-in.
+	ActionAccount ActionKind = "account"
+	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
+	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
 	// shows "This action is not available yet" when it runs.
 	ActionUnavailable ActionKind = "unavailable"
 )
 
+// AccountSignIn is the account op that starts the sign-in flow.
+const AccountSignIn = "sign-in"
+
 // Op values for the kinds that have sub-operations.
 var (
-	windowOps = []string{"create", "show", "hide", "toggle", "close"}
-	systemOps = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
-	updateOps = []string{"check", "download", "install"}
-	cameraOps = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
+	windowOps  = []string{"create", "show", "hide", "toggle", "close"}
+	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
+	updateOps  = []string{"check", "download", "install"}
+	accountOps = []string{AccountSignIn}
+	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )
 
 // Action is one declarative operation attached to an item, view, command or menu row. Helper
@@ -189,7 +197,7 @@ func (a Action) validateDeclarative() error {
 		if a.View == nil {
 			return errors.New("view is required")
 		}
-	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionUnavailable:
+	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionRecordPaletteShortcut, ActionUnavailable:
 		return nil
 	case ActionShellExec:
 		return validateShell(a.Shell)
@@ -205,6 +213,8 @@ func (a Action) validateDeclarative() error {
 		return validateOp(a.Op, updateOps)
 	case ActionCamera:
 		return validateOp(a.Op, cameraOps)
+	case ActionAccount:
+		return validateOp(a.Op, accountOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

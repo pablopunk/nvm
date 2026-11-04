@@ -25,7 +25,7 @@ const fixtureWaitTimeout = 20 * time.Second
 // Their children are this test binary (see TestMain).
 func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 	t.Helper()
-	return newManagerOver(t, builtInExtensions(nil, time.UTC), enabled...)
+	return newManagerOver(t, builtInExtensions(builtInInputs{Zone: time.UTC}), enabled...)
 }
 
 // newManagerOver is newFixtureManager with the built-ins it runs given: a benchmark passes only the one it measures.

@@ -97,52 +97,6 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []sear
 	return out
 }
 
-// commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
-// for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
-func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult, bound map[string]string) []search.Item {
-	return matchingCommandRows(p, m, result, "", bound, nil)
-}
-
-// matchingCommandRows lists a running extension's commands whose title matches q as a phrase, or every command
-// for the empty query. A failed extension declares none. Each command takes a keyboard shortcut from its action menu.
-func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResult, q string, bound map[string]string, aliases map[string][]string) []search.Item {
-	if result.Failure != nil {
-		return nil
-	}
-	var out []search.Item
-	for _, command := range result.Commands {
-		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
-		if q != "" && !manager.CommandMatches(command, q) && aliasMatchScore(aliases[actionID], q) == 0 {
-			continue
-		}
-		p.shortcutTitles.remember(actionID, command.Title)
-		row := p.withShortcutActions(search.Item{
-			Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
-			Tone: "purple", Score: scoreExtension,
-			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, commandAction(command))},
-		}, actionID, bound)
-		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
-	}
-	return out
-}
-
-// commandAction is the action that runs a command. A command that asks to be dismissed after its run closes the palette
-// as the run is dispatched, so the handler runs over the app the palette was summoned from.
-func commandAction(command api.Command) api.Action {
-	action := api.Run(command.ID, command.Title, nil)
-	action.DismissAfterRun = command.DismissAfterRun
-	return action
-}
-
-// commandSubtitle is the subtitle a command row shows: the command's own, or the extension's title when the command has
-// none, as 1.x shows it. The row's right-edge label already names the extension.
-func commandSubtitle(command api.Command, extensionTitle string) string {
-	if command.Subtitle != "" {
-		return command.Subtitle
-	}
-	return extensionTitle
-}
-
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {
 	deps := p.extensionViewDeps(m)
 	row := search.Item{

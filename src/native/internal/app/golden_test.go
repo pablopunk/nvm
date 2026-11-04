@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 )
 
 // paletteGoldens is the group of the palette goldens under testdata/golden/palette. They are the state of the
@@ -59,7 +60,8 @@ func TestPaletteSnippetForm(t *testing.T) {
 
 func TestPaletteQuicklinkForm(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.quicklinkForm())
+	goldenQuery(p, "create quicklink")
+	itemTitled(t, p, quicklinks.CreateTitle).Actions[0].Run(p)
 	golden.AssertMatrix(t, "quicklink-form", p.View, paletteGoldens)
 }
 
