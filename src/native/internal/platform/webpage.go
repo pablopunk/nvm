@@ -1,5 +1,10 @@
 package platform
 
+// WebPageDocumentURL is where every page's document lives. It is a secure origin that no site serves, so the
+// media APIs of a page (which need a secure context) work the way they do in the Electron palette, and it is the one
+// document a page may stay in: the navigation policy of a view compares against it.
+const WebPageDocumentURL = "https://page.nvm.invalid/"
+
 // WebPages is the intent "show a page of web content inside the app's window": a page the system renders beside
 // native controls, which a view places where it draws it. The page is untrusted: it calls no Go code, and every
 // permission, navigation, window open and title change is decided by the callbacks of its WebPageSpec. Systems

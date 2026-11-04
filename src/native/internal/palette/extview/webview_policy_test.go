@@ -12,6 +12,11 @@ func TestWebviewNavigationTable(t *testing.T) {
 	cases := map[string]bool{
 		"about:blank":                 true,
 		"about:blank#section":         true,
+		"https://page.nvm.invalid/":   true,
+		"https://page.nvm.invalid":    true,
+		"https://page.nvm.invalid/#x": true,
+		"https://page.nvm.invalid/x":  false,
+		"https://page.nvm.invalid.evil.test/": false,
 		"about:blankx":                false,
 		"https://example.test/":       false,
 		"http://example.test/":        false,

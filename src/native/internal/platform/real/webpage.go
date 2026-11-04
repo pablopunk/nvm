@@ -9,6 +9,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
+// pageBackground is the palette's surface in both appearances, which a page fills itself with until it paints its own.
+const pageBackground = "light-dark(#f5f2eb, #1a1f28)"
+
 // errNoWindow is returned while the app has no window to put a page in yet.
 var errNoWindow = errors.New("web pages need the palette window, which is not open yet")
 
@@ -32,8 +35,8 @@ func NewWebPages(window func() WebWindow) platform.WebPages {
 	return webPages{window: window}
 }
 
-// Open makes a transparent, untrusted web view in the window and wires the spec's decisions to its page. The page
-// starts blank; the view loads its document with Load.
+// Open makes an untrusted web view in the window, filled with the palette surface until the page paints, and wires
+// the spec's decisions to its page. The page starts blank; the view loads its document with Load.
 func (w webPages) Open(spec platform.WebPageSpec) (platform.WebPage, error) {
 	if !mygo.WebViewAvailable() {
 		return nil, platform.ErrUnsupported
@@ -42,7 +45,10 @@ func (w webPages) Open(spec platform.WebPageSpec) (platform.WebPage, error) {
 	if win == nil {
 		return nil, errNoWindow
 	}
-	view, err := win.NewWebView(mygo.WebViewOptions{Page: mygo.PageOptions{Untrusted: true}, Transparent: true})
+	view, err := win.NewWebView(mygo.WebViewOptions{
+		Page:            mygo.PageOptions{Untrusted: true},
+		BackgroundColor: pageBackground,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +115,7 @@ func (p *webPage) Native() any {
 // Load replaces the document with html. The page keeps its trust and decisions.
 func (p *webPage) Load(html string) {
 	if !p.isDestroyed() {
-		p.view.Page().LoadHTML(html, "")
+		p.view.Page().LoadHTML(html, platform.WebPageDocumentURL)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // pagePermissions maps the webview permissions an extension may declare to the page permissions the system asks
@@ -37,10 +38,14 @@ func webviewGrant(declared []api.WebviewPermission) func(kinds []string) bool {
 	}
 }
 
-// webviewNavigationAllowed keeps an untrusted page in its own document: about:blank, with or without a fragment.
-// Every other URL, including another origin, is handed to the system instead.
+// webviewNavigationAllowed keeps an untrusted page in its own document, with or without a fragment. A page's first
+// blank document is about:blank, which is its own too. Every other URL, including another origin, goes to the system.
 func webviewNavigationAllowed(rawURL string) bool {
-	return rawURL == "about:blank" || strings.HasPrefix(rawURL, "about:blank#")
+	document, _, _ := strings.Cut(rawURL, "#")
+	if document == "about:blank" {
+		return true
+	}
+	return strings.TrimSuffix(document, "/") == strings.TrimSuffix(platform.WebPageDocumentURL, "/")
 }
 
 // safeExternalURL returns the URL the system may open outside the app: http and https with a host, and mailto. Any
