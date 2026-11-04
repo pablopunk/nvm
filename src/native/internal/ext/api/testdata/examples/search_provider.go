@@ -10,21 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type temperature struct{}
-
-var (
-	_ api.Extension      = temperature{}
-	_ api.SearchProvider = temperature{}
-)
-
-func (temperature) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.temperature", Title: "Temperature"},
-	}
-}
-
-func (temperature) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	value, unit, ok := parseTemperature(query)
 	if !ok {
 		return nil, nil
