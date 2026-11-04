@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -68,8 +69,18 @@ type fixture struct {
 	svc       *Service
 	q         *queue
 	connected bool
+	tools     Toolset
 	noted     []error
 	settled   []Outcome
+}
+
+// newScriptedFixture serves a recorded backend, and offers tools to conversations.
+func newScriptedFixture(t *testing.T, tools Toolset, backend http.Handler) *fixture {
+	t.Helper()
+	f := &fixture{t: t, set: fake.NewSet(), connected: true, tools: tools}
+	f.set.HTTP.Handle(backend)
+	f.build(f.set.HTTP)
+	return f
 }
 
 // newFixture serves the fixture backend over the fake transport.
@@ -115,6 +126,7 @@ func (f *fixture) build(transport platform.HTTP) {
 		Dispatch:  f.q.dispatch,
 		NoteError: func(err error) { f.noted = append(f.noted, err) },
 		OnSettled: func(_ string, outcome Outcome) { f.settled = append(f.settled, outcome) },
+		Tools:     f.tools,
 	})
 }
 

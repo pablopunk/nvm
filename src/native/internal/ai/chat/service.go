@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -25,6 +26,14 @@ type Options struct {
 	SystemPrompt func(kind Kind) string
 	// OnSettled runs on the UI thread after a turn settles and its transcript is saved.
 	OnSettled func(chatID string, outcome Outcome)
+	// Tools are what a conversation may call. The extension builder gets none.
+	Tools Toolset
+}
+
+// Toolset is the tools a conversation may call and the policy each call passes before it runs.
+type Toolset struct {
+	Registry *agent.Registry
+	Policy   agent.Policy
 }
 
 // Service runs the chats: it sends a message, streams the reply into the transcript, stops or repeats a turn,
@@ -201,6 +210,30 @@ func (s *Service) Stop(id string) {
 	}
 }
 
+// Awaiting reports whether a tool call of the chat waits for the user's answer.
+func (s *Service) Awaiting(id string) bool {
+	r, ok := s.runs[id]
+	return ok && r.pending != ""
+}
+
+// Decide answers the tool call the chat is waiting on: allow runs it, refuse tells the model the user said no. It
+// refuses with ErrNothingToDecide when no call waits.
+func (s *Service) Decide(id string, allow bool) error {
+	r, ok := s.runs[id]
+	if !ok || r.pending == "" {
+		return ErrNothingToDecide
+	}
+	callID := r.pending
+	if !r.turn.Decide(callID, allow) {
+		return ErrNothingToDecide
+	}
+	r.pending = ""
+	if allow {
+		s.setToolStatus(id, callID, StatusRunning, "")
+	}
+	return nil
+}
+
 // RefreshModels asks the backend which route each tier resolves to, so the palette can name the models. It runs
 // off the UI thread and changes nothing when the account is not connected.
 func (s *Service) RefreshModels() {
@@ -233,17 +266,40 @@ func (s *Service) startTurn(id string) error {
 			c.Messages = append(c.Messages, s.noticeMessage(SignInNotice()))
 		})
 	}
-	request := Request(s.opts.SystemPrompt(chat.Kind), chat)
+	history := Request(s.opts.SystemPrompt(chat.Kind), chat)
 	err := s.mutate(id, func(c *Chat) {
 		c.Messages = append(c.Messages, s.message(AuthorAssistant, "", StatusStreaming))
 	})
 	if err != nil {
 		return err
 	}
-	r := newRun()
+	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history))
 	s.runs[id] = r
-	go s.execute(id, r, chat.Tier, request)
+	go s.consume(id, r)
 	return nil
+}
+
+// setupFor is the loop setup of a chat: its model tier and, for conversations, the tools.
+func (s *Service) setupFor(chat Chat) agent.Setup {
+	setup := agent.Setup{
+		Model: &routeModel{
+			client:   s.opts.Client,
+			tier:     chat.Tier,
+			dispatch: s.opts.Dispatch,
+			note:     s.noteRoute,
+		},
+		Clock: s.opts.Clock,
+	}
+	if chat.Kind == KindConversation {
+		setup.Tools = s.opts.Tools.Registry
+		setup.Policy = s.opts.Tools.Policy
+	}
+	return setup
+}
+
+// noteRoute keeps the descriptor a tier resolved to, so the palette can name it. It runs on the UI thread.
+func (s *Service) noteRoute(tier Tier, descriptor backend.ModelDescriptor) {
+	s.models[tier] = descriptor
 }
 
 // message builds a transcript entry stamped with the service's clock.

@@ -3,6 +3,7 @@ package chat
 import (
 	"errors"
 
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 )
@@ -23,6 +24,7 @@ const (
 	NoticeOffline          NoticeKind = "offline"
 	NoticeTimeout          NoticeKind = "timeout"
 	NoticeCutOff           NoticeKind = "cut_off"
+	NoticeStepLimit        NoticeKind = "step_limit"
 	NoticeFailed           NoticeKind = "failed"
 	NoticeNote             NoticeKind = "note"
 )
@@ -42,6 +44,7 @@ var (
 	ErrNothingToAsk     = errors.New("chat: there is no message to ask again")
 	ErrNotSignedIn      = errors.New("chat: not signed in")
 	ErrRouteUnsupported = errors.New("chat: the active model speaks a wire format this version cannot read")
+	ErrNothingToDecide  = errors.New("chat: no tool call is waiting for an answer")
 )
 
 // Copy for the notices the service writes. Each line says what the user can do next.
@@ -52,6 +55,7 @@ const (
 	copyTooLarge         = "This chat is too long for one request. Start a new chat to keep going."
 	copyFailed           = "The reply failed. Ask again, or try later."
 	copyEmptyReply       = "The model sent no text. Ask again."
+	copyStepLimit        = "The reply used every step without a final answer. Ask again to keep going."
 )
 
 // SignInNotice is the notice shown when a turn starts without a connected account.
@@ -67,6 +71,9 @@ func NoticeFor(err error, partial string) Notice {
 	}
 	if errors.Is(err, ErrEmptyReply) {
 		return Notice{Kind: NoticeFailed, Title: "No reply", Message: copyEmptyReply}
+	}
+	if errors.Is(err, agent.ErrStepLimit) {
+		return Notice{Kind: NoticeStepLimit, Title: "Step limit reached", Message: copyStepLimit}
 	}
 	if errors.Is(err, ErrRouteUnsupported) {
 		return Notice{Kind: NoticeUpdate, Title: "Update Nevermind", Message: copyRouteUnsupported}
