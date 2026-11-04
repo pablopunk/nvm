@@ -52,6 +52,16 @@ func (m *Manager) commandsOf(ctx context.Context, target runtimeTarget, budget s
 		if err := json.Unmarshal(response.Data, &result.Commands); err != nil {
 			result.Failure = &api.Failure{Code: api.CodeInternal, Message: "commands are not valid"}
 		}
+		applyCommandTitles(result.Commands, target.commandTitles)
 	}
 	return result
+}
+
+// applyCommandTitles gives each command the title the manifest renames it to, when it has one.
+func applyCommandTitles(commands []api.Command, titles map[string]string) {
+	for i := range commands {
+		if title, ok := titles[commands[i].ID]; ok {
+			commands[i].Title = title
+		}
+	}
 }

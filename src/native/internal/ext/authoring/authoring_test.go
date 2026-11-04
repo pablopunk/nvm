@@ -105,3 +105,33 @@ func TestRenameRefusesABlankTitle(t *testing.T) {
 		t.Fatal("a refused rename changed the title")
 	}
 }
+
+// TestRenameCommandSetsOnlyThatCommandTitle checks that a command rename adds its entry to commandTitles and leaves the
+// extension's title and the other entries alone.
+func TestRenameCommandSetsOnlyThatCommandTitle(t *testing.T) {
+	files := fake.NewFS()
+	dir := writeExtension(t, files, "acme.notes", "Notes")
+	if err := RenameCommand(files, dir, "new", " Jot down "); err != nil {
+		t.Fatal(err)
+	}
+	if err := RenameCommand(files, dir, "open", "Open notes"); err != nil {
+		t.Fatal(err)
+	}
+	m := manifestOf(t, files, dir)
+	titles, _ := m["commandTitles"].(map[string]any)
+	if titles["new"] != "Jot down" || titles["open"] != "Open notes" || len(titles) != 2 {
+		t.Fatalf("commandTitles = %v", titles)
+	}
+	if m["title"] != "Notes" {
+		t.Fatalf("extension title changed to %v", m["title"])
+	}
+}
+
+// TestRenameCommandRefusesABlankTitle checks that a blank command name changes nothing.
+func TestRenameCommandRefusesABlankTitle(t *testing.T) {
+	files := fake.NewFS()
+	dir := writeExtension(t, files, "acme.notes", "Notes")
+	if err := RenameCommand(files, dir, "new", "  "); err == nil {
+		t.Fatal("a blank command name was accepted")
+	}
+}

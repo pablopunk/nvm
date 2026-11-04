@@ -24,13 +24,13 @@ const (
 // 1.x order: Duplicate and Submit as PR for an extension the AI builder made, Rename and Tweak with AI for any
 // extension, and Remove action for an extension the builder made. Override with AI and Restore original are not listed:
 // 1.x shows them only for a row with a default action, which no extension row has.
-func (p *App) extensionAuthoringActions(extID, title string) []search.Action {
+func (p *App) extensionAuthoringActions(extID, commandID, title string) []search.Action {
 	owned := p.ownedByBuilder(extID)
 	var out []search.Action
 	if owned {
 		out = append(out, p.duplicateAction(extID))
 	}
-	out = append(out, p.renameAction(extID))
+	out = append(out, p.renameAction(extID, commandID, title))
 	if owned {
 		if action, ok := p.submitAction(extID); ok {
 			out = append(out, action)
@@ -75,21 +75,25 @@ func (p *App) duplicateExtension(extID string) (string, error) {
 	return id, ctl.Enable(id)
 }
 
-// renameAction asks for the extension's new name in a form, as 1.x's Rename prompt does.
-func (p *App) renameAction(extID string) search.Action {
+// renameAction asks for a new name in a form, as 1.x's Rename prompt does. On a command row it renames the command; on an
+// extension's own row it renames the extension.
+func (p *App) renameAction(extID, commandID, title string) search.Action {
 	return search.Action{Title: renameTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		h.Push(p.renameForm(extID))
+		h.Push(p.renameForm(extID, commandID, title))
 	}}
 }
 
-func (p *App) renameForm(extID string) *palette.View {
-	title := p.extensionTitle(extID)
+// renameForm names the item being renamed: the command row's title, or the extension's title for an extension's own row.
+func (p *App) renameForm(extID, commandID, title string) *palette.View {
+	if commandID == "" {
+		title = p.extensionTitle(extID)
+	}
 	return p.formView("Rename \""+title+"\"", []*FormField{{Label: "Name", Value: title, Placeholder: "Enter a new name"}}, func(vals []string) string {
 		dir, ok := p.extensionFolder(extID)
 		if !ok {
 			return "The extension is not installed"
 		}
-		if err := authoring.Rename(p.ports.FS, dir, vals[0]); err != nil {
+		if err := p.renameTarget(dir, commandID, vals[0]); err != nil {
 			return err.Error()
 		}
 		if ctl := p.currentExtensionController(); ctl != nil {
@@ -97,6 +101,14 @@ func (p *App) renameForm(extID string) *palette.View {
 		}
 		return ""
 	})
+}
+
+// renameTarget writes a new title: the command's, or the extension's when no command is named.
+func (p *App) renameTarget(dir, commandID, title string) error {
+	if commandID != "" {
+		return authoring.RenameCommand(p.ports.FS, dir, commandID, title)
+	}
+	return authoring.Rename(p.ports.FS, dir, title)
 }
 
 // extensionFolder returns the folder of an installed extension and whether it is installed.
@@ -138,10 +150,10 @@ func (p *App) removeActionConfirmation(extID, title string) *palette.View {
 
 // withAuthoringActions appends the authoring actions to a row of an extension the user installed. Built-in extensions
 // have no source to author, so their rows are left as they are.
-func (p *App) withAuthoringActions(it search.Item, extID string) search.Item {
+func (p *App) withAuthoringActions(it search.Item, extID, commandID string) search.Item {
 	if p.extensionManager() == nil || p.extensionManager().IsBuiltIn(extID) {
 		return it
 	}
-	it.Actions = append(it.Actions, p.extensionAuthoringActions(extID, it.Title)...)
+	it.Actions = append(it.Actions, p.extensionAuthoringActions(extID, commandID, it.Title)...)
 	return it
 }

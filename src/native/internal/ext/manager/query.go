@@ -72,9 +72,10 @@ func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResu
 
 // runtimeTarget is one enabled runtime and the extension it belongs to.
 type runtimeTarget struct {
-	id      string
-	title   string
-	runtime runner
+	id            string
+	title         string
+	commandTitles map[string]string
+	runtime       runner
 }
 
 // targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
@@ -87,7 +88,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
 		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
-			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, runtime: e.runtime})
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime})
 		}
 	}
 	return targets, m.config.BudgetFor(method)

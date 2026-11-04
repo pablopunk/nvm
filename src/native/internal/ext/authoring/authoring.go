@@ -63,6 +63,29 @@ func Rename(files platform.FS, dir, title string) error {
 	return replaceFile(files, filepath.Join(dir, bundle.ManifestFile), data)
 }
 
+// RenameCommand sets the title of one command in the manifest: the command keeps its id and its code, and shows title.
+func RenameCommand(files platform.FS, dir, commandID, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return errors.New("name is required")
+	}
+	manifest, _, err := readFolder(files, dir)
+	if err != nil {
+		return err
+	}
+	titles, _ := manifest["commandTitles"].(map[string]any)
+	if titles == nil {
+		titles = map[string]any{}
+	}
+	titles[commandID] = title
+	manifest["commandTitles"] = titles
+	data, err := encodeManifest(manifest)
+	if err != nil {
+		return err
+	}
+	return replaceFile(files, filepath.Join(dir, bundle.ManifestFile), data)
+}
+
 func readFolder(files platform.FS, dir string) (map[string]any, []byte, error) {
 	data, err := files.ReadFile(filepath.Join(dir, bundle.ManifestFile))
 	if err != nil {

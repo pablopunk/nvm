@@ -108,7 +108,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 			Tone: "purple", Score: scoreExtension,
 			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, command.Title, nil))},
 		}, actionID, bound)
-		out = append(out, p.withAuthoringActions(row, result.ExtensionID))
+		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
 	}
 	return out
 }
@@ -128,7 +128,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	for _, action := range item.Actions {
 		row.Actions = append(row.Actions, extview.ActionFor(p.extensionViewDeps(m), extID, action))
 	}
-	return p.withAuthoringActions(row, extID)
+	return p.withAuthoringActions(row, extID, "")
 }
 
 func iconOr(icon, fallback string) string {
