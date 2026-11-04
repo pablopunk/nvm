@@ -19,6 +19,9 @@ const (
 	OpRecent      = "recent"
 	OpTemplate    = "template"
 	OpFetch       = "fetch"
+	OpSave        = "save"
+	OpCommit      = "commit"
+	OpDiscard     = "discard"
 )
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.
@@ -49,4 +52,31 @@ type LogArgs struct {
 type TemplateArgs struct {
 	Input   string              `json:"input"`
 	Options api.TemplateOptions `json:"options"`
+}
+
+// DraftSaveArgs stores the unsaved text of one editor draft, typed on top of the version the view opened.
+type DraftSaveArgs struct {
+	Key     string `json:"key"`
+	Version string `json:"version"`
+	Content string `json:"content"`
+}
+
+// DraftCommitArgs names the draft the extension has persisted at Version.
+type DraftCommitArgs struct {
+	Key     string `json:"key"`
+	Version string `json:"version"`
+}
+
+// DraftRecord is one stored draft. SavedAtMs is the host clock when the draft was last written.
+type DraftRecord struct {
+	Key       string `json:"key"`
+	Version   string `json:"version"`
+	Content   string `json:"content"`
+	SavedAtMs int64  `json:"savedAtMs"`
+}
+
+// DraftLookup answers a drafts get. Draft is set only when Found is true.
+type DraftLookup struct {
+	Found bool        `json:"found"`
+	Draft DraftRecord `json:"draft"`
 }

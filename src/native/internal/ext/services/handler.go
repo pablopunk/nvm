@@ -49,6 +49,7 @@ type documents struct {
 	secrets  *store.Collection[secretIndexDoc]
 	settings *store.Collection[settingValuesDoc]
 	data     *store.Collection[dataCacheDoc]
+	drafts   *store.Collection[draftsDoc]
 }
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
@@ -127,6 +128,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveText(call)
 	case protocol.ServiceNetwork:
 		return h.serveNetwork(ctx, call)
+	case protocol.ServiceDrafts:
+		return h.serveDrafts(call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }
@@ -164,6 +167,7 @@ func (h *Handler) openDocuments() (*documents, error) {
 		secrets:  store.Doc(st, secretsFile, 1, newSecretIndex),
 		settings: store.Doc(st, settingsFile, 1, newSettingValues),
 		data:     store.Doc(st, dataCacheFile, 1, newDataCache),
+		drafts:   store.Doc(st, draftsFile, 1, newDraftsDoc),
 	}, nil
 }
 
