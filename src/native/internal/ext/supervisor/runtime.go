@@ -2,6 +2,7 @@ package supervisor
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ type Runtime struct {
 	cfg         Config
 	sourcePath  string
 	identity    api.Identity
+	services    ServiceHandler
 	slots       chan struct{}
 	mu          sync.Mutex
 	state       State
@@ -29,12 +31,14 @@ type Runtime struct {
 	changed     chan struct{}
 }
 
-// New prepares a runtime for the extension source at sourcePath. Nothing runs until Start.
-func New(cfg Config, identity api.Identity, sourcePath string) *Runtime {
+// New prepares a runtime for the extension source at sourcePath. Nothing runs until Start. services answers the
+// extension's service calls; nil refuses them.
+func New(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
 	return &Runtime{
 		cfg:        cfg,
 		sourcePath: sourcePath,
 		identity:   identity,
+		services:   services,
 		slots:      make(chan struct{}, 1),
 		state:      StateIdle,
 		changed:    make(chan struct{}),
@@ -122,6 +126,11 @@ func (r *Runtime) notifyLocked() {
 // a *CallError. The ctx bounds the wait only: a call that outlives its context still finishes inside its
 // budget, so the next call never overlaps it.
 func (r *Runtime) Call(ctx context.Context, method, query string, invocation *api.Invocation) (protocol.Response, error) {
+	return r.Do(ctx, protocol.Request{Method: method, Query: query, Invocation: invocation})
+}
+
+// Do sends a prepared request, assigning its id, and returns the child's response. The rules of Call apply.
+func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Response, error) {
 	if err := r.checkRunnable(); err != nil {
 		return protocol.Response{}, err
 	}
@@ -130,7 +139,7 @@ func (r *Runtime) Call(ctx context.Context, method, query string, invocation *ap
 	case <-ctx.Done():
 		return protocol.Response{}, ctx.Err()
 	}
-	req := protocol.Request{ID: r.newRequestID(), Method: method, Query: query, Invocation: invocation}
+	req.ID = r.newRequestID()
 	result := make(chan callResult, 1)
 	go func() {
 		defer func() { <-r.slots }()
@@ -143,6 +152,23 @@ func (r *Runtime) Call(ctx context.Context, method, query string, invocation *ap
 	case <-ctx.Done():
 		return protocol.Response{}, ctx.Err()
 	}
+}
+
+// Load runs the extension's data loader and returns its items. A child-side failure is a *CallError too, so the
+// caller shows one kind of error for every failed call.
+func (r *Runtime) Load(ctx context.Context, loader string) ([]api.Item, error) {
+	response, err := r.Do(ctx, protocol.Request{Method: protocol.MethodLoad, Loader: loader})
+	if err != nil {
+		return nil, err
+	}
+	if response.Failure != nil {
+		return nil, &CallError{Failure: *response.Failure}
+	}
+	var items []api.Item
+	if err := json.Unmarshal(response.Data, &items); err != nil {
+		return nil, &CallError{Failure: api.Failure{Code: api.CodeInternal, Message: "loader returned items that do not decode"}}
+	}
+	return items, nil
 }
 
 type callResult struct {

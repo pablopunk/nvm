@@ -57,7 +57,7 @@ func newRuntime(t *testing.T, name string, tweak func(*Config)) *Runtime {
 		tweak(&cfg)
 	}
 	id := api.Identity{ID: "acme." + name, Title: name}
-	return New(cfg, id, fixture(t, name))
+	return New(cfg, id, fixture(t, name), nil)
 }
 
 func requireUnixProcesses(t *testing.T) {

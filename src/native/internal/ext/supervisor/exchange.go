@@ -102,6 +102,12 @@ func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budge
 	for {
 		select {
 		case line, open := <-child.lines:
+			if call, ok := serviceCallFrom(line, open); ok {
+				if err := r.answerService(child, call, budget); err != nil {
+					return protocol.Response{}, err
+				}
+				continue
+			}
 			return r.handleLine(child, req, line, open)
 		case <-soft:
 			soft = nil

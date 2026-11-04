@@ -45,6 +45,8 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.encode(protocol.MethodSearch, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(req.Query))
 	case protocol.MethodRun:
 		return e.runAction(req.Invocation)
+	case protocol.MethodLoad:
+		return e.encode(protocol.MethodLoad, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(req.Loader))
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }

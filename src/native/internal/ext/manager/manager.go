@@ -15,17 +15,24 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/install"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Ports are the OS and time services the manager uses. The composition root supplies the real set; tests can
-// substitute fakes.
+// substitute fakes. Keychain, Network (the public-address port), Clipboard and Logs feed the context services;
+// nil ones make the services that need them unavailable.
 type Ports struct {
 	Files     platform.FS
 	Clock     platform.Clock
 	Worker    platform.Worker
 	Processes platform.Processes
+	Keychain  platform.Keychain
+	Network   platform.HTTP
+	Clipboard platform.Clipboard
+	Logs      *logx.Logger
 }
 
 // Options tune the child processes of every extension.
@@ -35,22 +42,27 @@ type Options struct {
 	MemoryLimit   uint64
 	ResidentLimit uint64
 	Budgets       map[string]supervisor.Budget
+	// DataRoot holds one data folder per extension, named after its id.
+	DataRoot string
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
 type Manager struct {
-	ports   Ports
-	root    string
-	enabled *enablement.Set
-	config  supervisor.Config
-	mu      sync.Mutex
-	entries map[string]*entry
+	ports       Ports
+	root        string
+	enabled     *enablement.Set
+	config      supervisor.Config
+	serviceDeps services.Deps
+	mu          sync.Mutex
+	entries     map[string]*entry
 }
 
-// entry is one extension folder: the version on disk and the runtime that runs it, when it can run.
+// entry is one extension folder: the version on disk, the runtime that runs it when it can run, and the host
+// services that runtime calls.
 type entry struct {
 	bundle  bundle.Bundle
 	runtime *supervisor.Runtime
+	host    *services.Handler
 }
 
 // New opens the extensions folder root, removes leftovers of interrupted installs, and loads every extension.
@@ -71,6 +83,15 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			MemoryLimit:   opts.MemoryLimit,
 			ResidentLimit: opts.ResidentLimit,
 			Budgets:       opts.Budgets,
+		},
+		serviceDeps: services.Deps{
+			Files:     ports.Files,
+			Clock:     ports.Clock,
+			DataRoot:  opts.DataRoot,
+			Keychain:  ports.Keychain,
+			Network:   ports.Network,
+			Clipboard: ports.Clipboard,
+			Logs:      ports.Logs,
 		},
 		entries: map[string]*entry{},
 	}
@@ -119,7 +140,8 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 	}
 	next := &entry{bundle: loaded}
 	if loaded.Runnable() {
-		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile))
+		next.host = services.New(m.serviceDeps, loaded.Manifest)
+		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
 		if m.isEnabled(loaded.Manifest.ID) {
 			next.runtime.Start()
 		}
@@ -127,9 +149,13 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 	m.entries[key] = next
 }
 
+// stopEntry stops the entry's child and then closes its services, which flushes the extension's data.
 func stopEntry(e *entry) {
 	if e.runtime != nil {
 		e.runtime.Stop()
+	}
+	if e.host != nil {
+		_ = e.host.Close()
 	}
 }
 

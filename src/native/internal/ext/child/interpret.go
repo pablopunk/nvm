@@ -24,6 +24,7 @@ var entryPoints = map[string]string{
 	protocol.MethodRoot:     "RootItems",
 	protocol.MethodSearch:   "SearchItems",
 	protocol.MethodRun:      "RunAction",
+	protocol.MethodLoad:     "LoadItems",
 }
 
 // extension is one interpreted extension: the functions it declares and the services it may use.
@@ -34,7 +35,7 @@ type extension struct {
 
 // load interprets the extension source at path. Extension code runs here, at load, inside the child; the host
 // has already reviewed extension.json.
-func load(path string, identity api.Identity, clock platform.Clock) (*extension, error) {
+func load(path string, identity api.Identity, clock platform.Clock, link *hostLink) (*extension, error) {
 	source, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read extension source: %w", err)
@@ -43,7 +44,7 @@ func load(path string, identity api.Identity, clock platform.Clock) (*extension,
 	if err != nil {
 		return nil, err
 	}
-	return &extension{functions: lookupEntryPoints(i), base: newHostContext(identity, clock)}, nil
+	return &extension{functions: lookupEntryPoints(i), base: newHostContext(identity, clock, link)}, nil
 }
 
 // evalExtension runs the source in a fresh interpreter that knows the standard library and the api package. A
