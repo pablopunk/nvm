@@ -70,7 +70,7 @@ Each journey test saves `*-palette.png` and `*-desktop.png` per step (names star
 
 The account and AI journeys run against the fake backend, never the real one. `StartFakeBackend` serves `internal/fixtures.Backend` on `127.0.0.1`, and `Launch` passes its origin in `NVM_RIG_BACKEND`. The override exists only in `-tags automation` builds (`internal/app/account_rig_on.go`). In those builds the account starts on that loopback origin, unpackaged, with no browser and an in-memory keychain. A launch without `Options.Backend` gets the discard port `127.0.0.1:9`, so it never reaches production. A default build ignores the variable and keeps the production origin, packaged (`internal/app/account_rig_off_test.go`).
 
-The fake serves device sign-in (initiate, exchange, approval), `/api/v1/active-model`, `/api/me`, chat completions as SSE (the scripted reply, or the 401, 402, 429, 5xx, malformed and mid-stream failure modes) and the audio transcription routes. A device code is approved with `ApproveDeviceCode`, which stands in for the verification page. `SetChunkDelay` paces a reply so Escape can stop it while it streams.
+The fake serves device sign-in (initiate, exchange, approval), `/api/v1/active-model`, `/api/me`, chat completions as SSE (the scripted reply, or the 401, 402, 429, 5xx, malformed and mid-stream failure modes) and the audio transcription routes. A device code is approved with `ApproveDeviceCode`, which stands in for the verification page. `SetChunkDelay` paces a reply so Escape can stop it while it streams. `SetScript` queues replies for the next chat requests (tool calls, then the text that answers them), so a journey can drive an approval row.
 
 Run the three journeys on a private display in the box:
 
@@ -82,13 +82,15 @@ The `HOME` override is for the test process; each launch still gets its own isol
 
 - **J12** signs in from the Account page: the pending code appears, the fake approves it, the page shows `Logged in as fixture@example.test`, and the app log does not hold the token. Not covered: sign-out, the repeat offline, and the denied and expired states.
 - **J13** asks with Tab, sees the reply stream, presses Escape while frames are still due, and checks three things: the fake backend counts the chat stream as abandoned, not completed (the stop is proven on the backend side), the palette stays open, and the question stays in the transcript. The last word never appears. Not covered: continuing the conversation after a restart and the first-token progress.
+- **J31** enables `acme.views` through its review: the Extensions list shows Running without being reopened, and typing a command's title at the root finds it.
+- **J32** scripts a `read_clipboard` call (it asks for approval; `list_folder` does not): Enter allows it and the clipboard text reaches the model, Ctrl+D refuses the next one and the refusal reaches the model.
 - **J28** shows the notices for a 402 (`Credits needed`, with the balance from the body) and for a route the free pool has paused (`Free AI temporarily paused`). Dismissing the palette from the chat page after a notice is not covered yet. Offline, the expired token, and the 429 notice are not covered either.
 
 The fake's approve route is not the backend's. The real approval needs the web session, and the rig does not drive a browser.
 
 ## What the rig does not cover yet
 
-Scripted journeys are J01, J02, J03, J05, J06, J08, J09, J10, J12, J13, J15, J16, J22, J23, J25 and J28. Each covers the smoke part of its pass condition. Not covered: no focus restoration, frecency, paste into another app, pinning, or restart durability. J15 checks the failed rows and the reasons the palette shows, but after a child's first failure the reason is the generic `not running: failed`, and J15 does not check the first failure's own reason. J16 covers a folder dropped before launch, not one dropped while the app runs. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
+Scripted journeys are J01, J02, J03, J05, J06, J08, J09, J10, J12, J13, J15, J16, J22, J23, J25, J28, J31 and J32. Each covers the smoke part of its pass condition. Not covered: no focus restoration, frecency, paste into another app, pinning, or restart durability. J15 checks the failed rows and the reasons the palette shows, but after a child's first failure the reason is the generic `not running: failed`, and J15 does not check the first failure's own reason. J16 covers a folder dropped before launch, not one dropped while the app runs. The macOS and Windows jobs in `native-rig.yml` launch the app and capture the desktop, and they are `continue-on-error` until hotkey injection and the palette assertions exist there (Accessibility permission on macOS, SendInput on Windows).
 
 ## Performance budgets (WP0.5)
 
