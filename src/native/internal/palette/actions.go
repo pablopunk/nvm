@@ -62,11 +62,7 @@ func (p *Palette) onEnter() {
 	v := p.cur()
 	switch {
 	case p.actionsOpen:
-		acts := p.actions()
-		p.actionsOpen = false
-		if p.actChosen < len(acts) {
-			p.runAction(acts[p.actChosen])
-		}
+		p.runMenuAction(p.actChosen)
 	case v.Body != nil:
 		if v.OnSubmit != nil {
 			q := strings.TrimSpace(p.query)
@@ -77,5 +73,14 @@ func (p *Palette) onEnter() {
 		}
 	default:
 		p.runDefault()
+	}
+}
+
+// runMenuAction closes the action menu and runs its action at index i, when there is one.
+func (p *Palette) runMenuAction(i int) {
+	acts := p.actions()
+	p.actionsOpen = false
+	if i >= 0 && i < len(acts) {
+		p.runAction(acts[i])
 	}
 }

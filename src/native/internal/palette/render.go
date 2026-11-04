@@ -261,7 +261,13 @@ func (p *Palette) actionPanel(c *ui.Context) {
 	for i, a := range acts {
 		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
 	}
-	design.ActionMenu(c, rows)
+	events := design.ActionMenu(c, rows)
+	if events.Hovered >= 0 {
+		p.actChosen = events.Hovered
+	}
+	if events.Clicked >= 0 {
+		p.runMenuAction(events.Clicked)
+	}
 }
 
 // accessoryLabel is the picker's text, or "" when the view has no picker.
