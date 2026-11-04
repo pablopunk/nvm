@@ -64,14 +64,15 @@ func appLearnKey(a apps.App) string {
 // appItem turns a feature row into a palette row. The row's first action is the one Enter runs.
 func (p *App) appItem(a apps.App, row apps.Row, score int) search.Item {
 	it := search.Item{
-		Kind:     search.KindApplications,
-		Title:    row.Title,
-		Subtitle: row.Subtitle,
-		IconPath: row.Path,
-		Score:    score,
-		LastUsed: a.FirstSeenAt,
-		LearnKey: appLearnKey(a),
-		Actions:  make([]search.Action, 0, len(row.Actions)),
+		Kind:      search.KindApplications,
+		Title:     row.Title,
+		Subtitle:  row.Subtitle,
+		IconPath:  row.Path,
+		DragPaths: pathsOf(row.Path),
+		Score:     score,
+		LastUsed:  a.FirstSeenAt,
+		LearnKey:  appLearnKey(a),
+		Actions:   make([]search.Action, 0, len(row.Actions)),
 	}
 	for _, act := range row.Actions {
 		it.Actions = append(it.Actions, p.appAction(a, act))

@@ -60,6 +60,8 @@ type Item struct {
 	IconFallback string
 	// DragPaths are files the row drags out to other applications. Empty means the row does not drag.
 	DragPaths []string
+	// DragImage is the file whose picture the drag shows, when it is not the first of DragPaths. Empty means the first.
+	DragImage string
 	Image     *ui.Bitmap
 	Accessory string
 	Actions   []Action

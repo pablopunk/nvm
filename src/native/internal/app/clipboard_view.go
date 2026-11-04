@@ -78,10 +78,24 @@ func (p *App) clipItem(e clipboard.Entry, historyLen int) search.Item {
 		Icon:      clipIcon(e.Kind),
 		Tone:      "blue",
 		TintTitle: true,
+		DragPaths: p.clipDragPaths(e),
 		Actions:   p.clipActions(e, row, historyLen),
 		Detail:    func(c *ui.Context, _ search.Host) { p.clipDetail(c, e) },
 	}
 	return it
+}
+
+// clipDragPaths is the stored picture of an image entry, which its row drags out as an image file. Other entries
+// drag nothing.
+func (p *App) clipDragPaths(e clipboard.Entry) []string {
+	if e.Kind != clipboard.KindImage {
+		return nil
+	}
+	path, err := p.clip.images.FilePath(e.ImageRef)
+	if err != nil {
+		return nil
+	}
+	return []string{path}
 }
 
 // clipIcon is the Lucide icon of an entry's kind.

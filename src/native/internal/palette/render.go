@@ -96,6 +96,8 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 }
 
 func (p *Palette) listBody(c *ui.Context) {
+	p.interact.pressing, p.interact.pressingNow = p.interact.pressingNow, false
+	p.interact.clickedThisFrame = false
 	v := p.cur()
 	if len(p.results) == 0 {
 		if !p.settled {
@@ -132,7 +134,7 @@ func (p *Palette) listBody(c *ui.Context) {
 			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
 		p.focusListIfRequested(c)
-		if list.Submitted() {
+		if list.Submitted() && !p.interact.clickedThisFrame {
 			p.runDefault()
 		}
 		if p.chosen < 0 && len(p.results) > 0 {
@@ -186,11 +188,7 @@ func (p *Palette) row(c *ui.Context, i int) {
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
 	}
-	if len(it.DragPaths) > 0 && p.opts.DragRow != nil {
-		p.opts.DragRow(c, it.DragPaths, func() { design.Row(c, data) })
-		return
-	}
-	design.Row(c, data)
+	p.listRow(c, i, func() { design.Row(c, data) })
 }
 
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon

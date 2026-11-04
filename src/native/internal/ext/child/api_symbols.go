@@ -94,6 +94,8 @@ func init() {
 		"DictationIdle":                 reflect.ValueOf(api.DictationIdle),
 		"DictationRecording":            reflect.ValueOf(api.DictationRecording),
 		"DictationTranscribing":         reflect.ValueOf(api.DictationTranscribing),
+		"DragImagePath":                 reflect.ValueOf(api.DragImagePath),
+		"DragPaths":                     reflect.ValueOf(api.DragPaths),
 		"EditorView":                    reflect.ValueOf(api.EditorView),
 		"ErrInvalidInput":               reflect.ValueOf(&api.ErrInvalidInput).Elem(),
 		"ErrNotAvailable":               reflect.ValueOf(&api.ErrNotAvailable).Elem(),

@@ -34,6 +34,7 @@ type Set struct {
 	Text         *TextRecognizer
 	Capture      *ScreenCapturer
 	OutputMute   *OutputMute
+	FileDrag     *FileDrag
 	Capabilities platform.Capabilities
 }
 
@@ -71,6 +72,7 @@ func NewSet() *Set {
 		Text:         NewTextRecognizer(),
 		Capture:      NewScreenCapturer(),
 		OutputMute:   NewOutputMute(),
+		FileDrag:     NewFileDrag(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -108,6 +110,7 @@ func (s *Set) Ports() platform.Ports {
 		Text:         s.Text,
 		Capture:      s.Capture,
 		OutputMute:   s.OutputMute,
+		FileDrag:     s.FileDrag,
 		Capabilities: s.Capabilities,
 	}
 }

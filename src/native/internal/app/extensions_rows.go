@@ -132,6 +132,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
 		Score: scoreExtension, LastUsed: item.LastUsedMs, Detail: extview.DetailFor(deps, extID, item.Detail),
 		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery,
+		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
 	}
 	if m.IsBuiltIn(extID) {
 		row.ID = item.ID

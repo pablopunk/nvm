@@ -195,7 +195,8 @@ type Item struct {
     Icon, Glyph         string            // Lucide name; one character for grid tiles
     Image               *Image
     Video               string
-    File                *FileRef
+    File                *FileRef         // the file a row or grid cell drags out (see below)
+    DragImage           *FileRef         // optional picture the drag shows instead of File
     Accessories         []Accessory
     Primary             *Action
     Actions             []Action
@@ -220,6 +221,16 @@ Shapes used inside items:
 - `Metadata.Kind`: text, link, tag, separator. Only the fields the kind reads are validated.
 - `LinkCard`: host-filled from Open Graph; status loading, ready or unavailable.
 - `FileRef`: path, name, display path, URLs, kind, extension, MIME, size, dimensions and timestamps in epoch milliseconds (one encoding).
+
+### Dragging files out
+
+A row or grid cell drags files out to other applications, as 1.x does, when it names an absolute path:
+
+- `File` is the file the drag carries. Without a path in `File`, the first action with an absolute `Path` (`Primary`, then `Actions`, then the action panel) is used, so an open-path row such as a folder drags its folder.
+- `DragImage` is an optional image file the drag shows. Without it, the drag shows the file itself when it is an image, else a generic file icon. `DragImage` needs a `File` and an absolute path; the API rejects it otherwise.
+- A press that moves past the drag threshold starts the drag and is neither a click nor a run. A click still chooses the row, and a double click runs it.
+- Built-in rows use the same rule: a file row drags its file, an application row its `.app` bundle, a clipboard image its stored picture.
+- The host carries the files as file URLs in the operating system's drag (macOS pasteboard, GTK URI list, Windows CF_HDROP). MyGo never moves or deletes a file.
 
 ## 7. Views
 

@@ -148,10 +148,10 @@ func (v View) Validate() error {
 			return fmt.Errorf("view %q: %w", v.Title, err)
 		}
 	}
-	return validateItemIDs(v.Items)
+	return validateItems(v.Items)
 }
 
-func validateItemIDs(items []Item) error {
+func validateItems(items []Item) error {
 	seen := make(map[string]bool, len(items))
 	for _, item := range items {
 		if item.ID == "" {
@@ -161,6 +161,9 @@ func validateItemIDs(items []Item) error {
 			return fmt.Errorf("duplicate item id %q", item.ID)
 		}
 		seen[item.ID] = true
+		if err := item.validateDragImage(); err != nil {
+			return fmt.Errorf("item %q: %w", item.ID, err)
+		}
 	}
 	return nil
 }

@@ -12,10 +12,14 @@ type Item struct {
 	// Icon is a Lucide icon name such as "camera" or "volume-2".
 	Icon string `json:"icon,omitempty"`
 	// Glyph is one character drawn natively as a grid tile visual (emoji, symbols).
-	Glyph       string      `json:"glyph,omitempty"`
-	Image       *Image      `json:"image,omitempty"`
-	Video       string      `json:"video,omitempty"`
-	File        *FileRef    `json:"file,omitempty"`
+	Glyph string `json:"glyph,omitempty"`
+	Image *Image `json:"image,omitempty"`
+	Video string `json:"video,omitempty"`
+	// File is the local file the row or grid cell drags out to other applications, as 1.x's path does. Without
+	// DragImage, the drag shows the file itself when it is an image. Relative paths do not drag.
+	File *FileRef `json:"file,omitempty"`
+	// DragImage is the local image file the drag shows instead of File, such as a thumbnail. It needs a File.
+	DragImage   *FileRef    `json:"dragImage,omitempty"`
 	Accessories []Accessory `json:"accessories,omitempty"`
 	// Primary runs on Enter. Actions are secondary and listed in the action menu. The host removes
 	// a Primary that repeats inside Actions.

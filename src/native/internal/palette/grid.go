@@ -72,13 +72,11 @@ func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	default:
 		cell.Background(ui.Transparent)
 	}
-	cell.Children(func() { g.Cell(c, it) })
-	if cell.Clicked() {
-		p.choose(i)
-	}
-	if cell.DoubleClicked() {
-		p.runDefault()
-	}
+	clickTarget := cell
+	cell.Children(func() { clickTarget = p.cellContent(c, g, cell, i) })
+	p.notePress(clickTarget)
+	p.hoverChoose(cell, i)
+	p.clickRun(clickTarget, i)
 }
 
 // moveGridChoice moves the choice across the cells with the arrows, to the first or last cell with Home and

@@ -56,9 +56,17 @@ type Options struct {
 	// Feedback shows a message raised while the palette is hidden, where it outlives the hide, as 1.x's HUD does. Nil
 	// drops such messages.
 	Feedback func(f Feedback)
-	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
-	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
-	DragRow func(c *ui.Context, paths []string, draw func())
+	// DragRow draws a row or grid cell whose item carries DragPaths: the host wraps draw in an element that a press
+	// dragging it turns into a native drag of the files, and returns that element. The palette takes the element as
+	// the row's click target. Nil draws the row as it is. The palette itself does not import the OS transfer package.
+	DragRow func(c *ui.Context, src DragSource, draw func()) ui.Element
+}
+
+// DragSource is the files a row drags out: their paths, and the file whose picture the drag shows. An empty Image
+// means the first path.
+type DragSource struct {
+	Paths []string
+	Image string
 }
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.
@@ -76,6 +84,7 @@ type Palette struct {
 	chosen     int
 	list       ui.ListState
 	input      ui.Handle
+	interact   interactionState // pointer and click state of rows and cells, see interact.go
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
 	focusList bool
 
