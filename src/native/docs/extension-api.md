@@ -1091,3 +1091,27 @@ Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<n
 Built-ins moved so far: System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). The rest of the WP3.10 list is not yet moved. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
 
 Declarative host operations that the palette performs itself (a built-in or a folder extension alike): `set-query` (search again, palette open), `open-path` and `reveal-path` (palette hides, the path opens or is selected), and `system` ops (`lock-screen`, `sleep`, `restart`, `shut-down`, `log-out`, `empty-trash`, `quit`, `open-system-settings`). A `Confirmation` asks first. A system op runs off the UI thread; a failure shows as a toast.
+
+## 24. Folder layout and the Electron app's folder
+
+Go extensions live in the shared folder `~/.config/nevermind/extensions` on every platform, the folder the Electron app uses for its `.ts` extensions (`src/app/electron/extension-host/extension-paths.ts:13-15`). Each extension is one folder named after its id:
+
+```
+~/.config/nevermind/extensions/
+  acme.world-clock/        Go extension: extension.json (manifest) and main.go (source)
+  syncthing-browser.ts     Electron extension: ignored by this host
+  nevermind-extension-api.d.ts, package.json   Electron files: ignored by this host
+```
+
+- **Loaded.** A folder that holds `extension.json` or `main.go`. The folder name must equal the manifest id. A name ending in `.ts` is refused, because the Electron loader would try to import it.
+- **Ignored silently.** Files, hidden folders (`.staging-`, `.trash-`), and folders holding neither file. `bundle.Scan` (`internal/ext/bundle/bundle.go`) and `isExtensionFolder` do this.
+- **Electron compatibility (checked in `src/app`, no changes made).** The Electron loader reads the folder and keeps names that end in `.ts` but not `.d.ts` (`extension-loader.ts:140-144`, `extension-source-files.ts:1-6`). Subfolders and `.go` files never match, so they are skipped with no log line. The Electron proposals scan (`extension-proposals.ts:28-31`), the AI builder listing (`ai/ai-builder-read-tools.ts:252-255`) and the chat migration (`ai/ai-chat-migration.ts:25`, `isFile()`) filter the same way. The one hazard is a folder named `*.ts`, which the loader would import and log as `extension.load.failed` (`extension-loader.ts:162`); this host refuses such ids. Verdict: the Electron app coexists with Go extension folders without errors.
+- **Electron writes.** On each load the Electron app copies `nevermind-extension-api.d.ts` and writes `package.json` into the folder (`extension-loader.ts:80-101`). This host never writes those names.
+
+### Context services as built (WP3.x extension API gaps)
+
+- **Shell.** `ctx.desktop.shell.exec`, `script`, `appleScript` and `which` run under the `system` capability, which is refused when undeclared. A login PATH precedes the host PATH (as in the Electron app), `~` expands in command, arguments, working folder and script, the default timeout is 30 s clamped to 1 to 120 s, and a killed process reports exit -1. Output is capped at 200000 characters per stream and marked when cut. AppleScript runs only on macOS. Calls share a limit of 60 runs a minute. Code: `services/desktop_process.go`, `platform.Commands`.
+- **Indicators.** `ctx.indicators` show, update and hide draw one passive panel for every extension. The host keys each indicator by extension id. Updates are limited to 120 a minute. A later show replaces the shown indicator. A timed indicator clears only while it is still the one shown. Code: `services/indicators.go`, `internal/app/extension_indicators.go`. The panel is shared with the AI commands, so the latest writer wins.
+- **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them. Window actions are served only where the host implements them, and otherwise show the palette's unavailable message.
+- **Not served.** `ctx.ai`, `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (keyboard, selection, extra file, clipboard and window-management operations, frontmost app) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
+- **Known gap.** The `unsupported` action kind, which AI builder action builders return, fails `Action.Validate`, so a view that contains one reports `unknown action kind` rather than a disabled row.

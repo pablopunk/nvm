@@ -103,8 +103,9 @@ func Hash(manifest []byte, source []byte) string {
 	return hex.EncodeToString(sum.Sum(nil))
 }
 
-// Scan loads every extension folder under root, sorted by folder name. Hidden folders are staging and
-// trash folders from install and are skipped. A missing root is an empty list, not an error.
+// Scan loads every extension folder under root, sorted by folder name. Hidden folders are staging and trash folders
+// from install and are skipped, and so is any folder that holds neither extension.json nor main.go: the shared folder
+// also holds the Electron app's files, and those are none of this host's business. A missing root is an empty list.
 func Scan(files platform.FS, root string) ([]Bundle, error) {
 	entries, err := files.ReadDir(root)
 	if err != nil {
@@ -115,14 +116,37 @@ func Scan(files platform.FS, root string) ([]Bundle, error) {
 	}
 	var bundles []Bundle
 	for _, entry := range entries {
-		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
+		folder := filepath.Join(root, entry.Name())
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") || !isExtensionFolder(files, folder) {
 			continue
 		}
-		bundle := Load(files, filepath.Join(root, entry.Name()))
-		if len(bundle.Problems) == 0 && bundle.Manifest.ID != entry.Name() {
-			bundle.Problems = append(bundle.Problems, fmt.Sprintf("folder name must match the id %q", bundle.Manifest.ID))
-		}
-		bundles = append(bundles, bundle)
+		bundles = append(bundles, loadFolder(files, folder, entry.Name()))
 	}
 	return bundles, nil
+}
+
+// loadFolder loads one folder of the shared folder and reports the names it cannot run under.
+func loadFolder(files platform.FS, folder, name string) Bundle {
+	bundle := Load(files, folder)
+	if len(bundle.Problems) == 0 && bundle.Manifest.ID != name {
+		bundle.Problems = append(bundle.Problems, fmt.Sprintf("folder name must match the id %q", bundle.Manifest.ID))
+	}
+	if strings.HasSuffix(name, ".ts") {
+		bundle.Problems = append(bundle.Problems, "folder name must not end in .ts: the Electron app loads .ts files from the same folder")
+	}
+	return bundle
+}
+
+// isExtensionFolder reports whether folder holds one of the two files an extension folder is built from.
+func isExtensionFolder(files platform.FS, folder string) bool {
+	entries, err := files.ReadDir(folder)
+	if err != nil {
+		return false
+	}
+	for _, entry := range entries {
+		if entry.Name() == ManifestFile || entry.Name() == SourceFile {
+			return true
+		}
+	}
+	return false
 }

@@ -178,9 +178,14 @@ func userHomeDir() string {
 	return home
 }
 
-// extensionsDir is the folder of installed extensions: one folder per extension, named after its id.
+// extensionsDir is the shared folder of extensions: one folder per Go extension, named after its id, beside the
+// Electron app's TypeScript files. It is the folder the Electron app uses on every platform, so the two apps read
+// the same extensions. docs/extension-api.md section 24 states the layout.
 func extensionsDir() string {
 	d := filepath.Join(configDir(), "extensions")
+	if home := userHomeDir(); home != "" {
+		d = filepath.Join(home, ".config", "nevermind", "extensions")
+	}
 	_ = os.MkdirAll(d, 0o755)
 	return d
 }

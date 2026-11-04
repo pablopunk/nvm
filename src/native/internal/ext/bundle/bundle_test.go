@@ -118,3 +118,31 @@ func bundleIn(t *testing.T, bundles []Bundle, dir string) Bundle {
 	t.Fatalf("Scan returned no bundle for %q", dir)
 	return Bundle{}
 }
+
+func TestScanIgnoresTheElectronAppsFilesAndFolders(t *testing.T) {
+	files := fake.NewFS()
+	seedExtension(files, "acme.good", validManifest, "package main\n")
+	files.Seed(filepath.Join(root, "syncthing-browser.ts"), []byte("export default {}\n"))
+	files.Seed(filepath.Join(root, "nevermind-extension-api.d.ts"), []byte("export {}\n"))
+	files.Seed(filepath.Join(root, "package.json"), []byte("{\"type\":\"module\"}\n"))
+	files.Seed(filepath.Join(root, "notes", "readme.txt"), []byte("not an extension\n"))
+	bundles, err := Scan(files, root)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(bundles) != 1 || bundles[0].Manifest.ID != "acme.good" || !bundles[0].Runnable() {
+		t.Fatalf("Scan = %+v; want only acme.good, with no problems for the other files", bundles)
+	}
+}
+
+func TestScanFlagsAFolderNamedLikeAnElectronSourceFile(t *testing.T) {
+	files := fake.NewFS()
+	seedExtension(files, "acme.ts", `{"apiVersion":"1.0","id":"acme.ts","title":"Odd"}`, "package main\n")
+	bundles, err := Scan(files, root)
+	if err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if len(bundles) != 1 || bundles[0].Runnable() || !strings.Contains(strings.Join(bundles[0].Problems, ";"), ".ts") {
+		t.Fatalf("Scan = %+v; want acme.ts listed with a .ts naming problem", bundles)
+	}
+}
