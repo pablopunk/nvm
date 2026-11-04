@@ -53,6 +53,9 @@ type View struct {
 	// HintFn, when set, gives the right footer text instead of Hint; it is read on every frame.
 	HintFn  func() string
 	OnLeave func()
+	// OnHide runs on every page of the stack when the palette hides. The pages stay on the stack until the next Show,
+	// so a question waiting for an answer can end at once.
+	OnHide func()
 	// Loading reports that the view has no rows yet because they are still arriving; no empty state shows meanwhile.
 	Loading func() bool
 	// Accessory is a small choice at the end of the search field, such as a category. Its change is passed to OnChange.
