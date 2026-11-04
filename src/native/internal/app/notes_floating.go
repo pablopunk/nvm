@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/egoist/mygo/ui/richtext"
 
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -166,15 +167,32 @@ func floatingNoteWindow(c *ui.Context, edit *noteEdit) {
 	})
 }
 
-// floatingNoteBody is the content of a floating window: the note's text, with the same autosave as the editor.
+// floatingNoteBody is the content of a floating window: the note's Markdown in the rich text editor, with the same
+// autosave as the editor.
 func floatingNoteBody(c *ui.Context, edit *noteEdit) {
 	syncBuffer(edit)
 	if _, pending := edit.sess.Conflict(); pending {
 		conflictNotice(c, "Unsaved changes from another session are waiting. Open this note in Quick Notes to choose which version to keep.")
 		return
 	}
-	ta := ui.TextArea(c, &edit.text).Fill().Padding(12).FontSize(14).Placeholder(editorPlaceholder).AutoFocus()
-	if ta.Changed() {
-		_ = edit.sess.Edit(edit.text)
+	doc := noteDocument(edit)
+	editor := design.MarkdownEditor(c, doc, editorPlaceholder).AutoFocus()
+	if editor.Changed() {
+		markdown := doc.Text().Markdown()
+		edit.text, edit.docSource = markdown, markdown
+		_ = edit.sess.Edit(markdown)
 	}
+}
+
+// noteDocument returns the rich text of a note, made from its text when it has none yet and remade when the text
+// changed under it, as a palette editor's typing or a conflict choice does.
+func noteDocument(edit *noteEdit) *richtext.Document {
+	switch {
+	case edit.doc == nil:
+		edit.doc = richtext.NewDocument(richtext.ParseMarkdown(edit.text))
+	case edit.docSource != edit.text:
+		edit.doc.SetText(richtext.ParseMarkdown(edit.text))
+	}
+	edit.docSource = edit.text
+	return edit.doc
 }
