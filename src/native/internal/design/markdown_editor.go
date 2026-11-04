@@ -25,13 +25,14 @@ func MarkdownEditor(c *ui.Context, doc *richtext.Document, placeholder string) u
 }
 
 // markdownEditorTheme sets the editor's colors and spacing to the 1.x editor's CSS. Its lengths are in ems of the
-// 14px text, so 8px is 8/14 of an em.
+// 14px text, so 8px is 8/14 of an em. MyGo's theme has no field for inline code's padding, for a quotation's text
+// inset, or for the margin of a block of code, so those stay as MyGo draws them.
 func markdownEditorTheme(c *ui.Context) *richtext.Theme {
 	k := Tokens(c)
 	th := richtext.DefaultTheme(c.Theme())
 	th.Text, th.Caret, th.Code, th.Marker = k.Primary, k.Primary, k.Primary, k.Primary
 	th.Muted, th.Link = k.Muted, k.Link
-	th.CodeSize = 0.9
+	th.CodeSize = em(13)
 	th.CodeBackground, th.CodeBlockBackground = k.Raised, k.Sunken
 	th.CodeBlockRadius = em(8)
 	th.CodeBlockPadding = [2]float32{em(12), em(8)}
@@ -39,10 +40,14 @@ func markdownEditorTheme(c *ui.Context) *richtext.Theme {
 	th.Indent = em(24)
 	th.ParagraphSpacing = em(8)
 	for i, size := range [6]float32{18, 16, 14, 14, 14, 14} {
-		th.Headings[i] = richtext.HeadingStyle{Size: size / markdownEditorFontSize, Weight: 700, Color: k.Strong, Bottom: em(8)}
+		th.Headings[i] = richtext.HeadingStyle{Size: size / markdownEditorFontSize, Weight: 700, Color: k.Strong, Top: noHeadingTop, Bottom: em(8)}
 	}
 	return th
 }
+
+// noHeadingTop is the space above a heading, in ems. MyGo reads a zero Top as unset and draws its own 0.6 em, so the
+// smallest value that is not zero stands for the 1.x margin of none.
+const noHeadingTop = 0.0001
 
 // em converts a length in DIPs to ems of the editor's text.
 func em(px float32) float32 {

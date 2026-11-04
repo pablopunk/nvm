@@ -13,6 +13,10 @@ import (
 // default size. The window content is drawn as the window draws it, without the window's own chrome.
 var floatingGoldens = golden.Options{Group: "floating", Width: 640, Height: 460}
 
+// floatingTallGoldens is the window at a height that shows a whole note above the actions: a note this long scrolls
+// to its caret in the default height, which hides its first lines.
+var floatingTallGoldens = golden.Options{Group: "floating", Width: 640, Height: 640}
+
 // floatingGoldenMarkdown is a note with a heading, bold and italic words, inline code, a list, a quotation and a
 // block of code: the styles the rich text editor shows as they are typed.
 var floatingGoldenMarkdown = strings.Join([]string{
@@ -43,7 +47,7 @@ func TestFloatingNoteWindowShowsMarkdownStyled(t *testing.T) {
 	if err := edit.sess.Edit(floatingGoldenMarkdown); err != nil {
 		t.Fatal(err)
 	}
-	golden.AssertMatrix(t, "note-markdown", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
+	golden.AssertMatrix(t, "note-markdown", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingTallGoldens)
 }
 
 // The conflict replaces the editor with its two choices, as 1.x's window does.
@@ -73,5 +77,5 @@ func TestFloatingNoteWindowActionsMenu(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.floatPane.actionsOpen = true
-	golden.AssertMatrix(t, "actions-menu", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
+	golden.AssertMatrix(t, "actions-menu", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingTallGoldens)
 }
