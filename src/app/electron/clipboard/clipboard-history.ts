@@ -518,6 +518,7 @@ export function createClipboardHistory(deps: ClipboardHistoryDeps) {
         subtitle: 'Copy text or images and they will appear here.',
       },
       actions,
+      actionPanelVisibility: 'menu',
       actionPanel: actions.length
         ? { sections: [{ title: 'Manage History', actions }] }
         : undefined,

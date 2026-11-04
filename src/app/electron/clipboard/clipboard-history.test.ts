@@ -761,6 +761,14 @@ test('clipboardHistoryView shows empty state when no history', () => {
   assert.equal(view.emptyView.title, 'No clipboard items found.');
 });
 
+test('clipboardHistoryView keeps removal actions out of empty search results', () => {
+  const { clipboardHistory } = createFakes();
+
+  const view = clipboardHistory.clipboardHistoryView();
+
+  assert.equal(view.actionPanelVisibility, 'menu');
+});
+
 // ═══════════════════════════════════════════════════════════
 // createClipboardExtension
 // ═══════════════════════════════════════════════════════════

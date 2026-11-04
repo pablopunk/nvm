@@ -556,6 +556,29 @@ function GridExtensionView({
   );
 }
 
+function listEmptyContent({
+  view,
+  renderEmpty,
+  renderActionPanel,
+  actionPanelRows,
+}: Pick<
+  ExtensionViewSurfaceProps,
+  'view' | 'renderEmpty' | 'renderActionPanel' | 'actionPanelRows'
+>) {
+  const emptyState = renderEmpty(view);
+  const actions = inlineViewActions({
+    view,
+    renderActionPanel,
+    actionPanelRows,
+  });
+  return (
+    <div className="extensionListEmpty">
+      {emptyState}
+      {actions}
+    </div>
+  );
+}
+
 function ListExtensionView({
   view,
   filterItems,
@@ -590,12 +613,12 @@ function ListExtensionView({
     <ListView
       items={items}
       sections={filterSections(view)}
-      empty={
-        <>
-          {renderEmpty(view)}
-          {inlineViewActions({ view, renderActionPanel, actionPanelRows })}
-        </>
-      }
+      empty={listEmptyContent({
+        view,
+        renderEmpty,
+        renderActionPanel,
+        actionPanelRows,
+      })}
       isLoading={view.isLoading}
       pagination={<ViewPagination view={view} runAction={runAction} />}
       renderItem={(item) => {

@@ -1792,6 +1792,26 @@
   text-align: center;
 }
 
+.extensionListEmpty {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+}
+
+.extensionListEmpty > .empty {
+  height: auto;
+  padding: 24px 12px 16px;
+}
+
+/* A side-preview list with nothing to preview shrinks to its empty state. */
+.results.sidePreviewCard:has(.extensionListEmpty) {
+  flex: 0 1 auto;
+}
+
+.sidePreviewCard:has(.extensionListEmpty) > [cmdk-list-sizer] {
+  height: auto;
+}
+
 .empty strong {
   color: var(--text-secondary);
 }
