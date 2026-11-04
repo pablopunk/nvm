@@ -125,7 +125,7 @@ func waitForRow(t *testing.T, app *App, label string, timeout time.Duration) {
 			}
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("no palette row labelled %q within %s", label, timeout)
+			t.Fatalf("no palette row labelled %q within %s; labels seen: %s", label, timeout, summarize(treeLabels(tree)))
 		}
 		time.Sleep(pollInterval)
 	}

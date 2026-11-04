@@ -108,9 +108,12 @@ func (p *App) commands(timerOn bool) []command {
 	return cmds
 }
 
+// rootViewTitle names the palette's first level, so a refresh can find it among the views pushed on it.
+const rootViewTitle = "Nevermind"
+
 // rootView is the palette's first level: the providers of every source, merged by the coordinator.
 func (p *App) rootView() *palette.View {
-	return &palette.View{Title: "Nevermind", Providers: p.rootProviders, Hint: "esc Close"}
+	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close"}
 }
 
 // ---- settings ----

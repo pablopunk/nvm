@@ -56,7 +56,7 @@ func (r rigSystem) record(call string) error {
 	if r.logPath == "" {
 		return nil
 	}
-	file, err := os.OpenFile(r.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	file, err := os.OpenFile(r.logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
