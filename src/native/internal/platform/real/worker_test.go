@@ -38,7 +38,7 @@ func TestWorkerExchangesLinesAndReportsExitCode(t *testing.T) {
 
 func TestWorkerKillUnblocksReadAndIsRepeatable(t *testing.T) {
 	requireUnixShell(t)
-	proc, err := NewWorker().Start(platform.WorkerSpec{Binary: "/bin/sh", Args: []string{"-c", "sleep 30"}})
+	proc, err := NewWorker().Start(platform.WorkerSpec{Binary: "/bin/sh", Args: []string{"-c", "exec sleep 30"}})
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
