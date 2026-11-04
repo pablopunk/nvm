@@ -88,7 +88,7 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 	_, err := app.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Floating Notes", elementWait)
+	_, err = app.WaitFor("Find a note", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // the first row starts a note
 	_, err = app.WaitFor("Untitled note", elementWait)
@@ -110,7 +110,7 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 	_, err = relaunched.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Return"))
-	_, err = relaunched.WaitFor("Search Floating Notes", elementWait)
+	_, err = relaunched.WaitFor("Find a note", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Down")) // the newest note is the row after "New Note"
 	must(t, relaunched.Key("Return"))

@@ -19,7 +19,7 @@ import (
 // Markdown of the chosen note. Filtering matches the text of the notes, as the 1.x list did.
 func (p *App) notesView() *palette.View {
 	return &palette.View{
-		Title: "Floating Notes", Placeholder: "Search Floating Notes",
+		Title: "Floating Notes", Placeholder: "Find a note",
 		EmptyTitle: "A clear space for your next idea.", EmptySub: "Create a Markdown note and keep it close at hand.",
 		Search: func(q string) []search.Item {
 			if p.notes == nil {

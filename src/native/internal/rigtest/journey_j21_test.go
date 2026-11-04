@@ -62,7 +62,7 @@ func createNoteWith(t *testing.T, app *App, text string) {
 	_, err := app.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Floating Notes", elementWait)
+	_, err = app.WaitFor("Find a note", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Untitled note", elementWait)
