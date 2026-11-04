@@ -30,6 +30,7 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 	var profile *store.Collection[auth.Profile]
 	if st != nil {
 		profile = auth.ProfileDocument(st)
+		importLegacyAccount(ports.FS, profile)
 	}
 	session, err := auth.New(p.accountDeps(ports, profile))
 	if err != nil {
