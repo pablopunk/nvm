@@ -43,8 +43,8 @@ func TestJourneyWP34FormSubmitAndDraftSurvivesKill(t *testing.T) {
 	_, err := app.WaitFor("Save   esc Back", elementWait) // the editor's footer: the text area has the focus by now
 	must(t, err)
 	must(t, app.Type(wp34Note))
-	_, err = app.WaitFor("Draft saved", elementWait)
-	must(t, err)
+	// Each edit clears the status, so "Draft saved" next to the full text means a save after the last key.
+	must(t, app.WaitForTogether(elementWait, wp34Note, "Draft saved"))
 	shoot(t, app, "wp34-2-draft-saved")
 	must(t, app.KillHard())
 
