@@ -7,6 +7,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
@@ -82,8 +84,14 @@ func (p *App) dictationDeps() dictationDeps {
 		After:         p.dictationAfter,
 		PaletteHidden: p.notePaletteHidden,
 		Toast:         p.toastFromBackground,
-		RestoreDelay:  dictationRestoreDelay,
-		OnDevices:     p.Refresh,
+		Warn: func(event string, fields map[string]any) {
+			logx.Default().Warn(event, logx.F(fields))
+		},
+		OpenMicrophoneSettings: func() error {
+			return p.ports.System.OpenSettings(systemfeat.PrivacyPaneID, "Microphone")
+		},
+		RestoreDelay: dictationRestoreDelay,
+		OnDevices:    p.Refresh,
 	}
 }
 

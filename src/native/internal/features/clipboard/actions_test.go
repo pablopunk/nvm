@@ -29,6 +29,11 @@ type orderPaster struct {
 	body func()
 }
 
+// FrontmostAppID reports that the front app is not needed by these tests.
+func (p orderPaster) FrontmostAppID() (string, error) {
+	return "", platform.ErrUnsupported
+}
+
 // PasteIntoFrontmost records the start and end of the call.
 func (p orderPaster) PasteIntoFrontmost(string) error {
 	*p.log = append(*p.log, "paste:start")

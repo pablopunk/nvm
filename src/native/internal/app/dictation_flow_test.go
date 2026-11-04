@@ -96,11 +96,13 @@ func (t *fakeDictationTranscriber) CancelPreparation(_ context.Context, _ string
 	return nil
 }
 
-// pasteRecord is what the paste port saw: how many palette hides had happened, and what the clipboard held.
+// pasteRecord is what the paste port saw: how many palette hides had happened, what the clipboard held, and the app
+// the paste was aimed at.
 type pasteRecord struct {
 	hidden    int
 	concealed bool
 	text      string
+	target    string
 }
 
 // orderedPaster records each paste with the state the palette and clipboard were in when the keys were sent.
@@ -108,12 +110,16 @@ type orderedPaster struct {
 	harness *dictationHarness
 }
 
-func (p orderedPaster) PasteIntoFrontmost(string) error {
+func (p orderedPaster) PasteIntoFrontmost(target string) error {
 	h := p.harness
 	formats, _ := h.set.Clipboard.Formats()
 	text, _ := h.set.Clipboard.ReadText()
-	h.pastes = append(h.pastes, pasteRecord{hidden: h.hidden, concealed: hasConcealed(formats), text: text})
+	h.pastes = append(h.pastes, pasteRecord{hidden: h.hidden, concealed: hasConcealed(formats), text: text, target: target})
 	return h.pasteErr
+}
+
+func (p orderedPaster) FrontmostAppID() (string, error) {
+	return p.harness.frontmost, p.harness.frontmostErr
 }
 
 func hasConcealed(formats []platform.ClipboardFormat) bool {
@@ -141,6 +147,12 @@ type dictationHarness struct {
 	pasteErr    error
 	toasts      []string
 	timers      []func()
+	frontmost   string
+	// frontmostErr is what FrontmostAppID returns; the zero value means the app is known.
+	frontmostErr error
+	warned       []string
+	settingsOpen int
+	settingsErr  error
 }
 
 func newDictationHarness(t *testing.T) *dictationHarness {
@@ -165,7 +177,12 @@ func newDictationHarness(t *testing.T) *dictationHarness {
 		After:         func(_ time.Duration, fn func()) { h.timers = append(h.timers, fn) },
 		PaletteHidden: func() { h.hidden++ },
 		Toast:         func(msg string) { h.toasts = append(h.toasts, msg) },
-		OnDevices:     func() {},
+		Warn:          func(event string, _ map[string]any) { h.warned = append(h.warned, event) },
+		OpenMicrophoneSettings: func() error {
+			h.settingsOpen++
+			return h.settingsErr
+		},
+		OnDevices: func() {},
 	})
 	return h
 }
@@ -339,7 +356,7 @@ func TestAPasteThatTheOSRefusesLeavesTheTextForAManualPaste(t *testing.T) {
 	h.flow.Toggle()
 	h.flow.Toggle()
 
-	if want := pasteFailureMessage(platform.ErrUnsupported); len(h.toasts) != 1 || h.toasts[0] != want {
+	if want := dictationPasteMessage(platform.ErrUnsupported); len(h.toasts) != 1 || h.toasts[0] != want {
 		t.Fatalf("toasts = %v, want %q", h.toasts, want)
 	}
 	if text, _ := h.set.Clipboard.ReadText(); text != "manual" {

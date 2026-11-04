@@ -3,6 +3,7 @@ package real
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -14,8 +15,17 @@ import (
 // closest port error, because System Events reports a missing permission as a script error.
 const macPasteScript = `tell application "System Events" to keystroke "v" using command down`
 
-// pasteGesture runs the osascript paste. expectedAppID is not checked on macOS in this build.
-func pasteGesture(ctx context.Context, helper platform.Helper, _ string) error {
+// pasteGesture runs the osascript paste. When expectedAppID is set, the paste is sent only while that bundle is in front.
+func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
+	if expectedAppID != "" {
+		current, err := frontmostAppID(ctx, helper, os.Getpid())
+		if err != nil {
+			return err
+		}
+		if current != expectedAppID {
+			return platform.ErrConflict
+		}
+	}
 	result, err := helper.Run(ctx, "osascript", []string{"-e", macPasteScript}, nil)
 	if err != nil {
 		return err
@@ -24,4 +34,10 @@ func pasteGesture(ctx context.Context, helper platform.Helper, _ string) error {
 		return fmt.Errorf("paste keystroke refused (Accessibility permission?): %w", platform.ErrDenied)
 	}
 	return nil
+}
+
+// frontmostAppID names the bundle in front through Launch Services, or "" when Nevermind itself has the keyboard.
+func frontmostAppID(ctx context.Context, helper platform.Helper, ownPID int) (string, error) {
+	app, found, err := frontmostApp(ctx, helper)
+	return frontmostIdentityOf(app, found, ownPID), err
 }

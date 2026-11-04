@@ -2,6 +2,7 @@ package real
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -23,6 +24,13 @@ type paster struct {
 // it, so the paster never polls the window.
 func NewPaster(helper platform.Helper, waitHidden func(ctx context.Context) error) platform.Paster {
 	return paster{helper: helper, waitHidden: waitHidden}
+}
+
+// FrontmostAppID names the app with the keyboard in the form PasteIntoFrontmost matches on this OS.
+func (p paster) FrontmostAppID() (string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), pasteTimeout)
+	defer cancel()
+	return frontmostAppID(ctx, p.helper, os.Getpid())
 }
 
 // PasteIntoFrontmost waits for the palette to hide, then sends the paste gesture. It returns

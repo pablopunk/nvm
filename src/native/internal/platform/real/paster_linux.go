@@ -51,3 +51,11 @@ func runXdotool(ctx context.Context, helper platform.Helper, args ...string) (st
 	}
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
+
+// frontmostAppID names the focused X11 window's class, the identity keyGesture checks before it types.
+func frontmostAppID(ctx context.Context, helper platform.Helper, _ int) (string, error) {
+	if !pasteCapable("linux", os.Getenv, programInstalled) {
+		return "", platform.ErrUnsupported
+	}
+	return runXdotool(ctx, helper, "getactivewindow", "getwindowclassname")
+}

@@ -69,7 +69,7 @@ func (d *dictationWindow) windowFor() *mygo.Window {
 			DisableMinimize:   true,
 			DisableMaximize:   true,
 			DisableFullScreen: true,
-			Content:           ui.View(func(c *ui.Context) { palindicator.Indicator(c, p.dictationView) }),
+			Content:           ui.View(func(c *ui.Context) { p.pressDictationControl(palindicator.Indicator(c, p.dictationView)) }),
 		})
 		p.dictationWindow.OnClosed(func() { p.dictationWindow = nil })
 	}
@@ -81,4 +81,13 @@ func dictationWindowOrigin(area platform.Rect, height int) (int, int) {
 	x := area.X + (area.Width-dictationWindowWidth)/2
 	y := area.Y + area.Height - height - dictationWindowBottomGap
 	return x, y
+}
+
+// pressDictationControl runs the button pressed in this frame on the UI thread after the frame, since the flow hides
+// the panel the press came from.
+func (p *App) pressDictationControl(control palindicator.Control) {
+	if control == palindicator.ControlNone {
+		return
+	}
+	p.dictationAfter(0, func() { p.dictationFlowFor().Press(control) })
 }
