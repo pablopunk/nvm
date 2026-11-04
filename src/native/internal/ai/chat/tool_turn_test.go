@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
-	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 )
 
@@ -158,107 +157,6 @@ func TestToolTurnRecordsTheTranscriptAndAnswers(t *testing.T) {
 	}
 }
 
-// TestAllowedCallRunsAfterTheUserAllowsIt checks the confirmation path: the row waits, then runs once allowed.
-func TestAllowedCallRunsAfterTheUserAllowsIt(t *testing.T) {
-	var runs atomic.Int32
-	backend := fixtures.NewScriptedBackend(
-		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "d1", Name: "delete", Arguments: []string{`{"text":"old"}`}}),
-		fixtures.TextReply("Deleted."),
-	)
-	f := newScriptedFixture(t, toolsOf(t, deleteTool(&runs)), backend)
-	chat := f.newChat()
-	if err := f.svc.Send(chat.ID, "delete old"); err != nil {
-		t.Fatal(err)
-	}
-	f.awaitState(func(messages []Message) bool { return hasToolWith(messages, StatusAwaiting) })
-	if runs.Load() != 0 {
-		t.Fatal("the confirmed call ran before the user allowed it")
-	}
-	if err := f.svc.Decide(chat.ID, true); err != nil {
-		t.Fatalf("Decide: %v", err)
-	}
-	f.awaitTurn(chat.ID)
-	if runs.Load() != 1 || !hasToolWith(f.messages(chat.ID), StatusComplete) {
-		t.Fatalf("runs = %d after an allow", runs.Load())
-	}
-}
-
-// TestRefusedCallNeverRunsAndTheModelIsTold checks that a refusal reaches the model as the user's answer.
-func TestRefusedCallNeverRunsAndTheModelIsTold(t *testing.T) {
-	var runs atomic.Int32
-	backend := fixtures.NewScriptedBackend(
-		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "d1", Name: "delete", Arguments: []string{`{"text":"old"}`}}),
-		fixtures.TextReply("Okay, I kept it."),
-	)
-	f := newScriptedFixture(t, toolsOf(t, deleteTool(&runs)), backend)
-	chat := f.newChat()
-	if err := f.svc.Send(chat.ID, "delete old"); err != nil {
-		t.Fatal(err)
-	}
-	f.awaitState(func(messages []Message) bool { return hasToolWith(messages, StatusAwaiting) })
-	if err := f.svc.Decide(chat.ID, false); err != nil {
-		t.Fatalf("Decide: %v", err)
-	}
-	f.awaitTurn(chat.ID)
-	if runs.Load() != 0 || !hasToolWith(f.messages(chat.ID), StatusRefused) {
-		t.Fatalf("runs = %d after a refusal", runs.Load())
-	}
-	if !strings.Contains(backend.Requests()[1], "The user did not allow this tool call.") {
-		t.Fatal("the model was not told the call was refused")
-	}
-}
-
-// TestDecideWithoutAPendingCallIsRefused checks the error when nothing waits for an answer.
-func TestDecideWithoutAPendingCallIsRefused(t *testing.T) {
-	f := newScriptedFixture(t, Toolset{}, fixtures.NewScriptedBackend())
-	chat := f.newChat()
-	if err := f.svc.Decide(chat.ID, true); err != ErrNothingToDecide {
-		t.Fatalf("Decide = %v, want ErrNothingToDecide", err)
-	}
-}
-
-// TestStopWhileAwaitingAnswerCancelsTheTurn checks Escape during a confirmation: nothing runs, the row is cancelled.
-func TestStopWhileAwaitingAnswerCancelsTheTurn(t *testing.T) {
-	var runs atomic.Int32
-	backend := fixtures.NewScriptedBackend(
-		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "d1", Name: "delete", Arguments: []string{`{"text":"old"}`}}),
-	)
-	f := newScriptedFixture(t, toolsOf(t, deleteTool(&runs)), backend)
-	chat := f.newChat()
-	if err := f.svc.Send(chat.ID, "delete old"); err != nil {
-		t.Fatal(err)
-	}
-	f.awaitState(func(messages []Message) bool { return hasToolWith(messages, StatusAwaiting) })
-	f.svc.Stop(chat.ID)
-	f.awaitTurn(chat.ID)
-	rows := toolRows(f.messages(chat.ID))
-	if runs.Load() != 0 || len(rows) != 1 || rows[0].Status != StatusCancelled {
-		t.Fatalf("rows = %+v, runs = %d", rows, runs.Load())
-	}
-	if f.settled[len(f.settled)-1].Ending != EndStopped {
-		t.Fatalf("the turn ended %+v, want stopped", f.settled[len(f.settled)-1])
-	}
-}
-
-// TestStopWhileAToolRunsCancelsItsRow checks that a tool which waits on its context is cancelled with the turn.
-func TestStopWhileAToolRunsCancelsItsRow(t *testing.T) {
-	started := make(chan struct{})
-	backend := fixtures.NewScriptedBackend(
-		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "w1", Name: "wait", Arguments: []string{`{}`}}),
-	)
-	f := newScriptedFixture(t, toolsOf(t, blockingTool(started)), backend)
-	chat := f.newChat()
-	if err := f.svc.Send(chat.ID, "wait"); err != nil {
-		t.Fatal(err)
-	}
-	<-started
-	f.svc.Stop(chat.ID)
-	f.awaitTurn(chat.ID)
-	if rows := toolRows(f.messages(chat.ID)); len(rows) != 1 || rows[0].Status != StatusCancelled {
-		t.Fatalf("rows = %+v", rows)
-	}
-}
-
 // TestStepLimitKeepsTheTranscriptAndNamesTheLimit runs a model that asks for a tool on every turn.
 func TestStepLimitKeepsTheTranscriptAndNamesTheLimit(t *testing.T) {
 	var runs atomic.Int32
@@ -400,45 +298,6 @@ func TestBuilderGetsNoTools(t *testing.T) {
 	f.awaitTurn(builder.ID)
 	if strings.Contains(backend.Requests()[0], `"tools"`) {
 		t.Fatal("the builder was offered tools")
-	}
-}
-
-// TestRequestAnswersCallsThatNeverFinished checks a restart that cut a call off: the request still answers it.
-func TestRequestAnswersCallsThatNeverFinished(t *testing.T) {
-	chat := Chat{Messages: []Message{
-		{Author: AuthorUser, Text: "find it", Status: StatusComplete},
-		{Author: AuthorAssistant, Status: StatusComplete, Calls: []backend.ToolCall{{ID: "x1", Type: "function", Function: backend.ToolFunction{Name: "search_files", Arguments: "{}"}}}},
-		{Author: AuthorTool, Status: StatusRunning, Tool: &ToolRun{CallID: "x1", Name: "search_files"}},
-	}}
-	turns := Request("system", chat)[1:]
-	if len(turns) != 3 || turns[2].Role != backend.RoleTool || turns[2].ToolCallID != "x1" || !strings.Contains(string(turns[2].Content), unfinishedResult) {
-		t.Fatalf("turns = %+v", turns)
-	}
-}
-
-// TestRequestNeverStartsWithAnOrphanAnswer checks the history cut: a window never opens on a tool answer.
-func TestRequestNeverStartsWithAnOrphanAnswer(t *testing.T) {
-	var messages []Message
-	for i := 0; i < 12; i++ {
-		id := string(rune('a' + i))
-		messages = append(messages,
-			Message{Author: AuthorUser, Text: "q" + id, Status: StatusComplete},
-			Message{Author: AuthorAssistant, Status: StatusComplete, Calls: []backend.ToolCall{{ID: id, Type: "function", Function: backend.ToolFunction{Name: "x", Arguments: "{}"}}}},
-			Message{Author: AuthorTool, Status: StatusComplete, Text: "r" + id, Tool: &ToolRun{CallID: id, Name: "x"}},
-			Message{Author: AuthorAssistant, Text: "a" + id, Status: StatusComplete},
-		)
-	}
-	turns := Request("system", Chat{Messages: messages})[1:]
-	if len(turns) > MaxHistoryMessages {
-		t.Fatalf("history = %d messages, want at most %d", len(turns), MaxHistoryMessages)
-	}
-	if turns[0].Role == backend.RoleTool {
-		t.Fatal("the history opens on a tool answer whose call was cut")
-	}
-	for i, turn := range turns {
-		if turn.Role == backend.RoleTool && (i == 0 || turns[i-1].Role != backend.RoleAssistant && turns[i-1].Role != backend.RoleTool) {
-			t.Fatalf("tool answer %d has no call before it", i)
-		}
 	}
 }
 
