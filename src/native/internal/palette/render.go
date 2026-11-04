@@ -76,12 +76,11 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 			data.Placeholder = rootPlaceholders[p.phIndex%len(rootPlaceholders)]
 		}
 	}
-	data.Accessory = accessoryLabel(v)
+	data.AccessoryOptions, data.AccessorySelected = accessoryChoices(v)
 	events := design.SearchRow(c, data)
 	p.searchSpan = events.Selection
-	if events.Accessory {
-		v.Accessory.Value = v.Accessory.Next()
-		v.Accessory.OnChange(v.Accessory.Value)
+	if v.Accessory != nil && events.AccessoryChoice >= 0 {
+		v.Accessory.Choose(events.AccessoryChoice)
 		p.search()
 	}
 	if events.Back {
@@ -267,12 +266,13 @@ func (p *Palette) actionPanel(c *ui.Context) {
 	}
 }
 
-// accessoryLabel is the picker's text, or "" when the view has no picker.
-func accessoryLabel(v *View) string {
+// accessoryChoices are the picker's option titles and the index of its current option; no titles when the view has
+// no picker.
+func accessoryChoices(v *View) ([]string, int) {
 	if v.Accessory == nil {
-		return ""
+		return nil, 0
 	}
-	return v.Accessory.Label()
+	return v.Accessory.Titles(), v.Accessory.SelectedIndex()
 }
 
 // viewHint is the right footer text of a view: its HintFn when it has one, its fixed Hint otherwise.

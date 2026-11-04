@@ -31,7 +31,8 @@ type Pagination struct {
 }
 
 // SearchAccessory is a small filter control at the end of the search bar, such as a category
-// picker. Its selection arrives as Invocation.Value through OnChange.
+// picker. The host shows it as a native popup menu of Options, with a check mark on Value, as a
+// native select does; a chosen option becomes Value and arrives as Invocation.Value through OnChange.
 type SearchAccessory struct {
 	ID       string                  `json:"id,omitempty"`
 	Tooltip  string                  `json:"tooltip,omitempty"`
