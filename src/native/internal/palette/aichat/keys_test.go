@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -21,8 +22,8 @@ type keyToken string
 
 func (t keyToken) Get() (string, error) { return string(t), nil }
 
-// streamingClient is a backend client whose chat replies the test writes by hand.
-func streamingClient(t *testing.T, transport *fixtures.StreamingTransport) *backend.Client {
+// streamingClient is a backend client whose chat replies the test writes by hand, or whose answers the transport makes.
+func streamingClient(t *testing.T, transport platform.HTTP) *backend.Client {
 	t.Helper()
 	set := fake.NewSet()
 	logger, err := logx.New(set.FS, set.Clock, "/logs", logx.Options{FlushInterval: time.Second, Level: logx.Debug})

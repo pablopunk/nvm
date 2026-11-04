@@ -110,7 +110,8 @@ func (p *Palette) SetStack(views ...*View) {
 
 func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 
-// Show shows the palette on the first level with every search reset, then runs OnShow.
+// Show shows the palette with every search reset, on the root or on the chat page that survived the last hide, then
+// runs OnShow.
 func (p *Palette) Show() {
 	if !p.win.IsVisible() {
 		p.captureFocus()
