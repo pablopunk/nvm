@@ -49,6 +49,9 @@ type Options struct {
 	// Focus gives the keyboard back to the window that had it when the palette was shown, when the palette hides
 	// without an action that chose its own destination. Nil disables it.
 	Focus platform.Focus
+	// Feedback shows a message raised while the palette is hidden, where it outlives the hide, as 1.x's HUD does. Nil
+	// drops such messages.
+	Feedback func(message string)
 	// DragRow draws a row whose item carries DragPaths: the host wraps draw so that dragging the row offers the files
 	// to other applications. Nil draws the row as it is. The palette itself does not import the OS transfer package.
 	DragRow func(c *ui.Context, paths []string, draw func())
@@ -182,10 +185,17 @@ func (p *Palette) Hide() {
 }
 
 // Toast sets the one-line message shown under the search field on the next frame. A message raised while the
-// palette is hidden is dropped: toasts belong to the presentation that is open.
+// palette is hidden is not drawn under the field, which belongs to the presentation that is open: it goes to Feedback.
 func (p *Palette) Toast(msg string) {
-	if p.win == nil || p.win.IsVisible() {
+	if p.win == nil {
+		return
+	}
+	if p.win.IsVisible() {
 		p.toastMsg = msg
+		return
+	}
+	if p.opts.Feedback != nil {
+		p.opts.Feedback(msg)
 	}
 }
 

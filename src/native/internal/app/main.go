@@ -28,6 +28,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
+	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
@@ -115,6 +116,9 @@ type App struct {
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
 	aiCommands *commands.Service
 	aiPanel    *aiIndicator
+	// hud shows what an action did while the palette is hidden; hudWindow is its panel, created on first use.
+	hud       *feedback.HUD
+	hudWindow *mygo.Window
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -139,6 +143,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		History:     p.history,
 		Learner:     p.learn,
 		DragRow:     dragFileRow,
+		Feedback:    p.feedbackMessage,
 	})
 }
 

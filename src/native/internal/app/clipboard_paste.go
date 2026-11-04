@@ -56,7 +56,9 @@ func (p *App) pasteAfterHide(h search.Host, e clipboard.Entry) {
 	safego.Go(clipPasteName, func(context.Context) {
 		if err := clip.paste(e); err != nil {
 			p.toastFromBackground(pasteFailureMessage(err))
+			return
 		}
+		p.redraw(func() { p.showFeedback("Nevermind", "Pasted") })
 	})
 }
 
