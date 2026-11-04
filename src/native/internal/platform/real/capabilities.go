@@ -32,5 +32,6 @@ func Capabilities() platform.Capabilities {
 	if pasteSupported() {
 		supported = append(supported, platform.CapabilityClipboardPaste)
 	}
+	supported = append(supported, systemCapabilities(processSystemEnvironment())...)
 	return platform.NewCapabilities(supported...)
 }
