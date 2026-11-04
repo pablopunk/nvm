@@ -65,12 +65,6 @@ func TestLiveSmoke(t *testing.T) {
 	}
 	t.Logf("compatibility: state %s, backend %s (%s)", report.State, report.Manifest.Backend.Version, report.Manifest.Backend.Environment)
 
-	account, err := client.Me(ctx)
-	if err != nil {
-		t.Fatalf("Me: %v", err)
-	}
-	t.Logf("account: plan %s, balance %d", account.Plan, account.Balance)
-
 	route, err := client.ActiveModel(ctx, ActiveModelQuery{})
 	if err != nil {
 		t.Fatalf("ActiveModel: %v", err)

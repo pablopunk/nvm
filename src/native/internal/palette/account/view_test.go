@@ -173,6 +173,16 @@ func TestAccountSummaryShowsPlanAndBalanceWhenReported(t *testing.T) {
 	}
 }
 
+// TestAccountSummaryNamesAnUnknownPlan checks the summary says the plan is unknown when no backend route reported one.
+func TestAccountSummaryNamesAnUnknownPlan(t *testing.T) {
+	snapshot := connected()
+	snapshot.Account = auth.AccountInfo{Balance: 1200, HasBalance: true}
+	items := connectedRows(snapshot, Actions{})
+	if items[0].Subtitle != "Signed in as pat@example.test · Plan unknown · 1200 credits" {
+		t.Fatalf("summary = %q", items[0].Subtitle)
+	}
+}
+
 // TestAccountSearchFiltersRowsByTitle checks the page filters as the user types, ignoring case.
 func TestAccountSearchFiltersRowsByTitle(t *testing.T) {
 	view := View(func() auth.Snapshot { return connected() }, Actions{})

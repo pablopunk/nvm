@@ -17,7 +17,6 @@ const (
 	pathActiveModel               = "/api/v1/active-model"
 	pathDecisions                 = "/api/v1/decisions"
 	pathCompatibility             = "/api/compatibility"
-	pathMe                        = "/api/me"
 	pathDeviceInitiate            = "/api/auth/device/initiate"
 	pathDeviceExchange            = "/api/auth/device/exchange"
 	pathAudioTranscriptions       = "/api/v1/audio/transcriptions"

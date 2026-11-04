@@ -24,16 +24,22 @@ func connectedRows(s auth.Snapshot, a Actions) []search.Item {
 	return items
 }
 
-// accountSummary is the one-line account description: the plan and the balance when the backend reported them.
+// accountSummary is the one-line account description: the plan, which reads unknown until a route reports it, and
+// the balance when the backend reported it.
 func accountSummary(s auth.Snapshot) string {
-	summary := "Signed in as " + s.Email
-	if s.Account.Plan != "" {
-		summary += " · Plan " + s.Account.Plan
-	}
+	summary := "Signed in as " + s.Email + " · " + planLabel(s.Account.Plan)
 	if s.Account.HasBalance {
 		summary += fmt.Sprintf(" · %d credits", s.Account.Balance)
 	}
 	return summary
+}
+
+// planLabel names the plan the account view shows.
+func planLabel(plan string) string {
+	if plan == "" {
+		return "Plan unknown"
+	}
+	return "Plan " + plan
 }
 
 // signedOutRows shows the sign-in as it stands: the way in, a flow in progress, or how the last flow ended.

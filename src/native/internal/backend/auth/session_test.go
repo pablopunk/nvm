@@ -129,33 +129,37 @@ func TestSignOutClearsLocallyWhenTheBackendRefuses(t *testing.T) {
 	}
 }
 
-// TestRefreshReadsBalanceSpendCapAndPlan checks the account view's numbers come from the backend's answers.
-func TestRefreshReadsBalanceSpendCapAndPlan(t *testing.T) {
+// TestRefreshReadsBalanceAndSpendCap checks the account view's numbers come from the active-model answer, and that
+// the plan stays unknown because no bearer-token route reports one.
+func TestRefreshReadsBalanceAndSpendCap(t *testing.T) {
 	r := newRig(t, rigOptions{})
 	r.signIn()
 	r.set.HTTP.Script(
 		jsonResponse(200, `{"id":"fast","name":"Fast","api":"openai-completions","notice":"blocked","noticeReason":"free_spend_cap_reached","credits":{"paid":0,"free":0,"total":1200}}`),
-		jsonResponse(200, `{"email":"pat@example.test","plan":"pro","balance":1200}`),
 	)
 	if err := r.session.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)
 	}
 	snapshot := r.session.Snapshot()
-	if !snapshot.Account.HasBalance || snapshot.Account.Balance != 1200 || snapshot.Account.Plan != "pro" {
-		t.Fatalf("account = %+v, want balance 1200 on plan pro", snapshot.Account)
+	if !snapshot.Account.HasBalance || snapshot.Account.Balance != 1200 || snapshot.Account.Plan != "" {
+		t.Fatalf("account = %+v, want balance 1200 and no plan", snapshot.Account)
 	}
 	if snapshot.Notice == nil || snapshot.Notice.Kind != freeSpendCapCode {
 		t.Fatalf("notice = %+v, want the spend-cap notice", snapshot.Notice)
 	}
+	for _, request := range r.set.HTTP.Requests() {
+		if strings.HasSuffix(request.URL, "/api/me") {
+			t.Fatalf("Refresh called %s, which accepts only session cookies", request.URL)
+		}
+	}
 }
 
-// TestRefreshToleratesAPlanTheBackendWillNotGive checks that a refused account read does not hide the balance.
-func TestRefreshToleratesAPlanTheBackendWillNotGive(t *testing.T) {
+// TestRefreshLeavesThePlanUnknownWithoutAnError checks the balance is kept and no error is shown for the plan.
+func TestRefreshLeavesThePlanUnknownWithoutAnError(t *testing.T) {
 	r := newRig(t, rigOptions{})
 	r.signIn()
 	r.set.HTTP.Script(
 		jsonResponse(200, `{"id":"fast","name":"Fast","api":"openai-completions","credits":{"paid":5,"free":0,"total":5}}`),
-		jsonResponse(http.StatusUnauthorized, "Unauthorized"),
 	)
 	if err := r.session.Refresh(context.Background()); err != nil {
 		t.Fatalf("Refresh: %v", err)

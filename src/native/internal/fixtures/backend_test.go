@@ -78,7 +78,6 @@ func TestFailureModesReturnExactStatusAndBody(t *testing.T) {
 			for _, route := range []struct{ method, path string }{
 				{http.MethodPost, ChatCompletionsPath},
 				{http.MethodGet, ActiveModelPath},
-				{http.MethodGet, MePath},
 			} {
 				status, header, body := doThroughPort(t, set, context.Background(), route.method, route.path, chatRequestBody)
 				if status != tt.wantStatus || body != tt.wantBody {
@@ -162,9 +161,9 @@ func TestStreamModesDoNotAffectOtherRoutes(t *testing.T) {
 	backend.SetMode(ModeMalformedSSE)
 	set := fake.NewSet()
 	set.HTTP.Handle(backend)
-	status, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, MePath, "")
-	if status != http.StatusOK || body != MeBody {
-		t.Fatalf("GET /api/me under a stream mode = %d %q", status, body)
+	status, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, ActiveModelPath, "")
+	if status != http.StatusOK || body != ActiveModelBody {
+		t.Fatalf("GET active-model under a stream mode = %d %q", status, body)
 	}
 }
 
@@ -176,7 +175,7 @@ func TestTimeoutModeHoldsTheRequestUntilTheClientLeaves(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	outcome := make(chan error, 1)
 	go func() {
-		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://backend.test"+MePath, nil)
+		req, _ := http.NewRequestWithContext(ctx, http.MethodGet, "https://backend.test"+ActiveModelPath, nil)
 		_, err := set.Ports().HTTP.Do(req)
 		outcome <- err
 	}()
@@ -194,9 +193,6 @@ func TestHealthyRoutesReturnFixtureJSON(t *testing.T) {
 	if _, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, ActiveModelPath, ""); body != ActiveModelBody {
 		t.Fatalf("active-model body = %q", body)
 	}
-	if _, _, body := doThroughPort(t, set, context.Background(), http.MethodGet, MePath, ""); body != MeBody {
-		t.Fatalf("me body = %q", body)
-	}
 	if status, _, _ := doThroughPort(t, set, context.Background(), http.MethodGet, "/api/unknown", ""); status != http.StatusNotFound {
 		t.Fatalf("unknown route status %d, want 404", status)
 	}
@@ -207,9 +203,9 @@ func TestBackendRecordsRequestsInOrder(t *testing.T) {
 	set := fake.NewSet()
 	set.HTTP.Handle(backend)
 	doThroughPort(t, set, context.Background(), http.MethodPost, ChatCompletionsPath, chatRequestBody)
-	doThroughPort(t, set, context.Background(), http.MethodGet, MePath, "")
+	doThroughPort(t, set, context.Background(), http.MethodGet, ActiveModelPath, "")
 	recorded := backend.Requests()
-	if len(recorded) != 2 || recorded[0].Path != ChatCompletionsPath || recorded[0].Body != chatRequestBody || recorded[1].Path != MePath {
+	if len(recorded) != 2 || recorded[0].Path != ChatCompletionsPath || recorded[0].Body != chatRequestBody || recorded[1].Path != ActiveModelPath {
 		t.Fatalf("recorded requests = %+v", recorded)
 	}
 }
