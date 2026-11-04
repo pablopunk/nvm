@@ -1,7 +1,6 @@
 package emoji
 
 import (
-	"slices"
 	"strings"
 	"testing"
 )
@@ -174,25 +173,6 @@ func TestSearchCategoryMatchesOnlyTheRequestedGroup(t *testing.T) {
 	}
 }
 
-type fakeRecents []string
-
-func (f fakeRecents) RecentIDs() []string { return f }
-
-func TestRecentsResolvesIDsNewestFirstWithoutDuplicates(t *testing.T) {
-	catalog := NewCatalog()
-	source := fakeRecents{"emoji:U+1F600", "bogus:id", "emoji:U+1F600", "symbol:U+2713"}
-	recents := catalog.Recents(source, 0)
-	if len(recents) != 2 || recents[0].Glyph() != "😀" || recents[1].Glyph() != "✓" {
-		t.Fatalf("Recents = %v, want [😀 ✓]", glyphsOf(recents))
-	}
-	if limited := catalog.Recents(source, 1); len(limited) != 1 || limited[0].Glyph() != "😀" {
-		t.Errorf("limited Recents = %v, want [😀]", glyphsOf(limited))
-	}
-	if nilSource := catalog.Recents(nil, 5); nilSource != nil {
-		t.Errorf("nil source returned %v", glyphsOf(nilSource))
-	}
-}
-
 func TestLookupReportsMissingIDs(t *testing.T) {
 	if _, ok := NewCatalog().Lookup("emoji:U+0000"); ok {
 		t.Error("Lookup found an id that is not in the catalog")
@@ -206,12 +186,4 @@ func containsGlyph(entries []Entry, glyph string) bool {
 		}
 	}
 	return false
-}
-
-func glyphsOf(entries []Entry) []string {
-	var out []string
-	for _, entry := range entries {
-		out = append(out, entry.Glyph())
-	}
-	return slices.Clip(out)
 }

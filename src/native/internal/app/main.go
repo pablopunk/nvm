@@ -95,7 +95,6 @@ type App struct {
 	// backendReport is the last compatibility report the active backend gave; the status row reads it.
 	backendReport atomic.Pointer[backend.CompatReport]
 	store         *store.Store
-	recents       *store.Collection[emojiRecents]
 	rates         *store.Collection[rateDocument]
 	calc          *calc.Calculator
 

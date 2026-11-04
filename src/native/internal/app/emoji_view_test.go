@@ -85,9 +85,9 @@ func TestEmojiSkinToneAppliesToTheWavingHand(t *testing.T) {
 	}
 }
 
-// TestEmojiRecentsLeadTheGridInTheOrderUsed copies two characters and checks that a new picker lists them first,
-// newest first.
-func TestEmojiRecentsLeadTheGridInTheOrderUsed(t *testing.T) {
+// TestEmojiEmptyQueryKeepsTheCatalogOrderAfterCopies copies two characters and checks that a new picker still lists the
+// catalog from its first entry, as 1.x does: copying does not move a character to the top.
+func TestEmojiEmptyQueryKeepsTheCatalogOrderAfterCopies(t *testing.T) {
 	p := goldenPalette(t)
 	openEmojiPicker(p)
 	goldenQuery(p, "fire")
@@ -98,8 +98,8 @@ func TestEmojiRecentsLeadTheGridInTheOrderUsed(t *testing.T) {
 
 	openEmojiPicker(p)
 	rows := p.Results()
-	if len(rows) < 2 || rows[0].Title != "Grinning Face" || rows[1].Title != "Fire" {
-		t.Fatalf("top rows = %v, want Grinning Face then Fire", rowTitles(p))
+	if len(rows) < 2 || rows[0].Title != "Grinning Face" || rows[1].Title != "Grinning Face With Big Eyes" {
+		t.Fatalf("top rows = %v, want the catalog order from Grinning Face", rowTitles(p))
 	}
 }
 
