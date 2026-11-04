@@ -30,8 +30,21 @@ func (s *Session) actionAt(itemID string, index int, action api.Action) search.A
 	return s.action(action, itemID+"/"+strconv.Itoa(index))
 }
 
-// action maps one wire action to a palette action. key names the row that owns the action, for run handles.
+// action maps one wire action to a palette action, with the accelerator the action names. key names the row that owns
+// the action, for run handles.
 func (s *Session) action(action api.Action, key string) search.Action {
+	return withShortcut(s.actionBody(action, key), action.Shortcut)
+}
+
+// withShortcut gives a palette action the keys of an accelerator. An accelerator that does not parse is ignored.
+func withShortcut(action search.Action, accelerator string) search.Action {
+	if mods, key, ok := parseShortcut(accelerator); ok {
+		action.Mods, action.Key, action.Label = mods, key, shortcutLabel(accelerator)
+	}
+	return action
+}
+
+func (s *Session) actionBody(action api.Action, key string) search.Action {
 	title := orDefault(action.Title, defaultTitle(action.Kind))
 	switch action.Kind {
 	case api.ActionRun:
@@ -52,7 +65,7 @@ func (s *Session) action(action api.Action, key string) search.Action {
 		}
 		view := *action.View
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			h.Push(NewSession(s.deps, s.extID, view).Palette())
+			h.Push(NewSession(s.deps, s.extID, view).Open(h))
 		}}
 	case api.ActionPop:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Pop() }}
@@ -113,16 +126,22 @@ func (s *Session) invoke(h search.Host, r route) {
 }
 
 // finish applies a result on the UI thread. A failure stays on screen under the search field. A view opens above the
-// current one (or replaces it), a patch refreshes the visible rows, and an empty result closes the palette.
+// current page, replaces it, or becomes the root; a patch refreshes the visible rows; a pop goes back a page; an empty
+// result closes the palette.
 func (s *Session) finish(h search.Host, extID string, result api.Result, failure *api.Failure) {
 	switch {
 	case failure != nil:
 		h.Toast(failure.Message)
 	case result.View != nil:
-		if result.Navigation == api.NavReplace {
+		switch result.Navigation {
+		case api.NavRoot:
+			h.Root()
+		case api.NavReplace:
 			h.Pop()
 		}
-		h.Push(NewSession(s.deps, extID, *result.View).Palette())
+		h.Push(NewSession(s.deps, extID, *result.View).Open(h))
+	case result.Navigation == api.NavPop:
+		h.Pop()
 	case result.Patch != nil:
 		s.Apply(*result.Patch)
 		h.Refresh()

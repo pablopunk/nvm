@@ -69,7 +69,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		}
 	}
 	if it := p.chosenItem(); it != nil {
-		for _, a := range it.Actions[min(1, len(it.Actions)):] {
+		for _, a := range it.Actions {
 			if a.Key != 0 && c.Shortcut(a.Mods, a.Key) {
 				p.runAction(a)
 				return

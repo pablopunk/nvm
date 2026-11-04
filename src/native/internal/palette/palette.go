@@ -215,6 +215,12 @@ func (p *Palette) push(v *View) {
 }
 
 // Pop returns to the view below the current one. At the root it does nothing.
+func (p *Palette) Root() {
+	for len(p.stack) > 1 {
+		p.Pop()
+	}
+}
+
 func (p *Palette) Pop() {
 	if len(p.stack) < 2 {
 		return
@@ -267,7 +273,7 @@ func (p *Palette) Results() []search.Item { return p.results }
 func (p *Palette) Chosen() int { return p.chosen }
 
 func (p *Palette) choose(i int) {
-	p.chosen = max(0, min(i, len(p.results)-1))
+	p.chosen = p.enabledNear(max(0, min(i, len(p.results)-1)), i)
 	if len(p.results) > 0 {
 		p.list.ScrollIntoView(p.rowOf(p.chosen))
 	}
@@ -277,6 +283,21 @@ func (p *Palette) choose(i int) {
 func (p *Palette) rowOf(i int) int {
 	if g := p.cur().Grid; g != nil {
 		return i / max(g.Columns, 1)
+	}
+	return i
+}
+
+// enabledNear returns the nearest row to i that the keyboard may choose, looking the way the choice moved (from the
+// request). A list with no enabled row keeps i.
+func (p *Palette) enabledNear(i, requested int) int {
+	step := 1
+	if requested < p.chosen {
+		step = -1
+	}
+	for at := i; at >= 0 && at < len(p.results); at += step {
+		if !p.results[at].Disabled {
+			return at
+		}
 	}
 	return i
 }

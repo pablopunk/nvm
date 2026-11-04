@@ -16,6 +16,9 @@ type RowData struct {
 	// Prominent is the accent-tinted row (Automate); Selected is the row under the cursor of the list.
 	Prominent bool
 	Selected  bool
+	// Disabled draws the row muted with no plate; Contextual draws it as a wrapped guidance line.
+	Disabled   bool
+	Contextual bool
 	// ShowEnter draws the return glyph at the end of a selected row that has actions.
 	ShowEnter bool
 }
@@ -29,6 +32,15 @@ func Row(c *ui.Context, d RowData) {
 		if d.Section != "" {
 			Section(c, d.Section)
 		}
+		if d.Contextual {
+			ui.Column(c).Gap(2).Padding(5, 8).Children(func() {
+				ui.Text(c, d.Title).FontSize(13).FontWeight(600).TextColor(k.Strong)
+				if d.Subtitle != "" {
+					ui.Text(c, d.Subtitle).FontSize(11).TextColor(k.Secondary)
+				}
+			})
+			return
+		}
 		title, subtitle := k.Strong, k.Tertiary
 		if d.TintTitle || d.Prominent {
 			if col, ok := k.Tones[d.Tone]; ok {
@@ -38,6 +50,8 @@ func Row(c *ui.Context, d RowData) {
 		rowEl := ui.Row(c).Padding(5, 8).Gap(10).AlignItems(ui.Center).Radius(12)
 		hovered := rowEl.Hovered()
 		switch {
+		case d.Disabled:
+			title, subtitle = k.Faint, k.Faint
 		case d.Selected:
 			SelectedFill(rowEl, k, d.Prominent)
 		case d.Prominent:

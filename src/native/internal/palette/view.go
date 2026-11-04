@@ -48,6 +48,12 @@ type View struct {
 	Footer  func(chosen *search.Item) string
 	Hint    string // right footer text
 	OnLeave func()
+	// Loading reports that the view has no rows yet because they are still arriving; no empty state shows meanwhile.
+	Loading func() bool
+	// Accessory is a small choice at the end of the search field, such as a category. Its change is passed to OnChange.
+	Accessory *Accessory
+	// SelectID names the row to choose once the view's rows first show, such as an item the extension selected.
+	SelectID string
 	// OnKey sees the keys before the list and the action menu do; it returns true when it used one.
 	OnKey func(c *ui.Context, h search.Host) bool
 }
@@ -60,4 +66,43 @@ type Grid struct {
 	Columns    int
 	CellHeight float32
 	Cell       func(c *ui.Context, it search.Item)
+}
+
+// Accessory is a search field's option picker: each click moves to the next option and reports its value.
+type Accessory struct {
+	Value    string
+	Options  []AccessoryOption
+	OnChange func(value string)
+}
+
+// AccessoryOption is one choice of an Accessory.
+type AccessoryOption struct {
+	Title string
+	Value string
+}
+
+// Label is the accessory's current option title, or "" when no option matches its value.
+func (a *Accessory) Label() string {
+	for _, option := range a.Options {
+		if option.Value == a.Value {
+			return option.Title
+		}
+	}
+	return ""
+}
+
+// Next moves to the option after the current one, wrapping at the end, and reports the new value.
+func (a *Accessory) Next() string {
+	if len(a.Options) == 0 {
+		return a.Value
+	}
+	index := 0
+	for i, option := range a.Options {
+		if option.Value == a.Value {
+			index = (i + 1) % len(a.Options)
+			break
+		}
+	}
+	a.Value = a.Options[index].Value
+	return a.Value
 }

@@ -224,3 +224,6 @@ func TestDevelopmentBackendIsOfferedOnlyWhenAllowed(t *testing.T) {
 		t.Fatalf("packaged = %v, unpackaged = %v; development must appear only unpackaged", packaged, unpackaged)
 	}
 }
+
+// Root has nothing to leave in this test host.
+func (h *recordingHost) Root() {}

@@ -1,0 +1,258 @@
+package extview
+
+import (
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/search"
+)
+
+// Defaults of a data source's snapshot windows, as the Electron host uses them: a snapshot younger than the fresh
+// window is shown without a load, and an older one is shown at once and loaded again in place.
+const (
+	defaultFreshMs = 60_000
+	defaultStaleMs = 300_000
+	loadMoreID     = "__nvm:load-more"
+	retryID        = "__nvm:retry-load"
+	failedID       = "__nvm:load-failed"
+)
+
+// start runs what a freshly opened view does: its data source loads (or its snapshot shows), its immediate refresh
+// runs, and its interval refresh starts. It runs once.
+func (s *Session) start() {
+	if s.started {
+		return
+	}
+	s.started = true
+	s.immediate = s.view.Refresh != nil && s.view.Refresh.Immediate
+	s.startInterval()
+	if s.view.Source != nil {
+		s.loadSource()
+		return
+	}
+	s.afterFirstLoad()
+}
+
+// loadSource shows the snapshot of a data source when it has one, and loads the items again when the snapshot is
+// stale or missing.
+func (s *Session) loadSource() {
+	source := s.view.Source
+	if key := s.snapshotKey(); key != "" {
+		if entry, ok := s.deps.Cache.Get(key); ok {
+			s.items = entry.Items
+			age := s.deps.Clock.Now().Sub(entry.At)
+			if age < durationMs(source.TTLMs, defaultFreshMs) {
+				s.afterFirstLoad()
+				return
+			}
+			if age < durationMs(source.StaleTTLMs, defaultStaleMs) {
+				s.reload()
+				return
+			}
+			s.items = nil
+		}
+	}
+	s.reload()
+}
+
+// reload runs the data source's loader off the UI thread. Items it returns replace the view's items and its snapshot;
+// a failure keeps the items that were showing and says why.
+func (s *Session) reload() {
+	if s.deps.Load == nil {
+		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
+		return
+	}
+	s.loading, s.failure = true, nil
+	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
+		if s.dismissed {
+			return
+		}
+		s.loading = false
+		if failure != nil {
+			s.failure = failure
+			s.refreshHost()
+			return
+		}
+		s.items = items
+		s.putSnapshot(items)
+		s.refreshHost()
+		s.afterFirstLoad()
+	})
+}
+
+// afterFirstLoad runs the immediate refresh once the first items are on screen, so the refresh patches what is shown.
+func (s *Session) afterFirstLoad() {
+	if s.immediate {
+		s.immediate = false
+		s.refreshNow()
+	}
+}
+
+// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result.
+func (s *Session) refreshNow() {
+	refresh := s.view.Refresh
+	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
+		return
+	}
+	s.refreshing = true
+	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
+		s.refreshing = false
+		if failure != nil || result.Patch == nil {
+			return
+		}
+		patch := *result.Patch
+		if patch.Mode == "" {
+			patch.Mode = refresh.Mode
+		}
+		s.Apply(patch)
+		s.refreshHost()
+	})
+}
+
+// startInterval runs the refresh every IntervalMs while the view is open, on the UI thread.
+func (s *Session) startInterval() {
+	refresh := s.view.Refresh
+	if refresh == nil || refresh.IntervalMs <= 0 || s.deps.Clock == nil {
+		return
+	}
+	stop := make(chan struct{})
+	s.stopInterval = stop
+	ticker := s.deps.Clock.NewTicker(time.Duration(refresh.IntervalMs) * time.Millisecond)
+	go func() {
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C():
+				s.onUI(s.refreshNow)
+			}
+		}
+	}()
+}
+
+// close ends the view's background work when the palette leaves it: no load or refresh result changes it afterwards.
+func (s *Session) close() {
+	if s.dismissed {
+		return
+	}
+	s.dismissed = true
+	if s.stopInterval != nil {
+		close(s.stopInterval)
+	}
+}
+
+// loadMoreRow is the pagination row at the end of the list. Its action asks the extension for the next page.
+func (s *Session) loadMoreRow() search.Item {
+	next := *s.view.Pagination.Next
+	return search.Item{
+		ID: loadMoreID, Title: "Load more", Icon: "plus", Tone: extensionTone,
+		Actions: []search.Action{{Title: "Load more", Dismiss: search.DismissNever, Run: func(h search.Host) { s.loadMore(h, next) }}},
+	}
+}
+
+// loadMore appends the next page. An empty page, or one without a patch, is the end of the list.
+func (s *Session) loadMore(h search.Host, next api.ActionRef) {
+	s.invokeRaw(next, "", func(result api.Result, failure *api.Failure) {
+		if failure != nil {
+			h.Toast(failure.Message)
+			return
+		}
+		if result.Patch == nil || len(result.Patch.Items) == 0 {
+			s.hasMore = false
+			h.Refresh()
+			return
+		}
+		patch := *result.Patch
+		if patch.Mode == "" {
+			patch.Mode = api.PatchAppend
+		}
+		s.Apply(patch)
+		h.Refresh()
+	})
+}
+
+// failureRows is what a failed load shows above the items it kept: the reason, and a retry row when the source allows it.
+func (s *Session) failureRows() []search.Item {
+	rows := []search.Item{{
+		ID: failedID, Title: "Could not load these items", Subtitle: s.failure.Message,
+		Contextual: true, Disabled: true,
+	}}
+	if s.view.Source != nil && s.view.Source.Retry {
+		rows = append(rows, search.Item{
+			ID: retryID, Title: "Try again", Icon: "rotate-ccw", Tone: extensionTone,
+			Actions: []search.Action{{Title: "Try again", Dismiss: search.DismissNever, Run: func(search.Host) { s.reload() }}},
+		})
+	}
+	return rows
+}
+
+// invokeRaw runs one handler of the view and passes its result to done on the UI thread. A view that is closed never
+// runs a handler.
+func (s *Session) invokeRaw(ref api.ActionRef, value string, done func(api.Result, *api.Failure)) {
+	if s.dismissed {
+		return
+	}
+	if s.deps.Invoke == nil {
+		done(api.Result{}, &api.Failure{Code: api.CodeUnavailable, Message: unavailableMessage})
+		return
+	}
+	s.deps.Invoke(s.extID, api.Invocation{Ref: ref, Value: value}, done)
+}
+
+// invokeInPlace runs a handler whose result changes the open view without closing the palette, such as a picker.
+func (s *Session) invokeInPlace(ref api.ActionRef, value string) {
+	s.invokeRaw(ref, value, func(result api.Result, failure *api.Failure) {
+		if failure != nil {
+			s.toast(failure.Message)
+			return
+		}
+		if result.Patch != nil {
+			s.Apply(*result.Patch)
+		}
+		s.refreshHost()
+	})
+}
+
+func (s *Session) toast(message string) {
+	if s.host != nil {
+		s.host.Toast(message)
+	}
+}
+
+func (s *Session) refreshHost() {
+	if s.host != nil {
+		s.host.Refresh()
+	}
+}
+
+// onUI runs fn on the UI thread through the host's hook, or in place when there is none.
+func (s *Session) onUI(fn func()) {
+	if s.deps.OnUI == nil {
+		fn()
+		return
+	}
+	s.deps.OnUI(fn)
+}
+
+// snapshotKey names the view's snapshot in the cache, or "" when the view keeps none.
+func (s *Session) snapshotKey() string {
+	source := s.view.Source
+	if source == nil || source.CacheKey == "" || s.deps.Cache == nil || s.deps.Clock == nil {
+		return ""
+	}
+	return s.extID + "/" + source.CacheKey
+}
+
+func (s *Session) putSnapshot(items []api.Item) {
+	if key := s.snapshotKey(); key != "" {
+		s.deps.Cache.Put(key, CacheEntry{Items: items, At: s.deps.Clock.Now()})
+	}
+}
+
+func durationMs(ms, fallback int64) time.Duration {
+	if ms <= 0 {
+		ms = fallback
+	}
+	return time.Duration(ms) * time.Millisecond
+}

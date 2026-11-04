@@ -13,6 +13,8 @@ type SearchData struct {
 	Placeholder string
 	Query       *string
 	Input       *ui.Handle
+	// Accessory is the label of the picker at the end of the field; "" draws none.
+	Accessory string
 	// AIHint shows the "Tab to ask AI" chip beside the input.
 	AIHint bool
 }
@@ -20,6 +22,7 @@ type SearchData struct {
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
 type SearchEvents struct {
 	Back, Changed, Submitted bool
+	Accessory                bool
 }
 
 // SearchRow draws the search field and reports its events. It draws no state of its own: the query and the
@@ -38,6 +41,9 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 			Placeholder(d.Placeholder).PlaceholderColor(k.Faint).Label("Search")
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
+		if d.Accessory != "" {
+			events.Accessory = ui.Text(c, d.Accessory+" ⌄").FontSize(12).TextColor(k.Secondary).SingleLine().Clicked()
+		}
 		if d.AIHint {
 			Chip(c, ChipData{Icon: "sparkles", Bold: "Tab", Text: "to ask AI"})
 		}

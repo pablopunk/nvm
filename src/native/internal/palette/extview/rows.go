@@ -16,14 +16,24 @@ const extensionTone = "purple"
 const defaultIcon = "puzzle"
 
 // row is the palette row of one item: its tile, title, subtitle, the first accessory, its detail pane and its actions.
+// A disabled item keeps its text but has no actions.
 func (s *Session) row(item api.Item) search.Item {
-	return search.Item{
+	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
 		Icon: iconOr(item.Icon, defaultIcon), Tone: extensionTone,
 		Accessory: accessoryText(item.Accessories),
 		Detail:    s.detailPane(item.Detail),
-		Actions:   s.itemActions(item),
+		Image:     s.bitmap(item.Image),
+		Disabled:  item.Disabled, Contextual: item.Contextual,
 	}
+	if item.Detail != nil {
+		s.bitmap(item.Detail.Image)
+	}
+	if item.Disabled {
+		return row
+	}
+	row.Actions = s.itemActions(item)
+	return row
 }
 
 // itemActions is the item's primary action first, then its other actions. An action repeated in the list is shown once.
@@ -36,6 +46,9 @@ func (s *Session) itemActions(item api.Item) []search.Action {
 		if item.Primary == nil || !sameAction(*item.Primary, action) {
 			wire = append(wire, action)
 		}
+	}
+	if item.Shortcut != "" && len(wire) > 0 && wire[0].Shortcut == "" {
+		wire[0].Shortcut = item.Shortcut
 	}
 	out := make([]search.Action, 0, len(wire))
 	for i, action := range wire {
@@ -106,6 +119,12 @@ func collectionItems(spec *api.CollectionSpec) []api.Item {
 	return items
 }
 
+// editShortcut and removeShortcut are the record shortcuts of a collection: Cmd or Ctrl with E, and with Backspace.
+const (
+	editShortcut   = "CommandOrControl+E"
+	removeShortcut = "CommandOrControl+Backspace"
+)
+
 // collectionAddID is the reserved id of the add row; records may not use it (api.CollectionSpec.Validate).
 const collectionAddID = "__nvm:collection-create"
 
@@ -118,10 +137,13 @@ func collectionItem(record api.CrudItem) api.Item {
 		item.Primary = record.Preview
 	}
 	if record.Edit != nil {
-		item.Actions = append(item.Actions, *record.Edit)
+		edit := *record.Edit
+		edit.Shortcut = orDefault(edit.Shortcut, editShortcut)
+		item.Actions = append(item.Actions, edit)
 	}
 	if record.Remove != nil {
 		remove := *record.Remove
+		remove.Shortcut = orDefault(remove.Shortcut, removeShortcut)
 		if remove.Confirm == nil {
 			remove.Confirm = &api.Confirmation{
 				Title: "Remove “" + record.Title + "”?", ConfirmLabel: "Remove", Destructive: true,

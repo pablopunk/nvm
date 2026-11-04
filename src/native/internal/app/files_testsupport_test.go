@@ -84,3 +84,6 @@ func (h *recordingHost) Query() string { return "" }
 func (h *recordingHost) SetQuery(string) {}
 
 var _ search.Host = (*recordingHost)(nil)
+
+// Root has nothing to leave in this test host.
+func (h *recordingHost) Root() {}

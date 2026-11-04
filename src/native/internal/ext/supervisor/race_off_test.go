@@ -2,5 +2,5 @@
 
 package supervisor
 
-// raceEnabled is false when the test binary runs without the race detector.
-const raceEnabled = false
+// addressSpaceCap is the child's address-space limit in tests: 2 GiB, which the memory bomb (64 GiB) exceeds.
+const addressSpaceCap = 2 << 30
