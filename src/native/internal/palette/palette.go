@@ -14,6 +14,9 @@ type Window interface {
 	Show()
 	Hide()
 	IsVisible() bool
+	// IsFocused reports whether the window has the keyboard. A visible window without it is one another window took the
+	// keyboard from, which the summon shortcut brings forward rather than hides.
+	IsFocused() bool
 	Size() (width, height int)
 	SetPosition(x, y int)
 }
@@ -95,6 +98,8 @@ type Palette struct {
 	// at its end, which the next frame acts on (keys_arrows.go).
 	searchSpan [2]int
 	edge       searchEdge
+	// blurred is set from a focus loss until its grace passes (blur.go).
+	blurred bool
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.
@@ -117,10 +122,11 @@ func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 // Show shows the palette with every search reset, on the root or on the chat page that survived the last hide, then
 // runs OnShow.
 func (p *Palette) Show() {
-	if !p.win.IsVisible() {
+	if !p.win.IsVisible() || !p.win.IsFocused() {
 		p.captureFocus()
 	}
 	p.shows++
+	p.blurred = false
 	if p.opts.Position != nil {
 		w, h := p.win.Size()
 		x, y := p.opts.Position(w, h)
@@ -142,9 +148,11 @@ func (p *Palette) Show() {
 	p.syncActive(nil)
 }
 
-// Toggle shows the palette when it is hidden and hides it when it is shown: the hotkey's action.
+// Toggle is the summon shortcut's action, as 1.x reads it: a palette that is shown and has the keyboard hides. Any other
+// state shows it, so a shown palette behind another window comes forward. A focus loss still within its grace counts as
+// the keyboard being here, because the shortcut's own press causes that loss.
 func (p *Palette) Toggle() {
-	if p.win.IsVisible() {
+	if p.win.IsVisible() && (p.blurred || p.win.IsFocused()) {
 		p.Hide()
 		return
 	}

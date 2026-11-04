@@ -22,6 +22,7 @@ type fakeWindow struct {
 	queued  []func()
 	notify  chan struct{}
 	visible bool
+	focused bool
 	shows   int
 	hides   int
 	x, y    int
@@ -66,11 +67,16 @@ func (w *fakeWindow) drain() {
 	}
 }
 
-func (w *fakeWindow) Show()                { w.visible = true; w.shows++ }
-func (w *fakeWindow) Hide()                { w.visible = false; w.hides++ }
-func (w *fakeWindow) IsVisible() bool      { return w.visible }
+func (w *fakeWindow) Show()           { w.visible, w.focused = true, true; w.shows++ }
+func (w *fakeWindow) Hide()           { w.visible, w.focused = false, false; w.hides++ }
+func (w *fakeWindow) IsVisible() bool { return w.visible }
+func (w *fakeWindow) IsFocused() bool { return w.focused }
+
 func (w *fakeWindow) Size() (int, int)     { return 720, 470 }
 func (w *fakeWindow) SetPosition(x, y int) { w.x, w.y = x, y }
+
+// takeKeyboard gives the keyboard to another window, as a click on it does, without the palette hearing about it.
+func (w *fakeWindow) takeKeyboard() { w.focused = false }
 
 // harness drives a palette the way the window does: keys and text go to the tester, and frames settle.
 type harness struct {

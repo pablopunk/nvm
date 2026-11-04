@@ -54,6 +54,34 @@ func TestToggleGivesTheKeyboardBack(t *testing.T) {
 	}
 }
 
+// TestSummonBringsAVisibleUnfocusedPaletteForward checks the summon press on a palette another window took the keyboard
+// from: it stays shown, captures the window that has the keyboard now, and the next press hides it and gives it back.
+func TestSummonBringsAVisibleUnfocusedPaletteForward(t *testing.T) {
+	focus := fake.NewFocus()
+	focus.SetActive(appBeforeSummon)
+	var ran []string
+	h := newHarness(t, rowsView("Root", &ran, "Alpha"), true, withFocus(focus))
+	otherApp := platform.FocusTarget{Window: "7", PID: 99}
+	h.win.takeKeyboard()
+	focus.SetActive(otherApp)
+
+	h.p.Toggle()
+	if !h.win.IsVisible() || h.win.hides != 0 {
+		t.Fatalf("the summon press hid a visible palette the keyboard had left: visible=%v hides=%d", h.win.IsVisible(), h.win.hides)
+	}
+	if got, ok := h.p.Summoned(); !ok || got != otherApp {
+		t.Fatalf("summoned %v (%v), want the window that has the keyboard now", got, ok)
+	}
+
+	h.p.Toggle()
+	if h.win.IsVisible() {
+		t.Fatal("the next summon press should hide the focused palette")
+	}
+	if got := focus.Restored(); !reflect.DeepEqual(got, []platform.FocusTarget{otherApp}) {
+		t.Fatalf("restored %v, want the window captured by the last show", got)
+	}
+}
+
 // TestClickAwayLeavesTheKeyboardWithTheWindowClicked checks a focus loss that hides the palette after the grace:
 // the user picked another window, so the palette does not pull the keyboard back to the one from before the summon.
 func TestClickAwayLeavesTheKeyboardWithTheWindowClicked(t *testing.T) {
