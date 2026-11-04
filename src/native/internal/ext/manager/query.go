@@ -17,6 +17,7 @@ import (
 // crashed, was not running, or returned an error; Items is then empty. A failure never hides other results.
 type SearchResult struct {
 	ExtensionID string
+	Title       string
 	Items       []api.Item
 	Failure     *api.Failure
 }
@@ -48,6 +49,7 @@ func (m *Manager) Search(ctx context.Context, query string) []SearchResult {
 // runtimeTarget is one enabled runtime and the extension it belongs to.
 type runtimeTarget struct {
 	id      string
+	title   string
 	runtime *supervisor.Runtime
 }
 
@@ -60,7 +62,7 @@ func (m *Manager) searchTargets() ([]runtimeTarget, supervisor.Budget) {
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
 		if e.runtime != nil && m.isEnabled(e.bundle.Manifest.ID) && isAnswerable(e.runtime.Status().State) {
-			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, runtime: e.runtime})
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, runtime: e.runtime})
 		}
 	}
 	return targets, m.config.BudgetFor(protocol.MethodSearch)
@@ -71,7 +73,7 @@ func isAnswerable(state supervisor.State) bool {
 }
 
 func (m *Manager) searchOne(ctx context.Context, target runtimeTarget, query string, budget supervisor.Budget) SearchResult {
-	result := SearchResult{ExtensionID: target.id}
+	result := SearchResult{ExtensionID: target.id, Title: target.title}
 	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, protocol.MethodSearch, query, nil)

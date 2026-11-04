@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"maps"
 	"slices"
 
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
@@ -18,8 +17,6 @@ type rootInput struct {
 	engine     engine
 	quicklinks []Quicklink
 	learn      *usage.Learner
-	disabled   map[string]bool
-	exts       []loadedExt
 	apps       []appfeat.App
 	clip       *clipEngine
 	chats      []chatHead
@@ -43,8 +40,6 @@ func (p *App) captureRoot() *rootInput {
 		engine:     p.engine(),
 		quicklinks: slices.Clone(p.S.Quicklinks),
 		learn:      p.learn,
-		disabled:   maps.Clone(p.S.Disabled),
-		exts:       p.exts,
 		apps:       p.appsSnapshot(),
 		clip:       p.clip,
 		chats:      chats,

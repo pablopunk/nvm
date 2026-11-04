@@ -108,7 +108,7 @@ start_desktop() {
 # start_virtual_microphone runs a private PulseAudio server with a null source as the default
 # microphone, so dictation-style code paths have an input device without real audio hardware.
 start_virtual_microphone() {
-  start_service pulseaudio pulseaudio -n --daemonize=no --exit-idle-time=-1 \
+  start_service pulseaudio env PULSE_RUNTIME_PATH="$state/pulse" pulseaudio -n --daemonize=no --exit-idle-time=-1 \
     -L "module-native-protocol-unix auth-anonymous=1 socket=$state/pulse/native" \
     -L "module-null-source source_name=rig_mic" \
     -L "module-always-sink"

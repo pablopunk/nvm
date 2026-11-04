@@ -197,7 +197,7 @@ func TestReinstallHotReloadsAndAFailedInstallKeepsTheRunningVersion(t *testing.T
 		t.Fatalf("state = %s; want running", before)
 	}
 
-	reloaded := fixtureContents(t, "acme.good", "package main\n\nfunc SearchItems(ctx any, query string) ([]map[string]any, error) {\n\treturn []map[string]any{{\"id\": \"v2\", \"title\": \"v2\"}}, nil\n}\n")
+	reloaded := fixtureContents(t, "acme.good", "package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\nfunc SearchItems(ctx api.Context, query string) ([]api.Item, error) {\n\treturn []api.Item{{ID: \"v2\", Title: \"v2\"}}, nil\n}\n")
 	if err := h.m.Install("acme.good", reloaded, true); err != nil {
 		t.Fatalf("reinstall: %v", err)
 	}

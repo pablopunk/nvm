@@ -80,9 +80,18 @@ func (r *Runtime) runningChild(method string) (*childProcess, Budget, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.state != StateRunning || r.child == nil {
-		return nil, Budget{}, unavailable("not running: " + string(r.state))
+		return nil, Budget{}, unavailable(notRunningReason(r.state, r.reason))
 	}
 	return r.child, r.cfg.BudgetFor(method), nil
+}
+
+// notRunningReason names the state of a runtime that cannot take a call, with the reason it recorded. The
+// reason is the one a palette row shows, so it must not be replaced by the bare state name.
+func notRunningReason(state State, reason string) string {
+	if reason == "" {
+		return "not running: " + string(state)
+	}
+	return reason
 }
 
 // awaitResponse waits for the child's answer to req. The soft budget only records a diagnostic; the hard budget

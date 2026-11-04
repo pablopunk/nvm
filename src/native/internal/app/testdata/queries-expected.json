@@ -1226,48 +1226,10 @@
     "query": "fixture",
     "rows": [
       {
-        "kind": "Fixture",
-        "title": "Fix result for fixture",
-        "subtitle": "fixture",
-        "section": "Top Hit",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Copy",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Fixture",
-        "title": "Fixture docs",
-        "subtitle": "fixture",
-        "section": "Fixture",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Search",
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
-        "section": "Search",
+        "section": "Top Hit",
         "id": "",
         "icon": "zap",
         "tone": "yellow",
