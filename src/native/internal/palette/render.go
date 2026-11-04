@@ -185,6 +185,9 @@ func (p *Palette) tileData(it search.Item) design.TileData {
 	if it.Image == nil && it.IconPath != "" && p.opts.Icon != nil {
 		data.FileIcon = p.opts.Icon(it.IconPath)
 	}
+	if data.Icon == "" {
+		data.Icon = it.IconFallback
+	}
 	return data
 }
 

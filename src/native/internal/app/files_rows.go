@@ -86,15 +86,29 @@ func (f fileSearch) scoreFor(i int) int {
 	return scoreFileFirst - i
 }
 
+// fileKindIcon is the icon of a file row until the system's icon of the file arrives, or when the system has none.
+// Without it the palette would spell the name's first letters.
+func fileKindIcon(kind files.Kind) string {
+	switch kind {
+	case files.KindImage:
+		return "image"
+	case files.KindVideo:
+		return "play"
+	default:
+		return "file-text"
+	}
+}
+
 // fileItem is the row of one file: its name, its folder, its picture, and the actions a user takes on it.
 func (s *fileService) fileItem(r files.Result) search.Item {
 	return search.Item{
-		ID:        r.Path,
-		Title:     r.Name,
-		Subtitle:  filepath.Dir(r.DisplayPath),
-		IconPath:  r.Path,
-		DragPaths: []string{r.Path},
-		Detail:    s.detail(r),
-		Actions:   s.actionsFor(r),
+		ID:           r.Path,
+		Title:        r.Name,
+		Subtitle:     filepath.Dir(r.DisplayPath),
+		IconPath:     r.Path,
+		IconFallback: fileKindIcon(r.Kind),
+		DragPaths:    []string{r.Path},
+		Detail:       s.detail(r),
+		Actions:      s.actionsFor(r),
 	}
 }
