@@ -54,5 +54,10 @@ func (osFS) Chmod(name string, mode fs.FileMode) error { return os.Chmod(name, m
 
 // Watch reports changes under name until ctx is done. See fs_watch.go for how events map.
 func (osFS) Watch(ctx context.Context, name string) (<-chan platform.Event, error) {
-	return startWatch(ctx, name)
+	return startWatch(ctx, name, nil)
+}
+
+// WatchFiltered is Watch without the entries skip returns true for. See fs_watch.go.
+func (osFS) WatchFiltered(ctx context.Context, name string, skip func(rel string, isDir bool) bool) (<-chan platform.Event, error) {
+	return startWatch(ctx, name, skip)
 }

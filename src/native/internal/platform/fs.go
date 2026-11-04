@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 )
 
@@ -46,7 +47,15 @@ type FS interface {
 	// Watch reports changes under name until ctx is done, then closes the channel. Events are hints:
 	// read the files again. Events may be dropped when a consumer falls behind.
 	Watch(ctx context.Context, name string) (<-chan Event, error)
+	// WatchFiltered is Watch for part of a tree. skip is asked about every file and folder under name, by its path
+	// relative to name (slash-separated) and whether it is a folder; a skipped folder is not opened, and a skipped
+	// entry is neither watched nor reported. A tree that holds more entries than the platform keeps a watch on fails
+	// with an error matching ErrWatchLimit, and nothing is watched.
+	WatchFiltered(ctx context.Context, name string, skip func(rel string, isDir bool) bool) (<-chan Event, error)
 }
+
+// ErrWatchLimit is what WatchFiltered returns when the entries it would watch exceed the platform's entry limit.
+var ErrWatchLimit = errors.New("watch entry limit exceeded")
 
 // EventOp is what happened to a watched path.
 type EventOp string
