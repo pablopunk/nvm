@@ -7,7 +7,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
-	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
 
 // rootInput is what the root's providers read. The palette captures it on the UI thread when a query
@@ -17,7 +16,6 @@ import (
 type rootInput struct {
 	engine     engine
 	quicklinks []Quicklink
-	learn      *usage.Learner
 	apps       []appfeat.App
 	clip       *clipEngine
 	chats      []chatHead
@@ -37,7 +35,6 @@ func (p *App) captureRoot() *rootInput {
 	return &rootInput{
 		engine:     p.engine(),
 		quicklinks: slices.Clone(p.S.Quicklinks),
-		learn:      p.learn,
 		apps:       p.appsSnapshot(),
 		clip:       p.clip,
 		chats:      chats,

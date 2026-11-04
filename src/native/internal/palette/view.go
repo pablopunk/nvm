@@ -37,6 +37,8 @@ type View struct {
 	Grid *Grid
 	// Limit is how many rows the view keeps from its providers. Zero means search.DefaultLimit.
 	Limit int
+	// Flat lists an empty query's rows in score order with no section labels, as 1.x's root list does.
+	Flat bool
 	// OnSubmit receives the input text when Enter is pressed in a Body view.
 	OnSubmit  func(q string)
 	HideInput bool

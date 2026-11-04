@@ -8,9 +8,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Limits of the file rows. The root shows the best few matches; the Files view shows a longer list.
+// Limits of the file rows. The root shows the best few matches, and the recent files at the empty query, as 1.x's
+// FILE_RESULT_LIMIT does; the Files view shows a longer list.
 const (
-	fileRootLimit = 4
+	fileRootLimit = 6
 	fileViewLimit = 100
 	// fileRootMinChars is how many characters the root needs before it searches files.
 	fileRootMinChars = 2
@@ -30,13 +31,13 @@ type fileSearch struct {
 
 // rootFileProvider is the root's files source.
 func rootFileProvider(p *App) search.Provider {
-	return fileSearch{svc: p.files, limit: fileRootLimit, minChars: fileRootMinChars, id: "files"}
+	return fileSearch{svc: p.files, limit: fileRootLimit, minChars: fileRootMinChars, recentEmpty: true, id: "files"}
 }
 
 // ID names the provider in statistics.
 func (f fileSearch) ID() string { return f.id }
 
-// Root answers the empty query: the recent files for the Files view, nothing for the root.
+// Root answers the empty query with the recent files, for the root and the Files view alike.
 func (f fileSearch) Root(ctx context.Context) []search.Item {
 	if !f.recentEmpty {
 		return nil

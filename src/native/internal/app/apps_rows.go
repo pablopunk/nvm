@@ -1,6 +1,8 @@
 package app
 
 import (
+	"cmp"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo"
@@ -12,34 +14,41 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// applicationRows matches installed applications by name, and at the root shows the ones used before. The rows and
+// applicationRows matches installed applications by name, and at the root lists every one of them. The rows and
 // their actions come from the apps feature; this function scores them and maps the actions onto the palette.
 func applicationRows(p *App, in *rootInput, q string) []search.Item {
 	if p.appsvc == nil {
 		return nil
 	}
-	lq := strings.ToLower(q)
-	var list []apps.App
-	var scores []int
-	for _, a := range in.apps {
-		s := 0
-		if lq == "" {
-			if in.learn.Uses(appLearnKey(a)) == 0 {
-				continue
-			}
-			s = scoreAppSuggestion
-		} else if s = search.Score(a.Name, lq); s == 0 {
-			continue
-		}
-		list = append(list, a)
-		scores = append(scores, s)
-	}
+	list, scores := matchingApps(in.apps, q)
 	rows := apps.AppRows(list, p.appsvc.Running.RunningAmong(list), p.appsvc.SupportsUninstall())
 	out := make([]search.Item, 0, len(rows))
 	for i, row := range rows {
 		out = append(out, p.appItem(list[i], row, scores[i]))
 	}
 	return out
+}
+
+// matchingApps returns the apps the root lists for q, with their scores. The empty query lists every app, newest
+// first by when it was first seen, as 1.x does; a query lists the apps whose names match it.
+func matchingApps(all []apps.App, q string) ([]apps.App, []int) {
+	lq := strings.ToLower(q)
+	if lq == "" {
+		list := slices.Clone(all)
+		slices.SortStableFunc(list, func(a, b apps.App) int {
+			return cmp.Or(cmp.Compare(b.FirstSeenAt, a.FirstSeenAt), strings.Compare(a.Name, b.Name))
+		})
+		return list, slices.Repeat([]int{scoreRootApplication}, len(list))
+	}
+	var list []apps.App
+	var scores []int
+	for _, a := range all {
+		if s := search.Score(a.Name, lq); s > 0 {
+			list = append(list, a)
+			scores = append(scores, s)
+		}
+	}
+	return list, scores
 }
 
 // appLearnKey names an app to the usage learner. It is the same key 1.x and the prototype used, so learning carries over.

@@ -32,6 +32,14 @@ func (Extension) Manifest() api.Manifest {
 	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "App Commands"}}
 }
 
+// rootQuitScore is the 1.x score of Quit Nevermind at the empty root.
+const rootQuitScore = 15
+
+// RootItems lists Quit Nevermind at the empty root, in red as 1.x shows it.
+func (Extension) RootItems(_ api.Context) ([]api.Item, error) {
+	return []api.Item{quitItem(rootQuitScore)}, nil
+}
+
 // SearchItems lists Quit Nevermind when the query matches it. The empty root shows nothing.
 func (Extension) SearchItems(_ api.Context, query string) ([]api.Item, error) {
 	lq := strings.ToLower(query)
@@ -42,9 +50,15 @@ func (Extension) SearchItems(_ api.Context, query string) ([]api.Item, error) {
 	if score == 0 {
 		return nil, nil
 	}
-	return []api.Item{{
+	return []api.Item{quitItem(score)}, nil
+}
+
+// quitItem is the row of Quit Nevermind at score.
+func quitItem(score int) api.Item {
+	return api.Item{
 		ID: QuitOp, Title: quitTitle, Icon: "x", Score: float64(score),
 		Section: search.KindCommands, LearnKey: "cmd:" + quitTitle,
-		Primary: &api.Action{Kind: api.ActionSystem, Op: QuitOp, Title: "Open"},
-	}}, nil
+		Appearance: &api.Appearance{Foreground: api.ColorRed},
+		Primary:    &api.Action{Kind: api.ActionSystem, Op: QuitOp, Title: "Open"},
+	}
 }

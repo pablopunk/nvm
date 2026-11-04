@@ -159,9 +159,13 @@ func commandSpan(c command) int {
 // rootViewTitle names the palette's first level, so a refresh can find it among the views pushed on it.
 const rootViewTitle = "Nevermind"
 
-// rootView is the palette's first level: the providers of every source, merged by the coordinator.
+// rootRowLimit is how many rows the root keeps, as 1.x's SEARCH_RESULT_LIMIT.
+const rootRowLimit = 30
+
+// rootView is the palette's first level: the providers of every source, merged by the coordinator. An empty query
+// lists its rows by score alone, with no section labels, as 1.x's root does.
 func (p *App) rootView() *palette.View {
-	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close"}
+	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true}
 }
 
 // ---- settings ----

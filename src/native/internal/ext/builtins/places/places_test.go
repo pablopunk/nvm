@@ -78,3 +78,23 @@ func TestNoHomeMeansNoPlaces(t *testing.T) {
 		t.Fatalf("items = %+v, %v; want none without a home", items, err)
 	}
 }
+
+// TestRootListsDownloadsDocumentsAndDesktopAtTheirOneXScores pins the folders the empty root shows: the three 1.x
+// folders in their order, and not Pictures, which only a query finds.
+func TestRootListsDownloadsDocumentsAndDesktopAtTheirOneXScores(t *testing.T) {
+	places := []api.Place{{Name: "Pictures", Path: "/h/Pictures"}, {Name: "Desktop", Path: "/h/Desktop"}, {Name: "Downloads", Path: "/h/Downloads"}, {Name: "Documents", Path: "/h/Documents"}}
+	items, err := Extension{}.RootItems(fakeContext{places: places})
+	if err != nil {
+		t.Fatalf("RootItems: %v", err)
+	}
+	wantTitles := []string{"Downloads", "Documents", "Desktop"}
+	wantScores := []float64{18, 17, 16}
+	if len(items) != len(wantTitles) {
+		t.Fatalf("root lists %d folders, want %d", len(items), len(wantTitles))
+	}
+	for i := range items {
+		if items[i].Title != wantTitles[i] || items[i].Score != wantScores[i] {
+			t.Fatalf("row %d is %q at %v, want %q at %v", i, items[i].Title, items[i].Score, wantTitles[i], wantScores[i])
+		}
+	}
+}
