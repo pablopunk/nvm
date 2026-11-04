@@ -18,7 +18,7 @@ const (
 	noticeTitle       = "Extension"
 	failedTitle       = "Extension not installed"
 	noEntryPointText  = "the source defines no entry point; define at least one of Commands, RootItems, SearchItems or RunAction"
-	installedFormat   = "“%s” is installed but off. Press ⌘E to review it and turn it on."
+	installedFormat   = "“%s” is installed and enabled."
 	retryNoticeFormat = "Extension failed (%s). Asking the model to fix it…"
 	failedFormat      = "Could not produce a working extension: %s. Describe it again to retry."
 	fixRequestFormat  = "The extension was rejected with this error:\n\n%s\n\nReply with the complete corrected manifest and file, in one ```json block and one ```go block."
@@ -75,11 +75,12 @@ func (w *Workshop) Settled(chatID string, outcome chat.Outcome) {
 	go w.build(chatID, candidate)
 }
 
-// build checks the candidate and installs it off, then hands the result to the UI thread.
+// build checks the candidate and installs it enabled, as the desktop app's write_extension does, then hands the result
+// to the UI thread.
 func (w *Workshop) build(chatID string, candidate Candidate) {
 	err := w.verify(candidate)
 	if err == nil {
-		err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), false)
+		err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), true)
 	}
 	w.dispatch(func() { w.finish(chatID, candidate, err) })
 }

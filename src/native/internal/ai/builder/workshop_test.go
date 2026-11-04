@@ -9,9 +9,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// TestFinishedReplyInstallsOffAndBindsTheChat is the happy path: the candidate loads, is installed disabled, the chat
-// owns the extension, and the user is told to review it.
-func TestFinishedReplyInstallsOffAndBindsTheChat(t *testing.T) {
+// TestFinishedReplyInstallsEnabledAndBindsTheChat is the happy path: the candidate loads, is installed enabled, the chat
+// owns the extension, and the user is told it is on.
+func TestFinishedReplyInstallsEnabledAndBindsTheChat(t *testing.T) {
 	conversation := newFakeConversation(builderChat("b1"))
 	extensions := newFakeExtensions(checkResult{methods: []string{"RootItems"}})
 	workshop, queue := newWorkshopFor(conversation, extensions)
@@ -19,8 +19,8 @@ func TestFinishedReplyInstallsOffAndBindsTheChat(t *testing.T) {
 	workshop.Settled("b1", finished())
 	awaitUI(t, queue)
 
-	if extensions.enabled["user.clock"] {
-		t.Fatal("the extension was installed on; it must stay off until it is reviewed")
+	if !extensions.enabled["user.clock"] {
+		t.Fatal("the extension was installed off; the desktop app enables it at once")
 	}
 	if conversation.bound["b1"] != "user.clock" {
 		t.Fatalf("the chat is bound to %q; want user.clock", conversation.bound["b1"])
@@ -29,7 +29,7 @@ func TestFinishedReplyInstallsOffAndBindsTheChat(t *testing.T) {
 		t.Fatalf("a good reply sent %q back to the model", conversation.sent)
 	}
 	last := conversation.notes[len(conversation.notes)-1]
-	if last.Kind != chat.NoticeNote || !strings.Contains(last.Message, "installed but off") {
+	if last.Kind != chat.NoticeNote || !strings.Contains(last.Message, "installed and enabled") {
 		t.Fatalf("the last note is %+v; want the review notice", last)
 	}
 }
@@ -53,8 +53,8 @@ func TestRejectedSourceGoesBackToTheModelAndIsFixed(t *testing.T) {
 	workshop.Settled("b1", finished())
 	awaitUI(t, queue)
 
-	if extensions.enabled["user.clock"] || conversation.bound["b1"] != "user.clock" {
-		t.Fatal("the fixed extension was not installed off and bound to the chat")
+	if !extensions.enabled["user.clock"] || conversation.bound["b1"] != "user.clock" {
+		t.Fatal("the fixed extension was not installed enabled and bound to the chat")
 	}
 }
 
@@ -158,8 +158,8 @@ func TestEditedChatKeepsItsExtensionID(t *testing.T) {
 	}
 }
 
-// TestEditingReplacesTheInstalledVersionOff: an edit of an enabled extension installs a new version that is off.
-func TestEditingReplacesTheInstalledVersionOff(t *testing.T) {
+// TestEditingReplacesTheInstalledVersionEnabled: an edit installs the new version enabled, as a new one is.
+func TestEditingReplacesTheInstalledVersionEnabled(t *testing.T) {
 	edit := builderChat("b1")
 	edit.Extension = "user.clock"
 	conversation := newFakeConversation(edit)
@@ -171,8 +171,8 @@ func TestEditingReplacesTheInstalledVersionOff(t *testing.T) {
 	workshop.Settled("b1", finished())
 	awaitUI(t, queue)
 
-	if extensions.enabled["user.clock"] {
-		t.Fatal("the edited extension stayed on without a review")
+	if !extensions.enabled["user.clock"] {
+		t.Fatal("the edited extension was installed off")
 	}
 }
 

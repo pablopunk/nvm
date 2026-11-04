@@ -23,7 +23,7 @@ func (p *App) builderViewWith(prompt string) *palette.View {
 }
 
 // builderEditView opens a builder chat bound to the extension id, so its replies change that extension. The review
-// of the change is the same as for a new one: it is installed off and the user turns it on.
+// of the change is the same as for a new one: it is installed enabled.
 func (p *App) builderEditView(id string) *palette.View {
 	if p.chats == nil {
 		return unavailableChatView()
