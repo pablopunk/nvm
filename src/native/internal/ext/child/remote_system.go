@@ -35,6 +35,12 @@ func (s remoteSystem) SettingsPanes() []api.SettingsPane {
 	return panes
 }
 
+func (s remoteSystem) Places() []api.Place {
+	var places []api.Place
+	_ = s.link.Call(protocol.ServiceSystem, protocol.OpPlaces, nil, &places)
+	return places
+}
+
 // remoteShortcuts reads the shortcut table. A failed exchange reads as an empty table.
 type remoteShortcuts struct {
 	link *hostLink

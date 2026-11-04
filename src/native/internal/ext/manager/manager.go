@@ -47,6 +47,8 @@ type Ports struct {
 	Confirm      services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
+	// Places lists the standard folders of the home folder for the system service.
+	Places func() []api.Place
 }
 
 // Options tune the child processes of every extension.
@@ -129,6 +131,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Confirm:      ports.Confirm,
 
 			SettingsPanes: ports.SettingsPanes,
+			Places:        ports.Places,
 		},
 		entries: map[string]*entry{},
 	}

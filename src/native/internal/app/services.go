@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"log"
-	"os"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -84,14 +83,11 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 	p.calc = calc.New(ports.Clock, zone, rates)
 }
 
-// newSystemServices builds the OS capability services over the ports for goos. The home folder is the process's, and
-// the settings label is the one goos uses.
+// newSystemServices builds the OS capability services over the ports for goos. The settings label is the one goos uses.
 func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
-	home, _ := os.UserHomeDir()
 	return systemfeat.NewServices(systemfeat.Options{
 		Ports:         ports,
 		Platform:      goos,
-		Home:          home,
 		SettingsTitle: platform.ShellLabelsFor(goos).SettingsCommand,
 	})
 }

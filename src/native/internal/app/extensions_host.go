@@ -75,6 +75,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		History:       p.extensionHistory,
 		Confirm:       p.askExtensionConfirmation,
 		SettingsPanes: p.systemSettingsPanes,
+		Places:        p.systemPlaces,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:     exe,
 		DataRoot:       filepath.Join(configDir(), "extension-data"),

@@ -46,6 +46,8 @@ type Deps struct {
 	OS string
 	// SettingsPanes lists the System Settings panes the host can open. Nil means the host offers none.
 	SettingsPanes func() []api.SettingsPane
+	// Places lists the standard folders of the home folder the palette opens. Nil means the host offers none.
+	Places func() []api.Place
 	// Capabilities are the host's platform capabilities; the system service and the OCR service read them.
 	Capabilities platform.Capabilities
 	// Shell opens paths and links, lists and launches apps and reads app icons. Nil answers unavailable.

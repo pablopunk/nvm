@@ -34,6 +34,7 @@ const (
 	OpOS            = "os"
 	OpLabels        = "labels"
 	OpSettingsPanes = "settings-panes"
+	OpPlaces        = "places"
 	OpPalette       = "palette"
 	OpImage         = "image"
 	OpScreen        = "screen"
