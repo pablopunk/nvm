@@ -27,19 +27,21 @@ func TestRootEmptyListsEveryAppNewestFirst(t *testing.T) {
 	}
 }
 
-// TestRootEmptyRowsSortByScoreWithNoSectionsAndAtMostThirty pins the empty root's layout: rows in 1.x score order, no
-// section labels, and the 30-row cap.
-func TestRootEmptyRowsSortByScoreWithNoSectionsAndAtMostThirty(t *testing.T) {
-	rows := rootResultsForTable(goldenPalette(t), "")
-	if len(rows) == 0 || len(rows) > rootRowLimit {
-		t.Fatalf("the empty root shows %d rows, want 1 to %d", len(rows), rootRowLimit)
-	}
-	for i, it := range rows {
-		if it.Section != "" {
-			t.Fatalf("row %d %q carries section %q; the empty root has no section labels", i, it.Title, it.Section)
+// TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty pins the root's layout for the empty query and a typed one: rows in
+// 1.x score order, no section labels, and the 30-row cap.
+func TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty(t *testing.T) {
+	for _, q := range []string{"", "meeting"} {
+		rows := rootResultsForTable(goldenPalette(t), q)
+		if len(rows) == 0 || len(rows) > rootRowLimit {
+			t.Fatalf("the root shows %d rows for %q, want 1 to %d", len(rows), q, rootRowLimit)
 		}
-		if i > 0 && rows[i-1].Score < it.Score {
-			t.Fatalf("row %d %q scores %d above the row before it (%d)", i, it.Title, it.Score, rows[i-1].Score)
+		for i, it := range rows {
+			if it.Section != "" {
+				t.Fatalf("%q row %d %q carries section %q; the root has no section labels", q, i, it.Title, it.Section)
+			}
+			if i > 0 && rows[i-1].Score < it.Score {
+				t.Fatalf("%q row %d %q scores %d above the row before it (%d)", q, i, it.Title, it.Score, rows[i-1].Score)
+			}
 		}
 	}
 }
