@@ -1,6 +1,9 @@
 package search
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Provider is one source of rows for the root of the palette. Root answers the empty query; Search answers
 // a typed one and may call emit several times with partial rows, the last with Final set.
@@ -15,6 +18,31 @@ type Provider interface {
 	Root(ctx context.Context) []Item
 	// Search emits the rows for q, which is never empty.
 	Search(ctx context.Context, q string, emit func(Batch))
+}
+
+// Budget is the time one call of a provider may take: Soft is when a call is logged as over budget and Hard is when
+// its context is cancelled and its rows so far are kept.
+type Budget struct {
+	Soft, Hard time.Duration
+}
+
+// DefaultBudget is the budget of a provider that does not declare its own: the PLAN.md B8 limits for local work.
+var DefaultBudget = Budget{Soft: SoftBudget, Hard: HardBudget}
+
+// BudgetedProvider is a Provider whose calls need a budget other than the default. A source that asks a network
+// service cannot answer inside the local limit, so it declares the longer budget its service needs; the coordinator
+// then enforces that budget instead.
+type BudgetedProvider interface {
+	Provider
+	Budget() Budget
+}
+
+// budgetOf returns the budget the coordinator enforces for p.
+func budgetOf(p Provider) Budget {
+	if budgeted, ok := p.(BudgetedProvider); ok {
+		return budgeted.Budget()
+	}
+	return DefaultBudget
 }
 
 // Batch is the rows one provider found for one query. Provider is filled in by the coordinator, so a

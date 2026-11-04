@@ -82,6 +82,7 @@ type slot struct {
 	id       string
 	items    []Item
 	started  time.Time
+	budget   Budget
 	finished bool
 	slow     bool
 	cancel   context.CancelFunc
@@ -113,7 +114,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.query = q
 	c.slots = make([]*slot, len(providers))
 	for i, p := range providers {
-		c.slots[i] = &slot{id: p.ID(), started: c.opts.Clock.Now(), done: make(chan struct{})}
+		c.slots[i] = &slot{id: p.ID(), started: c.opts.Clock.Now(), budget: budgetOf(p), done: make(chan struct{})}
 	}
 	c.pending = len(providers)
 	c.emitted = false
@@ -228,15 +229,15 @@ func (c *Coordinator) watch(gen, idx int) {
 		return
 	}
 	s := c.slots[idx]
-	done := s.done
+	done, budget := s.done, s.budget
 	c.mu.Unlock()
-	soft := c.opts.Clock.After(SoftBudget)
-	hard := c.opts.Clock.After(HardBudget)
+	soft := c.opts.Clock.After(budget.Soft)
+	hard := c.opts.Clock.After(budget.Hard)
 	select {
 	case <-done:
 		return
 	case <-soft:
-		logx.Default().Debug("search provider over its soft budget", logx.F{"provider": s.id, "soft_ms": SoftBudget.Milliseconds()})
+		logx.Default().Debug("search provider over its soft budget", logx.F{"provider": s.id, "soft_ms": budget.Soft.Milliseconds()})
 	}
 	select {
 	case <-done:
@@ -301,7 +302,7 @@ func (c *Coordinator) cutOff(gen, idx int) {
 	}
 	snap := c.snapshotLocked()
 	c.mu.Unlock()
-	logx.Default().Warn("search provider cut off at its hard budget", logx.F{"provider": s.id, "hard_ms": HardBudget.Milliseconds()})
+	logx.Default().Warn("search provider cut off at its hard budget", logx.F{"provider": s.id, "hard_ms": s.budget.Hard.Milliseconds()})
 	c.publish(snap)
 }
 

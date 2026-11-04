@@ -60,7 +60,21 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
 		supported = append(supported, platform.CapabilityMicrophone)
 	}
+	supported = append(supported, textCapabilities(goos, hasTool)...)
 	return platform.NewCapabilities(supported...)
+}
+
+// textCapabilities lists the text intents of an OS. Reading text is on macOS (the Vision framework) and on Linux when
+// Tesseract is installed; the screen can be captured only on macOS, so screen text is macOS only.
+func textCapabilities(goos string, hasTool func(string) bool) []platform.Capability {
+	var supported []platform.Capability
+	if goos == "darwin" || (goos == "linux" && hasTool(tesseractBinary)) {
+		supported = append(supported, platform.CapabilityTextRecognize)
+	}
+	if goos == "darwin" {
+		supported = append(supported, platform.CapabilityScreenCapture)
+	}
+	return supported
 }
 
 // isWaylandSession reports whether the desktop is a Wayland session on Linux. A Wayland client cannot place
