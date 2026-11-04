@@ -1,6 +1,10 @@
 package design
 
-import "github.com/egoist/mygo/ui"
+import (
+	"unicode/utf8"
+
+	"github.com/egoist/mygo/ui"
+)
 
 // SearchData is the field at the top of the palette: an icon, then either the view's title or a text input.
 type SearchData struct {
@@ -19,6 +23,8 @@ type SearchData struct {
 	AIHint bool
 	// Concealed masks the text while a secret is typed; the query still holds the real text.
 	Concealed bool
+	// CaretAtEnd puts the caret after the last rune of Query in this frame, for a text the app just set.
+	CaretAtEnd bool
 }
 
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
@@ -43,6 +49,10 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 			Placeholder(d.Placeholder).PlaceholderColor(k.Faint).Label("Search")
 		if d.Concealed {
 			in = in.Password()
+		}
+		if d.CaretAtEnd {
+			end := utf8.RuneCountInString(*d.Query)
+			in = in.SetTextSelection(end, end)
 		}
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
