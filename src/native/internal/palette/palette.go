@@ -155,6 +155,11 @@ func (p *Palette) Open(v *View) {
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
 	p.dropToasts()
+	for _, v := range p.stack {
+		if v.OnHide != nil {
+			v.OnHide()
+		}
+	}
 	p.win.Hide()
 	p.returnFocus()
 	if p.opts.OnHide != nil {
@@ -224,6 +229,18 @@ func (p *Palette) push(v *View) {
 	p.actionsOpen = false
 	p.search()
 	p.input.Focus()
+}
+
+// Visible reports whether the palette window is shown.
+func (p *Palette) Visible() bool { return p.win.IsVisible() }
+
+// PopIf goes back from v when v is the page on top, and reports whether it did. It never removes the root.
+func (p *Palette) PopIf(v *View) bool {
+	if len(p.stack) < 2 || p.cur() != v {
+		return false
+	}
+	p.Pop()
+	return true
 }
 
 // Pop returns to the view below the current one. At the root it does nothing.

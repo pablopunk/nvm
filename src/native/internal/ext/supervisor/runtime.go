@@ -30,12 +30,15 @@ type Runtime struct {
 	diagnostics []string
 	nextRequest uint64
 	changed     chan struct{}
+	// lifetime ends when the extension stops; host waits on behalf of a call end with it.
+	lifetime       context.Context
+	cancelLifetime context.CancelFunc
 }
 
 // New prepares a runtime for the extension source at sourcePath. Nothing runs until Start. services answers the
 // extension's service calls; nil refuses them.
 func New(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
-	return &Runtime{
+	r := &Runtime{
 		cfg:        cfg,
 		sourcePath: sourcePath,
 		identity:   identity,
@@ -44,6 +47,8 @@ func New(cfg Config, identity api.Identity, sourcePath string, services ServiceH
 		state:      StateIdle,
 		changed:    make(chan struct{}),
 	}
+	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
+	return r
 }
 
 // Start launches the child in the background and returns at once. It does nothing while the extension is
@@ -57,6 +62,8 @@ func (r *Runtime) Start() {
 // Stop kills the child and returns the extension to idle. Calls already waiting see a stopped extension.
 func (r *Runtime) Stop() {
 	r.mu.Lock()
+	r.cancelLifetime()
+	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
 	r.generation++
 	child := r.detachChildLocked()
 	r.state = StateIdle

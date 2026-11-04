@@ -27,7 +27,7 @@ func serviceCallFrom(line lineResult, open bool) (protocol.ServiceCall, bool) {
 // answerService runs one service call and writes its reply to the child. The services get the request's hard
 // budget as their deadline, so a slow service ends with the call instead of outliving it.
 func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget, method string) (waited bool, err error) {
-	ctx, cancel := context.WithTimeout(protocol.WithRequestMethod(context.Background(), method), budget.Hard)
+	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), method), r.lifetimeContext()), budget.Hard)
 	defer cancel()
 	reply := r.serveCall(ctx, call)
 	reply.ReplyTo = call.CallID
@@ -47,4 +47,11 @@ func (r *Runtime) serveCall(ctx context.Context, call protocol.ServiceCall) prot
 		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeUnavailable, Message: "host services are not available to this extension"}}
 	}
 	return r.services.Serve(ctx, call)
+}
+
+// lifetimeContext returns the context that ends when the runtime stops. Host waits on behalf of a call end with it.
+func (r *Runtime) lifetimeContext() context.Context {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.lifetime
 }

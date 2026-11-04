@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
 // ConfirmWait bounds how long a destructive call waits for the user. The palette shows the question meanwhile; an
@@ -31,8 +32,8 @@ type waitMark struct {
 }
 
 // confirmDestructive asks the user before a destructive call runs. It refuses when no confirmation port is wired,
-// and when the user does not confirm. The wait does not use the request's context: the request budget is far shorter
-// than a person's answer.
+// and when the user does not confirm. The wait ends with the extension's lifetime, not the request budget, which is
+// far shorter than a person's answer.
 func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
 	if h.deps.Confirm == nil {
 		return unavailable("this host cannot ask for confirmation, so %s did not run", action)
@@ -40,7 +41,7 @@ func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
 	if mark, ok := ctx.Value(waitMarkKey{}).(*waitMark); ok {
 		mark.waited = true
 	}
-	waitCtx, cancel := context.WithTimeout(context.Background(), ConfirmWait)
+	waitCtx, cancel := context.WithTimeout(protocol.LifetimeOf(ctx), ConfirmWait)
 	defer cancel()
 	confirmed, err := h.deps.Confirm(waitCtx, Question{Extension: h.manifest.Identity.Title, Action: action})
 	if err != nil {

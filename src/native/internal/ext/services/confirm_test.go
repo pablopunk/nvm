@@ -110,3 +110,55 @@ func TestSearchCannotAskOrClear(t *testing.T) {
 		t.Fatalf("a search asked %+v or cleared the history", asked)
 	}
 }
+
+// TestConfirmWaitEndsWhenTheExtensionStops runs a destructive call whose confirmation never gets an answer, then stops
+// the extension's lifetime. The question must end at once and refuse the call; it must not wait out ConfirmWait.
+func TestConfirmWaitEndsWhenTheExtensionStops(t *testing.T) {
+	host, deps := newDesktopHost(t)
+	rememberText(t, host.history, "draft")
+	lifetime, stop := context.WithCancel(context.Background())
+	defer stop()
+	asked := make(chan context.Context, 1)
+	deps.Confirm = func(ctx context.Context, _ Question) (bool, error) {
+		asked <- ctx
+		<-ctx.Done()
+		return false, ctx.Err()
+	}
+	h := desktopHandler(t, deps, api.CapabilityClipboardHistory)
+	done := make(chan protocol.ServiceReply, 1)
+	go func() {
+		ctx := protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), protocol.MethodRun), lifetime)
+		done <- h.Serve(ctx, protocol.ServiceCall{CallID: 1, Service: protocol.ServiceClipboardHistory, Op: protocol.OpClear})
+	}()
+	waitCtx := <-asked
+	stop()
+	select {
+	case reply := <-done:
+		requireCode(t, reply, api.CodeCancelled, "not confirmed in time")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call kept waiting after the extension stopped")
+	}
+	if waitCtx.Err() == nil {
+		t.Fatal("the question's context was not ended")
+	}
+	if host.history.Len() != 1 {
+		t.Fatal("a stopped confirmation removed entries")
+	}
+}
+
+// TestConfirmWaitIsBoundedByTheConfirmationNotTheRequest checks the question has its own deadline, close to ConfirmWait,
+// and not the few seconds a request budget allows.
+func TestConfirmWaitIsBoundedByTheConfirmationNotTheRequest(t *testing.T) {
+	host, deps := newDesktopHost(t)
+	rememberText(t, host.history, "draft")
+	var deadline time.Time
+	deps.Confirm = func(ctx context.Context, _ Question) (bool, error) {
+		deadline, _ = ctx.Deadline()
+		return true, nil
+	}
+	h := desktopHandler(t, deps, api.CapabilityClipboardHistory)
+	_ = serveRun(t, h, protocol.ServiceClipboardHistory, protocol.OpClear, protocol.ClearArgs{})
+	if remaining := time.Until(deadline); remaining < ConfirmWait-5*time.Second || remaining > ConfirmWait {
+		t.Fatalf("the question's deadline is %s away, want about %s", remaining, ConfirmWait)
+	}
+}
