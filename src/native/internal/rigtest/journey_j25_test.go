@@ -7,7 +7,7 @@ import (
 )
 
 // TestJourneyJ25FirstRunGuideBecomesHelp is the J25 smoke: a fresh profile shows the Welcome row first, Enter opens
-// the Getting Started guide, and Done for now turns the row into Help. The journey never runs a system command; the
+// the Getting Started guide, and Done for now turns the row into Help, which a search finds. The journey never runs a system command; the
 // permission prompts and the no-prompt-before-use rule of J25 are not covered yet.
 func TestJourneyJ25FirstRunGuideBecomesHelp(t *testing.T) {
 	app := Launch(t, Options{})
@@ -28,6 +28,7 @@ func TestJourneyJ25FirstRunGuideBecomesHelp(t *testing.T) {
 	must(t, app.DismissWithEscape())
 
 	must(t, app.SummonPalette())
+	must(t, app.Type("help"))
 	_, err = app.WaitFor("Help", elementWait)
 	must(t, err)
 	shoot(t, app, "j25-3-help")
