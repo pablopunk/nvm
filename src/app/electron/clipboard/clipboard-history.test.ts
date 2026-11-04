@@ -748,7 +748,7 @@ test('clipboardHistoryView returns view with items', () => {
   assert.equal(view.presentation, 'side-preview');
   assert.ok(Array.isArray(view.items));
   assert.equal(view.items.length, 1);
-  assert.equal(view.items[0].detail.text, 'hello');
+  assert.equal((view.items[0].detail as { text?: string }).text, 'hello');
 });
 
 test('clipboardHistoryView shows empty state when no history', () => {
