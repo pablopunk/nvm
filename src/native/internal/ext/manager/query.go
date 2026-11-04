@@ -22,18 +22,30 @@ type SearchResult struct {
 	Failure     *api.Failure
 }
 
-// Search asks every enabled, running extension for its items. The calls run in parallel, each bounded by its
-// own Search budget (B8: 100 ms hard), so one hanging extension cannot delay the others past that budget. It
-// returns when every call has answered or timed out, sorted by extension id.
+// Search asks every enabled, running extension that declares SearchItems for its rows for query. Its calls are
+// bounded by the Search budget (B8: 100 ms hard). It returns sorted by extension id; see fanOut.
 func (m *Manager) Search(ctx context.Context, query string) []SearchResult {
-	targets, budget := m.searchTargets()
+	return m.fanOut(ctx, protocol.MethodSearch, query)
+}
+
+// Roots asks every enabled, running extension that declares RootItems for its empty-query rows, the rows the
+// palette's root shows. Its calls and failures are those of Search.
+func (m *Manager) Roots(ctx context.Context) []SearchResult {
+	return m.fanOut(ctx, protocol.MethodRoot, "")
+}
+
+// fanOut calls method on every target that declares it. The calls run in parallel, each bounded by the budget of
+// method, so one hanging extension cannot delay the others past that budget. It returns when every call has
+// answered or timed out, sorted by extension id.
+func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResult {
+	targets, budget := m.targetsFor(method)
 	results := make(chan SearchResult, len(targets))
 	var wg sync.WaitGroup
 	for _, target := range targets {
 		wg.Add(1)
 		go func(target runtimeTarget) {
 			defer wg.Done()
-			results <- m.searchOne(ctx, target, query, budget)
+			results <- m.callOne(ctx, target, method, query, budget)
 		}(target)
 	}
 	wg.Wait()
@@ -53,30 +65,37 @@ type runtimeTarget struct {
 	runtime *supervisor.Runtime
 }
 
-// searchTargets snapshots the enabled runtimes and the Search budget. An extension that is still starting or
-// was never started is left out: a normal startup is not an error to show in the palette.
-func (m *Manager) searchTargets() ([]runtimeTarget, supervisor.Budget) {
+// targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
+// still starting, was never started, or does not declare method is left out: none of those is an error to show in
+// the palette.
+func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var targets []runtimeTarget
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
-		if e.runtime != nil && m.isEnabled(e.bundle.Manifest.ID) && isAnswerable(e.runtime.Status().State) {
+		if e.runtime != nil && m.isEnabled(e.bundle.Manifest.ID) && offersMethod(e.runtime, e.runtime.Status().State, method) {
 			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, runtime: e.runtime})
 		}
 	}
-	return targets, m.config.BudgetFor(protocol.MethodSearch)
+	return targets, m.config.BudgetFor(method)
+}
+
+// offersMethod is true when a running child declares method, and when the runtime is not running at all: then the
+// call answers with why it is not running, which is how a failed extension shows its pointer row.
+func offersMethod(runtime *supervisor.Runtime, state supervisor.State, method string) bool {
+	return isAnswerable(state) && (state != supervisor.StateRunning || runtime.Provides(method))
 }
 
 func isAnswerable(state supervisor.State) bool {
 	return state != supervisor.StateIdle && state != supervisor.StateStarting
 }
 
-func (m *Manager) searchOne(ctx context.Context, target runtimeTarget, query string, budget supervisor.Budget) SearchResult {
+func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {
 	result := SearchResult{ExtensionID: target.id, Title: target.title}
 	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
 	defer cancel()
-	response, err := target.runtime.Call(callCtx, protocol.MethodSearch, query, nil)
+	response, err := target.runtime.Call(callCtx, method, query, nil)
 	if err != nil {
 		result.Failure = failureOf(err)
 		return result

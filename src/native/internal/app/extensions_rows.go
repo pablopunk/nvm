@@ -18,13 +18,16 @@ func extensionProvider(p *App) search.Provider { return extensionSearch{p: p} }
 
 func (e extensionSearch) ID() string { return "extensions" }
 
-// Root lists the commands of the running extensions. Nothing shows while extensions load.
+// Root lists the rows and the commands of the running extensions. Nothing shows while extensions load.
 func (e extensionSearch) Root(ctx context.Context) []search.Item {
 	m := e.p.extensionManager()
 	if m == nil {
 		return nil
 	}
 	var out []search.Item
+	for _, result := range m.Roots(ctx) {
+		out = append(out, rootRowsFor(e.p, m, result)...)
+	}
 	for _, result := range m.Commands(ctx) {
 		out = append(out, commandRowsFor(e.p, m, result)...)
 	}
@@ -54,6 +57,19 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchResult) []search.Item {
 	if result.Failure != nil {
 		return failureRows(p, result.ExtensionID, result.Title, q, result.Failure)
+	}
+	var out []search.Item
+	for _, item := range result.Items {
+		out = append(out, extensionRow(p, m, result.ExtensionID, result.Title, item))
+	}
+	return out
+}
+
+// rootRowsFor turns one extension's empty-query rows into rows. A failed extension contributes none at the root, as
+// for its commands.
+func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult) []search.Item {
+	if result.Failure != nil {
+		return nil
 	}
 	var out []search.Item
 	for _, item := range result.Items {

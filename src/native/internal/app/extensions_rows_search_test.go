@@ -27,3 +27,12 @@ func TestRootStillListsTheCommandsOfARunningExtension(t *testing.T) {
 
 	findRowTitled(t, extensionProvider(p).Root(context.Background()), "List fixture")
 }
+
+func TestRootShowsTheRootItemsOfARunningExtension(t *testing.T) {
+	m := newFixtureManager(t, "acme.good")
+	waitForState(t, m, "acme.good", supervisor.StateRunning)
+	p := &App{}
+	p.exts.mgr.Store(m)
+
+	findRowTitled(t, extensionProvider(p).Root(context.Background()), "Good root")
+}

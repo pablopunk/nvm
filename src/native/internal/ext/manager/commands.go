@@ -30,7 +30,7 @@ func (m *Manager) SearchCommands(ctx context.Context) []CommandResult {
 }
 
 func (m *Manager) commandsWithin(ctx context.Context, budget supervisor.Budget) []CommandResult {
-	targets, _ := m.searchTargets()
+	targets, _ := m.targetsFor(protocol.MethodCommands)
 	results := make([]CommandResult, 0, len(targets))
 	for _, target := range targets {
 		results = append(results, m.commandsOf(ctx, target, budget))
