@@ -31,6 +31,7 @@ func init() {
 		"ActionRevealPath":              reflect.ValueOf(api.ActionRevealPath),
 		"ActionRootView":                reflect.ValueOf(api.ActionRootView),
 		"ActionRun":                     reflect.ValueOf(api.ActionRun),
+		"ActionSetQuery":                reflect.ValueOf(api.ActionSetQuery),
 		"ActionShellExec":               reflect.ValueOf(api.ActionShellExec),
 		"ActionSystem":                  reflect.ValueOf(api.ActionSystem),
 		"ActionToggleSetting":           reflect.ValueOf(api.ActionToggleSetting),
@@ -196,6 +197,7 @@ func init() {
 		"SelectionUnknown":              reflect.ValueOf(api.SelectionUnknown),
 		"SelectionUnsupported":          reflect.ValueOf(api.SelectionUnsupported),
 		"SerializableTypes":             reflect.ValueOf(api.SerializableTypes),
+		"SetQuery":                      reflect.ValueOf(api.SetQuery),
 		"SettingBoolean":                reflect.ValueOf(constant.MakeFromLiteral("\"boolean\"", token.STRING, 0)),
 		"SettingNumber":                 reflect.ValueOf(constant.MakeFromLiteral("\"number\"", token.STRING, 0)),
 		"SettingString":                 reflect.ValueOf(constant.MakeFromLiteral("\"string\"", token.STRING, 0)),
@@ -208,6 +210,7 @@ func init() {
 		"StepComplete":                  reflect.ValueOf(api.StepComplete),
 		"StepFailed":                    reflect.ValueOf(api.StepFailed),
 		"StepPending":                   reflect.ValueOf(api.StepPending),
+		"SystemOp":                      reflect.ValueOf(api.SystemOp),
 		"TextValue":                     reflect.ValueOf(api.TextValue),
 		"ToneAccent":                    reflect.ValueOf(api.ToneAccent),
 		"ToneDanger":                    reflect.ValueOf(api.ToneDanger),
@@ -370,6 +373,7 @@ func init() {
 		"PanelVisibility":         reflect.ValueOf((*api.PanelVisibility)(nil)),
 		"PasteOptions":            reflect.ValueOf((*api.PasteOptions)(nil)),
 		"PatchMode":               reflect.ValueOf((*api.PatchMode)(nil)),
+		"Place":                   reflect.ValueOf((*api.Place)(nil)),
 		"Placement":               reflect.ValueOf((*api.Placement)(nil)),
 		"Popover":                 reflect.ValueOf((*api.Popover)(nil)),
 		"Presentation":            reflect.ValueOf((*api.Presentation)(nil)),
@@ -1323,6 +1327,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_System struct {
 	WHasCapability func(name string) bool
 	WLabels        func() api.SystemLabels
 	WOS            func() string
+	WPlaces        func() []api.Place
 	WSettingsPanes func() []api.SettingsPane
 }
 
@@ -1334,6 +1339,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Labels() api.S
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OS() string {
 	return W.WOS()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Places() []api.Place {
+	return W.WPlaces()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) SettingsPanes() []api.SettingsPane {
 	return W.WSettingsPanes()

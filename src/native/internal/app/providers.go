@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
+	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -113,7 +114,7 @@ func trailingCommands(p *App, timerOn bool) []command {
 		builtInSlot(appcommands.ID, 1),
 		{Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
 	}...)
-	cmds = append(cmds, p.placeCommands()...)
+	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.windowCommands()...)
 	if timerOn {

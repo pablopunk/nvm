@@ -12,7 +12,8 @@ import (
 
 // servicesOver builds the services over a fake set with every capability.
 func servicesOver(goos string, set *fake.Set) *Services {
-	return NewServices(Options{Ports: set.Ports(), Platform: goos, Home: "/home/alice", SettingsTitle: "Open Settings"})
+	set.System.SetHome("/home/alice")
+	return NewServices(Options{Ports: set.Ports(), Platform: goos, SettingsTitle: "Open Settings"})
 }
 
 // TestRunCallsTheMatchingPortOperation runs each command and checks the single port call it makes.
@@ -90,20 +91,6 @@ func TestSettingsPanesReadTheSidebarOnMacOSOnly(t *testing.T) {
 	}
 	if linux := servicesOver("linux", set).SettingsPanes(); len(linux) != 0 {
 		t.Fatalf("linux panes = %+v, want none", linux)
-	}
-}
-
-// TestOpenPlaceOpensTheFolderThroughTheShell hands the folder to the shell's default application.
-func TestOpenPlaceOpensTheFolderThroughTheShell(t *testing.T) {
-	set := fake.NewSet()
-	service := servicesOver("linux", set)
-	place := service.Places()[0]
-	if err := service.OpenPlace(place); err != nil {
-		t.Fatalf("OpenPlace: %v", err)
-	}
-	calls := set.Shell.Calls()
-	if len(calls) != 1 || calls[0].Arg != place.Path {
-		t.Fatalf("shell calls = %+v, want OpenPath of %s", calls, place.Path)
 	}
 }
 

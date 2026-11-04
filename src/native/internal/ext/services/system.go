@@ -20,6 +20,8 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 		return systemLabelsOf(platform.ShellLabelsFor(h.deps.OS)), nil
 	case protocol.OpSettingsPanes:
 		return h.settingsPanes(), nil
+	case protocol.OpPlaces:
+		return h.places(), nil
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }
@@ -58,6 +60,14 @@ func (h *Handler) settingsPanes() []api.SettingsPane {
 		return nil
 	}
 	return h.deps.SettingsPanes()
+}
+
+// places lists the standard folders of the home folder. Without a provider the host has none to offer.
+func (h *Handler) places() []api.Place {
+	if h.deps.Places == nil {
+		return nil
+	}
+	return h.deps.Places()
 }
 
 func systemLabelsOf(labels platform.ShellLabels) api.SystemLabels {

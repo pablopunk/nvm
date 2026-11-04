@@ -9,12 +9,11 @@ import (
 // macSidebarPath is the System Settings sidebar, whose listed panes the root search offers on macOS.
 const macSidebarPath = "/System/Applications/System Settings.app/Contents/Resources/Sidebar.plist"
 
-// Options wires the services from the ports. Platform is the GOOS the panes and rows follow; Home is the user's
-// home folder; SettingsTitle is the label of the settings command, which the OS chooses.
+// Options wires the services from the ports. Platform is the GOOS the panes and rows follow; SettingsTitle is the
+// label of the settings command, which the OS chooses.
 type Options struct {
 	Ports         platform.Ports
 	Platform      string
-	Home          string
 	SettingsTitle string
 }
 
@@ -24,7 +23,6 @@ type Options struct {
 type Services struct {
 	ports         platform.Ports
 	goos          string
-	home          string
 	settingsTitle string
 
 	panesOnce sync.Once
@@ -33,17 +31,12 @@ type Services struct {
 
 // NewServices builds the services over the ports.
 func NewServices(o Options) *Services {
-	return &Services{ports: o.Ports, goos: o.Platform, home: o.Home, settingsTitle: o.SettingsTitle}
+	return &Services{ports: o.Ports, goos: o.Platform, settingsTitle: o.SettingsTitle}
 }
 
-// Places lists the home folders the palette offers.
+// Places lists the home folders the palette offers, resolved under the home folder the system port reports.
 func (s *Services) Places() []Place {
-	return Places(s.home)
-}
-
-// OpenPlace opens a folder with the OS file manager's default application.
-func (s *Services) OpenPlace(place Place) error {
-	return s.ports.Shell.OpenPath(place.Path)
+	return Places(s.ports.System.Home())
 }
 
 // CommandTitle names a command for a failure sentence, with the OS label of the settings command.

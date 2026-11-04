@@ -35,6 +35,21 @@ type System struct {
 	calls  []SystemCall
 	events chan SystemCall
 	faults faultSet
+	home   string
+}
+
+// SetHome sets the home folder Home reports, as the user's real home would be.
+func (s *System) SetHome(home string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.home = home
+}
+
+// Home reports the home folder set with SetHome; empty until one is set.
+func (s *System) Home() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.home
 }
 
 var _ platform.System = (*System)(nil)

@@ -36,6 +36,9 @@ type system struct {
 
 var _ platform.System = (*system)(nil)
 
+// Home is the home folder the process was started with.
+func (s *system) Home() string { return s.home }
+
 // newSystem builds the system port for one OS. home and user come from the process environment; an empty
 // home disables Trash emptying, so no relative path is ever removed.
 func newSystem(helper platform.Helper, shell platform.Shell, goos, home, user string) *system {

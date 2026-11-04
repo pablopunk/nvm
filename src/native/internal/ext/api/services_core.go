@@ -240,6 +240,8 @@ type System interface {
 	Labels() SystemLabels
 	// SettingsPanes lists the System Settings panes the OS has, in the order it shows them. Empty where the OS has none.
 	SettingsPanes() []SettingsPane
+	// Places lists the standard folders of the user's home, in the order the palette shows them. Empty without a home.
+	Places() []Place
 }
 
 // SettingsPane is one pane of the operating system's settings app. Setting an ActionSystem op of
@@ -247,6 +249,12 @@ type System interface {
 type SettingsPane struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+// Place is a standard folder of the user's home, such as Downloads. Path is absolute; an ActionOpenPath action opens it.
+type Place struct {
+	Name string `json:"name"`
+	Path string `json:"path"`
 }
 
 // UpdateState is a snapshot of the host update manager. Empty strings mean "none".

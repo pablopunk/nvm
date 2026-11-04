@@ -19,4 +19,7 @@ type System interface {
 	// OpenSettings opens the system settings. pane and anchor name a settings pane and a section within it on
 	// systems that can open one directly (macOS); other systems ignore them and open the top level.
 	OpenSettings(pane, anchor string) error
+	// Home is the user's home folder, the root of the standard places (Downloads, Documents...). Empty when unknown,
+	// so no place is ever resolved against a relative path.
+	Home() string
 }

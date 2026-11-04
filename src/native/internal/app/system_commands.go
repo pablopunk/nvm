@@ -12,28 +12,7 @@ import (
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-// placeCommands lists the home folders as palette commands, after the other commands, as they always were.
-func (p *App) placeCommands() []command {
-	var out []command
-	for _, place := range p.systemSvc.Places() {
-		out = append(out, p.placeCommand(place))
-	}
-	return out
-}
-
-// placeCommand opens one home folder in the file manager.
-func (p *App) placeCommand(place systemfeat.Place) command {
-	return command{
-		Title: place.Name, Subtitle: place.Path, Keywords: "open folder places go", Icon: "folder", Tone: "blue", Hidden: true,
-		Run: func(h search.Host) {
-			h.Hide()
-			_ = p.systemSvc.OpenPlace(place)
-		},
-	}
-}
 
 // runSystemOp runs the OS command an extension names, off the UI thread. done runs on the UI thread with the sentence to
 // show when the command did not run, and "" when the OS accepted it.

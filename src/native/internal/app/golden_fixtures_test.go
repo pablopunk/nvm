@@ -45,6 +45,16 @@ func goldenPalette(t *testing.T) *App {
 
 // goldenPaletteWith is goldenPalette, with a conflicting draft of the first note on disk when withConflict is set.
 // The palette's ports are the fakes of the set it returns, so an action the golden runs touches no OS.
+// goldenHome is the process's home folder, the one the standard places and the fixture file tree resolve under.
+func goldenHome(t *testing.T) string {
+	t.Helper()
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return home
+}
+
 func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	t.Helper()
 	t.Setenv("NVM_THEME", "")
@@ -69,7 +79,9 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	for _, app := range p.appsSnapshot() {
 		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
 	}
-	p.attachServices(fake.NewSet().Ports(), goldenOS, goldenConfig, time.UTC)
+	services := fake.NewSet()
+	services.System.SetHome(goldenHome(t))
+	p.attachServices(services.Ports(), goldenOS, goldenConfig, time.UTC)
 	p.exts.mgr.Store(newFixtureManager(t))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())

@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -37,6 +39,7 @@ func newFixtureManager(t *testing.T, enabled ...string) *manager.Manager {
 	m, err := manager.New(manager.Ports{
 		Files: ports.FS, Clock: ports.Clock, Worker: real.NewWorker(), Processes: ports.Processes,
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
+		Places:       fixturePlaces,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
@@ -91,4 +94,10 @@ func listingFor(t *testing.T, m *manager.Manager, id string) manager.Listing {
 	}
 	t.Fatalf("no listing for %s", id)
 	return manager.Listing{}
+}
+
+// fixturePlaces lists the standard folders of the process's home, as the app's system service lists them.
+func fixturePlaces() []api.Place {
+	home, _ := os.UserHomeDir()
+	return apiPlaces(systemfeat.Places(home))
 }

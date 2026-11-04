@@ -28,13 +28,14 @@ var rigSystemCapabilities = []platform.Capability{
 // The rig shares a desktop with other agents, so a confirmed restart, sleep or log out must only be recorded, never
 // performed.
 func rigPorts(ports platform.Ports) platform.Ports {
-	ports.System = rigSystem{logPath: os.Getenv(rigCallLogEnv)}
+	ports.System = rigSystem{System: ports.System, logPath: os.Getenv(rigCallLogEnv)}
 	ports.Capabilities = platform.NewCapabilities(append(ports.Capabilities.List(), rigSystemCapabilities...)...)
 	return ports
 }
 
 // rigSystem records each call as one line of the log file and performs nothing.
 type rigSystem struct {
+	platform.System
 	logPath string
 }
 
