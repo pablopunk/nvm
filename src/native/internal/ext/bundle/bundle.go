@@ -66,8 +66,33 @@ func Load(files platform.FS, dir string) Bundle {
 		bundle.Problems = append(bundle.Problems, err.Error())
 	}
 	bundle.Source = source
-	bundle.Hash = Hash(manifestBytes, source)
+	bundle.Hash = Hash(manifestBytes, append(source, otherSourceFiles(files, dir)...))
 	return bundle
+}
+
+// otherSourceFiles returns the names and text of the folder's other .go files, so a change to any of them changes the
+// hash and a reload runs the new version. The text is the interpreter's input too (see child.loadSource).
+func otherSourceFiles(files platform.FS, dir string) []byte {
+	entries, err := files.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var extra []byte
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name == SourceFile || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		data, err := files.ReadFile(filepath.Join(dir, name))
+		if err != nil {
+			continue
+		}
+		extra = append(extra, 0)
+		extra = append(extra, name...)
+		extra = append(extra, 0)
+		extra = append(extra, data...)
+	}
+	return extra
 }
 
 // decodeManifest reads extension.json. Unknown fields are ignored, as the API's compatibility rules say.

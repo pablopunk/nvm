@@ -1109,6 +1109,20 @@ Go extensions live in the shared folder `~/.config/nevermind/extensions` on ever
 - **Ignored silently.** Files, hidden folders (`.staging-`, `.trash-`), and folders holding neither file. `bundle.Scan` (`internal/ext/bundle/bundle.go`) and `isExtensionFolder` do this.
 - **Electron compatibility (checked in `src/app`, no changes made).** The Electron loader reads the folder and keeps names that end in `.ts` but not `.d.ts` (`extension-loader.ts:140-144`, `extension-source-files.ts:1-6`). Subfolders and `.go` files never match, so they are skipped with no log line. The Electron proposals scan (`extension-proposals.ts:28-31`), the AI builder listing (`ai/ai-builder-read-tools.ts:252-255`) and the chat migration (`ai/ai-chat-migration.ts:25`, `isFile()`) filter the same way. The one hazard is a folder named `*.ts`, which the loader would import and log as `extension.load.failed` (`extension-loader.ts:162`); this host refuses such ids. Verdict: the Electron app coexists with Go extension folders without errors.
 - **Electron writes.** On each load the Electron app copies `nevermind-extension-api.d.ts` and writes `package.json` into the folder (`extension-loader.ts:80-101`). This host never writes those names.
+- **Names.** The folder name must equal the manifest id, so an id is also the folder. An Electron file keeps its name and is never renamed. To port `caffeinate.ts`, create `local.caffeinate/` with `extension.json` (`"id": "local.caffeinate"`) and `main.go`. The Electron file stays where it is. Ids use lowercase dot-separated segments, and the `nevermind.` prefix is reserved.
+- **Several files.** Every `.go` file of the folder except `_test.go` files belongs to the extension. The host merges them into one source (union of imports, one spec per path; `child/sources.go`), because the interpreter rejects a package imported twice across evaluations. The bundle hash covers every file, so an edit to any of them reloads the extension. The installer writes only `extension.json` and `main.go`; other files are added by hand or by a later installer.
+
+### Budgets
+
+A run has a 5 s hard budget and a load 10 s, both counting the extension's own time. The time the host spends answering a service call is added back, and each service keeps its own limit (three minutes for the supervisor, and each service's own limit inside it, such as 120 s for a shell command). A busy loop with no host call still hits the budget (`supervisor/supervisor_test.go`); a root that waits twenty seconds on a host shell call completes (`supervisor/host_wait_test.go`). The Electron host has no compute budget, because its extension code runs asynchronously. Its limits are the refresh burst (5 per 2 s) and 30 AI calls per minute (`extension-rate-limits.ts`), and this host keeps its own rate limits per service.
+
+### Toasts
+
+An action result may carry a toast. The palette shows it as an indicator titled with the action that produced it, errors for four seconds and other tones for 2.2 seconds, as the Electron host does (`action-feedback.ts:105-132`). A toast without a tone reads as success, which is a deviation. `ui.error(title, message)` is `api.ErrorView`: a list with one contextual row carrying the message.
+
+### Lists and subtitles
+
+A list does not show `View.Subtitle`. The Electron host shows it on grid views and editor headers only (`extension-view/extension-view.tsx:466,531`), so this matches.
 
 ### Context services as built (WP3.x extension API gaps)
 
@@ -1117,3 +1131,4 @@ Go extensions live in the shared folder `~/.config/nevermind/extensions` on ever
 - **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them. Window actions are served only where the host implements them, and otherwise show the palette's unavailable message.
 - **Not served.** `ctx.ai`, `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (keyboard, selection, extra file, clipboard and window-management operations, frontmost app) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
 - **Known gap.** The `unsupported` action kind, which AI builder action builders return, fails `Action.Validate`, so a view that contains one reports `unknown action kind` rather than a disabled row.
+- **Not yet served, from the converter reports.** `desktop.files` `find`, `thumbnail`, `metadata`, `fileUrl` and `openWithApps` (only `open` and `reveal` are served). A binary file write (a download to disk, for example a wallpaper). A redirect policy on `network`. Loaders receive only the loader id, not their arguments. `api.Command` has no `keywords`, and command aliases are not searched. Each of these needs its own change.

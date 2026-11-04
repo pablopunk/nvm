@@ -146,3 +146,14 @@ func TestScanFlagsAFolderNamedLikeAnElectronSourceFile(t *testing.T) {
 		t.Fatalf("Scan = %+v; want acme.ts listed with a .ts naming problem", bundles)
 	}
 }
+
+func TestHashChangesWhenAnotherSourceFileChanges(t *testing.T) {
+	files := fake.NewFS()
+	seedExtension(files, "acme.good", validManifest, "package main\n")
+	before := Load(files, filepath.Join(root, "acme.good")).Hash
+	files.Seed(filepath.Join(root, "acme.good", "helpers.go"), []byte("package main\n\nfunc helper() {}\n"))
+	after := Load(files, filepath.Join(root, "acme.good")).Hash
+	if before == after {
+		t.Fatal("a helper file changed but the hash did not")
+	}
+}
