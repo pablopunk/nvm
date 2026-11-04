@@ -5,24 +5,19 @@ import (
 	"strings"
 	"time"
 
-	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/features/selection"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Titles of the commands, as the palette and the indicator name them.
-const (
-	FixTitle    = "Fix Selected Text with AI"
-	TriageTitle = "Triage Selected Text with AI"
-)
+const TriageTitle = "Triage Selected Text with AI"
 
 // Dismissal delays: a result the user should read stays longer than a failure's one-line copy would need.
 const (
-	successDismiss = 2 * time.Second
 	triageDismiss  = 6 * time.Second
 	failureDismiss = 4 * time.Second
 	triageTimeout  = 30 * time.Second
-	restoreDelay   = 500 * time.Millisecond
 )
 
 // Surface is what the commands draw on. The indicator is shown while a command works, and a result or a failure is
@@ -32,145 +27,36 @@ type Surface interface {
 	HideStatus()
 	Present(result Result)
 	Toast(message string)
-	// DismissPalette hides the palette and drops the presentation's pending keys, so a paste that waits for the hide
-	// waits for this one.
-	DismissPalette()
 }
 
 // Options are the ports and host callbacks a Service runs on. Dispatch runs a function on the UI thread, Background
-// runs one off it, and After schedules a function on the UI thread. Chats is the one chat service of the app; Client
-// returns the backend client of the account, or nil when it is signed out.
+// runs one off it, and After schedules a function on the UI thread. Client returns the backend client of the account,
+// or nil when it is signed out.
 type Options struct {
 	Clock        platform.Clock
 	Clipboard    platform.Clipboard
 	SelectedText platform.SelectedText
-	Paster       platform.Paster
 	Focus        platform.Focus
-	Chats        *chat.Service
 	Client       func() *backend.Client
 	Connected    func() bool
 	Surface      Surface
 	Dispatch     func(fn func())
 	Background   func(name string, fn func())
 	After        func(d time.Duration, fn func())
-	RestoreDelay time.Duration
 }
 
-// Service runs the AI commands. It owns the state of the indicator and of the proofread attempts, so only the UI
-// thread touches it.
+// Service runs the triage command. It owns the state of the indicator, so only the UI thread touches it.
 type Service struct {
-	opts     Options
-	reader   *Reader
-	attempts map[string]attempt
-	epoch    int
-}
-
-// attempt is one proofread request in flight: the chat that carries it, the text it corrects and where the
-// correction goes.
-type attempt struct {
-	input  string
-	retry  bool
-	source platform.FocusTarget
+	opts   Options
+	reader *selection.Reader
+	epoch  int
 }
 
 // NewService returns an idle service over opts.
 func NewService(opts Options) *Service {
-	if opts.RestoreDelay == 0 {
-		opts.RestoreDelay = restoreDelay
-	}
 	return &Service{
-		opts:     opts,
-		reader:   NewReader(opts.Clock, opts.Clipboard, opts.SelectedText, opts.Focus),
-		attempts: map[string]attempt{},
-	}
-}
-
-// Fix proofreads the text selected in source. The reply streams into a proofread chat; when it is a valid correction
-// the result is shown, and Replace puts it back into source.
-func (s *Service) Fix(source platform.FocusTarget) {
-	if !s.opts.Connected() {
-		s.fail(FixTitle, errNotSignedIn)
-		return
-	}
-	s.show(Status{Title: FixTitle, Subtitle: "Reading Selection", Tone: ToneLoading})
-	s.opts.Background("ai-commands.fix.read", func() {
-		text, err := s.reader.Read(source)
-		s.opts.Dispatch(func() { s.fixRead(text, err, source) })
-	})
-}
-
-// fixRead starts the proofread of the text a read returned.
-func (s *Service) fixRead(text string, err error, source platform.FocusTarget) {
-	switch {
-	case err != nil:
-		s.fail(FixTitle, err)
-	case strings.TrimSpace(text) == "":
-		s.fail(FixTitle, errNoSelection)
-	default:
-		s.startProofread(attempt{input: text, source: source})
-	}
-}
-
-// startProofread sends one proofread to a new chat of the proofread kind.
-func (s *Service) startProofread(a attempt) {
-	subtitle := "Fixing Text"
-	if a.retry {
-		subtitle = "Retrying Correction"
-	}
-	s.show(Status{Title: FixTitle, Subtitle: subtitle, Tone: ToneLoading})
-	record, err := s.opts.Chats.NewChat(chat.KindProofread, chat.TierFast)
-	if err != nil {
-		s.fail(FixTitle, err)
-		return
-	}
-	if err := s.opts.Chats.Send(record.ID, ProofreadPrompt(a.input, a.retry)); err != nil {
-		s.fail(FixTitle, err)
-		return
-	}
-	s.attempts[record.ID] = a
-}
-
-// Settled takes the end of a proofread chat's turn from the chat service. Chats that are not proofreads are ignored.
-// A valid correction is presented; an invalid one is retried once, then reported.
-func (s *Service) Settled(chatID string, outcome chat.Outcome) {
-	a, ok := s.attempts[chatID]
-	if !ok {
-		return
-	}
-	delete(s.attempts, chatID)
-	switch outcome.Ending {
-	case chat.EndFailed:
-		s.fail(FixTitle, outcome.Err)
-		return
-	case chat.EndStopped:
-		s.hide()
-		return
-	}
-	reply := replyOf(s.opts.Chats, chatID)
-	s.judgeProofread(a, reply)
-}
-
-// judgeProofread decides what a finished proofread reply means for the selection.
-func (s *Service) judgeProofread(a attempt, reply string) {
-	switch {
-	case strings.TrimSpace(reply) == "":
-		s.fail(FixTitle, errNoCorrection)
-	case !PreservesInput(a.input, reply):
-		if a.retry {
-			s.fail(FixTitle, errInvalidCorrection)
-			return
-		}
-		s.startProofread(attempt{input: a.input, retry: true, source: a.source})
-	case reply == a.input:
-		s.finish(Status{Title: FixTitle, Subtitle: "No changes needed", Tone: ToneSuccess}, successDismiss)
-	default:
-		s.hide()
-		s.opts.Surface.Present(Result{
-			Title:   "Fixed Text",
-			Text:    func() string { return reply },
-			Replace: func(text string) { s.Replace(text, a.source) },
-			Copy:    s.Copy,
-		})
+		opts:   opts,
+		reader: selection.NewReader(opts.Clock, opts.Clipboard, opts.SelectedText, opts.Focus),
 	}
 }
 
@@ -227,16 +113,6 @@ func (s *Service) decide(title string, request backend.DecisionRequest, done fun
 // decisionFor is the request that asks TriageQuestions about text.
 func decisionFor(text string) backend.DecisionRequest {
 	return backend.DecisionRequest{Input: text, Questions: TriageQuestions}
-}
-
-// replyOf returns the text of the chat's last reply, or "" when the chat is gone.
-func replyOf(chats *chat.Service, chatID string) string {
-	record, ok := chats.Chat(chatID)
-	if !ok {
-		return ""
-	}
-	text, _ := chat.LastReply(record)
-	return text
 }
 
 // show sets the indicator to status and cancels any dismissal that was waiting.

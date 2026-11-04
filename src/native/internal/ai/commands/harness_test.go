@@ -1,18 +1,15 @@
 package commands
 
 import (
-	"net/http"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
-	"github.com/pablopunk/nvm/native/internal/store"
 )
 
 // watchdog bounds a wait for queued work. A wait ends as soon as the work arrives; this never stands in for it.
@@ -60,7 +57,6 @@ type harness struct {
 	t          *testing.T
 	set        *fake.Set
 	backend    *fixtures.Backend
-	chats      *chat.Service
 	service    *Service
 	surface    *recordingSurface
 	connected  bool
@@ -99,33 +95,17 @@ func (h *harness) build(transport platform.HTTP) {
 	if err != nil {
 		h.t.Fatalf("backend: %v", err)
 	}
-	st, err := store.Open(h.set.FS, h.set.Clock, "/chats")
-	if err != nil {
-		h.t.Fatalf("store: %v", err)
-	}
-	h.t.Cleanup(func() { _ = st.Close() })
-	h.chats = chat.New(chat.Options{
-		Store:     chat.OpenStore(st, h.set.Clock),
-		Clock:     h.set.Clock,
-		Client:    func() *backend.Client { return client },
-		Connected: func() bool { return h.connected },
-		Dispatch:  h.dispatch,
-		OnSettled: func(id string, outcome chat.Outcome) { h.service.Settled(id, outcome) },
-	})
 	h.service = NewService(Options{
 		Clock:        h.set.Clock,
 		Clipboard:    h.set.Clipboard,
 		SelectedText: h.set.SelectedText,
-		Paster:       h.set.Paster,
 		Focus:        h.set.Focus,
-		Chats:        h.chats,
 		Client:       func() *backend.Client { return client },
 		Connected:    func() bool { return h.connected },
 		Surface:      h.surface,
 		Dispatch:     h.dispatch,
 		Background:   func(_ string, fn func()) { go fn() },
 		After:        func(_ time.Duration, fn func()) { h.dismissals = append(h.dismissals, fn) },
-		RestoreDelay: 500 * time.Millisecond,
 	})
 }
 
@@ -180,28 +160,6 @@ func (h *harness) fireAfter() {
 	for _, fn := range pending {
 		fn()
 	}
-}
-
-// proofreadReplies serves a fixture backend whose chat replies are chosen by request number, so a test can make the
-// first proofread answer badly and the retry answer well.
-type proofreadReplies struct {
-	backend *fixtures.Backend
-	replies []string
-	calls   int
-}
-
-func (p *proofreadReplies) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == fixtures.ChatCompletionsPath {
-		index := min(p.calls, len(p.replies)-1)
-		p.calls++
-		p.backend.SetReply(p.replies[index])
-	}
-	p.backend.ServeHTTP(w, r)
-}
-
-// useReplies makes the chat replies follow replies, one per request.
-func (h *harness) useReplies(replies ...string) {
-	h.set.HTTP.Handle(&proofreadReplies{backend: h.backend, replies: replies})
 }
 
 // fixSource is the source window of a test: a window the keyboard was in when the palette opened.

@@ -3,6 +3,33 @@
     "query": "",
     "rows": [
       {
+        "kind": "AI Commands",
+        "title": "Fix Selected Text with AI",
+        "subtitle": "Correct grammar, spelling, and punctuation",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Fix Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Welcome to Nevermind",
         "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
@@ -748,6 +775,7 @@
             "label": ""
           }
         ]
+<<<<<<< HEAD
       },
       {
         "kind": "Commands",
@@ -775,6 +803,8 @@
             "label": ""
           }
         ]
+=======
+>>>>>>> native/ai-fix-text
       }
     ]
   },

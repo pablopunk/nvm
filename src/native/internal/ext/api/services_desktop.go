@@ -21,9 +21,12 @@ type TypeOptions struct {
 	DelayMs int64 `json:"delayMs,omitempty"`
 }
 
-// Keyboard types text into the frontmost app without touching the clipboard.
+// Keyboard types text into the frontmost app without touching the clipboard. Undo sends the undo gesture (Command+Z
+// or Ctrl+Z) to the app the palette was summoned from, and needs a replacement made with Selection.ReplaceText in that
+// window first. Undo requires the desktop.keyboard capability.
 type Keyboard interface {
 	TypeText(text string, options TypeOptions) error
+	Undo() error
 }
 
 // SystemClipboard reads and writes the OS clipboard directly. Concealed writes are kept out of
@@ -58,13 +61,16 @@ type SelectionAccess struct {
 	Message string         `json:"message"`
 }
 
-// Selection reads and replaces the text selected in the frontmost app.
+// Selection reads and replaces the text selected in the app the palette was summoned from. It requires the
+// desktop.selection capability. The clipboard is saved and put back by the host, and formatted clipboards (HTML, RTF,
+// files, images) are refused rather than lost.
 type Selection interface {
 	Access() (SelectionAccess, error)
 	// Text captures the selection after the palette releases focus. found is false when nothing
 	// could be captured; that does not prove the source app has no selection.
 	Text() (text string, found bool, err error)
-	// ReplaceText reports false for an unconfirmed write so that callers can fall back to pasting.
+	// ReplaceText pastes text over the selection of the source app. It returns false when the host could not send the
+	// paste, and the text then stays on the clipboard. The paste lands in the app the selection came from.
 	ReplaceText(text string) (replaced bool, err error)
 	Files() ([]string, error)
 }

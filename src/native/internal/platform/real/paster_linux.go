@@ -17,6 +17,11 @@ func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID str
 	return keyGesture(ctx, helper, expectedAppID, "ctrl+v")
 }
 
+// undoGesture sends Ctrl+Z to the focused X11 window with xdotool.
+func undoGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
+	return keyGesture(ctx, helper, expectedAppID, "ctrl+z")
+}
+
 // keyGesture sends one key chord to the focused X11 window with xdotool, after checking the focused window's class
 // when expectedAppID is set.
 func keyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chord string) error {

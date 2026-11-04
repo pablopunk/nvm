@@ -1,4 +1,4 @@
-package commands
+package selection
 
 import (
 	"errors"
@@ -83,7 +83,7 @@ func TestReadRefusesFormattedClipboards(t *testing.T) {
 	r.set.SelectedText.Select("text")
 
 	_, err := r.reader.Read(fixSource)
-	if !errors.Is(err, errFormattedClipboard) {
+	if !errors.Is(err, ErrFormattedClipboard) {
 		t.Fatalf("Read error = %v, want the formatted-clipboard refusal", err)
 	}
 	if reqs := r.set.SelectedText.Requests(); len(reqs) != 0 {
@@ -95,8 +95,8 @@ func TestReadRefusesFormattedClipboards(t *testing.T) {
 func TestReadReportsAGoneSourceWindow(t *testing.T) {
 	r := newReaderRig(t, goneFocus{})
 	r.set.SelectedText.Select("text")
-	if _, err := r.reader.Read(fixSource); !errors.Is(err, errSourceGone) {
-		t.Fatalf("Read error = %v, want errSourceGone", err)
+	if _, err := r.reader.Read(fixSource); !errors.Is(err, ErrSourceGone) {
+		t.Fatalf("Read error = %v, want ErrSourceGone", err)
 	}
 }
 
@@ -121,3 +121,6 @@ func (goneFocus) Active() (platform.FocusTarget, error) {
 	return platform.FocusTarget{}, platform.ErrNotFound
 }
 func (goneFocus) Restore(platform.FocusTarget) error { return platform.ErrNotFound }
+
+// fixSource is the source window of a test: a window the keyboard was in when the palette opened.
+var fixSource = platform.FocusTarget{Window: "0x1200007", PID: 4242}

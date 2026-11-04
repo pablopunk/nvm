@@ -30,6 +30,10 @@ type orderPaster struct {
 }
 
 // FrontmostAppID reports that the front app is not needed by these tests.
+func (p orderPaster) UndoInFrontmost(string) error {
+	return platform.ErrUnsupported
+}
+
 func (p orderPaster) FrontmostAppID() (string, error) {
 	return "", platform.ErrUnsupported
 }

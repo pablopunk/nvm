@@ -8,6 +8,17 @@ type WriteTextArgs struct {
 	Concealed bool   `json:"concealed,omitempty"`
 }
 
+// SelectionTextResult is the selection of the source window: its text, and Found false when nothing was selected.
+type SelectionTextResult struct {
+	Text  string `json:"text"`
+	Found bool   `json:"found"`
+}
+
+// ReplaceTextArgs is the text that replaces the selection of the source window.
+type ReplaceTextArgs struct {
+	Text string `json:"text"`
+}
+
 // PathArgs names a file or folder on this computer.
 type PathArgs struct {
 	Path string `json:"path"`

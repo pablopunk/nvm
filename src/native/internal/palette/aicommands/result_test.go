@@ -7,26 +7,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
 )
 
-// TestEnterReplacesWhenTheResultCanBeReplaced: a proofread's Enter hands the shown text to Replace, and never copies.
-func TestEnterReplacesWhenTheResultCanBeReplaced(t *testing.T) {
-	var replaced, copied []string
-	view := ResultView(commands.Result{
-		Title:   "Fixed Text",
-		Text:    func() string { return "This is selected text." },
-		Replace: func(text string) { replaced = append(replaced, text) },
-		Copy:    func(text string) { copied = append(copied, text) },
-	})
-	view.OnSubmit("")
-	if len(replaced) != 1 || replaced[0] != "This is selected text." {
-		t.Fatalf("Replace got %q, want the corrected text once", replaced)
-	}
-	if len(copied) != 0 {
-		t.Fatalf("Enter copied %q although the result replaces", copied)
-	}
-}
-
-// TestEnterCopiesWhenTheResultCannotBeReplaced: a classification has no selection to replace, so Enter copies it.
-func TestEnterCopiesWhenTheResultCannotBeReplaced(t *testing.T) {
+// TestEnterCopiesTheResult: a classification's Enter copies the category and closes the page.
+func TestEnterCopiesTheResult(t *testing.T) {
 	var copied []string
 	view := ResultView(commands.Result{
 		Title: "Image Classification",

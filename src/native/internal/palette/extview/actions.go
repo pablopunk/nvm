@@ -53,7 +53,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 		}
 		token := s.issue(key, route{extID: s.extID, action: action})
-		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.runHandle(h, token) }}
+		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runHandle(h, token) }}
 	case api.ActionOpenURL:
 		url := action.URL
 		return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenURL(url) }}
@@ -283,4 +283,13 @@ func toastIndicator(title string, toast api.Toast) api.IndicatorInput {
 		input.DurationMs = 4000
 	}
 	return input
+}
+
+// runDismissal says whether the palette stays open while an ActionRun handler works. An action that asks to be
+// dismissed after its run closes the palette as the run is dispatched, as the 1.x auto dismissal did.
+func runDismissal(action api.Action) search.Dismissal {
+	if action.DismissAfterRun {
+		return search.DismissAuto
+	}
+	return search.DismissNever
 }

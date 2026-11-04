@@ -3,8 +3,8 @@ package commands
 import (
 	"errors"
 
-	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/features/selection"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -15,11 +15,9 @@ func (e userError) Error() string { return string(e) }
 
 // The failures a command names. Each carries the words the indicator shows.
 const (
-	errNoSelection        = userError("Could not read selected text. Select it and try again")
-	errSourceGone         = userError("The source window is gone. Select the text and try again")
-	errFormattedClipboard = userError("Cannot keep a formatted clipboard while reading selected text. Copy plain text first and try again")
-	errNoCorrection       = userError("AI returned no corrected text")
-	errInvalidCorrection  = userError("AI did not return a valid correction")
+	errNoSelection       = userError("Could not read selected text. Select it and try again")
+	ErrNoCorrection      = userError("AI returned no corrected text")
+	ErrCorrectionRefused = userError("AI did not return a valid correction")
 )
 
 // signInCopy is the message of every command that needs an account.
@@ -31,8 +29,10 @@ func failureMessage(err error) string {
 	switch {
 	case errors.As(err, &typed):
 		return string(typed)
-	case errors.Is(err, chat.ErrNotSignedIn), errors.Is(err, errNotSignedIn):
+	case errors.Is(err, errNotSignedIn):
 		return signInCopy
+	case errors.Is(err, selection.ErrSourceGone), errors.Is(err, selection.ErrFormattedClipboard), errors.Is(err, selection.ErrKeyboardHeld):
+		return err.Error()
 	case errors.Is(err, platform.ErrConflict):
 		return "Frontmost app changed. Select the text and try again"
 	case errors.Is(err, platform.ErrDenied):

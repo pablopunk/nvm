@@ -19,7 +19,7 @@ RUN apt-get update \
       ca-certificates curl tar xz-utils bash procps \
       xvfb openbox picom xfce4-panel xfconf dbus-x11 \
       pulseaudio pulseaudio-utils \
-      xdotool xclip xauth x11-utils x11-xserver-utils feh imagemagick \
+      xdotool xclip xauth x11-utils x11-xserver-utils feh imagemagick mousepad \
       fonts-dejavu-core fonts-liberation fonts-noto-color-emoji \
       libgtk-3-0t64 libcairo2 libpango-1.0-0 libatk1.0-0t64 libepoxy0 libsecret-1-0 \
       libayatana-appindicator3-1 libdbusmenu-gtk3-4 libgtk-layer-shell0 \

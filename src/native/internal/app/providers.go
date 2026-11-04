@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
@@ -143,7 +144,7 @@ func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Floating Notes": "yellow",
 	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Toggle Floating Notes": "yellow", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
 	"Start Timer": "orange", "Cancel Timer": "orange",
-	commands.FixTitle: "purple", commands.TriageTitle: "purple"}
+	aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
 
 // numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.
 func numberCommands(cmds []command) {

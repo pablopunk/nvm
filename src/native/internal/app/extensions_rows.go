@@ -119,11 +119,19 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		row := p.withShortcutActions(search.Item{
 			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
-			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, api.Run(command.ID, command.Title, nil))},
+			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, commandAction(command))},
 		}, actionID, bound)
 		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
 	}
 	return out
+}
+
+// commandAction is the action that runs a command. A command that asks to be dismissed after its run closes the palette
+// as the run is dispatched, so the handler runs over the app the palette was summoned from.
+func commandAction(command api.Command) api.Action {
+	action := api.Run(command.ID, command.Title, nil)
+	action.DismissAfterRun = command.DismissAfterRun
+	return action
 }
 
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {

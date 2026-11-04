@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
@@ -23,7 +24,7 @@ import (
 func builtInExtensions(rates calc.RateCache, zone *time.Location) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
-		calculatorbuiltin.New(rates, zone), classifyimage.Extension{},
+		calculatorbuiltin.New(rates, zone), classifyimage.Extension{}, aicommands.New(),
 	}
 }
 

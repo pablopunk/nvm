@@ -13,19 +13,14 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-// attachAICommands builds the AI commands over the app's ports and chat service. It runs after attachChats; without
-// the chat store the commands are not offered.
+// attachAICommands builds the triage and classify commands over the app's ports. Fix Selected Text with AI is the AI
+// commands built-in, which runs through the extension API.
 func (p *App) attachAICommands() {
-	if p.chats == nil {
-		return
-	}
 	p.aiCommands = commands.NewService(commands.Options{
 		Clock:        searchClock,
 		Clipboard:    p.ports.Clipboard,
 		SelectedText: p.ports.SelectedText,
-		Paster:       p.ports.Paster,
 		Focus:        p.focusOption(),
-		Chats:        p.chats,
 		Client:       p.backendClient,
 		Connected:    p.signedIn,
 		Surface:      aiSurface{app: p},
@@ -70,30 +65,14 @@ func (s aiSurface) Toast(message string) {
 	s.app.Toast(message)
 }
 
-// DismissPalette hides the palette. A stale hide signal is dropped first, so the paste that follows waits for this hide.
-func (s aiSurface) DismissPalette() {
-	s.app.discardPaletteHidden()
-	s.app.Hide()
-}
-
-// discardPaletteHidden forgets a hide the paste port has not consumed yet.
-func (p *App) discardPaletteHidden() {
-	select {
-	case <-p.paletteHidden:
-	default:
-	}
-}
-
-// aiCommandRows are the AI commands in the root list, or none when the chat store did not open. Fix and triage need a
-// selection the OS can copy. Classify Image with AI is a built-in, placed after them (see classifyImageSlot).
+// aiCommandRows are the AI commands in the root list. Triage needs a selection the OS can copy. Classify Image with AI
+// is a built-in, placed after them (see classifyImageSlot).
 func (p *App) aiCommandRows() []command {
 	if p.aiCommands == nil {
 		return nil
 	}
 	selection := p.ports.Capabilities.Supported(platform.CapabilitySelectionCopy)
 	return []command{
-		{ID: shortcuts.CommandFixSelectedText, Title: commands.FixTitle, Keywords: "fix grammar correct proofread spelling selected text ai", Icon: "sparkles", Subtitle: "Correct grammar, spelling, and punctuation", Hidden: !selection,
-			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Fix) }},
 		{ID: shortcuts.CommandTriageSelectedText, Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
 			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Triage) }},
 	}

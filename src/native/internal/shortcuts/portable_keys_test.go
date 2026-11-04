@@ -64,7 +64,7 @@ func TestSharedCommandsUseTheOneXKeyString(t *testing.T) {
 }
 
 func TestCommandsWithoutAOneXEquivalentKeepTheirOwnKey(t *testing.T) {
-	for _, id := range []string{CommandSnippets, CommandSearchFiles, CommandQuitAllApps, CommandFixSelectedText} {
+	for _, id := range []string{CommandSnippets, CommandSearchFiles, CommandQuitAllApps} {
 		if _, shared := builtInCommandKeys[id]; shared {
 			t.Errorf("%s has a 1.x key; the test expects it to be 2.0 only", id)
 		}

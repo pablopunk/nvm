@@ -60,6 +60,8 @@ type Ports struct {
 	Indicators services.IndicatorSurface
 	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
 	AI *extai.Service
+	// Selection reads, replaces and undoes the selected text of extensions. Nil makes ctx.desktop.selection unavailable.
+	Selection services.SelectionEngine
 }
 
 // Options tune the child processes of every extension.
@@ -155,6 +157,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,
 			AI:           ports.AI,
+			Selection:    ports.Selection,
 			History:      ports.History,
 			Confirm:      ports.Confirm,
 

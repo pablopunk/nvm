@@ -112,6 +112,10 @@ func (p orderedPaster) PasteIntoFrontmost(target string) error {
 	return h.pasteErr
 }
 
+func (p orderedPaster) UndoInFrontmost(string) error {
+	return platform.ErrUnsupported
+}
+
 func (p orderedPaster) FrontmostAppID() (string, error) {
 	return p.harness.frontmost, p.harness.frontmostErr
 }

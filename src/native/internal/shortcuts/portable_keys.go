@@ -80,6 +80,7 @@ var builtInCommandKeys = map[string]string{
 	CommandPlaceDownloads:     "extension:nevermind.places:places:downloads",
 	CommandPlaceDocuments:     "extension:nevermind.places:places:documents",
 	CommandPlaceDesktop:       "extension:nevermind.places:places:desktop",
+	CommandFixSelectedText:    "extension:nevermind.ai-commands:fix-selected-text-with-ai",
 }
 
 var builtInCommandIDs = invertKeys(builtInCommandKeys)
