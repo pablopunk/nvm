@@ -179,3 +179,18 @@ func withoutConfirmation(action api.Action) api.Action {
 	action.Confirm = nil
 	return action
 }
+
+// submit runs an action with a full invocation, such as a form's or an editor's submit, and applies its result like any
+// other action. afterRun, when set, sees whether the run failed before the result is applied.
+func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed bool)) {
+	if s.deps.Invoke == nil {
+		h.Toast(unavailableMessage)
+		return
+	}
+	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
+		if afterRun != nil {
+			afterRun(failure != nil)
+		}
+		s.finish(h, s.extID, result, failure)
+	})
+}

@@ -29,6 +29,10 @@ type Deps struct {
 	Clock     platform.Clock
 	Cache     Cache
 	OnUI      func(fn func())
+	// Dialog shows the native file and folder choosers for path fields. Nil makes those fields report unavailable.
+	Dialog platform.FileDialog
+	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
+	Drafts DraftStore
 }
 
 // Session is one open extension view. It is used on the UI thread only.
@@ -52,6 +56,7 @@ type Session struct {
 	dismissed    bool
 	refreshing   bool
 	stopInterval chan struct{}
+	form         *formState
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
@@ -89,6 +94,14 @@ func (s *Session) Palette() *palette.View {
 		return s.progressPage()
 	case api.ViewFilePreview:
 		return s.filePreviewPage()
+	case api.ViewForm:
+		if s.view.Form != nil {
+			return s.formPage()
+		}
+	case api.ViewEditor:
+		if s.view.Editor != nil {
+			return s.editorView(*s.view.Editor)
+		}
 	}
 	return s.unsupportedPage()
 }
