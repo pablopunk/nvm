@@ -19,9 +19,9 @@ Order is fixed by `getOptionActionRows` (App.tsx:4526). Rows follow the primary 
 | G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | n/a in 2.0: every row with preview content has its own Preview action (files, clipboard) |
 | G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | n/a (file rows have Preview Contents; Quick Look is missing, see F3) |
 | G5 | App.tsx:4567 | customizable rows | Set alias | none | G1 condition | done (`shortcut_row_actions.go`, `palette/aliasview`) |
-| G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | disabled with "Duplicate is not in 2.0 yet" (extension_authoring.go) |
-| G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | disabled with "Rename is not in 2.0 yet" (extension_authoring.go) |
-| G8 | App.tsx:4591 | generated extension rows | Submit as PR | none | G6 condition and GitHub CLI installed; disabled with "Requires GitHub CLI (gh auth login)" until authed | disabled with "Submit as PR is not in 2.0 yet" when gh is installed (extension_authoring.go) |
+| G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | done: copies the folder under a new id, enabled, then opens the builder chat (internal/ext/authoring) |
+| G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | done: the form writes the title into extension.json (internal/ext/authoring) |
+| G8 | App.tsx:4591 | generated extension rows | Submit as PR | none | G6 condition and GitHub CLI installed; disabled with "Requires GitHub CLI (gh auth login)" until authed | done: hidden without gh, disabled with "Requires GitHub CLI (gh auth login)" when signed out, else opens the PR (internal/ext/submit) |
 | G9 | App.tsx:4602 | file-backed extension rows | Tweak with AI | none | G7 condition | done: opens the builder chat bound to the extension (builderEditView) |
 | G10 | App.tsx:4610 | rows with a defaultActionId | Override with AI | none | `defaultActionId` (built-in with AI override) | not shown: no source sets defaultActionId, so 1.x never shows it; n/a |
 | G11 | App.tsx:4618 | overridden rows | Restore original | none | `isOverridden` | not shown: overrides cannot be created in 1.x, so the condition is unreachable; n/a |
@@ -68,7 +68,7 @@ File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 | C4 | clipboard-removal-actions.ts:1-140, clipboard-history.ts:469 | Manage History section: Remove Item | none | entry present; destructive, confirm "Remove “<title>” from clipboard history?" | done |
 | C5 | clipboard-removal-actions.ts:50 | Remove Last... (submenu): 5 Minutes, Hour, Day, Week | none | entry present | done |
 | C6 | clipboard-removal-actions.ts:124-139 | (history level, Clipboard History view) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | none | history not empty | removed from the entry menu; the view-level set is not changed by this pass |
-| — | none | Pin, Unpin | | 1.x has none | removed (owner decision) |
+| — | none | Pin, Unpin | | 1.x has none | removed; pinned state and sorting are gone from the store too |
 | — | none | Ask AI, Clear All Unpinned | | 1.x has none | removed from the entry menu |
 
 Clipboard entries have no keyboard shortcut or alias in 1.x.
@@ -119,7 +119,7 @@ Extension authoring actions (G6-G12) are missing in 2.0. See the report for the 
 |---|---|---|---|---|
 | H1 | ai-chat-views.ts:39 | Open (primary, the chat title) | always | done |
 | H2 | ai-created-actions.ts:110 | Tweak <title> (builder chats) | extension chat | missing |
-| H3 | (G12) | Remove action | kind ai-chat | partial (2.0 "Delete", ⌃⌫) |
+| H3 | (G12) | Remove action | kind ai-chat | done: confirmation "Delete “<title>” from Nevermind" (ConversationRow) |
 
 H1-H3 are partly traced: the exact panel of an AI chat row was not read end to end.
 
@@ -158,5 +158,5 @@ Counted over the rows above, after this change.
 | AI chats B7 | 3 | 1 | 0 | 0 | 0 |
 | Snippets, quicklinks, timers B8 | 0 | 0 | 0 | 0 | n/a, 2.0 only |
 
-Not done: Duplicate, Rename and Submit as PR are disabled, not implemented. The AI override group is not shown
-because 1.x never shows it.
+Not covered by the menu test yet: extension root items (rows of an extension, not its commands). The AI override group is
+not shown because 1.x never shows it.
