@@ -440,6 +440,10 @@ func init() {
 		"TriggerType":             reflect.ValueOf((*api.TriggerType)(nil)),
 		"TweakRequest":            reflect.ValueOf((*api.TweakRequest)(nil)),
 		"TypeOptions":             reflect.ValueOf((*api.TypeOptions)(nil)),
+		"UninstallItem":           reflect.ValueOf((*api.UninstallItem)(nil)),
+		"UninstallResult":         reflect.ValueOf((*api.UninstallResult)(nil)),
+		"UninstallReview":         reflect.ValueOf((*api.UninstallReview)(nil)),
+		"UninstallUntouched":      reflect.ValueOf((*api.UninstallUntouched)(nil)),
 		"UpdateState":             reflect.ValueOf((*api.UpdateState)(nil)),
 		"Updates":                 reflect.ValueOf((*api.Updates)(nil)),
 		"Version":                 reflect.ValueOf((*api.Version)(nil)),
@@ -637,17 +641,19 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler) RunActi
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Apps is an interface wrapper for Apps type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Apps struct {
-	IValue     interface{}
-	WForceQuit func(path string) (api.QuitResult, error)
-	WFrontmost func() (api.App, error)
-	WHide      func(path string) error
-	WIcon      func(path string) (dataURL string, found bool, err error)
-	WLaunch    func(path string) error
-	WList      func() ([]api.App, error)
-	WQuit      func(path string) (api.QuitResult, error)
-	WQuitAll   func() ([]api.App, error)
-	WRunning   func(paths []string) ([]string, error)
-	WSearch    func(query string) ([]api.App, error)
+	IValue           interface{}
+	WForceQuit       func(path string) (api.QuitResult, error)
+	WFrontmost       func() (api.App, error)
+	WHide            func(path string) error
+	WIcon            func(path string) (dataURL string, found bool, err error)
+	WLaunch          func(path string) error
+	WList            func() ([]api.App, error)
+	WQuit            func(path string) (api.QuitResult, error)
+	WQuitAll         func() ([]api.App, error)
+	WRunning         func(paths []string) ([]string, error)
+	WSearch          func(query string) ([]api.App, error)
+	WUninstallReview func(path string) (api.UninstallReview, error)
+	WUninstallTrash  func(token string, ids []string) (api.UninstallResult, error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) ForceQuit(path string) (api.QuitResult, error) {
@@ -679,6 +685,12 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Running(paths []
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Search(query string) ([]api.App, error) {
 	return W.WSearch(query)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) UninstallReview(path string) (api.UninstallReview, error) {
+	return W.WUninstallReview(path)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) UninstallTrash(token string, ids []string) (api.UninstallResult, error) {
+	return W.WUninstallTrash(token, ids)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder is an interface wrapper for AttachmentBuilder type
@@ -1348,10 +1360,14 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shell) Which(command s
 // _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts is an interface wrapper for Shortcuts type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts struct {
 	IValue   interface{}
+	WAliases func(prefix string) map[string][]string
 	WList    func() []api.ShortcutRecord
 	WPalette func() api.ShortcutRecord
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Aliases(prefix string) map[string][]string {
+	return W.WAliases(prefix)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) List() []api.ShortcutRecord {
 	return W.WList()
 }

@@ -16,7 +16,8 @@ type Item struct {
 	Image *Image `json:"image,omitempty"`
 	Video string `json:"video,omitempty"`
 	// File is the local file the row or grid cell drags out to other applications, as 1.x's path does. Without
-	// DragImage, the drag shows the file itself when it is an image. Relative paths do not drag.
+	// DragImage, the drag shows the file itself when it is an image. Relative paths do not drag. A built-in row with
+	// no Image or Icon shows the file's system icon instead, loaded in the background, as 1.x's app rows do.
 	File *FileRef `json:"file,omitempty"`
 	// DragImage is the local image file the drag shows instead of File, such as a thumbnail. It needs a File.
 	DragImage   *FileRef    `json:"dragImage,omitempty"`
@@ -34,6 +35,10 @@ type Item struct {
 	// messages the user must read, such as errors. Passive status rows leave it off.
 	Contextual bool    `json:"contextual,omitempty"`
 	Detail     *Detail `json:"detail,omitempty"`
+	// CustomizeAs names the action a built-in row's keyboard shortcut and alias are kept under, such as app:<path>. A
+	// built-in row with it offers Set keyboard shortcut, Remove keyboard shortcut and Set alias, as a Customizable command
+	// does. The host ignores it for folder extensions.
+	CustomizeAs string `json:"customizeAs,omitempty"`
 	// Section and LearnKey are host-only presentation for built-in extensions: the root section a row is listed under
 	// (for example "Commands") and the key the usage learner ranks it by. The host ignores both for folder extensions.
 	Section  string `json:"section,omitempty"`

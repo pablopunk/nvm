@@ -27,6 +27,8 @@ type Apps interface {
 	// index lists the app, which is the path Icon takes; it is empty otherwise.
 	Frontmost() (App, error)
 	Launch(path string) error
+	// List returns the apps the host index lists, sorted by name, each with the time the host first saw it. The list
+	// is capped at 500 apps.
 	List() ([]App, error)
 	Search(query string) ([]App, error)
 	Icon(path string) (dataURL string, found bool, err error)
@@ -43,4 +45,47 @@ type Apps interface {
 	QuitAll() ([]App, error)
 	// Hide hides the app's windows. Only macOS can; elsewhere the call fails.
 	Hide(path string) error
+	// UninstallReview finds what uninstalling the app at path would move to the Trash: the app and the data it left. The
+	// host keeps the review under its Token until the review is used or is replaced by a newer one. Ready is false when
+	// the platform cannot uninstall, or the app cannot be uninstalled, and Message says why.
+	UninstallReview(path string) (UninstallReview, error)
+	// UninstallTrash moves the items of a review, named by their IDs, to the Trash. Each item is checked again just before
+	// it moves, and the app itself is asked to quit when it runs. Items the review did not list are ignored. It needs
+	// the review's token, which is refused once the host has dropped the review.
+	UninstallTrash(token string, ids []string) (UninstallResult, error)
+}
+
+// UninstallReview is the review of one app's uninstall. Items are the candidates the review lists, Selected by default
+// as the host chose them.
+type UninstallReview struct {
+	Token   string          `json:"token,omitempty"`
+	Ready   bool            `json:"ready"`
+	Message string          `json:"message,omitempty"`
+	Notes   []string        `json:"notes,omitempty"`
+	Items   []UninstallItem `json:"items,omitempty"`
+}
+
+// UninstallItem is one candidate of an uninstall review. Kind is "app" for the application itself and "associated" for
+// its data; Reason says why the review lists it.
+type UninstallItem struct {
+	ID       string `json:"id"`
+	Path     string `json:"path"`
+	Kind     string `json:"kind"`
+	Reason   string `json:"reason,omitempty"`
+	Selected bool   `json:"selected"`
+}
+
+// UninstallResult says what a Trash run moved. Status is "complete" when every selected item moved, "partial" when some
+// did, and "failed" when none did. Untouched lists the selected items that stayed, with the reason for each.
+type UninstallResult struct {
+	Status    string               `json:"status"`
+	Moved     []string             `json:"moved,omitempty"`
+	Untouched []UninstallUntouched `json:"untouched,omitempty"`
+	Notes     []string             `json:"notes,omitempty"`
+}
+
+// UninstallUntouched is a selected item a Trash run left in place, and why.
+type UninstallUntouched struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
 }

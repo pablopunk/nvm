@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	appfeature "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -47,11 +48,18 @@ func (h *Handler) serveDesktopApps(ctx context.Context, call protocol.ServiceCal
 		return h.quitAllApps()
 	case protocol.OpHideApp:
 		return nil, h.hideApp(call.Args)
+	case protocol.OpUninstallReview, protocol.OpUninstallTrash:
+		return h.serveUninstall(call)
 	}
 	return nil, invalid("desktop.apps has no operation %q", call.Op)
 }
 
+// installedApps lists the apps the host index lists, with the time each was first seen. Without an apps lifecycle the
+// platform's own listing answers.
 func (h *Handler) installedApps() ([]api.App, error) {
+	if h.deps.Apps != nil {
+		return indexedAppList(h.deps.Apps.IndexedApps()), nil
+	}
 	apps, err := h.deps.Shell.InstalledApps()
 	if err != nil {
 		return nil, fmt.Errorf("list the installed apps: %w", err)
@@ -64,6 +72,17 @@ func (h *Handler) installedApps() ([]api.App, error) {
 		out = append(out, api.App{ID: app.ID, Name: app.Name, Path: app.Path})
 	}
 	return out, nil
+}
+
+func indexedAppList(list []appfeature.App) []api.App {
+	out := make([]api.App, 0, min(len(list), maxListedApps))
+	for _, app := range list {
+		if len(out) == maxListedApps {
+			break
+		}
+		out = append(out, api.App{ID: app.ID, Name: app.Name, Path: app.Path, FirstSeenMs: app.FirstSeenAt})
+	}
+	return out
 }
 
 func (h *Handler) searchApps(raw json.RawMessage) ([]api.App, error) {

@@ -140,7 +140,7 @@ func (p *App) extensionWindows() services.WindowEngine {
 
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.
 func (p *App) extensionShortcuts() services.ShortcutTable {
-	return shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler)
+	return shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler, p.aliasStore())
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.

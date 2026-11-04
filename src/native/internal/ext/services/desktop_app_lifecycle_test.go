@@ -27,6 +27,14 @@ type lifecycleRecorder struct {
 	err     error
 }
 
+func (r *lifecycleRecorder) IndexedApps() []appfeature.App { return nil }
+
+func (r *lifecycleRecorder) DiscoverUninstall(string) appfeature.Discovery { return appfeature.Discovery{} }
+
+func (r *lifecycleRecorder) TrashUninstall(appfeature.UninstallSnapshot, map[string]bool) appfeature.TrashResult {
+	return appfeature.TrashResult{}
+}
+
 func (r *lifecycleRecorder) RunningApps(list []appfeature.App) ([]appfeature.App, error) {
 	r.asked = append(r.asked, list...)
 	if r.err != nil {

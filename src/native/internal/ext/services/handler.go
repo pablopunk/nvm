@@ -127,6 +127,7 @@ type Handler struct {
 	rootRefreshes    *rateLimiter
 	aiCalls          *aiquota.Window
 	ai               *aiState
+	reviews          *uninstallReviews
 	openOnce         sync.Once
 	openErr          error
 	closeOnce        sync.Once
@@ -160,6 +161,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		rootRefreshes:    newBurstRateLimiter(deps.Clock, rootRefreshBurst, rootRefreshesPerMinute),
 		aiCalls:          aiCallWindow(deps, manifest.ID),
 		ai:               newAIState(),
+		reviews:          newUninstallReviews(),
 	}
 }
 

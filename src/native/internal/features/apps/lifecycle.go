@@ -63,12 +63,10 @@ var macHideLines = []string{
 	"end run",
 }
 
-// RunningApps returns the apps of list that have a live process now. It refreshes the running state before it
-// answers, so it can take a moment; the palette never calls it.
+// RunningApps returns the apps of list that have a live process, from the running state the palette keeps. A stale
+// state starts a refresh, and the palette runs its rows again when the running set changes, so the answer never waits.
 func (s *Services) RunningApps(list []App) ([]App, error) {
-	if _, err := s.Running.Refresh("extension"); err != nil {
-		return nil, err
-	}
+	s.Running.ScheduleRefresh("extension")
 	marked := s.Running.RunningAmong(list)
 	out := []App{}
 	for _, app := range list {
@@ -221,4 +219,19 @@ func namedApps(output string) []App {
 		}
 	}
 	return out
+}
+
+// IndexedApps is the index's list of apps, sorted by name, with the time each was first seen.
+func (s *Services) IndexedApps() []App {
+	return s.Index.Apps()
+}
+
+// DiscoverUninstall finds what uninstalling the app at appPath would move to the Trash.
+func (s *Services) DiscoverUninstall(appPath string) Discovery {
+	return s.Uninstaller.Discover(appPath)
+}
+
+// TrashUninstall moves the reviewed items the values select to the Trash, checking each one again first.
+func (s *Services) TrashUninstall(snapshot UninstallSnapshot, values map[string]bool) TrashResult {
+	return s.Uninstaller.Trash(snapshot, values)
 }
