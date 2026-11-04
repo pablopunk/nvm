@@ -263,3 +263,14 @@ func pushedTitle(h *viewHost) string {
 	}
 	return view.Title
 }
+
+// TestGoldenFormEditingPassword draws a password being typed: the search field masks the text, so the golden never
+// shows the secret. The secret typed here is a stand-in that appears nowhere else in the golden.
+func TestGoldenFormEditingPassword(t *testing.T) {
+	m := formsManager(t)
+	p := goldenPalette(t)
+	page, h := goldenFormPage(t, p, m, formFixture, "form", formDeps(m, nil, nil))
+	editField(t, page, h, "API token")
+	goldenQuery(p, "hunter2-stand-in")
+	golden.AssertMatrix(t, "form-editing-password", p.View, formsGoldens)
+}

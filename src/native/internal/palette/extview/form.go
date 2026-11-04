@@ -152,6 +152,7 @@ func (f *formState) open(h search.Host, field api.Field) {
 	default:
 		f.editing = field.ID
 		f.page.Placeholder = fieldPlaceholder(field)
+		f.page.Concealed = field.Type == api.FieldPassword
 		h.SetQuery(prefillFor(field, value))
 	}
 }
@@ -278,6 +279,7 @@ func (f *formState) stopEditing(h search.Host) {
 func (f *formState) stopEditingState() {
 	f.editing = ""
 	f.page.Placeholder = formPlaceholder
+	f.page.Concealed = false
 }
 
 // save validates every field the way the host does before a submit runs. A failure marks its rows and selects the

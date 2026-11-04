@@ -334,3 +334,18 @@ func TestMultilineSaveHandsTheTextBackToTheField(t *testing.T) {
 		t.Fatalf("bio subtitle = %q; want the saved text", got)
 	}
 }
+
+// Editing a password conceals the search field until the value is set, so the typed text is masked in the palette.
+func TestPasswordEditingConcealsTheSearchFieldUntilItIsSet(t *testing.T) {
+	secret := api.FieldOf("secret", api.FieldPassword, "Token")
+	r := openForm(t, api.FormSpec{Fields: []api.Field{secret}})
+
+	r.pressTitled("Token")
+	if !r.page.Concealed {
+		t.Fatal("editing a password left the search field readable")
+	}
+	r.press(findRow(t, r.page.Search("hunter3"), "Set Token"))
+	if r.page.Concealed {
+		t.Fatal("the search field stayed concealed after the password was set")
+	}
+}
