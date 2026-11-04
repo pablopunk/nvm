@@ -34,6 +34,12 @@ type WindowDescriptor struct {
 
 // ListDisplays returns the connected displays with their work areas.
 func (s *Service) ListDisplays(ctx context.Context) ([]geometry.Display, error) {
+	displays, err := s.listDisplays(ctx)
+	s.reportFailure("list-displays", err)
+	return displays, err
+}
+
+func (s *Service) listDisplays(ctx context.Context) ([]geometry.Display, error) {
 	if !s.Available() {
 		return nil, newFailure(ReasonUnsupported, "")
 	}
@@ -49,6 +55,12 @@ func (s *Service) ListDisplays(ctx context.Context) ([]geometry.Display, error) 
 
 // ListWindows returns the windows of the running apps that match the query, each with a fresh handle.
 func (s *Service) ListWindows(ctx context.Context, query WindowQuery) ([]WindowDescriptor, error) {
+	windows, err := s.listWindows(ctx, query)
+	s.reportFailure("list-windows", err)
+	return windows, err
+}
+
+func (s *Service) listWindows(ctx context.Context, query WindowQuery) ([]WindowDescriptor, error) {
 	if !s.Available() {
 		return nil, newFailure(ReasonUnsupported, "")
 	}

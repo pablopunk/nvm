@@ -39,7 +39,7 @@ const (
 	messageNoWindow            = "The target app has no window to move."
 	messageNoFocusedWindow     = "The target app has no focused window."
 	messageTargetLost          = "The target window is no longer available."
-	messageDenied              = "Window access is not available. Grant window access, then try again."
+	messageDenied              = "Accessibility access is blocked. Open Nevermind OS Permissions, enable access, then restart Nevermind."
 	messageUnsupported         = "Window management is not supported on this device."
 	messageUnknownWindow       = "That window handle is no longer valid. List windows again."
 	messageNoNeighbor          = "No window lies in that direction."
@@ -63,10 +63,12 @@ var defaultFailureMessages = map[FailureReason]string{
 	ReasonSingleDisplay:    geometry.MessageSingleDisplay,
 }
 
-// Failure is a command that did not reach its window. Message is the palette copy.
+// Failure is a command that did not reach its window. Message is the palette copy; Cause is what the window system
+// reported, kept for the log and never shown.
 type Failure struct {
 	Reason  FailureReason
 	Message string
+	Cause   string
 }
 
 // Error returns the palette copy, so a Failure can be returned as an error.
@@ -81,14 +83,24 @@ func newFailure(reason FailureReason, message string) *Failure {
 	return &Failure{Reason: reason, Message: message}
 }
 
-// failureOf maps an error from a window manager call to a failure. Platform codes keep their meaning;
-// anything unexpected is reported as an unapplied change with the helper's failure copy.
+// failureOf maps an error from a window manager call to a failure. Platform codes keep their meaning, denied access
+// gets the Accessibility copy, and a helper that failed or could not answer gets the helper copy with its cause.
 func failureOf(err error) *Failure {
 	var windowErr *platform.WindowError
 	if !errors.As(err, &windowErr) {
-		return newFailure(ReasonUnapplied, messageHelperFailed)
+		return helperFailure(err.Error())
+	}
+	switch windowErr.Code {
+	case platform.WindowErrorFailed:
+		return helperFailure(windowErr.Message)
+	case platform.WindowErrorDenied:
+		return newFailure(ReasonDenied, "")
 	}
 	return newFailure(reasonOfWindowCode(windowErr.Code), windowErr.Message)
+}
+
+func helperFailure(cause string) *Failure {
+	return &Failure{Reason: ReasonUnapplied, Message: messageHelperFailed, Cause: cause}
 }
 
 func reasonOfWindowCode(code platform.WindowErrorCode) FailureReason {

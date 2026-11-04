@@ -9,6 +9,12 @@ import (
 // ApplyToWindow runs a layout on a window named by a handle from ListWindows. The command does not need
 // focus: the window is acted on directly. A handle whose window is gone is forgotten.
 func (s *Service) ApplyToWindow(ctx context.Context, handle string, layout geometry.Layout, options geometry.Options) (Result, error) {
+	result, err := s.applyToWindow(ctx, handle, layout, options)
+	s.reportFailure("apply-window", err)
+	return result, err
+}
+
+func (s *Service) applyToWindow(ctx context.Context, handle string, layout geometry.Layout, options geometry.Options) (Result, error) {
 	target, ok := s.handles.resolve(handle)
 	if !ok {
 		return Result{}, newFailure(ReasonUnknownWindow, "")
@@ -34,6 +40,12 @@ func (s *Service) ApplyToWindow(ctx context.Context, handle string, layout geome
 
 // FocusWindow brings a window named by a handle to the front.
 func (s *Service) FocusWindow(ctx context.Context, handle string) error {
+	err := s.focusWindow(ctx, handle)
+	s.reportFailure("focus-window", err)
+	return err
+}
+
+func (s *Service) focusWindow(ctx context.Context, handle string) error {
 	target, ok := s.handles.resolve(handle)
 	if !ok {
 		return newFailure(ReasonUnknownWindow, "")

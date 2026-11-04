@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt"
 )
@@ -54,6 +55,9 @@ func (p *App) captureWindowFocus() {
 	ctx, cancel := context.WithTimeout(context.Background(), focusCaptureTimeout)
 	defer cancel()
 	app, found, err := p.ports.Windows.Frontmost(ctx)
+	if err != nil {
+		logx.Default().Warn("window.capture.failed", logx.F{"error": err.Error()})
+	}
 	if err != nil || !found {
 		p.windowFocus.store(summonRecord{})
 		return

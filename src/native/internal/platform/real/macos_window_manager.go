@@ -122,18 +122,9 @@ type macWindows struct {
 	macHelper
 }
 
-// Access asks the helper for its permission state. Anything but a clear answer is unknown.
+// Access reports the helper's Accessibility state. A helper that cannot answer is an error, not a silent denial.
 func (m macWindows) Access(ctx context.Context) (platform.WindowAccess, error) {
-	envelope, err := m.run(ctx, "permissions")
-	switch {
-	case err != nil:
-		return platform.WindowAccessUnknown, nil
-	case envelope.Code == swifthelper.CodeOK:
-		return platform.WindowAccessAllowed, nil
-	case envelope.Code == swifthelper.CodeDenied:
-		return platform.WindowAccessDenied, nil
-	}
-	return platform.WindowAccessUnknown, nil
+	return m.accessState(ctx)
 }
 
 func (m macWindows) Displays(ctx context.Context) ([]platform.WindowDisplay, error) {

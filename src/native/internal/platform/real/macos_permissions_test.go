@@ -119,3 +119,11 @@ func TestChooseMacosHelperPathPrefersTheBundledHelper(t *testing.T) {
 		}
 	}
 }
+
+func TestWindowAccessReportsAHelperThatCannotAnswer(t *testing.T) {
+	bridge, _ := newScriptedMacHelper(fake.HelperScript{Stdout: []byte("not json")})
+	access, err := (macWindows{macHelper: bridge}).Access(context.Background())
+	if access != platform.WindowAccessUnknown || err == nil {
+		t.Fatalf("Access() = %v, %v; want unknown with the helper's failure", access, err)
+	}
+}
