@@ -105,14 +105,10 @@ func (m *Manager) Reserved(accelerator string) bool {
 	return accelerator != "" && (accelerator == status.Accelerator || accelerator == status.Recovery)
 }
 
-// Entries lists the rows of the Keyboard Shortcuts list. An unavailable palette shortcut says so under its row.
+// Entries lists the rows of the Keyboard Shortcuts list.
 func (m *Manager) Entries() []Entry {
-	inactive := maps.Clone(m.inactive)
-	if status := m.summon.Status(); status.Unavailable() {
-		inactive[PaletteID] = status.Accelerator + " is in use by another app"
-	}
 	doc := m.load()
-	return Entries(doc, m.listedCommands(doc), m.declared(), inactive)
+	return Entries(doc, m.listedCommands(doc), m.declared(), maps.Clone(m.inactive))
 }
 
 // listedCommands is Commands plus the chosen actions that Commands does not list and Describe titles, so their rows

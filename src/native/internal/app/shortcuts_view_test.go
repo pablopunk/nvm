@@ -55,8 +55,8 @@ func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
 	for _, row := range rows {
 		byTitle[row.Title] = row.Accessory + "|" + row.Subtitle
 	}
-	if got := byTitle["Palette Hotkey"]; got != p.shortcutLabelOf("Alt+Shift+Space")+"|" {
-		t.Fatalf("palette row = %q", got)
+	if _, listed := byTitle[shortcuts.PaletteTitle]; listed {
+		t.Fatal("the palette hotkey is a row of the list; 1.x changes it in Settings only")
 	}
 	if got := byTitle["Clipboard History"]; got != p.shortcutLabelOf("Command+Alt+V")+"|" {
 		t.Fatalf("clipboard row = %q", got)
