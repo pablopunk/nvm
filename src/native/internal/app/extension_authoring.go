@@ -2,7 +2,6 @@ package app
 
 import (
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -21,9 +20,6 @@ const (
 	removeActionTitle = "Remove action"
 )
 
-// submitUnavailable is the reason Submit as PR is shown disabled while 2.0 cannot submit.
-const submitUnavailable = "Submit as PR is not in 2.0 yet"
-
 // extensionAuthoringActions are the actions 1.x adds to the menu of an extension row, after its shortcut and alias, in
 // 1.x order: Duplicate and Submit as PR for an extension the AI builder made, Rename and Tweak with AI for any
 // extension, and Remove action for an extension the builder made. Override with AI and Restore original are not listed:
@@ -35,8 +31,10 @@ func (p *App) extensionAuthoringActions(extID, title string) []search.Action {
 		out = append(out, p.duplicateAction(extID))
 	}
 	out = append(out, p.renameAction(extID))
-	if owned && ghInstalled() {
-		out = append(out, search.Action{Title: submitPRTitle, Disabled: submitUnavailable})
+	if owned {
+		if action, ok := p.submitAction(extID); ok {
+			out = append(out, action)
+		}
 	}
 	out = append(out, search.Action{Title: tweakWithAITitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
 		h.Push(p.builderEditView(extID))
@@ -136,12 +134,6 @@ func (p *App) removeActionConfirmation(extID, title string) *palette.View {
 			_ = ctl.Uninstall(extID)
 		}
 	})
-}
-
-// ghInstalled reports whether the GitHub CLI is on the PATH, which decides whether 1.x offers Submit as PR at all.
-func ghInstalled() bool {
-	_, err := exec.LookPath("gh")
-	return err == nil
 }
 
 // withAuthoringActions appends the authoring actions to a row of an extension the user installed. Built-in extensions

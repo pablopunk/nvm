@@ -80,6 +80,7 @@ type App struct {
 	paletteHidden  chan struct{}
 	shortcutMgr    *shortcuts.Manager
 	aliasList      *shortcuts.Aliases
+	github         *githubProbe
 	shortcutTitles shortcutTitles
 	snips          *snippets.Store
 	notes          *notes.Store
