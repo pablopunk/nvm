@@ -120,11 +120,15 @@ func TestAllowedCountIgnoresUnknownRows(t *testing.T) {
 	}
 }
 
-// erroringPermissions fails every State call, as a broken OS query does.
-type erroringPermissions struct{ fake.Permissions }
+// erroringPermissions fails every State call, as a broken OS query does, while claiming allowed.
+type erroringPermissions struct{}
 
-func (erroringPermissions) State(platform.PermissionKind) (platform.PermissionState, error) {
+func (*erroringPermissions) State(platform.PermissionKind) (platform.PermissionState, error) {
 	return platform.PermissionAllowed, errors.New("query failed")
+}
+
+func (*erroringPermissions) Request(platform.PermissionKind) error {
+	return nil
 }
 
 // TestAPortErrorIsUnknownEvenWhenTheStateSaysAllowed reads the error, not the state, when the query fails.
