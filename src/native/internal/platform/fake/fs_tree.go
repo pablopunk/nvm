@@ -8,9 +8,18 @@ import (
 	"strings"
 )
 
-// cleanKey turns a name into the tree key: slash-separated, cleaned, rooted at "/".
+// cleanKey turns a name into the tree key: slash-separated, cleaned, rooted at "/". The tree is one volume, so a
+// drive letter is dropped and C:\home\me names the same node as /home/me on every host.
 func cleanKey(name string) string {
-	return path.Clean("/" + strings.ReplaceAll(name, "\\", "/"))
+	return path.Clean("/" + strings.ReplaceAll(withoutDrive(name), "\\", "/"))
+}
+
+// withoutDrive removes a leading drive letter and colon, which the tree does not model.
+func withoutDrive(name string) string {
+	if len(name) >= 2 && name[1] == ':' && (name[0] >= 'a' && name[0] <= 'z' || name[0] >= 'A' && name[0] <= 'Z') {
+		return name[2:]
+	}
+	return name
 }
 
 // lookupLocked returns the node at name or an fs.ErrNotExist-wrapping error. The caller holds f.mu.

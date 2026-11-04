@@ -207,3 +207,16 @@ func TestWatchMissingFolderFails(t *testing.T) {
 		t.Fatalf("Watch of missing folder: %v, want ErrNotExist", err)
 	}
 }
+
+// TestVolumeQualifiedNamesShareTheRootedTree checks that a Windows name with a drive letter reaches the node its
+// rooted spelling names, so a path the OS resolves against the process volume finds what the fixture seeded.
+func TestVolumeQualifiedNamesShareTheRootedTree(t *testing.T) {
+	files := NewFS()
+	files.Seed("/home/u/docs/notes.txt", []byte("notes"))
+	for _, name := range []string{`C:\home\u\docs\notes.txt`, "d:/home/u/docs/notes.txt", "/home/u/docs/notes.txt"} {
+		data, err := files.ReadFile(name)
+		if err != nil || string(data) != "notes" {
+			t.Fatalf("ReadFile(%q) = %q, %v; want the seeded file", name, data, err)
+		}
+	}
+}
