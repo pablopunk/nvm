@@ -28,7 +28,7 @@ func (p *App) extensionManager() *manager.Manager {
 // startExtensions builds the manager from the extensions folder and publishes it. It runs on its own goroutine:
 // scanning the folder and starting enabled children never waits the palette's first paint.
 func (p *App) startExtensions() {
-	m, err := newExtensionManager(p.extensionsStateChanged)
+	m, err := newExtensionManager(p.refreshMenuBar, p.extensionsStateChanged)
 	if err != nil {
 		log.Println("extensions:", err)
 		return
@@ -37,7 +37,7 @@ func (p *App) startExtensions() {
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
-func newExtensionManager(onChange func()) (*manager.Manager, error) {
+func newExtensionManager(menuBarRefresh func(extensionID string), onChange func()) (*manager.Manager, error) {
 	ports := real.NewPorts()
 	exe, err := os.Executable()
 	if err != nil {
@@ -57,16 +57,19 @@ func newExtensionManager(onChange func()) (*manager.Manager, error) {
 		Clipboard: ports.Clipboard,
 		Logs:      logx.Default(),
 	}, extensionsDir(), enablement.Open(state), manager.Options{
-		Executable: exe,
-		DataRoot:   filepath.Join(configDir(), "extension-data"),
-		OnChange:   onChange,
+		Executable:     exe,
+		DataRoot:       filepath.Join(configDir(), "extension-data"),
+		MenuBarRefresh: menuBarRefresh,
+		OnChange:       onChange,
 	})
 }
 
 // extensionsStateChanged redraws the Extensions list when it is the view on top, so a child that finishes starting
-// shows as Running without the user reopening the list. It runs on the goroutine that changed the state.
+// shows as Running without the user reopening the list, and asks the menu bar to reconcile its items with the new
+// state. It runs on the goroutine that changed the state.
 func (p *App) extensionsStateChanged() {
 	p.RefreshTop(func(v *palette.View) bool { return v.Title == extensionsViewTitle })
+	p.syncMenuBarItems()
 }
 
 // extensionsDir is the folder of installed extensions: one folder per extension, named after its id.

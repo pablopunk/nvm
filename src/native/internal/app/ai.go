@@ -7,6 +7,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
@@ -63,8 +64,11 @@ func (p *App) noteAIError(err error) {
 
 // systemPromptFor is the instruction a chat of kind starts with: the builder writes extensions, a conversation talks.
 func systemPromptFor(kind chat.Kind) string {
-	if kind == chat.KindBuilder {
+	switch kind {
+	case chat.KindBuilder:
 		return builderSystem
+	case chat.KindProofread:
+		return commands.FixSystemPrompt
 	}
 	return chat.ConversationSystemPrompt
 }
@@ -125,10 +129,19 @@ func unavailableChatView() *palette.View {
 	}
 }
 
-// chatSettled runs after a chat's turn ends on the UI thread. Only the extension builder reacts to it.
+// chatSettled runs after a chat's turn ends on the UI thread. The extension builder and the AI commands react to theirs.
 func (p *App) chatSettled(id string, outcome chat.Outcome) {
-	if record, ok := p.chats.Chat(id); ok && record.Kind == chat.KindBuilder {
+	record, ok := p.chats.Chat(id)
+	if !ok {
+		return
+	}
+	switch record.Kind {
+	case chat.KindBuilder:
 		p.builderDone(id, outcome)
+	case chat.KindProofread:
+		if p.aiCommands != nil {
+			p.aiCommands.Settled(id, outcome)
+		}
 	}
 }
 

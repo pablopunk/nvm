@@ -43,7 +43,7 @@ type harness struct {
 	enabled *enablement.Set
 }
 
-func newHarness(t *testing.T, tune ...func(*Options)) *harness {
+func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -60,11 +60,12 @@ func newHarness(t *testing.T, tune ...func(*Options)) *harness {
 	}
 	opts := Options{
 		Executable: exe,
+		DataRoot:   filepath.Join(dir, "extension-data"),
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: searchBudget},
 		},
 	}
-	for _, change := range tune {
+	for _, change := range tweak {
 		change(&opts)
 	}
 	m, err := New(Ports{

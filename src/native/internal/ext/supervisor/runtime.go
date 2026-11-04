@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -78,6 +79,17 @@ func (r *Runtime) Reset() {
 	r.reason = ""
 	r.retryAt = time.Time{}
 	r.notifyLocked()
+}
+
+// Provides reports whether the running child declared the protocol method. A runtime that is not running provides
+// nothing: its declarations are read again when it starts.
+func (r *Runtime) Provides(method string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.child == nil {
+		return false
+	}
+	return slices.Contains(r.child.methods, method)
 }
 
 // Status returns the current state, the reason for a failed, broken or disabled state, and recent diagnostics.

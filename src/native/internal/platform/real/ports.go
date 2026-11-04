@@ -19,6 +19,7 @@ func NewPorts() platform.Ports {
 		Resolver:     resolver{},
 		Clipboard:    newClipboard(),
 		Paster:       NewPaster(helper{}, nil),
+		SelectedText: NewSelectedText(helper{}),
 		Shell:        shell{},
 		Screens:      screens{},
 		Notifier:     notifier{},
@@ -36,5 +37,7 @@ func NewPorts() platform.Ports {
 		Capabilities: Capabilities(),
 		Microphone:   newMicrophone(),
 		Opus:         opusCodec{},
+		Text:         newTextRecognizer(helper{}),
+		Capture:      newScreenCapturer(helper{}),
 	}
 }

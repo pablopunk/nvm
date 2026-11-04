@@ -9,9 +9,7 @@ var menuRowLabels = []string{"Open Nevermind", "Check for Updates…", "Settings
 
 // TestJourneyTrayMenuRegistersWithMenuRows checks the menu bar item of WP1.12 on the rig. It is not one of PLAN's
 // journeys. The test proves the item registers with the session's tray host, and that the menu the host reads over
-// D-Bus has the four 1.x rows. Not covered: choosing a row. A "clicked" event sent to the menu's D-Bus object did not
-// reach the item's action in the rig (with and without AboutToShow), so the actions are covered by the L2 tests
-// with fake tray items, and the click is outstanding rig validation.
+// D-Bus has the four 1.x rows. Choosing a row is checked by TestJourneyTrayAppItemSettingsRowOpensSettings.
 func TestJourneyTrayMenuRegistersWithMenuRows(t *testing.T) {
 	app := Launch(t, Options{})
 

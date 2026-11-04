@@ -72,7 +72,7 @@ func serve(sourcePath string, memoryLimit uint64, identity api.Identity, in io.R
 		writeLineLocked(out, protocol.Ready{OK: false, Failure: &failure})
 		return 1
 	}
-	writeLineLocked(out, protocol.Ready{OK: true})
+	writeLineLocked(out, protocol.Ready{OK: true, Methods: ext.declaredMethods()})
 	return answerRequests(ext, readInbound(in, link), link)
 }
 

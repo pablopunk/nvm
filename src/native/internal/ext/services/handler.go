@@ -40,6 +40,9 @@ type Deps struct {
 	Clipboard platform.Clipboard
 	// Logs receives extension records. Nil means the process logger.
 	Logs *logx.Logger
+	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
+	// returns before the items change. Nil makes the request a no-op.
+	MenuBarRefresh func(extensionID string)
 }
 
 // documents are the extension's files: one store folder holds all of them.
@@ -127,6 +130,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveText(call)
 	case protocol.ServiceNetwork:
 		return h.serveNetwork(ctx, call)
+	case protocol.ServiceViews:
+		return h.serveViews(call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

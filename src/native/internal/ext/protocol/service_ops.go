@@ -19,6 +19,8 @@ const (
 	OpRecent      = "recent"
 	OpTemplate    = "template"
 	OpFetch       = "fetch"
+
+	OpRefreshMenuBar = "refreshMenuBar"
 )
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.

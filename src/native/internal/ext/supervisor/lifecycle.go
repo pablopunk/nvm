@@ -69,6 +69,7 @@ func (r *Runtime) awaitReady(child *childProcess) (ready bool, broken bool, reas
 		if !message.OK {
 			return false, true, failureMessage(message.Failure)
 		}
+		child.methods = message.Methods
 		return true, false, ""
 	case <-r.cfg.Clock.After(r.cfg.startTimeout()):
 		return false, false, fmt.Sprintf("did not start within %s", r.cfg.startTimeout())
