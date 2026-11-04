@@ -996,7 +996,7 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
-Not wired in this build (still an internal failure when called, with a reference): `Desktop`, `ClipboardHistory`, `OCR`, `Dictation`, `Shortcuts`, `Indicators`, `System`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Windows`, `Navigation`, and `Views` except `RefreshMenuBar` (section 19). The settings view has no goldens yet.
+Not wired in this build (still an internal failure when called, with a reference): `Dictation`, `Indicators`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Navigation`, `Views` except `RefreshMenuBar` (section 19), and the desktop surfaces section 21 does not list. The settings view has no goldens yet.
 
 ## 19. Menu bar as built (WP3.5)
 
@@ -1028,3 +1028,32 @@ Code: `internal/palette/extview` (`form*.go`, `editor.go`, `drafts.go`, `form_pi
 - **Follow-up actions.** A result's `Next` runs instead of the rest of that result (its view, patch and navigation are not applied), as Electron runs an action in place of a view. A run action runs through its extension and its own result is applied the same way; a declarative action runs on the host; an action with `Confirm` opens its confirmation first. A chain stops after four follow-ups with a notice.
 - **Submit and commit.** The editor submits its text as `Invocation.EditorContent`. The extension persists its record and calls `Drafts().Commit(key, version)`, which removes the draft and reports whether one existed. A submit that fails keeps its text dirty, and text typed while a submit runs stays dirty.
 - **Not built yet.** `DraftOptions.Autosave` is not run; `Result.Draft`'s own `View` and `Navigation` are ignored; the editor is a plain text area (`ui.TextArea`), not MyGo's code editor or rich text, and has no live preview; separators draw as muted rows; rig coverage of the native dialog and of draft conflicts is missing.
+
+## 21. Desktop, clipboard, OCR, system and shortcut services as built (WP3.8)
+
+Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`, `system.go`, `shortcuts.go`, `desktop_ports.go` for the window and shortcut ports), `internal/ext/child` (`remote_desktop.go`, `remote_history.go`, `remote_ocr.go`, `remote_system.go`), `internal/ext/protocol` (`desktop_services.go`, `desktop_args.go`, `request_method.go`), the adapters `internal/windowmgmt/extension.go` and `internal/shortcuts/extension_table.go`. Fixtures: `acme.desktop` (every service) and `acme.undeclared` (declares nothing). Rig journey: `TestJourneyDesktopFixtureWritesTheClipboardAndListsWindows`.
+
+| Service | Surface served | Declaration |
+| --- | --- | --- |
+| `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
+| `desktop.apps` | `list`, `search`, `launch`, `icon` | `desktop.apps` |
+| `desktop.files` | `open`, `reveal` (absolute paths only) | `desktop.files` |
+| `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
+| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
+| `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
+| `ocr` | `image`, `screen`, `region` | `ocr` |
+| `shortcuts` | `list`, `palette` (read only) | `shortcuts` |
+| `system` | `os`, `hasCapability`, `labels` | none: read-only metadata, as storage needs none |
+
+Decisions behind the table:
+
+- **Declarations are enforced.** Electron does not gate these namespaces by declaration. This host does, as WP3.7 does for `network`, `secrets` and `settings.write`; a refusal is `permission`, names the capability and is logged.
+- **Concealed writes never land unmarked.** A clipboard that cannot mark content as concealed refuses the write. Clipboard history never stores concealed copies, so no read returns them.
+- **Launch and icon read the app index only.** An extension cannot start a binary by naming its path; the path must be an app the index lists.
+- **Destructive calls ask the user.** `remove` and `clear` run only under a palette run, and only after the host shows a palette confirmation ("Confirm" or "Cancel") that names the extension and the action. The extension cannot skip it, and a cancel, or no answer within 60 seconds, refuses the call. The time the user takes to answer does not count against the request's hard budget. Escape gives no answer, so it ends in the timeout.
+- **History images stay on the host.** An image entry carries its type only; no bytes or paths leave the host.
+- **Rates.** Opens, launches, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
+- **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
+- **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
+
+Not built in this slice: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.

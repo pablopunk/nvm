@@ -43,6 +43,7 @@ func init() {
 		"CapabilityCamera":              reflect.ValueOf(api.CapabilityCamera),
 		"CapabilityClipboardHistory":    reflect.ValueOf(api.CapabilityClipboardHistory),
 		"CapabilityDesktopApps":         reflect.ValueOf(api.CapabilityDesktopApps),
+		"CapabilityDesktopClipboard":    reflect.ValueOf(api.CapabilityDesktopClipboard),
 		"CapabilityDesktopFiles":        reflect.ValueOf(api.CapabilityDesktopFiles),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),

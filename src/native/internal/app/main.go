@@ -187,6 +187,7 @@ func (p *App) ready() {
 	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()
+	p.shortcutsManager()
 	go p.startExtensions()
 	p.setUpMenubar()
 	p.runMenubarScheduler()

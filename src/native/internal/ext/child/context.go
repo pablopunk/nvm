@@ -90,6 +90,26 @@ func (c hostContext) Network() api.Network {
 	return remoteNetwork{link: c.link}
 }
 
+func (c hostContext) Clipboard() api.ClipboardHistory {
+	return remoteHistory{link: c.link}
+}
+
+func (c hostContext) Desktop() api.Desktop {
+	return remoteDesktop{link: c.link}
+}
+
+func (c hostContext) OCR() api.OCR {
+	return remoteOCR{link: c.link}
+}
+
+func (c hostContext) System() api.System {
+	return remoteSystem{link: c.link}
+}
+
+func (c hostContext) Shortcuts() api.Shortcuts {
+	return remoteShortcuts{link: c.link}
+}
+
 func (c hostContext) Views() api.Views {
 	return remoteViews{link: c.link}
 }
