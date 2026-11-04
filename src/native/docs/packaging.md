@@ -32,7 +32,9 @@ the packages as run artifacts. It publishes nothing; see [release.md](release.md
 MyGo signs both with the app's identity (its resources rule): the hardened runtime
 and a timestamp for Developer ID, ad hoc otherwise. The Go loader tries the bundled
 libopus before the system one. Tesseract is not bundled: Linux users install it,
-and the app reports text recognition only when it finds it.
+and the app reports text recognition only when it finds it. The macOS job fails when
+the window helper is missing from the bundle or has the wrong architecture, because the
+window commands look for it in `Contents/Resources` and fail without it.
 
 Entitlements (`packaging/entitlements.mac.plist`): audio input, camera and Apple
 events, which the paste and copy keystrokes need. No JIT entitlement: the app does

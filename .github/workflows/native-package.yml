@@ -151,6 +151,16 @@ jobs:
             bash scripts/packaging/verify-updates.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$UPDATE_PUBLIC_KEY"
           fi
 
+      - name: Check the window helper is bundled for this architecture
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          helper="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/macos-selected-text"
+          want=arm64
+          if [ "${{ matrix.arch }}" = amd64 ]; then want=x86_64; fi
+          test -x "$helper" || { echo "The window helper is missing from the app bundle: $helper" >&2; exit 1; }
+          lipo -archs "$helper" | grep -qx "$want" || { echo "The window helper is not a $want binary." >&2; exit 1; }
+
       - name: Note the update feed
         env:
           HAS_UPDATE_SIGNING: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY != '' }}
