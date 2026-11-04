@@ -72,11 +72,20 @@ func snippetRows(p *App, _ *rootInput, q string) []search.Item {
 	return snippetRootRows(p, q)
 }
 
-// commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
+// commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise. The
+// built-in system commands sit between the two halves of the list, where the native system commands were.
 func commandRows(p *App, in *rootInput, q string) []search.Item {
+	before, after := p.commandsAroundBuiltIns(in.timerOn)
+	out := commandRowsOf(p, before, q)
+	out = append(out, builtInCommandRows(p, q)...)
+	return append(out, commandRowsOf(p, after, q)...)
+}
+
+// commandRowsOf lists the rows of cmds for q, as commandRows does for the whole command list.
+func commandRowsOf(p *App, cmds []command, q string) []search.Item {
 	lq := strings.ToLower(q)
 	var out []search.Item
-	for _, cmd := range p.commands(in.timerOn) {
+	for _, cmd := range cmds {
 		cmd := cmd
 		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: "Open", Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
 		if lq == "" {

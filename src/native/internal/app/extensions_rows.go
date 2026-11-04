@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -47,6 +48,9 @@ func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.
 		out = append(out, matchingCommandRows(e.p, m, result, q)...)
 	}
 	for _, result := range m.Search(ctx, q) {
+		if result.ExtensionID == systemcommands.ID {
+			continue // listed by commandRows, in the place of the native system commands
+		}
 		out = append(out, searchRowsFor(e.p, m, q, result)...)
 	}
 	emit(search.Batch{Items: out, Final: true})

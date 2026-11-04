@@ -33,3 +33,14 @@ func catalog(settingsCommand string) []command {
 		{op: "open-system-settings", title: settingsCommand, subtitle: "Open system preferences", keywords: "settings preferences system", icon: "settings", capability: "system.settings"},
 	}
 }
+
+// SupportedCount is how many of the commands the system supports, given whether it has a capability by name.
+func SupportedCount(hasCapability func(name string) bool) int {
+	count := 0
+	for _, c := range catalog("") {
+		if hasCapability(c.capability) {
+			count++
+		}
+	}
+	return count
+}

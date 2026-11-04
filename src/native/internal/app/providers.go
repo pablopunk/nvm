@@ -60,7 +60,24 @@ type command struct {
 
 // commands lists the palette commands. timerOn tells whether a timer is running, which adds the cancel command.
 func (p *App) commands(timerOn bool) []command {
-	cmds := []command{
+	before, after := p.commandsAroundBuiltIns(timerOn)
+	return slices.Concat(before, after)
+}
+
+// commandsAroundBuiltIns splits the commands where the built-in system commands sit in the tie order: the commands
+// before the split, the built-ins (see commandRows), then the rest. Each command's Order counts the built-ins it
+// stands behind, so the root's suggestions do not move when the system commands moved out of the list.
+func (p *App) commandsAroundBuiltIns(timerOn bool) (before, after []command) {
+	before = leadingCommands(p)
+	after = trailingCommands(p, timerOn)
+	numberCommands(before, 0)
+	numberCommands(after, len(before)+p.builtInCommandSlot())
+	return before, after
+}
+
+// leadingCommands are the commands listed before the built-in system commands.
+func leadingCommands(p *App) []command {
+	return []command{
 		{Title: "Clipboard History", Keywords: "clipboard paste copy history", Icon: "clipboard", Tone: "blue", Subtitle: "Browse and paste what you copied", Run: func(h search.Host) { h.Push(p.clipboardView()) }},
 		{Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
 		{Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
@@ -77,7 +94,11 @@ func (p *App) commands(timerOn bool) []command {
 		{Title: "Create Quicklink", Keywords: "quicklink bookmark url search new", Icon: "link", Hidden: true, Run: func(h search.Host) { h.Push(p.quicklinkForm()) }},
 		{Title: "Start Timer", Keywords: "timer countdown alarm", Icon: "timer", Subtitle: "Type e.g. “timer 5m”", Hidden: true, Dismiss: search.DismissNever, Run: func(h search.Host) { h.SetQuery("timer 5m") }},
 	}
-	cmds = append(cmds, p.meaningFilesCommands()...)
+}
+
+// trailingCommands are the commands listed after the built-in system commands.
+func trailingCommands(p *App, timerOn bool) []command {
+	cmds := p.meaningFilesCommands()
 	cmds = append(cmds, []command{
 		{Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksView()) }},
@@ -94,17 +115,23 @@ func (p *App) commands(timerOn bool) []command {
 	if timerOn {
 		cmds = append(cmds, command{Title: "Cancel Timer", Keywords: "timer cancel stop", Icon: "timer", Hidden: true, Run: func(h search.Host) { p.cancelTimer(); h.Hide() }})
 	}
-	tones := map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
-		"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
-		"Start Timer": "orange", "Cancel Timer": "orange",
-		commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
+	return cmds
+}
+
+// commandTones colors the commands the root shows in a tone of their own.
+var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Quick Notes": "yellow",
+	"New Note": "yellow", "New Floating Note": "yellow", "Snippets": "teal", "Create Snippet": "teal", "Extensions": "purple", "Force Quit Apps": "red", "Quit All Apps": "red", "Create Quicklink": "blue",
+	"Start Timer": "orange", "Cancel Timer": "orange",
+	commands.FixTitle: "purple", commands.TriageTitle: "purple", commands.ClassifyTitle: "purple"}
+
+// numberCommands sets the Order of cmds from first on, and their tones.
+func numberCommands(cmds []command, first int) {
 	for i := range cmds {
-		cmds[i].Order = i
-		if tone, ok := tones[cmds[i].Title]; ok {
+		cmds[i].Order = first + i
+		if tone, ok := commandTones[cmds[i].Title]; ok {
 			cmds[i].Tone = tone
 		}
 	}
-	return cmds
 }
 
 // rootViewTitle names the palette's first level, so a refresh can find it among the views pushed on it.

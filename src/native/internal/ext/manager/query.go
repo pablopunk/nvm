@@ -28,6 +28,18 @@ func (m *Manager) Search(ctx context.Context, query string) []SearchResult {
 	return m.fanOut(ctx, protocol.MethodSearch, query)
 }
 
+// SearchBuiltIn asks one built-in extension for its rows of query, within the Search budget. A root source that places a
+// built-in among other rows of the same tie order asks for it alone; ok is false when no such built-in is running.
+func (m *Manager) SearchBuiltIn(ctx context.Context, id, query string) (result SearchResult, ok bool) {
+	targets, budget := m.targetsFor(protocol.MethodSearch)
+	for _, target := range targets {
+		if target.id == id && m.IsBuiltIn(id) {
+			return m.callOne(ctx, target, protocol.MethodSearch, query, budget), true
+		}
+	}
+	return SearchResult{}, false
+}
+
 // Roots asks every enabled, running extension that declares RootItems for its empty-query rows, the rows the
 // palette's root shows. Its calls and failures are those of Search.
 func (m *Manager) Roots(ctx context.Context) []SearchResult {

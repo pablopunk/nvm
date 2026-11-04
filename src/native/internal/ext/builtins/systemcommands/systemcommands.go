@@ -12,6 +12,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
+// ID is the built-in's identity. The root lists its rows at the place the native system commands had, so the app asks for them by it.
+const ID = "nevermind.system-commands"
+
 // keywordMatchScore ranks a command found by a keyword rather than its title, below any title match.
 const keywordMatchScore = 45
 
@@ -23,7 +26,7 @@ type Extension struct{}
 
 // Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
 func (Extension) Manifest() api.Manifest {
-	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: "nevermind.system-commands", Title: "System Commands"}}
+	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "System Commands"}}
 }
 
 // SearchItems lists the supported commands that match the query. Commands show only for a query, never at the empty root.
