@@ -1350,6 +1350,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_System struct {
 	IValue         interface{}
 	WHasCapability func(name string) bool
 	WLabels        func() api.SystemLabels
+	WNotify        func(title string, body string) error
 	WOS            func() string
 	WPlaces        func() []api.Place
 	WSettingsPanes func() []api.SettingsPane
@@ -1360,6 +1361,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) HasCapability(
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Labels() api.SystemLabels {
 	return W.WLabels()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Notify(title string, body string) error {
+	return W.WNotify(title, body)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OS() string {
 	return W.WOS()
