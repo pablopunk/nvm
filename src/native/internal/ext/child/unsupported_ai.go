@@ -112,9 +112,10 @@ func (unsupportedAIBuilder) CleanupExpiredConversations() (int, error) {
 	return 0, unsupported("ctx.aiBuilder.cleanupExpiredConversations")
 }
 
-// unsupportedAction is a window-free placeholder the host reports as unavailable.
+// unsupportedAction is a placeholder row the palette reports as unavailable when it runs. It validates, so the view
+// that carries it still loads.
 func unsupportedAction(title string) api.Action {
-	return api.Action{Kind: "unsupported", Title: title}
+	return api.Action{Kind: api.ActionUnavailable, Title: title}
 }
 
 // unsupportedOwnership says that no builder conversation owns any file, which is true for every extension but the

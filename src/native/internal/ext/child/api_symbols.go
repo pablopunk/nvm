@@ -37,6 +37,7 @@ func init() {
 		"ActionToggleSetting":           reflect.ValueOf(api.ActionToggleSetting),
 		"ActionTrash":                   reflect.ValueOf(api.ActionTrash),
 		"ActionTypeText":                reflect.ValueOf(api.ActionTypeText),
+		"ActionUnavailable":             reflect.ValueOf(api.ActionUnavailable),
 		"ActionUpdate":                  reflect.ValueOf(api.ActionUpdate),
 		"ActionWindow":                  reflect.ValueOf(api.ActionWindow),
 		"AllFieldTypes":                 reflect.ValueOf(api.AllFieldTypes),
