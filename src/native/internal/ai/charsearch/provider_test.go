@@ -94,13 +94,19 @@ func TestASearchWaitsForTheTypingPauseBeforeAsking(t *testing.T) {
 		t.Fatal("the model was asked before the text rested")
 	}
 	clock.Advance(TypingPause)
-	select {
-	case batch := <-emitted:
-		if len(batch.Items) != 3 {
-			t.Fatalf("items = %d, want the three matches", len(batch.Items))
+	for {
+		select {
+		case batch := <-emitted:
+			if !batch.Final {
+				continue
+			}
+			if len(batch.Items) != 3 {
+				t.Fatalf("items = %d, want the three matches", len(batch.Items))
+			}
+			return
+		case <-time.After(watchdog):
+			t.Fatal("the search never emitted its matches")
 		}
-	case <-time.After(watchdog):
-		t.Fatal("the search never emitted")
 	}
 }
 
