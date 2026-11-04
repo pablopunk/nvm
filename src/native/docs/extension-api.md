@@ -71,11 +71,13 @@ type Manifest struct {
     Subtitle     string       `json:"subtitle,omitempty"`
     Capabilities []Capability `json:"capabilities,omitempty"`
     CommandTitles map[string]string `json:"commandTitles,omitempty"` // command id -> title; overrides the title the code declares
+    ConvertedFrom string `json:"convertedFrom,omitempty"` // 1.x source file this folder came from; host metadata only
 }
 ```
 
 - `id` is lowercase, dot-separated (`acme.world-clock`), at most 128 characters. The prefix `nevermind.` is reserved for built-ins. The id is permanent: enablement, storage, secrets, global shortcuts and restore keys are keyed by it.
 - `commandTitles` renames commands by id. A command shows the manifest's title when one is set, and the title its code declares otherwise. Rename on a command row writes here, so renaming never edits the code. Only titles are renamed.
+- `convertedFrom` names the 1.x source file a folder was converted from, such as `toggle-system-theme-257c802c.ts`. It is a plain file name ending in `.ts`. On its first scan the folder takes that file's enabled state from 1.x's state file, so a converted extension that was on stays on and one that was off waits for review. The state is taken once: a later change made in 2.0 is kept.
 - `Manifest()` must be pure. The host reads it before enabling anything, so review never depends on runtime state.
 
 Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one too high):
@@ -102,7 +104,8 @@ Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one
 Review semantics:
 
 - Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and does not yet diagnose it (section 16, question 2).
-- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), the desktop capabilities (section 21), and `ai` (section 25). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
+- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), the desktop capabilities (section 21), `system` (process and AppleScript calls), `shortcuts`, `clipboard.history`, `ocr` and `ai` (section 25). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
+- The AI builder reads the source before it installs anything: a reply whose source calls a service its manifest does not declare is sent back to the model with the capability it needs, and nothing is installed. The check is static, so a call hidden behind a variable is not seen; the run-time refusal still applies.
 - OS permissions (camera, microphone, screen recording, accessibility) remain real boundaries. The OS asks, and the answer is the enforcement.
 - An enabled extension has the full Context whether or not it declares anything. This matches the trust model.
 
@@ -907,7 +910,7 @@ What the examples show:
 ## 16. Open questions for review
 
 1. **Runtime.** The runtime was decided in `docs/extension-runtime-spike.md` and is built as section 17 describes. Revisit it only if the child-process model misses the call budget (B8) on a measured run.
-2. **Undeclared-capability diagnostics.** Proposed, not implemented. Needs owner agreement because it adds noise to review.
+2. **Undeclared-capability diagnostics for folder extensions.** The builder refuses an undeclared call before install (section 15). Folder extensions the user writes by hand are not checked; the run-time refusal is their only diagnostic.
 3. **Partial item patches.** Deferred until a measured need.
 4. **File move and rename.** Not in the TypeScript API and not in v1. A background job that organises files will need it; it should be a dedicated, confirmed action rather than a general file primitive.
 5. **Author-experience test (PLAN WP3.1 UX).** No measured study has run: no agent has yet written extensions from this document alone under observation. The result is the input to the next revision of this document.

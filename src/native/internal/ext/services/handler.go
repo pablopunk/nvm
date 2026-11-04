@@ -78,6 +78,8 @@ type Deps struct {
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.
 	AI *extai.Service
+	// Notify shows a failure the user must see, such as a refused AppleScript. Nil leaves it to the log.
+	Notify NotifyFunc
 	// AIQuota shares each extension's model-call count with the app's other callers of the same owner. Nil counts
 	// each extension alone.
 	AIQuota *aiquota.Registry

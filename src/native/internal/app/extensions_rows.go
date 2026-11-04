@@ -117,7 +117,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		}
 		p.shortcutTitles.remember(actionID, command.Title)
 		row := p.withShortcutActions(search.Item{
-			Kind: result.Title, Title: command.Title, Subtitle: command.Subtitle, Icon: iconOr(command.Icon, "puzzle"),
+			Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
 			Tone: "purple", Score: scoreExtension,
 			Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, commandAction(command))},
 		}, actionID, bound)
@@ -132,6 +132,15 @@ func commandAction(command api.Command) api.Action {
 	action := api.Run(command.ID, command.Title, nil)
 	action.DismissAfterRun = command.DismissAfterRun
 	return action
+}
+
+// commandSubtitle is the subtitle a command row shows: the command's own, or the extension's title when the command has
+// none, as 1.x shows it. The row's right-edge label already names the extension.
+func commandSubtitle(command api.Command, extensionTitle string) string {
+	if command.Subtitle != "" {
+		return command.Subtitle
+	}
+	return extensionTitle
 }
 
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item) search.Item {

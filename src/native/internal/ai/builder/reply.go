@@ -40,6 +40,15 @@ func (c Candidate) Files() map[string][]byte {
 	return files
 }
 
+// SourceFiles returns the candidate's Go files by name, main.go included, as the folder would hold them.
+func (c Candidate) SourceFiles() map[string][]byte {
+	files := map[string][]byte{bundle.SourceFile: []byte(c.Source)}
+	for name, text := range c.Sources {
+		files[name] = []byte(text)
+	}
+	return files
+}
+
 // ErrNoBlocks is the failure of a reply without both code blocks.
 var ErrNoBlocks = errors.New("the reply needs one ```json manifest block and one ```go source block")
 

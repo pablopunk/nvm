@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 )
 
 // rulesTemplate is the builder's instruction. ~~~ stands for a Markdown code fence, and API_VERSION for the API
@@ -49,7 +50,18 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 // package, so the prompt cannot drift from it.
 var instructionsText = fence(strings.NewReplacer(
 	"API_VERSION", apiVersion(),
-).Replace(rulesTemplate) + "\n\n" + apiReference)
+).Replace(rulesTemplate) + "\n\n" + capabilityRulesText() + "\n\n" + apiReference)
+
+// capabilityRulesText lists the services that need a capability, from the rules the host checks a reply against.
+func capabilityRulesText() string {
+	lines := []string{
+		"Capabilities: the manifest's \"capabilities\" list must name every capability the source uses. A reply that calls a service without declaring its capability is refused before it is installed, and the extension would be refused at run time too. Declare what the source uses and nothing more. The services and the capability each one needs:",
+	}
+	for _, rule := range sourcecheck.Rules() {
+		lines = append(lines, fmt.Sprintf("- ctx.%s() needs %q", strings.Join(rule.Path, "()."), rule.Capability))
+	}
+	return strings.Join(lines, "\n")
+}
 
 // fence replaces the ~~~ placeholder with the Markdown code fence.
 func fence(s string) string {

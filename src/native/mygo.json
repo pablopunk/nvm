@@ -16,7 +16,7 @@
       "LSUIElement": true,
       "NSMicrophoneUsageDescription": "Nevermind needs the microphone for local voice dictation.",
       "NSCameraUsageDescription": "Nevermind needs camera access for extensions that show a live camera view.",
-      "NSAppleEventsUsageDescription": "Nevermind sends copy and paste keystrokes to the app in front of it."
+      "NSAppleEventsUsageDescription": "Nevermind sends copy and paste keystrokes to the app in front of it, and runs System Events actions for the extensions you turn on, such as switching light and dark mode."
     }
   },
   "linux": {

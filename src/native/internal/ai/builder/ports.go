@@ -28,4 +28,6 @@ type Extensions interface {
 	Definition(id string) (api.Manifest, string, error)
 	Check(id string, files map[string][]byte) ([]string, error)
 	Install(id string, files map[string][]byte, enable bool) error
+	// Catalog lists the installed extensions, so the builder can see what exists before it writes.
+	Catalog() []Installed
 }
