@@ -7,15 +7,15 @@ import "github.com/egoist/mygo/ui"
 func LoadingRow(c *ui.Context) {
 	k := Tokens(c)
 	ui.Row(c).Gap(10).AlignItems(ui.Center).Padding(5, 8).Children(func() {
-		ui.Row(c).Width(32).Height(32).Radius(8).Background(k.Wash)
+		ui.Row(c).Width(32).Height(32).Radius(8).Background(k.Interactive)
 		ui.Column(c).Gap(6).Children(func() {
-			ui.Row(c).Width(180).Height(10).Radius(4).Background(k.Wash)
-			ui.Row(c).Width(110).Height(8).Radius(4).Background(k.Wash)
+			ui.Row(c).Width(180).Height(10).Radius(4).Background(k.Interactive)
+			ui.Row(c).Width(110).Height(8).Radius(4).Background(k.Interactive)
 		})
 	})
 }
 
 // LoadingCell draws the placeholder of a grid cell: one tile where a result's glyph would be.
 func LoadingCell(c *ui.Context) {
-	ui.Row(c).Width(28).Height(28).Radius(8).Background(Tokens(c).Wash)
+	ui.Row(c).Width(28).Height(28).Radius(8).Background(Tokens(c).Interactive)
 }
