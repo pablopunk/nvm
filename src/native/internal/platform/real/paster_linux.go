@@ -11,19 +11,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// xdotoolBinary is the input tool the X11 paste uses. Wayland sessions have no equivalent here.
-const xdotoolBinary = "xdotool"
-
-// pasteSupported reports whether the session can paste: an X11 display, xdotool on the PATH, and no Wayland
-// session (X11 apps under Xwayland receive no keys from xdotool on Wayland).
-func pasteSupported() bool {
-	if isWaylandSession("linux", os.Getenv) || os.Getenv("DISPLAY") == "" {
-		return false
-	}
-	_, err := exec.LookPath(xdotoolBinary)
-	return err == nil
-}
-
 // pasteGesture sends Ctrl+V to the focused X11 window with xdotool. Ctrl+V is the 1.x gesture; terminals that paste
 // with Ctrl+Shift+V are not covered.
 func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
@@ -33,7 +20,7 @@ func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID str
 // keyGesture sends one key chord to the focused X11 window with xdotool, after checking the focused window's class
 // when expectedAppID is set.
 func keyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chord string) error {
-	if !pasteSupported() {
+	if !pasteCapable("linux", os.Getenv, programInstalled) {
 		return platform.ErrUnsupported
 	}
 	if expectedAppID != "" {

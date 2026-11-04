@@ -11,14 +11,9 @@ import (
 // x11CallTimeout bounds one X11 tool call, so a stuck X server cannot hang a window command.
 const x11CallTimeout = 5 * time.Second
 
-// windowManagementSupported reports whether this session has an X server to talk to. Wayland sessions
-// without XWayland are omitted: X11 tools cannot move their windows.
-func windowManagementSupported() bool {
-	return os.Getenv("DISPLAY") != ""
-}
-
+// newWindowManager is nil unless the X11 window commands are capable here (see windowManagementCapable).
 func newWindowManager(helper platform.Helper) platform.WindowManager {
-	if !windowManagementSupported() {
+	if !windowManagementCapable("linux", os.Getenv, programInstalled) {
 		return nil
 	}
 	return x11Windows{helper: helper}
