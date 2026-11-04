@@ -16,6 +16,7 @@ type Set struct {
 	Screens      *Screens
 	Notifier     *Notifier
 	Keychain     *Keychain
+	DeepLinks    *DeepLinks
 	Processes    *Processes
 	Helper       *Helper
 	Hotkeys      *Hotkeys
@@ -39,6 +40,7 @@ func NewSet() *Set {
 		Screens:      NewScreens(),
 		Notifier:     NewNotifier(),
 		Keychain:     NewKeychain(),
+		DeepLinks:    NewDeepLinks(),
 		Processes:    NewProcesses(),
 		Helper:       NewHelper(),
 		Hotkeys:      NewHotkeys(),
@@ -63,6 +65,7 @@ func (s *Set) Ports() platform.Ports {
 		Screens:      s.Screens,
 		Notifier:     s.Notifier,
 		Keychain:     s.Keychain,
+		DeepLinks:    s.DeepLinks,
 		Processes:    s.Processes,
 		Helper:       s.Helper,
 		Hotkeys:      s.Hotkeys,

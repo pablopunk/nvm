@@ -20,6 +20,7 @@ type Ports struct {
 	Screens      Screens
 	Notifier     Notifier
 	Keychain     Keychain
+	DeepLinks    DeepLinks
 	Processes    Processes
 	Helper       Helper
 	Hotkeys      Hotkeys
