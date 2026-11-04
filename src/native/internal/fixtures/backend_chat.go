@@ -14,6 +14,15 @@ func (b *Backend) SetReply(text string) {
 	b.reply = text
 }
 
+// SetScript queues recorded replies for the next chat requests, first in first out, so a journey can script a model
+// that asks for a tool and then answers with what the tool returned. A request answers with the next queued reply;
+// once the queue is empty, the text of SetReply answers again.
+func (b *Backend) SetScript(replies ...ScriptedReply) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.script = append([]ScriptedReply(nil), replies...)
+}
+
 // SetChunkDelay paces each chat stream: every frame after the first waits d after the one before it, so a test can
 // stop a reply while it is still arriving. Zero, the default, streams the whole reply at once.
 func (b *Backend) SetChunkDelay(d time.Duration) {
@@ -29,14 +38,31 @@ func (b *Backend) streamSettings() (string, time.Duration) {
 	return b.reply, b.chunkDelay
 }
 
-// serveChat answers a chat completion: a stream of the reply text, or one of the stream failure modes.
+// nextScripted pops the next queued reply, if one is queued.
+func (b *Backend) nextScripted() (ScriptedReply, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(b.script) == 0 {
+		return ScriptedReply{}, false
+	}
+	reply := b.script[0]
+	b.script = b.script[1:]
+	return reply, true
+}
+
+// serveChat answers a chat completion: the next scripted reply, else a stream of the reply text, or one of the
+// stream failure modes.
 func (b *Backend) serveChat(w http.ResponseWriter, r *http.Request, body string, mode FailureMode) {
 	if !strings.Contains(body, `"messages"`) {
 		writeBody(w, http.StatusBadRequest, "application/json", InvalidRequestBody)
 		return
 	}
 	reply, delay := b.streamSettings()
-	b.countStream(writeStream(w, r, chatFrames(mode, reply), delay))
+	frames := chatFrames(mode, reply)
+	if scripted, ok := b.nextScripted(); ok {
+		frames = scripted.Frames
+	}
+	b.countStream(writeStream(w, r, frames, delay))
 }
 
 // chatFrames returns the SSE frames of one chat reply in mode.

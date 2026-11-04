@@ -54,6 +54,7 @@ type Backend struct {
 	hanging     chan struct{}
 	activeModel string
 	reply       string
+	script      []ScriptedReply
 	chunkDelay  time.Duration
 	device      *deviceSignIns
 	clock       platform.Clock
