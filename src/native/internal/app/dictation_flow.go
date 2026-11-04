@@ -63,7 +63,9 @@ type dictationDeps struct {
 	// ScreenText reads the text the screen shows, for the screen terms the cleanup prompt may use.
 	ScreenText func(ctx context.Context) (string, error)
 	// Recorder keeps the audio of each dictation until its text is in. Nil keeps none.
-	Recorder     dict.Recorder
+	Recorder dict.Recorder
+	// Remember adds a finished dictation's text to the history.
+	Remember     func(text string)
 	RestoreDelay time.Duration
 	OnDevices    func()
 }
@@ -166,6 +168,7 @@ func (f *dictationFlow) Stop() {
 		}
 		text := f.cleaned(transcript, settings, <-screen)
 		f.deps.Dispatch(f.hide)
+		f.remember(text)
 		f.insert(text)
 	})
 }

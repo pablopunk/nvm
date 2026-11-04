@@ -48,3 +48,10 @@ func (f *dictationFlow) cleaned(transcript string, settings dictationSettings, s
 func (f *dictationFlow) showCleaning() {
 	f.show(palindicator.State{Mode: palindicator.ModeCleaning})
 }
+
+// remember adds the text to the history, so it can be copied again later.
+func (f *dictationFlow) remember(text string) {
+	if f.deps.Remember != nil {
+		f.deps.Remember(text)
+	}
+}

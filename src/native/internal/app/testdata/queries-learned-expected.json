@@ -165,6 +165,29 @@
       },
       {
         "kind": "Commands",
+        "title": "Dictation History",
+        "subtitle": "Browse and copy previous dictations",
+        "section": "Suggestions",
+        "id": "",
+        "icon": "history",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Snippets",
         "subtitle": "Saved text you paste often",
         "section": "Suggestions",

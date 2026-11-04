@@ -115,6 +115,7 @@ type App struct {
 	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
 	dictation       *dictationFlow
 	dictationPref   dictationPrefs
+	transcripts     transcriptStore
 	dictationWindow *mygo.Window
 	dictationView   palindicator.State
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.

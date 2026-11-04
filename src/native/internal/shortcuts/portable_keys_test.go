@@ -7,7 +7,7 @@ import (
 
 var allBuiltInCommandIDs = []string{
 	CommandClipboardHistory, CommandAIChats, CommandEmojiSymbols, CommandSearchFiles, CommandFindFilesByMeaning,
-	CommandQuickNotes, CommandNewFloatingNote, CommandDictate, CommandSnippets, CommandExtensions, CommandForceQuitApps,
+	CommandQuickNotes, CommandNewFloatingNote, CommandDictate, CommandDictationHistory, CommandSnippets, CommandExtensions, CommandForceQuitApps,
 	CommandQuitAllApps, CommandKeyboardShortcuts, CommandBackgroundTasks, CommandSettings, CommandCheckForUpdates,
 	CommandShowRecentErrors, CommandReportProblem, CommandOSPermissions, CommandFixSelectedText,
 	CommandTriageSelectedText, CommandClassifyImage,

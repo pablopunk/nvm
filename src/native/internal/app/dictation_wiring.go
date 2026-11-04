@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -11,7 +10,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
 	"github.com/pablopunk/nvm/native/internal/dictation/cleanup"
-	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/logx"
@@ -99,6 +97,7 @@ func (p *App) dictationDeps() dictationDeps {
 		Complete:     p.dictationCompleter(),
 		ScreenText:   p.dictationScreenText,
 		Recorder:     p.dictationRecorder(),
+		Remember:     p.rememberDictation,
 		RestoreDelay: dictationRestoreDelay,
 		OnDevices:    p.Refresh,
 	}
@@ -156,5 +155,9 @@ func (p *App) dictationRecorder() dict.Recorder {
 	if p.userReadOnly {
 		return nil
 	}
-	return recordings.New(p.ports.FS, filepath.Join(dataDir(), dictationRecordingsFolder), p.ports.Clock.Now)
+	store := p.dictationRecordingStore()
+	if store == nil {
+		return nil
+	}
+	return store
 }

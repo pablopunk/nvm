@@ -109,9 +109,11 @@ func dictationSpeech(seconds float64, level int16) []int16 {
 	return samples
 }
 
+// speak queues one frame of speech. A frame is too short to emit a meter level, so the capture goroutine never reports
+// to the test thread while a test drives the flow directly; the transcript is scripted, so its length is not needed.
 func (h *dictationHarness) speak(text string) {
 	h.transcriber.texts = append(h.transcriber.texts, text)
-	h.set.Microphone.Queue(dictationSpeech(0.5, 9000)...)
+	h.set.Microphone.Queue(dictationSpeech(dict.FrameMillis/1000.0, 9000)...)
 }
 
 func TestDictationPastesConcealedTextAfterThePaletteHidesAndRestoresTheClipboard(t *testing.T) {

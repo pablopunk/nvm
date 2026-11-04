@@ -1,6 +1,8 @@
 package app
 
 import (
+	"path/filepath"
+
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -10,6 +12,11 @@ const dictationSettingsFile = "dictation.json"
 
 // dictationRecordingsFolder holds the audio of dictations whose text is not in yet, inside the data folder.
 const dictationRecordingsFolder = "dictation-recordings"
+
+// dictationRecordingsDir is the folder the unfinished dictations are kept in.
+func dictationRecordingsDir() string {
+	return filepath.Join(dataDir(), dictationRecordingsFolder)
+}
 
 // dictationSettings are the choices the Dictation Settings view edits. DeviceID "" is the system default microphone.
 type dictationSettings struct {
