@@ -26,6 +26,8 @@ func (r *Runner) dispatch(ctx context.Context, method, query string, invocation 
 		return r.menuBars(ctx)
 	case protocol.MethodMenuBarTriggers:
 		return r.menuBarTriggers()
+	case protocol.MethodRestoreWindow:
+		return r.restoreWindow(ctx, invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", method, api.ErrInvalidInput)
 }
@@ -98,6 +100,19 @@ func (r *Runner) menuBarTriggers() (json.RawMessage, error) {
 		return nil, notImplemented(protocol.MethodMenuBarTriggers)
 	}
 	return encode(protocol.MethodMenuBarTriggers, provider.MenuBarTriggers(), nil)
+}
+
+func (r *Runner) restoreWindow(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	restorer, ok := r.ext.(api.WindowRestorer)
+	if !ok {
+		return nil, notImplemented(protocol.MethodRestoreWindow)
+	}
+	key := ""
+	if invocation != nil {
+		key = invocation.Ref.ID
+	}
+	out, err := restorer.RestoreWindow(r.context.For(ctx, api.LaunchContext{}), key)
+	return encode(protocol.MethodRestoreWindow, out, err)
 }
 
 // encode marshals a result, or returns the entry point's error. A nil result encodes as null, as a child's does.

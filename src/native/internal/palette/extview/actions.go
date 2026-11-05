@@ -92,7 +92,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		op := action.Op
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
-	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash:
+	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionWindow:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:
 		if action.Op != api.AccountSignIn || s.deps.SignIn == nil {

@@ -65,6 +65,7 @@ func init() {
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
 		"CapabilityJobs":                reflect.ValueOf(api.CapabilityJobs),
 		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
+		"CapabilityNotes":               reflect.ValueOf(api.CapabilityNotes),
 		"CapabilityOCR":                 reflect.ValueOf(api.CapabilityOCR),
 		"CapabilityPlaces":              reflect.ValueOf(api.CapabilityPlaces),
 		"CapabilitySecrets":             reflect.ValueOf(api.CapabilitySecrets),
@@ -208,6 +209,10 @@ func init() {
 		"NavReplace":                    reflect.ValueOf(api.NavReplace),
 		"NavRoot":                       reflect.ValueOf(api.NavRoot),
 		"NewInput":                      reflect.ValueOf(api.NewInput),
+		"NoteConflictKeepRef":           reflect.ValueOf(constant.MakeFromLiteral("\"note-conflict-keep\"", token.STRING, 0)),
+		"NoteConflictRestoreRef":        reflect.ValueOf(constant.MakeFromLiteral("\"note-conflict-restore\"", token.STRING, 0)),
+		"NoteConflictView":              reflect.ValueOf(api.NoteConflictView),
+		"NotePreview":                   reflect.ValueOf(api.NotePreview),
 		"OpenPath":                      reflect.ValueOf(api.OpenPath),
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
 		"OpenWith":                      reflect.ValueOf(api.OpenWith),
@@ -417,6 +422,7 @@ func init() {
 		"Files":                   reflect.ValueOf((*api.Files)(nil)),
 		"FindOptions":             reflect.ValueOf((*api.FindOptions)(nil)),
 		"FocusResult":             reflect.ValueOf((*api.FocusResult)(nil)),
+		"FooterHint":              reflect.ValueOf((*api.FooterHint)(nil)),
 		"FormSpec":                reflect.ValueOf((*api.FormSpec)(nil)),
 		"FormValue":               reflect.ValueOf((*api.FormValue)(nil)),
 		"FormValueKind":           reflect.ValueOf((*api.FormValueKind)(nil)),
@@ -462,6 +468,8 @@ func init() {
 		"Navigation":              reflect.ValueOf((*api.Navigation)(nil)),
 		"NavigationMode":          reflect.ValueOf((*api.NavigationMode)(nil)),
 		"Network":                 reflect.ValueOf((*api.Network)(nil)),
+		"Note":                    reflect.ValueOf((*api.Note)(nil)),
+		"Notes":                   reflect.ValueOf((*api.Notes)(nil)),
 		"OCR":                     reflect.ValueOf((*api.OCR)(nil)),
 		"OCRBlock":                reflect.ValueOf((*api.OCRBlock)(nil)),
 		"OCRInput":                reflect.ValueOf((*api.OCRInput)(nil)),
@@ -581,6 +589,7 @@ func init() {
 		"_MenuBarProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider)(nil)),
 		"_Navigation":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Navigation)(nil)),
 		"_Network":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Network)(nil)),
+		"_Notes":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Notes)(nil)),
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
@@ -915,6 +924,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WLogs        func() api.Logs
 	WNavigation  func() api.Navigation
 	WNetwork     func() api.Network
+	WNotes       func() api.Notes
 	WOCR         func() api.OCR
 	WOwnership   func() api.Ownership
 	WScheduler   func() api.Scheduler
@@ -986,6 +996,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Navigation() 
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Network() api.Network {
 	return W.WNetwork()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Notes() api.Notes {
+	return W.WNotes()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) OCR() api.OCR {
 	return W.WOCR()
@@ -1393,6 +1406,36 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Network struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Network) Fetch(request api.FetchRequest) (api.FetchResponse, error) {
 	return W.WFetch(request)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Notes is an interface wrapper for Notes type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Notes struct {
+	IValue  interface{}
+	WCreate func() (api.Note, error)
+	WDelete func(id string) error
+	WGet    func(id string) (api.Note, bool, error)
+	WList   func() ([]api.Note, error)
+	WRecent func() (api.Note, error)
+	WUpdate func(id string, markdown string, updatedAt time.Time) (api.Note, bool, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Create() (api.Note, error) {
+	return W.WCreate()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Delete(id string) error {
+	return W.WDelete(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Get(id string) (api.Note, bool, error) {
+	return W.WGet(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) List() ([]api.Note, error) {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Recent() (api.Note, error) {
+	return W.WRecent()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Update(id string, markdown string, updatedAt time.Time) (api.Note, bool, error) {
+	return W.WUpdate(id, markdown, updatedAt)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_OCR is an interface wrapper for OCR type

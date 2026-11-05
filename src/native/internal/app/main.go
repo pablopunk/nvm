@@ -5,6 +5,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"log"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -31,6 +32,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/extwindow"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -120,8 +122,7 @@ type App struct {
 	// visibility holds which extensions show their menu bar items.
 	visibility menuBarVisibility
 
-	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
-	// edited, shared by the palette and the floating windows.
+	// userStore holds the notes and snippets, whose notices arrive on userNotices.
 	userStore    *store.Store
 	userNotices  <-chan store.Notice
 	userReadOnly bool
@@ -131,10 +132,9 @@ type App struct {
 	// hyper is the Hyper key config.json holds, read on first use; nil until then. saveHyperKey keeps it in step.
 	hyper    *string
 	quitting bool
-	edits    map[string]*noteEdit
-	// floating is the floating note window, when it is open.
-	floating  *floatingWindow
-	floatPane floatingPaneState
+	// extCalls counts the extension calls the palette has in flight, so goldens and tests can wait for them.
+	extCalls   sync.WaitGroup
+	extWindows *extwindow.Manager
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 
@@ -214,6 +214,7 @@ func (p *App) ready() {
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
 	p.recoverDictationMute()
 	p.attachWindows()
+	p.attachExtensionWindows()
 	p.attachDeepLinks()
 	p.clip = p.openClipboard()
 	p.openUserData()
@@ -234,7 +235,6 @@ func (p *App) ready() {
 	})
 	p.panel.SetActiveAppearance(paletteWindowAppearance().ActiveAppearance)
 	p.Attach(p.panel)
-	p.restoreFloatingNotes()
 	p.panel.OnClose(p.hidePanelUnlessQuitting)
 	p.panel.OnBlur(p.DismissOnBlur)
 	mygo.App.OnDidResignActive(func() { p.panel.Update(p.DismissOnBlur) })

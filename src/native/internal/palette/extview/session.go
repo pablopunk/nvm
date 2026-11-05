@@ -90,6 +90,9 @@ type Deps struct {
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
 	Drafts DraftStore
+	// Window performs a window action of extension extID: a companion window it opens, shows, hides, toggles or closes.
+	// The palette hides before the call. Nil makes the action report unavailable.
+	Window func(extID string, action api.Action)
 	// Pages opens the web page of a webview or camera view. Nil, or a system without a web view, makes those views
 	// say the system cannot show them.
 	Pages platform.WebPages
@@ -163,6 +166,25 @@ func (s *Session) Open(host search.Host) *palette.View {
 // Palette returns the palette page that draws the view. The page reads the session on every search, so patches show
 // on the next frame after the host refreshes it.
 func (s *Session) Palette() *palette.View {
+	page := s.pageOfKind()
+	page.Subtitle = s.view.Subtitle
+	if s.hasPageActions() {
+		page.Actions = s.pageActions
+	}
+	if len(s.view.FooterHints) > 0 {
+		page.Hint = footerHintsText(s.view.FooterHints, s.hyperKey())
+		page.HintReplacesActions = true
+	}
+	return page
+}
+
+// hasPageActions is true when the view's own menu lists an action, so its shortcuts run from any page of the view.
+func (s *Session) hasPageActions() bool {
+	return len(MenuWireActions(nil, s.view.ActionPanel, s.view.Actions)) > 0
+}
+
+// pageOfKind builds the palette page of the view's kind.
+func (s *Session) pageOfKind() *palette.View {
 	switch s.view.Kind {
 	case api.ViewList:
 		return s.listPage()

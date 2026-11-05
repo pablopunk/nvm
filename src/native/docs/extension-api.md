@@ -1024,7 +1024,7 @@ Decisions behind the table:
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 - **Global shortcuts on commands (`Command.GlobalShortcut`).** Declared shortcuts bind with the ones the user sets in the Keyboard Shortcuts list. A command in mode `noView` or `background` runs without opening the palette and never takes focus; its failure or toast is a notification. A `view` command opens the palette. `Command.ActionID` names the key a shortcut binds to, so a built-in keeps the 1.x key. The commands are listed again whenever the extensions change.
 
-Not built yet: selected files, previews and the file index, extension windows, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: selected files, previews and the file index, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ### 21.1 Selection, replacement and undo as built (WP2.5)
 
@@ -1036,6 +1036,25 @@ Code: `internal/features/selection` (the engine), `internal/ext/services/desktop
 - **Undo.** `Keyboard().Undo()` sends the undo gesture to the source window. It needs a replacement pending in that same window and is refused for any other window, and each replacement is undone at most once.
 - **Capabilities.** `desktop.selection` gates the selection calls and `desktop.keyboard` gates undo. Both are enforced by the host, not only declared for review.
 - **Not served.** `Selection().Files()` answers unsupported. Typing is in section 28.
+
+### 21.2 Extension windows as built (WP3.8)
+
+`ctx.windows` (`Create`, `Show`, `Hide`, `Toggle`, `Close`) builds a window action; the host's windows manager (`internal/palette/extwindow`) performs it. Code: `internal/palette/extwindow` (the rules, with a fake window port in its tests), `internal/app/extension_window_host.go` (the MyGo window), `extview` (`runWindow`), `ext/manager/restore_window.go` and the `restore-window` protocol method.
+
+- **Identity.** A window is known by its extension and its id: the option `id`, else the view's `id`, else a hash of the view. Two extensions may use the same id. `Create` with an open id updates that window: it shows the new view and options and brings it forward.
+- **Page.** The window shows a palette page built from the view, with the palette's search, actions and Escape. Loads and refreshes of the view run against the window's palette.
+- **Show and hide.** `Show` and `Hide` keep the page. `Toggle` hides a visible window and shows a hidden one; it creates the window when a view is given and the window is not open. A window hidden by `hideOnBlur` stays hidden for 300 ms, so the click that took the focus does not reopen it. `Close` ends the window and forgets it; an operation on a window that is not open says so.
+- **Level and size.** `alwaysOnTop` defaults to true. Sizes are the default 560 by 420 or the large 900 by 680, an explicit width or height wins, and each is clamped to 320 to 1600 by 240 to 1200. Zero means the preset, because a window cannot ask for zero points.
+- **Placement.** `position` `center` (the default), `top-center` and `bottom-center` place the window on the display under the pointer, 48 points from the top or bottom edge. `menu-bar` places it as `center`: the menu bar anchor is not served yet.
+- **Chrome.** `titleBar: hidden` hides the title bar and keeps the window controls; `chrome: none` makes the window frameless. `visibleOnAllSpaces` is applied.
+- **Frame memory.** `remembersFrame` stores the window's frame when it moves or resizes, keyed by extension and by restore key (or id). The next open uses the frame, moved and shrunk onto the displays connected now.
+- **Persistence.** A window with `persistent` and a `restoreKey` is saved in the host document `extension-windows.json`. At launch the host calls the owning extension's `RestoreWindow` with the key, off the UI thread, and opens the window it returns. A nil answer, an error or a missing extension drops the saved window, as 1.x does. Quitting keeps saved windows; closing one by hand drops it.
+- **Failures.** A window action from a palette row hides the palette first, then runs. A failure, such as an unknown window, shows as a toast on the app. Success is silent: the window itself shows.
+- **Not served.** `focusable`, `showInactive` and `ignoreMouseEvents` are accepted and ignored, because the MyGo window port does not expose them. Capability diagnostics (`windows.*`) are not reported.
+
+### 21.3 Editor Markdown and autosave as built (P15)
+
+An editor view draws plain text unless it has `format: markdown` (the default matches 1.x and `EditorView`); with markdown it draws a Markdown editor (`design.MarkdownEditor`) instead of a plain text area; its text stays Markdown. A draft with `autosave` runs that action with the draft's text each time the draft is written, after the 400 ms debounce; a failure shows on the editor's status line. Conflicts resolve through `onConflict`, as before. Code: `internal/palette/extview/editor.go`, `editor_markdown.go`. Not yet: the editor's view-level action panel, and the Markdown editor's live preview.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
@@ -1105,7 +1124,7 @@ A list does not show `View.Subtitle`. The Electron host shows it on grid views a
 
 - **Shell.** `ctx.desktop.shell.exec`, `script`, `appleScript` and `which` run under the `system` capability, which is refused when undeclared. A login PATH precedes the host PATH (as in the Electron app), `~` expands in command, arguments, working folder and script, the default timeout is 30 s clamped to 1 to 120 s, and a killed process reports exit -1. Output is capped at 200000 characters per stream and marked when cut. AppleScript runs only on macOS. Calls share a limit of 60 runs a minute. Code: `services/desktop_process.go`, `platform.Commands`.
 - **Indicators.** `ctx.indicators` show, update and hide draw one passive panel for every extension. The host keys each indicator by extension id. Updates are limited to 120 a minute. A later show replaces the shown indicator. A timed indicator clears only while it is still the one shown. Code: `services/indicators.go`, `internal/app/extension_indicators.go`. The panel is shared with the AI commands, so the latest writer wins.
-- **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them. Window actions are served only where the host implements them, and otherwise show the palette's unavailable message.
+- **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them; window actions are served as section 21.2 describes.
 - **Not served.** `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (selected files, extra file, clipboard and window-management operations) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
 - **Builder placeholders.** The AI builder action builders return `unavailable` actions. They validate, and the palette shows "This action is not available yet" when one runs, so the view that carries one still loads.
 - **Open items from the converter reports.** `desktop.files` `readText`, `writeText`, `quickLook`, the file index and `displayPath` (which returns the path unchanged), and thumbnails of videos. Thumbnails of every find result are not rendered: call `thumbnail` for the ones a view shows. A network redirect policy is not added: 1.x exposes none (its extensions called Node's `fetch` directly), so 2.0 follows up to five redirects one hop at a time, and the converted paperless extension's `redirect: 'error'` check reads `FinalURL`; the only difference is the message for a refused redirect target. Loaders keep their id as the only argument: 1.x loaders are closures, so a loader's arguments travel in its id, as the converted extensions do. Commands take `keywords` as well as `aliases`, and the root search matches both.
@@ -1387,3 +1406,23 @@ Code: `internal/ext/api/action.go` (the `shortcut` action kind, its `Target` and
 - **Not in this step.** `GlobalShortcut`, the extension's own global shortcut, belongs to the Windows branch.
 - **Parity.** 1.x lists the bound shortcuts only, so a command without a shortcut no longer has a row on this page. The `Not active` subtitle is gone, because 1.x shows none; an OS refusal shows only its label. Titles are 1.x's (`Change shortcut`, `Remove shortcut`), and the label is the row's accessory, where 1.x draws a keycap.
 - **Tests.** `internal/ext/builtins/shortcuts/shortcuts_test.go` (labels, primary and actions, user-only removal, empty state, unknown action) and `internal/app/shortcuts_view_test.go` and `hyper_key_test.go` (the built-in's rows, the search, the hyper label), with the `shortcuts-list` golden through the built-in.
+
+## 43. Notes service and the conflict view (dogfood batch 4)
+
+Code: `api.Notes` (`internal/ext/api/services_notes.go`), served by `internal/ext/services/notes.go` over `internal/features/notes`, which is the store the Notes built-in shows.
+
+- **Access.** `Context().Notes()` needs the `notes` capability in the manifest. It is the user's own notes, so an extension without the capability gets a permission failure.
+- **Operations.** `List`, `Get`, `Create`, `Recent` (the most recent note, or a new one when there is none), `Update` and `Delete`. `Delete` runs only from a palette action and asks the user first; a refused question removes nothing.
+- **Conflicts.** `Update(id, markdown, updatedAt)` takes the saved version the text was typed on and returns the note with a conflict flag. A newer saved version refuses the write: nothing is written, the saved note comes back with `true`, and the unsaved text stays with the extension. A note carries `id`, `markdown` and `updatedAt` only.
+- **Conflict view.** `api.NoteConflictView(saved, unsaved, compareMarkdown)` lists "Restore unsaved changes" (runs `NoteConflictRestoreRef`), "Keep saved version" (runs `NoteConflictKeepRef`) and "Compare", which pushes a preview of the two texts. The extension decides what each resolution writes; the Markdown diff comes from `features/notes`.
+- **Storage.** The service reads and writes the same `notes.json` as the native notes store. The 1.x floating-notes storage key `notes` is not read here.
+- **Tests.** `internal/ext/services/notes_test.go` covers create, list, get, an in-place update, the conflict refusal, the capability and the delete confirmation. `internal/ext/api/services_notes_test.go` covers the conflict view. The palette's golden `extension-window/note-conflict` draws the view in a window.
+
+## 44. Extension window chrome (dogfood batch 4)
+
+Code: `internal/palette/window_chrome.go`, `internal/app/extension_window_host.go`.
+
+- **Header.** Every extension window draws its view's title over the view's subtitle at the top of its page. The launcher panel draws neither.
+- **Companion.** A window whose `titleBar` is `hidden` uses the companion layout: a 36 px strip above the header drags the window, under the traffic lights at 12, 12. A native title bar draws no strip.
+- **Footer and menu.** The footer shows the action menu's key (⌘K) when the row has actions. The menu draws over the footer, as before.
+- **Tests.** `internal/palette/extview/window_chrome_test.go` draws a companion window and a launcher page on the fake window; the golden `extension-window/companion-ticker` is the floating ticker fixture, light and dark.

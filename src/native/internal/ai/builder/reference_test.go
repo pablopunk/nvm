@@ -37,8 +37,9 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // uninstall review and the alias read of the applications built-in, and by about 1 KB more for the bundled datasets, the
 // view search and the grid categories. It grew again for the files built-in's footer, Tab kind key, indexing empty state,
 // file detail and index status, the API surface the builder reads. The settings views (section 37 of the extension API
-// doc) and the Background Tasks jobs namespace (section 41) grew it again.
-const maxReferenceBytes = 57 << 10
+// doc) and the Background Tasks jobs namespace (section 41) grew it again. The Notes built-in and the extension window
+// chrome (section 44) grew it by about 1 KB more.
+const maxReferenceBytes = 58 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
@@ -50,8 +51,9 @@ func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 // request under the size of the request a turn used to send. It grew by about 1 KB for the uninstall review and the
 // alias read of the applications built-in, which the builder reads as API surface. It grew by about 1.2 KB for the
 // files built-in's preview, open-with and trash actions, its index status and the bundled datasets, the API surface the
-// built-ins moved onto. The diagnostics built-in's records and report and the jobs namespace grew it again.
-const maxCompactReferenceBytes = 37 << 10
+// built-ins moved onto. The diagnostics built-in's records and report and the jobs namespace grew it again. The Notes
+// built-in's list, editor and window actions grew it by about 0.8 KB more.
+const maxCompactReferenceBytes = 38 << 10
 
 func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReferenceCompact) > maxCompactReferenceBytes {

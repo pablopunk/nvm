@@ -25,6 +25,8 @@ func goldenShortcutsList(t *testing.T) *App {
 	mustSetShortcut(t, manager, shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
 	mustSetShortcut(t, manager, shortcuts.CommandQuickNotes, "Command+Alt+N")
+	// The root lists the extension commands before the shortcuts view opens, which is where their titles come from.
+	rootResultsForTable(p, "")
 	goldenOpen(p, p.keyboardShortcutsPage())
 	return p
 }

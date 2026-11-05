@@ -20,6 +20,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -99,6 +100,8 @@ type Deps struct {
 	Bundles *bundled.Store
 	// ClipboardImages makes files and thumbnails of clipboard pictures. Nil leaves image handles out of the results.
 	ClipboardImages ClipboardImages
+	// Notes returns the notes store, or nil while it is not open. The notes service answers unavailable until then.
+	Notes func() *notes.Store
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.
@@ -242,6 +245,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveNetwork(ctx, call)
 	case protocol.ServiceDrafts:
 		return h.serveDrafts(call)
+	case protocol.ServiceNotes:
+		return h.serveNotes(ctx, call)
 	case protocol.ServiceDesktopClipboard:
 		return h.serveDesktopClipboard(call)
 	case protocol.ServiceDesktopApps:

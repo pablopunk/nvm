@@ -25,6 +25,9 @@ type editorState struct {
 	submitFn    func(h search.Host, text string)
 	draft       *draftTrack
 	edits       uint64
+	// markdown draws the text as a Markdown editor rather than a plain text area.
+	markdown bool
+	rich     design.MarkdownSource
 }
 
 // draftTrack is the autosave state of one editor. Blocked means a stored draft from another version waits for the
@@ -39,6 +42,7 @@ type draftTrack struct {
 // editorView builds the page of a ViewEditor. Its submit action gets the text as Invocation.EditorContent.
 func (s *Session) editorView(spec api.EditorSpec) *palette.View {
 	ed := newEditorState(s, s.view.Title, spec.Content, spec.Placeholder, spec.ReadOnly)
+	ed.markdown = spec.Format == "markdown"
 	ed.submitFn = func(h search.Host, text string) { ed.submitTo(h, spec.Submit, text) }
 	if spec.Draft != nil {
 		ed.attachDraft(*spec.Draft)
@@ -72,7 +76,11 @@ func newEditorState(s *Session, title, text, placeholder string, readOnly bool) 
 func (ed *editorState) body(c *ui.Context, _ search.Host) {
 	t := design.Tokens(c)
 	ui.Column(c).Grow(1).Children(func() {
-		ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
+		if ed.markdown {
+			ui.Column(c).Grow(1).Margin(12).Padding(8, 4).Children(func() { ed.markdownBody(c) })
+		} else {
+			ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus().Value(ed.text)
+		}
 		ed.noticeTextChange()
 		ui.Text(c, ed.statusLine()).FontSize(11).TextColor(t.Tertiary).Margin(12)
 	})
@@ -177,6 +185,22 @@ func (ed *editorState) flush() {
 	}
 	track.dirty = false
 	ed.status = "Draft saved"
+	ed.autosave()
+}
+
+// autosave runs the view's Autosave action with the text the draft now holds. The extension's own store takes the
+// text there, so the draft stays an unsaved-work buffer. A failure shows on the status line.
+func (ed *editorState) autosave() {
+	track := ed.draft
+	if track.options.Autosave == nil || track.options.Autosave.Ref == nil || ed.sess.deps.Invoke == nil {
+		return
+	}
+	in := api.Invocation{Ref: *track.options.Autosave.Ref, EditorContent: ed.text}
+	ed.sess.deps.Invoke(ed.sess.extID, in, func(_ api.Result, failure *api.Failure) {
+		if failure != nil {
+			ed.status = failure.Message
+		}
+	})
 }
 
 // attachDraft recovers the stored draft of the view. A draft of the same version is the text the user typed, so it

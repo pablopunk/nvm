@@ -22,13 +22,11 @@ func (p *App) openUserData() {
 		logx.Default().Warn("notes and snippets open read-only", logx.F{})
 	}
 	p.notes = notes.New(st, searchClock, p.userReadOnly)
+	importLegacyNotes(p.ports.FS, legacyNotesPath(p.goos), p.notes, store.Doc(st, legacyNotesMarkerFile, 1, func() legacyNotesMarker { return legacyNotesMarker{} }), searchClock.Now())
 	p.legacySnips = loadLegacySnippets(st)
 	p.legacyDictation = loadLegacyDictation(st)
 	p.userNotices = st.Notices()
-	mygo.App.OnQuit(func() {
-		p.closeEdits()
-		_ = st.Close()
-	})
+	mygo.App.OnQuit(func() { _ = st.Close() })
 	p.installFailureReporting(st.InstallCrashFlush())
 }
 
@@ -50,13 +48,5 @@ func (p *App) showUserDataNotices() {
 		default:
 			return
 		}
-	}
-}
-
-// closeEdits ends every open editing session, saving what is pending, before the store closes.
-func (p *App) closeEdits() {
-	for id, edit := range p.edits {
-		_ = edit.sess.Close()
-		delete(p.edits, id)
 	}
 }

@@ -23,6 +23,12 @@ const extensionRunTimeout = 10 * time.Second
 // backgroundRunTimeout bounds an action declared background, as the manager's background run budget does, plus slack.
 const backgroundRunTimeout = 2*time.Minute + 10*time.Second
 
+// settleExtensionCalls waits for the extension calls the palette started to return and to deliver their results. The
+// app never waits for them before it draws; goldens and tests do, so they see the view the call opened.
+func (p *App) settleExtensionCalls() {
+	p.extCalls.Wait()
+}
+
 // extensionViewDeps are the services of extension views: an action runs on the manager's supervised child, and its
 // result returns to the UI thread, where the palette applies it.
 func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
@@ -30,7 +36,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			p.beginPaletteRun()
+			p.extCalls.Add(1)
 			go func() {
+				defer p.extCalls.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), runTimeoutOf(in))
 				defer cancel()
 				result, failure, err := m.Run(ctx, extID, in)
@@ -42,7 +50,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			}()
 		},
 		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
+			p.extCalls.Add(1)
 			go func() {
+				defer p.extCalls.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
 				defer cancel()
 				items, failure, err := m.Load(ctx, extID, loader)
@@ -72,6 +82,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
+		Window:                p.performExtensionWindow,
 		ReadSetting:           func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
 		RowAccessory:          p.settingRowAccessory,
 		HostOperation:         p.settingsHostOperation,

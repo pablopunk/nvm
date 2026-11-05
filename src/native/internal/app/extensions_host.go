@@ -17,6 +17,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -46,6 +47,7 @@ func (p *App) startExtensions() {
 		return
 	}
 	p.exts.mgr.Store(m)
+	p.restoreExtensionWindows(m)
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
@@ -101,6 +103,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Paste:           selections,
 		Apps:            p.appsvc,
 		Dictation:       p.dictationEngine(),
+		Notes:           p.extensionNotes,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dataDir(), "extension-data"),
@@ -152,6 +155,11 @@ func (p *App) extensionShortcuts() services.ShortcutTable {
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.
+// extensionNotes is the notes store the notes service answers from, or nil before the user's data is open.
+func (p *App) extensionNotes() *notes.Store {
+	return p.notes
+}
+
 func (p *App) extensionHistory() *clipboard.History {
 	if p.clip == nil {
 		return nil

@@ -63,6 +63,8 @@ type Options struct {
 	// Resize sizes the window for a presentation when the top view asks for another size (see desiredSize). Nil keeps
 	// the window's size.
 	Resize func(width, height int)
+	// Layout is how the palette sits in its window; the zero value is the launcher panel.
+	Layout WindowLayout
 }
 
 // DragSource is the files a row drags out: their paths, and the file whose picture the drag shows. An empty Image

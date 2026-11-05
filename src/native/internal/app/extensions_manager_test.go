@@ -17,6 +17,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -146,6 +147,7 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Apps:            apps,
 		History:         fakes.extras.history,
 		ClipboardImages: fakes.extras.images,
+		Notes:           fakes.extras.notes,
 		Permissions:     fakes.permissions,
 		Updates:         fakes.updates,
 		Diagnostics:     fakes.diagnostics,
@@ -235,6 +237,7 @@ type extensionPorts struct {
 	images  services.ClipboardImages
 	options func() clipboardbuiltin.Options
 	clock   platform.Clock
+	notes   func() *notes.Store
 }
 
 // pinnedNowClock is the real clock with its instant pinned, so the relative times a golden draws are the same every run.

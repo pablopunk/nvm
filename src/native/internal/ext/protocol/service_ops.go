@@ -23,6 +23,7 @@ const (
 	OpSave        = "save"
 	OpCommit      = "commit"
 	OpDiscard     = "discard"
+	OpCreate      = "create"
 
 	OpRecords = "records"
 

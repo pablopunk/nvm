@@ -19,6 +19,7 @@ import (
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
+	notesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/notes"
 	permissionsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/permissions"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
@@ -65,7 +66,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), dictationbuiltin.New(in.Dictation), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
-		timersbuiltin.New(),
+		timersbuiltin.New(), notesbuiltin.New(),
 		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
 		clipboardbuiltin.New(in.Clipboard), windowmanagementbuiltin.New(in.WindowSettings),
 		settingsbuiltin.New(), permissionsbuiltin.New(), updatesbuiltin.New(), diagnosticsbuiltin.New(), backgroundtasksbuiltin.New(), shortcutsbuiltin.New(),

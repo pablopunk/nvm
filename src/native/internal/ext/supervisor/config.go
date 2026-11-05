@@ -44,6 +44,7 @@ var DefaultBudgets = map[string]Budget{
 
 	protocol.MethodMenuBars:        {Soft: 50 * time.Millisecond, Hard: time.Second},
 	protocol.MethodMenuBarTriggers: {Soft: 20 * time.Millisecond, Hard: 500 * time.Millisecond},
+	protocol.MethodRestoreWindow:   {Hard: 10 * time.Second},
 }
 
 // Config is everything a Runtime needs from the composition root. Ports are injected so tests can fake them.

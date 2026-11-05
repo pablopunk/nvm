@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
+	notesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/notes"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -54,6 +55,8 @@ var movedCommandShortcutIDs = map[string]string{
 	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                    shortcuts.CommandForceQuitApps,
 	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                      shortcuts.CommandQuitAllApps,
 	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID:   shortcuts.CommandSnippets,
+	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.ListCommandID:         shortcuts.CommandQuickNotes,
+	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.NewWindowCommandID:    shortcuts.CommandNewFloatingNote,
 	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:             shortcuts.CommandEmojiSymbols,
 	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:        shortcuts.CommandDictate,
 	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:        shortcuts.CommandDictationHistory,

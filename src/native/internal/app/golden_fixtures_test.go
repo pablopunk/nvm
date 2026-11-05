@@ -35,17 +35,6 @@ const goldenOS = "linux"
 // goldenData is the machine-local folder the goldens show. Nothing is written there: no fixture saves.
 const goldenData = "/nvm-fixture/data/nevermind-next"
 
-// goldenPalette returns the palette built from fixtures alone. It holds the stores, apps and icons in
-// memory and fixes the clock and the config directory, so no golden reads or writes the disk or depends
-// on the machine it runs on. It does what ready does for the view (the stack and a first search) and
-// nothing else: no window, hotkey, tray, clipboard watcher or file index.
-func goldenPalette(t *testing.T) *App {
-	t.Helper()
-	return goldenPaletteWith(t, false)
-}
-
-// goldenPaletteWith is goldenPalette, with a conflicting draft of the first note on disk when withConflict is set.
-// The palette's ports are the fakes of the set it returns, so an action the golden runs touches no OS.
 // goldenHome is the process's home folder, the one the standard places and the fixture file tree resolve under.
 func goldenHome(t *testing.T) string {
 	t.Helper()
@@ -56,13 +45,18 @@ func goldenHome(t *testing.T) string {
 	return home
 }
 
-func goldenPaletteWith(t *testing.T, withConflict bool) *App {
+// goldenPalette returns the palette built from fixtures alone. It holds the stores, apps and icons in
+// memory and fixes the clock and the config directory, so no golden reads or writes the disk or depends
+// on the machine it runs on. It does what ready does for the view (the stack and a first search) and
+// nothing else: no window, hotkey, tray, clipboard watcher or file index.
+// The palette's ports are the fakes of the set it returns, so an action the golden runs touches no OS.
+func goldenPalette(t *testing.T) *App {
 	t.Helper()
 	t.Setenv("NVM_THEME", "")
 	t.Setenv("NVM_TOKEN", "")
 	swapForGolden(t)
 	set := fake.NewSet()
-	userNotes, userSnippets := goldenUserData(t, set, withConflict)
+	userNotes, userSnippets := goldenUserData(t, set)
 	p := &App{
 		S: &Settings{
 			Engine: "google", ClipLimit: 200,
@@ -180,19 +174,12 @@ func goldenApps() []appfeat.App {
 }
 
 // goldenUserData opens the notes and snippets over a fake disk seeded with the fixtures, so the goldens run the
-// code the app runs. With withConflict, the disk also holds an unsaved draft of the first note that was typed on an
-// older version, so opening that note raises the conflict.
-func goldenUserData(t *testing.T, set *fake.Set, withConflict bool) (*notes.Store, []snippetsbuiltin.Snippet) {
+// code the app runs.
+func goldenUserData(t *testing.T, set *fake.Set) (*notes.Store, []snippetsbuiltin.Snippet) {
 	t.Helper()
 	dir := goldenData
 	set.FS.Seed(dir+"/notes.json", goldenEnvelope(t, map[string]any{"notes": goldenNoteRecords()}))
 	set.FS.Seed(dir+"/snippets.json", goldenEnvelope(t, map[string]any{"snippets": goldenSnippetRecords()}))
-	if withConflict {
-		set.FS.Seed(dir+"/drafts.json", goldenEnvelope(t, map[string]any{"drafts": []map[string]any{{
-			"noteId": "note-ideas", "base": 1, "content": "Ideas\nPalette chips for filters\n- keyboard first\n- [ ] ship the goldens\n- sketched on the train",
-			"edited": goldenNow.Add(-4 * time.Minute),
-		}}}))
-	}
 	st, err := store.Open(set.FS, set.Clock, dir)
 	if err != nil {
 		t.Fatal(err)
