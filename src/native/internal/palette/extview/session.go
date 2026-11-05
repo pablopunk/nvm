@@ -61,7 +61,7 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 		deps.Cameras = NewMemoryCameras()
 	}
 	s := &Session{
-		deps: deps, extID: extID, view: view,
+		deps: deps, extID: extID, view: view, loading: view.IsLoading,
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
 		images: map[string]*ui.Bitmap{}, requested: map[string]bool{},
 		handles: map[handle]route{}, markdown: &markdown.Options{},
@@ -152,7 +152,7 @@ func (s *Session) listPage() *palette.View {
 			return s.rows(q)
 		}
 	}
-	page.Loading = s.isLoadingEmpty
+	page.Loading = s.isLoading
 	page.Pending = s.searchChangePending
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.EmptyFn = s.emptyState
@@ -284,9 +284,9 @@ func (s *Session) appendSectionRows(out []search.Item, title string, items []api
 	return out
 }
 
-// isLoadingEmpty is true while a data source has nothing to show yet; the palette then shows no empty state.
-func (s *Session) isLoadingEmpty() bool {
-	return s.loading && len(s.items) == 0 && len(s.sections) == 0
+// isLoading reports both cold loads and refreshes; the host preserves cached rows during refresh.
+func (s *Session) isLoading() bool {
+	return s.loading
 }
 
 // unsupportedPage says, in the palette, that this build cannot draw the view kind yet. It never fails silently.

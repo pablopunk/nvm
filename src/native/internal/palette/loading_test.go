@@ -115,3 +115,45 @@ func TestTypingWhileABatchIsPendingStillChangesTheQuery(t *testing.T) {
 		t.Fatalf("query = %q, want ca while the batch is pending", h.p.Query())
 	}
 }
+
+func TestRefreshKeepsSelectedIdentityAcrossReordering(t *testing.T) {
+	for _, grid := range []bool{false, true} {
+		pending := true
+		titles := []string{"Cat", "Tiger"}
+		h := newHarness(t, loadingView(grid, &pending, &titles), true)
+		h.p.Choose(1)
+		h.frame()
+		titles = []string{"Tiger", "Cat", "Lion"}
+		h.p.Refresh()
+		h.frame()
+		if h.chosenTitle() != "Tiger" {
+			t.Fatal("refresh changed the selected item")
+		}
+		pending = false
+		titles = nil
+		h.p.Refresh()
+		h.frame()
+		if h.p.loadingMore() || h.chosenTitle() != "" {
+			t.Fatal("empty completion retained loading or a choice")
+		}
+	}
+}
+
+func TestColdLoadingReducedMotionAndSettling(t *testing.T) {
+	for _, grid := range []bool{false, true} {
+		pending := true
+		titles := []string{}
+		h := newHarness(t, loadingView(grid, &pending, &titles), true)
+		h.tt.SetPreferences(ui.Preferences{ReduceMotion: true})
+		h.frame()
+		if h.tt.FramePending() {
+			t.Fatal("reduced-motion loading kept requesting frames")
+		}
+		pending = false
+		h.p.Refresh()
+		h.frame()
+		if h.p.loadingMore() || h.tt.FramePending() {
+			t.Fatal("settled loading kept requesting frames")
+		}
+	}
+}

@@ -84,11 +84,9 @@ func (p *Palette) Refresh() {
 		return
 	}
 	p.win.Update(func() {
-		keep := p.chosen
 		p.invalidateRows()
 		p.syncPresentation()
 		p.search()
-		p.choose(keep)
 	})
 }
 
@@ -99,10 +97,8 @@ func (p *Palette) RefreshTop(pred func(*View) bool) {
 		if !p.win.IsVisible() || !pred(p.cur()) {
 			return
 		}
-		keep := p.chosen
 		p.invalidateRows()
 		p.search()
-		p.choose(keep)
 	})
 }
 

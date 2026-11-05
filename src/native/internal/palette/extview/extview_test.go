@@ -290,3 +290,16 @@ func ptrAction(a api.Action) *api.Action { return &a }
 
 // Root has nothing to leave in this test host.
 func (h *fakeHost) Root() {}
+
+func TestInitialLoadingAndWarmRefreshReachHost(t *testing.T) {
+	s := NewSession(Deps{}, "fixture", api.View{Kind: api.ViewGrid, IsLoading: true, Items: []api.Item{{ID: "cached", Title: "Cached"}}})
+	page := s.Palette()
+	if !page.Loading() || len(page.Search("")) != 1 {
+		t.Fatal("warm loading lost cached content or status")
+	}
+	loading := false
+	s.Apply(api.ViewPatch{IsLoading: &loading})
+	if page.Loading() || len(page.Search("")) != 1 {
+		t.Fatal("completion did not retain cached content and settle")
+	}
+}

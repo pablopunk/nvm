@@ -106,6 +106,10 @@ func (p *Palette) listBody(c *ui.Context) {
 	p.interact.clickedThisFrame = false
 	v := p.cur()
 	loading := p.loadingMore()
+	if len(p.results) == 0 && loading {
+		p.coldLoading(c, v.Grid)
+		return
+	}
 	if len(p.results) == 0 && !loading {
 		if !p.settled {
 			return
@@ -141,7 +145,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			list = ui.List(c, &p.list, listRowCount(p.results, loading), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6)
+			list = ui.List(c, &p.list, listRowCount(p.results, p.pendingBatch()), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
 		p.focusListIfRequested(c)
 		if list.Submitted() && !p.interact.clickedThisFrame {
@@ -276,6 +280,16 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	}
 	if len(p.stack) == 1 {
 		name = "Nevermind"
+	}
+	if p.loadingMore() {
+		status := "Loading…"
+		if len(p.results) > 0 {
+			status = "Refreshing…"
+		}
+		if name != "" {
+			name += " · "
+		}
+		name += status
 	}
 	data := design.FooterData{Name: name}
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {

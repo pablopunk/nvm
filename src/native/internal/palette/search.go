@@ -63,6 +63,13 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
 	if p.shownView != v || p.shownQuery != q {
 		p.chosen = 0
+	} else if selected := p.chosenItem(); selected != nil && selected.ID != "" {
+		for i := range rows {
+			if rows[i].ID == selected.ID {
+				p.chosen = i
+				break
+			}
+		}
 	}
 	p.shownView, p.shownQuery = v, q
 	p.results, p.settled, p.pending = rows, settled, pending

@@ -12,7 +12,7 @@ import (
 const gridPageRows = 5
 
 // gridCellRadius is the corner radius of a cell's plate.
-const gridCellRadius = 10
+const gridCellRadius = 8
 
 // gridLoadingCells is how many placeholder cells follow the results while a second batch is arriving. They sit in the
 // slots after the last result, so the results never move when the batch lands.
@@ -26,7 +26,7 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 	}
 	p.list.Selected, p.list.Key, p.list.Label = nil, gridRowKey, nil
 	cols := max(g.Columns, 1)
-	slots := p.gridSlots(p.loadingMore())
+	slots := p.gridSlots(p.pendingBatch())
 	rows := (slots + cols - 1) / cols
 	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
 		quiet := *c.Theme()
@@ -59,7 +59,7 @@ func (p *Palette) gridSlots(loading bool) int {
 // of the rows above; the slots past the last result are placeholders while a batch arrives, and empty otherwise.
 func (p *Palette) gridRow(c *ui.Context, g *Grid, row, slots int) {
 	cols := max(g.Columns, 1)
-	ui.Row(c).Gap(2).Padding(2, 8).Children(func() {
+	ui.Row(c).FillWidth().Gap(8).Padding(4, 8).Children(func() {
 		for i := row * cols; i < (row+1)*cols; i++ {
 			switch {
 			case i < len(p.results):
@@ -67,7 +67,7 @@ func (p *Palette) gridRow(c *ui.Context, g *Grid, row, slots int) {
 			case i < slots:
 				p.gridLoadingCell(c, g)
 			default:
-				ui.Row(c).Grow(1).Height(g.CellHeight)
+				ui.Row(c).Grow(1).Basis(0).MinWidth(0).Height(g.CellHeight)
 			}
 		}
 	})
@@ -75,7 +75,7 @@ func (p *Palette) gridRow(c *ui.Context, g *Grid, row, slots int) {
 
 // gridLoadingCell draws a placeholder cell. It has no label, plate or click: the choice never reaches it.
 func (p *Palette) gridLoadingCell(c *ui.Context, g *Grid) {
-	ui.Row(c).Grow(1).Height(g.CellHeight).Center().Children(func() { design.LoadingCell(c) })
+	ui.Row(c).Grow(1).Basis(0).MinWidth(0).Height(g.CellHeight).Center().Children(func() { design.LoadingCell(c, g.Compact) })
 }
 
 // gridCell draws result i as a cell: the plate of the cursor or the pointer, the content Grid.Cell draws, and
@@ -83,13 +83,13 @@ func (p *Palette) gridLoadingCell(c *ui.Context, g *Grid) {
 func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	k := design.Tokens(c)
 	it := p.results[i]
-	cell := ui.Row(c).Grow(1).Height(g.CellHeight).Radius(gridCellRadius).Center().Label(it.Title)
+	cell := ui.Row(c).Grow(1).Basis(0).MinWidth(0).Height(g.CellHeight).Radius(gridCellRadius).Clip().Padding(8).Center().Label(it.Title)
 	hovered := cell.Hovered()
 	switch {
 	case i == p.chosen:
 		cell.Background(k.AccentMuted)
 	case hovered:
-		cell.Background(k.Wash)
+		cell.Background(k.Selected)
 	default:
 		cell.Background(ui.Transparent)
 	}

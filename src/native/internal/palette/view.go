@@ -69,7 +69,7 @@ type View struct {
 	// OnHide runs on every page of the stack when the palette hides. The pages stay on the stack until the next Show,
 	// so a question waiting for an answer can end at once.
 	OnHide func()
-	// Loading reports that the view has no rows yet because they are still arriving; no empty state shows meanwhile.
+	// Loading reports a cold load or refresh. Cold loads show placeholders; refreshes keep cached rows interactive.
 	Loading func() bool
 	// Pending reports that the view's second batch is still in flight, such as the answer to an onSearchChange call the
 	// host has started. It is read on every frame: while it holds, the palette shows a loading placeholder after the
@@ -111,7 +111,9 @@ type View struct {
 // End, Page Up and Page Down, draws each cell's plate, selection and clicks, and labels the cell with the row's
 // title. Cell draws what a cell shows and nothing else.
 type Grid struct {
-	Columns    int
+	Columns int
+	// Compact omits title placeholders for glyph-only grids.
+	Compact    bool
 	CellHeight float32
 	Cell       func(c *ui.Context, it search.Item)
 }

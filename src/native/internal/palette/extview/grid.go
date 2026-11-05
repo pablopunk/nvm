@@ -9,12 +9,12 @@ import (
 )
 
 // compactCellHeight is one glyph tile's height in a compact grid, which draws the glyph alone, as the emoji picker does.
-const compactCellHeight = 46
+const compactCellHeight = 48
 
 // gridSpecOf is the palette grid of the view: compact layouts draw glyph tiles, every other layout draws titled tiles.
 func (s *Session) gridSpecOf() *palette.Grid {
 	if s.view.Grid != nil && s.view.Grid.Layout == "compact" {
-		return &palette.Grid{Columns: s.gridColumns(), CellHeight: compactCellHeight, Cell: drawCompactCell}
+		return &palette.Grid{Columns: s.gridColumns(), Compact: true, CellHeight: compactCellHeight, Cell: drawCompactCell}
 	}
 	return &palette.Grid{Columns: s.gridColumns(), CellHeight: gridCellHeight, Cell: drawGridCell}
 }
@@ -25,7 +25,7 @@ func drawCompactCell(c *ui.Context, it search.Item) {
 		ui.Text(c, it.Glyph).FontSize(26)
 		return
 	}
-	design.Tile(c, design.TileData{Icon: it.Icon, Tone: it.Tone, Title: it.Title})
+	design.Tile(c, design.TileData{Image: it.Image, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
 }
 
 // selectionFooter is the left footer of a grid with SelectionFooter: the chosen tile's title and subtitle, or nothing.
@@ -37,7 +37,7 @@ func selectionFooter(chosen *search.Item) string {
 }
 
 // gridCellHeight is one tile's height: the tile, a title line and the cell padding.
-const gridCellHeight = 96
+const gridCellHeight = 104
 
 // defaultGridColumns is the column count of a grid that names none.
 const defaultGridColumns = 4
@@ -52,12 +52,16 @@ func (s *Session) gridColumns() int {
 
 // drawGridCell draws one tile: the glyph when the item has one, else its icon, then the title under it.
 func drawGridCell(c *ui.Context, it search.Item) {
-	ui.Column(c).Gap(6).Children(func() {
+	k := design.Tokens(c)
+	ui.Column(c).FillWidth().MinWidth(0).Gap(8).AlignItems(ui.Center).Children(func() {
 		if it.Glyph != "" {
 			ui.Text(c, it.Glyph).FontSize(26)
 		} else {
-			design.Tile(c, design.TileData{Icon: it.Icon, Tone: it.Tone, Title: it.Title})
+			design.Tile(c, design.TileData{Image: it.Image, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
 		}
-		ui.Text(c, it.Title).FontSize(11)
+		ui.Text(c, it.Title).FontSize(13).TextColor(k.Strong).FillWidth().SingleLine()
+		if it.Subtitle != "" {
+			ui.Text(c, it.Subtitle).FontSize(11).TextColor(k.Secondary).FillWidth().SingleLine()
+		}
 	})
 }
