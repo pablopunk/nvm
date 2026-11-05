@@ -129,6 +129,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
+          retry_bin="$RUNNER_TEMP/stapler-retry-bin"
+          mkdir -p "$retry_bin"
+          cp scripts/packaging/xcrun-with-stapler-retry.sh "$retry_bin/xcrun"
+          chmod +x "$retry_bin/xcrun"
+          echo "$retry_bin" >> "$GITHUB_PATH"
           bash scripts/packaging/stamp-mygo-config.sh
 
       - name: Build and package
