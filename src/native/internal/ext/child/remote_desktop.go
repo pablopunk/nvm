@@ -3,6 +3,7 @@ package child
 import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // remoteDesktop is the desktop surface the host serves. The sub-surfaces the host does not serve yet (keyboard,
@@ -10,7 +11,8 @@ import (
 // with a reference, as every unwired service does.
 type remoteDesktop struct {
 	api.Desktop
-	link *hostLink
+	link  *hostLink
+	clock platform.Clock
 }
 
 func (d remoteDesktop) Clipboard() api.SystemClipboard {
@@ -38,7 +40,7 @@ func (d remoteDesktop) Shell() api.Shell {
 }
 
 func (d remoteDesktop) WindowManagement() api.WindowManagement {
-	return remoteWindowManagement{link: d.link}
+	return remoteWindowManagement{link: d.link, clock: d.clock}
 }
 
 // remoteSystemClipboard reads and writes the system clipboard as plain text. Other formats are not served yet.

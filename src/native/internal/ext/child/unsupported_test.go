@@ -9,6 +9,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // refusingLink answers every host call with an unavailable failure, so the remote services can be walked without a
@@ -34,7 +35,7 @@ func everyService() map[string]any {
 		"apps":             remoteApps{link: link},
 		"files":            remoteFiles{link: link},
 		"systemClipboard":  remoteSystemClipboard{link: link},
-		"windowManagement": remoteWindowManagement{link: link},
+		"windowManagement": remoteWindowManagement{link: link, clock: fake.NewClock()},
 		"windows":          childWindows{},
 		"navigation":       childNavigation{},
 	}

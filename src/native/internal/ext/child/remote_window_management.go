@@ -5,6 +5,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Window wait bounds of the API: the default and the most a wait may last.
@@ -18,7 +19,8 @@ const (
 // call is one exchange with the host's window engine, except the wait, which polls the listing.
 type remoteWindowManagement struct {
 	api.WindowManagement
-	link *hostLink
+	link  *hostLink
+	clock platform.Clock
 }
 
 func (w remoteWindowManagement) Displays() ([]api.DisplayInfo, error) {
@@ -34,7 +36,7 @@ func (w remoteWindowManagement) Windows(query api.WindowQuery) ([]api.WindowInfo
 }
 
 func (w remoteWindowManagement) WaitForWindow(query api.WindowQuery, timeout time.Duration) (api.WindowInfo, bool, error) {
-	deadline := time.Now().Add(clampWindowWait(timeout))
+	deadline := w.clock.Now().Add(clampWindowWait(timeout))
 	for {
 		windows, err := w.Windows(query)
 		if err != nil {
@@ -43,10 +45,10 @@ func (w remoteWindowManagement) WaitForWindow(query api.WindowQuery, timeout tim
 		if len(windows) > 0 {
 			return windows[0], true, nil
 		}
-		if !time.Now().Before(deadline) {
+		if !w.clock.Now().Before(deadline) {
 			return api.WindowInfo{}, false, nil
 		}
-		time.Sleep(windowPollEvery)
+		w.clock.Sleep(windowPollEvery)
 	}
 }
 
