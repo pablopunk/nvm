@@ -140,9 +140,11 @@ type App struct {
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 
-	windows        *windowmgmt.Service
-	windowSettings *windowmgmt.SettingsStore
-	windowFocus    windowSummon
+	windows     *windowmgmt.Service
+	windowFocus windowSummon
+	// paletteRuns counts the extension runs the palette started that have not returned. A window call made meanwhile acts
+	// on the window the palette was summoned from, as the palette's own commands did; the palette hides before the call.
+	paletteRuns atomic.Int32
 	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
 	dictation       *dictationFlow
 	dictationPref   dictationPrefs

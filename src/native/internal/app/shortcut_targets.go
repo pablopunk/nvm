@@ -8,13 +8,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
-	"github.com/pablopunk/nvm/native/internal/palette/windows"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-// The prefixes of the action IDs that the shortcut document keys root rows by. Window commands keep their own
-// "window." IDs, and apps keep the 1.x "app:<path>" ID that shortcuts.AppActionID builds.
+// The prefixes of the action IDs that the shortcut document keys root rows by. Apps keep the 1.x "app:<path>" ID that
+// shortcuts.AppActionID builds.
 const (
 	commandShortcutPrefix         = "command:"
 	extensionShortcutPrefix       = "extension:"
@@ -89,6 +88,9 @@ func splitMovedCommandShortcutID(actionID string) (extID, commandID string, ok b
 // resolveShortcutTitle names a root action outside the Keyboard Shortcuts list's commands and reports whether it still
 // exists. A source that is still loading (the app index, the extensions) says it does, so the shortcut binds at launch.
 func (p *App) resolveShortcutTitle(actionID string) (string, bool) {
+	if entry, ok := p.globalShortcuts.commands[actionID]; ok {
+		return entry.command.Title, true
+	}
 	if path, ok := shortcuts.AppPathOf(actionID); ok {
 		return p.appShortcutTitle(path)
 	}
@@ -152,12 +154,9 @@ func (p *App) builtInCommandRow(title string) (search.Item, bool) {
 	return search.Item{}, false
 }
 
-// runShortcutCommand runs the root row a shortcut names, as choosing it from the root does. Window commands act on
-// the app in front and apps open without the palette; every other row opens the palette and runs its first action.
+// runShortcutCommand runs the row a shortcut names, as choosing it from the root does. Apps open without the palette,
+// and so do extension commands that run in place; every other row opens the palette and runs its first action.
 func (p *App) runShortcutCommand(actionID string) {
-	if windows.RunShortcut(p.windowDeps(), actionID) {
-		return
-	}
 	if path, ok := shortcuts.AppPathOf(actionID); ok {
 		p.openShortcutApp(path)
 		return
@@ -188,6 +187,9 @@ func (p *App) openShortcutApp(path string) {
 
 // shortcutAction is the first action of the row actionID names.
 func (p *App) shortcutAction(actionID string) (search.Action, bool) {
+	if entry, ok := p.globalShortcuts.commands[actionID]; ok {
+		return extview.ActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command)), true
+	}
 	if extID, commandID, ok := splitExtensionCommandShortcutID(actionID); ok {
 		m := p.extensionManager()
 		if m == nil {

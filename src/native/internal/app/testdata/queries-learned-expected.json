@@ -782,6 +782,33 @@
     "query": "cal",
     "rows": [
       {
+        "kind": "Window Management",
+        "title": "Maximize Height",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "move-vertical",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Maximize Height",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
@@ -831,33 +858,6 @@
           },
           {
             "title": "Uninstall Calculator…",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Maximize Height",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "",
-        "icon": "move-vertical",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Maximize Height",
             "label": ""
           },
           {
@@ -1288,6 +1288,44 @@
     "query": "set",
     "rows": [
       {
+        "kind": "Window Management",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "move",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Move Window…",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Window Management",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "",
+        "id": "",
+        "icon": "settings",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
@@ -1329,60 +1367,6 @@
         "actions": [
           {
             "title": "Open Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
-        "section": "",
-        "id": "",
-        "icon": "settings",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Move Window…",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "",
-        "icon": "move-horizontal",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Move Window…",
             "label": ""
           },
           {

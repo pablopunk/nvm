@@ -20,18 +20,20 @@ func (w *shownWindow) Focus()                    {}
 func (w *shownWindow) Size() (width, height int) { return 720, 470 }
 func (w *shownWindow) SetPosition(x, y int)      {}
 
-func windowCommandIDs(p *App) map[string]bool {
+const leftHalfKey = "extension-action:window-management:layout.left-half"
+
+func shortcutActionIDs(p *App) map[string]bool {
 	ids := map[string]bool{}
-	for _, command := range p.commands() {
-		ids[command.ID] = true
+	for _, action := range p.shortcutCommands() {
+		ids[action.ID] = true
 	}
 	return ids
 }
 
-func TestWindowCommandsAreListedWhereTheSystemManagesWindows(t *testing.T) {
+func TestWindowCommandsAreShortcutActionsWhereTheSystemManagesWindows(t *testing.T) {
 	p := goldenPalette(t)
 	p.attachWindows()
-	if !windowCommandIDs(p)["window.left-half"] || !windowCommandIDs(p)["window.switch"] {
+	if !shortcutActionIDs(p)[leftHalfKey] {
 		t.Fatal("window commands are missing on a system that manages windows")
 	}
 
@@ -42,7 +44,7 @@ func TestWindowCommandsAreListedWhereTheSystemManagesWindows(t *testing.T) {
 		}
 	}
 	p.ports.Capabilities = platform.NewCapabilities(withoutWindows...)
-	if ids := windowCommandIDs(p); ids["window.left-half"] || ids["window.switch"] {
+	if ids := shortcutActionIDs(p); ids[leftHalfKey] {
 		t.Fatal("window commands are listed on a system without window management")
 	}
 }
@@ -99,11 +101,11 @@ func TestSummonCapturesNothingOfItsOwnWhereThePaletteHasAFocusPort(t *testing.T)
 func TestShortcutsListWindowCommandsAndBindThemLikeAnyAction(t *testing.T) {
 	p := goldenPalette(t)
 	p.attachWindows()
-	if err := p.shortcutsManager().SetAction("window.left-half", "Control+Alt+Left"); err != nil {
+	if err := p.shortcutsManager().SetAction(leftHalfKey, "Control+Alt+Left"); err != nil {
 		t.Fatal(err)
 	}
 	for _, entry := range p.shortcutsManager().Entries() {
-		if entry.ActionID == "window.left-half" {
+		if entry.ActionID == leftHalfKey {
 			if entry.Title != "Left Half" || entry.Accelerator != "Control+Alt+Left" {
 				t.Fatalf("entry = %+v, want Left Half on Control+Alt+Left", entry)
 			}

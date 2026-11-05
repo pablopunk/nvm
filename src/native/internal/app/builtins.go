@@ -19,6 +19,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	timersbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/timers"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
+	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -34,6 +35,8 @@ type builtInInputs struct {
 	Snippets     []snippetsbuiltin.Snippet
 	GuideDone    bool
 	SearchEngine string
+	// WindowSettings are the window management values the settings file held before the built-in kept its own.
+	WindowSettings windowmanagementbuiltin.Settings
 }
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
@@ -45,6 +48,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
 		appsbuiltin.New(),
+		windowmanagementbuiltin.New(in.WindowSettings),
 	}
 }
 

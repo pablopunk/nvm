@@ -87,7 +87,6 @@ func trailingCommands(p *App) []command {
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.classifyImageSlot()...)
-	cmds = append(cmds, p.windowCommands()...)
 	return cmds
 }
 

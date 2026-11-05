@@ -11,7 +11,7 @@ func TestAppActionTitleIsTheAppNameFromItsPath(t *testing.T) {
 	if !ok || title != "Slack" {
 		t.Fatalf("DescribeApp = %q, %v; want Slack", title, ok)
 	}
-	if _, ok := DescribeApp("window.left-half"); ok {
+	if _, ok := DescribeApp("extension-action:window-management:layout.left-half"); ok {
 		t.Error("a window action is titled as an app")
 	}
 }
