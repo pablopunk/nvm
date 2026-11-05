@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"fmt"
 	"os"
 	"testing"
 )
@@ -34,10 +35,18 @@ func TestJourneyBackgroundShortcutPastesItsFollowUpIntoTheSource(t *testing.T) {
 	// Summoning captures the source; closing leaves the shortcut free to run without opening the palette.
 	must(t, app.SummonPalette())
 	hidePalette(t, app)
-	must(t, app.ClipboardSet("clipboard before background paste"))
-	must(t, app.PressHotkey("Control+Alt+Shift+P"))
-	waitNoteOnDisk(t, app, "nvm paste fixture")
-	waitClipboardEquals(t, app, "clipboard before background paste")
+	for round := 1; round <= 3; round++ {
+		draft := fmt.Sprintf("replace round %d", round)
+		must(t, app.Key("ctrl+a"))
+		must(t, app.Type(draft))
+		waitNoteOnDisk(t, app, draft)
+		must(t, app.Key("ctrl+a"))
+		clipboard := fmt.Sprintf("clipboard before background paste %d", round)
+		must(t, app.ClipboardSet(clipboard))
+		must(t, app.PressHotkey("Control+Alt+Shift+P"))
+		waitNoteOnDisk(t, app, "nvm paste fixture")
+		waitClipboardEquals(t, app, clipboard)
+	}
 	window, err := app.PaletteWindow()
 	must(t, err)
 	if window.Visible {

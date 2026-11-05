@@ -84,9 +84,7 @@ type App struct {
 	// quotas are the model-call counts by owner, shared by the extensions and the picker's decisions.
 	quotas *quota.Registry
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
-	background *jobs.Scheduler
-	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
-	paletteHidden  chan struct{}
+	background     *jobs.Scheduler
 	shortcutMgr    *shortcuts.Manager
 	aliasList      *shortcuts.Aliases
 	github         *githubProbe
@@ -211,7 +209,6 @@ func (p *App) placementOption() func(w, h int) (int, int) {
 
 func (p *App) ready() {
 	p.S = loadSettings()
-	p.paletteHidden = make(chan struct{}, 1)
 	ports := p.appPorts()
 	p.openDiagnostics(ports)
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
@@ -241,7 +238,6 @@ func (p *App) ready() {
 	p.panel.OnClose(p.hidePanelUnlessQuitting)
 	p.panel.OnBlur(p.DismissOnBlur)
 	mygo.App.OnDidResignActive(func() { p.panel.Update(p.DismissOnBlur) })
-	p.panel.OnHide(p.notePaletteHidden)
 
 	p.startShortcuts()
 	p.shortcutsManager()

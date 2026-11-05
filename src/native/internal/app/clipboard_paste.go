@@ -25,22 +25,22 @@ func (p *App) appPorts() platform.Ports {
 	return rigPorts(ports)
 }
 
-// notePaletteHidden records that the palette window hid. The window calls it from its hide event on the UI
-// thread; the buffered signal is taken by the next paste, so the event is never lost and never waited for on the
-// UI thread.
-func (p *App) notePaletteHidden() {
-	select {
-	case p.paletteHidden <- struct{}{}:
-	default:
-	}
-}
-
-// waitPaletteHidden returns once the palette has hidden since the last paste started. The paste port calls it on
-// its own goroutine, before it sends the gesture, so keys never reach the palette.
+// waitPaletteHidden checks visibility on the UI thread after the caller's dismissal and focus restoration. A hidden
+// palette stays ready for repeated background pastes; a newer summon refuses the gesture instead of consuming it.
 func (p *App) waitPaletteHidden(ctx context.Context) error {
+	ready := make(chan error, 1)
+	p.onUI(func() {
+		if err := ctx.Err(); err != nil {
+			ready <- err
+		} else if p.Palette != nil && p.Visible() {
+			ready <- platform.ErrConflict
+		} else {
+			ready <- nil
+		}
+	})
 	select {
-	case <-p.paletteHidden:
-		return nil
+	case err := <-ready:
+		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -50,13 +50,9 @@ func (p *App) waitPaletteHidden(ctx context.Context) error {
 const pasteActionTitle = "Paste"
 
 // hideThenRun hides the palette, then runs run on its own goroutine once the palette has hidden, so the keys of a paste
-// reach the app that had focus. Stale hide signals are dropped first, so run waits for this hide. A failure shows the
+// reach the app that had focus. The paste port checks visibility after this dismissal. A failure shows the
 // feedback fail builds; success shows done under title.
 func (p *App) hideThenRun(h search.Host, title, done string, run func() error, fail func(error) palette.Feedback) {
-	select {
-	case <-p.paletteHidden:
-	default:
-	}
 	h.Hide()
 	safego.Go(clipPasteName, func(context.Context) {
 		if err := run(); err != nil {
