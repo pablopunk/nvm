@@ -13,13 +13,14 @@ func holdingInteraction(mods ui.Modifiers) func(*ui.Tester) {
 	return func(tt *ui.Tester) { tt.HoldModifiers(mods) }
 }
 
-// TestPaletteShortcutRecorderHeldModifiers is the recorder with Super and Alt held and no key yet.
-func TestPaletteShortcutRecorderHeldModifiers(t *testing.T) {
+// TestPaletteShortcutRecorderIgnoresHeldModifiers is the recorder with Super and Alt held and no key yet: the prompt
+// stays, as 1.x shows it, because only a key press records a shortcut.
+func TestPaletteShortcutRecorderIgnoresHeldModifiers(t *testing.T) {
 	p := goldenPalette(t)
 	goldenOpen(p, p.shortcutRecorderView(clipboardEntry))
 	held := paletteGoldens
 	held.Interact = holdingInteraction(ui.Super | ui.Alt)
-	golden.AssertMatrix(t, "shortcuts-recorder-held", p.View, held)
+	golden.AssertMatrix(t, "shortcuts-recorder-held-prompt", p.View, held)
 }
 
 // TestPaletteShortcutRecorderHyperCap records Hyper+D, the four Hyper modifiers and D: the Hyper key shows as one ✦ cap.

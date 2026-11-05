@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +49,7 @@ func TestJourneyAIFixInTextEditor(t *testing.T) {
 	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
+	waitEditorModified(t, display, window)
 	saveUntilFileHolds(t, display, window, file, editorCorrected)
 	waitClipboardEquals(t, app, editorClipboard)
 	shoot(t, app, "ai-fix-editor-1-fixed")
@@ -57,6 +59,7 @@ func TestJourneyAIFixInTextEditor(t *testing.T) {
 	_, err = app.WaitFor("Undo Fix", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
+	waitEditorModified(t, display, window)
 	saveUntilFileHolds(t, display, window, file, strings.TrimSpace(editorInput))
 	waitClipboardEquals(t, app, editorClipboard)
 	shoot(t, app, "ai-fix-editor-2-undone")
@@ -99,10 +102,53 @@ func focusEditor(t *testing.T, display, window string) {
 	must(t, activateWindow(display, window))
 }
 
-// editorKey sends one key chord to the focused window on display.
+// editorKey sends one key chord to the focused window on display, once no other xdotool chord is in flight.
 func editorKey(display, chord string) error {
+	if err := waitInputIdle(display); err != nil {
+		return err
+	}
 	_, err := xdotoolOn(display, "key", "--clearmodifiers", chord)
 	return err
+}
+
+// inputIdleTicks is how many polls in a row must find no xdotool process before a chord is sent.
+const inputIdleTicks = 4
+
+// waitInputIdle waits until no xdotool runs for inputIdleTicks polls. The app sends its own chords (paste, undo) with
+// xdotool, and two chords in flight release each other's modifiers: a Control released by one lands after the other
+// pressed it, and Control stays held for the rest of the run.
+func waitInputIdle(display string) error {
+	deadline := time.Now().Add(editorWait)
+	quiet := 0
+	for quiet < inputIdleTicks {
+		if exec.Command("pgrep", "-x", "xdotool").Run() != nil {
+			quiet++
+		} else {
+			quiet = 0
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("xdotool kept running on %s", display)
+		}
+		time.Sleep(pollInterval)
+	}
+	return nil
+}
+
+// waitEditorModified waits until the editor's title carries the unsaved-change mark, which the fix's paste and the
+// undo make. The app's chord that makes the change has then been sent, so the test's next chord does not overlap it.
+func waitEditorModified(t *testing.T, display, window string) {
+	t.Helper()
+	deadline := time.Now().Add(editorWait)
+	for {
+		title, err := xdotoolOn(display, "getwindowname", window)
+		if err == nil && strings.HasPrefix(strings.TrimSpace(title), "*") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the editor title %q never showed an unsaved change", strings.TrimSpace(title))
+		}
+		time.Sleep(pollInterval)
+	}
 }
 
 // saveEditor saves the focused editor to its file.

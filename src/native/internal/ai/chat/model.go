@@ -137,7 +137,12 @@ func Busy(chat Chat) bool {
 
 // AwaitingAnswer reports whether a tool call of the chat waits for the user's answer, as the transcript shows it.
 func AwaitingAnswer(chat Chat) bool {
-	for _, message := range chat.Messages {
+	return MessagesAwaitAnswer(chat.Messages)
+}
+
+// MessagesAwaitAnswer reports whether a tool call among messages waits for the user's answer.
+func MessagesAwaitAnswer(messages []Message) bool {
+	for _, message := range messages {
 		if message.Author == AuthorTool && message.Status == StatusAwaiting {
 			return true
 		}

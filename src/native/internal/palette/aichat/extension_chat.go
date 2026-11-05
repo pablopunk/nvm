@@ -165,15 +165,24 @@ func (x *ExtensionChat) composerKey(key ui.TextKey) bool {
 	return true
 }
 
-// send hands the typed text and the attached pictures to the view. A message needs text or a picture.
+// send hands the typed text and the attached pictures to the view. A message needs text or a picture, or an empty Enter
+// that allows the tool call waiting for the user.
 func (x *ExtensionChat) send(text string) bool {
 	text = strings.TrimSpace(text)
-	if (text == "" && len(x.images) == 0) || x.spec.Send == nil || x.streaming() {
+	if !x.canSend(text) || x.spec.Send == nil || x.streaming() {
 		return false
 	}
 	x.spec.Send(x.host, text, x.images)
 	x.draft, x.images = "", nil
 	return true
+}
+
+func (x *ExtensionChat) canSend(text string) bool {
+	return text != "" || len(x.images) > 0 || x.awaitingAnswer()
+}
+
+func (x *ExtensionChat) awaitingAnswer() bool {
+	return chat.MessagesAwaitAnswer(x.spec.Messages)
 }
 
 // streaming reports whether the newest message is still arriving, which is when the view offers Stop.

@@ -115,8 +115,11 @@ func (c extensionChatPages) Send(chatID, text string, images []chat.Image) error
 	if c.p.chats == nil {
 		return errChatsUnavailable
 	}
-	if text == "" && len(images) == 0 && c.p.chats.Awaiting(chatID) {
-		return c.p.chats.Decide(chatID, true)
+	if text == "" && len(images) == 0 {
+		if c.p.chats.Awaiting(chatID) {
+			return c.p.chats.Decide(chatID, true)
+		}
+		return nil
 	}
 	return c.p.chats.SendWithImages(chatID, text, images)
 }
