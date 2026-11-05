@@ -21,6 +21,7 @@ const (
 	ViewCamera      ViewKind = "camera"
 	ViewWebview     ViewKind = "webview"
 	ViewChat        ViewKind = "chat"
+	ViewSettings    ViewKind = "settings"
 )
 
 // ViewSize is the named dimension preset for independent windows and the palette.
@@ -95,6 +96,7 @@ type View struct {
 	Camera     *CameraSpec     `json:"camera,omitempty"`
 	Webview    *WebviewSpec    `json:"webview,omitempty"`
 	Chat       *ChatSpec       `json:"chat,omitempty"`
+	Settings   *SettingsSpec   `json:"settings,omitempty"`
 }
 
 // specKinds maps each spec field to the single kind it belongs to.
@@ -110,6 +112,7 @@ func (v View) specKinds() map[ViewKind]bool {
 		ViewCamera:      v.Camera != nil,
 		ViewWebview:     v.Webview != nil,
 		ViewChat:        v.Chat != nil,
+		ViewSettings:    v.Settings != nil,
 	}
 }
 
@@ -117,7 +120,7 @@ func (v View) specKinds() map[ViewKind]bool {
 // nested action and item is valid. Item ids must be unique within the view.
 func (v View) Validate() error {
 	if !oneOf(v.Kind, ViewList, ViewGrid, ViewCollection, ViewPreview, ViewFilePreview, ViewProgress,
-		ViewForm, ViewEditor, ViewCamera, ViewWebview, ViewChat) {
+		ViewForm, ViewEditor, ViewCamera, ViewWebview, ViewChat, ViewSettings) {
 		return fmt.Errorf("unknown view kind %q", v.Kind)
 	}
 	if v.Title == "" {
@@ -141,6 +144,11 @@ func (v View) Validate() error {
 	}
 	if v.Form != nil {
 		if err := v.Form.Validate(); err != nil {
+			return err
+		}
+	}
+	if v.Settings != nil {
+		if err := v.Settings.Validate(); err != nil {
 			return err
 		}
 	}

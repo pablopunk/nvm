@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -57,22 +58,26 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
-		SignIn:                p.signInFromRoot,
-		OpenPath:              func(path string) { _ = ports.Shell.OpenPath(path) },
-		RevealPath:            func(path string) { _ = ports.Shell.Reveal(path) },
-		RunSystem:             p.runSystemOp,
-		HyperKey:              p.hyperKey,
-		OnUI:                  p.onUI,
-		Files:                 ports.FS,
-		Clock:                 ports.Clock,
-		Cache:                 extensionSnapshots,
-		Dialog:                p.GuardDialog(ports.FileDialog),
-		Indicate:              p.extensionIndicators().ShowIndicator,
-		Drafts:                m,
-		Pages:                 real.NewWebPages(p.paletteWebWindow),
-		Permissions:           ports.Permissions,
-		Cameras:               extensionCameras,
-		IsDark:                func() bool { return mygo.Theme.IsDark() },
+		ReadSetting:           func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
+		WriteSetting: func(extID, key string, value json.RawMessage) error {
+			return m.WriteSetting(extID, key, value)
+		},
+		SignIn:      p.signInFromRoot,
+		OpenPath:    func(path string) { _ = ports.Shell.OpenPath(path) },
+		RevealPath:  func(path string) { _ = ports.Shell.Reveal(path) },
+		RunSystem:   p.runSystemOp,
+		HyperKey:    p.hyperKey,
+		OnUI:        p.onUI,
+		Files:       ports.FS,
+		Clock:       ports.Clock,
+		Cache:       extensionSnapshots,
+		Dialog:      p.GuardDialog(ports.FileDialog),
+		Indicate:    p.extensionIndicators().ShowIndicator,
+		Drafts:      m,
+		Pages:       real.NewWebPages(p.paletteWebWindow),
+		Permissions: ports.Permissions,
+		Cameras:     extensionCameras,
+		IsDark:      func() bool { return mygo.Theme.IsDark() },
 	}
 }
 

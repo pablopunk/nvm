@@ -7,6 +7,8 @@
 package extview
 
 import (
+	"encoding/json"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -34,6 +36,14 @@ type Deps struct {
 	OpenSettingsPane func(id string)
 	// RecordPaletteShortcut pushes the recorder of the palette shortcut onto h. Nil makes the action report unavailable.
 	RecordPaletteShortcut func(h search.Host)
+	// ReadSetting returns the stored value of a declared setting of extension extID, and WriteSetting saves one (both
+	// through the extension's settings service). RecordSetting pushes the host's recorder for a setting that holds an
+	// accelerator, and RowAccessory gives the host's edge text for a settings row, when it has one. Nil makes the
+	// settings rows report unavailable, or show their own text.
+	ReadSetting   func(extID, key string) (json.RawMessage, error)
+	WriteSetting  func(extID, key string, value json.RawMessage) error
+	RecordSetting func(h search.Host, extID, key string)
+	RowAccessory  func(extID, rowID string) (string, bool)
 	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.
 	SignIn func(h search.Host)
 	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
@@ -149,6 +159,10 @@ func (s *Session) Palette() *palette.View {
 	case api.ViewWebview, api.ViewCamera:
 		if s.media != nil {
 			return s.media
+		}
+	case api.ViewSettings:
+		if s.view.Settings != nil {
+			return s.settingsPage()
 		}
 	}
 	return s.unsupportedPage()

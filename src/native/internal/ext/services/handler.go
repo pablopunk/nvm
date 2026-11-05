@@ -136,6 +136,8 @@ type Handler struct {
 	closeOnce        sync.Once
 	docs             *documents
 	secretsMu        sync.Mutex
+	// hostSettings keeps the settings of a built-in in the host's store. Nil means the extension's settings file.
+	hostSettings SettingsHost
 }
 
 // New returns the services of one extension. Nothing is opened until the extension makes its first call.

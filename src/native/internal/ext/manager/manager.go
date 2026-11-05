@@ -95,6 +95,9 @@ type Options struct {
 	SearchRefresh func(extensionID, query string)
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
+	// BuiltInSettings returns the host's store for a built-in's settings, such as config.json, or nil when the built-in
+	// keeps its settings in its own file.
+	BuiltInSettings func(id string) services.SettingsHost
 	// LegacyStatePath is the 1.x state file. A folder that names a 1.x source file takes its enabled state from it on
 	// its first scan. Empty means no 1.x state is read.
 	LegacyStatePath string
@@ -107,8 +110,10 @@ type Manager struct {
 	enabled     *enablement.Set
 	config      supervisor.Config
 	serviceDeps services.Deps
-	mu          sync.Mutex
-	entries     map[string]*entry
+	// builtInSettings is Options.BuiltInSettings.
+	builtInSettings func(id string) services.SettingsHost
+	mu              sync.Mutex
+	entries         map[string]*entry
 	// legacyStatePath is the 1.x state file read by inheritLocked.
 	legacyStatePath string
 }
@@ -130,9 +135,10 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		return nil, err
 	}
 	m := &Manager{
-		ports:   ports,
-		root:    root,
-		enabled: enabled,
+		ports:           ports,
+		root:            root,
+		enabled:         enabled,
+		builtInSettings: opts.BuiltInSettings,
 		config: supervisor.Config{
 			Worker:        ports.Worker,
 			Clock:         ports.Clock,
