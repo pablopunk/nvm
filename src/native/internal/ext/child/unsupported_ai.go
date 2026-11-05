@@ -32,6 +32,8 @@ func (unsupportedAIBuilder) ListChats() []api.ChatSummary { return nil }
 
 func (unsupportedAIBuilder) GetChat(string) (api.ChatDetail, bool) { return api.ChatDetail{}, false }
 
+func (unsupportedAIBuilder) ExtensionPreview(string) (api.View, bool) { return api.View{}, false }
+
 func (unsupportedAIBuilder) CleanupExpiredConversations() (int, error) {
 	return 0, unsupported("ctx.aiBuilder.cleanupExpiredConversations")
 }

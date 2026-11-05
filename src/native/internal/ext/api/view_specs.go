@@ -186,6 +186,13 @@ type ChatTool struct {
 	Result string `json:"result,omitempty"`
 }
 
+// NewChatView is the transcript of a chat that has no record yet: a draft with no messages and no tier picker. Submit
+// runs with the typed text in Invocation.Form["message"] and the pictures in Invocation.Images, and its handler starts
+// the chat, which the host then opens. The chat starts on tier.
+func NewChatView(title string, tier ModelTier, submit ActionRef) View {
+	return View{Kind: ViewChat, Title: title, Chat: &ChatSpec{Tier: tier, Submit: &submit}}
+}
+
 // ChatSpec is a transcript view. The host draws the messages, the composer and the streaming progress. Submit runs
 // with the typed text in Invocation.Form["message"] (empty when the user only allows a waiting tool). Stop runs
 // while a message streams. Tier is the selected model tier and OnTier runs with the tier the user chose in

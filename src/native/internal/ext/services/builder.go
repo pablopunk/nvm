@@ -16,6 +16,7 @@ type BuilderPort interface {
 	OwnerOf(extension string) (chatID string, found bool)
 	FilesForChat(chatID string) []string
 	CanWrite(extension, chatID string) bool
+	ExtensionPreview(extension string) (api.View, bool)
 }
 
 // serveBuilder answers the builder and ownership calls. Only built-in extensions may make them.
@@ -40,6 +41,8 @@ func (h *Handler) serveBuilder(call protocol.ServiceCall) (any, error) {
 		return h.filesForChat(call.Args)
 	case protocol.OpCanWrite:
 		return h.canWrite(call.Args)
+	case protocol.OpExtensionPreview:
+		return h.extensionPreview(call.Args)
 	}
 	return nil, invalid("builder has no operation %q", call.Op)
 }
@@ -76,4 +79,13 @@ func (h *Handler) canWrite(raw json.RawMessage) (bool, error) {
 		return false, err
 	}
 	return h.deps.Builder.CanWrite(args.Extension, args.ChatID), nil
+}
+
+func (h *Handler) extensionPreview(raw json.RawMessage) (protocol.BuilderPreviewAnswer, error) {
+	var args protocol.BuilderExtensionArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return protocol.BuilderPreviewAnswer{}, err
+	}
+	view, found := h.deps.Builder.ExtensionPreview(args.Extension)
+	return protocol.BuilderPreviewAnswer{View: view, Found: found}, nil
 }

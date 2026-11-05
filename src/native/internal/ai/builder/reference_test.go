@@ -37,7 +37,8 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // uninstall review and the alias read of the applications built-in, and by about 1 KB more for the bundled datasets, the
 // view search and the grid categories. It grew again for the files built-in's footer, Tab kind key, indexing empty state,
 // file detail and index status, the API surface the builder reads.
-const maxReferenceBytes = 55 << 10
+// It grew past 55 KB for the new-chat view, tie priority, extension preview and row actions, by under 0.3 KB.
+const maxReferenceBytes = 56 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {

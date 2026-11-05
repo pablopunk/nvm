@@ -26,7 +26,7 @@ const (
 
 // Handler IDs of the actions the built-in's rows and views run. Args carry the chat ID under argChatID.
 const (
-	opNewChat        = "new-chat"
+	opNewSubmit      = "new-submit"
 	opOpenChat       = "open-chat"
 	opOpenBuilder    = "open-builder"
 	opSubmit         = "submit"
@@ -44,6 +44,8 @@ var errChatGone = errors.New("this AI chat no longer exists")
 
 // Extension is the AI Chats and AI builder built-in. It has no state: the host keeps the chats.
 type Extension struct{}
+
+var _ api.RowActionProvider = Extension{}
 
 // New returns the built-in.
 func New() Extension {
@@ -90,8 +92,8 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 	case cleanupCommandID:
 		_, err := ctx.AIBuilder().CleanupExpiredConversations()
 		return api.Result{}, err
-	case opNewChat:
-		return next(ctx.AI().Chats().New("")), nil
+	case opNewSubmit:
+		return newChatSubmit(ctx, in), nil
 	case opOpenChat, opOpenBuilder:
 		return openChat(ctx, in.Ref.Args[argChatID])
 	case opSubmit:
@@ -110,6 +112,21 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 	return api.Result{}, fmt.Errorf("the AI builder built-in has no action %q: %w", in.Ref.ID, api.ErrInvalidInput)
 }
 
+// RowActions adds Tweak with AI to an extension's row, as 1.x's menu does for every extension.
+func (Extension) RowActions(ctx api.Context, row api.ExtensionRow) ([]api.Action, error) {
+	return []api.Action{ctx.AIBuilder().TweakExtension(api.TweakRequest{ExtensionID: row.ExtensionID})}, nil
+}
+
+// newChatSubmit starts a chat with the text the draft's composer sent. An empty send starts nothing, as Enter does on an
+// empty composer of a new chat.
+func newChatSubmit(ctx api.Context, in api.Invocation) api.Result {
+	text := in.Form["message"].Text
+	if text == "" {
+		return api.Result{}
+	}
+	return next(ctx.AI().Chats().New(text))
+}
+
 // next returns a result that runs action on the host once the handler returns.
 func next(action api.Action) api.Result {
 	return api.Result{Next: &action}
@@ -121,7 +138,7 @@ func openChat(ctx api.Context, id string) (api.Result, error) {
 	if !ok {
 		return api.Result{}, errChatGone
 	}
-	return ctx.Navigation().Push(chatView(detail)), nil
+	return ctx.Navigation().Push(chatView(ctx, detail)), nil
 }
 
 // refreshChat returns the chat's transcript as it is now, which is how a streaming reply shows its next words.
@@ -130,7 +147,7 @@ func refreshChat(ctx api.Context, id string) (api.Result, error) {
 	if !ok {
 		return api.Result{}, errChatGone
 	}
-	return api.Result{View: chatView(detail)}, nil
+	return api.Result{View: chatView(ctx, detail)}, nil
 }
 
 // refreshHistory replaces the list's rows, so a removed chat drops out of it.

@@ -194,14 +194,16 @@ type AIChats interface {
 type ChatSummary struct {
 	ID string `json:"id"`
 	// Kind is conversation, builder or proofread.
-	Kind           string    `json:"kind,omitempty"`
-	Tier           ModelTier `json:"tier,omitempty"`
-	Title          string    `json:"title,omitempty"`
-	Query          string    `json:"query,omitempty"`
-	Status         string    `json:"status,omitempty"`
-	CreatedAtMs    int64     `json:"createdAtMs,omitempty"`
-	UpdatedAtMs    int64     `json:"updatedAtMs,omitempty"`
-	ExtensionFiles []string  `json:"extensionFiles"`
+	Kind  string    `json:"kind,omitempty"`
+	Tier  ModelTier `json:"tier,omitempty"`
+	Title string    `json:"title,omitempty"`
+	// ExtensionID is the extension a builder chat wrote or was bound to, empty for other chats.
+	ExtensionID    string   `json:"extensionId,omitempty"`
+	Query          string   `json:"query,omitempty"`
+	Status         string   `json:"status,omitempty"`
+	CreatedAtMs    int64    `json:"createdAtMs,omitempty"`
+	UpdatedAtMs    int64    `json:"updatedAtMs,omitempty"`
+	ExtensionFiles []string `json:"extensionFiles"`
 }
 
 // TweakRequest asks the builder to change an existing extension.
@@ -223,6 +225,10 @@ type AIBuilder interface {
 	ListChats() []ChatSummary
 	CleanupExpiredConversations() (removed int, err error)
 	GetChat(chatID string) (ChatDetail, bool)
+	// ExtensionPreview is what the extension shows now: its root rows and its commands, as a list view with the
+	// side-preview presentation. It is the Side of a builder chat's transcript, and false when the extension is not
+	// installed.
+	ExtensionPreview(extensionID string) (View, bool)
 }
 
 // Ownership says which builder conversation wrote which extension file. It is host-only, and it is

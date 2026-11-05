@@ -53,6 +53,15 @@ func (b remoteBuilder) CleanupExpiredConversations() (int, error) {
 	return answer.Removed, err
 }
 
+// ExtensionPreview asks the host for the preview view of an installed extension.
+func (b remoteBuilder) ExtensionPreview(extensionID string) (api.View, bool) {
+	var answer protocol.BuilderPreviewAnswer
+	if err := b.link.Call(protocol.ServiceBuilder, protocol.OpExtensionPreview, protocol.BuilderExtensionArgs{Extension: extensionID}, &answer); err != nil {
+		return api.View{}, false
+	}
+	return answer.View, answer.Found
+}
+
 // remoteOwnership says which builder chat wrote an extension and whether a chat may change it.
 type remoteOwnership struct {
 	link *hostLink

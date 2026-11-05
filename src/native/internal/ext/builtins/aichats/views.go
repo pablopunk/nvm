@@ -20,7 +20,7 @@ func historyView(ctx api.Context) *api.View {
 // historyItems lists New Chat, then every chat the list shows.
 func historyItems(ctx api.Context) []api.Item {
 	now := ctx.Clock().Now()
-	newChat := api.Run(opNewChat, "Start", nil)
+	newChat := api.PushView("Start", api.NewChatView("New Chat", api.ModelFast, api.ActionRef{ID: opNewSubmit}))
 	items := []api.Item{{ID: "new-chat", Title: "New Chat", Icon: "plus", Actions: []api.Action{newChat}, Primary: &newChat}}
 	for _, chat := range ctx.AI().Chats().List() {
 		if listed(chat) {
@@ -58,19 +58,32 @@ func openAction(id, handler, title string) api.Action {
 
 // chatView is the transcript of one chat. The host draws the composer; Submit, Stop and the tier picker run the built-in's
 // handlers, which hand the change to the chat store. A streaming reply refreshes the view on a short tick.
-func chatView(detail api.ChatDetail) *api.View {
+func chatView(ctx api.Context, detail api.ChatDetail) *api.View {
 	id := detail.ID
 	view := &api.View{
 		Kind: api.ViewChat, Title: chatTitle(detail.Title),
 		Chat: &api.ChatSpec{
 			Messages: detail.Messages, Tier: detail.Tier, Attach: attachable(detail.Tier),
 			OnTier: chatRef(opTier, id), Submit: chatRef(opSubmit, id), Stop: chatRef(opStop, id),
+			Side: builderPreview(ctx, detail),
 		},
 	}
 	if replyStreams(detail.Messages) {
 		view.Refresh = &api.Refresh{IntervalMs: streamTickMs, Ref: chatRef(opRefreshChat, id)}
 	}
 	return view
+}
+
+// builderPreview is the side of a builder chat: the extension the chat wrote, as it is now. Other chats have none.
+func builderPreview(ctx api.Context, detail api.ChatDetail) *api.View {
+	if detail.Kind != kindBuilder || detail.ExtensionID == "" {
+		return nil
+	}
+	preview, ok := ctx.AIBuilder().ExtensionPreview(detail.ExtensionID)
+	if !ok {
+		return nil
+	}
+	return &preview
 }
 
 // chatRef names a chat handler with the chat's ID in its args.
@@ -116,8 +129,14 @@ func continueRow(chat api.ChatSummary, score float64) api.Item {
 	open := openAction(chat.ID, opOpenChat, "Open")
 	return api.Item{
 		ID: "chat:" + chat.ID, Title: title, Subtitle: subtitle, Icon: chatIcon(chat.Kind), Section: search.KindConversations,
-		Score: score, Appearance: &api.Appearance{Foreground: "yellow"}, Primary: &open,
+		Score: score, LastUsedMs: lastChangeMs(chat), TiePriority: chatTiePriority(chat.Kind),
+		Appearance: &api.Appearance{Foreground: "yellow"}, Primary: &open,
 	}
+}
+
+// lastChangeMs is when a chat was last used: its last change, or its creation when it has none.
+func lastChangeMs(chat api.ChatSummary) int64 {
+	return max(chat.UpdatedAtMs, chat.CreatedAtMs)
 }
 
 // ago names how long ago a Unix-millisecond time was, in the words the list uses.

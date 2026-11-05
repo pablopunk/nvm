@@ -31,6 +31,20 @@ func (b extensionBuilder) Chat(chatID string) (api.ChatDetail, bool) {
 	return detail, true
 }
 
+// ExtensionPreview is the preview view of an installed extension, which a builder chat shows beside its transcript.
+func (b extensionBuilder) ExtensionPreview(extension string) (api.View, bool) {
+	m := b.p.extensionManager()
+	if m == nil {
+		return api.View{}, false
+	}
+	if _, installed := b.p.installedListing(extension); !installed {
+		return api.View{}, false
+	}
+	view := extensionPreviewView(m, extension)
+	view.Presentation = api.PresentSidePreview
+	return view, true
+}
+
 // Cleanup removes the expired conversations and says how many it removed; builder chats are kept.
 func (b extensionBuilder) Cleanup() (int, error) {
 	var removed int

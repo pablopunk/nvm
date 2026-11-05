@@ -172,11 +172,11 @@ func TestSubmitBecomesAContinueWithTextAndPictures(t *testing.T) {
 
 func TestStreamingChatRefreshesOnATickUntilTheReplyEnds(t *testing.T) {
 	streaming := chat("1", "conversation", "Alpha", api.ChatMessage{Role: "assistant", Content: "Part", Streaming: true})
-	if view := chatView(streaming); view.Refresh == nil || view.Refresh.IntervalMs != streamTickMs {
+	if view := chatView(contextWith(), streaming); view.Refresh == nil || view.Refresh.IntervalMs != streamTickMs {
 		t.Fatalf("a streaming chat must refresh on a tick, got %+v", view.Refresh)
 	}
 	done := chat("2", "conversation", "Beta", api.ChatMessage{Role: "assistant", Content: "All done."})
-	if view := chatView(done); view.Refresh != nil {
+	if view := chatView(contextWith(), done); view.Refresh != nil {
 		t.Fatalf("a finished chat must not refresh, got %+v", view.Refresh)
 	}
 }
@@ -212,5 +212,30 @@ func TestOpeningAGoneChatFails(t *testing.T) {
 	_, err := Extension{}.RunAction(contextWith(), api.Invocation{Ref: api.ActionRef{ID: opOpenChat, Args: map[string]string{argChatID: "missing"}}})
 	if !errors.Is(err, errChatGone) {
 		t.Fatalf("err = %v, want errChatGone", err)
+	}
+}
+
+func TestRowActionsAddTweakWithAIToAnExtensionRow(t *testing.T) {
+	actions, err := Extension{}.RowActions(contextWith(), api.ExtensionRow{ExtensionID: "acme.views", Title: "Views"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actions) != 1 || actions[0].Op != api.BuilderTweak || actions[0].Builder == nil || actions[0].Builder.ExtensionID != "acme.views" {
+		t.Fatalf("row actions = %+v, want one Tweak with AI for acme.views", actions)
+	}
+}
+
+func TestBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
+	builder := chat("1", "builder", "Clock")
+	builder.UpdatedAtMs = testNow.UnixMilli()
+	items, err := Extension{}.RootItems(contextWith(builder, chat("2", "conversation", "Notes")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if items[0].TiePriority != -1 || items[0].LastUsedMs != testNow.UnixMilli() {
+		t.Fatalf("builder row = tie %d last used %d, want -1 and %d", items[0].TiePriority, items[0].LastUsedMs, testNow.UnixMilli())
+	}
+	if items[1].TiePriority != 0 {
+		t.Fatalf("conversation row tie priority = %d, want 0", items[1].TiePriority)
 	}
 }

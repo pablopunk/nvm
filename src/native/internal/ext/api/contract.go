@@ -58,6 +58,37 @@ type MenuBarProvider interface {
 	MenuBars(ctx Context) ([]MenuBar, error)
 }
 
+// RowActionProvider adds actions to the menu of an installed extension's row, such as Tweak with AI. The host asks each
+// built-in that implements it, after the actions it lists itself. Only built-in extensions may implement it.
+type RowActionProvider interface {
+	RowActions(ctx Context, row ExtensionRow) ([]Action, error)
+}
+
+// ExtensionRow names the row a RowActionProvider adds actions to: an extension's own row, with an empty CommandID, or
+// one of its commands.
+type ExtensionRow struct {
+	ExtensionID string `json:"extensionId"`
+	CommandID   string `json:"commandId,omitempty"`
+	Title       string `json:"title"`
+}
+
+// Keys of the Ref.Args that carry an ExtensionRow in a row-actions invocation.
+const (
+	rowArgExtensionID = "extensionId"
+	rowArgCommandID   = "commandId"
+	rowArgTitle       = "title"
+)
+
+// Args encodes the row as the arguments of the invocation a host sends a RowActionProvider.
+func (r ExtensionRow) Args() map[string]string {
+	return map[string]string{rowArgExtensionID: r.ExtensionID, rowArgCommandID: r.CommandID, rowArgTitle: r.Title}
+}
+
+// RowFromArgs decodes the row a host sent in the arguments of a row-actions invocation.
+func RowFromArgs(args map[string]string) ExtensionRow {
+	return ExtensionRow{ExtensionID: args[rowArgExtensionID], CommandID: args[rowArgCommandID], Title: args[rowArgTitle]}
+}
+
 // Context is the single argument of every handler. It is not serializable: it is the host's
 // in-process service surface. Every accessor is cheap and never blocks on decoration work.
 type Context interface {

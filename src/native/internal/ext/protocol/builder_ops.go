@@ -1,15 +1,24 @@
 package protocol
 
+import "github.com/pablopunk/nvm/native/internal/ext/api"
+
 // Operations of the builder service, which only built-in extensions may call. The list and get reads return the
 // builder chats; the ownership reads say which chat wrote or may change an extension.
 const (
-	OpBuilderList    = "list"
-	OpBuilderGet     = "get"
-	OpBuilderCleanup = "cleanup"
-	OpOwnerOf        = "owner-of"
-	OpFilesForChat   = "files-for-chat"
-	OpCanWrite       = "can-write"
+	OpBuilderList      = "list"
+	OpBuilderGet       = "get"
+	OpBuilderCleanup   = "cleanup"
+	OpOwnerOf          = "owner-of"
+	OpFilesForChat     = "files-for-chat"
+	OpCanWrite         = "can-write"
+	OpExtensionPreview = "extension-preview"
 )
+
+// BuilderPreviewAnswer is the answer to extension-preview: the preview view of the extension, when Found is set.
+type BuilderPreviewAnswer struct {
+	View  api.View `json:"view"`
+	Found bool     `json:"found"`
+}
 
 // BuilderCleanupAnswer is the answer to cleanup: how many expired conversations were removed.
 type BuilderCleanupAnswer struct {

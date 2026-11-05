@@ -60,6 +60,9 @@ type Item struct {
 	Score float64 `json:"score,omitempty"`
 	// LastUsedMs is epoch milliseconds for the item's last use, an intrinsic recency signal.
 	LastUsedMs int64 `json:"lastUsedMs,omitempty"`
+	// TiePriority orders rows of equal score and last use, higher first. Built-in extensions only: the root lists a
+	// builder chat at -1, so it follows the other rows, as 1.x does. A folder extension's value is ignored.
+	TiePriority int `json:"tiePriority,omitempty"`
 }
 
 // Accessory is a small trailing label or badge on an item row.

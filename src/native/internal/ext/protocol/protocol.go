@@ -21,6 +21,7 @@ const (
 
 	MethodMenuBars        = "menubars"         // MenuBarProvider.MenuBars
 	MethodMenuBarTriggers = "menubar-triggers" // MenuBarProvider.MenuBarTriggers
+	MethodRowActions      = "row-actions"      // RowActionProvider.RowActions, with the row in Invocation.Ref.Args
 )
 
 // Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the

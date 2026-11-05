@@ -131,6 +131,7 @@ func (c extensionChatPages) Remove(chatID string) error {
 func chatSummary(record chat.Chat) api.ChatSummary {
 	return api.ChatSummary{
 		ID:             record.ID,
+		ExtensionID:    record.Extension,
 		Kind:           string(record.Kind),
 		Tier:           api.ModelTier(record.Tier),
 		Title:          record.Title,
