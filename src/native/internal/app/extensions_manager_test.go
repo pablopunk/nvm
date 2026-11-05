@@ -47,7 +47,7 @@ func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platfor
 // the apps the palette indexed.
 func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle, extras extensionPorts) *manager.Manager {
 	t.Helper()
-	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: extras.options}), nil, nil, apps, extras)
+	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: extras.options}), extras.clock, nil, apps, extras)
 }
 
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
@@ -142,10 +142,25 @@ type extensionPorts struct {
 	history func() *clipboard.History
 	images  services.ClipboardImages
 	options func() clipboardbuiltin.Options
+	clock   platform.Clock
+}
+
+// pinnedNowClock is the real clock with its instant pinned, so the relative times a golden draws are the same every run.
+type pinnedNowClock struct {
+	platform.Clock
+	now time.Time
+}
+
+// Now is the pinned instant.
+func (c pinnedNowClock) Now() time.Time { return c.now }
+
+// goldenClock is the clock the goldens' extensions read: the real one with the golden instant pinned.
+func goldenClock() platform.Clock {
+	return pinnedNowClock{Clock: real.NewPorts().Clock, now: goldenNow}
 }
 
 // testExtensionPorts are the clipboard history and pictures the palette's extension services read, for the golden
 // palette's manager. They follow the palette's clipboard engine as it changes.
 func (p *App) testExtensionPorts() extensionPorts {
-	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions}
+	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions, clock: goldenClock()}
 }

@@ -190,13 +190,21 @@ func (p *Palette) drawListRow(c *ui.Context, i int) {
 	p.row(c, i)
 }
 
-// detailColumn is the column of a chosen row's detail. A side-preview list gives the detail half of the pane, as 1.x's
-// side-preview card does; any other list keeps the detail at its narrow width.
+// sidePreviewMinWidth and sidePreviewWidthPercent size the detail of a side-preview list, as 1.x's side-preview card
+// does: at least 300 points, and 40% of the pane when that is wider.
+const (
+	sidePreviewMinWidth     = 300
+	sidePreviewWidthPercent = 40
+	narrowDetailWidth       = 320
+)
+
+// detailColumn is the column of a chosen row's detail. A side-preview list sizes the detail beside its rows, and any
+// other list keeps the detail at its narrow width.
 func detailColumn(c *ui.Context, v *View) ui.Element {
 	if v.Presentation == SidePreview {
-		return ui.Column(c).Grow(1)
+		return ui.Column(c).WidthPercent(sidePreviewWidthPercent).MinWidth(sidePreviewMinWidth)
 	}
-	return ui.Column(c).Width(320)
+	return ui.Column(c).Width(narrowDetailWidth)
 }
 
 // selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.
