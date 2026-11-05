@@ -5,10 +5,13 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
-// Copy the transcript shows for a tool call that is still waiting for the user.
-const copyAwaiting = "Waiting for you. Enter allows it, ⌘D refuses it."
+// awaitingCopy is the line a tool call that waits for the user shows: Enter allows it, and the refuse key refuses it.
+func awaitingCopy() string {
+	return "Waiting for you. Enter allows it, " + palette.KeyLabel("⌃D") + " refuses it."
+}
 
 // toolRow draws one tool call of the transcript, the same for every chat: its icon and title, its short detail, the
 // line that says what it is doing or how it ended, and, once it has ended, a Result disclosure that opens what the
@@ -81,7 +84,7 @@ func toolLine(m chat.Message) string {
 	case chat.StatusRunning:
 		return "Running…"
 	case chat.StatusAwaiting:
-		return copyAwaiting
+		return awaitingCopy()
 	case chat.StatusCancelled:
 		return "Stopped before it finished."
 	}

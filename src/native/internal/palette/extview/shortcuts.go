@@ -81,7 +81,7 @@ func paletteKeyLabel(accelerator string) string {
 		label += palette.KeyLabel("⌃")
 	}
 	if mods&ui.Cmd != 0 && palette.Mod != ui.Cmd {
-		label += "⌘"
+		label += palette.KeyLabel("⌃")
 	}
 	if mods&ui.Ctrl != 0 && palette.Mod != ui.Ctrl {
 		label += "⌃"

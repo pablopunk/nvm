@@ -7,11 +7,15 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/fixtures"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
-// The approval row's copy (aichat.copyAwaiting) and the words the scripted model answers with.
+// approvalWaiting is the approval row's copy (aichat's awaiting line) on this platform: the refuse key is the palette's
+// modifier with D.
+var approvalWaiting = "Waiting for you. Enter allows it, " + palette.KeyLabel("⌃D") + " refuses it."
+
+// The words the scripted model answers with.
 const (
-	approvalWaiting        = "Waiting for you. Enter allows it, ⌘D refuses it."
 	approvalClipboardText  = "fixture clipboard text"
 	approvalAllowedAnswer  = "ALLOWED-MARK"
 	approvalRefusedAnswer  = "REFUSED-MARK"

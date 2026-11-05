@@ -260,7 +260,7 @@ func (x *ExtensionChat) previewAction() search.Action {
 	if !x.previewHidden {
 		title = "Hide Preview"
 	}
-	return search.Action{Title: title, Label: "⌃⇧P", Key: ui.KeyP, Mods: palette.Mod | ui.Shift, Dismiss: search.DismissNever,
+	return search.Action{Title: title, Label: palette.KeyLabel("⌃⇧P"), Key: ui.KeyP, Mods: palette.Mod | ui.Shift, Dismiss: search.DismissNever,
 		Run: func(h search.Host) {
 			x.previewHidden = !x.previewHidden
 			h.Refresh()
