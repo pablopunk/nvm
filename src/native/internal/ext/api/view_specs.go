@@ -14,8 +14,8 @@ type GridSpec struct {
 	// its OnChange run as a pick of its menu would run it. The accessory stays drawn and shows the chosen option.
 	// Without a SearchAccessory with an OnChange, the keys do nothing.
 	CategoryKeys bool `json:"categoryKeys,omitempty"`
-	// SelectionFooter moves the view's subtitle into the footer, after the title and subtitle of the selected item, as
-	// the emoji picker's footer names the chosen character and its category.
+	// SelectionFooter shows the selected item's title and subtitle in the footer. The view's subtitle is not repeated
+	// there: a SearchAccessory already names the category.
 	SelectionFooter bool `json:"selectionFooter,omitempty"`
 }
 

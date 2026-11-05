@@ -16,8 +16,8 @@ Order is fixed by `getOptionActionRows` (App.tsx:4526). Rows follow the primary 
 |---|---|---|---|---|---|---|
 | G1 | App.tsx:4531 | customizable rows | Set keyboard shortcut | none | `canCustomizeCommandAction`: `customizable` or kind in app, builtin, clipboard-history, extension-action (model.ts:26, 679) | done (`shortcut_row_actions.go`) |
 | G2 | App.tsx:4539 | customizable rows with a binding | Remove keyboard shortcut | none | G1 and a shortcut is bound; subtitle is the shortcut | done |
-| G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | n/a in 2.0: every row with preview content has its own Preview action (files, clipboard) |
-| G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | n/a (file rows have Preview Contents; Quick Look is missing, see F3) |
+| G3 | App.tsx:4549 | rows with preview content and no preview action | Preview | ⌘Y | `canPreviewAction` and not `hasPreview` (App.tsx:4168, root-action-preview.ts:22) | done: `api.WithPreviewActions` (ext/api/item_preview.go) adds it to every row with text, a picture, a video or a file and no preview of its own |
+| G4 | App.tsx:4558 | file rows without a preview or Quick Look action | Preview File | ⌘Y | `filePath` and not `hasQuickLook` and not `hasPreview` | done: added with G3 for a file row that has no preview of its own (file rows keep Preview Contents, so their menu is unchanged) |
 | G5 | App.tsx:4567 | customizable rows | Set alias | none | G1 condition | done (`shortcut_row_actions.go`, `palette/aliasview`) |
 | G6 | App.tsx:4575 | generated extension rows | Duplicate | none | kind extension-root-item or extension-action, and `removable` (generated) (App.tsx:4166) | done: copies the folder under a new id, enabled, then opens the builder chat (internal/ext/authoring) |
 | G7 | App.tsx:4583 | file-backed extension rows | Rename | none | `extensionFile` and kind extension-root-item or extension-action (App.tsx:4156) | done: the form writes the title into extension.json (internal/ext/authoring) |
@@ -54,7 +54,7 @@ Total for an app row in 1.x: Open, Uninstall (when supported), Set keyboard shor
 | F3 | files.ts:25 | Quick Look (macOS; "Preview File" elsewhere, only with the quick-look capability) | none | `quick-look` capability | done on macOS (shell.quickLook, from views-parity d2b7dec3) |
 | F4 | os.ts:410 | Show in Finder (macOS) / Show in File Explorer / Show in File Manager | none | always | done (`revealTitle`) |
 | — | (none) | Copy Path, Copy File, Move to Trash | | 1.x has none on file rows | extra: removed from the menu |
-| — | G3, G4 | generic Preview and Preview File | | suppressed by F2/F3 | n/a |
+| — | G3, G4 | generic Preview and Preview File | | a file row keeps its own Preview Contents and Quick Look, and gets neither | done (generic, on the API) |
 
 File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 
@@ -137,7 +137,7 @@ H1-H3 are partly traced: the exact panel of an AI chat row was not read end to e
 
 ### B8. Snippets, quicklinks, timers
 
-No 1.x counterpart. Snippets, quicklinks and "Start timer" are 2.0 features (the 1.x API only lists them as a helper, `nevermind-extension-api.d.ts`). They are n/a for parity and keep their 2.0 menus.
+No 1.x counterpart. Snippets carry their text as a detail, so they also get the generic Preview (G3). Snippets, quicklinks and "Start timer" are 2.0 features (the 1.x API only lists them as a helper, `nevermind-extension-api.d.ts`). They are n/a for parity and keep their 2.0 menus.
 
 ### B9. System and places built-ins (2.0 IDs)
 

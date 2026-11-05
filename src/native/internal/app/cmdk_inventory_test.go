@@ -66,6 +66,9 @@ func menuCases(t *testing.T) []menuCase {
 		{kind: "extension root item", row: func(t *testing.T) search.Item {
 			return extensionRootItemRow(t)
 		}, menu: []string{"Copy note", "Copy Text", renameTitle, tweakWithAITitle}, skipPrimary: true},
+		{kind: "extension root item with text", row: func(t *testing.T) search.Item {
+			return rootItemRowOf(t, "acme.preview")
+		}, menu: []string{"Copy note", api.PreviewTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
 		{kind: "extension command", row: func(t *testing.T) search.Item {
 			return extensionCommandRow(t, goldenPalette(t), "")
 		}, menu: []string{"New Note", setShortcutTitle, setAliasTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
@@ -74,13 +77,18 @@ func menuCases(t *testing.T) []menuCase {
 
 // extensionRootItemRow runs the root item fixture in a real manager and returns its root row.
 func extensionRootItemRow(t *testing.T) search.Item {
+	return rootItemRowOf(t, "acme.rootitem")
+}
+
+// rootItemRowOf runs the root item fixture extID in a real manager and returns its root row.
+func rootItemRowOf(t *testing.T, extID string) search.Item {
 	t.Helper()
-	m := newFixtureManager(t, "acme.rootitem")
-	waitForState(t, m, "acme.rootitem", supervisor.StateRunning)
+	m := newFixtureManager(t, extID)
+	waitForState(t, m, extID, supervisor.StateRunning)
 	p := goldenPalette(t)
 	p.exts.mgr.Store(m)
 	for _, result := range m.Roots(context.Background()) {
-		if result.ExtensionID != "acme.rootitem" {
+		if result.ExtensionID != extID {
 			continue
 		}
 		if rows := rootRowsFor(p, m, result, nil); len(rows) == 1 {

@@ -2,13 +2,12 @@ package aichats
 
 import "github.com/pablopunk/nvm/native/internal/ext/api"
 
-// Shortcuts of the transcript's actions, as the desktop app binds them. Refuse shares Delete Chat's key with it only while
-// a tool call waits, and the menu lists Refuse first.
+// Shortcuts of the transcript's actions, as the desktop app binds them. Refuse takes ⌘D only while a tool call waits;
+// Delete Chat has no key, as 1.x's Remove Chat has none, so the two never clash.
 const (
 	shortcutAgain     = "CommandOrControl+R"
 	shortcutCopy      = "CommandOrControl+Alt+C"
 	shortcutTier      = "CommandOrControl+Shift+M"
-	shortcutDelete    = "CommandOrControl+D"
 	shortcutRefuse    = "CommandOrControl+D"
 	shortcutReview    = "CommandOrControl+E"
 	toolStatusWaiting = "waiting"
@@ -67,7 +66,7 @@ func newChatAction() api.Action {
 func deleteChatAction(summary api.ChatSummary) api.Action {
 	action := removeAction(summary)
 	action.Title = "Delete Chat"
-	return withShortcut(action, shortcutDelete)
+	return action
 }
 
 // reviewAction opens the review of the extension a builder chat wrote.
