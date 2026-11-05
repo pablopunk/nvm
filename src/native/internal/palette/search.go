@@ -13,6 +13,9 @@ var _ search.Host = (*Palette)(nil)
 // with providers runs them on its coordinator: rows that are ready now are shown now, and the others arrive
 // through applySnapshot.
 func (p *Palette) search() {
+	if p.actionPending && len(p.stack) == 1 && p.actionQuery != p.query {
+		p.cancelAction()
+	}
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
 	if v.Providers == nil {
@@ -71,7 +74,7 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 // the shown query say a call is in flight, or the view's Pending hook does.
 func (p *Palette) loadingMore() bool {
 	v := p.cur()
-	return (p.shownView == v && p.pending) || (v.Pending != nil && v.Pending())
+	return (p.shownView == v && p.pending) || (v.Pending != nil && v.Pending()) || (v.Loading != nil && v.Loading())
 }
 
 // invalidateRows forgets the remembered rows of every view on the stack, for when the data behind them changed.

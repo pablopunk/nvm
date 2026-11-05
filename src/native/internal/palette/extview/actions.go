@@ -215,12 +215,14 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
-	// Acknowledge every extension action with the shared palette loading sweep while the host
-	// waits for the extension. The session owns the state so completion can clear it in place.
-	s.actionLoading = true
-	h.Refresh()
+	current := func() bool { return !s.dismissed }
+	if loading, ok := h.(search.ActionLoadingHost); ok {
+		current = loading.BeginAction()
+	}
 	s.deps.Invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
-		s.actionLoading = false
+		if !current() || s.dismissed {
+			return
+		}
 		s.finish(h, r.extID, r.action.Title, result, failure)
 	})
 }

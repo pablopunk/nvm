@@ -57,17 +57,18 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 // signed-in account, the clipboard ports and the palette's own surfaces. A nil field keeps the service absent, as the
 // app without it does.
 type managerFakes struct {
-	onChange     func()
-	index        services.FileIndex
-	ai           *extai.Service
-	account      services.AccountState
-	extras       extensionPorts
-	settingsHost func(string) services.SettingsHost
-	permissions  services.PermissionSurface
-	updates      services.UpdateSurface
-	diagnostics  services.DiagnosticsSurface
-	jobs         services.JobsSurface
-	shortcuts    services.ShortcutTable
+	onChange       func()
+	commandsChange func()
+	index          services.FileIndex
+	ai             *extai.Service
+	account        services.AccountState
+	extras         extensionPorts
+	settingsHost   func(string) services.SettingsHost
+	permissions    services.PermissionSurface
+	updates        services.UpdateSurface
+	diagnostics    services.DiagnosticsSurface
+	jobs           services.JobsSurface
+	shortcuts      services.ShortcutTable
 }
 
 // paletteSurfaces are the palette's own surfaces as the app hands them to the built-ins: its settings, permissions,
@@ -164,6 +165,7 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		BuiltIns:        builtins,
 		BuiltInSettings: fakes.settingsHost,
 		OnChange:        fakes.onChange,
+		CommandsChange:  fakes.commandsChange,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},

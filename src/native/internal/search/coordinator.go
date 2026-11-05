@@ -28,11 +28,12 @@ const (
 // finished or been cut off; until then more snapshots of the same generation may follow. Pending is set while
 // a provider reports a call in flight (Batch.Pending), so the rows shown are not the whole answer yet.
 type Snapshot struct {
-	Gen     int
-	Query   string
-	Items   []Item
-	Settled bool
-	Pending bool
+	revision uint64
+	Gen      int
+	Query    string
+	Items    []Item
+	Settled  bool
+	Pending  bool
 }
 
 // Options configures a Coordinator.
@@ -70,15 +71,18 @@ type ProviderStats struct {
 type Coordinator struct {
 	opts Options
 
-	mu      sync.Mutex
-	gen     int
-	query   string
-	cancel  context.CancelFunc // cancels the providers of the current generation
-	slots   []*slot            // one per provider of the current generation, in provider order
-	pending int                // slots not finished yet
-	emitted bool               // a snapshot of the current generation has been produced
-	cache   *queryCache
-	stats   map[string]*ProviderStats
+	mu                sync.Mutex
+	publishMu         sync.Mutex
+	revision          uint64
+	publishedRevision uint64
+	gen               int
+	query             string
+	cancel            context.CancelFunc // cancels the providers of the current generation
+	slots             []*slot            // one per provider of the current generation, in provider order
+	pending           int                // slots not finished yet
+	emitted           bool               // a snapshot of the current generation has been produced
+	cache             *queryCache
+	stats             map[string]*ProviderStats
 }
 
 // slot is one provider's part of the current generation.
@@ -239,6 +243,7 @@ func (c *Coordinator) start(ctx context.Context, gen, idx int, p Provider, q str
 
 // snapshotLocked merges the current generation and remembers the result for its query. The caller holds c.mu.
 func (c *Coordinator) snapshotLocked() Snapshot {
+	c.revision++
 	var ranked, appended [][]Item
 	for _, s := range c.slots {
 		if s.appended {
@@ -248,7 +253,7 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
-	snap := Snapshot{Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled), Settled: settled, Pending: c.pendingCallsLocked()}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled), Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
 	return snap
@@ -279,6 +284,15 @@ func (c *Coordinator) firstSnapshotTimer(gen int) {
 
 // publish hands a snapshot to OnSnapshot. It is called without the lock.
 func (c *Coordinator) publish(snap Snapshot) {
+	c.publishMu.Lock()
+	defer c.publishMu.Unlock()
+	c.mu.Lock()
+	if snap.Gen != c.gen || snap.revision <= c.publishedRevision {
+		c.mu.Unlock()
+		return
+	}
+	c.publishedRevision = snap.revision
+	c.mu.Unlock()
 	if c.opts.OnSnapshot != nil {
 		c.opts.OnSnapshot(snap)
 	}

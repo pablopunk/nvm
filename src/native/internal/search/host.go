@@ -22,3 +22,9 @@ type Host interface {
 	// SetQuery replaces the text of the search field and searches again.
 	SetQuery(q string)
 }
+
+// ActionLoadingHost acknowledges asynchronous actions without re-running providers. The returned completion clears
+// feedback and reports whether the action still belongs to the visible navigation/query; obsolete results are ignored.
+type ActionLoadingHost interface {
+	BeginAction() func() bool
+}

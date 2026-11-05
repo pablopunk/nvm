@@ -154,7 +154,8 @@ type App struct {
 	// rootRows keeps each extension's root rows, so an InvalidateRoot refresh asks only the extension that asked.
 	rootRows rootRowCache
 	// extensionStateRefresh runs the redraw of extension state once for a burst of state changes.
-	extensionStateRefresh coalescer
+	extensionStateRefresh   coalescer
+	extensionCommandRefresh coalescer
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

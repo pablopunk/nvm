@@ -6,12 +6,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// TestBuiltInCommandsStayOutOfTheExtensionBandAtTheRoot checks the empty root's first row: the AI commands score 0 as
-// their 1.x actions did, so the welcome row, which scores 90, is the row Enter runs.
+// TestBuiltInCommandsStayOutOfTheExtensionBandAtTheRoot keeps command defaults below the fixture's frequently used app.
 func TestBuiltInCommandsStayOutOfTheExtensionBandAtTheRoot(t *testing.T) {
 	items := rootResultsForTable(rootTableFixture(t), "")
-	if len(items) == 0 || items[0].Title != "Welcome to Nevermind" {
-		t.Fatalf("the empty root's first row = %q, want the welcome row that 1.x shows first", firstTitle(items))
+	if len(items) == 0 || items[0].Title != "Firefox" || items[0].Kind != search.KindApplications {
+		t.Fatalf("the empty root's first row = %q, want its frequently used application", firstTitle(items))
 	}
 }
 

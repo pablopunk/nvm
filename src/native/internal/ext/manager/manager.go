@@ -103,6 +103,8 @@ type Options struct {
 	// OnChange runs after any extension's runtime changes state, so a view showing it can redraw. It runs on its
 	// own goroutine and must not block.
 	OnChange func()
+	// CommandsChange runs when a durable command snapshot changes, without implying a runtime lifecycle change.
+	CommandsChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
 	// RootRefresh receives an extension's InvalidateRoot calls. It must not block.
@@ -133,7 +135,8 @@ type Manager struct {
 	mu              sync.Mutex
 	entries         map[string]*entry
 	// commands keeps each extension's durable commands once they are known; see CachedCommands.
-	commands commandCache
+	commands       commandCache
+	commandsChange func()
 	// legacyStatePath is the 1.x state file read by inheritLocked.
 	legacyStatePath string
 }
@@ -159,6 +162,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		root:            root,
 		enabled:         enabled,
 		builtInSettings: opts.BuiltInSettings,
+		commandsChange:  opts.CommandsChange,
 		config: supervisor.Config{
 			Worker:        ports.Worker,
 			Clock:         ports.Clock,

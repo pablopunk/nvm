@@ -27,14 +27,14 @@ type SearchProvider interface {
 	SearchItems(ctx Context, query string) ([]Item, error)
 }
 
-// ActionHandler runs ActionRun actions, command bodies, form submits, editor saves, refreshes and
-// pagination. Dispatch is by Invocation.Ref.ID, so one extension has one switch statement.
+// ActionHandler runs actions with immediate host loading feedback. Return Source-backed views before slow I/O;
+// DataLoader fills them after paint. Dispatch uses Invocation.Ref.ID for commands, forms, saves and refreshes.
 type ActionHandler interface {
 	RunAction(ctx Context, in Invocation) (Result, error)
 }
 
-// DataLoader fills a view whose Source names a loader. It is called in the background; the host
-// patches the visible view when it returns.
+// DataLoader fills Source-backed views after paint. The host shows loading feedback and promotes successful results
+// into the Source snapshot; return the view immediately from RunAction and perform slow I/O here.
 type DataLoader interface {
 	LoadItems(ctx Context, loader string) ([]Item, error)
 }

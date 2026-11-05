@@ -21,6 +21,7 @@ type ShellResult struct {
 // Shell runs processes. Declare the system capability for review; it is metadata, not a sandbox.
 type Shell interface {
 	OpenExternal(url string) error
+	// Exec resolves bare program names against the merged user-login PATH and Options.Env, including desktop launches.
 	Exec(command string, args []string, options ShellOptions) (ShellResult, error)
 	Script(script string, options ShellOptions) (ShellResult, error)
 	AppleScript(script string, options ShellOptions) (ShellResult, error)

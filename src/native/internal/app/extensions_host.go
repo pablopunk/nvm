@@ -114,6 +114,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		RootRefresh:     p.refreshRootRows,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,
+		CommandsChange:  p.extensionCommandsChanged,
 		BuiltInSettings: p.builtInSettingsStore,
 		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine, Clipboard: p.clipboardOptions, WindowSettings: p.legacyWindowSettings()}),
 		AIQuota:         p.aiQuotas(),
@@ -177,6 +178,13 @@ func (p *App) extensionsStateChanged() {
 	p.extensionStateRefresh.request(p.onUI, p.redrawExtensionState)
 }
 
+func (p *App) extensionCommandsChanged() {
+	p.extensionCommandRefresh.request(p.onUI, func() {
+		p.refreshGlobalShortcuts()
+		p.RefreshTop(isExtensionStateView)
+	})
+}
+
 func (p *App) redrawExtensionState() {
 	p.rootRows.reset()
 	p.refreshGlobalShortcuts()
@@ -193,6 +201,9 @@ func isExtensionStateView(v *palette.View) bool {
 // An extension's InvalidateRoot call arrives on the child's exchange goroutine, and RefreshTop is safe from any
 // goroutine, so the call does not wait.
 func (p *App) refreshRootRows(extensionID string) {
+	if m := p.extensionManager(); m != nil {
+		m.InvalidateCommands(extensionID)
+	}
 	p.rootRows.markPending(extensionID)
 	p.RefreshTop(isRootView)
 }

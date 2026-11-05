@@ -15,7 +15,7 @@ func awaitFixtureCommand(t *testing.T, id, query, title string) (*App, *manager.
 	w := uiWindow{stubWindow: &stubWindow{}, jobs: make(chan func(), 1024)}
 	p.uiQueue = w
 	p.Attach(w)
-	m := newManagerWithFakes(t, managerFakes{onChange: p.extensionsStateChanged}, nil, nil, nil, nil)
+	m := newManagerWithFakes(t, managerFakes{onChange: p.extensionsStateChanged, commandsChange: p.extensionCommandsChanged}, nil, nil, nil, nil)
 	p.exts.mgr.Store(m)
 	if err := m.Install(id, fixtureFiles(t, id), true); err != nil {
 		t.Fatal(err)

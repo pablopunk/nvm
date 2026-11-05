@@ -20,15 +20,20 @@ const boostUnitsPerPoint = 10
 // one below it, and the top band is an exact match.
 var bands = []int{10, 20, 50, 60, 70, 80, 90, 95, 100}
 
-// learned raises the score of each learned row of a batch for query. The coordinator calls it once per batch,
-// as the batch arrives, so a row is never boosted twice.
+// learned uses 1.x frecency units directly for empty-root suggestions and capped match bands for typed searches.
+// The coordinator applies it once per batch so a row is never boosted twice.
 func (c *Coordinator) learned(items []Item, query string) []Item {
 	if c.opts.Learner == nil {
 		return items
 	}
 	for i := range items {
 		if key := items[i].LearnKey; key != "" {
-			items[i].Score = Boosted(items[i].Score, c.opts.Learner.Boost(key, query))
+			boost := c.opts.Learner.Boost(key, query)
+			if query == "" {
+				items[i].Score += max(0, boost)
+			} else {
+				items[i].Score = Boosted(items[i].Score, boost)
+			}
 			items[i].LastUsed = max(items[i].LastUsed, c.opts.Learner.LastUsed(key))
 		}
 	}

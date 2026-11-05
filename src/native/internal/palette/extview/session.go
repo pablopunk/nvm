@@ -32,7 +32,6 @@ type Session struct {
 	items           []api.Item
 	sections        []api.ItemSection
 	loading         bool
-	actionLoading   bool
 	failure         *api.Failure
 	hasMore         bool
 	selectID        string
@@ -153,7 +152,7 @@ func (s *Session) listPage() *palette.View {
 			return s.rows(q)
 		}
 	}
-	page.Loading = func() bool { return s.actionLoading || s.isLoadingEmpty() }
+	page.Loading = s.isLoadingEmpty
 	page.Pending = s.searchChangePending
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.EmptyFn = s.emptyState

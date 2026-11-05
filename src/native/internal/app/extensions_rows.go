@@ -44,22 +44,29 @@ func (e extensionSearch) RootStream(ctx context.Context, emit func(search.Batch)
 	if m != nil {
 		commands := e.commandRows(m, "")
 		rows := map[string][]search.Item{}
-		emit(search.Batch{Items: commands, Replace: true})
+		for _, result := range e.p.rootRows.cachedOutside(nil) {
+			rows[result.ExtensionID] = rootRowsFor(e.p, m, result, e.in.shortcuts)
+		}
+		emit(search.Batch{Items: mergedExtensionRows(commands, rows), Replace: true})
 		e.p.rootRows.stream(ctx, m, func(result manager.SearchResult) {
 			rows[result.ExtensionID] = rootRowsFor(e.p, m, result, e.in.shortcuts)
-			ids := make([]string, 0, len(rows))
-			for id := range rows {
-				ids = append(ids, id)
-			}
-			sort.Strings(ids)
-			out := append([]search.Item(nil), commands...)
-			for _, id := range ids {
-				out = append(out, rows[id]...)
-			}
-			emit(search.Batch{Items: out, Replace: true})
+			emit(search.Batch{Items: mergedExtensionRows(commands, rows), Replace: true})
 		})
 	}
 	emit(search.Batch{Final: true})
+}
+
+func mergedExtensionRows(commands []search.Item, rows map[string][]search.Item) []search.Item {
+	ids := make([]string, 0, len(rows))
+	for id := range rows {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	out := append([]search.Item(nil), commands...)
+	for _, id := range ids {
+		out = append(out, rows[id]...)
+	}
+	return out
 }
 
 // Search emits, for q, the matching commands at once and then each extension's search rows as that extension answers. A
@@ -122,7 +129,11 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound 
 	}
 	var out []search.Item
 	for _, item := range result.Items {
-		out = append(out, extensionRow(p, m, result.ExtensionID, result.Title, item, bound))
+		row := extensionRow(p, m, result.ExtensionID, result.Title, item, bound)
+		if !m.IsBuiltIn(result.ExtensionID) {
+			row.Score = scoreRootCommand
+		}
+		out = append(out, row)
 	}
 	return out
 }
@@ -141,6 +152,12 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 		row = builtInRow(row, item)
 	} else {
 		row.LearnKey = folderLearnKey(extID, item.LearnKey)
+		if item.ID != "" {
+			row.ID = folderLearnKey(extID, "item:"+item.ID)
+			if row.LearnKey == "" {
+				row.LearnKey = row.ID
+			}
+		}
 	}
 	row.Actions = extview.MenuActionsFor(deps, extID, extview.MenuSections(item.Primary, item.ActionPanel, item.Actions))
 	if item.ActionPanelVisibility == api.PanelHidden {

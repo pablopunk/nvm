@@ -43,6 +43,8 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 		Tone: commandTone(command), Score: score,
 		Actions: extview.MenuActionsFor(p.extensionViewDeps(m), result.ExtensionID, sections),
 	}
+	row.ID = folderLearnKey(result.ExtensionID, "command:"+command.ID)
+	row.LearnKey = row.ID
 	if m.IsBuiltIn(result.ExtensionID) {
 		row = builtInCommandRow(row, command)
 	}
@@ -69,12 +71,12 @@ func commandRowScore(m *manager.Manager, extID string, command api.Command, q st
 }
 
 // rootCommandRowScore is a command's score at the empty root. A built-in command scores as its 1.x action did: the score
-// it names, or 0 when it names none. Other extensions' commands share the extension band.
+// it names, or 0 when it names none. Unused folder commands share the ordinary command default and learn from use.
 func rootCommandRowScore(m *manager.Manager, extID string, command api.Command) int {
 	if m.IsBuiltIn(extID) {
 		return int(command.Score)
 	}
-	return scoreExtension
+	return scoreRootCommand
 }
 
 // builtInCommandSearchScore ranks a built-in command for a typed query as 1.x ranks an action: by its title, then by its

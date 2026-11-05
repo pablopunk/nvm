@@ -10,6 +10,11 @@ import (
 
 const commandRetryInterval = 2 * time.Second
 
+// InvalidateCommands revalidates an extension's commands after an explicit root invalidation while retaining its snapshot.
+func (m *Manager) InvalidateCommands(id string) {
+	m.commands.invalidate(id)
+}
+
 type commandCache struct {
 	mu         sync.Mutex
 	known      map[string]CommandResult
@@ -36,8 +41,8 @@ func (m *Manager) CachedCommands() []CommandResult {
 
 func (m *Manager) learnCommands(target runtimeTarget, generation uint64) {
 	result := m.commandsOf(context.Background(), target, m.config.BudgetFor(protocol.MethodCommands))
-	if m.rememberCommands(target, generation, result) && m.config.OnStateChange != nil {
-		m.config.OnStateChange()
+	if m.rememberCommands(target, generation, result) && m.commandsChange != nil {
+		m.commandsChange()
 	}
 }
 
@@ -83,6 +88,7 @@ func (c *commandCache) finish(id string, generation uint64, result CommandResult
 	}
 	previous, known := c.known[id]
 	c.known[id] = result
+	c.retryAt[id] = now.Add(commandRetryInterval)
 	return !known || !reflect.DeepEqual(previous, result)
 }
 
@@ -98,6 +104,15 @@ func (c *commandCache) forget(id string) {
 	c.ensureLocked()
 	c.generation[id]++
 	delete(c.known, id)
+	delete(c.inflight, id)
+	delete(c.retryAt, id)
+}
+
+func (c *commandCache) invalidate(id string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensureLocked()
+	c.generation[id]++
 	delete(c.inflight, id)
 	delete(c.retryAt, id)
 }

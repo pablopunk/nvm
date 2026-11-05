@@ -76,8 +76,11 @@ type DragSource struct {
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.
 type Palette struct {
-	opts Options
-	win  Window
+	actionSequence uint64
+	actionPending  bool
+	actionQuery    string
+	opts           Options
+	win            Window
 	// refresh holds the queries background sources asked the palette to search again.
 	refresh searchRefresher
 

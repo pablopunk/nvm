@@ -3,6 +3,7 @@ package palette
 // SetStack replaces the navigation stack without leaving the views on it. The host uses it to start from a
 // given state, and the goldens use it to render one.
 func (p *Palette) SetStack(views ...*View) {
+	p.cancelAction()
 	p.stack = append([]*View(nil), views...)
 	p.shownView = nil
 }
@@ -57,6 +58,8 @@ func (p *Palette) Open(v *View) {
 
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
+	p.actionSequence++
+	p.actionPending = false
 	for _, v := range p.stack {
 		if v.OnHide != nil {
 			v.OnHide()
@@ -116,6 +119,7 @@ func (p *Palette) Push(v any) {
 }
 
 func (p *Palette) push(v *View) {
+	p.cancelAction()
 	covered := p.cur()
 	p.stack = append(p.stack, v)
 	p.pushes++
@@ -164,12 +168,14 @@ func (p *Palette) ReplaceIf(old, v *View) bool {
 
 // Pop returns to the view below the current one. At the root it does nothing.
 func (p *Palette) Root() {
+	p.cancelAction()
 	for len(p.stack) > 1 {
 		p.Pop()
 	}
 }
 
 func (p *Palette) Pop() {
+	p.cancelAction()
 	if len(p.stack) < 2 {
 		return
 	}

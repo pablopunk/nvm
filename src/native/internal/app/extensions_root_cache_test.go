@@ -39,7 +39,7 @@ func TestRootRowCacheResetAsksEveryExtension(t *testing.T) {
 // TestInvalidateRootRefreshesTheCallersRootRowsOnly runs the acme.fallback fixture, whose root row counts its RootItems
 // calls, next to acme.good. A refresh asked by acme.fallback runs its root again and shows the new count.
 func TestInvalidateRootRefreshesTheCallersRootRowsOnly(t *testing.T) {
-	m := newFixtureManager(t, "acme.fallback", "acme.good")
+	m := newManagerOver(t, nil, "acme.fallback", "acme.good")
 	waitForState(t, m, "acme.fallback", supervisor.StateRunning)
 	waitForState(t, m, "acme.good", supervisor.StateRunning)
 	p := goldenPalette(t)

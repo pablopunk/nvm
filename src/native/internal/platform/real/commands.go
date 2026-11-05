@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -27,15 +28,20 @@ type commands struct {
 
 // Run executes the program in spec, killing it when ctx ends. Output beyond MaxHelperOutputBytes is discarded.
 func (c commands) Run(ctx context.Context, spec platform.CommandSpec) (platform.HelperResult, error) {
-	cmd := exec.CommandContext(ctx, spec.Binary, spec.Args...)
+	env := mergedEnvironment(os.Environ(), c.userPath.get(ctx), spec.Env)
+	binary, err := commandPath(spec.Binary, env)
+	if err != nil {
+		return platform.HelperResult{}, err
+	}
+	cmd := exec.CommandContext(ctx, binary, spec.Args...)
 	cmd.Dir = spec.Dir
-	cmd.Env = mergedEnvironment(os.Environ(), c.userPath.get(ctx), spec.Env)
+	cmd.Env = env
 	cmd.WaitDelay = helperWaitDelay
 	stdout := &limitedBuffer{limit: platform.MaxHelperOutputBytes}
 	stderr := &limitedBuffer{limit: platform.MaxHelperOutputBytes}
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
-	err := cmd.Run()
+	err = cmd.Run()
 	result := platform.HelperResult{
 		Stdout:    stdout.buf.Bytes(),
 		Stderr:    stderr.buf.Bytes(),
@@ -50,6 +56,27 @@ func (c commands) Run(ctx context.Context, spec platform.CommandSpec) (platform.
 		return result, nil
 	}
 	return result, err
+}
+
+func commandPath(binary string, env []string) (string, error) {
+	if strings.ContainsAny(binary, `/\`) {
+		return binary, nil
+	}
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if !ok || !(key == "PATH" || (runtime.GOOS == "windows" && strings.EqualFold(key, "PATH"))) {
+			continue
+		}
+		for _, dir := range filepath.SplitList(value) {
+			if !filepath.IsAbs(dir) {
+				continue
+			}
+			if path, err := exec.LookPath(filepath.Join(dir, binary)); err == nil {
+				return path, nil
+			}
+		}
+	}
+	return "", &exec.Error{Name: binary, Err: exec.ErrNotFound}
 }
 
 // mergedEnvironment returns base with the user PATH in front of PATH, then the extra entries. Later entries win.
