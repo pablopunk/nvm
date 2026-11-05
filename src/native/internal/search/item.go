@@ -42,6 +42,9 @@ type Action struct {
 	// Disabled names why the action cannot run now, as 1.x shows it under the title of a disabled menu row. A
 	// disabled action stays in the menu, muted, and choosing it does nothing. Empty means the action runs.
 	Disabled string
+	// MenuHidden keeps the action out of the action menu while its shortcut still runs it, as an action panel hidden by
+	// its extension does. The menu does not open on a row whose actions are all hidden.
+	MenuHidden bool
 }
 
 // Item is one row in the palette.

@@ -19,7 +19,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		return
 	}
 	if p.actionsOpen {
-		acts := p.actions()
+		acts := p.menuActions()
 		switch {
 		case c.Shortcut(0, ui.KeyEscape), c.Shortcut(Mod, ui.KeyK):
 			p.actionsOpen = false
@@ -35,7 +35,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 	if v.OnKey != nil && v.OnKey(c, p) {
 		return
 	}
-	if c.Shortcut(Mod, ui.KeyK) && len(p.actions()) > 0 {
+	if c.Shortcut(Mod, ui.KeyK) && len(p.menuActions()) > 0 {
 		p.actionsOpen, p.actChosen = true, 0
 		return
 	}

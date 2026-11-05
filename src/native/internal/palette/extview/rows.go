@@ -57,36 +57,30 @@ func (s *Session) row(item api.Item) search.Item {
 	return row
 }
 
-// itemActions is the item's primary action first, then its other actions. An action repeated in the list is shown once.
+// itemActions is the item's menu: its primary action first, then its action panel's actions (its actions when the
+// panel is empty), then the view's actions the item does not repeat. The view's actions join only a row that has its
+// own, since the first action is what Enter runs. A hidden item panel keeps the primary and the shortcuts but no menu,
+// and a hidden view panel keeps its actions' shortcuts out of the menu.
 func (s *Session) itemActions(item api.Item) []search.Action {
-	var wire []api.Action
-	if item.Primary != nil {
-		wire = append(wire, *item.Primary)
+	own := MenuWireActions(item.Primary, item.ActionPanel, item.Actions)
+	if item.Shortcut != "" && len(own) > 0 && own[0].Shortcut == "" {
+		own[0].Shortcut = item.Shortcut
 	}
-	for _, action := range item.Actions {
-		if item.Primary == nil || !sameAction(*item.Primary, action) {
-			wire = append(wire, action)
-		}
-	}
-	if item.Shortcut != "" && len(wire) > 0 && wire[0].Shortcut == "" {
-		wire[0].Shortcut = item.Shortcut
-	}
-	out := make([]search.Action, 0, len(wire))
-	for i, action := range wire {
+	out := make([]search.Action, 0, len(own))
+	for i, action := range own {
 		out = append(out, s.actionAt(item.ID, i, action))
 	}
+	if len(own) > 0 {
+		for i, action := range s.viewActionsNotIn(own) {
+			mapped := s.actionAt(item.ID, len(own)+i, action)
+			mapped.MenuHidden = s.viewHidesMenu()
+			out = append(out, mapped)
+		}
+	}
+	if item.ActionPanelVisibility == api.PanelHidden {
+		return HideFromMenu(out)
+	}
 	return out
-}
-
-// sameAction is true when two wire actions do the same thing, so a Primary repeated in Actions is not listed twice.
-func sameAction(a, b api.Action) bool {
-	if a.Kind != b.Kind || a.Title != b.Title {
-		return false
-	}
-	if a.Ref != nil && b.Ref != nil {
-		return a.Ref.ID == b.Ref.ID
-	}
-	return a.Ref == nil && b.Ref == nil && a.URL == b.URL && a.Path == b.Path && a.Text == b.Text
 }
 
 // accessoryText is the first accessory's text, with a count of the others, because a row has one trailing label.

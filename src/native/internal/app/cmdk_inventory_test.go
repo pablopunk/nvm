@@ -48,7 +48,7 @@ func menuCases(t *testing.T) []menuCase {
 		{kind: "clipboard entry", row: func(t *testing.T) search.Item {
 			p, _, _ := seededClipPalette(t)
 			return p.Results()[1]
-		}, menu: []string{"Copy Text", "Preview", "Paste Text", "Remove Item", "Remove Last..."}},
+		}, menu: []string{"Copy Text", "Preview", "Paste Text", "Remove Item", "Remove Last...", "Remove Entries from Last Hour", "Remove Entries from Last Day", "Remove All Entries"}},
 		{kind: "calculator", row: func(t *testing.T) search.Item {
 			p := goldenPalette(t)
 			goldenQuery(p, "2+2")
@@ -60,6 +60,9 @@ func menuCases(t *testing.T) []menuCase {
 		{kind: "system command", row: func(t *testing.T) search.Item {
 			return rootRowNamed(t, "Lock Screen")
 		}, menu: []string{"Lock Screen", setShortcutTitle, setAliasTitle}},
+		{kind: "built-in command with a panel", row: func(t *testing.T) search.Item {
+			return rootRowNamed(t, "Dictate")
+		}, menu: []string{"Dictate", "Settings", setShortcutTitle, setAliasTitle}, skipPrimary: true},
 		{kind: "folder", row: func(t *testing.T) search.Item {
 			return rootRowNamed(t, "Downloads")
 		}, menu: []string{"Open Downloads", setShortcutTitle, setAliasTitle}},

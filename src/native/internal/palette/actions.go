@@ -17,6 +17,19 @@ func (p *Palette) actions() []search.Action {
 	return nil
 }
 
+// menuActions are the actions the action menu lists: all of actions() but those marked MenuHidden, whose shortcuts still
+// run through actions().
+func (p *Palette) menuActions() []search.Action {
+	all := p.actions()
+	visible := make([]search.Action, 0, len(all))
+	for _, a := range all {
+		if !a.MenuHidden {
+			visible = append(visible, a)
+		}
+	}
+	return visible
+}
+
 // chosenItem returns the chosen row, or nil on a Body view and without rows.
 func (p *Palette) chosenItem() *search.Item {
 	if p.cur().Body != nil || p.chosen < 0 || p.chosen >= len(p.results) {
@@ -84,7 +97,7 @@ func (p *Palette) onEnter() {
 
 // runMenuAction closes the action menu and runs its action at index i, when there is one.
 func (p *Palette) runMenuAction(i int) {
-	acts := p.actions()
+	acts := p.menuActions()
 	if i >= 0 && i < len(acts) && acts[i].Disabled != "" {
 		return
 	}
