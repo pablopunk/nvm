@@ -119,13 +119,6 @@ func (p *App) drawReply(c *ui.Context, src string, streaming bool) {
 	replyMarkdown(c, src, streaming, &p.md)
 }
 
-// copyChatReply writes a reply to the clipboard. A failure is logged; the palette has already said the copy happened.
-func (p *App) copyChatReply(text string) {
-	if err := p.ports.Clipboard.WriteText(text); err != nil {
-		log.Println("chat: copy failed:", err)
-	}
-}
-
 // startedChatView starts a chat of kind, prompted when prompt is not empty and bound to extension when it is not empty,
 // and returns the palette page that shows it. The page opens at once with the built-in's loading view, which fills in
 // on a tick, so the caller never waits for the built-in on the UI thread.

@@ -9,7 +9,9 @@ import (
 
 func TestOneOwnerSharesItsCountAcrossRegistryLookups(t *testing.T) {
 	registry := NewRegistry(fake.NewClock(), 2)
-	if !registry.For("emoji-symbols").Allow() || !registry.For("emoji-symbols").Allow() {
+	first := registry.For("emoji-symbols").Allow()
+	second := registry.For("emoji-symbols").Allow()
+	if !first || !second {
 		t.Fatal("the first two calls of an owner fit its minute")
 	}
 	if registry.For("emoji-symbols").Allow() {

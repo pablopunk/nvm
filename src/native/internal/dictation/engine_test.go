@@ -160,10 +160,10 @@ func TestEngineStartFailureGivesTheOutputBackAndNamesTheCause(t *testing.T) {
 func TestEngineStopReturnsTheHostedTranscript(t *testing.T) {
 	rig := newEngineRig(t, true)
 	rig.transcriber.texts = []string{"hello world"}
+	rig.mic.Queue(speech(0.5, 9000)...)
 	if err := rig.engine.Start(api.DictationStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	rig.mic.Queue(speech(0.5, 9000)...)
 	text, err := rig.engine.Stop()
 	if err != nil {
 		t.Fatal(err)

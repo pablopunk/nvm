@@ -15,6 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 func chatBodies(rig *extaitest.Rig) []string {
@@ -132,18 +133,18 @@ func TestTimeoutEndsTheCallAsTimedOut(t *testing.T) {
 
 func TestAttachmentsCarryTextAndImagesIntoThePrompt(t *testing.T) {
 	rig := extaitest.New(t)
-	if err := rig.Set.FS.MkdirAll("/home/ada", 0o755); err != nil {
+	if err := rig.Set.FS.MkdirAll(testpath.Abs("home", "ada"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := rig.Set.FS.WriteFile("/home/ada/notes.md", []byte("# Notes\nHello from notes"), 0o644); err != nil {
+	if err := rig.Set.FS.WriteFile(testpath.Abs("home", "ada", "notes.md"), []byte("# Notes\nHello from notes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := rig.Set.FS.WriteFile("/home/ada/shot.png", []byte("\x89PNG-bytes"), 0o644); err != nil {
+	if err := rig.Set.FS.WriteFile(testpath.Abs("home", "ada", "shot.png"), []byte("\x89PNG-bytes"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err := rig.Service.Complete(context.Background(), extai.Call{Prompt: "read these", Options: api.AIOptions{Attachments: []api.Attachment{
 		{Kind: "file", Path: "~/notes.md"},
-		{Kind: "image", Path: "/home/ada/shot.png"},
+		{Kind: "image", Path: testpath.Abs("home", "ada", "shot.png")},
 	}}})
 	if err != nil {
 		t.Fatalf("complete: %v", err)

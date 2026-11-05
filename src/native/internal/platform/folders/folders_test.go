@@ -15,17 +15,17 @@ func TestSharedFolderIsTheOneOneXUses(t *testing.T) {
 }
 
 func TestLocalFolderFollowsEachOperatingSystem(t *testing.T) {
-	home := filepath.Join("/", "home", "owner")
+	home := "/home/owner"
 	tests := []struct {
 		name   string
 		goos   string
 		getenv func(string) string
 		want   string
 	}{
-		{"macOS", "darwin", noEnv, filepath.Join(home, "Library", "Application Support", "Nevermind Next")},
-		{"Linux default", "linux", noEnv, filepath.Join(home, ".local", "share", "nevermind-next")},
-		{"Linux XDG", "linux", envOf("XDG_DATA_HOME", "/data"), filepath.Join("/data", "nevermind-next")},
-		{"Linux ignores a relative XDG", "linux", envOf("XDG_DATA_HOME", "relative"), filepath.Join(home, ".local", "share", "nevermind-next")},
+		{"macOS", "darwin", noEnv, "/home/owner/Library/Application Support/Nevermind Next"},
+		{"Linux default", "linux", noEnv, "/home/owner/.local/share/nevermind-next"},
+		{"Linux XDG", "linux", envOf("XDG_DATA_HOME", "/data"), "/data/nevermind-next"},
+		{"Linux ignores a relative XDG", "linux", envOf("XDG_DATA_HOME", "relative"), "/home/owner/.local/share/nevermind-next"},
 		{"Windows", "windows", envOf("APPDATA", `C:\Users\owner\AppData\Roaming`), filepath.Join(`C:\Users\owner\AppData\Roaming`, "Nevermind Next")},
 		{"Windows without APPDATA", "windows", noEnv, filepath.Join(home, "AppData", "Roaming", "Nevermind Next")},
 	}
@@ -54,7 +54,7 @@ func TestElectronUserDataIsWhere1xKeptItsState(t *testing.T) {
 	cases := []struct{ goos, home, want string }{
 		{"darwin", "/Users/acme", "/Users/acme/Library/Application Support/nvm"},
 		{"linux", "/home/acme", "/home/acme/.config/nvm"},
-		{"windows", "/Users/acme", "/Users/acme/AppData/Roaming/nvm"},
+		{"windows", "/Users/acme", filepath.Join("/Users/acme", "AppData", "Roaming", "nvm")},
 	}
 	for _, c := range cases {
 		if got := ElectronUserData(c.goos, c.home, none, "nvm"); got != c.want {

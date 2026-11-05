@@ -134,6 +134,7 @@ func TestRemoveKeyboardShortcutFromTheRootRowUnbindsIt(t *testing.T) {
 // TestShortcutActionOfACommandOpensTheCommand resolves the action a shortcut runs for a command row and runs it.
 func TestShortcutActionOfACommandOpensTheCommand(t *testing.T) {
 	p := goldenPalette(t)
+	p.uiQueue = &queuedWindow{}
 	action, ok := p.shortcutAction(shortcuts.CommandClipboardHistory)
 	if !ok {
 		t.Fatal("no action for the Clipboard History shortcut")
@@ -148,10 +149,18 @@ func awaitTopView(t *testing.T, p *App, title string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
 	for p.Top().Title != title {
+		drainUIQueue(p)
 		if time.Now().After(deadline) {
 			t.Fatalf("top view = %q, want %q", p.Top().Title, title)
 		}
 		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+// drainUIQueue runs the UI-thread work a background goroutine queued on the app's test queue, if there is one.
+func drainUIQueue(p *App) {
+	if queue, ok := p.uiQueue.(*queuedWindow); ok {
+		queue.drain()
 	}
 }
 

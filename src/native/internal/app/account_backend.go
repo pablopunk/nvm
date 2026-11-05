@@ -136,6 +136,7 @@ func (p *App) switchBackendFromHost(h search.Host, kind backend.EnvironmentKind,
 // switchBackend makes the backend the active one and asks the backend for its report again.
 func (p *App) switchBackend(kind backend.EnvironmentKind, rawURL string) error {
 	if p.account == nil {
+		//lint:ignore ST1005 user-facing copy, shown as written
 		return errors.New("The account is not available")
 	}
 	if err := p.account.SwitchEnvironment(kind, rawURL); err != nil {

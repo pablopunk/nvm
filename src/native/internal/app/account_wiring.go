@@ -116,13 +116,17 @@ func (p *App) refreshAccountPage() {
 	})
 }
 
-// onUI runs fn on the UI thread. Without a window, which only the goldens and tests have, fn runs directly.
+// onUI runs fn on the UI thread. Tests route it through uiQueue, which they drain; without a window, which only the
+// goldens and tests have, fn runs directly.
 func (p *App) onUI(fn func()) {
-	if p.panel != nil {
+	switch {
+	case p.uiQueue != nil:
+		p.uiQueue.Update(fn)
+	case p.panel != nil:
 		p.panel.Update(fn)
-		return
+	default:
+		fn()
 	}
-	fn()
 }
 
 // signedIn reports whether the account is connected, from the snapshot, without reading the keychain.

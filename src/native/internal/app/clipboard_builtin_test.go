@@ -19,13 +19,6 @@ func clipboardBuiltInView(t testing.TB, engine *clipEngine) *palette.View {
 	return builtInViewPage(t, m, clipboardbuiltin.ID, api.ActionRef{ID: clipboardbuiltin.ListCommandID})
 }
 
-// newManagerOverClipboard is a manager with the built-ins, whose clipboard history and pictures are the engine's. The
-// clipboard port stays empty: the list and the removals read the history only.
-func newManagerOverClipboard(t testing.TB, engine *clipEngine) *manager.Manager {
-	t.Helper()
-	return newManagerOverClipboardAt(t, engine, nil)
-}
-
 // newManagerOverClipboardAt is newManagerOverClipboard with the clock its built-ins read; nil is the real one.
 func newManagerOverClipboardAt(t testing.TB, engine *clipEngine, clock platform.Clock) *manager.Manager {
 	t.Helper()

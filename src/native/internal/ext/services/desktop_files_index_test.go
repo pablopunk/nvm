@@ -13,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // fakeIndex answers the index from a fixed list and records the last query, so a test checks what the service asked.
@@ -182,10 +183,10 @@ func TestWriteTextCreatesAndReplacesOnlyWhenAsked(t *testing.T) {
 }
 
 func TestDisplayPathShowsTheHomeFolderAsTilde(t *testing.T) {
-	home := "/Users/someone"
+	home := testpath.Abs("Users", "someone")
 	h := realFilesHandler(t, Deps{Home: home})
 	var display string
-	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopFiles, protocol.OpDisplayPath, protocol.PathArgs{Path: home + "/Documents/a.txt"})), &display); err != nil {
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopFiles, protocol.OpDisplayPath, protocol.PathArgs{Path: filepath.Join(home, "Documents", "a.txt")})), &display); err != nil {
 		t.Fatal(err)
 	}
 	if display != "~/Documents/a.txt" {
@@ -197,7 +198,7 @@ func TestQuickLookAndOpenWithReportUnsupportedSystems(t *testing.T) {
 	home := t.TempDir()
 	h := realFilesHandler(t, Deps{Home: home, Shell: unsupportedShell{fake.NewShell()}})
 	file := filepath.Join(home, "a.png")
-	app := "/Applications/Preview.app"
+	app := testpath.Abs("Applications", "Preview.app")
 	if reply := serve(t, h, protocol.ServiceDesktopFiles, protocol.OpQuickLook, protocol.PathArgs{Path: file}); reply.Failure == nil {
 		t.Fatal("quick look succeeded on a system without it")
 	}

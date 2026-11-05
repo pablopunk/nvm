@@ -2,13 +2,13 @@ package services
 
 import (
 	"encoding/base64"
-	"net/url"
 	"path/filepath"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // TestOCRSourcesNameTheImageTheyMean checks the source forms 1.x accepts: a path, a file: URL (escaped), a path under "~",
@@ -19,14 +19,14 @@ func TestOCRSourcesNameTheImageTheyMean(t *testing.T) {
 		input api.OCRInput
 		want  string
 	}{
-		{"absolute path", api.OCRInput{Source: "/tmp/receipt.png"}, "/tmp/receipt.png"},
-		{"file URL", api.OCRInput{Source: "file:///tmp/my%20receipt.png"}, "/tmp/my receipt.png"},
-		{"home path", api.OCRInput{Source: "~/receipt.png"}, "/home/ada/receipt.png"},
-		{"file path", api.OCRInput{File: &api.FileRef{Path: "/tmp/a.png"}}, "/tmp/a.png"},
-		{"file URL of a file", api.OCRInput{File: &api.FileRef{FileURL: "file:///tmp/b.png"}}, "/tmp/b.png"},
+		{"absolute path", api.OCRInput{Source: testpath.Abs("tmp", "receipt.png")}, testpath.Abs("tmp", "receipt.png")},
+		{"file URL", api.OCRInput{Source: fileURLFor(testpath.Abs("tmp", "my receipt.png"))}, testpath.Abs("tmp", "my receipt.png")},
+		{"home path", api.OCRInput{Source: "~/receipt.png"}, testpath.Abs("home", "ada", "receipt.png")},
+		{"file path", api.OCRInput{File: &api.FileRef{Path: testpath.Abs("tmp", "a.png")}}, testpath.Abs("tmp", "a.png")},
+		{"file URL of a file", api.OCRInput{File: &api.FileRef{FileURL: fileURLFor(testpath.Abs("tmp", "b.png"))}}, testpath.Abs("tmp", "b.png")},
 	}
 	for _, c := range cases {
-		if got := ocrPathOf(ocrSourceOf(c.input), "/home/ada"); got != c.want {
+		if got := ocrPathOf(ocrSourceOf(c.input), testpath.Abs("home", "ada")); got != c.want {
 			t.Errorf("%s: path = %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -43,7 +43,7 @@ func TestOCRDataURLsOfAnyImageTypeAreRead(t *testing.T) {
 	if err != nil || !isData || string(data) != "jpeg" {
 		t.Fatalf("jpeg data URL = %q, %v, %v; want its bytes", data, isData, err)
 	}
-	if _, isData, _ := ocrDataURLInput("/tmp/a.png"); isData {
+	if _, isData, _ := ocrDataURLInput(testpath.Abs("tmp", "a.png")); isData {
 		t.Fatal("a path was read as a data URL")
 	}
 	if _, _, err := ocrDataURLInput("data:text/plain;base64,AA=="); err == nil {
@@ -62,7 +62,7 @@ func TestOCRReadsAFileURLAndAHomePath(t *testing.T) {
 	image := filepath.Join(home, "receipt.png")
 	host.text.Script(image, platform.TextResult{Text: "total 4"})
 	h := desktopHandler(t, deps, api.CapabilityOCR)
-	fileURL := (&url.URL{Scheme: "file", Path: image}).String()
+	fileURL := fileURLFor(image)
 	for _, source := range []string{fileURL, "~/receipt.png"} {
 		var result api.OCRResult
 		if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceOCR, protocol.OpImage, protocol.OCRImageArgs{Input: api.OCRInput{Source: source}})), &result); err != nil || result.Text != "total 4" {

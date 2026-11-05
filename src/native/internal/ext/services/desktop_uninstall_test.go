@@ -7,6 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	appfeature "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // uninstallPort is an apps lifecycle that discovers one reviewed app and records what Trash is asked to move.
@@ -21,7 +22,7 @@ func (p *uninstallPort) DiscoverUninstall(string) appfeature.Discovery {
 		AppPath: notesApp,
 		Candidates: []appfeature.Candidate{
 			{ID: "app", Path: notesApp, Kind: appfeature.KindApp, Reason: "The application", SelectedByDefault: true},
-			{ID: "data", Path: "/Users/t/Library/Notes", Kind: appfeature.KindAssociated, Reason: "Application data"},
+			{ID: "data", Path: testpath.Abs("Users", "t", "Library", "Notes"), Kind: appfeature.KindAssociated, Reason: "Application data"},
 		},
 	}}
 }
@@ -32,7 +33,7 @@ func (p *uninstallPort) TrashUninstall(snapshot appfeature.UninstallSnapshot, va
 	return appfeature.TrashResult{Status: appfeature.StatusComplete, Moved: []string{notesApp}}
 }
 
-func (p *uninstallPort) TrashFolder() string { return "/Users/t/.Trash" }
+func (p *uninstallPort) TrashFolder() string { return testpath.Abs("Users", "t", ".Trash") }
 
 // TestUninstallReviewListsTheCandidatesWithTheirDefaults: a ready review keeps its candidates under a token, with the
 // default selection the host chose.
@@ -61,7 +62,7 @@ func TestUninstallTrashMovesTheReviewedSnapshot(t *testing.T) {
 	if !port.trashed["app"] || !port.trashed["data"] || port.snapshot.AppPath != notesApp {
 		t.Fatalf("trash got %v over %q", port.trashed, port.snapshot.AppPath)
 	}
-	if result.Status != appfeature.StatusComplete || result.TrashFolder != "/Users/t/.Trash" || len(result.Moved) != 1 {
+	if result.Status != appfeature.StatusComplete || result.TrashFolder != testpath.Abs("Users", "t", ".Trash") || len(result.Moved) != 1 {
 		t.Fatalf("result = %+v", result)
 	}
 }

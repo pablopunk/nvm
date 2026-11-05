@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 
@@ -60,24 +59,4 @@ func readChatImages(paths []string) ([]chat.Image, string) {
 		images = append(images, image)
 	}
 	return images, problem
-}
-
-// clipboardChatImage reads the picture on the clipboard. ok is false when the clipboard holds no picture; err says why a
-// picture there was refused.
-func (p *App) clipboardChatImage() (chat.Image, bool, error) {
-	if p.ports.Clipboard == nil {
-		return chat.Image{}, false, nil
-	}
-	data, err := p.ports.Clipboard.ReadImagePNG()
-	if errors.Is(err, platform.ErrNotFound) {
-		return chat.Image{}, false, nil
-	}
-	if err != nil {
-		return chat.Image{}, false, err
-	}
-	image, err := chat.NewImage("", data)
-	if err != nil {
-		return chat.Image{}, false, err
-	}
-	return image, true, nil
 }

@@ -12,9 +12,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
-const notesApp = "/Applications/Notes.app"
+var notesApp = testpath.Abs("Applications", "Notes.app")
 
 // lifecycleRecorder is the app lifecycle port a test inspects: which apps it was asked about and the answers it gives.
 type lifecycleRecorder struct {
@@ -108,7 +109,7 @@ func TestRunningAnswersOnlyForIndexedAppsThatRun(t *testing.T) {
 	port := &lifecycleRecorder{running: []appfeature.App{{Name: "Notes", Path: notesApp}}}
 	h, _, _ := lifecycleTestHandler(t, port, platform.CapabilityAppRunning)
 	var running []string
-	mustDecode(t, mustOK(t, serve(t, h, protocol.ServiceDesktopApps, protocol.OpRunning, protocol.PathsArgs{Paths: []string{"/Applications/Ghost.app", notesApp}})), &running)
+	mustDecode(t, mustOK(t, serve(t, h, protocol.ServiceDesktopApps, protocol.OpRunning, protocol.PathsArgs{Paths: []string{testpath.Abs("Applications", "Ghost.app"), notesApp}})), &running)
 	if len(running) != 1 || running[0] != notesApp {
 		t.Fatalf("running = %v; want Notes only", running)
 	}
@@ -168,7 +169,7 @@ func TestQuitAndForceQuitReportTheOutcome(t *testing.T) {
 func TestQuitRefusesAnAppTheIndexDoesNotList(t *testing.T) {
 	port := &lifecycleRecorder{}
 	h, _, _ := lifecycleTestHandler(t, port, platform.CapabilityAppQuit)
-	requireCode(t, serve(t, h, protocol.ServiceDesktopApps, protocol.OpQuit, protocol.PathArgs{Path: "/Applications/Ghost.app"}), api.CodeNotFound, "")
+	requireCode(t, serve(t, h, protocol.ServiceDesktopApps, protocol.OpQuit, protocol.PathArgs{Path: testpath.Abs("Applications", "Ghost.app")}), api.CodeNotFound, "")
 	if len(port.quit) != 0 {
 		t.Fatalf("an unlisted app reached the port: %v", port.quit)
 	}

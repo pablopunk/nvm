@@ -3,6 +3,7 @@ package services
 import (
 	"encoding/base64"
 	"net/url"
+	"path/filepath"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -26,12 +27,22 @@ func ocrSourceOf(input api.OCRInput) string {
 // ocrPathOf is the image file a source names: the path of a file: URL, or a path whose leading "~" is the home folder.
 func ocrPathOf(source, home string) string {
 	if parsed, err := url.Parse(source); err == nil && parsed.Scheme == "file" {
-		return parsed.Path
+		return fileURLPath(parsed)
 	}
 	if home != "" && (source == "~" || strings.HasPrefix(source, "~/")) {
 		return home + source[1:]
 	}
 	return source
+}
+
+// fileURLPath is the local path a file: URL names, the inverse of fileURLFor: a Windows drive path loses the slash its URL
+// gives it.
+func fileURLPath(parsed *url.URL) string {
+	path := parsed.Path
+	if len(path) >= 3 && path[0] == '/' && path[2] == ':' {
+		path = path[1:]
+	}
+	return filepath.FromSlash(path)
 }
 
 // ocrDataURLInput returns the image bytes a source carries as a base64 data URL of any image type, or false when it names

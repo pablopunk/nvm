@@ -13,6 +13,8 @@ import (
 const MaximumImageBytes = 2 << 20
 
 // The refusals, in the words the native command used.
+//
+//lint:file-ignore ST1005 user-facing copy, shown as written
 var (
 	errNoImage       = errors.New("Choose a PNG, JPEG or WebP image and try again")
 	errImageTooLarge = errors.New("That image is too large to classify. Choose a smaller one")

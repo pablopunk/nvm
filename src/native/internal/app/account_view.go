@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
@@ -18,19 +17,6 @@ func (p *App) accountSource() auth.Snapshot {
 		return auth.Snapshot{}
 	}
 	return p.account.Snapshot()
-}
-
-// signInState is the sign-in flow the signed-out chat gate shows. Before the session exists it reads as idle.
-func (p *App) signInState() auth.SignInState {
-	return p.accountSource().SignIn
-}
-
-// startSignIn begins a sign-in from a chat gate, as the account page's Sign in row does.
-func (p *App) startSignIn() error {
-	if p.account == nil {
-		return errors.New("the account is not available")
-	}
-	return p.account.StartSignIn()
 }
 
 // accountView is the account page over the live session.

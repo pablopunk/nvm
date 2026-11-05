@@ -114,7 +114,11 @@ func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, er
 }
 
 // errNoSelection is the failure of a fix that found no text.
+//
+//lint:ignore ST1005 user-facing copy, shown as written
 var errNoSelection = errors.New("Could not read selected text. Select it and try again")
 
 // errNotSignedIn is the failure of a fix started without an account.
+//
+//lint:ignore ST1005 user-facing copy, shown as written
 var errNotSignedIn = errors.New("Sign in to use AI commands.")

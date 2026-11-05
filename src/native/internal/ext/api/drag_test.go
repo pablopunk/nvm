@@ -1,6 +1,10 @@
 package api
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
+)
 
 // TestDragPathsTakesTheFileThenTheFirstActionPath checks the 1.x rule: an item's absolute file drags, else the first
 // action that names an absolute path, and nothing drags when no path is absolute.
@@ -10,9 +14,9 @@ func TestDragPathsTakesTheFileThenTheFirstActionPath(t *testing.T) {
 		item Item
 		want []string
 	}{
-		{"file", Item{File: &FileRef{Path: "/a/b.png"}}, []string{"/a/b.png"}},
-		{"open-path primary", Item{Primary: ptrAction(OpenPath("Open", "/home/u/Downloads"))}, []string{"/home/u/Downloads"}},
-		{"action panel", Item{ActionPanel: &ActionPanel{Sections: []ActionSection{{Actions: []Action{OpenPath("Open", "/x")}}}}}, []string{"/x"}},
+		{"file", Item{File: &FileRef{Path: testpath.Abs("a", "b.png")}}, []string{testpath.Abs("a", "b.png")}},
+		{"open-path primary", Item{Primary: ptrAction(OpenPath("Open", testpath.Abs("home", "u", "Downloads")))}, []string{testpath.Abs("home", "u", "Downloads")}},
+		{"action panel", Item{ActionPanel: &ActionPanel{Sections: []ActionSection{{Actions: []Action{OpenPath("Open", testpath.Abs("x"))}}}}}, []string{testpath.Abs("x")}},
 		{"relative file", Item{File: &FileRef{Path: "b.png"}}, nil},
 		{"relative action", Item{Primary: ptrAction(OpenPath("Open", "x"))}, nil},
 		{"no path", Item{Title: "Plain"}, nil},
@@ -45,10 +49,10 @@ func TestValidateItemsRejectsABadDragImage(t *testing.T) {
 		item    Item
 		wantErr bool
 	}{
-		{"valid", Item{ID: "a", File: &FileRef{Path: "/a.mov"}, DragImage: &FileRef{Path: "/a.png"}}, false},
-		{"no file", Item{ID: "a", DragImage: &FileRef{Path: "/a.png"}}, true},
-		{"relative picture", Item{ID: "a", File: &FileRef{Path: "/a.mov"}, DragImage: &FileRef{Path: "a.png"}}, true},
-		{"no picture", Item{ID: "a", File: &FileRef{Path: "/a.mov"}}, false},
+		{"valid", Item{ID: "a", File: &FileRef{Path: testpath.Abs("a.mov")}, DragImage: &FileRef{Path: testpath.Abs("a.png")}}, false},
+		{"no file", Item{ID: "a", DragImage: &FileRef{Path: testpath.Abs("a.png")}}, true},
+		{"relative picture", Item{ID: "a", File: &FileRef{Path: testpath.Abs("a.mov")}, DragImage: &FileRef{Path: "a.png"}}, true},
+		{"no picture", Item{ID: "a", File: &FileRef{Path: testpath.Abs("a.mov")}}, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

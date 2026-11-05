@@ -1,10 +1,7 @@
 package app
 
 import (
-	"bytes"
-	"image"
 	"image/color"
-	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -79,17 +76,6 @@ func trySend[T any](ch chan T, value T) {
 	}
 }
 
-// awaitUpdate runs the next request the engine made of the UI thread, failing the test when none comes.
-func (f *clipFixture) awaitUpdate(tb testing.TB) {
-	tb.Helper()
-	select {
-	case fn := <-f.updates:
-		fn()
-	case <-time.After(watchdog):
-		tb.Fatal("the engine never asked the UI thread for an update")
-	}
-}
-
 // awaitNotice returns the next notice the store reported, failing the test when none comes.
 func (f *clipFixture) awaitNotice(tb testing.TB) store.Notice {
 	tb.Helper()
@@ -146,32 +132,6 @@ func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 // goldenPictureFill is the colour of the golden picture.
 var goldenPictureFill = color.NRGBA{R: 96, G: 128, B: 160, A: 255}
 
-// watchdogTimer returns a channel that fires when the watchdog runs out.
-func watchdogTimer() <-chan time.Time {
-	return time.After(watchdog)
-}
-
-// fakeResponse is a scripted answer of the fake public HTTP client with the given status and a short body.
-func fakeResponse(status int) fake.Response {
-	return fake.Response{Status: status, Body: []byte("gone")}
-}
-
-// pngBytes encodes a w by h picture as PNG, for tests that store pictures.
-func pngBytes(t testing.TB, w, h int) []byte {
-	t.Helper()
-	img := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for y := range h {
-		for x := range w {
-			img.Set(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: 40, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
-
 // benchClipboard returns an engine whose history holds entries, which are given newest first and all fit.
 func benchClipboard(tb testing.TB, entries []clipboard.Entry) *clipEngine {
 	tb.Helper()
@@ -182,12 +142,6 @@ func benchClipboard(tb testing.TB, entries []clipboard.Entry) *clipEngine {
 		}
 	}
 	return f.engine
-}
-
-// clipEngineOver is an engine with an empty history over the given ports. A test that pastes through the palette
-// uses it, so the copy and the paste land on the same fake clipboard and paster as the palette's other actions.
-func clipEngineOver(ports platform.Ports) *clipEngine {
-	return newClipEngine(clipDeps{ports: ports, dir: clipFixtureDir, limit: clipDefaultLimit, redraw: func(func()) {}, log: logx.Default()})
 }
 
 // emptyClipboard is an engine with an empty history, for the empty state.

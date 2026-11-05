@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -157,28 +156,6 @@ func (s *fileService) start() {
 // stop closes the index, which saves the latest snapshot. The app calls it when it quits.
 func (s *fileService) stop() {
 	_ = s.ix.Close()
-}
-
-// statusLabel describes the index in the words of the Files view footer.
-func (s *fileService) statusLabel() string {
-	st := s.ix.Status()
-	switch {
-	case !st.Ready:
-		return "Indexing…"
-	case st.Scanning:
-		return "Indexing… " + strconv.Itoa(int(st.ScannedFiles)) + " files"
-	default:
-		return strconv.Itoa(st.Entries) + " files indexed"
-	}
-}
-
-// emptyTitle is the empty state of the Files view: while the first index is still loading, it says so instead of
-// claiming there are no files.
-func (s *fileService) emptyTitle() string {
-	if !s.ix.Status().Ready {
-		return "Indexing…"
-	}
-	return "No files found."
 }
 
 // systemIconKey names the icon a path shares with others: files of one extension share an icon, while folders,

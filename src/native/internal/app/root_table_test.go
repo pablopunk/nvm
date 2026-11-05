@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -100,6 +101,11 @@ func homeRelativeSlashes(text, home string) string {
 	return strings.ReplaceAll(filepath.ToSlash(text), filepath.ToSlash(home), "$HOME")
 }
 
+// canonicalShortcutLabel undoes palette.KeyLabel, so the recorded tables hold the Control symbol on every platform.
+func canonicalShortcutLabel(label string) string {
+	return strings.ReplaceAll(label, palette.KeyLabel("⌃"), "⌃")
+}
+
 // rootTableRows runs the root search for q and reduces each row to its comparable part. Home-relative
 // paths are rewritten to $HOME with forward slashes, since the fixture home is a temporary directory and
 // Windows joins paths with backslashes.
@@ -118,7 +124,7 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 			IconPath: homeRelativeSlashes(it.IconPath, home),
 		}
 		for _, a := range it.Actions {
-			row.Actions = append(row.Actions, rootAction{Title: a.Title, Label: a.Label})
+			row.Actions = append(row.Actions, rootAction{Title: a.Title, Label: canonicalShortcutLabel(a.Label)})
 		}
 		rows = append(rows, row)
 	}

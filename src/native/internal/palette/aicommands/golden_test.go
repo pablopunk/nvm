@@ -7,9 +7,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/design/golden"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/platform/fake"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // goldenWidth is the indicator panel's width; each golden takes the height Height gives its status.
@@ -48,25 +45,3 @@ const (
 	fixTitle    = "Fix Selected Text with AI"
 	triageTitle = "Triage Selected Text with AI"
 )
-
-// testWindow is the palette's window in the goldens: updates run at once and nothing is shown.
-type testWindow struct{}
-
-func (testWindow) Update(fn func())     { fn() }
-func (testWindow) Show()                {}
-func (testWindow) Hide()                {}
-func (testWindow) IsVisible() bool      { return true }
-func (testWindow) IsFocused() bool      { return true }
-func (testWindow) Focus()               {}
-func (testWindow) Size() (int, int)     { return paletteWidth, paletteHigh }
-func (testWindow) SetPosition(x, y int) {}
-
-// paletteOver returns a palette with view pushed above an empty root, drawn synchronously.
-func paletteOver(view *palette.View) *palette.Palette {
-	root := &palette.View{Title: "Nevermind", Search: func(string) []search.Item { return nil }}
-	p := palette.New(palette.Options{Root: root, Clock: fake.NewClock(), Synchronous: true})
-	p.Attach(testWindow{})
-	p.SetStack(root, view)
-	p.SetQuery("")
-	return p
-}

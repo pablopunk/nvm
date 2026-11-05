@@ -9,6 +9,7 @@ import (
 
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -73,10 +74,10 @@ func TestCalculatorKeysFollow1x(t *testing.T) {
 	goldenQuery(p, "10 ft in m")
 	calcRow := findResultOfKind(t, p, search.KindCalculator)
 	cont := actionTitled(t, calcRow, "Continue Calculation")
-	if cont.Label != "⌃↵" || cont.Mods != mod || cont.Key != ui.KeyEnter || cont.Dismiss != search.DismissNever {
+	if cont.Label != palette.KeyLabel("⌃↵") || cont.Mods != mod || cont.Key != ui.KeyEnter || cont.Dismiss != search.DismissNever {
 		t.Fatalf("continue = %+v", cont)
 	}
-	if swap := actionTitled(t, calcRow, "Swap Units"); swap.Label != "⌃⇧↵" || swap.Mods != mod|ui.Shift || swap.Key != ui.KeyEnter {
+	if swap := actionTitled(t, calcRow, "Swap Units"); swap.Label != palette.KeyLabel("⌃⇧↵") || swap.Mods != mod|ui.Shift || swap.Key != ui.KeyEnter {
 		t.Fatalf("swap = %+v", swap)
 	}
 	if paste := actionTitled(t, calcRow, "Paste Result"); paste.Label != "" || paste.Key != 0 {

@@ -6,19 +6,10 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/palette/extview"
 )
 
 // previewTimeout bounds the reads that fill an extension's preview.
 const previewTimeout = 5 * time.Second
-
-// extensionPreview is the preview of one extension beside its builder chats: the extview session that holds the
-// extension's rows and commands, and the side that shows them.
-type extensionPreview struct {
-	session *extview.Session
-	side    *palette.Side
-}
 
 // extensionPreviewView is the list an extension's preview shows: its root rows, then one row per command. A command row
 // runs the command, and its view opens in the preview.

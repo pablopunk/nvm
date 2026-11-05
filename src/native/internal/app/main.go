@@ -54,8 +54,9 @@ const (
 // providers read. The shell's methods are promoted, so features call Hide, Push and the rest on the App.
 type App struct {
 	*palette.Palette
-	panel *mygo.Window
-	S     *Settings
+	panel   *mygo.Window
+	uiQueue interface{ Update(fn func()) }
+	S       *Settings
 	// goos is the operating system whose labels and commands the app shows; the goldens pin the recorded one.
 	goos string
 
@@ -98,10 +99,8 @@ type App struct {
 	files           *fileService
 	chats           *chat.Service
 	builder         *builder.Workshop
-	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
-	previews map[string]*extensionPreview
-	learn    *usage.Learner
-	history  *palette.QueryHistory
+	learn           *usage.Learner
+	history         *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session

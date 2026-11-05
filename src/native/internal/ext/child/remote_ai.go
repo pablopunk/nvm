@@ -19,7 +19,7 @@ const defaultSessionID = "default"
 
 // Chats reads and opens the host's chats.
 func (a remoteAI) Chats() api.AIChats {
-	return remoteChats{link: a.link}
+	return remoteChats(a)
 }
 
 func (a remoteAI) IsAvailable() (bool, error) {
@@ -58,7 +58,7 @@ func (a remoteAI) Prepare(options api.AIOptions) error {
 }
 
 func (a remoteAI) Attachments() api.AttachmentBuilder {
-	return remoteAttachments{link: a.link}
+	return remoteAttachments(a)
 }
 
 func (a remoteAI) Session(id string, options api.AIOptions) (api.AISession, error) {

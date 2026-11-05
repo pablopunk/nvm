@@ -9,6 +9,7 @@ import (
 	"image"
 	"net/url"
 	"path/filepath"
+	"strings"
 	"time"
 
 	_ "image/gif"  // registers the GIF decoder with image.DecodeConfig
@@ -160,8 +161,13 @@ func (h *Handler) fileURLOf(raw json.RawMessage) (string, error) {
 	return fileURLFor(path), nil
 }
 
+// fileURLFor spells a local path as a file: URL. A URL path starts with a slash, so a Windows drive path gets one.
 func fileURLFor(path string) string {
-	return (&url.URL{Scheme: "file", Path: path}).String()
+	slashed := filepath.ToSlash(path)
+	if !strings.HasPrefix(slashed, "/") {
+		slashed = "/" + slashed
+	}
+	return (&url.URL{Scheme: "file", Path: slashed}).String()
 }
 
 // fileRefOf describes a file from its path and what the stat or scan knows of it.

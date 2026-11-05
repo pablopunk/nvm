@@ -14,7 +14,7 @@ type extensionBuilder struct {
 // Chats lists the builder chats.
 func (b extensionBuilder) Chats() []api.ChatSummary {
 	var builders []api.ChatSummary
-	for _, summary := range (extensionChats{p: b.p}).List() {
+	for _, summary := range extensionChats(b).List() {
 		if summary.Kind == string(chat.KindBuilder) {
 			builders = append(builders, summary)
 		}
@@ -24,7 +24,7 @@ func (b extensionBuilder) Chats() []api.ChatSummary {
 
 // Chat returns one builder chat with its transcript.
 func (b extensionBuilder) Chat(chatID string) (api.ChatDetail, bool) {
-	detail, ok := (extensionChats{p: b.p}).Get(chatID)
+	detail, ok := extensionChats(b).Get(chatID)
 	if !ok || detail.Kind != string(chat.KindBuilder) {
 		return api.ChatDetail{}, false
 	}

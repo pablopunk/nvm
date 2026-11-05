@@ -49,7 +49,7 @@ func TestMarkdownEditorPageDrawsItsChrome(t *testing.T) {
 	tt := ui.NewTester(p.View, 560, 420)
 	p.Show()
 	tt.Frame()
-	if !tt.HasText("Note") || !tt.HasText("⌃↵ Save   esc Back") {
+	if !tt.HasText("Note") || !tt.HasText(palette.KeyLabel("⌃↵ Save   esc Back")) {
 		t.Fatalf("the Markdown editor page draws %q, want its title and footer", tt.Texts())
 	}
 }

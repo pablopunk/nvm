@@ -7,6 +7,8 @@ import (
 )
 
 // errNothingToUndo is the failure of an undo with no fix to put back.
+//
+//lint:ignore ST1005 user-facing copy, shown as written
 var errNothingToUndo = errors.New("There is no fix to undo")
 
 // undo sends the undo gesture to the app the palette was summoned from. The host refuses when the window in front is

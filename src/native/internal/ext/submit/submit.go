@@ -27,6 +27,8 @@ type Status struct {
 
 // ErrNotSignedIn is the reason an extension cannot be submitted while the CLI is missing or signed out. It is the 1.x
 // wording, so the menu and the toast say the same thing.
+//
+//lint:ignore ST1005 user-facing copy, shown as written
 var ErrNotSignedIn = errors.New("Requires GitHub CLI (gh auth login)")
 
 // ErrAlreadyUpstream means the repository already has an extension with this id.

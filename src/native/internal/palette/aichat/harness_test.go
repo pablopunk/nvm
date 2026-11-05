@@ -9,12 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
-	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -27,9 +23,6 @@ const (
 	goldenWidth  = 720
 	goldenHeight = 470
 )
-
-// watchdog bounds a wait for queued work. Waits end as soon as the work arrives.
-const watchdog = 10 * time.Second
 
 // goldenNow is the fixed time the goldens and tests read; every message and chat is dated against it.
 var goldenNow = time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
@@ -46,8 +39,8 @@ func (testWindow) Focus()               {}
 func (testWindow) Size() (int, int)     { return goldenWidth, goldenHeight }
 func (testWindow) SetPosition(x, y int) {}
 
-// rig is a palette over a chat service on a fake store and clock. The service's dispatched work waits in a queue
-// that the test runs with settle, so every change happens on the test goroutine, as on the UI thread.
+// rig is a palette over a chat service on a fake store and clock. The service's dispatched work waits in a queue,
+// so every change happens on the test goroutine, as on the UI thread.
 type rig struct {
 	// feedback is what the actions said to the HUD, in order.
 	feedback []palette.Feedback
@@ -57,15 +50,7 @@ type rig struct {
 	service  *chat.Service
 	palette  *palette.Palette
 	root     *palette.View
-	copied   []string
 	signed   bool
-	sign     auth.SignInState
-	seq      int
-
-	signInStarts int
-	startErr     error
-	// previewSide is the side the preview of a builder chat shows, when a test sets one.
-	previewSide *palette.Side
 
 	mu     sync.Mutex
 	queued []func()
@@ -114,73 +99,15 @@ func (r *rig) dispatch(fn func()) {
 	}
 }
 
-// settle runs the queued work, in order, until none is left.
-func (r *rig) settle() {
-	for {
-		r.mu.Lock()
-		if len(r.queued) == 0 {
-			r.mu.Unlock()
-			return
-		}
-		fn := r.queued[0]
-		r.queued = r.queued[1:]
-		r.mu.Unlock()
-		fn()
-	}
-}
-
-// awaitIdle settles the chat's turn, failing the test if it never ends.
-func (r *rig) awaitIdle(id string) {
-	r.t.Helper()
-	deadline := time.After(watchdog)
-	for {
-		r.settle()
-		if !r.service.Busy(id) {
-			return
-		}
-		select {
-		case <-r.notify:
-		case <-deadline:
-			r.t.Fatal("the turn never settled")
-		}
-	}
-}
-
 // open shows view above the root with an empty query, as a push does: the palette gives the keyboard to the page.
 func (r *rig) open(view *palette.View) {
 	r.palette.SetStack(r.root)
 	r.palette.Push(view)
 }
 
-// user, assistant, streaming, stopped and notice build transcript entries for the goldens and tests.
+// user builds a transcript entry for the goldens and tests.
 func user(text string) chat.Message {
 	return chat.Message{Author: chat.AuthorUser, Text: text, Status: chat.StatusComplete, At: goldenNow}
-}
-
-func assistant(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusComplete, At: goldenNow}
-}
-
-func streaming(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusStreaming, At: goldenNow}
-}
-
-func stopped(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusStopped, At: goldenNow}
-}
-
-func notice(n chat.Notice) chat.Message {
-	return chat.Message{Author: chat.AuthorNotice, Text: n.Message, Status: chat.StatusComplete, Notice: &n, At: goldenNow}
-}
-
-// drawReply is the reply renderer the tests use: the same Markdown the app draws.
-func drawReply(c *ui.Context, src string, streaming bool) {
-	options := &markdown.Options{}
-	if streaming {
-		markdown.Stream(c, src, options)
-		return
-	}
-	markdown.View(c, src, options)
 }
 
 // pageGoldens renders a chat page at the palette's size. Each golden is compared in light and dark, at 1x and 2x.

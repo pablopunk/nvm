@@ -77,6 +77,8 @@ func (p *App) compatibilityAction(state update.State) func() {
 
 // errClientRefused is what an AI or sign-in request says when the backend refuses this client. It names the update, as
 // 1.x's refusal does.
+//
+//lint:ignore ST1005 user-facing copy, shown as written
 var errClientRefused = errors.New("This Nevermind version is no longer supported by the backend. Update Nevermind to continue.")
 
 // checkCompatibility fetches the manifest of the backend the account targets, then refuses the request when that

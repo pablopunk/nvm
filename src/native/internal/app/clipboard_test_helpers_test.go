@@ -1,7 +1,6 @@
 package app
 
 import (
-	"github.com/pablopunk/nvm/native/internal/search"
 	"testing"
 )
 
@@ -54,11 +53,3 @@ func (w *testWindow) Size() (int, int) { return width, height }
 func (w *testWindow) SetPosition(int, int) {}
 
 // clipPalette returns the golden palette showing the clipboard history of f, with a window that can hide.
-
-func actionTitles(actions []search.Action) []string {
-	titles := make([]string, 0, len(actions))
-	for _, a := range actions {
-		titles = append(titles, a.Title)
-	}
-	return titles
-}

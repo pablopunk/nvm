@@ -3,10 +3,12 @@ package real
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 const (
@@ -110,7 +112,7 @@ func TestChooseMacosHelperPathPrefersTheBundledHelper(t *testing.T) {
 		name, bundled, executableDir, want string
 	}{
 		{"bundled", "/App.app/Contents/Resources/macos-selected-text", "/App.app/Contents/MacOS", "/App.app/Contents/Resources/macos-selected-text"},
-		{"beside the executable", "", "/work/bin", "/work/bin/macos-selected-text"},
+		{"beside the executable", "", testpath.Abs("work", "bin"), filepath.Join(testpath.Abs("work", "bin"), "macos-selected-text")},
 		{"bare name", "", "", "macos-selected-text"},
 	}
 	for _, test := range tests {

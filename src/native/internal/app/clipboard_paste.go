@@ -5,7 +5,6 @@ import (
 	"errors"
 	"runtime"
 
-	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -49,14 +48,6 @@ func (p *App) waitPaletteHidden(ctx context.Context) error {
 
 // pasteActionTitle is the title of the paste action that copies, emoji and snippets offer. The HUD names a paste by it.
 const pasteActionTitle = "Paste"
-
-// pasteAfterHide hides the palette and pastes e into the app that had focus, for the action titled title.
-func (p *App) pasteAfterHide(h search.Host, title string, e clipboard.Entry) {
-	clip := p.clip
-	p.hideThenRun(h, title, "Pasted", func() error { return clip.paste(e) }, func(err error) palette.Feedback {
-		return pasteFailedFeedback(title, err)
-	})
-}
 
 // hideThenRun hides the palette, then runs run on its own goroutine once the palette has hidden, so the keys of a paste
 // reach the app that had focus. Stale hide signals are dropped first, so run waits for this hide. A failure shows the
@@ -122,14 +113,4 @@ func (p *App) redraw(fn func()) {
 // feedbackFromBackground shows f from a background goroutine, under the field or in the HUD, as the palette is up.
 func (p *App) feedbackFromBackground(f palette.Feedback) {
 	p.redraw(func() { p.Notify(f) })
-}
-
-// toastFromBackground shows a one-line message from a background goroutine.
-func (p *App) toastFromBackground(msg string) {
-	p.redraw(func() { p.Toast(msg) })
-}
-
-// canPaste reports whether the platform can send the paste gesture. The emoji grid copies where it cannot.
-func (p *App) canPaste() bool {
-	return p.ports.Capabilities.Supported(platform.CapabilityClipboardPaste)
 }

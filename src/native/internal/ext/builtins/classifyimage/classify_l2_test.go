@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/fixtures"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // hostContext is the built-in's context over the host's real services: the AI call service on the fixture backend and
@@ -32,9 +33,9 @@ func hostContext(t *testing.T) (api.Context, *extaitest.Rig) {
 // fixture backend: the picture reaches the decision route typed by its extension, and the first category answers.
 func TestClassifyOverTheHostServicesListsTheFixtureCategory(t *testing.T) {
 	ctx, rig := hostContext(t)
-	rig.Set.FS.Seed("/pics/cat.jpg", make([]byte, 64))
+	rig.Set.FS.Seed(testpath.Abs("pics", "cat.jpg"), make([]byte, 64))
 	result, err := Extension{}.RunAction(ctx, api.Invocation{
-		Ref: api.ActionRef{ID: classifyAction}, Form: api.FormValues{"image": api.TextValue("/pics/cat.jpg")},
+		Ref: api.ActionRef{ID: classifyAction}, Form: api.FormValues{"image": api.TextValue(testpath.Abs("pics", "cat.jpg"))},
 	})
 	if err != nil || result.View == nil || len(result.View.Items) != 1 || result.View.Items[0].Title != "photograph" {
 		t.Fatalf("result = %+v, %v; want the category photograph", result, err)
@@ -54,9 +55,9 @@ func TestClassifyOverTheHostServicesRefusesBeforeTheModel(t *testing.T) {
 		size int
 		want error
 	}{
-		{"another format", "/pics/anim.gif", 64, errNoImage},
-		{"unreadable", "/pics/missing.png", 0, errNoImage},
-		{"too large", "/pics/big.png", MaximumImageBytes + 1, errImageTooLarge},
+		{"another format", testpath.Abs("pics", "anim.gif"), 64, errNoImage},
+		{"unreadable", testpath.Abs("pics", "missing.png"), 0, errNoImage},
+		{"too large", testpath.Abs("pics", "big.png"), MaximumImageBytes + 1, errImageTooLarge},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,10 +81,10 @@ func TestClassifyOverTheHostServicesRefusesBeforeTheModel(t *testing.T) {
 // TestClassifyOverTheHostServicesNeedsASignedInAccount checks the sign-in copy when the account is signed out.
 func TestClassifyOverTheHostServicesNeedsASignedInAccount(t *testing.T) {
 	ctx, rig := hostContext(t)
-	rig.Set.FS.Seed("/pics/cat.jpg", make([]byte, 64))
+	rig.Set.FS.Seed(testpath.Abs("pics", "cat.jpg"), make([]byte, 64))
 	rig.SignOut()
 	_, err := Extension{}.RunAction(ctx, api.Invocation{
-		Ref: api.ActionRef{ID: classifyAction}, Form: api.FormValues{"image": api.TextValue("/pics/cat.jpg")},
+		Ref: api.ActionRef{ID: classifyAction}, Form: api.FormValues{"image": api.TextValue(testpath.Abs("pics", "cat.jpg"))},
 	})
 	if !errors.Is(err, errNotSignedIn) {
 		t.Fatalf("err = %v, want the sign-in copy", err)

@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
+//lint:ignore ST1005 user-facing copy, shown as written
 var errSettingsUnavailable = errors.New("This setting cannot be changed here")
 
 func decodeBool(value json.RawMessage) bool {

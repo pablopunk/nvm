@@ -20,6 +20,7 @@ func TestGuideShortcutLabelComesFromTheLiveShortcutTable(t *testing.T) {
 // openGuide opens the guide from the Welcome row, as the user does: a search for it, then Get Started.
 func openGuide(t *testing.T, p *App) {
 	t.Helper()
+	p.uiQueue = &queuedWindow{}
 	goldenQuery(p, "welcome")
 	itemTitled(t, p, "Welcome to Nevermind").Actions[0].Run(p)
 	awaitTopView(t, p, "Getting Started")

@@ -14,6 +14,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // Rig is one account and one call service. Time is the fake set's clock; the logger uses the real clock, so a test
@@ -30,7 +31,7 @@ type staticToken string
 
 func (t staticToken) Get() (string, error) { return string(t), nil }
 
-// New returns a rig signed in to a healthy fixture backend. The home folder is /home/ada.
+// New returns a rig signed in to a healthy fixture backend. The home folder is home/ada below the test volume root.
 func New(t *testing.T) *Rig {
 	t.Helper()
 	set := fake.NewSet()
@@ -59,7 +60,7 @@ func New(t *testing.T) *Rig {
 		Clock:     set.Clock,
 		Clipboard: set.Clipboard,
 		Files:     set.FS,
-		Home:      "/home/ada",
+		Home:      testpath.Abs("home", "ada"),
 	})
 	return rig
 }

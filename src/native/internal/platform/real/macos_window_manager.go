@@ -2,7 +2,6 @@ package real
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"time"
 
@@ -22,15 +21,6 @@ const accessRequestSubcommand = "request-access"
 // helperUnreadable is the copy when the helper's answer is not an envelope.
 const helperUnreadable = "The window helper returned an unreadable response."
 
-// macosHelperPath returns the helper bundled with the app, else the one beside the executable.
-func macosHelperPath() string {
-	executableDir := ""
-	if executable, err := os.Executable(); err == nil {
-		executableDir = filepath.Dir(executable)
-	}
-	return chooseMacosHelperPath(existingBundledResource(macosHelperName), executableDir)
-}
-
 // chooseMacosHelperPath prefers the bundled helper, then the one in the executable's directory, then the bare name.
 func chooseMacosHelperPath(bundled, executableDir string) string {
 	switch {
@@ -47,10 +37,6 @@ func chooseMacosHelperPath(bundled, executableDir string) string {
 type macHelper struct {
 	helper platform.Helper
 	binary string
-}
-
-func newMacHelper(helper platform.Helper) macHelper {
-	return macHelper{helper: helper, binary: macosHelperPath()}
 }
 
 // run calls the helper's window subcommand and returns its envelope. A process that fails to start, or prints

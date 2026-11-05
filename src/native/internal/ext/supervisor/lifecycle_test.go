@@ -8,6 +8,7 @@ import (
 	appfeature "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // fixedApps is the app lifecycle port the fixture sees: Notes runs, quits and hides, and Quit All asks it.
@@ -24,13 +25,13 @@ func (fixedApps) ForceQuitApp(appfeature.App) (appfeature.QuitOutcome, error) {
 }
 
 func (fixedApps) QuitAllApps() ([]appfeature.App, error) {
-	return []appfeature.App{{Name: "Notes", Path: "/Applications/Notes.app"}}, nil
+	return []appfeature.App{{Name: "Notes", Path: testpath.Abs("Applications", "Notes.app")}}, nil
 }
 
 func (fixedApps) HideApp(appfeature.App) error { return nil }
 
 func (fixedApps) IndexedApps() []appfeature.App {
-	return []appfeature.App{{Name: "Notes", ID: "com.example.notes", Path: "/Applications/Notes.app"}}
+	return []appfeature.App{{Name: "Notes", ID: "com.example.notes", Path: testpath.Abs("Applications", "Notes.app")}}
 }
 
 func (fixedApps) TrashFolder() string { return "" }
@@ -46,7 +47,7 @@ func (fixedApps) TrashUninstall(appfeature.UninstallSnapshot, map[string]bool) a
 func TestLifecycleFixtureUsesTheAppServicesThroughTheChild(t *testing.T) {
 	rig := newServicesRig(t)
 	shell := fake.NewShell()
-	shell.SetApps([]platform.App{{Name: "Notes", ID: "com.example.notes", Path: "/Applications/Notes.app"}}, nil)
+	shell.SetApps([]platform.App{{Name: "Notes", ID: "com.example.notes", Path: testpath.Abs("Applications", "Notes.app")}}, nil)
 	rig.deps.Shell = shell
 	rig.deps.Apps = fixedApps{}
 	rig.deps.Capabilities = platform.NewCapabilities(platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppHide)

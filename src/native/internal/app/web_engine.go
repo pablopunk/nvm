@@ -17,12 +17,3 @@ func (p *App) webEngineKey() string {
 	}
 	return key
 }
-
-// cycleWebEngine stores the engine after the current default in the built-in's setting.
-func (p *App) cycleWebEngine() error {
-	m := p.extensionManager()
-	if m == nil {
-		return nil
-	}
-	return m.WriteSetting(websearch.ID, websearch.EngineSettingID, websearch.NextEngine(p.webEngineKey()))
-}

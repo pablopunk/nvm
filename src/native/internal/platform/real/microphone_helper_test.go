@@ -106,6 +106,7 @@ func TestOpenRefusedAccessIsDeniedAndStartsNoStream(t *testing.T) {
 }
 
 func TestOpenAsksOnceWhenTheMicrophoneIsUndecided(t *testing.T) {
+	requireUnixShell(t)
 	pcm := []byte{1, 0}
 	pcmPath := writePCMFile(t, pcm)
 	mic, helper := newScriptedMicrophone(t, "cat "+pcmPath,
@@ -131,6 +132,7 @@ func TestOpenMissingDeviceIsNotFound(t *testing.T) {
 }
 
 func TestOpenStreamsTheDeviceAndFormatTheHelperWasGiven(t *testing.T) {
+	requireUnixShell(t)
 	samples := []int16{0, 1, -1, 32767, -32768}
 	raw := make([]byte, 2*len(samples))
 	for i, sample := range samples {
@@ -156,6 +158,7 @@ func TestOpenStreamsTheDeviceAndFormatTheHelperWasGiven(t *testing.T) {
 }
 
 func TestStreamEndsWithTheDeniedStderrAsErrDenied(t *testing.T) {
+	requireUnixShell(t)
 	mic, _ := newScriptedMicrophone(t, "echo 'denied: Microphone access is denied' >&2; exit 2", fake.HelperScript{Stdout: []byte(micAllowed)})
 	stream, err := mic.Open(context.Background(), "", micFormat)
 	if err != nil {
@@ -179,6 +182,7 @@ func TestStreamStderrClassifiesTheFailure(t *testing.T) {
 }
 
 func TestEmptyStreamEndsWithEOF(t *testing.T) {
+	requireUnixShell(t)
 	mic, _ := newScriptedMicrophone(t, "true", fake.HelperScript{Stdout: []byte(micAllowed)})
 	stream, err := mic.Open(context.Background(), "", micFormat)
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 // realFilesHandler is an extension with desktop.files over the real file system, so walks and reads hit a temp folder.
@@ -130,10 +131,12 @@ func TestFileURLEncodesTheAbsolutePath(t *testing.T) {
 	_, deps := newDesktopHost(t)
 	handler := realFilesHandler(t, deps)
 	var link string
-	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpFileURL, protocol.PathArgs{Path: "/Users/me/my file.png"})), &link); err != nil {
+	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpFileURL, protocol.PathArgs{Path: testpath.Abs("Users", "me", "my file.png")})), &link); err != nil {
 		t.Fatal(err)
 	}
-	if link != "file:///Users/me/my%20file.png" {
+	root := strings.TrimSuffix(filepath.ToSlash(testpath.Root()), "/")
+	want := "file:///" + strings.TrimPrefix(root+"/Users/me/my%20file.png", "/")
+	if link != want {
 		t.Fatalf("file url %q", link)
 	}
 }
@@ -158,20 +161,20 @@ func (r toolRunner) Run(_ context.Context, spec platform.CommandSpec) (platform.
 func TestOpenWithAppsRanksByDocumentType(t *testing.T) {
 	host, deps := newDesktopHost(t)
 	host.shell.SetApps([]platform.App{
-		{Name: "Safari", ID: "safari", Path: "/Applications/Safari.app"},
-		{Name: "Preview", ID: "preview", Path: "/Applications/Preview.app"},
-		{Name: "TextEdit", ID: "textedit", Path: "/Applications/TextEdit.app"},
-		{Name: "Folder", ID: "folder", Path: "/Applications/Folder"},
+		{Name: "Safari", ID: "safari", Path: testpath.Abs("Applications", "Safari.app")},
+		{Name: "Preview", ID: "preview", Path: testpath.Abs("Applications", "Preview.app")},
+		{Name: "TextEdit", ID: "textedit", Path: testpath.Abs("Applications", "TextEdit.app")},
+		{Name: "Folder", ID: "folder", Path: testpath.Abs("Applications", "Folder")},
 	}, nil)
 	deps.Commands = toolRunner{outputs: map[string]string{
-		"/Applications/Preview.app":  `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["png","jpg"]}]}`,
-		"/Applications/Safari.app":   `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["*"]}]}`,
-		"/Applications/TextEdit.app": `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["txt"]}]}`,
-		"kMDItemContentTypeTree":     `("public.png","public.image")`,
+		testpath.Abs("Applications", "Preview.app"):  `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["png","jpg"]}]}`,
+		testpath.Abs("Applications", "Safari.app"):   `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["*"]}]}`,
+		testpath.Abs("Applications", "TextEdit.app"): `{"CFBundleDocumentTypes":[{"CFBundleTypeExtensions":["txt"]}]}`,
+		"kMDItemContentTypeTree":                     `("public.png","public.image")`,
 	}}
 	handler := realFilesHandler(t, deps)
 	var apps []api.App
-	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpOpenWithApps, protocol.PathArgs{Path: "/Users/me/a.png"})), &apps); err != nil {
+	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpOpenWithApps, protocol.PathArgs{Path: testpath.Abs("Users", "me", "a.png")})), &apps); err != nil {
 		t.Fatal(err)
 	}
 	names := make([]string, 0, len(apps))
@@ -186,12 +189,12 @@ func TestOpenWithAppsRanksByDocumentType(t *testing.T) {
 func TestOpenWithAppsListsEveryBundleWhenNoToolAnswers(t *testing.T) {
 	host, deps := newDesktopHost(t)
 	host.shell.SetApps([]platform.App{
-		{Name: "Zed", Path: "/Applications/Zed.app"},
-		{Name: "Arc", Path: "/Applications/Arc.app"},
+		{Name: "Zed", Path: testpath.Abs("Applications", "Zed.app")},
+		{Name: "Arc", Path: testpath.Abs("Applications", "Arc.app")},
 	}, nil)
 	handler := realFilesHandler(t, deps)
 	var apps []api.App
-	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpOpenWithApps, protocol.PathArgs{Path: "/Users/me/a.png"})), &apps); err != nil {
+	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpOpenWithApps, protocol.PathArgs{Path: testpath.Abs("Users", "me", "a.png")})), &apps); err != nil {
 		t.Fatal(err)
 	}
 	if len(apps) != 2 || apps[0].Name != "Arc" || apps[1].Name != "Zed" {

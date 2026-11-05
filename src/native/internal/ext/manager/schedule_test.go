@@ -24,7 +24,7 @@ func TestScheduledRunFiresThroughTheExtensionAndCancelDropsIt(t *testing.T) {
 	}
 	h.waitRunning("acme.schedule")
 
-	h.search("arm 10")
+	h.search("arm 1000")
 	if got := scheduleTitle(t, h, "pending"); got != "true" {
 		t.Fatalf("pending after arm = %q, want true", got)
 	}

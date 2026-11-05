@@ -43,7 +43,7 @@ func TestRecordedKeysAreLargeAndCentred(t *testing.T) {
 	tt.Key(ui.Super|ui.Alt, ui.KeyV)
 	tt.Frame()
 
-	keyLeft, keyTop, keyRight, keyBottom := stageBounds(t, tt, "Super", "Alt", "V")
+	keyLeft, keyTop, keyRight, keyBottom := stageBounds(t, tt, p.labeler().Keycaps("Command+Alt+V")...)
 	if keyBottom-keyTop < 30 {
 		t.Fatalf("key labels are %.0f DIPs tall, want large keys", keyBottom-keyTop)
 	}

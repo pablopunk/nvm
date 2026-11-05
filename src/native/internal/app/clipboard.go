@@ -149,17 +149,6 @@ func (e *clipEngine) flush() {
 	_ = e.log.Flush()
 }
 
-// paste puts an entry on the clipboard and sends the paste gesture to the app that had focus.
-func (e *clipEngine) paste(entry clipboard.Entry) error {
-	return e.actions.Paste(entry, "")
-}
-
-// textEntry describes plain text that did not come from the history, such as a calculation result, so it can be
-// pasted through the same path. Its copy is suppressed from the history, as any copy the app makes is.
-func textEntry(text string) clipboard.Entry {
-	return clipboard.Entry{ID: clipboard.TextID(text), Kind: clipboard.KindText, Text: text}
-}
-
 // openClipboard builds the engine over the app's one store, which ready opened with the directory's lease. Without
 // the lease the history stays in memory for the session and nothing is watched: a second instance must not write
 // pictures into a folder another instance owns. The watcher starts unless the user turned clipboard history off.

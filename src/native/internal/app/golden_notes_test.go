@@ -83,22 +83,6 @@ func TestPaletteSnippetsList(t *testing.T) {
 	golden.AssertMatrix(t, "snippets-list", p.View, paletteGoldens)
 }
 
-// goldenChoose runs the action of the row at index, through the same path Enter takes.
-func goldenChoose(t *testing.T, p *App, index int, action string) {
-	t.Helper()
-	results := p.Results()
-	if index >= len(results) {
-		t.Fatalf("row %d of %d", index, len(results))
-	}
-	for _, a := range results[index].Actions {
-		if a.Title == action {
-			a.Run(p.Palette)
-			return
-		}
-	}
-	t.Fatalf("row %d has no action %q", index, action)
-}
-
 // topView is the view on top of the palette's stack.
 func topView(p *App) *palette.View {
 	return p.Top()

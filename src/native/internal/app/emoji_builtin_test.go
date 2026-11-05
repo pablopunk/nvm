@@ -16,6 +16,7 @@ func openEmojiBuiltIn(t *testing.T, p *App) *queuedWindow {
 	t.Helper()
 	win := &queuedWindow{}
 	p.Attach(win)
+	p.uiQueue = win
 	goldenQuery(p, "emoji")
 	itemTitled(t, p, builtin.Title).Actions[0].Run(p)
 	deadline := time.Now().Add(10 * time.Second)
