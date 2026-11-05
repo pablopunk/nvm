@@ -2,6 +2,7 @@ package aichats
 
 import (
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -238,4 +239,97 @@ func TestBuilderChatRowsFollowConversationsAtEqualScore(t *testing.T) {
 	if items[1].TiePriority != 0 {
 		t.Fatalf("conversation row tie priority = %d, want 0", items[1].TiePriority)
 	}
+}
+
+// actionTitles lists the titles of a transcript's action menu, in order.
+func actionTitles(actions []api.Action) []string {
+	var titles []string
+	for _, action := range actions {
+		titles = append(titles, action.Title)
+	}
+	return titles
+}
+
+// actionNamed returns the action of the menu titled title, and whether the menu has one.
+func actionNamed(actions []api.Action, title string) (api.Action, bool) {
+	for _, action := range actions {
+		if action.Title == title {
+			return action, true
+		}
+	}
+	return api.Action{}, false
+}
+
+func TestIdleTranscriptMenuListsTheChatActionsInOrder(t *testing.T) {
+	detail := chat("1", "conversation", "Plan", user("Plan a trip."), assistant("Three days in Lisbon."))
+	detail.Tier = api.ModelFast
+	want := []string{"Ask Again", "Copy Reply", "Copy Message", "Switch to Smart", "New Chat", "Delete Chat"}
+	if got := actionTitles(chatActions(detail)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("menu = %v, want %v", got, want)
+	}
+}
+
+func TestBusyTranscriptMenuOffersStopAndNoAskAgain(t *testing.T) {
+	detail := chat("2", "conversation", "Busy", user("q"), api.ChatMessage{Role: "assistant", Content: "Part", Streaming: true})
+	detail.Tier = api.ModelFast
+	want := []string{"Copy Reply", "Copy Message", "Stop", "Switch to Smart", "New Chat", "Delete Chat"}
+	if got := actionTitles(chatActions(detail)); !reflect.DeepEqual(got, want) {
+		t.Fatalf("menu while busy = %v, want %v", got, want)
+	}
+}
+
+func TestWaitingToolCallMenuLeadsWithAllowAndRefuse(t *testing.T) {
+	waiting := api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: "read_file", Status: "waiting"}}
+	detail := chat("3", "conversation", "Notes", user("Read notes."), waiting)
+	detail.Tier = api.ModelSmart
+	titles := actionTitles(chatActions(detail))
+	if len(titles) < 2 || titles[0] != "Allow" || titles[1] != "Refuse" {
+		t.Fatalf("menu = %v, want Allow and Refuse first", titles)
+	}
+	refuse, _ := actionNamed(chatActions(detail), "Refuse")
+	if refuse.Op != api.ChatRefuse || refuse.Chat == nil || refuse.Chat.ChatID != "3" {
+		t.Fatalf("Refuse = %+v, want a refuse of chat 3", refuse)
+	}
+}
+
+func TestTranscriptActionsCarryTheirShortcuts(t *testing.T) {
+	detail := chat("4", "conversation", "Keys", user("q"), assistant("a"))
+	detail.Tier = api.ModelFast
+	actions := chatActions(detail)
+	for title, want := range map[string]string{"Ask Again": "CommandOrControl+R", "Copy Reply": "CommandOrControl+Alt+C", "Switch to Smart": "CommandOrControl+Shift+M", "Delete Chat": "CommandOrControl+D"} {
+		action, ok := actionNamed(actions, title)
+		if !ok || action.Shortcut != want {
+			t.Fatalf("%s shortcut = %q, want %q", title, action.Shortcut, want)
+		}
+	}
+}
+
+func TestBuilderTranscriptMenuEndsWithTheReview(t *testing.T) {
+	detail := chat("5", "builder", "Clock", user("Make a clock."), assistant("Done."))
+	detail.ExtensionID = "user.clock"
+	detail.Tier = api.ModelSmart
+	titles := actionTitles(chatActions(detail))
+	if len(titles) == 0 || titles[len(titles)-1] != "Review Extension" {
+		t.Fatalf("menu = %v, want Review Extension last", titles)
+	}
+	review, _ := actionNamed(chatActions(detail), "Review Extension")
+	if review.Kind != api.ActionBuilder || review.Op != api.BuilderReview || review.Builder == nil || review.Builder.ExtensionID != "user.clock" {
+		t.Fatalf("Review Extension = %+v, want a review of user.clock", review)
+	}
+}
+
+func TestChatViewCarriesItsTranscriptActions(t *testing.T) {
+	view := chatView(contextWith(), chat("6", "conversation", "View", user("q"), assistant("a")))
+	if len(view.Actions) == 0 || view.Actions[0].Title != "Ask Again" {
+		t.Fatalf("chat view actions = %v, want Ask Again first", actionTitles(view.Actions))
+	}
+}
+
+// user and assistant are finished transcript messages of the two roles.
+func user(text string) api.ChatMessage {
+	return api.ChatMessage{Role: "user", Content: text}
+}
+
+func assistant(text string) api.ChatMessage {
+	return api.ChatMessage{Role: "assistant", Content: text}
 }

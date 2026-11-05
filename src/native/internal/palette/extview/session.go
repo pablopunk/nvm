@@ -93,6 +93,8 @@ type Deps struct {
 	// Chats runs the chat actions: the chat store takes the new chats, sends, stops, tier changes and removals. Nil makes
 	// those actions report unavailable.
 	Chats ChatPages
+	// Review returns the review page of the extension a builder chat wrote, or nil when it is no longer installed.
+	Review func(extension string) *palette.View
 }
 
 // ChatPages is the chat store as the chat actions use it. Start creates a chat of kind (conversation or builder), bound to
@@ -101,6 +103,8 @@ type Deps struct {
 type ChatPages interface {
 	Start(kind, prompt, extension string) (chatID string, err error)
 	Send(chatID, text string, images []chat.Image) error
+	Regenerate(chatID string) error
+	Decide(chatID string, allow bool) error
 	Stop(chatID string)
 	SetTier(chatID string, tier chat.Tier) error
 	Remove(chatID string) error

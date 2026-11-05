@@ -54,7 +54,8 @@ const AccountSignIn = "sign-in"
 
 // Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat
 // (an empty message allows a tool call that waits), Stop ends a reply that streams, Tier changes the chat's model tier,
-// and Remove deletes a chat the user asked to remove.
+// Remove deletes a chat the user asked to remove, Again drops the last reply and asks the last question again, and
+// Allow and Refuse answer a tool call that waits.
 const (
 	ChatOpen     = "open"
 	ChatNew      = "new"
@@ -62,16 +63,20 @@ const (
 	ChatStop     = "stop"
 	ChatTier     = "tier"
 	ChatRemove   = "remove"
+	ChatAgain    = "again"
+	ChatAllow    = "allow"
+	ChatRefuse   = "refuse"
 )
 
 // Ops of the builder action: Start begins a builder chat with a prompt, Open shows one, Remove deletes one, Tweak opens
-// a chat that changes an extension, and List shows the builder chats.
+// a chat that changes an extension, List shows the builder chats, and Review opens the review of an extension.
 const (
 	BuilderStart  = "start"
 	BuilderOpen   = "open"
 	BuilderRemove = "remove"
 	BuilderTweak  = "tweak"
 	BuilderList   = "list"
+	BuilderReview = "review"
 )
 
 // Op values for the kinds that have sub-operations.
@@ -80,8 +85,8 @@ var (
 	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps  = []string{"check", "download", "install"}
 	accountOps = []string{AccountSignIn}
-	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove}
-	builderOps = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList}
+	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse}
+	builderOps = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )
 

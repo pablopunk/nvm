@@ -128,6 +128,22 @@ func (c extensionChatPages) SetTier(chatID string, tier chat.Tier) error {
 	return c.p.chats.SetTier(chatID, tier)
 }
 
+// Regenerate drops the last reply of the chat with id and asks its last question again.
+func (c extensionChatPages) Regenerate(chatID string) error {
+	if c.p.chats == nil {
+		return errChatsUnavailable
+	}
+	return c.p.chats.Regenerate(chatID)
+}
+
+// Decide answers the tool call the chat with id waits on: allowed or refused.
+func (c extensionChatPages) Decide(chatID string, allow bool) error {
+	if c.p.chats == nil {
+		return errChatsUnavailable
+	}
+	return c.p.chats.Decide(chatID, allow)
+}
+
 // Remove deletes the chat with id.
 func (c extensionChatPages) Remove(chatID string) error {
 	if c.p.chats == nil {

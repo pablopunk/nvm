@@ -22,3 +22,8 @@ func LoadingChatView(chatID string) api.View {
 		Refresh: &api.Refresh{IntervalMs: streamTickMs, Ref: chatRef(opRefreshChat, chatID)},
 	}
 }
+
+// RefreshChatRef is the reference of the action that returns the transcript of the chat with id as it is now.
+func RefreshChatRef(chatID string) api.ActionRef {
+	return api.ActionRef{ID: opRefreshChat, Args: map[string]string{argChatID: chatID}}
+}

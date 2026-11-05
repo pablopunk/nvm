@@ -67,6 +67,7 @@ func chatView(ctx api.Context, detail api.ChatDetail) *api.View {
 			OnTier: chatRef(opTier, id), Submit: chatRef(opSubmit, id), Stop: chatRef(opStop, id),
 			Side: builderPreview(ctx, detail),
 		},
+		Actions: chatActions(detail),
 	}
 	if replyStreams(detail.Messages) {
 		view.Refresh = &api.Refresh{IntervalMs: streamTickMs, Ref: chatRef(opRefreshChat, id)}
