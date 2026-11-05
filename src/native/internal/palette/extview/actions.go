@@ -33,7 +33,9 @@ func (s *Session) actionAt(itemID string, index int, action api.Action) search.A
 // action maps one wire action to a palette action, with the accelerator the action names. key names the row that owns
 // the action, for run handles.
 func (s *Session) action(action api.Action, key string) search.Action {
-	return s.withShortcut(s.actionBody(action, key), action.Shortcut)
+	mapped := s.withShortcut(s.actionBody(action, key), action.Shortcut)
+	mapped.MenuOnly = action.Preview
+	return mapped
 }
 
 // withShortcut gives a palette action the keys of an accelerator, and the label the palette shows for them. An

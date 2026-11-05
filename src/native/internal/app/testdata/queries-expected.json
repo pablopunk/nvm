@@ -1833,6 +1833,10 @@
           {
             "title": "Delete",
             "label": "⌃⌫"
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
           }
         ]
       },

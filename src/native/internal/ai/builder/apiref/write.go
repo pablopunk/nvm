@@ -112,7 +112,7 @@ func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full 
 		doc := commentText(firstNonNil(field.Doc, field.Comment))
 		typeText := index.exprText(field.Type)
 		if len(field.Names) == 0 {
-			fmt.Fprintf(b, "- embeds %s: its fields are part of this type\n", typeText)
+			fmt.Fprintf(b, "- embeds %s, its fields included\n", typeText)
 			continue
 		}
 		for _, name := range field.Names {

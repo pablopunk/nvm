@@ -108,6 +108,9 @@ type Action struct {
 	Style      string     `json:"style,omitempty"`
 	Shortcut   string     `json:"shortcut,omitempty"`
 	Background bool       `json:"background,omitempty"`
+	// Preview marks an action that previews the item's content. The menu lists it and Enter never runs it, so a row that
+	// wants Enter to preview sets its Primary. The host adds no generic Preview option beside an action marked so.
+	Preview bool `json:"preview,omitempty"`
 	// DismissAfterRun closes the palette once the action is dispatched.
 	DismissAfterRun bool          `json:"dismissAfterRun,omitempty"`
 	Confirm         *Confirmation `json:"confirm,omitempty"`
