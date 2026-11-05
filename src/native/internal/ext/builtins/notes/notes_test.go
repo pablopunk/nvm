@@ -207,6 +207,34 @@ func TestRestoreWindowRebuildsTheMostRecentNote(t *testing.T) {
 	}
 }
 
+// TestFloatingWindowTitlesFollowTheOneXWindows: the toggle and the restore title the window Floating Notes, as 1.x does,
+// and a window opened on a new note takes that note's title.
+func TestFloatingWindowTitlesFollowTheOneXWindows(t *testing.T) {
+	ctx := newContext(note("note-1", "# Ideas", testNow))
+	if _, err := New().RunAction(ctx, invocation(ToggleCommandID, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(ctx.windows.toggled) != 1 || ctx.windows.toggled[0].Options == nil {
+		t.Fatalf("toggled = %+v, want one window with options", ctx.windows.toggled)
+	}
+	if got := ctx.windows.toggled[0].Options.Title; got != "Floating Notes" {
+		t.Fatalf("toggle title = %q, want Floating Notes", got)
+	}
+	restore, err := New().RestoreWindow(ctx, windowID)
+	if err != nil || restore == nil || restore.Options == nil {
+		t.Fatalf("restore = %+v, %v; want a window", restore, err)
+	}
+	if got := restore.Options.Title; got != "Floating Notes" {
+		t.Fatalf("restore title = %q, want Floating Notes", got)
+	}
+	if _, err := New().RunAction(ctx, invocation(NewWindowCommandID, nil)); err != nil {
+		t.Fatal(err)
+	}
+	if len(ctx.windows.created) != 1 || ctx.windows.created[0].Title != "Untitled note" {
+		t.Fatalf("created = %+v, want one window titled with the new note", ctx.windows.created)
+	}
+}
+
 func TestAutosaveWritesTheNoteAndCommitsItsDraft(t *testing.T) {
 	ctx := newContext(note("note-1", "old", testNow))
 	if _, err := New().RunAction(ctx, api.Invocation{Ref: api.ActionRef{ID: refAutosave, Args: map[string]string{argID: "note-1"}}, EditorContent: "new text"}); err != nil {

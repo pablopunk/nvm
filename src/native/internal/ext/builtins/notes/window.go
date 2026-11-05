@@ -7,6 +7,10 @@ import (
 // windowID names the floating window: one per extension, restored at launch under the same key.
 const windowID = "floating-notes"
 
+// windowTitle titles the floating window the toggle and the restore show, as 1.x titles it. A window opened on a new
+// note takes the note's title instead.
+const windowTitle = "Floating Notes"
+
 // Floating window metrics, as the 1.x window has them.
 const (
 	windowWidth  = 640
@@ -14,11 +18,11 @@ const (
 )
 
 // floatingWindowOptions are the options of the floating window: always on top, with a hidden title bar, a remembered
-// frame, and a persistent restore key. note titles a window that opens on a new note.
-func floatingWindowOptions(note api.Note) api.WindowOptions {
+// frame, a persistent restore key, and the title given.
+func floatingWindowOptions(title string) api.WindowOptions {
 	alwaysOnTop := true
 	return api.WindowOptions{
-		ID: windowID, RestoreKey: windowID, Title: noteTitle(note), TitleBar: "hidden",
+		ID: windowID, RestoreKey: windowID, Title: title, TitleBar: "hidden",
 		Width: windowWidth, Height: windowHeight, AlwaysOnTop: &alwaysOnTop,
 		Persistent: true, RemembersFrame: true,
 	}
@@ -32,7 +36,7 @@ func toggleWindow(ctx api.Context) (api.Result, error) {
 		return api.Result{}, err
 	}
 	view := editorView(ctx, note, modeWindow)
-	options := floatingWindowOptions(note)
+	options := floatingWindowOptions(windowTitle)
 	toggle := ctx.Windows().Toggle(api.WindowRef{ID: windowID, View: &view, Options: &options})
 	return api.Result{Next: &toggle}, nil
 }
@@ -57,6 +61,6 @@ func openInWindow(ctx api.Context, id string) (api.Result, error) {
 
 // createWindow opens the floating window on note. The window opens on the note's editor, titled with the note.
 func createWindow(ctx api.Context, note api.Note) (api.Result, error) {
-	create := ctx.Windows().Create(editorView(ctx, note, modeWindow), floatingWindowOptions(note))
+	create := ctx.Windows().Create(editorView(ctx, note, modeWindow), floatingWindowOptions(noteTitle(note)))
 	return api.Result{Next: &create}, nil
 }
