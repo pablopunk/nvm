@@ -22,6 +22,7 @@ func (p *App) openUserData() {
 		logx.Default().Warn("notes and snippets open read-only", logx.F{})
 	}
 	p.notes = notes.New(st, searchClock, p.userReadOnly)
+	importLegacyNotes(p.ports.FS, legacyNotesPath(p.goos), p.notes, store.Doc(st, legacyNotesMarkerFile, 1, func() legacyNotesMarker { return legacyNotesMarker{} }), searchClock.Now())
 	p.legacySnips = loadLegacySnippets(st)
 	p.userNotices = st.Notices()
 	mygo.App.OnQuit(func() { _ = st.Close() })

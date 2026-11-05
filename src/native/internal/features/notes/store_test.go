@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // The list is the notes most recently saved first, so the first row is the note the toggle command opens.
@@ -97,4 +98,29 @@ func mustRecent(t *testing.T, f *fixture) Note {
 		t.Fatalf("most recent: %v", err)
 	}
 	return note
+}
+
+// An imported note keeps its id, text and times; a note whose id the store holds is left as the store has it.
+func TestImportKeepsTheNoteAndSkipsAnExistingID(t *testing.T) {
+	f := newFixture(t)
+	kept := f.newNote("2.0 text")
+	old := Note{ID: "note-from-1x", Markdown: "1.x text", CreatedAt: kept.CreatedAt, UpdatedAt: kept.UpdatedAt.Add(-time.Hour)}
+	added, err := f.notes.Import(old)
+	if err != nil || !added {
+		t.Fatalf("import = %v, %v; want the note added", added, err)
+	}
+	got, ok := f.notes.Get(old.ID)
+	if !ok || got.Markdown != "1.x text" || !got.UpdatedAt.Equal(old.UpdatedAt) {
+		t.Fatalf("imported note = %+v, found %v", got, ok)
+	}
+	added, err = f.notes.Import(Note{ID: kept.ID, Markdown: "1.x copy"})
+	if err != nil || added {
+		t.Fatalf("import over an existing id = %v, %v; want it skipped", added, err)
+	}
+	if now, _ := f.notes.Get(kept.ID); now.Markdown != "2.0 text" {
+		t.Fatalf("existing note = %q, want the store's text", now.Markdown)
+	}
+	if _, err := f.notes.Import(Note{ID: "Bad ID"}); !errors.Is(err, ErrInvalidNote) {
+		t.Fatalf("import with a bad id = %v, want ErrInvalidNote", err)
+	}
 }

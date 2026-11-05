@@ -19,8 +19,11 @@ const (
 // ErrNotFound is returned for a note id that the store does not hold.
 var ErrNotFound = errors.New("notes: no such note")
 
-// ErrLimit is returned by Create when the store holds MaxNotes notes already.
+// ErrLimit is returned by Create and Import when the store holds MaxNotes notes already.
 var ErrLimit = errors.New("notes: the limit of 500 notes is reached; delete one to make room")
+
+// ErrInvalidNote is returned by Import for a note whose id has the wrong shape.
+var ErrInvalidNote = errors.New("notes: invalid note id")
 
 type notesDocument struct {
 	Notes []Note `json:"notes"`
@@ -92,6 +95,28 @@ func (s *Store) Create(now time.Time) (Note, error) {
 		return Note{}, err
 	}
 	return note, nil
+}
+
+// Import adds a note with the id, text and times it already has, as the 1.x app stored it. It reports false, and writes
+// nothing, when the store holds a note with that id: the store's copy is the one the user has kept.
+func (s *Store) Import(note Note) (bool, error) {
+	if s.readOnly {
+		return false, store.ErrReadOnly
+	}
+	if !validNoteID(note.ID) {
+		return false, ErrInvalidNote
+	}
+	if _, ok := s.Get(note.ID); ok {
+		return false, nil
+	}
+	if len(s.usableNotes()) >= MaxNotes {
+		return false, ErrLimit
+	}
+	note.Markdown = truncateText(note.Markdown)
+	if err := s.notes.Update(func(d *notesDocument) { d.Notes = append(d.Notes, note) }); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // Delete removes a note. The caller confirms with the user first.
