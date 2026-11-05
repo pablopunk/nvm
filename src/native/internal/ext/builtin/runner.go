@@ -56,6 +56,9 @@ func (r *Runner) Provides(method string) bool {
 	case protocol.MethodRestoreWindow:
 		_, ok := r.ext.(api.WindowRestorer)
 		return ok
+	case protocol.MethodRowActions:
+		_, ok := r.ext.(api.RowActionProvider)
+		return ok
 	}
 	return false
 }

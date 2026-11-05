@@ -88,7 +88,8 @@ func (s *Session) afterFirstLoad() {
 	}
 }
 
-// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result.
+// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result. A chat view
+// takes a whole new view instead, since its transcript, tier and side page change together while a reply streams.
 func (s *Session) refreshNow() {
 	refresh := s.view.Refresh
 	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
@@ -97,6 +98,11 @@ func (s *Session) refreshNow() {
 	s.refreshing = true
 	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
+		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat && result.View.Chat != nil {
+			s.view = *result.View
+			s.refreshHost()
+			return
+		}
 		if failure != nil || result.Patch == nil {
 			return
 		}
@@ -111,13 +117,13 @@ func (s *Session) refreshNow() {
 
 // startInterval runs the refresh every IntervalMs while the view is open, on the UI thread.
 func (s *Session) startInterval() {
-	refresh := s.view.Refresh
-	if refresh == nil || refresh.IntervalMs <= 0 || s.deps.Clock == nil {
+	interval := s.refreshInterval()
+	if interval <= 0 || s.deps.Clock == nil {
 		return
 	}
 	stop := make(chan struct{})
 	s.stopInterval = stop
-	ticker := s.deps.Clock.NewTicker(time.Duration(refresh.IntervalMs) * time.Millisecond)
+	ticker := s.deps.Clock.NewTicker(interval)
 	go func() {
 		defer ticker.Stop()
 		for {
@@ -255,4 +261,20 @@ func durationMs(ms, fallback int64) time.Duration {
 		ms = fallback
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+// chatTickInterval is how often a chat view checks for a new transcript. It runs whenever the chat is open, so a reply
+// that starts after the view opened shows its words; a view with no refresh does nothing on a tick.
+const chatTickInterval = 150 * time.Millisecond
+
+// refreshInterval is the period of the view's refresh ticks: a chat view ticks at chatTickInterval, and any other view
+// at its own IntervalMs, or not at all when it has no refresh.
+func (s *Session) refreshInterval() time.Duration {
+	if s.view.Kind == api.ViewChat {
+		return chatTickInterval
+	}
+	if s.view.Refresh == nil || s.view.Refresh.IntervalMs <= 0 {
+		return 0
+	}
+	return time.Duration(s.view.Refresh.IntervalMs) * time.Millisecond
 }

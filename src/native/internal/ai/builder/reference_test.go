@@ -39,7 +39,8 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // file detail and index status, the API surface the builder reads. The settings views (section 37 of the extension API
 // doc) and the Background Tasks jobs namespace (section 41) grew it again. The Notes built-in and the extension window
 // chrome (section 44) grew it by about 1 KB more.
-const maxReferenceBytes = 58 << 10
+// The AI Chats built-in's chat and builder API, merged over the shared displays, grew it to about 61 KB.
+const maxReferenceBytes = 61 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
@@ -52,8 +53,9 @@ func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 // alias read of the applications built-in, which the builder reads as API surface. It grew by about 1.2 KB for the
 // files built-in's preview, open-with and trash actions, its index status and the bundled datasets, the API surface the
 // built-ins moved onto. The diagnostics built-in's records and report and the jobs namespace grew it again. The Notes
-// built-in's list, editor and window actions grew it by about 0.8 KB more.
-const maxCompactReferenceBytes = 38 << 10
+// built-in's list, editor and window actions grew it by about 0.8 KB more. The AI Chats built-in's chat and builder
+// actions grew it to about 39 KB.
+const maxCompactReferenceBytes = 39 << 10
 
 func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReferenceCompact) > maxCompactReferenceBytes {

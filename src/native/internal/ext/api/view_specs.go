@@ -160,13 +160,56 @@ type WebviewSpec struct {
 	Permissions []WebviewPermission `json:"permissions,omitempty"`
 }
 
-// ChatMessage is one turn in a chat view.
+// ChatMessage is one turn in a chat view. Role is user, assistant or system. Thinking is a reasoning block that
+// opens on request, Images are pictures sent with a user turn, Tool is a tool row, and Streaming marks an assistant
+// turn still arriving: the host shows progress for it and the chat's Stop action.
 type ChatMessage struct {
-	Role    string `json:"role"` // user, assistant or system
-	Content string `json:"content"`
+	Role string `json:"role"`
+	// Title names a system row, such as a refusal's notice; empty shows it as Note.
+	Title     string      `json:"title,omitempty"`
+	Content   string      `json:"content"`
+	Thinking  string      `json:"thinking,omitempty"`
+	Images    []ChatImage `json:"images,omitempty"`
+	Tool      *ChatTool   `json:"tool,omitempty"`
+	Streaming bool        `json:"streaming,omitempty"`
 }
 
-// ChatSpec is a transcript view. The composer and streaming are host-owned.
+// ChatImage is a picture in a chat turn, as a data URL.
+type ChatImage struct {
+	Title   string `json:"title,omitempty"`
+	DataURL string `json:"dataUrl"`
+}
+
+// ChatTool is a tool row: its name, its status (running, waiting, done or failed) and its result text. A waiting
+// tool asks the user to allow it; the chat's Submit action with an empty message answers the allow.
+type ChatTool struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
+	Result string `json:"result,omitempty"`
+}
+
+// NewChatView is the transcript of a chat that has no record yet: a draft with no messages and no tier picker. Submit
+// runs with the typed text in Invocation.Form["message"] and the pictures in Invocation.Images, and its handler starts
+// the chat, which the host then opens. The chat starts on tier.
+func NewChatView(title string, tier ModelTier, submit ActionRef) View {
+	return View{Kind: ViewChat, Title: title, Chat: &ChatSpec{Tier: tier, Submit: &submit}}
+}
+
+// ChatSpec is a transcript view. The host draws the messages, the composer and the streaming progress. Submit runs
+// with the typed text in Invocation.Form["message"] (empty when the user only allows a waiting tool). Stop runs
+// while a message streams. Tier is the selected model tier and OnTier runs with the tier the user chose in
+// Ref.Args["tier"]; without OnTier the picker is hidden.
 type ChatSpec struct {
-	Messages []ChatMessage `json:"messages"`
+	Messages    []ChatMessage `json:"messages"`
+	Placeholder string        `json:"placeholder,omitempty"`
+	Tier        ModelTier     `json:"tier,omitempty"`
+	OnTier      *ActionRef    `json:"onTier,omitempty"`
+	Submit      *ActionRef    `json:"submit,omitempty"`
+	Stop        *ActionRef    `json:"stop,omitempty"`
+	// Attach shows the composer's picture control. A submit then carries the pictures in Invocation.Images.
+	Attach bool `json:"attach,omitempty"`
+
+	// Side is a view drawn beside the transcript, as the AI Chats page draws the preview of a builder's extension. The
+	// host hides and shows it with a palette action, and keeps the side's place while the owner returns the same view.
+	Side *View `json:"side,omitempty"`
 }

@@ -123,6 +123,11 @@ func (m Manifest) Validate() error {
 
 // ValidateBuiltIn checks a manifest compiled into Nevermind. It is Validate without the reserved prefix rule,
 // which exists to keep folder extensions out of the built-in namespace.
+// IsBuiltIn reports whether the id is in the namespace reserved for built-in extensions.
+func (m Manifest) IsBuiltIn() bool {
+	return IsBuiltInID(m.ID)
+}
+
 func (m Manifest) ValidateBuiltIn() error {
 	if !strings.HasPrefix(m.ID, reservedIDPrefix) {
 		return fmt.Errorf("built-in extension id %q must use the %q prefix", m.ID, reservedIDPrefix)
@@ -166,4 +171,9 @@ func validateConvertedFrom(name string) error {
 		return fmt.Errorf("convertedFrom %q must be the file name of a 1.x extension, such as toggle-system-theme.ts", name)
 	}
 	return nil
+}
+
+// IsBuiltInID reports whether an extension id is in the namespace reserved for built-in extensions.
+func IsBuiltInID(id string) bool {
+	return strings.HasPrefix(id, reservedIDPrefix)
 }

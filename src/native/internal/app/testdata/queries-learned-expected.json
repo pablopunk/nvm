@@ -595,7 +595,7 @@
       {
         "kind": "Commands",
         "title": "AI Chats",
-        "subtitle": "Chat with the assistant",
+        "subtitle": "2 AI chats",
         "section": "",
         "id": "",
         "icon": "sparkles",
@@ -743,7 +743,7 @@
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-release",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -762,7 +762,7 @@
         "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-tokyo",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -879,7 +879,7 @@
         "title": "Automate \"cal\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -888,7 +888,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"cal\"",
             "label": ""
           }
         ]
@@ -1103,7 +1103,7 @@
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1112,7 +1112,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"term\"",
             "label": ""
           }
         ]
@@ -1624,7 +1624,7 @@
         "title": "Automate \"set\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1633,7 +1633,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"set\"",
             "label": ""
           }
         ]
@@ -1662,7 +1662,7 @@
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-release",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -1893,7 +1893,7 @@
         "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-tokyo",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",

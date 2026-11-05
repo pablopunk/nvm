@@ -1,8 +1,10 @@
 package aichat
 
 import (
-	"fmt"
-	"strings"
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
+	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -143,71 +146,6 @@ func (r *rig) awaitIdle(id string) {
 	}
 }
 
-// deps is the page dependencies over the rig.
-func (r *rig) deps() Deps {
-	return Deps{
-		Service:  r.service,
-		Reply:    drawReply,
-		Copy:     func(text string) { r.copied = append(r.copied, text) },
-		SignedIn: func() bool { return r.signed },
-		SignIn:   func() auth.SignInState { return r.sign },
-		StartSignIn: func() error {
-			r.signInStarts++
-			return r.startErr
-		},
-		Now:     func() time.Time { return goldenNow },
-		Preview: r.extensionPreview,
-	}
-}
-
-// extensionPreview is the preview source of the rig: nil when the test sets no side, so no chat offers a preview.
-func (r *rig) extensionPreview(string) *palette.Side {
-	return r.previewSide
-}
-
-// chatWith creates a conversation with a transcript, dated against goldenNow. With no transcript it is an opened chat.
-func (r *rig) chatWith(title string, tier chat.Tier, messages ...chat.Message) chat.Chat {
-	r.t.Helper()
-	return r.seedChat(chat.KindConversation, tier, title, "", messages)
-}
-
-// seedChat records a chat of kind with a transcript and the given title and extension, dated against goldenNow, and
-// reloads the service. A chat with no transcript is only opened, since the service records a chat with its first
-// message.
-func (r *rig) seedChat(kind chat.Kind, tier chat.Tier, title, extension string, messages []chat.Message) chat.Chat {
-	r.t.Helper()
-	if len(messages) == 0 {
-		return r.openChat(kind, tier, extension)
-	}
-	r.seq++
-	record := chat.Chat{
-		ID: fmt.Sprintf("chat-seed-%d", r.seq), Kind: kind, Tier: tier, Title: title, Extension: extension,
-		Messages: messages, CreatedAt: goldenNow, UpdatedAt: goldenNow,
-	}
-	if err := r.store.Insert(record); err != nil {
-		r.t.Fatalf("seed chat: %v", err)
-	}
-	r.service.Reload()
-	record, _ = r.service.Chat(record.ID)
-	return record
-}
-
-// openChat opens a chat of kind on tier, bound to extension when it is not empty. Nothing is recorded until a message.
-func (r *rig) openChat(kind chat.Kind, tier chat.Tier, extension string) chat.Chat {
-	r.t.Helper()
-	record, err := r.service.NewChat(kind, tier)
-	if err != nil {
-		r.t.Fatalf("NewChat: %v", err)
-	}
-	if extension != "" {
-		if err := r.service.Bind(record.ID, extension); err != nil {
-			r.t.Fatalf("Bind: %v", err)
-		}
-	}
-	record, _ = r.service.Chat(record.ID)
-	return record
-}
-
 // open shows view above the root with an empty query, as a push does: the palette gives the keyboard to the page.
 func (r *rig) open(view *palette.View) {
 	r.palette.SetStack(r.root)
@@ -245,12 +183,25 @@ func drawReply(c *ui.Context, src string, streaming bool) {
 	markdown.View(c, src, options)
 }
 
-// said reports whether the HUD was told text, in a message of its own or in a feedback's title.
-func (r *rig) said(text string) bool {
-	for _, f := range r.feedback {
-		if strings.Contains(f.Message, text) {
-			return true
+// pageGoldens renders a chat page at the palette's size. Each golden is compared in light and dark, at 1x and 2x.
+var pageGoldens = golden.Options{Group: "aichat", Width: goldenWidth, Height: goldenHeight}
+
+// testPicture is a PNG of the given size and shade, read as a picture the composer attaches.
+func testPicture(t *testing.T, name string, w, h int, shade uint8) chat.Image {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: shade, G: uint8(x * 255 / w), B: uint8(y * 255 / h), A: 255})
 		}
 	}
-	return false
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	picture, err := chat.NewImage(name, buf.Bytes())
+	if err != nil {
+		t.Fatalf("NewImage: %v", err)
+	}
+	return picture
 }

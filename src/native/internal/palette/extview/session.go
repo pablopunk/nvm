@@ -7,8 +7,6 @@
 package extview
 
 import (
-	"context"
-	"encoding/json"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -16,125 +14,42 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Deps are the services a view uses. Each asynchronous one calls its done function on the UI thread through OnUI; the
-// host owns the timeouts and the processes. A nil Clock or Cache disables snapshots, and a nil OnUI runs callbacks in
-// place (tests).
-type Deps struct {
-	Invoke func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
-	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their
-	// provider runs off the UI thread and needs the answer to build its rows. Nil leaves those rows empty.
-	Answer    func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)
-	Load      func(extID, loader string, done func([]api.Item, *api.Failure))
-	LoadImage func(ref string, done func(*ui.Bitmap))
-	OpenURL   func(url string)
-	// CopyText writes text to the clipboard and reports a failure as a toast on h. Paste sends a paste or typing action to
-	// the app in front, through the services of extension extID, and hides the palette first. Nil makes those actions
-	// report unavailable.
-	CopyText func(h search.Host, text string)
-	// CopyImage puts the PNG file at path on the clipboard and reports a failure as a toast on h. Nil makes copy-image report unavailable.
-	CopyImage func(h search.Host, path string)
-	// LinkCard returns the preview of a web address for a detail pane's link card: its status, and the title,
-	// description, site and picture the host read. It starts the read when there is none yet and never blocks. Nil draws
-	// no card.
-	LinkCard func(url string) api.LinkCard
-	Paste    func(h search.Host, extID string, action api.Action)
-	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
-	// system action report unavailable.
-	OpenSettingsPane func(id string)
-	// RecordPaletteShortcut pushes the recorder of the palette shortcut onto h. Nil makes the action report unavailable.
-	RecordPaletteShortcut func(h search.Host)
-	// ReadSetting returns the stored value of a declared setting of extension extID, and WriteSetting saves one (both
-	// through the extension's settings service). RecordSetting pushes the host's recorder for a setting that holds an
-	// accelerator, and RowAccessory gives the host's edge text for a settings row, when it has one. Nil makes the
-	// settings rows report unavailable, or show their own text.
-	ReadSetting   func(extID, key string) (json.RawMessage, error)
-	WriteSetting  func(extID, key string, value json.RawMessage) error
-	RecordSetting func(h search.Host, extID, key string)
-	RowAccessory  func(extID, rowID string) (accessory, subtitle string, ok bool)
-	// ReadDisplay returns the display text another built-in publishes for the shared setting a row shows, for the
-	// settings view of reader readerID. Nil makes such a row show its own accessory.
-	ReadDisplay func(readerID string, ref api.SettingRef) (string, bool)
-	// HostOperation runs a host operation of a built-in's ActionHost action on h. Nil makes it report unavailable.
-	HostOperation func(h search.Host, extID, op string)
-	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.
-	SignIn func(h search.Host)
-	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
-	// the action report unavailable.
-	OpenPath   func(path string)
-	RevealPath func(path string)
-	// QuickLook shows a file in the system's previewer, OpenWith opens a file with the app at appPath, and Trash
-	// moves a file to the Trash. Nil makes the action report unavailable; failures show as a toast.
-	QuickLook func(path string) error
-	OpenWith  func(path, appPath string) error
-	Trash     func(path string) error
-	// Indicate shows a result's toast as a passive indicator owned by the extension. Nil shows the message under the
-	// search field instead.
-	Indicate func(extID string, input api.IndicatorInput)
-	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
-	// run it, and "" when it did. Nil makes system ops report unavailable.
-	RunSystem func(op string, done func(failure string))
-	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and
-	// remove drops the user's shortcut. Nil makes the action report unavailable.
-	ShortcutAction func(h search.Host, op, target string)
-	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
-	// reason it refused, if it did. Nil makes update actions report unavailable.
-	RunUpdate func(op string) error
-	Files     platform.FS
-	Clock     platform.Clock
-	Cache     Cache
-	OnUI      func(fn func())
-	// HyperKey is the Hyper key that shortcut labels show as ✦. It is asked on each label. Nil shows none.
-	HyperKey func() string
-	// Dialog shows the native file and folder choosers for path fields. Nil makes those fields report unavailable.
-	Dialog platform.FileDialog
-	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
-	Drafts DraftStore
-	// Window performs a window action of extension extID: a companion window it opens, shows, hides, toggles or closes.
-	// The palette hides before the call. Nil makes the action report unavailable.
-	Window func(extID string, action api.Action)
-	// Pages opens the web page of a webview or camera view. Nil, or a system without a web view, makes those views
-	// say the system cannot show them.
-	Pages platform.WebPages
-	// Permissions reads the OS camera permission before a camera view starts, and asks for camera and microphone
-	// access for a webview that declares them. Nil skips both.
-	Permissions platform.Permissions
-	// Cameras remembers the camera each camera view chose. Nil keeps the choice for the life of the session.
-	Cameras CameraMemory
-	// IsDark reports the palette's appearance, which a web page's theme follows. Nil means light.
-	IsDark func() bool
-}
-
 // Session is one open extension view. It is used on the UI thread only.
 type Session struct {
 	deps         Deps
-	extID        string
-	view         api.View
-	host         search.Host
-	items        []api.Item
-	sections     []api.ItemSection
-	loading      bool
-	failure      *api.Failure
-	hasMore      bool
-	selectID     string
-	images       map[string]*ui.Bitmap
-	requested    map[string]bool
-	handles      map[handle]route
-	markdown     *markdown.Options
-	started      bool
-	immediate    bool
-	dismissed    bool
-	refreshing   bool
-	stopInterval chan struct{}
-	form         *formState
-	media        *palette.View
-	page         platform.WebPage
-	camera       *cameraView
-	searchChange searchChange
-	accessory    *palette.Accessory
+	chatRenderer *aichat.ExtensionChat
+	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
+	chatSideSession *Session
+	chatSidePage    *palette.View
+	extID           string
+	view            api.View
+	host            search.Host
+	items           []api.Item
+	sections        []api.ItemSection
+	loading         bool
+	failure         *api.Failure
+	hasMore         bool
+	selectID        string
+	images          map[string]*ui.Bitmap
+	requested       map[string]bool
+	handles         map[handle]route
+	markdown        *markdown.Options
+	started         bool
+	immediate       bool
+	dismissed       bool
+	refreshing      bool
+	stopInterval    chan struct{}
+	form            *formState
+	media           *palette.View
+	page            platform.WebPage
+	camera          *cameraView
+	searchChange    searchChange
+	accessory       *palette.Accessory
 	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
 	guard        sync.Mutex
 	filePreviews map[string]filePreviewText
@@ -216,6 +131,10 @@ func (s *Session) pageOfKind() *palette.View {
 	case api.ViewSettings:
 		if s.view.Settings != nil {
 			return s.settingsPage()
+		}
+	case api.ViewChat:
+		if s.view.Chat != nil {
+			return s.chatPage()
 		}
 	}
 	return s.unsupportedPage()

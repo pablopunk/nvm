@@ -1427,3 +1427,14 @@ Code: `internal/palette/window_chrome.go`, `internal/app/extension_window_host.g
 - **Companion.** A window whose `titleBar` is `hidden` uses the companion layout: a 36 px strip above the header drags the window, under the traffic lights at 12, 12. A native title bar draws no strip.
 - **Footer and menu.** The footer shows the action menu's key (⌘K) when the row has actions. The menu draws over the footer, as before.
 - **Tests.** `internal/palette/extview/window_chrome_test.go` draws a companion window and a launcher page on the fake window; the golden `extension-window/companion-ticker` is the floating ticker fixture, light and dark.
+
+## 45. Dogfood batch 5: the AI Chats built-in's API gaps
+
+Code: `internal/ext/api/view_specs.go` (`NewChatView`), `internal/ext/api/item.go` (`TiePriority`), `internal/ext/api/services_ai.go` (`ChatSummary.ExtensionID`, `AIBuilder.ExtensionPreview`), `internal/ext/api/contract.go` (`RowActionProvider`, `ExtensionRow`), `internal/ext/manager/row_actions.go` (the fan-out to built-ins).
+
+- **New Chat.** `api.NewChatView(title, tier, submit)` is a draft transcript with no chat record and no tier picker. Its submit runs with the typed text in `Form["message"]`; the built-in starts the chat with `AIChats.New`, and the host opens it. Pictures are not offered on a draft.
+- **Side preview.** A builder chat's transcript carries `ChatSpec.Side`, the extension's own preview from `AIBuilder.ExtensionPreview(id)`: its root rows and commands, with `Presentation: side-preview`. It is false for an extension that is not installed. `ChatSummary.ExtensionID` names the extension a builder chat is bound to.
+- **Root order.** `Item.TiePriority` orders rows of equal score and last use, higher first (1.x gives builder chats -1). A built-in sets `LastUsedMs` to its chat's last change, or its creation, as 1.x does. The host applies `TiePriority` to built-in rows only.
+- **Row actions.** A built-in that implements `RowActionProvider` adds actions to the menu of every installed extension's row, after the actions the host lists for it. The built-in AI Chats adds Tweak with AI this way. The host asks built-ins only, through the `row-actions` protocol method; a folder extension cannot add row actions.
+- **Host views.** The host opens every chat and builder page by running the built-in's own action (`OpenChatRef`, `HistoryRef`), asynchronously, so a view never waits on the UI thread. Tab, Create, Duplicate and Edit with AI open `LoadingChatView`, which refreshes on a tick until the built-in's transcript is ready. A system row carries its `ChatMessage.Title`, such as a refusal's "Credits needed".
+- **Tests.** L1: `internal/ext/builtins/aichats/aichats_test.go` (row actions, tie priority and last use of builder and conversation rows). Rig L4: J13 and J28 pass on the dogaichat box slot with the built-in views (`TestJourney(J13|J28)`).

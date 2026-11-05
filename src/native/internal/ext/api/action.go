@@ -39,6 +39,11 @@ const (
 	ActionAccount ActionKind = "account"
 	// ActionHost runs a host operation a built-in may name, such as opening a host page. Op is one of hostOps.
 	ActionHost ActionKind = "host"
+	// ActionChat opens, starts, continues or removes a host-owned chat. Chat holds its payload.
+	ActionChat ActionKind = "chat"
+	// ActionBuilder opens, starts, tweaks or removes an AI builder chat, or opens the list of them. Builder holds its
+	// payload. Only built-in extensions may return it.
+	ActionBuilder ActionKind = "builder"
 	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionShortcut changes the user's shortcut for the action Target names: Op record opens the host's recorder for it,
@@ -52,12 +57,41 @@ const (
 // AccountSignIn starts the sign-in flow.
 const AccountSignIn = "sign-in"
 
+// Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat
+// (an empty message allows a tool call that waits), Stop ends a reply that streams, Tier changes the chat's model tier,
+// Remove deletes a chat the user asked to remove, Again drops the last reply and asks the last question again, and
+// Allow and Refuse answer a tool call that waits.
+const (
+	ChatOpen     = "open"
+	ChatNew      = "new"
+	ChatContinue = "continue"
+	ChatStop     = "stop"
+	ChatTier     = "tier"
+	ChatRemove   = "remove"
+	ChatAgain    = "again"
+	ChatAllow    = "allow"
+	ChatRefuse   = "refuse"
+)
+
+// Ops of the builder action: Start begins a builder chat with a prompt, Open shows one, Remove deletes one, Tweak opens
+// a chat that changes an extension, List shows the builder chats, and Review opens the review of an extension.
+const (
+	BuilderStart  = "start"
+	BuilderOpen   = "open"
+	BuilderRemove = "remove"
+	BuilderTweak  = "tweak"
+	BuilderList   = "list"
+	BuilderReview = "review"
+)
+
 // Op values for the kinds that have sub-operations.
 var (
 	windowOps   = []string{"create", "show", "hide", "toggle", "close"}
 	systemOps   = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps   = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
 	accountOps  = []string{AccountSignIn}
+	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse}
+	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
 	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page"}
 	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove}
@@ -96,6 +130,8 @@ type Action struct {
 	View    *View             `json:"view,omitempty"`
 	Window  *WindowRef        `json:"window,omitempty"`
 	Submenu *ActionPanel      `json:"submenu,omitempty"`
+	Chat    *ChatAction       `json:"chat,omitempty"`
+	Builder *BuilderAction    `json:"builder,omitempty"`
 }
 
 // ActionRef names a handler the extension registered. IDs are stable across runs because
@@ -233,6 +269,16 @@ func (a Action) validateDeclarative() error {
 		return validateOp(a.Op, accountOps)
 	case ActionHost:
 		return validateOp(a.Op, hostOps)
+	case ActionChat:
+		if a.Chat == nil {
+			return fmt.Errorf("chat action %q needs its chat payload", a.Title)
+		}
+		return validateOp(a.Op, chatOps)
+	case ActionBuilder:
+		if a.Builder == nil {
+			return fmt.Errorf("builder action %q needs its builder payload", a.Title)
+		}
+		return validateOp(a.Op, builderOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

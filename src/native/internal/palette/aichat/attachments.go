@@ -10,24 +10,25 @@ import (
 // attachmentSize is the side of a picture's thumbnail in the composer, in DIPs.
 const attachmentSize = 48
 
-// attachButton opens the chooser for pictures. Like the desktop app's, it is offered on the Smart tier only.
-func attachButton(c *ui.Context, p *page) {
+// attachButton opens the chooser for pictures, and done receives the ones read. The AI Chats page offers it on the Smart
+// tier only, as the desktop app does.
+func attachButton(c *ui.Context, pick func(done func([]chat.Image)), done func([]chat.Image)) {
 	k := design.Tokens(c)
 	button := ui.ButtonBase(c).Padding(3, 6).Radius(6).Label("Attach images")
 	button.Children(func() {
 		ui.Icon(c, design.Icon("image")).FontSize(14).TextColor(k.Secondary)
 	})
 	if button.Clicked() {
-		p.deps.PickImages(p.addImages)
+		pick(done)
 	}
 }
 
-// attachmentsRow is the row of thumbnails the next message carries, each with a control that removes it.
-func attachmentsRow(c *ui.Context, p *page) {
+// attachmentsRow is the row of thumbnails the next message carries, each with a control that removes it by index.
+func attachmentsRow(c *ui.Context, images []chat.Image, removeAt func(index int)) {
 	k := design.Tokens(c)
 	removed := -1
 	ui.Row(c).Gap(8).Padding(8, 8, 0, 8).AlignItems(ui.Center).Children(func() {
-		for index, image := range p.attachments {
+		for index, image := range images {
 			ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 				width, height := fittedPicture(image, attachmentSize, attachmentSize)
 				picture(c, image, width, height)
@@ -42,7 +43,7 @@ func attachmentsRow(c *ui.Context, p *page) {
 		}
 	})
 	if removed >= 0 {
-		p.removeImage(removed)
+		removeAt(removed)
 	}
 }
 
@@ -52,38 +53,4 @@ func imageLabel(image chat.Image, index int) string {
 		return image.Name
 	}
 	return "image " + string(rune('1'+index))
-}
-
-// addImages attaches pictures to the next message, as many as the limits allow, and says which limit refused the rest.
-// The composer takes the keyboard back, as the chooser that picked them took it away.
-func (p *page) addImages(incoming []chat.Image) {
-	kept, problem := chat.AddImages(p.attachments, incoming)
-	p.attachments = kept
-	p.input.Focus()
-	if problem != "" && p.host != nil {
-		p.host.Toast(problem)
-	}
-}
-
-// removeImage takes the picture at index off the next message.
-func (p *page) removeImage(index int) {
-	p.attachments = append(p.attachments[:index:index], p.attachments[index+1:]...)
-}
-
-// paste takes a paste that holds no text as a picture from the clipboard, when the clipboard holds one. A picture it
-// refuses is said on the palette. A paste of text is left to the input.
-func (p *page) paste(text string) bool {
-	if text != "" || p.deps.PasteImage == nil {
-		return false
-	}
-	image, ok, err := p.deps.PasteImage()
-	switch {
-	case err != nil:
-		p.report(err)
-	case ok:
-		p.addImages([]chat.Image{image})
-	default:
-		return false
-	}
-	return true
 }

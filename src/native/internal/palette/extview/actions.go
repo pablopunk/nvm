@@ -114,6 +114,16 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		op, target := action.Op, action.Target
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.ShortcutAction(h, op, target) }}
+	case api.ActionChat:
+		if action.Chat == nil || s.deps.Chats == nil {
+			break
+		}
+		return s.chatOperation(action, title)
+	case api.ActionBuilder:
+		if action.Builder == nil || s.deps.Chats == nil || !api.IsBuiltInID(s.extID) {
+			break
+		}
+		return s.builderOperation(action, title)
 	case api.ActionRecordPaletteShortcut:
 		if s.deps.RecordPaletteShortcut == nil {
 			break

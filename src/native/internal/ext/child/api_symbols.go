@@ -24,7 +24,9 @@ func init() {
 		"AIEventToolStart":              reflect.ValueOf(constant.MakeFromLiteral("\"tool_start\"", token.STRING, 0)),
 		"AccountSignIn":                 reflect.ValueOf(constant.MakeFromLiteral("\"sign-in\"", token.STRING, 0)),
 		"ActionAccount":                 reflect.ValueOf(api.ActionAccount),
+		"ActionBuilder":                 reflect.ValueOf(api.ActionBuilder),
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
+		"ActionChat":                    reflect.ValueOf(api.ActionChat),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
 		"ActionHost":                    reflect.ValueOf(api.ActionHost),
@@ -53,6 +55,12 @@ func init() {
 		"ActionUpdate":                  reflect.ValueOf(api.ActionUpdate),
 		"ActionWindow":                  reflect.ValueOf(api.ActionWindow),
 		"AllFieldTypes":                 reflect.ValueOf(api.AllFieldTypes),
+		"BuilderList":                   reflect.ValueOf(constant.MakeFromLiteral("\"list\"", token.STRING, 0)),
+		"BuilderOpen":                   reflect.ValueOf(constant.MakeFromLiteral("\"open\"", token.STRING, 0)),
+		"BuilderRemove":                 reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
+		"BuilderReview":                 reflect.ValueOf(constant.MakeFromLiteral("\"review\"", token.STRING, 0)),
+		"BuilderStart":                  reflect.ValueOf(constant.MakeFromLiteral("\"start\"", token.STRING, 0)),
+		"BuilderTweak":                  reflect.ValueOf(constant.MakeFromLiteral("\"tweak\"", token.STRING, 0)),
 		"CapabilityAI":                  reflect.ValueOf(api.CapabilityAI),
 		"CapabilityCamera":              reflect.ValueOf(api.CapabilityCamera),
 		"CapabilityClipboardHistory":    reflect.ValueOf(api.CapabilityClipboardHistory),
@@ -74,6 +82,15 @@ func init() {
 		"CapabilitySystem":              reflect.ValueOf(api.CapabilitySystem),
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
+		"ChatAgain":                     reflect.ValueOf(constant.MakeFromLiteral("\"again\"", token.STRING, 0)),
+		"ChatAllow":                     reflect.ValueOf(constant.MakeFromLiteral("\"allow\"", token.STRING, 0)),
+		"ChatContinue":                  reflect.ValueOf(constant.MakeFromLiteral("\"continue\"", token.STRING, 0)),
+		"ChatNew":                       reflect.ValueOf(constant.MakeFromLiteral("\"new\"", token.STRING, 0)),
+		"ChatOpen":                      reflect.ValueOf(constant.MakeFromLiteral("\"open\"", token.STRING, 0)),
+		"ChatRefuse":                    reflect.ValueOf(constant.MakeFromLiteral("\"refuse\"", token.STRING, 0)),
+		"ChatRemove":                    reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
+		"ChatStop":                      reflect.ValueOf(constant.MakeFromLiteral("\"stop\"", token.STRING, 0)),
+		"ChatTier":                      reflect.ValueOf(constant.MakeFromLiteral("\"tier\"", token.STRING, 0)),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
 		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
@@ -154,6 +171,7 @@ func init() {
 		"IndicatorRecording":            reflect.ValueOf(api.IndicatorRecording),
 		"IndicatorSuccess":              reflect.ValueOf(api.IndicatorSuccess),
 		"IndicatorTranscribing":         reflect.ValueOf(api.IndicatorTranscribing),
+		"IsBuiltInID":                   reflect.ValueOf(api.IsBuiltInID),
 		"IsPermissionKind":              reflect.ValueOf(api.IsPermissionKind),
 		"JobOutcomeFailed":              reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
 		"JobOutcomeSkipped":             reflect.ValueOf(constant.MakeFromLiteral("\"skipped\"", token.STRING, 0)),
@@ -208,6 +226,7 @@ func init() {
 		"NavPush":                       reflect.ValueOf(api.NavPush),
 		"NavReplace":                    reflect.ValueOf(api.NavReplace),
 		"NavRoot":                       reflect.ValueOf(api.NavRoot),
+		"NewChatView":                   reflect.ValueOf(api.NewChatView),
 		"NewInput":                      reflect.ValueOf(api.NewInput),
 		"NoteConflictKeepRef":           reflect.ValueOf(constant.MakeFromLiteral("\"note-conflict-keep\"", token.STRING, 0)),
 		"NoteConflictRestoreRef":        reflect.ValueOf(constant.MakeFromLiteral("\"note-conflict-restore\"", token.STRING, 0)),
@@ -254,6 +273,7 @@ func init() {
 		"QuickLook":                     reflect.ValueOf(api.QuickLook),
 		"RevealPath":                    reflect.ValueOf(api.RevealPath),
 		"RootView":                      reflect.ValueOf(api.RootView),
+		"RowFromArgs":                   reflect.ValueOf(api.RowFromArgs),
 		"Run":                           reflect.ValueOf(api.Run),
 		"ScheduleKeyLimit":              reflect.ValueOf(constant.MakeFromLiteral("64", token.INT, 0)),
 		"Section":                       reflect.ValueOf(api.Section),
@@ -342,6 +362,7 @@ func init() {
 		// type definitions
 		"AI":                      reflect.ValueOf((*api.AI)(nil)),
 		"AIBuilder":               reflect.ValueOf((*api.AIBuilder)(nil)),
+		"AIChats":                 reflect.ValueOf((*api.AIChats)(nil)),
 		"AIOptions":               reflect.ValueOf((*api.AIOptions)(nil)),
 		"AISession":               reflect.ValueOf((*api.AISession)(nil)),
 		"AIStream":                reflect.ValueOf((*api.AIStream)(nil)),
@@ -361,14 +382,19 @@ func init() {
 		"Attachment":              reflect.ValueOf((*api.Attachment)(nil)),
 		"AttachmentBuilder":       reflect.ValueOf((*api.AttachmentBuilder)(nil)),
 		"BackgroundMode":          reflect.ValueOf((*api.BackgroundMode)(nil)),
+		"BuilderAction":           reflect.ValueOf((*api.BuilderAction)(nil)),
 		"Bundle":                  reflect.ValueOf((*api.Bundle)(nil)),
 		"BundleRecord":            reflect.ValueOf((*api.BundleRecord)(nil)),
 		"Cache":                   reflect.ValueOf((*api.Cache)(nil)),
 		"CameraSpec":              reflect.ValueOf((*api.CameraSpec)(nil)),
 		"Capability":              reflect.ValueOf((*api.Capability)(nil)),
+		"ChatAction":              reflect.ValueOf((*api.ChatAction)(nil)),
+		"ChatDetail":              reflect.ValueOf((*api.ChatDetail)(nil)),
+		"ChatImage":               reflect.ValueOf((*api.ChatImage)(nil)),
 		"ChatMessage":             reflect.ValueOf((*api.ChatMessage)(nil)),
 		"ChatSpec":                reflect.ValueOf((*api.ChatSpec)(nil)),
 		"ChatSummary":             reflect.ValueOf((*api.ChatSummary)(nil)),
+		"ChatTool":                reflect.ValueOf((*api.ChatTool)(nil)),
 		"ClipboardContent":        reflect.ValueOf((*api.ClipboardContent)(nil)),
 		"ClipboardEntry":          reflect.ValueOf((*api.ClipboardEntry)(nil)),
 		"ClipboardHistory":        reflect.ValueOf((*api.ClipboardHistory)(nil)),
@@ -410,6 +436,7 @@ func init() {
 		"ErrorCode":               reflect.ValueOf((*api.ErrorCode)(nil)),
 		"ExactFrame":              reflect.ValueOf((*api.ExactFrame)(nil)),
 		"Extension":               reflect.ValueOf((*api.Extension)(nil)),
+		"ExtensionRow":            reflect.ValueOf((*api.ExtensionRow)(nil)),
 		"Fact":                    reflect.ValueOf((*api.Fact)(nil)),
 		"Failure":                 reflect.ValueOf((*api.Failure)(nil)),
 		"FetchRequest":            reflect.ValueOf((*api.FetchRequest)(nil)),
@@ -496,6 +523,7 @@ func init() {
 		"Refresh":                 reflect.ValueOf((*api.Refresh)(nil)),
 		"Result":                  reflect.ValueOf((*api.Result)(nil)),
 		"RootProvider":            reflect.ValueOf((*api.RootProvider)(nil)),
+		"RowActionProvider":       reflect.ValueOf((*api.RowActionProvider)(nil)),
 		"Rules":                   reflect.ValueOf((*api.Rules)(nil)),
 		"SavedDictation":          reflect.ValueOf((*api.SavedDictation)(nil)),
 		"Scheduler":               reflect.ValueOf((*api.Scheduler)(nil)),
@@ -562,6 +590,7 @@ func init() {
 		// interface wrapper definitions
 		"_AI":                reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AI)(nil)),
 		"_AIBuilder":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder)(nil)),
+		"_AIChats":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIChats)(nil)),
 		"_AISession":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AISession)(nil)),
 		"_AIStream":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIStream)(nil)),
 		"_Account":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Account)(nil)),
@@ -594,6 +623,7 @@ func init() {
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
+		"_RowActionProvider": reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RowActionProvider)(nil)),
 		"_Scheduler":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Scheduler)(nil)),
 		"_SearchProvider":    reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider)(nil)),
 		"_Secrets":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Secrets)(nil)),
@@ -618,6 +648,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AI struct {
 	IValue       interface{}
 	WAsk         func(prompt string, options api.AIOptions) (string, error)
 	WAttachments func() api.AttachmentBuilder
+	WChats       func() api.AIChats
 	WDecide      func(request api.DecisionRequest) (api.DecisionResult, error)
 	WIsAvailable func() (bool, error)
 	WPrepare     func(options api.AIOptions) error
@@ -630,6 +661,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Ask(prompt string,
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Attachments() api.AttachmentBuilder {
 	return W.WAttachments()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Chats() api.AIChats {
+	return W.WChats()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Decide(request api.DecisionRequest) (api.DecisionResult, error) {
 	return W.WDecide(request)
@@ -651,6 +685,8 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Stream(prompt stri
 type _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder struct {
 	IValue                       interface{}
 	WCleanupExpiredConversations func() (removed int, err error)
+	WExtensionPreview            func(extensionID string) (api.View, bool)
+	WGetChat                     func(chatID string) (api.ChatDetail, bool)
 	WListChats                   func() []api.ChatSummary
 	WOpenChat                    func(chatID string) api.Action
 	WOpenChatsList               func(title string) api.Action
@@ -661,6 +697,12 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) CleanupExpiredConversations() (removed int, err error) {
 	return W.WCleanupExpiredConversations()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) ExtensionPreview(extensionID string) (api.View, bool) {
+	return W.WExtensionPreview(extensionID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) GetChat(chatID string) (api.ChatDetail, bool) {
+	return W.WGetChat(chatID)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) ListChats() []api.ChatSummary {
 	return W.WListChats()
@@ -679,6 +721,44 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) StartChat(p
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) TweakExtension(request api.TweakRequest) api.Action {
 	return W.WTweakExtension(request)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_AIChats is an interface wrapper for AIChats type
+type _github_com_pablopunk_nvm_native_internal_ext_api_AIChats struct {
+	IValue    interface{}
+	WContinue func(chatID string, message string) api.Action
+	WGet      func(chatID string) (api.ChatDetail, bool)
+	WList     func() []api.ChatSummary
+	WNew      func(prompt string) api.Action
+	WOpen     func(chatID string) api.Action
+	WRemove   func(chatID string) api.Action
+	WStop     func(chatID string) api.Action
+	WTier     func(chatID string, tier api.ModelTier) api.Action
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Continue(chatID string, message string) api.Action {
+	return W.WContinue(chatID, message)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Get(chatID string) (api.ChatDetail, bool) {
+	return W.WGet(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) List() []api.ChatSummary {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) New(prompt string) api.Action {
+	return W.WNew(prompt)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Open(chatID string) api.Action {
+	return W.WOpen(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Remove(chatID string) api.Action {
+	return W.WRemove(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Stop(chatID string) api.Action {
+	return W.WStop(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Tier(chatID string, tier api.ModelTier) api.Action {
+	return W.WTier(chatID, tier)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AISession is an interface wrapper for AISession type
@@ -1483,6 +1563,16 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider) RootItems(ctx api.Context) ([]api.Item, error) {
 	return W.WRootItems(ctx)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_RowActionProvider is an interface wrapper for RowActionProvider type
+type _github_com_pablopunk_nvm_native_internal_ext_api_RowActionProvider struct {
+	IValue      interface{}
+	WRowActions func(ctx api.Context, row api.ExtensionRow) ([]api.Action, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_RowActionProvider) RowActions(ctx api.Context, row api.ExtensionRow) ([]api.Action, error) {
+	return W.WRowActions(ctx, row)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler is an interface wrapper for Scheduler type

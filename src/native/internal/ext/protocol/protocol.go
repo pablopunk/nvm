@@ -23,6 +23,7 @@ const (
 	MethodMenuBarTriggers = "menubar-triggers" // MenuBarProvider.MenuBarTriggers
 	// MethodRestoreWindow asks for the fresh view of a persistent window, with Invocation.Ref.ID as the restore key.
 	MethodRestoreWindow = "restore-window" // WindowRestorer.RestoreWindow
+	MethodRowActions    = "row-actions"    // RowActionProvider.RowActions, with the row in Invocation.Ref.Args
 )
 
 // Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the
@@ -40,6 +41,7 @@ const (
 	ServiceIndicators = "indicators"
 	ServiceScheduler  = "scheduler"
 	ServiceAI         = "ai"
+	ServiceBuilder    = "builder"
 	ServiceBundle     = "bundle"
 	ServiceDictation  = "dictation"
 )

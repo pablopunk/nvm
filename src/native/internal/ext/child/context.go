@@ -134,11 +134,11 @@ func (c hostContext) AI() api.AI {
 }
 
 func (c hostContext) AIBuilder() api.AIBuilder {
-	return unsupportedAIBuilder{}
+	return remoteBuilder{link: c.link}
 }
 
 func (c hostContext) Ownership() api.Ownership {
-	return unsupportedOwnership{}
+	return remoteOwnership{link: c.link}
 }
 
 func (c hostContext) Dictation() api.Dictation {

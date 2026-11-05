@@ -1,13 +1,16 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"path/filepath"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/authoring"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -16,7 +19,6 @@ const (
 	duplicateTitle    = "Duplicate"
 	renameTitle       = "Rename"
 	submitPRTitle     = "Submit as PR"
-	tweakWithAITitle  = "Tweak with AI"
 	removeActionTitle = "Remove action"
 )
 
@@ -36,9 +38,7 @@ func (p *App) extensionAuthoringActions(extID, commandID, title string) []search
 			out = append(out, action)
 		}
 	}
-	out = append(out, search.Action{Title: tweakWithAITitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		h.Push(p.builderEditView(extID))
-	}})
+	out = append(out, p.builtInRowActions(extID, commandID, title)...)
 	if owned {
 		out = append(out, search.Action{Title: removeActionTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			h.Push(p.removeActionConfirmation(extID, title))
@@ -55,7 +55,7 @@ func (p *App) duplicateAction(extID string) search.Action {
 			h.Toast("Could not duplicate: " + err.Error())
 			return
 		}
-		h.Push(p.builderEditView(id))
+		h.Push(p.startedChatView("builder", "", id))
 	}}
 }
 
@@ -156,4 +156,18 @@ func (p *App) withAuthoringActions(it search.Item, extID, commandID string) sear
 	}
 	it.Actions = append(it.Actions, p.extensionAuthoringActions(extID, commandID, it.Title)...)
 	return it
+}
+
+// builtInRowActions are the actions the built-in extensions add to an extension's row through the API, such as Tweak
+// with AI, in the order the built-ins are listed.
+func (p *App) builtInRowActions(extID, commandID, title string) []search.Action {
+	m := p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	var out []search.Action
+	for _, added := range m.RowActions(context.Background(), api.ExtensionRow{ExtensionID: extID, CommandID: commandID, Title: title}) {
+		out = append(out, extview.MenuActionsFor(p.extensionViewDeps(m), added.Extension, extview.MenuSections(nil, nil, []api.Action{added.Action}))...)
+	}
+	return out
 }

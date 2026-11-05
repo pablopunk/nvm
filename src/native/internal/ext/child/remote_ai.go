@@ -17,6 +17,11 @@ type remoteAI struct {
 // defaultSessionID is the session of a call that names none, as 1.x names it.
 const defaultSessionID = "default"
 
+// Chats reads and opens the host's chats.
+func (a remoteAI) Chats() api.AIChats {
+	return remoteChats{link: a.link}
+}
+
 func (a remoteAI) IsAvailable() (bool, error) {
 	var result protocol.AIAvailability
 	err := a.link.Call(protocol.ServiceAI, protocol.OpIsAvailable, nil, &result)

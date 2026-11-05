@@ -28,6 +28,8 @@ func (r *Runner) dispatch(ctx context.Context, method, query string, invocation 
 		return r.menuBarTriggers()
 	case protocol.MethodRestoreWindow:
 		return r.restoreWindow(ctx, invocation)
+	case protocol.MethodRowActions:
+		return r.rowActions(ctx, invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", method, api.ErrInvalidInput)
 }
@@ -92,6 +94,19 @@ func (r *Runner) menuBars(ctx context.Context) (json.RawMessage, error) {
 	}
 	out, err := provider.MenuBars(r.context.For(ctx, api.LaunchContext{}))
 	return encode(protocol.MethodMenuBars, out, err)
+}
+
+func (r *Runner) rowActions(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	provider, ok := r.ext.(api.RowActionProvider)
+	if !ok {
+		return nil, notImplemented(protocol.MethodRowActions)
+	}
+	var args map[string]string
+	if invocation != nil {
+		args = invocation.Ref.Args
+	}
+	out, err := provider.RowActions(r.context.For(ctx, api.LaunchContext{}), api.RowFromArgs(args))
+	return encode(protocol.MethodRowActions, out, err)
 }
 
 func (r *Runner) menuBarTriggers() (json.RawMessage, error) {

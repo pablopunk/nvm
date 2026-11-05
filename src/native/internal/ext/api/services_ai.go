@@ -149,12 +149,58 @@ type AI interface {
 	Prepare(options AIOptions) error
 	Attachments() AttachmentBuilder
 	Session(id string, options AIOptions) (AISession, error)
+	// Chats reads and opens the host's chats: the conversations the AI Chats page lists. Each is kept by the host.
+	Chats() AIChats
+}
+
+// ChatAction is the payload of an ActionChat. ChatID names the chat; Message and Images are what a Continue sends; Prompt
+// is the first message of a New chat; Tier is the tier a Tier change selects.
+type ChatAction struct {
+	ChatID  string      `json:"chatId,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Images  []ChatImage `json:"images,omitempty"`
+	Prompt  string      `json:"prompt,omitempty"`
+	Tier    ModelTier   `json:"tier,omitempty"`
+	// Replace, on a New, shows the new chat in place of the page the action runs from.
+	Replace bool `json:"replace,omitempty"`
+}
+
+// BuilderAction is the payload of an ActionBuilder. ChatID names a builder chat, Prompt starts or seeds one, and
+// ExtensionID names the extension a tweak changes.
+type BuilderAction struct {
+	ChatID      string `json:"chatId,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	ExtensionID string `json:"extensionId,omitempty"`
+}
+
+// ChatDetail is one chat with its transcript, as the host keeps it.
+type ChatDetail struct {
+	ChatSummary
+	Messages []ChatMessage `json:"messages"`
+}
+
+// AIChats lists chats and returns the actions that open, start, continue, stop, re-tier or remove them. Reads are answered
+// by the host; the actions run when the user picks them, on the palette.
+type AIChats interface {
+	List() []ChatSummary
+	Get(chatID string) (ChatDetail, bool)
+	New(prompt string) Action
+	Open(chatID string) Action
+	Continue(chatID, message string) Action
+	Stop(chatID string) Action
+	Tier(chatID string, tier ModelTier) Action
+	Remove(chatID string) Action
 }
 
 // ChatSummary is one builder conversation. Only built-in extensions may call AIBuilder.
 type ChatSummary struct {
-	ID             string   `json:"id"`
-	Title          string   `json:"title,omitempty"`
+	ID string `json:"id"`
+	// Kind is conversation, builder or proofread.
+	Kind  string    `json:"kind,omitempty"`
+	Tier  ModelTier `json:"tier,omitempty"`
+	Title string    `json:"title,omitempty"`
+	// ExtensionID is the extension a builder chat wrote or was bound to, empty for other chats.
+	ExtensionID    string   `json:"extensionId,omitempty"`
 	Query          string   `json:"query,omitempty"`
 	Status         string   `json:"status,omitempty"`
 	CreatedAtMs    int64    `json:"createdAtMs,omitempty"`
@@ -180,6 +226,11 @@ type AIBuilder interface {
 	OpenChatsList(title string) Action
 	ListChats() []ChatSummary
 	CleanupExpiredConversations() (removed int, err error)
+	GetChat(chatID string) (ChatDetail, bool)
+	// ExtensionPreview is what the extension shows now: its root rows and its commands, as a list view with the
+	// side-preview presentation. It is the Side of a builder chat's transcript, and false when the extension is not
+	// installed.
+	ExtensionPreview(extensionID string) (View, bool)
 }
 
 // Ownership says which builder conversation wrote which extension file. It is host-only, and it is

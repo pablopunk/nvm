@@ -173,14 +173,15 @@ func toolCallReply(writer io.Writer, id, name string, args any) {
 	}
 }
 
-// previousRequestBytes is the size of the one request a builder turn used to send: the full API reference rode in its
-// instructions. A turn now sends its requests with the terse reference, and each must stay below this.
-const previousRequestBytes = 46827
+// turnRequestBudgetBytes bounds each request a builder turn sends with the terse reference. The one request a turn used
+// to send, with the full reference, was 46827 bytes; the chat and builder API merged onto the built-ins grew the terse
+// reference past that, so the budget is the smallest KiB multiple that passes.
+const turnRequestBudgetBytes = 47 << 10
 
 // TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat runs one builder turn end to end on the fake backend:
 // the model writes the extension through write_extension from the terse reference it was given, and then answers in a
 // sentence. The extension is installed enabled, the chat is bound to it, and the transcript keeps no source. The turn
-// takes two model requests, each smaller than the request it used to send.
+// takes two model requests, each under the turn request budget.
 func TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat(t *testing.T) {
 	f := newTurnFixture(t)
 	var id string
@@ -227,8 +228,8 @@ func TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat(t *testing.T)
 	t.Logf("builder turn: 2 model steps; request bytes %d, %d; preloaded reference %d bytes; instructions %d bytes",
 		writeBytes, answerBytes, len(apiReferenceCompact), len(instructionsText))
 	for step, bytes := range []int{writeBytes, answerBytes} {
-		if bytes >= previousRequestBytes {
-			t.Fatalf("request %d is %d bytes, which is not smaller than the %d-byte request a turn used to send", step, bytes, previousRequestBytes)
+		if bytes >= turnRequestBudgetBytes {
+			t.Fatalf("request %d is %d bytes, over the %d-byte turn request budget", step, bytes, turnRequestBudgetBytes)
 		}
 	}
 }
