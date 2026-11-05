@@ -116,6 +116,9 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 		t.Fatal(err)
 	}
 	items := rootResultsForTable(p, q)
+	if !p.Settled() {
+		t.Fatalf("root query %q returned an unfinished synchronous snapshot: %v", q, rowTitles(p))
+	}
 	rows := make([]rootRow, 0, len(items))
 	for _, it := range items {
 		row := rootRow{
@@ -156,7 +159,29 @@ func TestRootResultsMatchRecordedTable(t *testing.T) {
 		t.Fatalf("read %s: %v (run with -update-root-table to record it)", rootTableFile, err)
 	}
 	if string(want) != string(encoded) {
+		logRootTableDifferences(t, want, got)
 		t.Fatalf("root results differ from %s; first difference:\n%s", rootTableFile, firstDifference(string(want), string(encoded)))
+	}
+}
+
+func logRootTableDifferences(t *testing.T, recorded []byte, current map[string][]rootRow) {
+	t.Helper()
+	var entries []tableEntry
+	if err := json.Unmarshal(recorded, &entries); err != nil {
+		t.Fatalf("decode recorded root table: %v", err)
+	}
+	for _, entry := range entries {
+		want, err := json.MarshalIndent(entry.Rows, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := json.MarshalIndent(current[entry.Query], "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(want) != string(got) {
+			t.Logf("root query %q (synchronous snapshot settled):\nrecorded rows:\n%s\ncurrent rows:\n%s", entry.Query, want, got)
+		}
 	}
 }
 
