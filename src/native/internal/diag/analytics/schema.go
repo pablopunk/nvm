@@ -15,9 +15,9 @@ const FeatureCommandRun = "command.run"
 
 // schema lists the property keys each event may carry. Capture drops every other key.
 var schema = map[string][]string{
-	EventAppLaunched:          nil,
+	EventAppLaunched:          {"release"},
 	EventFeatureUsed:          {"feature", "variant"},
-	EventException:            {"support_ref", "component", "message", "frames", "attributes"},
+	EventException:            {"support_ref", "component", "message", "frames", "attributes", "release"},
 	EventSupportReport:        {"support_ref"},
 	EventInstallOwnerObserved: {"owner_source", "owner_id"},
 }

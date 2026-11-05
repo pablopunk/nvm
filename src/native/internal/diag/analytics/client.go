@@ -41,6 +41,7 @@ type Config struct {
 	// Dir holds the install identifier file.
 	Dir       string
 	Version   string
+	Release   string
 	OS        string
 	OSRelease string
 	Arch      string
@@ -190,7 +191,14 @@ func (c *Client) Reporting() Reporting {
 
 // AppLaunched records that the app started.
 func (c *Client) AppLaunched() bool {
-	return c.capture(EventAppLaunched, nil)
+	return c.capture(EventAppLaunched, c.releaseProperties())
+}
+
+func (c *Client) releaseProperties() map[string]any {
+	if c == nil || c.cfg.Release == "" {
+		return nil
+	}
+	return map[string]any{"release": c.cfg.Release}
 }
 
 // FeatureUsed records that the person used a feature. variant is a closed-set id, or empty when there is none.
@@ -209,13 +217,17 @@ func (c *Client) Exception(r diag.Record) bool {
 	if attributes == nil {
 		attributes = map[string]string{}
 	}
-	return c.capture(EventException, map[string]any{
+	props := map[string]any{
 		"support_ref": r.Ref,
 		"component":   r.Component,
 		"message":     clip(r.Message, maxMessage),
 		"frames":      clipFrames(r.Frames),
 		"attributes":  attributes,
-	})
+	}
+	for key, value := range c.releaseProperties() {
+		props[key] = value
+	}
+	return c.capture(EventException, props)
 }
 
 // SupportReport sends a problem report that carries only its support reference.

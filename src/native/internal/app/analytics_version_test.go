@@ -122,3 +122,19 @@ func TestReleaseLDFLagsRejectMalformedVersion(t *testing.T) {
 		})
 	}
 }
+
+func TestAnalyticsReleaseIdentity(t *testing.T) {
+	for _, tc := range []struct{ os, want string }{
+		{"darwin", "nevermind@2.0.0+0123456789abcdef0123456789abcdef01234567.darwin"},
+		{"linux", "nevermind@2.0.0+0123456789abcdef0123456789abcdef01234567.linux"},
+		{"windows", "nevermind@2.0.0+0123456789abcdef0123456789abcdef01234567.win32"},
+	} {
+		got := analyticsReleaseIdentity("2.0.0", "0123456789abcdef0123456789abcdef01234567", tc.os)
+		if got != tc.want {
+			t.Fatalf("identity(%s) = %q, want %q", tc.os, got, tc.want)
+		}
+	}
+	if got := analyticsReleaseIdentity("2.0.0", "", "darwin"); got != "nevermind@2.0.0" {
+		t.Fatalf("fallback = %q", got)
+	}
+}

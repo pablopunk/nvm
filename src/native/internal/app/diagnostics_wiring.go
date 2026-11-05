@@ -25,6 +25,9 @@ var releaseBuild = "false"
 // analyticsAppVersion is linked to the packaged MyGo version; development uses the backend client version.
 var analyticsAppVersion = nativeClientVersion
 
+// analyticsSourceCommit is linked from packaging provenance; development builds omit it.
+var analyticsSourceCommit = ""
+
 // quitFlushTimeout bounds the diagnostics sent while the app quits, so an unreachable endpoint cannot hold the quit.
 const quitFlushTimeout = 2 * time.Second
 
@@ -45,6 +48,7 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 		Clock:     ports.Clock,
 		Dir:       dataDir(),
 		Version:   analyticsAppVersion,
+		Release:   analyticsReleaseIdentity(analyticsAppVersion, analyticsSourceCommit, runtime.GOOS),
 		OS:        runtime.GOOS,
 		OSRelease: osRelease,
 		Arch:      runtime.GOARCH,
