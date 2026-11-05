@@ -13,6 +13,8 @@ import (
 type noteRichText struct {
 	doc    *richtext.Document
 	source string
+	// focus is the handle of the editor the view draws, which the palette focuses when the view hides its search field.
+	focus ui.Handle
 }
 
 // sync returns the document showing text, made when there is none and remade when the text changed since it was
@@ -31,7 +33,7 @@ func (r *noteRichText) sync(text string) *richtext.Document {
 // editNoteRich draws the Markdown editor of a note and, after an edit, saves the Markdown as the note's text.
 func editNoteRich(c *ui.Context, edit *noteEdit, rich *noteRichText, placeholder string) {
 	doc := rich.sync(edit.text)
-	editor := design.MarkdownEditor(c, doc, placeholder).AutoFocus()
+	editor := design.MarkdownEditor(c, doc, placeholder).Bind(&rich.focus).AutoFocus()
 	if editor.Changed() {
 		markdown := doc.Text().Markdown()
 		rich.source = markdown
