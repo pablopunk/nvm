@@ -133,6 +133,10 @@ func (s *Session) Palette() *palette.View {
 	if len(s.viewWireActions()) > 0 {
 		page.Actions = s.viewActions
 	}
+	if len(s.view.FooterHints) > 0 {
+		page.Hint = footerHintsText(s.view.FooterHints, s.hyperKey())
+		page.HintReplacesActions = true
+	}
 	return page
 }
 

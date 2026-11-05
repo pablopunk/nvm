@@ -56,8 +56,11 @@ type View struct {
 	Footer func(chosen *search.Item) string
 	Hint   string // right footer text
 	// HintFn, when set, gives the right footer text instead of Hint; it is read on every frame.
-	HintFn  func() string
-	OnLeave func()
+	HintFn func() string
+	// HintReplacesActions keeps Hint as the footer's right text on a Body page that has actions, so the page names its own
+	// keys instead of the Actions key.
+	HintReplacesActions bool
+	OnLeave             func()
 	// OnHide runs on every page of the stack when the palette hides. The pages stay on the stack until the next Show,
 	// so a question waiting for an answer can end at once.
 	OnHide func()

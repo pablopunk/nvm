@@ -241,8 +241,8 @@ func TestDraftConflictOffersTheChoicesOnTheSavedNote(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result.View == nil || len(result.View.Items) != 3 {
-		t.Fatalf("conflict view = %+v, want the restore, keep and compare rows", result.View)
+	if result.View == nil || len(result.View.Items) != 2 {
+		t.Fatalf("conflict view = %+v, want the restore and keep rows", result.View)
 	}
 	restore := result.View.Items[0].Primary.Ref.Args
 	if restore[argText] != "typed text" || restore[argID] != "note-1" {

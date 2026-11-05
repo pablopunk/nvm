@@ -10,10 +10,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// Title and preview lengths, and the title of a note with no text, as the 1.x extension has them.
+// titleLimit and untitledTitle are the title length and the title of a note with no text, as the 1.x extension has them.
 const (
 	titleLimit    = 120
-	previewLimit  = 100
 	untitledTitle = "Untitled note"
 )
 
@@ -24,7 +23,6 @@ var (
 	linkPattern       = regexp.MustCompile(`\[([^\]]+)\]\([^)]+\)`)
 	decorationPattern = regexp.MustCompile("[*_~`]+")
 	whitespacePattern = regexp.MustCompile(`\s+`)
-	headingPrefix     = regexp.MustCompile(`^#{1,6}\s*`)
 )
 
 // noteTitle derives a note's title from its first non-blank line: list, heading, quote and checkbox markers, images and
@@ -44,22 +42,9 @@ func noteTitle(n api.Note) string {
 	return title
 }
 
-// notePreview is the second content line of a note, heading marks removed, as the list shows under the title. A note
-// with one line reads "Markdown note"; an empty one reads "Empty note".
+// notePreview is the line a note's row shows under its title.
 func notePreview(n api.Note) string {
-	var lines []string
-	for _, raw := range splitLines(n.Markdown) {
-		if line := strings.TrimSpace(headingPrefix.ReplaceAllString(raw, "")); line != "" {
-			lines = append(lines, line)
-		}
-	}
-	switch {
-	case len(lines) > 1:
-		return truncateRunes(lines[1], previewLimit)
-	case len(lines) == 1:
-		return "Markdown note"
-	}
-	return "Empty note"
+	return api.NotePreview(n.Markdown)
 }
 
 // relativeTime says how long ago the note was saved, in the words the list uses: "just now", "5m ago", "2h ago",

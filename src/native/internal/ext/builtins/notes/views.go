@@ -40,6 +40,17 @@ func editorView(ctx api.Context, note api.Note, mode string) api.View {
 		},
 		Actions:     []api.Action{newNote, allNotes, remove},
 		ActionPanel: api.Panel(api.Section("Notes", newNote, allNotes), api.Section("This note", remove)),
+		FooterHints: editorFooterHints(),
+	}
+}
+
+// editorFooterHints are the keys the editor's footer names, as 1.x's editor footer does: Back, then the New and All
+// notes shortcuts.
+func editorFooterHints() []api.FooterHint {
+	return []api.FooterHint{
+		{Key: "Escape", Title: "Back"},
+		{Key: "Command+N", Title: "New"},
+		{Key: "Command+O", Title: "All notes"},
 	}
 }
 

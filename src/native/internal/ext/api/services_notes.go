@@ -1,12 +1,12 @@
 package api
 
-import (
-	"strings"
-	"time"
-)
+import "time"
 
-// noteConflictSubtitle is the line under the conflict view's title, as 1.x shows it.
-const noteConflictSubtitle = "This note has unsaved changes from another session."
+// noteConflictTitle and noteConflictSubtitle are the conflict view's title and the line under it, as 1.x shows them.
+const (
+	noteConflictTitle    = "Unsaved changes found"
+	noteConflictSubtitle = "This note has unsaved changes from another session."
+)
 
 // Arg keys the conflict view's rows carry back to the extension.
 const (
@@ -41,22 +41,18 @@ const (
 	NoteConflictKeepRef    = "note-conflict-keep"
 )
 
-// NoteConflictView is the view an extension shows when Update met a newer saved version: the unsaved text it kept, the
-// saved text, and Compare, which pushes a preview of the two. Restore unsaved changes runs NoteConflictRestoreRef with
-// the note's id, the unsaved text under "text", and args; Keep saved version runs NoteConflictKeepRef with the id and
-// args. The extension decides what each one writes.
-func NoteConflictView(saved Note, unsaved, compareMarkdown string, args map[string]string) View {
+// NoteConflictView is the view shown when Update met a newer saved version, as 1.x shows it. Restore unsaved changes
+// runs NoteConflictRestoreRef with the id and the unsaved text under "text"; Keep saved version runs NoteConflictKeepRef.
+func NoteConflictView(saved Note, unsaved string, args map[string]string) View {
 	restore := withArgs(args, map[string]string{argNoteID: saved.ID, argNoteText: unsaved})
 	keep := withArgs(args, map[string]string{argNoteID: saved.ID})
-	view := ListView("Unsaved changes found",
-		Item{ID: "note-conflict-restore", Title: "Restore unsaved changes", Subtitle: firstLine(unsaved), Icon: "rotate-ccw",
+	view := ListView(noteConflictTitle,
+		Item{ID: "note-conflict-restore", Title: "Restore unsaved changes", Subtitle: NotePreview(unsaved), Icon: "rotate-ccw",
 			Primary: Primary(Run(NoteConflictRestoreRef, "Restore unsaved changes", restore))},
-		Item{ID: "note-conflict-keep", Title: "Keep saved version", Subtitle: firstLine(saved.Markdown), Icon: "check",
+		Item{ID: "note-conflict-keep", Title: "Keep saved version", Subtitle: NotePreview(saved.Markdown), Icon: "check",
 			Primary: Primary(Run(NoteConflictKeepRef, "Keep saved version", keep))},
-		Item{ID: "note-conflict-compare", Title: "Compare", Subtitle: "See the unsaved and saved text side by side", Icon: "scan",
-			Primary: Primary(PushView("Compare", PreviewView("Compare", compareMarkdown)))},
 	)
-	view.Subtitle, view.Placeholder = noteConflictSubtitle, noteConflictSubtitle
+	view.Subtitle = noteConflictSubtitle
 	return view
 }
 
@@ -70,14 +66,4 @@ func withArgs(base, extra map[string]string) map[string]string {
 		out[k] = v
 	}
 	return out
-}
-
-// firstLine is the first non-empty line of text, the subtitle a conflict row shows.
-func firstLine(text string) string {
-	for _, line := range strings.Split(text, "\n") {
-		if trimmed := strings.TrimSpace(line); trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
 }

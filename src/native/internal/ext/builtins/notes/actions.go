@@ -2,7 +2,6 @@ package notes
 
 import (
 	"errors"
-	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
@@ -104,7 +103,7 @@ func conflictView(ctx api.Context, args map[string]string, conflict *api.DraftCo
 	if err != nil {
 		return api.Result{}, err
 	}
-	view := api.NoteConflictView(saved, conflict.StoredContent, compareMarkdown(saved.Markdown, conflict.StoredContent), args)
+	view := api.NoteConflictView(saved, conflict.StoredContent, args)
 	return api.Result{View: &view, Navigation: api.NavReplace}, nil
 }
 
@@ -162,18 +161,4 @@ func modeOf(args map[string]string) string {
 		return modeWindow
 	}
 	return modePalette
-}
-
-// compareMarkdown is the Compare preview: the line diff of the saved text against the unsaved text, with removed lines
-// marked "-" and added lines "+".
-func compareMarkdown(saved, unsaved string) string {
-	var b strings.Builder
-	b.WriteString("````text\n")
-	for _, line := range diffLines(saved, unsaved) {
-		b.WriteString(diffMark(line.Op))
-		b.WriteString(line.Text)
-		b.WriteString("\n")
-	}
-	b.WriteString("````")
-	return b.String()
 }

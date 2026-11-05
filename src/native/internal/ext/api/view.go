@@ -83,6 +83,8 @@ type View struct {
 	Actions               []Action        `json:"actions,omitempty"`
 	ActionPanel           *ActionPanel    `json:"actionPanel,omitempty"`
 	ActionPanelVisibility PanelVisibility `json:"actionPanelVisibility,omitempty"`
+	// FooterHints, when set, replace the footer's Actions entry with the keys the view names.
+	FooterHints []FooterHint `json:"footerHints,omitempty"`
 
 	// Kind-specific specs. Exactly the one matching Kind may be set.
 	Grid       *GridSpec       `json:"grid,omitempty"`
@@ -95,6 +97,12 @@ type View struct {
 	Camera     *CameraSpec     `json:"camera,omitempty"`
 	Webview    *WebviewSpec    `json:"webview,omitempty"`
 	Chat       *ChatSpec       `json:"chat,omitempty"`
+}
+
+// FooterHint is one footer key: an accelerator such as "Command+N" or "Escape", and what it does.
+type FooterHint struct {
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
 // specKinds maps each spec field to the single kind it belongs to.

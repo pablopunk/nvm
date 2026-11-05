@@ -274,7 +274,7 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 		if len(it.Actions) > 1 {
 			data.Secondary = actionsKeyHint()
 		}
-	} else if v.Body != nil && (v.Primary != nil || len(p.actions()) > 0) {
+	} else if v.Body != nil && (v.Primary != nil || len(p.actions()) > 0) && !v.HintReplacesActions {
 		p.bodyFooterKeys(v, &data)
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
