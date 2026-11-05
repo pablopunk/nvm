@@ -500,6 +500,7 @@ func init() {
 		"SelectionState":          reflect.ValueOf((*api.SelectionState)(nil)),
 		"SettingChoice":           reflect.ValueOf((*api.SettingChoice)(nil)),
 		"SettingDefinition":       reflect.ValueOf((*api.SettingDefinition)(nil)),
+		"SettingRef":              reflect.ValueOf((*api.SettingRef)(nil)),
 		"SettingRow":              reflect.ValueOf((*api.SettingRow)(nil)),
 		"SettingRowKind":          reflect.ValueOf((*api.SettingRowKind)(nil)),
 		"Settings":                reflect.ValueOf((*api.Settings)(nil)),
@@ -1515,11 +1516,12 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) Text() (tex
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Settings is an interface wrapper for Settings type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Settings struct {
-	IValue       interface{}
-	WDefinitions func() []api.SettingDefinition
-	WGet         func(id string, into any) error
-	WSet         func(id string, value any) error
-	WToggle      func(id string) (value json.RawMessage, err error)
+	IValue          interface{}
+	WDefinitions    func() []api.SettingDefinition
+	WGet            func(id string, into any) error
+	WPublishDisplay func(id string, text string) error
+	WSet            func(id string, value any) error
+	WToggle         func(id string) (value json.RawMessage, err error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Settings) Definitions() []api.SettingDefinition {
@@ -1527,6 +1529,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Settings) Definitions(
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Settings) Get(id string, into any) error {
 	return W.WGet(id, into)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Settings) PublishDisplay(id string, text string) error {
+	return W.WPublishDisplay(id, text)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Settings) Set(id string, value any) error {
 	return W.WSet(id, value)

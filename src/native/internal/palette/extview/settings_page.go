@@ -56,6 +56,9 @@ func (s *Session) settingAccessory(row api.SettingRow) string {
 	if text, ok := s.hostRowAccessory(row.ID); ok {
 		return text
 	}
+	if text, ok := s.sharedDisplay(row); ok {
+		return text
+	}
 	if row.Kind == api.SettingRowAction || row.Kind == api.SettingRowRecorder {
 		return row.Accessory
 	}
@@ -72,6 +75,14 @@ func (s *Session) settingAccessory(row api.SettingRow) string {
 		return decodeString(value)
 	}
 	return row.Accessory
+}
+
+// sharedDisplay is the display text another built-in publishes for the setting the row shows, when it has published one.
+func (s *Session) sharedDisplay(row api.SettingRow) (string, bool) {
+	if row.Shows == nil || s.deps.ReadDisplay == nil {
+		return "", false
+	}
+	return s.deps.ReadDisplay(s.extID, *row.Shows)
 }
 
 func (s *Session) hostRowAccessory(rowID string) (string, bool) {

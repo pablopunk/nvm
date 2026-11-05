@@ -55,6 +55,9 @@ type Deps struct {
 	WriteSetting  func(extID, key string, value json.RawMessage) error
 	RecordSetting func(h search.Host, extID, key string)
 	RowAccessory  func(extID, rowID string) (accessory, subtitle string, ok bool)
+	// ReadDisplay returns the display text another built-in publishes for the shared setting a row shows, for the
+	// settings view of reader readerID. Nil makes such a row show its own accessory.
+	ReadDisplay func(readerID string, ref api.SettingRef) (string, bool)
 	// HostOperation runs a host operation of a built-in's ActionHost action on h. Nil makes it report unavailable.
 	HostOperation func(h search.Host, extID, op string)
 	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.

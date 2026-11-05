@@ -13,6 +13,12 @@ const (
 	storageHistoryKey  = "history"
 )
 
+// SettingDevice is the setting whose display text is the microphone's title. The Settings page shows it on its Dictation row.
+const SettingDevice = "device"
+
+// systemDefaultTitle names the system microphone when the host lists no title for it.
+const systemDefaultTitle = "System Default"
+
 // The settings form's fields, by id, as 1.x named them.
 const (
 	fieldDevice       = "deviceId"
@@ -173,5 +179,24 @@ func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Resul
 	if err := ctx.Storage().Set(storageSettingsKey, settings); err != nil {
 		return api.Result{}, err
 	}
+	publishDeviceTitle(ctx, settings)
 	return api.Result{Navigation: api.NavPop}, nil
+}
+
+// publishDeviceTitle publishes the title of the microphone the settings choose, for the Settings page's Dictation row.
+// A host that cannot list microphones leaves the row with its own text, so the error is not shown.
+func publishDeviceTitle(ctx api.Context, settings Settings) {
+	_ = ctx.Settings().PublishDisplay(SettingDevice, displayTitleOf(devicesOf(ctx), settings.DeviceID))
+}
+
+// displayTitleOf is the microphone's title for the Settings page: its listed title, else the system microphone's name
+// for the default id, else the id itself.
+func displayTitleOf(devices []api.DictationDevice, id string) string {
+	if title := deviceTitle(devices, id); title != "" {
+		return title
+	}
+	if isDefaultDevice(id) {
+		return systemDefaultTitle
+	}
+	return id
 }

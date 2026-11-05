@@ -74,6 +74,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
 		ReadSetting:           func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
 		RowAccessory:          p.settingRowAccessory,
+		ReadDisplay:           m.SharedDisplay,
 		HostOperation:         p.settingsHostOperation,
 		RecordSetting:         p.settingRecorder,
 		WriteSetting: func(extID, key string, value json.RawMessage) error {

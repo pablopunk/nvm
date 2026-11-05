@@ -64,6 +64,9 @@ type Settings interface {
 	// Set resolves after the value is saved and fails with the reason when it cannot be saved.
 	Set(id string, value any) error
 	Toggle(id string) (value json.RawMessage, err error)
+	// PublishDisplay sets the text another built-in's settings row shows for setting id, which the manifest lists in
+	// Publishes. Built-ins only.
+	PublishDisplay(id string, text string) error
 }
 
 // LogLevel orders log records.

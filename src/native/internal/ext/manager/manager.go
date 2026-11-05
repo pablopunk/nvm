@@ -178,6 +178,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			AIQuota:        opts.AIQuota,
 			SearchRefresh:  opts.SearchRefresh,
 			Bundles:        bundled.Shipped(),
+			Displays:       services.NewSharedDisplays(),
 
 			Shell:           ports.Shell,
 			Commands:        ports.Commands,

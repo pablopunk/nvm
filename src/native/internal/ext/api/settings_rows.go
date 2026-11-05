@@ -39,6 +39,9 @@ type SettingRow struct {
 	Choices     []SettingChoice `json:"choices,omitempty"`
 	Action      *Action         `json:"action,omitempty"`
 	Also        []SettingRow    `json:"also,omitempty"`
+	// Shows names a shared setting of another built-in: the row's accessory is the display text that built-in publishes,
+	// until it has published one. The built-in must list the setting in its manifest's Reads.
+	Shows *SettingRef `json:"shows,omitempty"`
 }
 
 // SettingsSpec is a settings view's rows.
@@ -80,6 +83,9 @@ func validateSettingRow(row SettingRow, seen map[string]bool, count *int, primar
 		return fmt.Errorf("settings row %q needs a title", row.ID)
 	}
 	if err := validateSettingRowKind(row); err != nil {
+		return err
+	}
+	if err := validateSharedDisplayRow(row); err != nil {
 		return err
 	}
 	if !primary && len(row.Also) > 0 {

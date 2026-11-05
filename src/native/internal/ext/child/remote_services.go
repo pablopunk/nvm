@@ -73,6 +73,14 @@ func (s remoteSettings) Toggle(id string) (json.RawMessage, error) {
 	return value, err
 }
 
+func (s remoteSettings) PublishDisplay(id string, text string) error {
+	raw, err := json.Marshal(text)
+	if err != nil {
+		return api.ErrInvalidInput
+	}
+	return s.link.Call(protocol.ServiceSettings, protocol.OpPublishDisplay, protocol.KeyValueArgs{Key: id, Value: raw}, nil)
+}
+
 // remoteLogs is Logs backed by the host's file log. The host stamps every record with this extension's id.
 type remoteLogs struct {
 	link *hostLink

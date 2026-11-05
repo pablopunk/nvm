@@ -44,6 +44,11 @@ type Manifest struct {
 	// AIQuotaKey is the owner the extension's model calls count under, so they share a limit with the 1.x extension of
 	// that name. Only a built-in may set it: a folder extension cannot borrow another owner's window.
 	AIQuotaKey string `json:"aiQuotaKey,omitempty"`
+	// Publishes lists the declared settings whose display text the built-in publishes for other built-ins to show, such
+	// as the microphone a dictation uses. Reads lists the shared settings the built-in's settings rows show. Both are for
+	// built-ins only.
+	Publishes []string     `json:"publishes,omitempty"`
+	Reads     []SettingRef `json:"reads,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -109,6 +114,9 @@ func (m Manifest) Validate() error {
 	if m.AIQuotaKey != "" {
 		return fmt.Errorf("extension %q cannot set an AI quota key", m.ID)
 	}
+	if len(m.Publishes) > 0 || len(m.Reads) > 0 {
+		return fmt.Errorf("extension %q cannot publish or read shared settings", m.ID)
+	}
 	return m.validateShape()
 }
 
@@ -129,6 +137,9 @@ func (m Manifest) validateShape() error {
 		return errors.New("extension title is required")
 	}
 	if err := validateSettingDefinitions(m.Settings); err != nil {
+		return err
+	}
+	if err := m.validateSharedDisplays(); err != nil {
 		return err
 	}
 	for id, title := range m.CommandTitles {

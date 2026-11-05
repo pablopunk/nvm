@@ -29,6 +29,8 @@ func (h *Handler) serveSettings(call protocol.ServiceCall) (any, error) {
 		return h.settingSet(call.Args)
 	case protocol.OpToggle:
 		return h.settingToggle(call.Args)
+	case protocol.OpPublishDisplay:
+		return nil, h.publishDisplay(call.Args)
 	}
 	return nil, invalid("settings has no operation %q", call.Op)
 }

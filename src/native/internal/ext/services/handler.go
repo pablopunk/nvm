@@ -69,6 +69,8 @@ type Deps struct {
 	Updates UpdateSurface
 	// Diagnostics reads the support records and files problem reports. Nil keeps none and answers unavailable.
 	Diagnostics DiagnosticsSurface
+	// Displays holds the display text the built-ins publish for their settings. Nil answers unavailable.
+	Displays *SharedDisplays
 	// Jobs lists the background jobs and runs or changes them. Nil answers unavailable.
 	Jobs JobsSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.

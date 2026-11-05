@@ -49,6 +49,7 @@ func (Extension) Manifest() api.Manifest {
 		Identity:     api.Identity{ID: ID, Title: "Settings"},
 		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
 		Settings:     declaredSettings(),
+		Reads:        []api.SettingRef{*sharedDictationDevice()},
 	}
 }
 

@@ -227,6 +227,18 @@ type fakeContext struct {
 	logs       *fakeLogs
 	system     fakeSystem
 	frontmost  string
+	settings   *fakeDisplaySettings
+}
+
+// fakeDisplaySettings records the display text the built-in publishes.
+type fakeDisplaySettings struct {
+	api.Settings
+	displays map[string]string
+}
+
+func (s *fakeDisplaySettings) PublishDisplay(id, text string) error {
+	s.displays[id] = text
+	return nil
 }
 
 func newContext() fakeContext {
@@ -238,6 +250,7 @@ func newContext() fakeContext {
 		logs:       &fakeLogs{},
 		system:     fakeSystem{capabilities: map[string]bool{"ocr": true}},
 		frontmost:  "com.apple.Notes",
+		settings:   &fakeDisplaySettings{displays: map[string]string{}},
 	}
 }
 
@@ -252,6 +265,7 @@ func (c fakeContext) System() api.System         { return c.system }
 func (c fakeContext) Logs() api.Logs             { return c.logs }
 func (c fakeContext) Desktop() api.Desktop       { return fakeDesktop{front: c.frontmost} }
 func (c fakeContext) Navigation() api.Navigation { return fakeNavigation{} }
+func (c fakeContext) Settings() api.Settings     { return c.settings }
 
 // run runs one of the built-in's actions with the given args and form.
 
