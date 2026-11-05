@@ -68,6 +68,11 @@ type FocusNeighborArgs struct {
 	Wrap      bool   `json:"wrap"`
 }
 
+// SwitchDesktopArgs names the desktop to move to: next or previous.
+type SwitchDesktopArgs struct {
+	Direction string `json:"direction"`
+}
+
 // ApplyToArgs places one listed window.
 type ApplyToArgs struct {
 	Handle  api.WindowHandle            `json:"handle"`

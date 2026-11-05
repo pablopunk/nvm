@@ -74,6 +74,12 @@ func (w remoteWindowManagement) FocusNeighbor(direction string, wrap bool) (api.
 	return result, err
 }
 
+func (w remoteWindowManagement) SwitchDesktop(direction string) (api.FocusResult, error) {
+	var result api.FocusResult
+	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpSwitchDesktop, protocol.SwitchDesktopArgs{Direction: direction}, &result)
+	return result, err
+}
+
 func (w remoteWindowManagement) Apply(layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error) {
 	var result api.ApplyResult
 	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpApply, protocol.ApplyArgs{Layout: layout, Options: options}, &result)

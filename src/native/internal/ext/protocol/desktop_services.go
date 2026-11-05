@@ -37,6 +37,7 @@ const (
 	OpApplyTo         = "apply-to"
 	OpApply           = "apply"
 	OpFocusNeighbor   = "focus-neighbor"
+	OpSwitchDesktop   = "switch-desktop"
 	OpRemove          = "remove"
 	OpHasCapability   = "has-capability"
 	OpOS              = "os"

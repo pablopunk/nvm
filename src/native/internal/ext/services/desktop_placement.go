@@ -29,6 +29,8 @@ func (h *Handler) serveDesktopWindows(ctx context.Context, call protocol.Service
 		return h.applyFrontmost(ctx, call)
 	case protocol.OpFocusNeighbor:
 		return h.focusNeighbor(ctx, call)
+	case protocol.OpSwitchDesktop:
+		return h.switchDesktop(ctx, call)
 	}
 	return nil, invalid("desktop.windows has no operation %q", call.Op)
 }
