@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/pablopunk/nvm/native/internal/dictation/audiomute"
-	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -61,15 +60,4 @@ func (p *App) dictationMuter() *audiomute.Muter {
 	}
 	journal := fileMuteJournal{files: p.ports.FS, path: filepath.Join(dataDir(), dictationMuteFile)}
 	return audiomute.New(p.ports.OutputMute, journal)
-}
-
-// recoverDictationMute gives the output back its state when the last run stopped in the middle of a dictation.
-func (p *App) recoverDictationMute() {
-	muter := p.dictationMuter()
-	if muter == nil {
-		return
-	}
-	if err := muter.RecoverAfterCrash(); err != nil {
-		logx.Default().Warn("dictation.unmute-recovery-failed", logx.F{"error": err.Error()})
-	}
 }

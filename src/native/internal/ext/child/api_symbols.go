@@ -423,6 +423,7 @@ func init() {
 		"Result":                  reflect.ValueOf((*api.Result)(nil)),
 		"RootProvider":            reflect.ValueOf((*api.RootProvider)(nil)),
 		"Rules":                   reflect.ValueOf((*api.Rules)(nil)),
+		"SavedDictation":          reflect.ValueOf((*api.SavedDictation)(nil)),
 		"Scheduler":               reflect.ValueOf((*api.Scheduler)(nil)),
 		"SearchAccessory":         reflect.ValueOf((*api.SearchAccessory)(nil)),
 		"SearchAccessoryOption":   reflect.ValueOf((*api.SearchAccessoryOption)(nil)),
@@ -1010,13 +1011,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) WindowManagem
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Dictation is an interface wrapper for Dictation type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Dictation struct {
-	IValue        interface{}
-	WAPIAvailable func() (bool, error)
-	WCancel       func() error
-	WDevices      func() ([]api.DictationDevice, error)
-	WStart        func(options api.DictationStartOptions) error
-	WStatus       func() (api.DictationStatus, error)
-	WStop         func() (transcript string, err error)
+	IValue           interface{}
+	WAPIAvailable    func() (bool, error)
+	WCancel          func() error
+	WDeleteRecording func(id string) error
+	WDevices         func() ([]api.DictationDevice, error)
+	WRecordings      func() ([]api.SavedDictation, error)
+	WRetry           func(id string) (transcript string, err error)
+	WStart           func(options api.DictationStartOptions) error
+	WStatus          func() (api.DictationStatus, error)
+	WStop            func() (transcript string, err error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) APIAvailable() (bool, error) {
@@ -1025,8 +1029,17 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) APIAvailabl
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Cancel() error {
 	return W.WCancel()
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) DeleteRecording(id string) error {
+	return W.WDeleteRecording(id)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Devices() ([]api.DictationDevice, error) {
 	return W.WDevices()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Recordings() ([]api.SavedDictation, error) {
+	return W.WRecordings()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Retry(id string) (transcript string, err error) {
+	return W.WRetry(id)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Dictation) Start(options api.DictationStartOptions) error {
 	return W.WStart(options)

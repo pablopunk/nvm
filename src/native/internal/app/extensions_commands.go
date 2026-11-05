@@ -106,12 +106,16 @@ func commandTakesShortcuts(m *manager.Manager, extID string, command api.Command
 	return !m.IsBuiltIn(extID) || command.Customizable
 }
 
-// commandTone is the tone of a command's row: the foreground the command names, else the extension tone.
+// commandTone is the tone of a command's row: the foreground the command names, else the extension tone. The neutral
+// foreground takes no tone at all, as the native rows did.
 func commandTone(command api.Command) string {
-	if command.Appearance != nil && command.Appearance.Foreground != "" {
-		return string(command.Appearance.Foreground)
+	if command.Appearance == nil || command.Appearance.Foreground == "" {
+		return "purple"
 	}
-	return "purple"
+	if command.Appearance.Foreground == api.ColorNone {
+		return ""
+	}
+	return string(command.Appearance.Foreground)
 }
 
 // builtInCommandRow applies the host-only presentation of a built-in's command: its section and learning key, and its
@@ -130,6 +134,7 @@ func builtInCommandRow(row search.Item, command api.Command) search.Item {
 func commandAction(command api.Command) api.Action {
 	action := api.Run(command.ID, command.Title, nil)
 	action.DismissAfterRun = command.DismissAfterRun
+	action.Background = command.Mode == api.ModeBackground
 	return action
 }
 

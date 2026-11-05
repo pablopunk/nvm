@@ -19,6 +19,9 @@ import (
 // extensionRunTimeout bounds one action an extension runs from the palette. Actions run off the UI thread.
 const extensionRunTimeout = 10 * time.Second
 
+// backgroundRunTimeout bounds an action declared background, as the manager's background run budget does, plus slack.
+const backgroundRunTimeout = 2*time.Minute + 10*time.Second
+
 // extensionViewDeps are the services of extension views: an action runs on the manager's supervised child, and its
 // result returns to the UI thread, where the palette applies it.
 func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
@@ -26,7 +29,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			go func() {
-				ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
+				ctx, cancel := context.WithTimeout(context.Background(), runTimeoutOf(in))
 				defer cancel()
 				result, failure, err := m.Run(ctx, extID, in)
 				if err != nil {
@@ -115,4 +118,12 @@ func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string
 	p.hideThenRun(h, title, done, func() error { return m.PerformPaste(extID, action) }, func(err error) palette.Feedback {
 		return palette.Feedback{Title: title, Message: err.Error(), Tone: feedback.ToneError}
 	})
+}
+
+// runTimeoutOf is the palette's bound on one action: a background action may wait for the microphone or a transcript.
+func runTimeoutOf(in api.Invocation) time.Duration {
+	if in.Background {
+		return backgroundRunTimeout
+	}
+	return extensionRunTimeout
 }

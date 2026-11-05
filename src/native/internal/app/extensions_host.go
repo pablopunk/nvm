@@ -95,6 +95,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Selection:     selections,
 		Paste:         selections,
 		Apps:          p.appsvc,
+		Dictation:     p.dictationEngine(),
 	}, extensionsDir(), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dataDir(), "extension-data"),
@@ -103,7 +104,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		RootRefresh:     p.refreshRootRows,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,
-		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine}),
+		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine}),
 		AIQuota:         p.aiQuotas(),
 		LegacyStatePath: p.legacyStatePath(),
 	})

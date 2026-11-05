@@ -12,6 +12,7 @@ import (
 	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
+	dictationbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
@@ -41,6 +42,7 @@ type builtInInputs struct {
 	EmojiSkinTone int
 	Quicklinks    []quicklinks.Link
 	Snippets      []snippetsbuiltin.Snippet
+	Dictation     dictationbuiltin.Legacy
 	GuideDone     bool
 	SearchEngine  string
 }
@@ -51,7 +53,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
-		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
+		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), dictationbuiltin.New(in.Dictation), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
 		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
 	}

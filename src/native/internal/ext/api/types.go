@@ -109,6 +109,7 @@ func SerializableTypes() []reflect.Type {
 		reflect.TypeFor[OCRResult](),
 		reflect.TypeFor[DictationDevice](),
 		reflect.TypeFor[DictationStartOptions](),
+		reflect.TypeFor[SavedDictation](),
 		reflect.TypeFor[Attachment](),
 		reflect.TypeFor[AIOptions](),
 		reflect.TypeFor[AIStreamEvent](),

@@ -62,8 +62,6 @@ func leadingCommands(p *App) []command {
 		{Title: "Toggle Floating Notes", Keywords: "notes note float floating window sticky toggle", Icon: "sticky-note", Subtitle: "Show or hide your floating Markdown notes", Hidden: true, Run: func(h search.Host) { h.Hide(); p.toggleFloatingNotes() }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
 		{ID: shortcuts.CommandNewFloatingNote, Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
-		{ID: shortcuts.CommandDictate, Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.dictationFlowFor().Toggle() }},
-		{ID: shortcuts.CommandDictationHistory, Title: "Dictation History", Keywords: "dictation history transcripts voice history", Icon: "history", Subtitle: "Browse and copy previous dictations", Run: func(h search.Host) { h.Push(p.dictationHistoryView()) }},
 		{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
 	}
 }
@@ -182,7 +180,7 @@ func (p *App) settingsView() *palette.View {
 					p.S.save()
 					h.Refresh()
 				}}}},
-				{Title: "Dictation", Accessory: deviceTitle(p.dictationFlowFor().Devices(), p.dictationSettings().DeviceID), Icon: "mic", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.dictationSettingsView()) }}}},
+				{Title: "Dictation", Icon: "mic", Actions: []search.Action{p.dictationSettingsAction()}},
 				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.diagnosticsOff()), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
 					p.toggleDiagnostics()
 					h.Refresh()
@@ -213,4 +211,12 @@ func rowIndexAfter(rows []search.Item, title string) int {
 		return i + 1
 	}
 	return len(rows)
+}
+
+// onOff is the palette's word for a switch's state.
+func onOff(on bool) string {
+	if on {
+		return "On"
+	}
+	return "Off"
 }

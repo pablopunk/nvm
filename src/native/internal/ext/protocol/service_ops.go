@@ -39,6 +39,15 @@ const (
 	OpOnce          = "once"
 	OpCancel        = "cancel"
 	OpPending       = "pending"
+
+	OpStatus          = "status"
+	OpAPIAvailable    = "api-available"
+	OpDevices         = "devices"
+	OpStart           = "start"
+	OpStop            = "stop"
+	OpRecordings      = "recordings"
+	OpRetry           = "retry"
+	OpDeleteRecording = "delete-recording"
 )
 
 // OnceArgs schedules one run of the handler Ref names, at At, under Key.
@@ -129,4 +138,9 @@ type DraftRecord struct {
 type DraftLookup struct {
 	Found bool        `json:"found"`
 	Draft DraftRecord `json:"draft"`
+}
+
+// DictationRecordingArgs names the saved dictation a retry or a delete acts on.
+type DictationRecordingArgs struct {
+	ID string `json:"id"`
 }
