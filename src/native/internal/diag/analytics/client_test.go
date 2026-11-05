@@ -2,13 +2,17 @@ package analytics
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"encoding/hex"
 	"errors"
 	"net/http"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/logx"
@@ -237,6 +241,65 @@ func TestQueueIsBoundedWhileTheEndpointIsUnreachable(t *testing.T) {
 	if c.Pending() != maxQueue || c.Dropped() != 5 {
 		t.Fatalf("pending %d dropped %d, want %d and 5", c.Pending(), c.Dropped(), maxQueue)
 	}
+}
+
+func TestObserveInstallOwnerHashesAndDeduplicates(t *testing.T) {
+	set := fake.NewSet()
+	set.HTTP.Script(fake.Response{Status: http.StatusOK})
+	c := newTestClient(t, set)
+	if !c.ObserveInstallOwner("private-account") || c.ObserveInstallOwner("private-account") {
+		t.Fatal("owner observation should be accepted once")
+	}
+	if !c.ObserveInstallOwner("another-account") {
+		t.Fatal("different owner should be accepted")
+	}
+	if err := c.Flush(context.Background()); err != nil { t.Fatal(err) }
+	events := sentBatches(t, set)[0].Batch
+	if len(events) != 2 { t.Fatalf("events = %d, want 2", len(events)) }
+	wantHash := sha256.Sum256([]byte("private-account"))
+	if events[0].Properties["owner_id"] != hex.EncodeToString(wantHash[:]) || events[0].Properties["owner_source"] != "account" {
+		t.Fatalf("owner properties = %v", events[0].Properties)
+	}
+	if strings.Contains(string(set.HTTP.Requests()[0].Body), "private-account") || events[0].DistinctID == "" || events[0].DistinctID == events[0].Properties["owner_id"] {
+		t.Fatal("account ID leaked or anonymous distinct ID changed")
+	}
+	if events[0].Properties["$process_person_profile"] != false { t.Fatal("person profile enabled") }
+}
+
+func TestObserveInstallOwnerConsentAndQueueRejectionDoNotMark(t *testing.T) {
+	set := fake.NewSet()
+	c := newTestClient(t, set)
+	c.SetConsent(false)
+	if c.ObserveInstallOwner("id") { t.Fatal("accepted with consent off") }
+	c.SetConsent(true)
+	if !c.ObserveInstallOwner("id") { t.Fatal("did not accept after consent enabled") }
+	c = newTestClient(t, fake.NewSet())
+	for i := 0; i < maxQueue; i++ { c.AppLaunched() }
+	if c.ObserveInstallOwner("id") { t.Fatal("accepted into full queue") }
+	c.mu.Lock(); c.queue = nil; c.mu.Unlock()
+	if !c.ObserveInstallOwner("id") { t.Fatal("queue rejection incorrectly marked owner") }
+}
+
+func TestObserveInstallOwnerDoesNotWaitForFlushNetwork(t *testing.T) {
+	set := fake.NewSet()
+	entered, release := make(chan struct{}), make(chan struct{})
+	var enteredOnce sync.Once
+	set.HTTP.Handle(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { enteredOnce.Do(func() { close(entered) }); <-release; w.WriteHeader(http.StatusOK) }))
+	c := newTestClient(t, set)
+	c.AppLaunched()
+	flushDone := make(chan struct{})
+	go func() { _ = c.Flush(context.Background()); close(flushDone) }()
+	<-entered
+	ownerDone := make(chan bool, 1)
+	go func() { ownerDone <- c.ObserveInstallOwner("id") }()
+	select {
+	case accepted := <-ownerDone:
+		if !accepted { t.Fatal("owner was rejected") }
+	case <-time.After(time.Second):
+		t.Fatal("owner observation blocked on network flush")
+	}
+	close(release)
+	<-flushDone
 }
 
 func TestInstallIdentifierIsCreatedOnceAndReusedByLaterLaunches(t *testing.T) {

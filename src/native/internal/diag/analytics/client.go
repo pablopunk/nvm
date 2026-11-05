@@ -81,12 +81,14 @@ type Client struct {
 	// sendMu serializes flushes, and guards the identifier and the attempt count, which only flushes touch.
 	sendMu    sync.Mutex
 	installID string
+	ownerMu sync.Mutex
+	observedOwners map[string]struct{}
 	attempts  int
 }
 
 // New returns a client with its consent set to cfg.Consent. It sends nothing until Start or Flush runs.
 func New(cfg Config) *Client {
-	c := &Client{cfg: cfg, common: commonProperties(cfg), kick: make(chan struct{}, 1)}
+	c := &Client{cfg: cfg, common: commonProperties(cfg), kick: make(chan struct{}, 1), observedOwners: make(map[string]struct{})}
 	c.consent.Store(cfg.Consent)
 	return c
 }
@@ -176,6 +178,7 @@ func (c *Client) SupportReport(ref string) bool {
 	return c.capture(EventSupportReport, map[string]any{"support_ref": ref})
 }
 
+// ObserveInstallOwner records the signed-in account as a one-way hash once per owner per run.
 // capture queues one event. It returns false when the event was not kept: sending is off, the event is unknown, or the
 // queue is full. It never waits on the network.
 func (c *Client) capture(event string, props map[string]any) bool {
