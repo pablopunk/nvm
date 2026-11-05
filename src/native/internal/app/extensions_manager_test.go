@@ -86,6 +86,7 @@ func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
+		Home:       userHomeDir(),
 		BuiltIns:   builtins,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},

@@ -17,7 +17,7 @@ const (
 func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 	commands := []api.Command{{
 		ID: searchCommandID, Title: searchTitle, Subtitle: "Find files in your home folder", Icon: "folder",
-		Keywords: []string{"files", "find", "documents", "locate"}, Score: rootCommandScore,
+		Keywords: []string{"files", "find", "documents", "locate"}, Score: rootCommandScore, Appearance: &api.Appearance{Foreground: api.ColorBlue},
 		Customizable: true, Section: search.KindCommands, LearnKey: "cmd:" + searchTitle,
 	}}
 	if ctx.Account().SignedIn() {

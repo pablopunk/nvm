@@ -89,15 +89,15 @@ func TestRootShowsTheSixNewestFilesWithTheirOwnMenu(t *testing.T) {
 	}
 }
 
-func TestRootTypedQueryNeedsTwoCharactersAndScoresFromSeventyFive(t *testing.T) {
+func TestRootTypedQueryNeedsTwoCharactersAndScoresLikeTheRecentFiles(t *testing.T) {
 	files := &fakeFiles{matches: []api.IndexedFile{indexed("/h/x.md", "x.md", "file"), indexed("/h/y.md", "y.md", "file")}}
 	ctx := fakeContext{files: files}
 	if items, _ := (Extension{}).SearchItems(ctx, "x"); items != nil {
 		t.Fatalf("one character searched the index: %+v", items)
 	}
 	items, _ := Extension{}.SearchItems(ctx, "xy")
-	if files.lastText != "xy" || len(items) != 2 || items[0].Score != 75 || items[1].Score != 74 {
-		t.Fatalf("search = %+v for %q, want two rows from 75", items, files.lastText)
+	if files.lastText != "xy" || len(items) != 2 || items[0].Score != 6 || items[1].Score != 5 {
+		t.Fatalf("search = %+v for %q, want two rows scored 6 and 5", items, files.lastText)
 	}
 }
 
