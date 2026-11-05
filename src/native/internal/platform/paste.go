@@ -1,6 +1,17 @@
 package platform
 
-import "time"
+import (
+	"context"
+	"time"
+)
+
+// ContextPaster is an optional Paster capability for callers that own a cancellable lifecycle.
+// Cancellation prevents queued work and is passed through to the OS helper; it cannot recall a
+// gesture already posted to the operating system.
+type ContextPaster interface {
+	PasteIntoFrontmostContext(ctx context.Context, expectedAppID string) error
+	UndoInFrontmostContext(ctx context.Context, expectedAppID string) error
+}
 
 // Paster is the intent "paste into the app that had focus before the palette opened". The caller has
 // already placed the content on the clipboard; the port sends the OS paste gesture to the frontmost app.
@@ -29,4 +40,9 @@ type Paster interface {
 // refuses typing with ErrUnsupported. delay is the pause between characters, zero for none.
 type Typist interface {
 	TypeIntoFrontmost(expectedAppID, text string, delay time.Duration) error
+}
+
+// ContextTypist is the cancellable form of Typist.
+type ContextTypist interface {
+	TypeIntoFrontmostContext(ctx context.Context, expectedAppID, text string, delay time.Duration) error
 }

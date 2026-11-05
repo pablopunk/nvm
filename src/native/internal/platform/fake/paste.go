@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"time"
@@ -52,6 +53,13 @@ func (p *Paster) PasteIntoFrontmost(expectedAppID string) error {
 	return nil
 }
 
+func (p *Paster) PasteIntoFrontmostContext(ctx context.Context, expectedAppID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return p.PasteIntoFrontmost(expectedAppID)
+}
+
 // UndoInFrontmost records the undo request and returns nil, or the injected fault.
 func (p *Paster) UndoInFrontmost(expectedAppID string) error {
 	if err := p.faults.take(OpUndoInFrontmost); err != nil {
@@ -61,6 +69,13 @@ func (p *Paster) UndoInFrontmost(expectedAppID string) error {
 	defer p.mu.Unlock()
 	p.undos = append(p.undos, expectedAppID)
 	return nil
+}
+
+func (p *Paster) UndoInFrontmostContext(ctx context.Context, expectedAppID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return p.UndoInFrontmost(expectedAppID)
 }
 
 // Undos returns a copy of the expected app IDs of every recorded undo, in order.
@@ -108,6 +123,13 @@ func (p *Paster) TypeIntoFrontmost(_, text string, _ time.Duration) error {
 	return nil
 }
 
+func (p *Paster) TypeIntoFrontmostContext(ctx context.Context, expectedAppID, text string, delay time.Duration) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return p.TypeIntoFrontmost(expectedAppID, text, delay)
+}
+
 // Typed returns a copy of every text the paster was asked to type, in order.
 func (p *Paster) Typed() []string {
 	p.mu.Lock()
@@ -116,3 +138,5 @@ func (p *Paster) Typed() []string {
 }
 
 var _ platform.Typist = (*Paster)(nil)
+var _ platform.ContextPaster = (*Paster)(nil)
+var _ platform.ContextTypist = (*Paster)(nil)
