@@ -178,12 +178,20 @@ func listRowCount(results []search.Item, loading bool) int {
 	return len(results)
 }
 
-// listRowKey identifies list row i. The loading row after the results has a key of its own.
+// listRowKey keeps an identified result mounted when its title or rank changes. Anonymous rows use their position
+// with a learning key or title; the loading row after the results has a key of its own.
 func listRowKey(results []search.Item, i int) any {
 	if i >= len(results) {
 		return "loading"
 	}
-	return fmt.Sprint(i, results[i].ID, results[i].Title)
+	item := results[i]
+	if item.ID != "" {
+		return fmt.Sprintf("id:%q:%q", item.Kind, item.ID)
+	}
+	if item.LearnKey != "" {
+		return fmt.Sprintf("learn:%d:%q:%q", i, item.Kind, item.LearnKey)
+	}
+	return fmt.Sprint(i, item.Kind, item.Title)
 }
 
 // listRowLabel is the assistive name of list row i. The loading row names what it waits for.
