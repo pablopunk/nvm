@@ -24,6 +24,9 @@ type Shell interface {
 	// QuickLook shows an item in the system's quick preview, without opening it. Only systems with the
 	// shell.quickLook capability have one; the others return ErrUnsupported.
 	QuickLook(path string) error
+	// OpenWith opens a file with the application at app.Path. Systems that cannot choose the application for one
+	// file return ErrUnsupported.
+	OpenWith(path string, app App) error
 	// Trash moves an item to the Trash or Recycle Bin. It must not delete permanently; an item that
 	// cannot be trashed is left in place and an error is returned.
 	Trash(path string) error

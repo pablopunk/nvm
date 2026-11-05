@@ -33,6 +33,9 @@ func TestRootEmptyStateSaysTypeAnything(t *testing.T) {
 	}
 }
 
+// rootRecentFileLimit is the recent files the empty root lists, as the built-in files extension lists them.
+const rootRecentFileLimit = 6
+
 // TestRootEmptyShowsTenCopiesAndSixRecentFiles pins how many copies and recent files the empty root lists inline.
 func TestRootEmptyShowsTenCopiesAndSixRecentFiles(t *testing.T) {
 	p := goldenPalette(t)
@@ -43,7 +46,7 @@ func TestRootEmptyShowsTenCopiesAndSixRecentFiles(t *testing.T) {
 	if want := min(rootClipboardLimit, p.clip.history.Len()); counts[search.KindClipboard] != want {
 		t.Fatalf("the empty root shows %d copies, want %d", counts[search.KindClipboard], want)
 	}
-	if counts[search.KindFiles] > fileRootLimit {
-		t.Fatalf("the empty root shows %d recent files, want at most %d", counts[search.KindFiles], fileRootLimit)
+	if counts[search.KindFiles] > rootRecentFileLimit {
+		t.Fatalf("the empty root shows %d recent files, want at most %d", counts[search.KindFiles], rootRecentFileLimit)
 	}
 }

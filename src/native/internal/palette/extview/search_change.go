@@ -64,6 +64,7 @@ func (s *Session) runSearchChange(gen int, ref api.ActionRef, text string) {
 		s.searchChange.inFlight = false
 		s.searchChange.query, s.searchChange.ids, s.searchChange.items = text, nil, nil
 		if failure == nil && result.Patch != nil {
+			s.Apply(*result.Patch)
 			s.searchChange.ids = result.Patch.SearchResultIds
 			s.searchChange.items = result.Patch.SearchItems
 		}

@@ -66,6 +66,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	selections := p.extensionSelection()
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
+		FileIndex: fileIndexPort{p: p},
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -14,9 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
-	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
-	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -44,15 +41,10 @@ func rootRowNamed(t *testing.T, title string) search.Item {
 
 // menuCases lists the row kinds the palette can reach from the golden fixtures and the file service.
 func menuCases(t *testing.T) []menuCase {
-	fileName := "report-2024.pdf"
 	return []menuCase{
 		{kind: "application", name: "Firefox", row: func(t *testing.T) search.Item {
 			return rootRowNamed(t, "Firefox")
 		}, menu: applicationMenu(goldenPalette(t).appsvc.SupportsUninstall())},
-		{kind: "file", name: fileName, row: func(t *testing.T) search.Item {
-			svc := newTestFiles(t, testFileHome, fixturePaths())
-			return svc.fileItem(files.Result{Path: fixturePaths()[0], Name: fileName, DisplayPath: "~/Documents/" + fileName})
-		}, menu: []string{"Open " + fileName, "Preview Contents", platform.ShellLabelsFor(runtime.GOOS).RevealInFileManager}},
 		{kind: "clipboard entry", row: func(t *testing.T) search.Item {
 			p, _, _ := seededClipPalette(t)
 			return p.Results()[1]

@@ -16,15 +16,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
-// Sizes of the file service's caches and pools. Icons and thumbnails are small pictures and may be many; previews
-// hold decoded pictures of up to 1024 pixels, so there are few of them.
+// Sizes of the file service's caches and pools. Icons and thumbnails are small pictures and may be many.
 const (
-	fileIconEntries    = 400
-	fileThumbEntries   = 400
-	filePreviewEntries = 8
-	fileWorkers        = 2
-	fileQueue          = 256
-	fileProgressTick   = time.Second
+	fileIconEntries  = 400
+	fileThumbEntries = 400
+	fileWorkers      = 2
+	fileQueue        = 256
+	fileProgressTick = time.Second
 )
 
 // fileDeps are what the file service is built from. The composition root fills it with the real ports; tests fill it
@@ -64,7 +62,6 @@ type fileService struct {
 	thumbErr   error
 	icons      *asyncCache[*ui.Bitmap]
 	thumbs     *asyncCache[*ui.Bitmap]
-	previews   *asyncCache[*filePreview]
 	redraw     func()
 	ctx        context.Context
 	log        *logx.Logger
@@ -110,7 +107,6 @@ func newFileService(d fileDeps) (*fileService, error) {
 		thumbDir:  d.ThumbDir,
 		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
 		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
-		previews:  newAsyncCache[*filePreview](ctx, fileWorkers, fileQueue, filePreviewEntries, redraw),
 		redraw:    redraw,
 		ctx:       ctx,
 		log:       logger,

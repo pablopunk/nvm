@@ -187,6 +187,7 @@ func init() {
 		"NewInput":                      reflect.ValueOf(api.NewInput),
 		"OpenPath":                      reflect.ValueOf(api.OpenPath),
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
+		"OpenWith":                      reflect.ValueOf(api.OpenWith),
 		"Panel":                         reflect.ValueOf(api.Panel),
 		"PanelHidden":                   reflect.ValueOf(api.PanelHidden),
 		"PanelMenu":                     reflect.ValueOf(api.PanelMenu),
@@ -205,10 +206,13 @@ func init() {
 		"PresentRoot":                   reflect.ValueOf(api.PresentRoot),
 		"PresentSidePreview":            reflect.ValueOf(api.PresentSidePreview),
 		"PresentStacked":                reflect.ValueOf(api.PresentStacked),
+		"PreviewFile":                   reflect.ValueOf(api.PreviewFile),
+		"PreviewFileView":               reflect.ValueOf(api.PreviewFileView),
 		"PreviewView":                   reflect.ValueOf(api.PreviewView),
 		"Primary":                       reflect.ValueOf(api.Primary),
 		"ProgressView":                  reflect.ValueOf(api.ProgressView),
 		"PushView":                      reflect.ValueOf(api.PushView),
+		"QuickLook":                     reflect.ValueOf(api.QuickLook),
 		"RevealPath":                    reflect.ValueOf(api.RevealPath),
 		"RootView":                      reflect.ValueOf(api.RootView),
 		"Run":                           reflect.ValueOf(api.Run),
@@ -241,6 +245,7 @@ func init() {
 		"ToneMuted":                     reflect.ValueOf(api.ToneMuted),
 		"ToneSuccess":                   reflect.ValueOf(api.ToneSuccess),
 		"ToneWarning":                   reflect.ValueOf(api.ToneWarning),
+		"Trash":                         reflect.ValueOf(api.Trash),
 		"TriggerAppFrontmostChange":     reflect.ValueOf(api.TriggerAppFrontmostChange),
 		"TriggerClipboardChanged":       reflect.ValueOf(api.TriggerClipboardChanged),
 		"TriggerFilesChanged":           reflect.ValueOf(api.TriggerFilesChanged),
@@ -363,6 +368,7 @@ func init() {
 		"ImageShape":              reflect.ValueOf((*api.ImageShape)(nil)),
 		"IndexOptions":            reflect.ValueOf((*api.IndexOptions)(nil)),
 		"IndexReport":             reflect.ValueOf((*api.IndexReport)(nil)),
+		"IndexStatus":             reflect.ValueOf((*api.IndexStatus)(nil)),
 		"IndexedFile":             reflect.ValueOf((*api.IndexedFile)(nil)),
 		"IndicatorInput":          reflect.ValueOf((*api.IndicatorInput)(nil)),
 		"IndicatorStatus":         reflect.ValueOf((*api.IndicatorStatus)(nil)),
@@ -1062,7 +1068,11 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Files struct {
 	WDisplayPath   func(path string) string
 	WFileURL       func(path string) string
 	WFind          func(roots []string, options api.FindOptions) ([]api.FileRef, error)
+	WFindImages    func(roots []string, options api.FindOptions) ([]api.FileRef, error)
+	WFindMedia     func(roots []string, options api.FindOptions) ([]api.FileRef, error)
+	WFindVideos    func(roots []string, options api.FindOptions) ([]api.FileRef, error)
 	WIndexSnapshot func(options api.IndexOptions) []api.IndexedFile
+	WIndexStatus   func() api.IndexStatus
 	WIndexedRoots  func() []string
 	WMetadata      func(path string) (api.FileRef, error)
 	WOpen          func(path string) error
@@ -1087,8 +1097,20 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) FileURL(path st
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) Find(roots []string, options api.FindOptions) ([]api.FileRef, error) {
 	return W.WFind(roots, options)
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) FindImages(roots []string, options api.FindOptions) ([]api.FileRef, error) {
+	return W.WFindImages(roots, options)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) FindMedia(roots []string, options api.FindOptions) ([]api.FileRef, error) {
+	return W.WFindMedia(roots, options)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) FindVideos(roots []string, options api.FindOptions) ([]api.FileRef, error) {
+	return W.WFindVideos(roots, options)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexSnapshot(options api.IndexOptions) []api.IndexedFile {
 	return W.WIndexSnapshot(options)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexStatus() api.IndexStatus {
+	return W.WIndexStatus()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexedRoots() []string {
 	return W.WIndexedRoots()

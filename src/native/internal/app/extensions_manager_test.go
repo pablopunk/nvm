@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -48,8 +49,33 @@ func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manage
 	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
 }
 
+// newFixtureManagerWithIndex is newFixtureManagerWithApps with the file index the built-in files extension reads.
+func newFixtureManagerWithIndex(t *testing.T, apps services.AppLifecycle, index services.FileIndex) *manager.Manager {
+	t.Helper()
+	return newManagerWithIndex(t, index, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+}
+
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
 func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+	t.Helper()
+	return newManagerWithIndex(t, nil, builtins, clock, network, apps, enabled...)
+}
+
+// newManagerWithIndex is newManagerWithApps with the file index the built-in files extension reads.
+func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+	return newManagerWithFakes(t, managerFakes{index: index}, builtins, clock, network, apps, enabled...)
+}
+
+// managerFakes are the host services a test puts in place of the real ones: the file index, the model calls and the
+// signed-in account. A nil field keeps the service absent, as the app without it does.
+type managerFakes struct {
+	index   services.FileIndex
+	ai      *extai.Service
+	account services.AccountState
+}
+
+// newManagerWithFakes is newManagerWithIndex with the host services of fakes.
+func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -66,7 +92,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 		clock = ports.Clock
 	}
 	m, err := manager.New(manager.Ports{
-		Files: ports.FS, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
+		Files: ports.FS, FileIndex: fakes.index, AI: fakes.ai, Account: fakes.account, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 		Places:       fixturePlaces,
 		Network:      network,
@@ -74,6 +100,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
+		Home:       userHomeDir(),
 		BuiltIns:   builtins,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},

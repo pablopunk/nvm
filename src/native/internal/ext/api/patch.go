@@ -18,4 +18,7 @@ type ViewPatch struct {
 	// SearchItems is read only from an onSearchChange result too: rows answered for the search text, shown after the
 	// local matches like SearchResultIds. Their rows are not filtered by the text, and the host drops them when it changes.
 	SearchItems []Item `json:"searchItems,omitempty"`
+	// Status and EmptyView, when set, replace the view's footer Status and empty state.
+	Status    string      `json:"status,omitempty"`
+	EmptyView *EmptyState `json:"emptyView,omitempty"`
 }

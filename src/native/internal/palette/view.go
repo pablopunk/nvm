@@ -47,8 +47,11 @@ type View struct {
 	// never remembered or learned while it is set.
 	Concealed            bool
 	EmptyTitle, EmptySub string
-	KeepQuery            bool          // do not clear the input on Enter
-	Status               func() string // not drawn; kept for the views that set it
+	// EmptyFn, when set, gives the empty state's title and subtitle instead of EmptyTitle and EmptySub; it is read on
+	// every frame, so a view's empty state can change as its index fills.
+	EmptyFn   func() (title, sub string)
+	KeepQuery bool          // do not clear the input on Enter
+	Status    func() string // not drawn; kept for the views that set it
 	// Footer is the left footer text when the view follows its chosen row, such as the picker's character name.
 	// It receives the chosen row, or nil without one, and replaces the title.
 	Footer func(chosen *search.Item) string

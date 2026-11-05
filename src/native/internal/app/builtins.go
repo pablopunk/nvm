@@ -13,6 +13,7 @@ import (
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
+	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
@@ -52,7 +53,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
-		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider),
+		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
 	}
 }
 

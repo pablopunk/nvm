@@ -57,6 +57,8 @@ type View struct {
 	ContentSizing string `json:"contentSizing,omitempty"`
 	// Placeholder is the search input placeholder.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Status replaces the footer's title, such as counts. Refresh it with ViewPatch.Status.
+	Status string `json:"status,omitempty"`
 	// WindowCompact renders the result as a compact overlay in independent windows.
 	WindowCompact bool `json:"windowCompact,omitempty"`
 
@@ -75,9 +77,8 @@ type View struct {
 	SelectedItemID    string           `json:"selectedItemId,omitempty"`
 	MaxVisibleItems   int              `json:"maxVisibleItems,omitempty"`
 	OnSelectionChange *ActionRef       `json:"onSelectionChange,omitempty"`
-	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch's SearchResultIds are a
-	// second batch of item ids, shown after the local matches. While the call runs the host shows the batch as loading
-	// after the rows, with no field to set. Only list and grid views carry it.
+	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch may replace the items, and
+	// its SearchResultIds are a second batch of those ids, shown after the local matches. Only list and grid views carry it.
 	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
 	// Search answers every typed query with the rows of the search, in the order the handler gives them. The host does not
 	// filter or sort them, and shows the rows of the latest answer while the next one runs. The handler gets the trimmed

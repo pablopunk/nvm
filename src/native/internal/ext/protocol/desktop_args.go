@@ -167,3 +167,27 @@ type UninstallTrashArgs struct {
 	Token string   `json:"token"`
 	IDs   []string `json:"ids"`
 }
+
+// WriteFileTextArgs names a text file to write and its content. Overwrite replaces an existing file.
+type WriteFileTextArgs struct {
+	Path      string `json:"path"`
+	Text      string `json:"text"`
+	Overwrite bool   `json:"overwrite,omitempty"`
+}
+
+// IndexArgs carries the options of an index read or rebuild.
+type IndexArgs struct {
+	Options api.IndexOptions `json:"options"`
+}
+
+// SearchIndexArgs names the text to match in the file index and the options that filter the match.
+type SearchIndexArgs struct {
+	Query   string           `json:"query"`
+	Options api.IndexOptions `json:"options"`
+}
+
+// OpenWithArgs names a file and the application to open it with, by its bundle path.
+type OpenWithArgs struct {
+	Path    string `json:"path"`
+	AppPath string `json:"appPath"`
+}

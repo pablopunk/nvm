@@ -106,7 +106,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		if !p.settled {
 			return
 		}
-		title, sub := v.EmptyTitle, v.EmptySub
+		title, sub := emptyText(v)
 		if title == "" {
 			title, sub = "No Results", "Try a different search."
 		}
@@ -320,6 +320,14 @@ func accessoryChoices(v *View) ([]string, int) {
 		return nil, 0
 	}
 	return v.Accessory.Titles(), v.Accessory.SelectedIndex()
+}
+
+// emptyText is the empty state's title and subtitle of a view: its EmptyFn when it has one, its fixed texts otherwise.
+func emptyText(v *View) (string, string) {
+	if v.EmptyFn != nil {
+		return v.EmptyFn()
+	}
+	return v.EmptyTitle, v.EmptySub
 }
 
 // viewHint is the right footer text of a view: its HintFn when it has one, its fixed Hint otherwise.

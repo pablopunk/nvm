@@ -46,6 +46,11 @@ type Deps struct {
 	// the action report unavailable.
 	OpenPath   func(path string)
 	RevealPath func(path string)
+	// QuickLook shows a file in the system's previewer, OpenWith opens a file with the app at appPath, and Trash
+	// moves a file to the Trash. Nil makes the action report unavailable; failures show as a toast.
+	QuickLook func(path string) error
+	OpenWith  func(path, appPath string) error
+	Trash     func(path string) error
 	// Indicate shows a result's toast as a passive indicator owned by the extension. Nil shows the message under the
 	// search field instead.
 	Indicate func(extID string, input api.IndicatorInput)
@@ -102,7 +107,8 @@ type Session struct {
 	searchChange searchChange
 	accessory    *palette.Accessory
 	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
-	guard sync.Mutex
+	guard        sync.Mutex
+	filePreviews map[string]filePreviewText
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
@@ -178,9 +184,18 @@ func (s *Session) listPage() *palette.View {
 	page.Loading = s.isLoadingEmpty
 	page.Pending = s.searchChangePending
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
+	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
+	page.OnKey = s.tabCyclesAccessory(page.Accessory)
+	page.Footer = s.footerName
+	page.Hint = s.view.Hint
 	return page
+}
+
+// emptyState is the empty state of a list as the view says it now: a refresh can change it while the view is open.
+func (s *Session) emptyState() (string, string) {
+	return s.emptyTitle(), s.emptySubtitle()
 }
 
 // palettePresentation maps a view's presentation to the palette's. A side-preview list shows the detail of the chosen row

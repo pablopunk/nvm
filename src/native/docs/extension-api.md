@@ -1234,3 +1234,55 @@ Code: `internal/ext/bundled` (the shipped datasets, decoded once), `internal/ext
 - **Dataset.** `internal/ext/bundled/datasets/emoji-symbols.json` is generated from the catalog library by `go test ./internal/ext/builtins/emoji -args -update-dataset`. `TestShippedDatasetMatchesTheCatalog` fails when the catalog and the file differ.
 - **Tests.** L1: `internal/ext/services/bundle_test.go` (decoded once, unknown names), `internal/ext/child/bundle_test.go` (one host answer for three reads), `internal/palette/extview/grid_categories_test.go` (Tab and Shift+Tab wrap, change handler values). L2: `internal/app/extensions_learning_test.go` (a folder row climbs with its key; a bare key does not boost it, `acme.learn`), `internal/app/emoji_builtin_test.go` and `emoji_meaning_builtin_test.go` (the ported picker tests and the goldens emoji-grid, emoji-no-results, emoji-skin-tone, emoji-meaning and emoji-loading, unchanged).
 
+
+## 33. Files as built (dogfood batch 4: the files built-in)
+
+Every `ctx.desktop.files` method of the 1.x API is served by the host, through the same services handler as a folder
+extension's calls (`internal/ext/services/desktop_files*.go`, child side `internal/ext/child/remote_files*.go`):
+
+| 1.x method | Go (`api.Files`) | Host |
+|---|---|---|
+| `find` | `Find` | index-free walk of existing roots; relative and missing roots skipped |
+| `findImages`, `findVideos`, `findMedia` | `FindImages`, `FindVideos`, `FindMedia` | `Find` with the kind fixed |
+| `openWithApps` | `OpenWithApps` | the installed bundles, ranked by their document types |
+| `open` | `Open` | the shell's default app |
+| `reveal` | `Reveal` | the file manager |
+| `preview` (Quick Look) | `QuickLook` | `Shell.QuickLook`; `ErrUnsupported` answers "Quick Look is not available on this system" |
+| `readText` | `ReadText` | the whole file, at most 256 KiB; a larger file is refused, never cut |
+| `writeText` | `WriteText` | atomic replace; fails when the file exists unless `overwrite`; never creates folders |
+| `displayPath` | `DisplayPath` | the home folder shown as `~` |
+| `toFileUrl` | `FileURL` | `file:` URL of an absolute path |
+| `thumbnail` | `Thumbnail` | PNG data URL of a picture, `found` false otherwise |
+| `metadata` | `Metadata` | size, times, kind, picture dimensions |
+| `indexedRoots` | `IndexedRoots` | the index's roots, `~` expanded |
+| `indexSnapshot` | `IndexSnapshot` | filtered and sorted from memory, never rescanned |
+| `reindex` | `Reindex` | starts a rescan and returns the count now; the scan finishes later |
+| `recent` | `Recent` | newest first from the index |
+| `searchIndex` | `SearchIndex` | name matches from the index |
+| `indexStatus` | `IndexStatus` | whether the index holds a snapshot and whether it is scanning; read from memory |
+
+Actions: `openPath`, `revealPath`, `quickLook`, `openWith(path, app)` and `trash(paths)` are declarative
+(`api.OpenPath`, `api.RevealPath`, `api.QuickLook`, `api.OpenWith`, `api.Trash`). The palette runs them itself; trash
+asks first when the action carries a confirmation. `openWith` needs `Shell.OpenWith`, which is served on macOS through
+`open -a` and refused elsewhere. `ui.previewFile(file)` is `api.PreviewFile(title, file)` (a file-preview view) and
+`api.PreviewFileView(file)` for a view that wants the preview itself.
+
+Deliberate differences from the 1.x declarations:
+
+- `mtime`, `birthtime` and `dateAdded` are epoch milliseconds only (`mtimeMs`, `birthtimeMs`, `dateAddedMs`). There are no ISO duplicates.
+- `readText` refuses files over 256 KiB instead of returning them whole; the protocol line cap is 1 MiB.
+- `thumbnail` renders synchronously; the built-in gives at most 48 rows of a list a picture.
+- The file index's status (indexing or the file count) is not exposed to extensions, so an empty view says "No files found." while the index is still loading.
+
+The files built-in (`internal/ext/builtins/files`, id `nevermind.files`) uses only this surface. It serves the six
+recent files at the root (scores 6 to 1), the typed root search (two characters, scores from 75), the Search Files
+command and view, and Find Files by Meaning (signed in only). Its rows carry the 1.x menu: Open (Enter), Preview or
+Preview Contents (`CommandOrControl+Y`), Quick Look where the system has it, and Show in Finder (`CommandOrControl+Enter`).
+Find Files by Meaning asks `ctx.AI().Decide` about the sixteen most recent names, only after the user asks for the
+query, with the decision's predicate and match probability of 0.5 as the native feature had them.
+
+Changes to the native behavior, each from moving the feature onto the API:
+
+- The Search Files kind filter is a search accessory (a popup on the search bar) instead of the Tab key: the API has no key-driven filter. The footer status line is gone for the same reason.
+- Find Files by Meaning lists its matches through the view's search change, so the ask row and the decision rows update in place.
+- Search Files and Find Files by Meaning are listed by the extension source, so they sit after the native commands at the root rather than at their native place.

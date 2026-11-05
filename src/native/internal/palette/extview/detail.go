@@ -15,6 +15,10 @@ func (s *Session) detailPane(detail *api.Detail) func(c *ui.Context, h search.Ho
 		return nil
 	}
 	return func(c *ui.Context, _ search.Host) {
+		if detail.File != nil {
+			s.drawFileDetail(c, *detail.File)
+			return
+		}
 		drawDetail(c, *detail, s.markdown, s.images[imageRef(detail.Image)])
 	}
 }

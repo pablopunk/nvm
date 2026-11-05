@@ -95,8 +95,10 @@ type Appearance struct {
 type Detail struct {
 	Title    string `json:"title,omitempty"`
 	Subtitle string `json:"subtitle,omitempty"`
-	Text     string `json:"text,omitempty"`
-	Markdown string `json:"markdown,omitempty"`
+	// File, when set, is previewed by the host and listed with its metadata; it replaces the other content.
+	File     *FileRef `json:"file,omitempty"`
+	Text     string   `json:"text,omitempty"`
+	Markdown string   `json:"markdown,omitempty"`
 	// Facts are labelled values drawn large, one pair after another, below the other content. Use them for the
 	// answer a row gives, such as the lines of a calculation.
 	Facts    []Fact     `json:"facts,omitempty"`

@@ -22,23 +22,37 @@ func (h *Handler) writeBytes(raw json.RawMessage) (api.FileRef, error) {
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.FileRef{}, err
 	}
-	if !filepath.IsAbs(args.Path) {
+	return h.writeContent(args.Path, args.Data, args.Overwrite)
+}
+
+// writeText saves UTF-8 text the same way writeBytes saves bytes.
+func (h *Handler) writeText(raw json.RawMessage) (api.FileRef, error) {
+	var args protocol.WriteFileTextArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return api.FileRef{}, err
+	}
+	return h.writeContent(args.Path, []byte(args.Text), args.Overwrite)
+}
+
+// writeContent is the shared write of writeBytes and writeText: the path must be absolute and its folder must exist.
+func (h *Handler) writeContent(rawPath string, data []byte, overwrite bool) (api.FileRef, error) {
+	if !filepath.IsAbs(rawPath) {
 		return api.FileRef{}, invalid("a file path must be absolute")
 	}
-	if len(args.Data) > maxWriteBytes {
-		return api.FileRef{}, invalid("a binary file write is limited to %d bytes per call", maxWriteBytes)
+	if len(data) > maxWriteBytes {
+		return api.FileRef{}, invalid("a file write is limited to %d bytes per call", maxWriteBytes)
 	}
 	if h.deps.Files == nil {
 		return api.FileRef{}, unavailable("files are not available in this build")
 	}
-	path := filepath.Clean(args.Path)
-	if err := h.checkWritableTarget(path, args.Overwrite); err != nil {
+	path := filepath.Clean(rawPath)
+	if err := h.checkWritableTarget(path, overwrite); err != nil {
 		return api.FileRef{}, err
 	}
 	if !h.actions.allow() {
 		return api.FileRef{}, rateExceeded("file writes")
 	}
-	if err := h.replaceFile(path, args.Data); err != nil {
+	if err := h.replaceFile(path, data); err != nil {
 		return api.FileRef{}, fmt.Errorf("write %s: %w", filepath.Base(path), err)
 	}
 	info, err := h.deps.Files.Stat(path)
