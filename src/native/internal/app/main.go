@@ -137,6 +137,7 @@ type App struct {
 
 	windows     *windowmgmt.Service
 	windowFocus windowSummon
+	pasteLeases *leasedPaster
 	// paletteRuns counts the extension runs the palette started that have not returned. A window call made meanwhile acts
 	// on the window the palette was summoned from, as the palette's own commands did; the palette hides before the call.
 	paletteRuns atomic.Int32

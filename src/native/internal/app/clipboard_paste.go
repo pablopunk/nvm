@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"runtime"
+	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
@@ -21,9 +23,96 @@ const clipPasteName = "clipboard.paste"
 // app's one port set from it, so snippets, emoji and the clipboard all paste the same way.
 func (p *App) appPorts() platform.Ports {
 	ports := real.NewPorts()
-	ports.Paster = real.NewPaster(ports.Helper, p.waitPaletteHidden)
+	adapter := &leasedPaster{app: p, inner: real.NewPaster(ports.Helper, nil)}
+	p.pasteLeases = adapter
+	ports.Paster = adapter
 	return rigPorts(ports)
 }
+
+// leasedPaster revokes pending paste dispatches as soon as a new palette summon starts.
+type leasedPaster struct {
+	app    *App
+	inner  platform.Paster
+	mu     sync.Mutex
+	leases map[uint64]context.CancelFunc
+	next   uint64
+}
+
+func (p *leasedPaster) revoke() {
+	p.mu.Lock()
+	for _, cancel := range p.leases {
+		cancel()
+	}
+	p.leases = nil
+	p.mu.Unlock()
+}
+
+func (p *leasedPaster) withLease(ctx context.Context, run func(context.Context) error) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	leaseCtx, cancel := context.WithCancel(ctx)
+	type leaseResult struct {
+		id  uint64
+		err error
+	}
+	ready := make(chan leaseResult, 1)
+	p.app.onUI(func() {
+		if err := leaseCtx.Err(); err != nil {
+			ready <- leaseResult{err: err}
+			return
+		}
+		if p.app.Palette != nil && p.app.Visible() {
+			ready <- leaseResult{err: platform.ErrConflict}
+			return
+		}
+		p.mu.Lock()
+		if p.leases == nil {
+			p.leases = make(map[uint64]context.CancelFunc)
+		}
+		p.next++
+		id := p.next
+		p.leases[id] = cancel
+		p.mu.Unlock()
+		ready <- leaseResult{id: id}
+	})
+	var id uint64
+	select {
+	case result := <-ready:
+		if result.err != nil {
+			cancel()
+			return result.err
+		}
+		id = result.id
+	case <-leaseCtx.Done():
+		return leaseCtx.Err()
+	}
+	defer func() { p.mu.Lock(); delete(p.leases, id); p.mu.Unlock(); cancel() }()
+	return run(leaseCtx)
+}
+
+func (p *leasedPaster) PasteIntoFrontmost(id string) error {
+	return p.PasteIntoFrontmostContext(context.Background(), id)
+}
+func (p *leasedPaster) UndoInFrontmost(id string) error {
+	return p.UndoInFrontmostContext(context.Background(), id)
+}
+func (p *leasedPaster) PasteIntoFrontmostContext(ctx context.Context, id string) error {
+	cp := p.inner.(platform.ContextPaster)
+	return p.withLease(ctx, func(ctx context.Context) error { return cp.PasteIntoFrontmostContext(ctx, id) })
+}
+func (p *leasedPaster) UndoInFrontmostContext(ctx context.Context, id string) error {
+	cp := p.inner.(platform.ContextPaster)
+	return p.withLease(ctx, func(ctx context.Context) error { return cp.UndoInFrontmostContext(ctx, id) })
+}
+func (p *leasedPaster) TypeIntoFrontmost(id, text string, delay time.Duration) error {
+	return p.TypeIntoFrontmostContext(context.Background(), id, text, delay)
+}
+func (p *leasedPaster) TypeIntoFrontmostContext(ctx context.Context, id, text string, delay time.Duration) error {
+	ct := p.inner.(platform.ContextTypist)
+	return p.withLease(ctx, func(ctx context.Context) error { return ct.TypeIntoFrontmostContext(ctx, id, text, delay) })
+}
+func (p *leasedPaster) FrontmostAppID() (string, error) { return p.inner.FrontmostAppID() }
 
 // waitPaletteHidden checks visibility on the UI thread after the caller's dismissal and focus restoration. A hidden
 // palette stays ready for repeated background pastes; a newer summon refuses the gesture instead of consuming it.

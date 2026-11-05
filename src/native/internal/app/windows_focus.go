@@ -42,6 +42,9 @@ func (s *windowSummon) load() summonRecord {
 
 // onPaletteShown captures the app in front where the palette captures nothing of its own, then shows the palette's rows.
 func (p *App) onPaletteShown() {
+	if p.pasteLeases != nil {
+		p.pasteLeases.revoke()
+	}
 	p.captureWindowFocus()
 	p.showApps()
 }
