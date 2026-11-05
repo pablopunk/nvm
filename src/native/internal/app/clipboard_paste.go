@@ -57,38 +57,54 @@ func (p *leasedPaster) withLease(ctx context.Context, run func(context.Context) 
 		err error
 	}
 	ready := make(chan leaseResult, 1)
+	p.mu.Lock()
+	if p.leases == nil {
+		p.leases = make(map[uint64]context.CancelFunc)
+	}
+	p.next++
+	id := p.next
+	p.leases[id] = cancel
+	p.mu.Unlock()
 	p.app.onUI(func() {
 		if err := leaseCtx.Err(); err != nil {
+			p.removeLease(id)
 			ready <- leaseResult{err: err}
 			return
 		}
 		if p.app.Palette != nil && p.app.Visible() {
+			p.removeLease(id)
 			ready <- leaseResult{err: platform.ErrConflict}
 			return
 		}
 		p.mu.Lock()
-		if p.leases == nil {
-			p.leases = make(map[uint64]context.CancelFunc)
-		}
-		p.next++
-		id := p.next
-		p.leases[id] = cancel
+		_, registered := p.leases[id]
 		p.mu.Unlock()
+		if !registered {
+			ready <- leaseResult{err: context.Canceled}
+			return
+		}
 		ready <- leaseResult{id: id}
 	})
-	var id uint64
 	select {
 	case result := <-ready:
 		if result.err != nil {
+			p.removeLease(id)
 			cancel()
 			return result.err
 		}
-		id = result.id
 	case <-leaseCtx.Done():
+		p.removeLease(id)
+		cancel()
 		return leaseCtx.Err()
 	}
-	defer func() { p.mu.Lock(); delete(p.leases, id); p.mu.Unlock(); cancel() }()
+	defer func() { p.removeLease(id); cancel() }()
 	return run(leaseCtx)
+}
+
+func (p *leasedPaster) removeLease(id uint64) {
+	p.mu.Lock()
+	delete(p.leases, id)
+	p.mu.Unlock()
 }
 
 func (p *leasedPaster) PasteIntoFrontmost(id string) error {
@@ -113,27 +129,6 @@ func (p *leasedPaster) TypeIntoFrontmostContext(ctx context.Context, id, text st
 	return p.withLease(ctx, func(ctx context.Context) error { return ct.TypeIntoFrontmostContext(ctx, id, text, delay) })
 }
 func (p *leasedPaster) FrontmostAppID() (string, error) { return p.inner.FrontmostAppID() }
-
-// waitPaletteHidden checks visibility on the UI thread after the caller's dismissal and focus restoration. A hidden
-// palette stays ready for repeated background pastes; a newer summon refuses the gesture instead of consuming it.
-func (p *App) waitPaletteHidden(ctx context.Context) error {
-	ready := make(chan error, 1)
-	p.onUI(func() {
-		if err := ctx.Err(); err != nil {
-			ready <- err
-		} else if p.Palette != nil && p.Visible() {
-			ready <- platform.ErrConflict
-		} else {
-			ready <- nil
-		}
-	})
-	select {
-	case err := <-ready:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
 
 // pasteActionTitle is the title of the paste action that copies, emoji and snippets offer. The HUD names a paste by it.
 const pasteActionTitle = "Paste"
