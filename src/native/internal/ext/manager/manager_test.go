@@ -81,6 +81,24 @@ func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	return &harness{t: t, m: m, root: root, files: ports.FS, enabled: set}
 }
 
+func TestNewRetainsRunObserver(t *testing.T) {
+	observer := &testRunObserver{}
+	h := newHarness(t, func(opts *Options) { opts.RunObserver = observer })
+	if h.m.runObserver != observer {
+		t.Fatal("New did not retain the supplied run observer")
+	}
+
+	if got := newHarness(t).m.runObserver; got != nil {
+		t.Fatalf("New default run observer = %v, want nil", got)
+	}
+}
+
+type testRunObserver struct{}
+
+func (*testRunObserver) BeginRun(ctx context.Context) (context.Context, func(RunOutcome)) {
+	return ctx, func(RunOutcome) {}
+}
+
 // fixtureContents reads a fixture folder from testdata, optionally with a different main.go.
 func fixtureContents(t *testing.T, name string, source ...string) map[string][]byte {
 	t.Helper()

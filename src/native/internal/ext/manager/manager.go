@@ -121,6 +121,8 @@ type Options struct {
 	// LegacyStatePath is the 1.x state file. A folder that names a 1.x source file takes its enabled state from it on
 	// its first scan. Empty means no 1.x state is read.
 	LegacyStatePath string
+	// RunObserver optionally observes extension run lifecycle outcomes.
+	RunObserver RunObserver
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
@@ -137,6 +139,7 @@ type Manager struct {
 	// commands keeps each extension's durable commands once they are known; see CachedCommands.
 	commands       commandCache
 	commandsChange func()
+	runObserver    RunObserver
 	// legacyStatePath is the 1.x state file read by inheritLocked.
 	legacyStatePath string
 }
@@ -163,6 +166,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		enabled:         enabled,
 		builtInSettings: opts.BuiltInSettings,
 		commandsChange:  opts.CommandsChange,
+		runObserver:     opts.RunObserver,
 		config: supervisor.Config{
 			Worker:        ports.Worker,
 			Clock:         ports.Clock,

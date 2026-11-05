@@ -1,14 +1,18 @@
 package timing
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
+
+type contextCanaryKey struct{}
 
 func newTestTracker(t *testing.T) (*fake.Set, *analytics.Client) {
 	t.Helper()
@@ -44,7 +48,8 @@ func TestFinishSerializesCorrelatedCompletionsOnce(t *testing.T) {
 	set, client := newTestTracker(t)
 	set.HTTP.Script(fake.Response{Status: 200}, fake.Response{Status: 200}, fake.Response{Status: 200})
 	tracker := New(set.Clock, client)
-	rootCtx, root := tracker.Start(context.Background())
+	const canary = "timing-private-context-canary"
+	rootCtx, root := tracker.Start(context.WithValue(context.Background(), contextCanaryKey{}, canary))
 	nestedCtx, nested := tracker.Start(rootCtx)
 	_, independent := tracker.Start(context.Background())
 	if err := client.Flush(context.Background()); err != nil {
@@ -54,7 +59,15 @@ func TestFinishSerializesCorrelatedCompletionsOnce(t *testing.T) {
 		t.Fatal("event sent before Finish")
 	}
 	set.Clock.Advance(1500 * time.Microsecond)
-	nested.Finish(analytics.OutcomeSuccess)
+	var concurrent sync.WaitGroup
+	for range 8 {
+		concurrent.Add(1)
+		go func() {
+			defer concurrent.Done()
+			nested.Finish(analytics.OutcomeSuccess)
+		}()
+	}
+	concurrent.Wait()
 	root.Finish(analytics.OutcomeFailed)
 	if err := client.Flush(context.Background()); err != nil {
 		t.Fatal(err)
@@ -87,8 +100,10 @@ func TestFinishSerializesCorrelatedCompletionsOnce(t *testing.T) {
 		if p == nil || p["boot_id"] != pair.ids.boot || p["journey_id"] != pair.ids.journey || p["outcome"] != pair.outcome || p["duration_ms"] != float64(2) || p["release"] != "test-release" {
 			t.Fatalf("serialized completion mismatch: %#v", p)
 		}
-		if _, ok := p["context_canary"]; ok {
-			t.Fatal("context value leaked")
+	}
+	for _, request := range set.HTTP.Requests() {
+		if bytes.Contains(request.Body, []byte(canary)) {
+			t.Fatal("context value leaked into the serialized batch")
 		}
 	}
 	for i := 0; i < 8; i++ {
@@ -105,7 +120,7 @@ func TestFinishSerializesCorrelatedCompletionsOnce(t *testing.T) {
 func TestConsentWithdrawalAndCancellation(t *testing.T) {
 	set, client := newTestTracker(t)
 	tracker := New(set.Clock, client)
-	parent, cancel := context.WithCancel(context.WithValue(context.Background(), "canary", "private"))
+	parent, cancel := context.WithCancel(context.WithValue(context.Background(), contextCanaryKey{}, "private"))
 	ctx, done := tracker.Start(parent)
 	cancel()
 	if ctx.Err() != context.Canceled {
@@ -117,8 +132,8 @@ func TestConsentWithdrawalAndCancellation(t *testing.T) {
 	if len(payloads(t, set)) != 0 {
 		t.Fatal("cancellation auto-reported")
 	}
-	done.Finish(analytics.OutcomeCancelled)
 	client.SetConsent(false)
+	done.Finish(analytics.OutcomeCancelled)
 	client.SetConsent(true)
 	done.Finish(analytics.OutcomeSuccess)
 	if err := client.Flush(context.Background()); err != nil {
