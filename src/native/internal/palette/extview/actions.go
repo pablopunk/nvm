@@ -171,7 +171,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		h.Toast(unavailableMessage)
 		return
 	}
-	in := api.Invocation{Ref: *r.action.Ref}
+	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
 	s.deps.Invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
 		s.finish(h, r.extID, r.action.Title, result, failure)
 	})

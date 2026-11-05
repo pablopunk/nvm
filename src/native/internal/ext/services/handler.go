@@ -80,6 +80,8 @@ type Deps struct {
 	Apps AppLifecycle
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
+	// Dictation records speech and returns the hosted transcript. Nil answers unavailable.
+	Dictation DictationEngine
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
@@ -255,6 +257,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveScheduler(call)
 	case protocol.ServiceAI:
 		return h.serveAI(ctx, call)
+	case protocol.ServiceDictation:
+		return h.serveDictation(ctx, call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }

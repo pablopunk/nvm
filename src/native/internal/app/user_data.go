@@ -23,6 +23,7 @@ func (p *App) openUserData() {
 	}
 	p.notes = notes.New(st, searchClock, p.userReadOnly)
 	p.legacySnips = loadLegacySnippets(st)
+	p.legacyDictation = loadLegacyDictation(st)
 	p.userNotices = st.Notices()
 	mygo.App.OnQuit(func() {
 		p.closeEdits()

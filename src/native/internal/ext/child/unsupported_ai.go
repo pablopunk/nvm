@@ -12,27 +12,6 @@ func unsupported(service string) error {
 	return fmt.Errorf("%s is not available in this Nevermind version yet: %w", service, api.ErrNotAvailable)
 }
 
-// unsupportedDictation answers every dictation call with the unsupported error.
-type unsupportedDictation struct{}
-
-func (unsupportedDictation) Status() (api.DictationStatus, error) {
-	return "", unsupported("ctx.dictation")
-}
-
-func (unsupportedDictation) APIAvailable() (bool, error) { return false, unsupported("ctx.dictation") }
-
-func (unsupportedDictation) Devices() ([]api.DictationDevice, error) {
-	return nil, unsupported("ctx.dictation.devices")
-}
-
-func (unsupportedDictation) Start(api.DictationStartOptions) error {
-	return unsupported("ctx.dictation.start")
-}
-
-func (unsupportedDictation) Stop() (string, error) { return "", unsupported("ctx.dictation.stop") }
-
-func (unsupportedDictation) Cancel() error { return unsupported("ctx.dictation.cancel") }
-
 // unsupportedAIBuilder answers builder calls. Only built-in extensions may use the builder, so an extension gets an
 // action the palette shows as unavailable and no chat data.
 type unsupportedAIBuilder struct{}

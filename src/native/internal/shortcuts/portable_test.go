@@ -31,7 +31,6 @@ const oneXShortcuts = `{
 func TestOneXKeysBindAsTheirTwoOhActions(t *testing.T) {
 	tests := map[string]string{
 		"extension-root:nevermind.apps:app:/Applications/Slack.app": "app:/Applications/Slack.app",
-		"extension-root:nevermind.dictation:dictation":              CommandDictate,
 		"extension-action:window-management:layout.left-half":       "window.left-half",
 		"extension-action:window-management:layout.focus-right":     "window.focus-right",
 		"extension:nevermind.emoji-symbols:emoji-symbols":           CommandEmojiSymbols,

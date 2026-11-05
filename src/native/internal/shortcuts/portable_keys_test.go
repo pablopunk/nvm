@@ -7,7 +7,7 @@ import (
 
 var allBuiltInCommandIDs = []string{
 	CommandClipboardHistory, CommandAIChats, CommandEmojiSymbols, CommandSearchFiles, CommandFindFilesByMeaning,
-	CommandQuickNotes, CommandNewFloatingNote, CommandDictate, CommandDictationHistory, CommandSnippets, CommandExtensions, CommandForceQuitApps,
+	CommandQuickNotes, CommandNewFloatingNote, CommandSnippets, CommandExtensions, CommandForceQuitApps,
 	CommandQuitAllApps, CommandKeyboardShortcuts, CommandBackgroundTasks, CommandSettings, CommandCheckForUpdates,
 	CommandShowRecentErrors, CommandReportProblem, CommandOSPermissions, CommandFixSelectedText,
 	CommandTriageSelectedText, CommandClassifyImage, CommandLockScreen, CommandSleep, CommandRestart,
@@ -50,7 +50,6 @@ func TestEveryCommandIDRoundTripsThroughItsConfigKey(t *testing.T) {
 
 func TestSharedCommandsUseTheOneXKeyString(t *testing.T) {
 	want := map[string]string{
-		CommandDictate:         "extension-root:nevermind.dictation:dictation",
 		CommandEmojiSymbols:    "extension:nevermind.emoji-symbols:emoji-symbols",
 		CommandSettings:        "extension:nevermind.settings:app-settings",
 		CommandCheckForUpdates: "extension:nevermind.updates:updates:check",

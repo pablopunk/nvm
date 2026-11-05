@@ -25,7 +25,6 @@ func everyService() map[string]any {
 	return map[string]any{
 		"ai":               remoteAI{link: link},
 		"attachments":      remoteAttachments{link: link},
-		"dictation":        unsupportedDictation{},
 		"aiBuilder":        unsupportedAIBuilder{},
 		"ownership":        unsupportedOwnership{},
 		"updates":          unsupportedUpdates{},
@@ -94,7 +93,7 @@ func callWithoutPanic(t *testing.T, method reflect.Value, args []reflect.Value) 
 func TestHostContextNeverHandsOutANilService(t *testing.T) {
 	ctx := newHostContext(api.Identity{ID: "acme.test"}, nil, refusingLink())
 	accessors := map[string]any{
-		"AI": ctx.AI(), "AIBuilder": ctx.AIBuilder(), "Ownership": ctx.Ownership(), "Dictation": ctx.Dictation(),
+		"AI": ctx.AI(), "AIBuilder": ctx.AIBuilder(), "Ownership": ctx.Ownership(),
 		"Updates": ctx.Updates(), "Windows": ctx.Windows(), "Navigation": ctx.Navigation(), "Indicators": ctx.Indicators(),
 		"Desktop": ctx.Desktop(), "Shell": ctx.Desktop().Shell(), "Keyboard": ctx.Desktop().Keyboard(),
 		"Selection": ctx.Desktop().Selection(), "Files": ctx.Desktop().Files(), "Apps": ctx.Desktop().Apps(),

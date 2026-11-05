@@ -21,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -31,7 +32,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -86,16 +86,17 @@ type App struct {
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
 	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
-	paletteHidden  chan struct{}
-	shortcutMgr    *shortcuts.Manager
-	aliasList      *shortcuts.Aliases
-	github         *githubProbe
-	shortcutTitles shortcutTitles
-	legacySnips    []snippetsbuiltin.Snippet
-	notes          *notes.Store
-	files          *fileService
-	chats          *chat.Service
-	builder        *builder.Workshop
+	paletteHidden   chan struct{}
+	shortcutMgr     *shortcuts.Manager
+	aliasList       *shortcuts.Aliases
+	github          *githubProbe
+	shortcutTitles  shortcutTitles
+	legacySnips     []snippetsbuiltin.Snippet
+	legacyDictation dictbuiltin.Legacy
+	notes           *notes.Store
+	files           *fileService
+	chats           *chat.Service
+	builder         *builder.Workshop
 	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
 	previews map[string]*extensionPreview
 	learn    *usage.Learner
@@ -141,12 +142,8 @@ type App struct {
 	windows        *windowmgmt.Service
 	windowSettings *windowmgmt.SettingsStore
 	windowFocus    windowSummon
-	// dictation runs the one dictation at a time; dictationWindow is its indicator, created on first use.
-	dictation       *dictationFlow
-	dictationPref   dictationPrefs
-	transcripts     transcriptStore
-	dictationWindow *mygo.Window
-	dictationView   palindicator.State
+	// dictation is the extensions' dictation engine, created on first use.
+	dictation *extensionDictation
 	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
 	aiCommands *commands.Service
 	aiPanel    *aiIndicator

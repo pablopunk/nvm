@@ -59,6 +59,8 @@ type Ports struct {
 	Places func() []api.Place
 	// Indicators draws the passive indicators of extensions.
 	Indicators services.IndicatorSurface
+	// Dictation records speech for extensions. Nil makes ctx.dictation unavailable.
+	Dictation services.DictationEngine
 	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
 	AI *extai.Service
 	// Selection reads, replaces and undoes the selected text of extensions. Nil makes ctx.desktop.selection unavailable.
@@ -169,6 +171,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Account:      ports.Account,
 			OCR:          ports.OCR,
 			Indicators:   ports.Indicators,
+			Dictation:    ports.Dictation,
 			AI:           ports.AI,
 			Selection:    ports.Selection,
 			Paste:        ports.Paste,

@@ -136,7 +136,7 @@ func (c hostContext) Ownership() api.Ownership {
 }
 
 func (c hostContext) Dictation() api.Dictation {
-	return unsupportedDictation{}
+	return remoteDictation{link: c.link}
 }
 
 func (c hostContext) Updates() api.Updates {

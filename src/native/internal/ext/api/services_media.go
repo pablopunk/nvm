@@ -55,21 +55,36 @@ type DictationDevice struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-// DictationStartOptions chooses a microphone and whether system audio is muted while recording.
+// DictationStartOptions chooses a microphone and whether system audio is muted while recording. An empty DeviceID
+// is the system default microphone.
 type DictationStartOptions struct {
 	DeviceID                   string `json:"deviceId,omitempty"`
 	MuteSystemAudioWhileRecord bool   `json:"muteSystemAudioWhileRecording,omitempty"`
 }
 
-// Dictation records speech and returns the hosted transcript. Audio is never exposed to extension
-// code. The recording-recovery helpers of the TypeScript API are built-in only and omitted here.
+// SavedDictation is a saved dictation whose transcript did not complete. Its audio stays on this device and is
+// only sent again by Retry.
+type SavedDictation struct {
+	ID           string `json:"id"`
+	CreatedAtMs  int64  `json:"createdAtMs"`
+	SegmentCount int    `json:"segmentCount"`
+}
+
+// Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves
+// once the microphone delivers stable audio, and Stop is the call that waits for the hosted transcription, so an
+// action that runs it should declare Background. Recordings, Retry and DeleteRecording recover a dictation whose
+// transcription failed; a saved recording is deleted once its text is saved.
 type Dictation interface {
 	Status() (DictationStatus, error)
+	// APIAvailable reports whether authenticated hosted transcription is available for this client.
 	APIAvailable() (bool, error)
 	Devices() ([]DictationDevice, error)
-	// Start resolves once the microphone delivers stable audio.
 	Start(options DictationStartOptions) error
-	// Stop ends capture and returns the transcript.
+	// Stop ends capture and returns the hosted transcript.
 	Stop() (transcript string, err error)
 	Cancel() error
+	Recordings() ([]SavedDictation, error)
+	// Retry transcribes a saved recording again. Each retry is a new, billable request.
+	Retry(id string) (transcript string, err error)
+	DeleteRecording(id string) error
 }

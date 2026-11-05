@@ -140,6 +140,10 @@ func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, que
 	return result
 }
 
+// backgroundRunBudget bounds an action declared background, such as a dictation that waits for the microphone or for
+// a transcription. It is the budget of a background job's run.
+var backgroundRunBudget = supervisor.Budget{Hard: 2 * time.Minute}
+
 // budgetSlack lets a call's context outlive the hard budget by a few milliseconds, so the child's own timeout
 // reports first and the caller sees a timeout failure rather than a bare context error.
 const budgetSlack = 10 * time.Millisecond
@@ -152,6 +156,9 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 		return api.Result{}, nil, err
 	}
 	budget := m.config.BudgetFor(protocol.MethodRun)
+	if invocation.Background {
+		budget = backgroundRunBudget
+	}
 	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
 	defer cancel()
 	response, err := runtime.Call(callCtx, protocol.MethodRun, "", &invocation)

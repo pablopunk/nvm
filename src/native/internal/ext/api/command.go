@@ -80,6 +80,9 @@ type Invocation struct {
 	// DraftConflict is injected only into a draft's OnConflict handler.
 	DraftConflict *DraftConflict `json:"draftConflict,omitempty"`
 	Launch        LaunchContext  `json:"launch"`
+	// Background is set by the host when the action is declared background. Such a run may take as long as a background
+	// job, because it waits on work that takes seconds, such as a microphone or a transcription.
+	Background bool `json:"background,omitempty"`
 }
 
 // DraftConflict describes a stored draft whose version differs from the opened view.
