@@ -175,6 +175,7 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 			t.Fatalf("install %s: %v", id, err)
 		}
 	}
+	m.Commands(context.Background()) // Prime deterministic fixtures; production discovers commands asynchronously.
 	return m
 }
 

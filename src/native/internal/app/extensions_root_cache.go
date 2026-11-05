@@ -15,6 +15,7 @@ import (
 type rootRowCache struct {
 	mu      sync.Mutex
 	filled  bool
+	epoch   uint64
 	pending map[string]bool
 	rows    map[string]manager.SearchResult
 }
@@ -33,19 +34,41 @@ func (c *rootRowCache) markPending(id string) {
 func (c *rootRowCache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.filled, c.pending, c.rows = false, nil, nil
+	c.filled, c.pending = false, nil
+	c.epoch++
 }
 
-// results returns the root rows of every extension, asking only the pending ones when a refresh is pending.
-func (c *rootRowCache) results(ctx context.Context, m *manager.Manager) []manager.SearchResult {
+// stream hands the root rows of the extensions to emit as each one answers, so a slow extension never holds back the
+// others. A refresh that asks only the pending extensions emits the cached rows of the others at once. The pass is
+// complete only when its context was not cancelled; then the extensions it did not hear from lose their rows.
+func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func(manager.SearchResult)) {
+	c.mu.Lock()
+	epoch := c.epoch
+	c.mu.Unlock()
 	scope := c.takeScope()
-	if scope == nil {
-		fresh := m.Roots(ctx)
-		c.storeAll(fresh)
-		return fresh
+	for _, result := range c.cachedOutside(nil) {
+		emit(result)
 	}
-	c.storeScoped(m.RootsOf(ctx, scope), scope)
-	return c.sorted()
+	answered := map[string]bool{}
+	receive := func(result manager.SearchResult) {
+		answered[result.ExtensionID] = true
+		if c.remember(ctx, epoch, result) {
+			emit(result)
+		}
+	}
+	if scope == nil {
+		m.RootsEach(ctx, receive)
+	} else {
+		m.RootsOfEach(ctx, scope, receive)
+	}
+	c.mu.Lock()
+	current := ctx.Err() == nil && epoch == c.epoch
+	c.mu.Unlock()
+	if current {
+		for _, id := range c.settle(scope, answered) {
+			emit(manager.SearchResult{ExtensionID: id})
+		}
+	}
 }
 
 // takeScope returns the pending extensions and clears them, or nil when the root asks every extension.
@@ -60,39 +83,48 @@ func (c *rootRowCache) takeScope() map[string]bool {
 	return scope
 }
 
-func (c *rootRowCache) storeAll(fresh []manager.SearchResult) {
+// remember stores the rows of one extension. An answer that comes after the pass was cancelled is a cancellation, not the
+// extension's rows, so it is not stored.
+func (c *rootRowCache) remember(ctx context.Context, epoch uint64, result manager.SearchResult) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.filled = true
-	c.rows = map[string]manager.SearchResult{}
-	for _, result := range fresh {
-		c.rows[result.ExtensionID] = result
+	if ctx.Err() != nil || epoch != c.epoch || result.Failure != nil {
+		return false
 	}
-}
-
-// storeScoped replaces the rows of the extensions in scope with fresh. An extension in scope that answered nothing
-// (not running, or no longer enabled) loses its rows.
-func (c *rootRowCache) storeScoped(fresh []manager.SearchResult, scope map[string]bool) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.rows == nil {
 		c.rows = map[string]manager.SearchResult{}
 	}
-	for id := range scope {
-		delete(c.rows, id)
-	}
-	for _, result := range fresh {
-		c.rows[result.ExtensionID] = result
-	}
+	c.rows[result.ExtensionID] = result
+	return true
 }
 
-// sorted returns the cached rows in extension id order, as the manager returns them.
-func (c *rootRowCache) sorted() []manager.SearchResult {
+// settle ends a pass that was not cut off. The extensions the pass asked and did not hear from lose their rows, and a
+// full pass marks the cache filled, so later refreshes ask only the pending extensions.
+func (c *rootRowCache) settle(scope map[string]bool, answered map[string]bool) []string {
+	var removed []string
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	out := make([]manager.SearchResult, 0, len(c.rows))
-	for _, result := range c.rows {
-		out = append(out, result)
+	for id := range c.rows {
+		if !answered[id] && (scope == nil || scope[id]) {
+			delete(c.rows, id)
+			removed = append(removed, id)
+		}
+	}
+	if scope == nil {
+		c.filled = true
+	}
+	return removed
+}
+
+// cachedOutside returns the cached rows of the extensions not in scope, in extension id order.
+func (c *rootRowCache) cachedOutside(scope map[string]bool) []manager.SearchResult {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	var out []manager.SearchResult
+	for id, result := range c.rows {
+		if !scope[id] {
+			out = append(out, result)
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ExtensionID < out[j].ExtensionID })
 	return out

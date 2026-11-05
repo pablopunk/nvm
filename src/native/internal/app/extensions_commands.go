@@ -10,12 +10,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// commandRowsFor lists a running extension's commands. A failed extension declares none, so the root shows nothing
-// for it: its failure lives in the Extensions manager, and a failure row never ranks at the root.
-func commandRowsFor(p *App, m *manager.Manager, result manager.CommandResult, bound map[string]string) []search.Item {
-	return matchingCommandRows(p, m, result, "", bound, nil)
-}
-
 // matchingCommandRows lists a running extension's commands that q finds, or the commands the root lists for the empty
 // query. A failed extension declares none. Each command takes a keyboard shortcut from its action menu, unless it is a
 // built-in command that is not customizable.

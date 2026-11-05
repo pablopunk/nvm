@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
@@ -15,7 +14,8 @@ import (
 const (
 	// SoftBudget is how long a provider call may run before it is logged at debug level.
 	SoftBudget = 20 * time.Millisecond
-	// HardBudget is how long a provider call may run before its context is cancelled and it is marked slow.
+	// HardBudget is how long a provider call may run before it is marked slow and stops holding up the snapshot.
+	// Its rows that arrive later still merge into the same query.
 	HardBudget = 100 * time.Millisecond
 	// FirstSnapshot is the longest a query waits for its first snapshot: one frame. When no provider has
 	// answered by then, the snapshot is empty and not settled, and the rows arrive as the providers finish.
@@ -83,16 +83,18 @@ type Coordinator struct {
 
 // slot is one provider's part of the current generation.
 type slot struct {
-	id       string
-	appended bool
-	items    []Item
-	started  time.Time
-	budget   Budget
-	finished bool
-	pending  bool
-	slow     bool
-	cancel   context.CancelFunc
-	done     chan struct{}
+	id           string
+	appended     bool
+	items        []Item
+	started      time.Time
+	budget       Budget
+	finished     bool
+	returned     bool
+	selfBudgeted bool
+	pending      bool
+	slow         bool
+	cancel       context.CancelFunc
+	done         chan struct{}
 }
 
 // NewCoordinator returns a coordinator with no queries. It panics without a clock: budgets cannot be
@@ -120,7 +122,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.query = q
 	c.slots = make([]*slot, len(providers))
 	for i, p := range providers {
-		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), done: make(chan struct{})}
+		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), selfBudgeted: ownsCallBudgets(p), done: make(chan struct{})}
 	}
 	c.pending = len(providers)
 	c.emitted = false
@@ -198,13 +200,22 @@ func (c *Coordinator) resetLocked() {
 func (c *Coordinator) invoke(ctx context.Context, gen, idx int, p Provider, q string) {
 	emit := func(b Batch) {
 		b.Provider = p.ID()
-		c.deliver(ctx, gen, idx, b)
+		c.deliver(gen, idx, b)
 	}
-	if q == "" {
-		emit(Batch{Items: p.Root(ctx), Final: true})
+	answerCall(ctx, p, q, emit)
+}
+
+// answerCall runs the root call of p, streamed when it streams, or its search call for q.
+func answerCall(ctx context.Context, p Provider, q string, emit func(Batch)) {
+	if q != "" {
+		p.Search(ctx, q, emit)
 		return
 	}
-	p.Search(ctx, q, emit)
+	if streamer, streams := p.(RootStreamer); streams {
+		streamer.RootStream(ctx, emit)
+		return
+	}
+	emit(Batch{Items: p.Root(ctx), Final: true})
 }
 
 // start runs one provider on its own goroutine, supervised by safego, with the budget watch beside it.
@@ -224,106 +235,6 @@ func (c *Coordinator) start(ctx context.Context, gen, idx int, p Provider, q str
 		c.invoke(pctx, gen, idx, p, q)
 	}, safego.WithContext(pctx), safego.WithClock(c.opts.Clock))
 	go c.watch(gen, idx)
-}
-
-// watch logs a call that runs past the soft budget and cuts it off at the hard one. Both timers start with the
-// call, so the budgets hold however the scheduler orders them.
-func (c *Coordinator) watch(gen, idx int) {
-	c.mu.Lock()
-	if gen != c.gen || idx >= len(c.slots) {
-		c.mu.Unlock()
-		return
-	}
-	s := c.slots[idx]
-	done, budget := s.done, s.budget
-	c.mu.Unlock()
-	soft := c.opts.Clock.After(budget.Soft)
-	hard := c.opts.Clock.After(budget.Hard)
-	select {
-	case <-done:
-		return
-	case <-soft:
-		logx.Default().Debug("search provider over its soft budget", logx.F{"provider": s.id, "soft_ms": budget.Soft.Milliseconds()})
-	}
-	select {
-	case <-done:
-	case <-hard:
-		c.cutOff(gen, idx)
-	}
-}
-
-// deliver merges a batch into its provider's slot and, for an asynchronous query, publishes the new snapshot.
-// Batches from an older generation, or from a call whose context ended, are dropped.
-func (c *Coordinator) deliver(ctx context.Context, gen, idx int, b Batch) {
-	c.mu.Lock()
-	if gen != c.gen || ctx.Err() != nil || idx >= len(c.slots) || c.slots[idx].finished {
-		c.mu.Unlock()
-		return
-	}
-	s := c.slots[idx]
-	s.items = append(s.items, c.learned(b.Items, c.query)...)
-	s.pending = s.pending || b.Pending
-	if b.Final {
-		c.finishLocked(s)
-	}
-	if c.opts.Synchronous {
-		c.mu.Unlock()
-		return
-	}
-	snap := c.snapshotLocked()
-	c.mu.Unlock()
-	c.publish(snap)
-}
-
-// complete marks a provider's call as returned, whatever it did. It runs after the call, panics included.
-func (c *Coordinator) complete(gen, idx int) {
-	c.mu.Lock()
-	if gen != c.gen || idx >= len(c.slots) || c.slots[idx].finished {
-		c.mu.Unlock()
-		return
-	}
-	s := c.slots[idx]
-	c.finishLocked(s)
-	if s.cancel != nil {
-		s.cancel()
-	}
-	snap := c.snapshotLocked()
-	c.mu.Unlock()
-	c.publish(snap)
-}
-
-// cutOff ends a call that ran past the hard budget: its context is cancelled, its rows so far are kept, and
-// it is counted as slow. The merge does not wait for it.
-func (c *Coordinator) cutOff(gen, idx int) {
-	c.mu.Lock()
-	if gen != c.gen || idx >= len(c.slots) || c.slots[idx].finished {
-		c.mu.Unlock()
-		return
-	}
-	s := c.slots[idx]
-	s.slow = true
-	c.statsLocked(s.id).Slow++
-	c.finishLocked(s)
-	if s.cancel != nil {
-		s.cancel()
-	}
-	snap := c.snapshotLocked()
-	c.mu.Unlock()
-	logx.Default().Warn("search provider cut off at its hard budget", logx.F{"provider": s.id, "hard_ms": s.budget.Hard.Milliseconds()})
-	c.publish(snap)
-}
-
-// finishLocked marks a slot finished and releases the goroutines waiting on it. The caller holds c.mu.
-func (c *Coordinator) finishLocked(s *slot) {
-	if s.finished {
-		return
-	}
-	s.finished = true
-	s.pending = false
-	close(s.done)
-	c.pending--
-	elapsed := c.opts.Clock.Now().Sub(s.started)
-	c.statsLocked(s.id).Last = elapsed
 }
 
 // snapshotLocked merges the current generation and remembers the result for its query. The caller holds c.mu.
@@ -388,4 +299,9 @@ func (c *Coordinator) statsLocked(id string) *ProviderStats {
 		c.stats[id] = s
 	}
 	return s
+}
+
+func ownsCallBudgets(p Provider) bool {
+	_, ok := p.(SelfBudgetedProvider)
+	return ok
 }

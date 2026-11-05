@@ -132,6 +132,8 @@ type Manager struct {
 	builtInSettings func(id string) services.SettingsHost
 	mu              sync.Mutex
 	entries         map[string]*entry
+	// commands keeps each extension's durable commands once they are known; see CachedCommands.
+	commands commandCache
 	// legacyStatePath is the 1.x state file read by inheritLocked.
 	legacyStatePath string
 }
@@ -254,6 +256,7 @@ func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
 	for key, current := range m.entries {
 		if !seen[key] && !current.builtin {
 			stopEntry(current)
+			m.commands.forget(current.bundle.Manifest.ID)
 			delete(m.entries, key)
 		}
 	}
@@ -264,7 +267,9 @@ func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
 func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 	if old, ok := m.entries[key]; ok {
 		stopEntry(old)
+		m.commands.forget(old.bundle.Manifest.ID)
 	}
+	m.commands.forget(loaded.Manifest.ID)
 	next := &entry{bundle: loaded}
 	if loaded.Runnable() {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
@@ -307,6 +312,7 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, e := range m.entries {
+		m.commands.forget(e.bundle.Manifest.ID)
 		stopEntry(e)
 	}
 }

@@ -10,7 +10,7 @@ import (
 //
 // Providers run off the UI thread, so they must not read state the UI thread changes: the caller captures
 // what a query needs when it starts, and the provider works on that capture. A provider should honor ctx:
-// the coordinator cancels it when the query changes or the call runs past the hard budget.
+// the coordinator cancels it when the query changes.
 type Provider interface {
 	// ID names the provider in statistics and logs. It must be unique among the providers of one search.
 	ID() string
@@ -20,8 +20,23 @@ type Provider interface {
 	Search(ctx context.Context, q string, emit func(Batch))
 }
 
+// RootStreamer is a Provider whose empty-query rows come in batches, as its search rows do. A provider that gathers the
+// root from several independent sources implements it, so the sources that answer first show before the others. Its
+// last batch carries Final, as a search's does.
+type RootStreamer interface {
+	Provider
+	RootStream(ctx context.Context, emit func(Batch))
+}
+
 // Budget is the time one call of a provider may take: Soft is when a call is logged as over budget and Hard is when
-// its context is cancelled and its rows so far are kept.
+// the call is marked slow and stops holding up the snapshot. Its rows that arrive later still merge into the query.
+// SelfBudgetedProvider aggregates calls that each enforce their own execution deadline. The coordinator
+// stops waiting at Hard but accepts their late batches until they finish or the query changes.
+type SelfBudgetedProvider interface {
+	Provider
+	OwnsCallBudgets()
+}
+
 type Budget struct {
 	Soft, Hard time.Duration
 }
@@ -50,7 +65,9 @@ func budgetOf(p Provider) Budget {
 type Batch struct {
 	Provider string
 	Items    []Item
-	Final    bool
+	// Replace replaces this provider's previous rows, for snapshot refreshes.
+	Replace bool
+	Final   bool
 	// Pending says the provider has started a call that outlasts the moment the query was typed, and its rows are
 	// still to come. It carries no rows, and Snapshot.Pending holds until the provider's Final batch.
 	Pending bool

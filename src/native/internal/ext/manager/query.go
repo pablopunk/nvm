@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -56,11 +55,38 @@ func (m *Manager) RootsOf(ctx context.Context, only map[string]bool) []SearchRes
 // method, so one hanging extension cannot delay the others past that budget. It returns when every call has
 // answered or timed out, sorted by extension id.
 func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResult {
-	return m.fanOutWhere(ctx, method, query, func(string) bool { return true })
+	return m.fanOutWhere(ctx, method, query, everyTarget)
 }
+
+// SearchEach is Search with each answer handed to each as it arrives, so an extension that answers late does not hold
+// back the others. Each is called on the caller's goroutine.
+func (m *Manager) SearchEach(ctx context.Context, query string, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodSearch, query, everyTarget, each)
+}
+
+// RootsEach is Roots with each answer handed to each as it arrives, as SearchEach does for Search.
+func (m *Manager) RootsEach(ctx context.Context, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodRoot, "", everyTarget, each)
+}
+
+// RootsOfEach is RootsOf with each answer handed to each as it arrives, as SearchEach does for Search.
+func (m *Manager) RootsOfEach(ctx context.Context, only map[string]bool, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodRoot, "", func(id string) bool { return only[id] }, each)
+}
+
+func everyTarget(string) bool { return true }
 
 // fanOutWhere is fanOut for the targets that keep accepts by extension id.
 func (m *Manager) fanOutWhere(ctx context.Context, method, query string, keep func(id string) bool) []SearchResult {
+	collected := []SearchResult{}
+	m.eachWhere(ctx, method, query, keep, func(result SearchResult) { collected = append(collected, result) })
+	sort.Slice(collected, func(i, j int) bool { return collected[i].ExtensionID < collected[j].ExtensionID })
+	return collected
+}
+
+// eachWhere calls method on the targets that keep accepts, in parallel, each bounded by the budget of method, and hands
+// every answer to each in the order the answers arrive.
+func (m *Manager) eachWhere(ctx context.Context, method, query string, keep func(id string) bool, each func(SearchResult)) {
 	all, budget := m.targetsFor(method)
 	targets := all[:0:0]
 	for _, target := range all {
@@ -69,22 +95,14 @@ func (m *Manager) fanOutWhere(ctx context.Context, method, query string, keep fu
 		}
 	}
 	results := make(chan SearchResult, len(targets))
-	var wg sync.WaitGroup
 	for _, target := range targets {
-		wg.Add(1)
 		go func(target runtimeTarget) {
-			defer wg.Done()
 			results <- m.callOne(ctx, target, method, query, budget)
 		}(target)
 	}
-	wg.Wait()
-	close(results)
-	collected := make([]SearchResult, 0, len(targets))
-	for result := range results {
-		collected = append(collected, result)
+	for range targets {
+		each(<-results)
 	}
-	sort.Slice(collected, func(i, j int) bool { return collected[i].ExtensionID < collected[j].ExtensionID })
-	return collected
 }
 
 // runtimeTarget is one enabled runtime and the extension it belongs to.

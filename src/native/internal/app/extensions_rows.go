@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"sort"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -19,43 +20,72 @@ type extensionSearch struct {
 
 func extensionProvider(p *App, in *rootInput) search.Provider { return extensionSearch{p: p, in: in} }
 
+// OwnsCallBudgets lets the manager enforce each extension deadline independently of the aggregate snapshot budget.
+func (e extensionSearch) OwnsCallBudgets() {}
+
 func (e extensionSearch) ID() string { return "extensions" }
 
-// Root lists the rows and the commands of the running extensions. Nothing shows while extensions load.
+// Root collects what RootStream emits. The coordinator streams the root, so this is for callers that want it whole.
 func (e extensionSearch) Root(ctx context.Context) []search.Item {
-	m := e.p.extensionManager()
-	if m == nil {
-		return nil
-	}
 	var out []search.Item
-	for _, result := range e.p.rootRows.results(ctx, m) {
-		out = append(out, rootRowsFor(e.p, m, result, e.in.shortcuts)...)
-	}
-	for _, result := range m.Commands(ctx) {
-		out = append(out, commandRowsFor(e.p, m, result, e.in.shortcuts)...)
-	}
+	e.RootStream(ctx, func(batch search.Batch) {
+		if batch.Replace {
+			out = nil
+		}
+		out = append(out, batch.Items...)
+	})
 	return out
 }
 
-// Search emits, for q, the commands of the running extensions that match it and their search rows, in one batch. A
+// RootStream emits the durable commands at once, then each extension's rows as that extension answers. Nothing shows
+// while extensions load, and a slow extension never holds back the rows of the others.
+func (e extensionSearch) RootStream(ctx context.Context, emit func(search.Batch)) {
+	m := e.p.extensionManager()
+	if m != nil {
+		commands := e.commandRows(m, "")
+		rows := map[string][]search.Item{}
+		emit(search.Batch{Items: commands, Replace: true})
+		e.p.rootRows.stream(ctx, m, func(result manager.SearchResult) {
+			rows[result.ExtensionID] = rootRowsFor(e.p, m, result, e.in.shortcuts)
+			ids := make([]string, 0, len(rows))
+			for id := range rows {
+				ids = append(ids, id)
+			}
+			sort.Strings(ids)
+			out := append([]search.Item(nil), commands...)
+			for _, id := range ids {
+				out = append(out, rows[id]...)
+			}
+			emit(search.Batch{Items: out, Replace: true})
+		})
+	}
+	emit(search.Batch{Final: true})
+}
+
+// Search emits, for q, the matching commands at once and then each extension's search rows as that extension answers. A
 // command is found by its title, its aliases or its keywords, as a built-in command is by its title.
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	m := e.p.extensionManager()
-	if m == nil {
-		emit(search.Batch{Final: true})
-		return
+	if m != nil {
+		emit(search.Batch{Items: e.commandRows(m, q)})
+		m.SearchEach(ctx, q, func(result manager.SearchResult) {
+			if isCommandPlacedBuiltIn(result.ExtensionID) {
+				return // listed by commandRows, at the place of its command
+			}
+			emit(search.Batch{Items: searchRowsFor(e.p, m, q, result, e.in.shortcuts)})
+		})
 	}
+	emit(search.Batch{Final: true})
+}
+
+// commandRows lists the known commands that q finds, or the commands the root lists for the empty query. It never waits
+// on an extension: a command not yet known appears once it is learned.
+func (e extensionSearch) commandRows(m *manager.Manager, q string) []search.Item {
 	var out []search.Item
-	for _, result := range m.SearchCommands(ctx) {
+	for _, result := range m.CachedCommands() {
 		out = append(out, matchingCommandRows(e.p, m, result, q, e.in.shortcuts, e.in.aliases)...)
 	}
-	for _, result := range m.Search(ctx, q) {
-		if isCommandPlacedBuiltIn(result.ExtensionID) {
-			continue // listed by commandRows, at the place of its command
-		}
-		out = append(out, searchRowsFor(e.p, m, q, result, e.in.shortcuts)...)
-	}
-	emit(search.Batch{Items: out, Final: true})
+	return out
 }
 
 // searchRowsFor turns one extension's answer into rows. A failed extension contributes at most its pointer row

@@ -125,6 +125,7 @@ func (m *Manager) Disable(id string) error {
 	if err := m.enabled.SetEnabled(id, false); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
+	m.commands.forget(id)
 	stopEntry(e)
 	return nil
 }
@@ -171,6 +172,7 @@ func (m *Manager) Uninstall(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
+	m.commands.forget(id)
 	stopEntry(e)
 	if err := install.Uninstall(m.ports.Files, m.ports.Clock, m.root, filepath.Base(e.bundle.Dir)); err != nil {
 		return err

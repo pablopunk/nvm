@@ -171,8 +171,13 @@ func (p *App) extensionHistory() *clipboard.History {
 
 // extensionsStateChanged redraws the views that show extension state when they are on top: the Extensions list, so a
 // child that finishes starting shows as Running, and the root, so its rows appear without a new query. It also asks
-// the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
+// the menu bar to reconcile its items with the new state. Starting every child makes a burst of changes, so the redraw
+// runs once for the burst; it runs on the UI thread, and it reads the state as it is then.
 func (p *App) extensionsStateChanged() {
+	p.extensionStateRefresh.request(p.onUI, p.redrawExtensionState)
+}
+
+func (p *App) redrawExtensionState() {
 	p.rootRows.reset()
 	p.refreshGlobalShortcuts()
 	p.RefreshTop(isExtensionStateView)

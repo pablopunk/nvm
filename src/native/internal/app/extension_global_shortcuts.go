@@ -50,15 +50,15 @@ func (p *App) declaredGlobalShortcuts() []shortcuts.Declared {
 	return p.globalShortcuts.declared
 }
 
-// refreshGlobalShortcuts asks the running extensions for their commands and binds the shortcuts they declare. The
-// commands are listed off the UI thread; the table is kept and bound on it.
+// refreshGlobalShortcuts binds the shortcuts the running extensions declare. It reads the known commands, so it never
+// waits on a child; the table is kept and bound on the UI thread.
 func (p *App) refreshGlobalShortcuts() {
 	m := p.extensionManager()
 	if m == nil {
 		return
 	}
-	safego.Go("shortcuts.extensions", func(ctx context.Context) {
-		table := globalShortcutTableOf(m.Commands(ctx))
+	safego.Go("shortcuts.extensions", func(context.Context) {
+		table := globalShortcutTableOf(m.CachedCommands())
 		p.onUI(func() {
 			p.globalShortcuts = table
 			p.shortcutsManager().Refresh()
