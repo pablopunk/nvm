@@ -9,7 +9,7 @@ import (
 // markdownBody draws the Markdown editor of the page and takes over the text a typing in it changed.
 func (ed *editorState) markdownBody(c *ui.Context) {
 	doc := ed.rich.Sync(ed.text)
-	editor := design.MarkdownEditor(c, doc, ed.placeholder).AutoFocus()
+	editor := design.MarkdownEditor(c, doc, ed.placeholder).Bind(&ed.focus).AutoFocus()
 	if editor.Changed() {
 		markdown := doc.Text().Markdown()
 		ed.rich.Read(markdown)

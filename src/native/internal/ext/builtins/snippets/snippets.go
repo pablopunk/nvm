@@ -187,8 +187,7 @@ func (e Extension) save(ctx api.Context, id string, form api.FormValues) (api.Re
 	if err != nil {
 		return api.Result{}, err
 	}
-	refresh := ctx.Views().Refresh()
-	return api.Result{Navigation: api.NavPop, Next: &refresh}, nil
+	return api.Result{Navigation: api.NavPop}, nil
 }
 
 // pushView opens view above the current page.

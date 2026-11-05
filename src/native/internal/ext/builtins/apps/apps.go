@@ -55,7 +55,7 @@ func (Extension) Manifest() api.Manifest {
 	return api.Manifest{
 		APIVersion:   "1.0",
 		Identity:     api.Identity{ID: ID, Title: "Applications"},
-		Capabilities: []api.Capability{api.CapabilityDesktopApps, api.CapabilityShortcuts, api.CapabilitySystem},
+		Capabilities: []api.Capability{api.CapabilityDesktopApps, api.CapabilityDesktopFiles, api.CapabilityShortcuts, api.CapabilitySystem},
 	}
 }
 

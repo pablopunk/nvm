@@ -21,6 +21,8 @@ const (
 	j21Corrected = "This is selected text."
 	j21Clipboard = "rig clipboard kept by the fix"
 	j21AIWait    = 15 * time.Second
+	// j21FloatingTitle is the title of the floating window Toggle Floating Notes opens.
+	j21FloatingTitle = "Floating Notes"
 )
 
 // TestJourneyJ21FixSelectedTextReplacesTheSelection is the J21 smoke described above.
@@ -34,7 +36,7 @@ func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 
 	createNoteWith(t, app, j21Input)
 	display := os.Getenv("DISPLAY")
-	note := waitForWindowID(t, display, j21Input)
+	note := waitForWindowID(t, display, j21FloatingTitle)
 	must(t, activateWindow(display, note))
 	must(t, app.Key("ctrl+a"))
 
@@ -48,8 +50,8 @@ func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 	shoot(t, app, "j21-2-replaced")
 }
 
-// createNoteWith types text into a new Quick Note, then leaves the editor for the list, where the newest note is the row
-// after New Note. ctrl+f opens that note in its floating window.
+// createNoteWith types text into a new Floating Notes note in the palette, closes the palette, and shows the most recent
+// note in the floating window with Toggle Floating Notes, as the user does.
 func createNoteWith(t *testing.T, app *App, text string) {
 	t.Helper()
 	must(t, app.SummonPalette())
@@ -66,9 +68,15 @@ func createNoteWith(t *testing.T, app *App, text string) {
 	_, err = app.WaitFor(text, elementWait)
 	must(t, err)
 	time.Sleep(autosaveSettle)
-	must(t, app.Key("Escape"))
-	must(t, app.Key("Down"))
-	must(t, app.Key("ctrl+f"))
+	must(t, app.Key("Escape")) // the editor back to the list
+	must(t, app.Key("Escape")) // the list back to the root
+	must(t, app.DismissWithEscape())
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("Toggle Floating Notes"))
+	_, err = app.WaitFor("Toggle Floating Notes", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
 }
 
 // activateWindow gives the keyboard to window id on display.

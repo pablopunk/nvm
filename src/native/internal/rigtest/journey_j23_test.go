@@ -9,28 +9,29 @@ import (
 	"time"
 )
 
-// TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm is the J23 smoke: Restart opens a confirmation, Cancel
-// leaves the system alone, and Restart confirmed runs it once. The app's System port is a recorder in this build, so
-// the call is written to the test's log and nothing restarts. Lock, sleep, log out and empty Trash are not scripted.
+// TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm is the J23 smoke. Empty Trash is destructive: it opens a
+// confirmation, Cancel leaves the system alone, and the confirmed command runs once. Restart runs at once, as 1.x runs
+// Restart Computer, with no confirmation. The app's System port is a recorder in this build, so the calls are written to
+// the test's log and nothing restarts. Lock, sleep, log out and shut down are not scripted.
 func TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm(t *testing.T) {
 	app := Launch(t, Options{})
 	must(t, app.SummonPalette())
 
-	must(t, app.Type("restart"))
-	_, err := app.WaitFor("Restart Computer", elementWait)
+	must(t, app.Type("empty trash"))
+	_, err := app.WaitFor("Empty Trash", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Restart?", elementWait)
+	_, err = app.WaitFor("Empty Trash?", elementWait)
 	must(t, err)
 	shoot(t, app, "j23-1-confirmation")
 	if calls := systemCalls(t, app); len(calls) != 0 {
-		t.Fatalf("Restart ran before confirmation: %v", calls)
+		t.Fatalf("Empty Trash ran before confirmation: %v", calls)
 	}
 
 	must(t, app.Key("Down"))
 	must(t, app.Key("Return"))
-	must(t, app.Type("restart"))
-	_, err = app.WaitFor("Restart Computer", elementWait)
+	must(t, app.Type("empty trash"))
+	_, err = app.WaitFor("Empty Trash", elementWait)
 	must(t, err)
 	if calls := systemCalls(t, app); len(calls) != 0 {
 		t.Fatalf("Cancel ran a system command: %v", calls)
@@ -38,8 +39,16 @@ func TestJourneyJ23DestructiveCommandAsksFirstAndRunsOnConfirm(t *testing.T) {
 
 	must(t, app.Key("Return"))
 	must(t, app.Key("Return"))
-	waitSystemCalls(t, app, []string{"Restart"})
+	waitSystemCalls(t, app, []string{"EmptyTrash"})
 	shoot(t, app, "j23-2-confirmed")
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("restart"))
+	_, err = app.WaitFor("Restart Computer", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	waitSystemCalls(t, app, []string{"EmptyTrash", "Restart"})
+	shoot(t, app, "j23-3-restart-runs-at-once")
 }
 
 // systemCalls reads the system commands the app recorded in this launch.

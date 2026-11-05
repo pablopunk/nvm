@@ -181,6 +181,9 @@ func (p *Palette) Pop() {
 	p.syncPresentation()
 	p.search()
 	p.focusInput()
+	if reveal := p.cur().OnReveal; reveal != nil {
+		reveal()
+	}
 }
 
 // leaveUnsurvivingPages pops the pages above the topmost page that survives a hide, down to the root when none does.

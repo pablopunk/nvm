@@ -28,6 +28,8 @@ type editorState struct {
 	// markdown draws the text as a Markdown editor rather than a plain text area.
 	markdown bool
 	rich     design.MarkdownSource
+	// focus is the handle of the Markdown editor, which the palette focuses because the page hides its search field.
+	focus ui.Handle
 }
 
 // draftTrack is the autosave state of one editor. Blocked means a stored draft from another version waits for the
@@ -43,6 +45,9 @@ type draftTrack struct {
 func (s *Session) editorView(spec api.EditorSpec) *palette.View {
 	ed := newEditorState(s, s.view.Title, spec.Content, spec.Placeholder, spec.ReadOnly)
 	ed.markdown = spec.Format == "markdown"
+	if ed.markdown {
+		ed.page.Input = &ed.focus
+	}
 	ed.submitFn = func(h search.Host, text string) { ed.submitTo(h, spec.Submit, text) }
 	if spec.Draft != nil {
 		ed.attachDraft(*spec.Draft)

@@ -53,3 +53,14 @@ func TestMarkdownEditorPageDrawsItsChrome(t *testing.T) {
 		t.Fatalf("the Markdown editor page draws %q, want its title and footer", tt.Texts())
 	}
 }
+
+// TestMarkdownEditorPageNamesItsEditorAsInput checks a Markdown editor page hands the keyboard to its editor: the page
+// hides its search field, so the palette focuses the input the page names.
+func TestMarkdownEditorPageNamesItsEditorAsInput(t *testing.T) {
+	view := api.View{ID: "note", Kind: api.ViewEditor, Title: "Note",
+		Editor: &api.EditorSpec{Content: "Note body", Format: "markdown"}}
+	page := NewSession(Deps{}, "notes", view).Open(&fakeHost{})
+	if page.Input == nil || !page.HideInput {
+		t.Fatalf("Markdown editor page Input = %v, HideInput = %v; want the page to name its editor as its input", page.Input, page.HideInput)
+	}
+}

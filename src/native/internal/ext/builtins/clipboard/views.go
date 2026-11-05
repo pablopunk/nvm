@@ -11,13 +11,19 @@ func (Extension) listView(ctx api.Context, options Options) api.View {
 		Kind: api.ViewList, Title: listTitle, Placeholder: listPlaceholder, Presentation: api.PresentSidePreview,
 		Items:          copyItems(ctx, historyListLimit, options),
 		EmptyView:      &api.EmptyState{Title: emptyTitle, Subtitle: emptySubtitle},
-		Actions:        historyActions(),
+		ActionPanel:    historyActionPanel(),
 		OnSearchChange: &api.ActionRef{ID: refSearch},
 		Refresh:        &api.Refresh{Ref: &api.ActionRef{ID: refRefresh}},
 	}
 }
 
-// historyActions are the removals of the whole history, listed on the list's own menu.
+// historyActionPanel is the list's own menu: the removals of the whole history under the "Manage History" group, as 1.x
+// titles them.
+func historyActionPanel() *api.ActionPanel {
+	return &api.ActionPanel{Sections: []api.ActionSection{{Title: manageSectionTitle, Actions: historyActions()}}}
+}
+
+// historyActions are the removals of the whole history.
 func historyActions() []api.Action {
 	return []api.Action{
 		api.Destructive(api.Run(refRemoveWindow, "Remove Entries from Last Hour", map[string]string{argWindow: windowHour})),

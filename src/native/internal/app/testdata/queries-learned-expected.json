@@ -3,60 +3,6 @@
     "query": "",
     "rows": [
       {
-        "kind": "AI Commands",
-        "title": "Fix Selected Text with AI",
-        "subtitle": "Correct grammar, spelling, and punctuation",
-        "section": "",
-        "id": "",
-        "icon": "sparkles",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Fix Selected Text with AI",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "AI Commands",
-        "title": "Triage Selected Text with AI",
-        "subtitle": "Reply needed, category and urgency in one call",
-        "section": "",
-        "id": "",
-        "icon": "sparkles",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Triage Selected Text with AI",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "Welcome to Nevermind",
         "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
@@ -775,6 +721,64 @@
             "label": ""
           }
         ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Background Tasks",
+        "subtitle": "Run, pause, and inspect background work",
+        "section": "",
+        "id": "",
+        "icon": "activity",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Background Tasks",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Dictate",
+        "subtitle": "Start or stop cloud voice dictation",
+        "section": "",
+        "id": "",
+        "icon": "mic",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Dictate",
+            "label": ""
+          },
+          {
+            "title": "Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
       }
     ]
   },
@@ -1009,6 +1013,33 @@
         ]
       },
       {
+        "kind": "AI Commands",
+        "title": "Fix Selected Text with AI",
+        "subtitle": "Correct grammar, spelling, and punctuation",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Fix Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Search Files",
         "subtitle": "Find files in your home folder",
@@ -1023,6 +1054,33 @@
         "actions": [
           {
             "title": "Search Files",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "AI Commands",
+        "title": "Triage Selected Text with AI",
+        "subtitle": "Reply needed, category and urgency in one call",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Triage Selected Text with AI",
             "label": ""
           },
           {
@@ -1715,6 +1773,33 @@
         ]
       },
       {
+        "kind": "AI Commands",
+        "title": "Fix Selected Text with AI",
+        "subtitle": "Correct grammar, spelling, and punctuation",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Fix Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Focus Window Left",
         "subtitle": "Window Management",
@@ -1876,6 +1961,33 @@
         "actions": [
           {
             "title": "Snippets",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "AI Commands",
+        "title": "Triage Selected Text with AI",
+        "subtitle": "Reply needed, category and urgency in one call",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Triage Selected Text with AI",
             "label": ""
           },
           {
@@ -2087,6 +2199,33 @@
       },
       {
         "kind": "Commands",
+        "title": "Dictation History",
+        "subtitle": "Browse and copy previous dictations",
+        "section": "",
+        "id": "",
+        "icon": "history",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Dictation History",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Documents",
         "subtitle": "$HOME/Documents",
         "section": "",
@@ -2200,91 +2339,6 @@
         "actions": [
           {
             "title": "Force Quit Apps",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Keyboard Shortcuts",
-        "subtitle": "View, change, or remove shortcuts",
-        "section": "",
-        "id": "",
-        "icon": "keyboard",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Keyboard Shortcuts",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Middle Two Thirds",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "",
-        "icon": "rows-2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Middle Two Thirds",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Backend Status",
-        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Backend Status",
             "label": ""
           },
           {

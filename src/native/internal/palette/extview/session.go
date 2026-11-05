@@ -157,6 +157,9 @@ func (s *Session) listPage() *palette.View {
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
+	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
+		page.OnReveal = s.refreshNow
+	}
 	page.Accessory = s.searchAccessory()
 	page.Actions = s.pageActions
 	page.OnKey = s.tabCyclesAccessory(page.Accessory)
@@ -270,10 +273,7 @@ func (s *Session) withSecondBatch(local []search.Item, query string) []search.It
 
 func (s *Session) appendSectionRows(out []search.Item, title string, items []api.Item, query string) []search.Item {
 	first := true
-	for _, item := range items {
-		if !matchesQuery(item, query) {
-			continue
-		}
+	for _, item := range matchingItems(items, query) {
 		row := s.row(item)
 		if first && title != "" {
 			row.Section = title

@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -94,14 +95,35 @@ func accessoryText(accessories []api.Accessory) string {
 	return first
 }
 
-// matchesQuery is true for an empty query and for one that the item's title, subtitle, keywords or aliases match.
+// matchesQuery is true for an empty query and for one that the item's title, subtitle, keywords or aliases hold as a
+// phrase, a substring or a word prefix. Scattered letters do not match a list row, as 1.x's list views require.
 func matchesQuery(item api.Item, query string) bool {
 	q := strings.TrimSpace(query)
 	if q == "" {
 		return true
 	}
 	text := strings.Join(append([]string{item.Title, item.Subtitle}, append(item.Keywords, item.Aliases...)...), " ")
-	return search.Score(text, q) > 0
+	return search.Score(text, q) >= search.PhraseScoreFloor
+}
+
+// matchingItems returns the items that match query, an exact title first and then an exact keyword, as 1.x sorts a
+// list's matches. Items of one rank keep their order.
+func matchingItems(items []api.Item, query string) []api.Item {
+	matches := slices.DeleteFunc(slices.Clone(items), func(item api.Item) bool { return !matchesQuery(item, query) })
+	slices.SortStableFunc(matches, func(a, b api.Item) int { return queryRank(a, query) - queryRank(b, query) })
+	return matches
+}
+
+// queryRank is 0 for an item whose title is the query, 1 for one with a keyword that is, and 2 for every other match.
+func queryRank(item api.Item, query string) int {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if strings.ToLower(strings.TrimSpace(item.Title)) == q {
+		return 0
+	}
+	if slices.ContainsFunc(item.Keywords, func(keyword string) bool { return strings.ToLower(strings.TrimSpace(keyword)) == q }) {
+		return 1
+	}
+	return 2
 }
 
 // collectionPage is the host-owned CRUD list: an add row, then one row per record with preview, edit and remove.
