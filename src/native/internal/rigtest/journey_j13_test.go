@@ -16,13 +16,12 @@ const (
 	refusedQuestion   = "Say no"
 )
 
-// J13 (PLAN.md 3.1): Tab asks AI, the reply streams into the chat, and Escape stops it while frames are still due. The
-// fake backend counts the stream as abandoned, not completed, so the stop is proven on the backend side. The palette
-// stays open, the question stays in the transcript, and the last word never arrives. A second Escape, with nothing in
-// flight, goes back to the root as it does on any page. The same holds after a reply that completes and after a turn
-// the backend refuses with 402 (Credits needed): each Escape then goes back to the root. Continuing the conversation
-// later and the first-token progress are not covered yet.
-func TestJourneyJ13AskAIStreamsAndEscapeStopsTheReply(t *testing.T) {
+// J13 (PLAN.md 3.1): Tab asks AI and the reply streams into the chat. Leaving the chat with Escape does not abandon the
+// reply: 1.x only aborts a reply from its Stop button, so the fake backend sees the one stream run to its end (completed,
+// never abandoned) and the palette stays open. A second Escape, with nothing in flight, goes back to the root as it does
+// on any page. The same holds after a reply that completes and after a turn the backend refuses with 402 (Credits
+// needed). Continuing the conversation later and the first-token progress are not covered yet.
+func TestJourneyJ13AskAIStreamsAndEscapeLeavesTheReplyRunning(t *testing.T) {
 	fake := StartFakeBackend(t)
 	fake.SetReply(streamedReply)
 	fake.SetChunkDelay(streamFrameDelay)
@@ -37,32 +36,19 @@ func TestJourneyJ13AskAIStreamsAndEscapeStopsTheReply(t *testing.T) {
 	shoot(t, app, "j13-1-streaming")
 
 	must(t, app.Key("Escape"))
-	time.Sleep(streamFrameDelay * 8)
-	if completed, abandoned := fake.StreamOutcomes(); completed != 0 || abandoned != 1 {
-		t.Fatalf("chat streams on the backend: %d completed, %d abandoned; want the one stream abandoned", completed, abandoned)
+	requireChatLeft(t, app)
+	waitForCompletedStreams(t, fake, 1, streamWait)
+	if _, abandoned := fake.StreamOutcomes(); abandoned != 0 {
+		t.Fatalf("Escape abandoned the reply: %d abandoned streams; 1.x keeps the reply running until its Stop button", abandoned)
 	}
-	if paletteShows(t, app, streamFinalWord) {
-		t.Fatal("the reply finished after Escape; the stream was not stopped")
-	}
-	visible, err := app.PaletteVisible()
-	must(t, err)
-	if !visible {
-		t.Fatal("Escape closed the palette while the reply was streaming; it must only stop the reply")
-	}
-	if !paletteShows(t, app, aiQuestion) {
-		t.Fatal("the question is gone from the transcript after the stop")
-	}
-	shoot(t, app, "j13-2-stopped")
-
-	escapeChatToRoot(t, app)
-	shoot(t, app, "j13-3-escape-back-to-root")
+	shoot(t, app, "j13-2-left-while-streaming")
 
 	fake.SetChunkDelay(0)
 	fake.SetReply(completedReply)
 	askAIFromRoot(t, app, completedQuestion)
 	_, err = app.WaitFor(completedWord, streamWait)
 	must(t, err)
-	waitForCompletedStreams(t, fake, 1, streamWait)
+	waitForCompletedStreams(t, fake, 2, streamWait)
 	escapeChatToRoot(t, app)
 
 	fake.SetMode(fixtures.ModeInsufficientCredits)
@@ -81,6 +67,12 @@ func TestJourneyJ13AskAIStreamsAndEscapeStopsTheReply(t *testing.T) {
 func escapeChatToRoot(t *testing.T, app *App) {
 	t.Helper()
 	must(t, app.Key("Escape"))
+	requireChatLeft(t, app)
+}
+
+// requireChatLeft checks that the chat page is gone and the palette is still shown on the root.
+func requireChatLeft(t *testing.T, app *App) {
+	t.Helper()
 	if !waitUntilPaletteLacks(t, app, "Message AI", elementWait) {
 		t.Fatal("Escape on the chat did not leave it: the composer is still shown")
 	}
