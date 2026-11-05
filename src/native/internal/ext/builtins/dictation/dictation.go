@@ -75,6 +75,7 @@ func (Extension) Manifest() api.Manifest {
 		Identity:   api.Identity{ID: ID, Title: "Dictation"},
 		Capabilities: []api.Capability{
 			api.CapabilityDictation, api.CapabilityAI, api.CapabilityOCR, api.CapabilityDesktopApps,
+			api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard,
 		},
 		Settings:  []api.SettingDefinition{{ID: SettingDevice, Title: "Microphone", Type: api.SettingString}},
 		Publishes: []string{SettingDevice},

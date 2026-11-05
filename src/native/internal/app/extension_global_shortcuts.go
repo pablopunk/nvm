@@ -74,9 +74,50 @@ func (p *App) runExtensionCommandInPlace(entry extensionCommandEntry) {
 		return
 	}
 	safego.Go("shortcuts.command", func(ctx context.Context) {
-		result, failure, err := m.Run(ctx, entry.extID, api.Invocation{Ref: api.ActionRef{ID: entry.command.ID}, Launch: api.LaunchContext{Reason: "manual"}})
+		result, failure, err := runShortcutCommand(ctx, m, entry, func() error {
+			hidden := make(chan struct{})
+			p.onUI(func() {
+				if p.Palette != nil && p.Palette.Visible() {
+					p.Hide()
+				}
+				close(hidden)
+			})
+			select {
+			case <-hidden:
+				return nil
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		})
 		p.reportShortcutOutcome(entry.command.Title, result, failure, err)
 	})
+}
+
+// shortcutCommandRunner is the shared extension runtime and desktop paste service used by a global command.
+type shortcutCommandRunner interface {
+	Run(context.Context, string, api.Invocation) (api.Result, *api.Failure, error)
+	PerformPaste(string, api.Action) error
+}
+
+func runShortcutCommand(ctx context.Context, runner shortcutCommandRunner, entry extensionCommandEntry, beforePaste func() error) (api.Result, *api.Failure, error) {
+	invocation := api.Invocation{
+		Ref: api.ActionRef{ID: entry.command.ID}, Launch: api.LaunchContext{Reason: "manual"},
+		Background: entry.command.Mode == api.ModeBackground,
+	}
+	result, failure, err := runner.Run(ctx, entry.extID, invocation)
+	if failure != nil || err != nil || result.View != nil || result.Next == nil {
+		return result, failure, err
+	}
+	switch result.Next.Kind {
+	case api.ActionPaste, api.ActionPasteText, api.ActionTypeText:
+		action := *result.Next
+		result.Next = nil
+		if err := beforePaste(); err != nil {
+			return result, nil, err
+		}
+		err = runner.PerformPaste(entry.extID, action)
+	}
+	return result, nil, err
 }
 
 // reportShortcutOutcome tells the user what a shortcut run could not do, as a notification, since the palette stays
