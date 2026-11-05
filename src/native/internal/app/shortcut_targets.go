@@ -6,6 +6,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
+	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/palette/windows"
@@ -45,6 +46,8 @@ var movedCommandShortcutIDs = map[string]string{
 	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                  shortcuts.CommandForceQuitApps,
 	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                    shortcuts.CommandQuitAllApps,
 	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID: shortcuts.CommandSnippets,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:      shortcuts.CommandDictate,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:      shortcuts.CommandDictationHistory,
 }
 
 func extensionCommandShortcutID(extID, commandID string) string {

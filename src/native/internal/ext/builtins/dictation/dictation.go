@@ -20,10 +20,8 @@ const ID = "nevermind.dictation"
 // Row ids and the shortcut actions 1.x stored their keys under. The shortcut actions are the rows' CustomizeAs: the
 // host maps "command:dictate" and "command:dictation-history" to the 1.x keys, so the shortcuts keep working as in 1.x.
 const (
-	dictateRowID        = "dictation"
-	historyRowID        = "dictation-history"
-	dictateActionID     = "command:dictate"
-	historyActionID     = "command:dictation-history"
+	DictateCommandID    = "dictate"
+	HistoryCommandID    = "dictation-history"
 	dictateTitle        = "Dictate"
 	historyTitle        = "Dictation History"
 	dictateSubtitle     = "Start or stop cloud voice dictation"
@@ -34,10 +32,8 @@ const (
 	copyTranscriptTitle = "Copy Transcript"
 )
 
-// Refs of the actions the rows, the views and the forms run. The args carry the saved dictation or transcript id.
+// Refs of the actions the views and the forms run. The args carry the saved dictation or transcript id.
 const (
-	refDictate          = "dictate"
-	refOpenHistory      = "open-history"
 	RefOpenSettings     = "open-settings"
 	refSaveSettings     = "save-settings"
 	refRetry            = "retry-recording"
@@ -83,41 +79,29 @@ func (Extension) Manifest() api.Manifest {
 	}
 }
 
-// RootItems lists Dictate and Dictation History at the empty root.
-func (Extension) RootItems(api.Context) ([]api.Item, error) {
-	return rootItems(), nil
+// Commands lists Dictate and Dictation History at the root. Their shortcuts are keyed by the command ids, which the host
+// maps to the 1.x keys, so the shortcuts a user set in 1.x keep working.
+func (Extension) Commands(api.Context) ([]api.Command, error) {
+	return []api.Command{dictateCommand(), historyCommand()}, nil
 }
 
-// SearchItems lists the same rows for any query, as 1.x did; the palette ranks them by their titles and aliases.
-func (Extension) SearchItems(_ api.Context, _ string) ([]api.Item, error) {
-	return rootItems(), nil
-}
-
-func rootItems() []api.Item {
-	return []api.Item{dictateItem(), historyItem()}
-}
-
-// dictateItem is the Dictate row. Enter starts or stops a dictation in the background, and its menu opens the settings.
-func dictateItem() api.Item {
-	return api.Item{
-		ID: dictateRowID, Title: dictateTitle, Subtitle: dictateSubtitle, Icon: "mic", Score: scoreRootCommand,
-		Aliases: []string{"dictate", "dictation", "voice dictation"}, CustomizeAs: dictateActionID,
+// dictateCommand starts or stops a dictation in the background. Its menu opens the settings.
+func dictateCommand() api.Command {
+	return api.Command{
+		ID: DictateCommandID, Title: dictateTitle, Subtitle: dictateSubtitle, Icon: "mic", Score: scoreRootCommand,
+		Aliases: []string{"dictate", "dictation", "voice dictation"}, Keywords: []string{"dictate dictation voice speech transcribe"},
+		Mode: api.ModeBackground, DismissAfterRun: true, Customizable: true, Appearance: &api.Appearance{Foreground: api.ColorNone},
 		Section: search.KindCommands, LearnKey: "cmd:" + dictateTitle,
-		Primary: &api.Action{
-			Kind: api.ActionRun, Title: dictateTitle, Ref: &api.ActionRef{ID: refDictate},
-			Background: true, DismissAfterRun: true,
-		},
 		ActionPanel: api.Panel(api.Section("", api.Run(RefOpenSettings, "Settings", nil))),
 	}
 }
 
-// historyItem is the Dictation History row, which opens the list of transcripts and saved dictations.
-func historyItem() api.Item {
-	return api.Item{
-		ID: historyRowID, Title: historyTitle, Subtitle: historySubtitle, Icon: "history", Score: scoreRootCommand,
-		Aliases: []string{"dictation history", "transcripts", "voice history"}, CustomizeAs: historyActionID,
-		Section: search.KindCommands, LearnKey: "cmd:" + historyTitle,
-		Primary: &api.Action{Kind: api.ActionRun, Title: historyTitle, Ref: &api.ActionRef{ID: refOpenHistory}},
+// historyCommand opens the list of transcripts and saved dictations.
+func historyCommand() api.Command {
+	return api.Command{
+		ID: HistoryCommandID, Title: historyTitle, Subtitle: historySubtitle, Icon: "history", Score: scoreRootCommand,
+		Aliases: []string{"dictation history", "transcripts", "voice history"}, Keywords: []string{"dictation history transcripts voice history"},
+		Customizable: true, Appearance: &api.Appearance{Foreground: api.ColorNone}, Section: search.KindCommands, LearnKey: "cmd:" + historyTitle,
 	}
 }
 
@@ -125,9 +109,9 @@ func historyItem() api.Item {
 func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	args := in.Ref.Args
 	switch in.Ref.ID {
-	case refDictate:
+	case DictateCommandID:
 		return e.toggle(ctx)
-	case refOpenHistory:
+	case HistoryCommandID:
 		return e.openHistory(ctx)
 	case RefOpenSettings:
 		return e.openSettings(ctx)

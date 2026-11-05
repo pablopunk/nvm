@@ -264,7 +264,7 @@ func run(t *testing.T, ext Extension, ctx api.Context, ref string, args map[stri
 // dictate runs the Dictate action, which starts a dictation when none runs and stops the running one.
 func dictate(t *testing.T, ext Extension, ctx api.Context) api.Result {
 	t.Helper()
-	return run(t, ext, ctx, refDictate, nil, nil)
+	return run(t, ext, ctx, DictateCommandID, nil, nil)
 }
 
 // pasted returns the paste action of a result, or fails the test when the result pastes nothing.
@@ -457,7 +457,7 @@ func TestHistoryListsUnfinishedDictationsFirstAndRetryRecoversThem(t *testing.T)
 	ctx.dictation.retryText = "recovered words"
 	ext := New(Legacy{History: []history.Entry{{ID: "old", Text: "older", CreatedAt: testNow.Add(-time.Hour).UnixMilli()}}})
 
-	view := run(t, ext, ctx, refOpenHistory, nil, nil).View
+	view := run(t, ext, ctx, HistoryCommandID, nil, nil).View
 	if view == nil || len(view.Items) != 2 || view.Items[0].ID != "dictation-rec" || view.Items[0].Title != recordingTitle {
 		t.Fatalf("history view %+v; want the unfinished dictation first", view)
 	}
@@ -519,7 +519,7 @@ func TestHistoryDropsTheOldestEntriesPastTheCap(t *testing.T) {
 		entries = append(entries, history.Entry{ID: fmt.Sprintf("e%d", i), Text: "text", CreatedAt: int64(i + 1)})
 	}
 	ctx.storage.values[storageHistoryKey] = mustJSON(t, entries)
-	view := run(t, New(Legacy{}), ctx, refOpenHistory, nil, nil).View
+	view := run(t, New(Legacy{}), ctx, HistoryCommandID, nil, nil).View
 	if len(view.Items) != history.MaxEntries {
 		t.Fatalf("items = %d; want the cap of %d", len(view.Items), history.MaxEntries)
 	}
@@ -566,16 +566,19 @@ func TestLegacyChoicesAnswerUntilTheBuiltInSaves(t *testing.T) {
 	}
 }
 
-func TestRootRowsKeepTheOneXShortcutActions(t *testing.T) {
-	rows, err := Extension{}.RootItems(newContext())
+func TestCommandsKeepTheOneXShortcutIDsAndRunInTheBackground(t *testing.T) {
+	commands, err := Extension{}.Commands(newContext())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 || rows[0].CustomizeAs != "command:dictate" || rows[1].CustomizeAs != "command:dictation-history" {
-		t.Fatalf("rows %+v; want Dictate and Dictation History keyed as their 1.x shortcuts", rows)
+	if len(commands) != 2 || commands[0].ID != DictateCommandID || commands[1].ID != HistoryCommandID {
+		t.Fatalf("commands %+v; want Dictate and Dictation History", commands)
 	}
-	if rows[0].Primary == nil || !rows[0].Primary.Background || rows[0].Primary.Ref.ID != refDictate {
-		t.Fatalf("Dictate primary %+v; want a background run", rows[0].Primary)
+	if !commands[0].Customizable || commands[0].Mode != api.ModeBackground || !commands[0].DismissAfterRun {
+		t.Fatalf("Dictate %+v; want a customizable background command that dismisses", commands[0])
+	}
+	if !commands[1].Customizable {
+		t.Fatalf("Dictation History %+v; want it customizable", commands[1])
 	}
 }
 
