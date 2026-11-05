@@ -114,7 +114,7 @@ func (e Extension) RootItems(ctx api.Context) ([]api.Item, error) {
 	}
 	rows := make([]api.Item, 0, len(entries))
 	for _, entry := range entries {
-		rows = append(rows, copyRow(entry, scoreRootCopy, pasteAvailable(ctx), options))
+		rows = append(rows, copyRow(entry, scoreRootCopy, lookOf(ctx, options)))
 	}
 	return rows, nil
 }
@@ -131,7 +131,7 @@ func (e Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error
 	}
 	rows := make([]api.Item, 0, len(entries))
 	for i, entry := range entries {
-		rows = append(rows, copyRow(entry, float64(scoreSearchCopy-i), pasteAvailable(ctx), options))
+		rows = append(rows, copyRow(entry, float64(scoreSearchCopy-i), lookOf(ctx, options)))
 	}
 	return rows, nil
 }
@@ -139,9 +139,9 @@ func (e Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error
 // textTypes are the copies the root search finds: text, with or without markup.
 var textTypes = []string{"text", "html", "rtf"}
 
-// pasteAvailable reports whether the platform can send the paste gesture. Where it cannot, Paste Text is left out.
-func pasteAvailable(ctx api.Context) bool {
-	return ctx.System().HasCapability("clipboard.paste")
+// lookOf is what the rows of one call read: the call's instant, whether the platform can paste, and the settings.
+func lookOf(ctx api.Context, options Options) rowLook {
+	return rowLook{Now: ctx.Clock().Now(), CanPaste: ctx.System().HasCapability("clipboard.paste"), Options: options}
 }
 
 // RunAction runs the list command, the rows' actions, the removals and the list's search and refresh.

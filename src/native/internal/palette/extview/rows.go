@@ -28,7 +28,7 @@ const defaultIcon = "puzzle"
 func (s *Session) row(item api.Item) search.Item {
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
-		Icon: iconOr(item.Icon, defaultIcon), Tone: rowTone(item),
+		Icon: iconOr(item.Icon, defaultIcon), Tone: rowTone(item), TintTitle: item.TintTitle,
 		Accessory: accessoryText(item.Accessories),
 		Detail:    s.detailPane(item.Detail),
 		Image:     s.bitmap(item.Image),

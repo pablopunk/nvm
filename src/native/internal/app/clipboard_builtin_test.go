@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -28,4 +29,9 @@ func newManagerOverClipboard(t testing.TB, engine *clipEngine) *manager.Manager 
 // defaultClipboardOptions are the settings a new install has.
 func defaultClipboardOptions() clipboardbuiltin.Options {
 	return clipboardbuiltin.Options{RootList: true, RootSearch: true, LinkPreviews: true}
+}
+
+// ports returns the history and pictures of the engine as the extension services read them.
+func (e *clipEngine) ports() extensionPorts {
+	return extensionPorts{history: func() *clipboard.History { return e.history }, images: e.files}
 }

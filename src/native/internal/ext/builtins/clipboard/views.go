@@ -32,10 +32,10 @@ func copyItems(ctx api.Context, limit int, options Options) []api.Item {
 	if err != nil {
 		return nil
 	}
-	canPaste := pasteAvailable(ctx)
+	look := lookOf(ctx, options)
 	items := make([]api.Item, 0, len(entries))
 	for _, entry := range entries {
-		items = append(items, copyRow(entry, 0, canPaste, options))
+		items = append(items, copyRow(entry, 0, look))
 	}
 	return items
 }
@@ -73,7 +73,7 @@ func searchResult(ctx api.Context, query string, options Options) (api.Result, e
 	items := make([]api.Item, 0, len(entries))
 	ids := make([]string, 0, len(entries))
 	for _, entry := range entries {
-		row := copyRow(entry, 0, pasteAvailable(ctx), options)
+		row := copyRow(entry, 0, lookOf(ctx, options))
 		items = append(items, row)
 		ids = append(ids, row.ID)
 	}

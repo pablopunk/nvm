@@ -28,20 +28,28 @@ const (
 	infoTime      = "Jan 2 15:04"
 )
 
+// rowLook is what a row reads besides the copy: the instant its ages are measured from, whether the platform can
+// paste, and the settings.
+type rowLook struct {
+	Now      time.Time
+	CanPaste bool
+	Options  Options
+}
+
 // copyRow is one copy as a row: its title and subtitle, the copy action on Enter, and the actions on its menu. Images
 // carry their thumbnail and their file, so the row draws the picture and drags out as an image file.
-func copyRow(entry api.ClipboardEntry, score float64, canPaste bool, options Options) api.Item {
+func copyRow(entry api.ClipboardEntry, score float64, look rowLook) api.Item {
 	row := api.Item{
 		ID: "clipboard:" + entry.ID, Title: titleOf(entry), Subtitle: subtitleOf(entry), Icon: iconOf(entry.Type),
 		Appearance: &api.Appearance{Foreground: api.ColorBlue}, Section: search.KindClipboard, TintTitle: true,
 		LearnKey: "clipboard:" + entry.ID, Score: score, LastUsedMs: entry.CreatedAtMs,
-		Detail: detailOf(entry, options),
+		Detail: detailOf(entry, look),
 	}
 	if entry.Type == kindImage {
 		attachPicture(&row, entry)
 	}
 	row.Primary = copyActionOf(entry)
-	row.Actions = rowActions(entry, canPaste)
+	row.Actions = rowActions(entry, look.CanPaste)
 	return row
 }
 
@@ -153,10 +161,10 @@ func subtitleOf(entry api.ClipboardEntry) string {
 	return "Copied " + when
 }
 
-// detailOf is the side preview of a copy: its text or picture, the link card of a single web address, and the footer
-// line with the age, the time and the size.
-func detailOf(entry api.ClipboardEntry, options Options) *api.Detail {
-	detail := &api.Detail{Title: titleOf(entry), Subtitle: subtitleOf(entry)}
+// detailOf is the side preview of a copy, as the native pane drew it: the text or the picture, the link card of a
+// single web address, and a footer with the age, the time and, for text, the length.
+func detailOf(entry api.ClipboardEntry, look rowLook) *api.Detail {
+	detail := &api.Detail{}
 	if entry.Type == kindImage {
 		if entry.ThumbnailURL != "" {
 			detail.Image = &api.Image{Src: entry.ThumbnailURL, Fit: api.FitContain}
@@ -164,26 +172,26 @@ func detailOf(entry api.ClipboardEntry, options Options) *api.Detail {
 	} else {
 		detail.Text = entry.Text
 	}
-	if link := singleWebURL(entry.Text); link != "" && options.LinkPreviews && isText(entry.Type) {
+	if link := singleWebURL(entry.Text); link != "" && look.Options.LinkPreviews && isText(entry.Type) {
 		detail.Link = &api.LinkCard{URL: link, Status: "loading"}
 	}
-	detail.Metadata = []api.Metadata{{Kind: api.MetadataText, Value: footerOf(entry)}}
+	detail.Metadata = []api.Metadata{{Kind: api.MetadataSeparator}, {Kind: api.MetadataText, Value: footerOf(entry, look.Now)}}
 	return detail
 }
 
 // footerOf is the footer of the side preview: when the copy was made, and for text its length.
-func footerOf(entry api.ClipboardEntry) string {
+func footerOf(entry api.ClipboardEntry, now time.Time) string {
 	created := time.UnixMilli(entry.CreatedAtMs)
-	info := fmt.Sprintf("%s · %s", ago(created), created.Format(infoTime))
+	info := fmt.Sprintf("%s · %s", ago(created, now), created.Format(infoTime))
 	if !isText(entry.Type) {
 		return info
 	}
 	return info + fmt.Sprintf(" · %d chars", len([]rune(entry.Text)))
 }
 
-// ago describes how long ago t was, in the words the rows use.
-func ago(t time.Time) string {
-	d := time.Since(t)
+// ago describes how long ago t was, relative to now, in the words the rows use.
+func ago(t, now time.Time) string {
+	d := now.Sub(t)
 	switch {
 	case d < time.Minute:
 		return "just now"

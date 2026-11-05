@@ -3,6 +3,7 @@ package app
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
@@ -138,8 +139,19 @@ func TestShortcutActionOfACommandOpensTheCommand(t *testing.T) {
 		t.Fatal("no action for the Clipboard History shortcut")
 	}
 	action.Run(p)
-	if got := p.Top().Title; got != "Clipboard History" {
-		t.Fatalf("top view = %q, want the clipboard history", got)
+	awaitTopView(t, p, "Clipboard History")
+}
+
+// awaitTopView waits until the palette's top view has the title. An extension's run answers on its own goroutine, so
+// the view arrives after the action returns.
+func awaitTopView(t *testing.T, p *App, title string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for p.Top().Title != title {
+		if time.Now().After(deadline) {
+			t.Fatalf("top view = %q, want %q", p.Top().Title, title)
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
 

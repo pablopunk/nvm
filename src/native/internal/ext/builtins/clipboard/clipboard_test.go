@@ -215,7 +215,7 @@ func TestSearchHidesCopiesWhenTheRootSearchIsOff(t *testing.T) {
 }
 
 func TestImageRowCarriesItsThumbnailAndDragsItsFile(t *testing.T) {
-	row := copyRow(image("shot", 3), 0, true, Options{})
+	row := copyRow(image("shot", 3), 0, rowLook{Now: testNow, CanPaste: true})
 	if row.Image == nil || row.Image.Src != "data:image/png;base64,AAAA" {
 		t.Fatalf("image row thumbnail = %+v", row.Image)
 	}
@@ -228,8 +228,8 @@ func TestImageRowCarriesItsThumbnailAndDragsItsFile(t *testing.T) {
 }
 
 func TestTextRowsOfferPasteTextOnlyWhenThePlatformCanPaste(t *testing.T) {
-	with := titlesOf(copyRow(text("a", "copy", 1), 0, true, Options{}).Actions)
-	without := titlesOf(copyRow(text("a", "copy", 1), 0, false, Options{}).Actions)
+	with := titlesOf(copyRow(text("a", "copy", 1), 0, rowLook{Now: testNow, CanPaste: true}).Actions)
+	without := titlesOf(copyRow(text("a", "copy", 1), 0, rowLook{Now: testNow}).Actions)
 	if !contains(join(with), "Paste Text") || contains(join(without), "Paste Text") {
 		t.Fatalf("actions with paste %v, without %v", with, without)
 	}

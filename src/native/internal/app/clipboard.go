@@ -181,7 +181,3 @@ func (p *App) openClipboard() *clipEngine {
 	return e
 }
 
-// ports returns the history and pictures of the engine as the extension services read them.
-func (e *clipEngine) ports() extensionPorts {
-	return extensionPorts{history: func() *clipboard.History { return e.history }, images: e.files}
-}
