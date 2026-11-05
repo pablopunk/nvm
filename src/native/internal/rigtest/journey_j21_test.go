@@ -29,7 +29,9 @@ const (
 func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 	for _, rich := range []bool{false, true} {
 		name := "plain clipboard"
-		if rich { name = "rich clipboard" }
+		if rich {
+			name = "rich clipboard"
+		}
 		t.Run(name, func(t *testing.T) { runSelectedTextReplacement(t, rich) })
 	}
 }
@@ -133,8 +135,12 @@ func waitHTMLClipboard(t *testing.T, app *App, want string) {
 	deadline := time.Now().Add(j21AIWait)
 	for {
 		got, err := app.output("xclip", "-selection", "clipboard", "-t", "text/html", "-o")
-		if err == nil && got == want { return }
-		if time.Now().After(deadline) { t.Fatalf("rich clipboard was not restored: got=%q err=%v", got, err) }
+		if err == nil && got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("rich clipboard was not restored: got=%q err=%v", got, err)
+		}
 		time.Sleep(pollInterval)
 	}
 }
