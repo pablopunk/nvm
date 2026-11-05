@@ -160,7 +160,7 @@ func TestFlushSendsOneBatchInThePostHogFormat(t *testing.T) {
 	if usage.Properties["$process_person_profile"] != false || usage.Properties["channel"] != "stable" {
 		t.Fatalf("common properties = %v", usage.Properties)
 	}
-	if usage.Properties["os_type"] != "darwin" || usage.Properties["arch"] != "arm64" || usage.Properties["app_version"] != "0.9.0" {
+	if usage.Properties["os_type"] != "Darwin" || usage.Properties["arch"] != "arm64" || usage.Properties["app_version"] != "0.9.0" {
 		t.Fatalf("platform properties = %v", usage.Properties)
 	}
 	if usage.DistinctID == "" || usage.Timestamp == "" {

@@ -122,17 +122,41 @@ func Channel(version string) string {
 
 // commonProperties are the fields every event carries. Callers cannot set them.
 func commonProperties(cfg Config) map[string]any {
+	osType, arch := platformValues(cfg.OS, cfg.Arch)
 	properties := map[string]any{
 		"$process_person_profile": false,
 		"app_version":             cfg.Version,
-		"os_type":                 cfg.OS,
-		"arch":                    cfg.Arch,
+		"os_type":                 osType,
+		"arch":                    arch,
 		"channel":                 Channel(cfg.Version),
 	}
 	if cfg.OSRelease != "" {
 		properties["os_release"] = cfg.OSRelease
 	}
 	return properties
+}
+
+// platformValues maps Go runtime identifiers to the platform and architecture tokens used by the 1.x collector.
+// Unknown OS values are preserved so analytics never invents a platform identity; unlisted architectures already
+// use the collector's spelling and are preserved as well.
+func platformValues(goOS, goArch string) (string, string) {
+	osType := goOS
+	switch goOS {
+	case "darwin":
+		osType = "Darwin"
+	case "linux":
+		osType = "Linux"
+	case "windows":
+		osType = "Windows_NT"
+	}
+	arch := goArch
+	switch goArch {
+	case "amd64":
+		arch = "x64"
+	case "386":
+		arch = "ia32"
+	}
+	return osType, arch
 }
 
 // SetConsent turns sending on or off. Turning it off drops what is queued at once, so a batch that was waiting
