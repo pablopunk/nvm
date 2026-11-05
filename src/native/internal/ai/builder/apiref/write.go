@@ -77,10 +77,13 @@ func (index *pkgIndex) writeInterfaceMethods(b *strings.Builder, name string) {
 }
 
 // writeType writes one type. A full type keeps its first sentences and enum values; a signature-only type keeps the
-// names and types of its members.
+// names and types of its members. A terse index writes no blank lines inside a type.
 func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 	spec := index.types[name]
-	fmt.Fprintf(b, "### %s\n\n", name)
+	fmt.Fprintf(b, "### %s\n", name)
+	if !index.terse {
+		b.WriteString("\n")
+	}
 	if doc := index.docs[name]; full && doc != "" && !index.terse {
 		fmt.Fprintf(b, "%s\n\n", firstSentence(doc))
 	}
@@ -99,7 +102,9 @@ func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 			index.writeConsts(b, name)
 		}
 	}
-	b.WriteString("\n")
+	if !index.terse {
+		b.WriteString("\n")
+	}
 }
 
 func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full bool) {
