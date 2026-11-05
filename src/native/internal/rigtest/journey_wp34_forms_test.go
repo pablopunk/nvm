@@ -96,8 +96,10 @@ func submitFormFixture(t *testing.T, app *App) {
 	must(t, app.Key("ctrl+Return"))
 	_, err = app.WaitFor("Enter an email address", elementWait) // refused, and the Email row is selected again
 	must(t, err)
-	must(t, app.Key("Return"))                        // edit the rejected address: the caret is after it, so Backspace erases it
-	for range len("not-an-email") {
+	// Send both events in one xdotool process with no delay or UI synchronization between them.
+	// This exercises the frame boundary where the rejected value is first copied into the search input.
+	must(t, app.xdo("key", "--clearmodifiers", "--delay", "0", "Return", "BackSpace"))
+	for range len("not-an-email") - 1 {
 		must(t, app.Key("BackSpace"))
 	}
 	must(t, app.Type("ada@example.test"))
