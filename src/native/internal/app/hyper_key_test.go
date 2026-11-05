@@ -93,10 +93,17 @@ func TestKeyboardShortcutsRowShowsTheHyperSparkle(t *testing.T) {
 	if err := files.WriteFile(sharedFixtureConfig, []byte(oneXSharedConfig), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	row := p.shortcutRow(entryOf(t, p, "command:dictate"))
-	if row.Accessory != "✦V" {
-		t.Fatalf("dictation row accessory = %q, want ✦V", row.Accessory)
+	p.exts.mgr.Store(newFixtureManagerWithApps(t, p))
+	rows := p.keyboardShortcutsPage().Search("")
+	for _, row := range rows {
+		if row.Title == "Dictate" {
+			if row.Accessory != "✦V" {
+				t.Fatalf("dictation row accessory = %q, want ✦V", row.Accessory)
+			}
+			return
+		}
 	}
+	t.Fatalf("no dictation row in %d rows", len(rows))
 }
 
 // TestSettingsShortcutRowsMatchOneX checks the two shortcut settings: 1.x copy, and no accessory, as 1.x shows none.

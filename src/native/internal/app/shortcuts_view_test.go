@@ -25,7 +25,7 @@ func goldenShortcutsList(t *testing.T) *App {
 	mustSetShortcut(t, manager, shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
 	mustSetShortcut(t, manager, shortcuts.CommandQuickNotes, "Command+Alt+N")
-	goldenOpen(p, p.keyboardShortcutsView())
+	goldenOpen(p, p.keyboardShortcutsPage())
 	return p
 }
 
@@ -47,10 +47,11 @@ func entryOf(t *testing.T, p *App, actionID string) shortcuts.Entry {
 	return shortcuts.Entry{}
 }
 
-// TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal searches the list and reads the rows it draws.
-func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
+// TestKeyboardShortcutsListShowsTheBoundShortcutsAsTheOneXListDoes searches the built-in's list and reads the rows it draws.
+// 1.x lists the bound shortcuts only, each with its label, so the palette hotkey and an OS refusal show no subtitle.
+func TestKeyboardShortcutsListShowsTheBoundShortcutsAsTheOneXListDoes(t *testing.T) {
 	p := goldenShortcutsList(t)
-	rows := p.shortcutRows("")
+	rows := p.keyboardShortcutsPage().Search("")
 	byTitle := map[string]string{}
 	for _, row := range rows {
 		byTitle[row.Title] = row.Accessory + "|" + row.Subtitle
@@ -61,10 +62,10 @@ func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
 	if got := byTitle["Clipboard History"]; got != p.shortcutLabelOf("Command+Alt+V")+"|" {
 		t.Fatalf("clipboard row = %q", got)
 	}
-	if got := byTitle["Floating Notes"]; got != p.shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
+	if got := byTitle["Floating Notes"]; got != p.shortcutLabelOf("Command+Alt+N")+"|" {
 		t.Fatalf("notes row = %q", got)
 	}
-	if got := len(p.shortcutRows("clip")); got != 1 {
+	if got := len(p.keyboardShortcutsPage().Search("clip")); got != 1 {
 		t.Fatalf("search for clip found %d rows, want 1", got)
 	}
 }

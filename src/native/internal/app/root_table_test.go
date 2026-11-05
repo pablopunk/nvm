@@ -73,7 +73,7 @@ func rootTableFixture(t *testing.T) *App {
 		t.Fatal(err)
 	}
 	hackerNews := []quicklinks.Link{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
-	p.exts.mgr.Store(newManagerWithApps(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips}), nil, nil, p.appsvc, p.builtInSettingsStore, permissionSurface{p: p}, updatesSurface{p: p}, diagnosticsSurface{p: p}, jobsSurface{p: p}))
+	p.exts.mgr.Store(newManagerWithApps(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips}), nil, nil, p.appsvc, p.builtInSettingsStore, permissionSurface{p: p}, updatesSurface{p: p}, diagnosticsSurface{p: p}, jobsSurface{p: p}, p.extensionShortcuts()))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),

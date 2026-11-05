@@ -1291,3 +1291,14 @@ Code: `internal/ext/api/jobs.go` (the job, its triggers and runs, the owner, sta
 - **Refresh.** The open page re-reads the jobs once a second, so a run that finishes shows as it ends. The native page subscribed to scheduler changes; the built-in polls, as the Updates page does.
 - **Root.** The root's Background Tasks command stays the host's and opens the built-in's `open` action.
 - **Tests.** `internal/ext/builtins/backgroundtasks/backgroundtasks_test.go` (rows and subtitles, icons and accessories, details and actions, run, failure, switch, clear, refusals, unknown job and action, trigger spelling), `internal/ext/services/jobs_test.go` (reads without a declaration, the declaration for changes, the reasons a refusal carries, ids, unlisted operations, unavailable) and `internal/app/golden_background_test.go` (the list, the details and the action menu render the built-in).
+
+## 39. The Keyboard Shortcuts built-in (dogfood batch 5, step 6)
+
+Code: `internal/ext/api/action.go` (the `shortcut` action kind, its `Target` and its validation), `internal/ext/api/services_core.go` (the `record` and `remove` operations), `internal/palette/extview` (the `ShortcutAction` host hook), `internal/app/shortcuts_view.go` (the root's page and the operation the palette runs), `internal/ext/builtins/shortcuts` (the list, its rows and its actions).
+
+- **List.** `ctx.Shortcuts().List()` returns the bound shortcuts, the user's choices and the declared ones, each with its label as this platform spells it. A Hyper key reads as `✦` followed by the key, as 1.x labels it. The list needs the `shortcuts` capability, which the built-in declares.
+- **Change.** Enter, and the `Change shortcut` action, is an `ActionShortcut` with the `record` operation and the action's ID in `Target`. The host pushes its recorder for that action. Key capture stays with the host, as the palette hotkey's recorder does.
+- **Remove.** `Remove shortcut` is the `remove` operation on the user's own choices only, as 1.x offers it. It drops the choice, toasts that it was removed and refreshes the page.
+- **Not in this step.** `GlobalShortcut`, the extension's own global shortcut, belongs to the Windows branch.
+- **Parity.** 1.x lists the bound shortcuts only, so a command without a shortcut no longer has a row on this page. The `Not active` subtitle is gone, because 1.x shows none; an OS refusal shows only its label. Titles are 1.x's (`Change shortcut`, `Remove shortcut`), and the label is the row's accessory, where 1.x draws a keycap.
+- **Tests.** `internal/ext/builtins/shortcuts/shortcuts_test.go` (labels, primary and actions, user-only removal, empty state, unknown action) and `internal/app/shortcuts_view_test.go` and `hyper_key_test.go` (the built-in's rows, the search, the hyper label), with the `shortcuts-list` golden through the built-in.

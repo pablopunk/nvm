@@ -58,6 +58,9 @@ type Deps struct {
 	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
 	// run it, and "" when it did. Nil makes system ops report unavailable.
 	RunSystem func(op string, done func(failure string))
+	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and
+	// remove drops the user's shortcut. Nil makes the action report unavailable.
+	ShortcutAction func(h search.Host, op, target string)
 	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
 	// reason it refused, if it did. Nil makes update actions report unavailable.
 	RunUpdate func(op string) error

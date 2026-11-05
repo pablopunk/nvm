@@ -71,7 +71,7 @@ func leadingCommands(p *App) []command {
 func trailingCommands(p *App) []command {
 	cmds := p.meaningFilesCommands()
 	cmds = append(cmds, []command{
-		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
+		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsPage()) }},
 		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksPage()) }},
 		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsPage()) }},
 		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(func(string) {}); h.Push(p.updatesPage()) }},

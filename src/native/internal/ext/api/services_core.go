@@ -352,3 +352,10 @@ type Windows interface {
 func DataSourceFrom(loader string) DataSource {
 	return DataSource{Loader: loader}
 }
+
+// Operations of an ActionShortcut action. Record opens the recorder for the action's shortcut, and remove drops the
+// shortcut the user chose for it.
+const (
+	ShortcutOpRecord = "record"
+	ShortcutOpRemove = "remove"
+)
