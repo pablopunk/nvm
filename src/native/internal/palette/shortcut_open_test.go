@@ -51,8 +51,12 @@ func TestShortcutLoadingIsTargetSpecificAndReplacedInHistory(t *testing.T) {
 		t.Fatal("loading surface remained in navigation history")
 	}
 	p.Pop()
+	if p.Visible() {
+		t.Fatal("Back from an independent shortcut entry did not dismiss the palette")
+	}
+	p.Show()
 	if p.Top() != root {
-		t.Fatal("Back did not return directly to the root")
+		t.Fatal("summoning after shortcut dismissal did not restore the root")
 	}
 }
 
@@ -94,7 +98,11 @@ func TestShortcutKeepsTheChatThatSurvivedDismissal(t *testing.T) {
 		t.Fatal("shortcut discarded the surviving chat")
 	}
 	p.Pop()
-	if p.Top() != chat {
-		t.Fatal("Back did not return to the surviving chat")
+	if p.Visible() {
+		t.Fatal("Back from an independent shortcut entry did not dismiss the palette")
+	}
+	p.Show()
+	if p.Top() != chat || left {
+		t.Fatal("summoning after shortcut dismissal did not restore the surviving chat")
 	}
 }

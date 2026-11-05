@@ -48,7 +48,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		p.escape(v)
 		return
 	}
-	if p.query == "" && len(p.stack) > 1 && !v.HideInput && v.Body == nil && c.Shortcut(0, ui.KeyBackspace) {
+	if p.query == "" && (len(p.stack) > 1 || p.entryBoundary > 0) && !v.HideInput && v.Body == nil && c.Shortcut(0, ui.KeyBackspace) {
 		p.Pop()
 		return
 	}

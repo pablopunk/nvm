@@ -53,6 +53,9 @@ func (p *Palette) chosenItem() *search.Item {
 // runDefault runs the first action of the chosen row: what Enter does. At the root the query is remembered
 // first, and the row's learn key is recorded with the query after its action has run.
 func (p *Palette) runDefault() {
+	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
+		return
+	}
 	it := p.chosenItem()
 	if it == nil {
 		return
@@ -95,6 +98,16 @@ func (p *Palette) runAction(a search.Action) {
 // view, or run the chosen row's first action.
 func (p *Palette) onEnter() {
 	v := p.cur()
+	q := strings.TrimSpace(p.query)
+	if v.Body == nil && !p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
+		p.defaultEnter = &defaultEnterIntent{view: v, query: q, shows: p.shows}
+		if v.Providers != nil {
+			p.defaultEnter.gen = p.coordinator(v).Gen() + 1
+		}
+		p.search()
+		p.resolveDefaultEnter(v, q, p.settled)
+		return
+	}
 	switch {
 	case p.actionsOpen:
 		p.runMenuAction(p.actChosen)
@@ -109,6 +122,15 @@ func (p *Palette) onEnter() {
 	default:
 		p.runDefault()
 	}
+}
+
+func (p *Palette) resolveDefaultEnter(v *View, q string, settled bool) {
+	i := p.defaultEnter
+	if i == nil || !settled || i.view != v || i.query != q || i.shows != p.shows || p.cur() != v || p.shownView != v || p.shownQuery != q || strings.TrimSpace(p.query) != q || !p.Visible() || p.actionsOpen || i.gen != 0 && (v.coord == nil || v.coord.Gen() != i.gen) {
+		return
+	}
+	p.defaultEnter = nil
+	p.runDefault()
 }
 
 // runMenuAction closes the action menu and runs its action at index i, when there is one.

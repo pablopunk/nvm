@@ -78,6 +78,7 @@ type DragSource struct {
 
 // Palette is the shell: one window, a stack of views, the search of the view on top, and the action menu.
 type Palette struct {
+	defaultEnter   *defaultEnterIntent
 	actionSequence uint64
 	actionPending  bool
 	openingView    *View
@@ -152,6 +153,13 @@ type Palette struct {
 	dialogs atomic.Int32
 	// windowWidth and windowHeight are the size the window was last resized to for a presentation (split.go).
 	windowWidth, windowHeight int
+}
+
+type defaultEnterIntent struct {
+	view  *View
+	query string
+	gen   int
+	shows int
 }
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.

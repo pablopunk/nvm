@@ -61,6 +61,9 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 // showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
 // changing the view or query resets that choice.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
+	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
+		p.defaultEnter = nil
+	}
 	newQuery := p.shownView != v || p.shownQuery != q
 	if newQuery {
 		p.chosen, p.choicePinned = 0, false

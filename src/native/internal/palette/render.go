@@ -72,7 +72,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 		CaretAtEnd: p.takeCaretToEnd(),
 		AIHint:     len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
 		Concealed:  v.Concealed,
-		OnKey:      p.onSearchKey,
+		OnKey:      p.onSearchInputKey,
 	}
 	if v.HideInput {
 		data.Title = v.Title
@@ -102,6 +102,9 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	if events.Submitted {
 		p.onEnter()
 	}
+	// SearchRow has committed this frame's text and dispatched its change/submit events.
+	// Only now can a deferred Enter safely use the selected row for that query.
+	p.resolveDefaultEnter(v, strings.TrimSpace(p.query), p.shownView == v && p.shownQuery == strings.TrimSpace(p.query) && p.settled)
 }
 
 func (p *Palette) listBody(c *ui.Context) {

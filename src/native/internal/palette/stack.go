@@ -21,6 +21,7 @@ func (p *Palette) Show() {
 }
 
 func (p *Palette) prepareShow() {
+	p.defaultEnter = nil
 	p.cancelAction()
 	if !p.win.IsVisible() || !p.win.IsFocused() {
 		p.captureFocus()
@@ -79,6 +80,7 @@ func (p *Palette) Hide() {
 
 // hide performs dismissal after its caller decides whether pending action completion remains valid.
 func (p *Palette) hide() {
+	p.defaultEnter = nil
 	p.resetActionMenu()
 	p.actionPending = false
 	for _, v := range p.stack {
@@ -187,8 +189,13 @@ func (p *Palette) ReplaceIf(old, v *View) bool {
 // Pop returns to the view below the current one. At the root it does nothing.
 func (p *Palette) Root() {
 	p.cancelAction()
-	for len(p.stack) > 1 {
+	for len(p.stack) > 1 && p.entryBoundary == 0 {
 		p.Pop()
+	}
+	if p.entryBoundary > 0 && len(p.stack) > p.entryBoundary {
+		for len(p.stack) > p.entryBoundary+1 {
+			p.popOne()
+		}
 	}
 }
 
@@ -197,6 +204,16 @@ func (p *Palette) Pop() {
 	if len(p.stack) < 2 {
 		return
 	}
+	if p.entryBoundary > 0 && len(p.stack) == p.entryBoundary+1 {
+		p.Hide()
+		return
+	}
+	p.popOne()
+}
+
+// popOne removes a page without applying the independent-entry dismissal boundary. Root uses it to
+// unwind extension navigation internally while user initiated back remains confined to its entry.
+func (p *Palette) popOne() {
 	p.leave(p.cur())
 	p.stack = p.stack[:len(p.stack)-1]
 	p.query = ""

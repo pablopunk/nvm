@@ -23,7 +23,29 @@ const (
 // a page, and at the end ArrowRight opens the menu of the chosen row. The span is the one the last frame drew, so it is
 // trusted only while the text is the same: typed text the frame has not built yet sends the arrow to the field.
 func (p *Palette) onSearchKey(k ui.TextKey) bool {
-	if k.Mods != 0 || k.Text() != p.query {
+	if k.Mods != 0 {
+		return false
+	}
+	if k.Key == ui.KeyEnter {
+		text := k.Text()
+		if text != p.query {
+			p.query = text
+		}
+		p.onEnter()
+		// Apply replacement and caret before the next queued key reaches this field.
+		if p.caretToEnd {
+			p.caretToEnd = false
+			if text != p.query {
+				k.SetText(p.query)
+			}
+			end := utf8.RuneCountInString(p.query)
+			k.SetTextSelection(end, end)
+		} else if text != p.query {
+			k.SetText(p.query)
+		}
+		return true
+	}
+	if k.Text() != p.query {
 		return false
 	}
 	start := p.searchSpan[0]

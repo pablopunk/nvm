@@ -97,3 +97,63 @@ func TestRootNavigationEscapeStillReturnsToRoot(t *testing.T) {
 		t.Fatal("Escape in ordinary root navigation should return to root")
 	}
 }
+
+func TestIndependentEntryBackspaceAndHostPopDismiss(t *testing.T) {
+	t.Run("Backspace", func(t *testing.T) {
+		h := newHarness(t, rowsView("root", nil), true)
+		h.p.Open(rowsView("entry", nil))
+		h.key(0, ui.KeyBackspace)
+		if h.p.Visible() {
+			t.Fatal("Backspace at an independent entry should dismiss")
+		}
+	})
+	t.Run("HostPop", func(t *testing.T) {
+		h := newHarness(t, rowsView("root", nil), true)
+		h.p.Open(rowsView("entry", nil))
+		h.p.Pop()
+		if h.p.Visible() {
+			t.Fatal("host Pop at an independent entry should dismiss")
+		}
+	})
+}
+
+func TestIndependentEntryNestedBackThenDismissAndRootUnwindsSafely(t *testing.T) {
+	h := newHarness(t, rowsView("root", nil), true)
+	entry := rowsView("entry", nil)
+	h.p.Open(entry)
+	nested := rowsView("nested", nil)
+	h.p.Push(nested)
+	h.p.Pop()
+	if h.p.Top() != entry || !h.p.Visible() {
+		t.Fatal("nested back should return to the independent entry")
+	}
+	h.p.Pop()
+	if h.p.Visible() {
+		t.Fatal("back from the entry should dismiss")
+	}
+
+	h.p.Open(entry)
+	h.p.Push(nested)
+	h.p.Root()
+	if !h.p.Visible() || h.p.Top() != entry {
+		t.Fatal("Root should unwind to the entry without exposing the root")
+	}
+}
+
+func TestOrdinaryPopShowsRootAndShowClearsEntryBoundary(t *testing.T) {
+	root := rowsView("root", nil)
+	h := newHarness(t, root, true)
+	h.p.Push(rowsView("child", nil))
+	h.p.Pop()
+	if h.p.Top() != root || !h.p.Visible() {
+		t.Fatal("ordinary child back should show root")
+	}
+	h.p.Open(rowsView("entry", nil))
+	h.p.Pop()
+	h.p.Show()
+	h.p.Push(rowsView("child", nil))
+	h.p.Pop()
+	if h.p.Top() != root || !h.p.Visible() {
+		t.Fatal("a normal Show should not inherit an entry boundary")
+	}
+}
