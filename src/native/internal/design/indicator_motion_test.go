@@ -47,3 +47,34 @@ func TestIndicatorEntryRespectsReducedMotion(t *testing.T) {
 		t.Fatal("reduced-motion indicator kept animating")
 	}
 }
+
+func TestIndicatorActivityLoopsWhileMountedAndStopsWhenIdle(t *testing.T) {
+	active := true
+	tester := ui.NewTester(func(c *ui.Context) {
+		if active {
+			IndicatorActivity(c, "recording", c.Preferences().ReduceMotion)
+		}
+	}, 40, 40)
+	tester.Frame()
+	if !tester.FramePending() {
+		t.Fatal("active phase did not request another frame")
+	}
+	tester.Advance(2100 * time.Millisecond)
+	if !tester.FramePending() {
+		t.Fatal("active phase stopped requesting frames after two seconds")
+	}
+	active = false
+	tester.Frame()
+	if tester.FramePending() {
+		t.Fatal("idle phase kept requesting frames after unmount")
+	}
+}
+
+func TestIndicatorActivityRespectsReducedMotion(t *testing.T) {
+	tester := ui.NewTester(func(c *ui.Context) { IndicatorActivity(c, "transcribing", c.Preferences().ReduceMotion) }, 40, 40)
+	tester.SetPreferences(ui.Preferences{ReduceMotion: true})
+	tester.Frame()
+	if tester.FramePending() {
+		t.Fatal("reduced-motion activity kept requesting frames")
+	}
+}

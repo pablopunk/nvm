@@ -29,3 +29,15 @@ func IndicatorEntrance(c *ui.Context, sequence uint64, body func()) {
 func IndicatorContentTransition() ui.ContentTransition {
 	return ui.ContentTransition{Animation: &ui.Animation{Duration: 120 * time.Millisecond, Ease: ui.EaseOut}}
 }
+
+// IndicatorActivity returns a looping phase only while a live activity indicator is built.
+// Rebuilding with another activity key starts the new phase at its own visual origin.
+func IndicatorActivity(c *ui.Context, activity string, reducedMotion bool) float32 {
+	if reducedMotion || activity == "" {
+		return 0
+	}
+	return ui.Row(c).Key(activity).Keyframes("ambient-activity", []ui.Keyframe{
+		{Value: 0},
+		{At: 900 * time.Millisecond, Value: 1, Ease: ui.EaseInOut},
+	}, ui.KeyframeOptions{Repeat: ui.RepeatForever, Alternate: true})
+}

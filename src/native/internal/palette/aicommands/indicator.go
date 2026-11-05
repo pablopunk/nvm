@@ -1,7 +1,6 @@
 package aicommands
 
 import (
-	"time"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
@@ -41,9 +40,12 @@ func Indicator(c *ui.Context, s commands.Status) {
 	design.Pane(c, func() {
 		ui.Row(c).Grow(1).Padding(10, 14).Gap(10).AlignItems(ui.Center).Children(func() {
 			if s.Activity == commands.ActivityRecording || s.Activity == commands.ActivityTranscribing {
-				// Distinct native glyph and accent treatment identify actual host-reported phases.
-				progress := ui.Row(c).Key(string(s.Activity)).Keyframes("activity", []ui.Keyframe{{Value: 0.76}, {At: 520 * time.Millisecond, Value: 1, Ease: ui.EaseInOut}})
-				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone).Opacity(progress)
+				activity := design.IndicatorActivity(c, string(s.Activity), c.Preferences().ReduceMotion)
+				if s.Activity == commands.ActivityRecording {
+					ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone).Scale(1+0.12*activity, 1+0.12*activity).Opacity(0.76 + 0.24*activity)
+				} else {
+					ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone).Rotate(360 * activity).Opacity(0.82 + 0.18*activity)
+				}
 			} else {
 				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone)
 			}
