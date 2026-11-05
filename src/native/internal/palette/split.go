@@ -15,17 +15,16 @@ const (
 )
 
 // splitBody draws the page's body, and when the page has a side, the side beside it in an equal half of the pane, with
-// a hairline between them (1.x's builder workspace is a 1fr 1fr grid). A page without a side fills the pane.
+// a hairline between them (1.x's builder workspace is a 1fr 1fr grid). The body keeps the same parent when the side
+// arrives or hides, preserving its controls and keyboard focus. A page without a side fills the pane.
 func (p *Palette) splitBody(c *ui.Context, v *View, body func()) {
 	side := v.sideNow()
-	if side == nil {
-		body()
-		return
-	}
 	ui.Row(c).Grow(1).FillHeight().MinHeight(0).Children(func() {
 		ui.Column(c).Grow(1).FillHeight().MinHeight(0).Clip().Children(body)
-		ui.Column(c).Width(1).FillHeight().Background(design.Tokens(c).EdgeSubtle).Children(func() {})
-		side.draw(c, p)
+		if side != nil {
+			ui.Column(c).Width(1).FillHeight().Background(design.Tokens(c).EdgeSubtle).Children(func() {})
+			side.draw(c, p)
+		}
 	})
 }
 
