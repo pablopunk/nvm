@@ -20,6 +20,8 @@ type WindowEngine interface {
 	Windows(ctx context.Context, query api.WindowQuery) ([]api.WindowInfo, error)
 	Focus(ctx context.Context, handle api.WindowHandle) (api.FocusResult, error)
 	ApplyTo(ctx context.Context, handle api.WindowHandle, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error)
+	Apply(ctx context.Context, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error)
+	FocusNeighbor(ctx context.Context, direction string, wrap bool) (api.FocusResult, error)
 }
 
 // AccountState reports whether the palette is signed in to a Nevermind account.

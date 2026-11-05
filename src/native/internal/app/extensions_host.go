@@ -135,7 +135,7 @@ func (p *App) extensionWindows() services.WindowEngine {
 	if p.windows == nil {
 		return nil
 	}
-	return windowmgmt.NewExtension(p.windows)
+	return windowmgmt.NewExtension(p.windows, p.extensionWindowInvocation)
 }
 
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.

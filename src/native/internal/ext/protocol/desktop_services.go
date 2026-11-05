@@ -35,6 +35,8 @@ const (
 	OpWindows         = "windows"
 	OpFocus           = "focus"
 	OpApplyTo         = "apply-to"
+	OpApply           = "apply"
+	OpFocusNeighbor   = "focus-neighbor"
 	OpRemove          = "remove"
 	OpHasCapability   = "has-capability"
 	OpOS              = "os"

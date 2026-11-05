@@ -1,8 +1,6 @@
 package child
 
 import (
-	"time"
-
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
@@ -56,16 +54,4 @@ func (remoteSystemClipboard) Read([]string) (api.ClipboardContent, error) {
 
 func (remoteSystemClipboard) Write(api.ClipboardContent) error {
 	return unsupported("ctx.desktop.clipboard.write")
-}
-
-func (remoteWindowManagement) Apply(api.WindowLayout, api.WindowManagementOptions) (api.ApplyResult, error) {
-	return api.ApplyResult{}, unsupported("ctx.desktop.windowManagement.apply")
-}
-
-func (remoteWindowManagement) WaitForWindow(api.WindowQuery, time.Duration) (api.WindowInfo, bool, error) {
-	return api.WindowInfo{}, false, unsupported("ctx.desktop.windowManagement.wait")
-}
-
-func (remoteWindowManagement) FocusNeighbor(string, bool) (api.FocusResult, error) {
-	return api.FocusResult{}, unsupported("ctx.desktop.windowManagement.focusNeighbor")
 }

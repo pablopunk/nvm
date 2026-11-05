@@ -2,21 +2,22 @@ package windowmgmt
 
 import (
 	"context"
-	"errors"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt/geometry"
 )
 
 // Extension is the window engine as the extension services see it: the same operations in the api's wire types.
-// Runtime failures come back as results with OK false, the way the TypeScript API reports them.
+// Runtime failures come back as results with OK false, the way the TypeScript API reports them. Invocations names
+// the app a call acts on: the palette's target while the palette is open, the app in front for a shortcut.
 type Extension struct {
-	engine *Service
+	engine      *Service
+	invocations func(context.Context) Invocation
 }
 
 // NewExtension returns the extension view of engine.
-func NewExtension(engine *Service) Extension {
-	return Extension{engine: engine}
+func NewExtension(engine *Service, invocations func(context.Context) Invocation) Extension {
+	return Extension{engine: engine, invocations: invocations}
 }
 
 // Displays lists the connected displays with their frames and work areas.
@@ -53,74 +54,36 @@ func (x Extension) Windows(ctx context.Context, query api.WindowQuery) ([]api.Wi
 
 // Focus raises the listed window. A stale or refused handle is a result with OK false.
 func (x Extension) Focus(ctx context.Context, handle api.WindowHandle) (api.FocusResult, error) {
-	err := x.engine.FocusWindow(ctx, string(handle))
-	if err == nil {
-		return api.FocusResult{OK: true}, nil
-	}
-	failure, ok := asFailure(err)
-	if !ok {
-		return api.FocusResult{}, err
-	}
-	return api.FocusResult{OK: false, Reason: string(failure.Reason), Message: failure.Error()}, nil
+	return focusResultOf(x.engine.FocusWindow(ctx, string(handle)))
 }
 
-// ApplyTo places the listed window. Only fraction layouts are served to extensions for now; the window commands of
-// the palette cover the rest.
+// FocusNeighbor raises the nearest window in a direction from the invocation's target window.
+func (x Extension) FocusNeighbor(ctx context.Context, direction string, wrap bool) (api.FocusResult, error) {
+	neighborDirection, ok := neighborDirectionOf(direction)
+	if !ok {
+		return api.FocusResult{OK: false, Reason: string(ReasonInvalidSpec), Message: geometry.MessageInvalidSpec}, nil
+	}
+	return focusResultOf(x.engine.FocusNeighbor(ctx, neighborDirection, geometry.NeighborOptions{Wrap: wrap}, x.invocations(ctx)))
+}
+
+// Apply lays out the focused window of the invocation's target app.
+func (x Extension) Apply(ctx context.Context, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error) {
+	geometryLayout, geometryOptions, failure := extensionRequest(layout, options)
+	if failure != nil {
+		return failedApply(failure), nil
+	}
+	result, err := x.engine.Apply(ctx, geometryLayout, geometryOptions, x.invocations(ctx))
+	return applyResultOf(result, err)
+}
+
+// ApplyTo places the listed window. The layout and options are the ones Apply takes.
 func (x Extension) ApplyTo(ctx context.Context, handle api.WindowHandle, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error) {
-	spec, ok := fractionLayoutOf(layout)
-	if !ok {
-		return api.ApplyResult{OK: false, Reason: string(ReasonUnsupported), Message: "this layout is not available to extensions yet"}, nil
+	geometryLayout, geometryOptions, failure := extensionRequest(layout, options)
+	if failure != nil {
+		return failedApply(failure), nil
 	}
-	result, err := x.engine.ApplyToWindow(ctx, string(handle), spec, geometryOptionsOf(options))
-	if err != nil {
-		failure, ok := asFailure(err)
-		if !ok {
-			return api.ApplyResult{}, err
-		}
-		return api.ApplyResult{OK: false, Reason: string(failure.Reason), Message: failure.Error()}, nil
-	}
-	return api.ApplyResult{
-		OK: result.Outcome == geometry.Applied, Outcome: outcomeName(result.Outcome), Changed: result.Changed,
-		Frame: apiRect(result.Frame), Message: result.Message,
-	}, nil
-}
-
-func asFailure(err error) (*Failure, bool) {
-	var failure *Failure
-	return failure, errors.As(err, &failure)
-}
-
-func fractionLayoutOf(layout api.WindowLayout) (geometry.Layout, bool) {
-	if layout.Kind != api.LayoutFraction || layout.Fraction == nil {
-		return geometry.Layout{}, false
-	}
-	fraction := layout.Fraction
-	return geometry.Layout{Kind: geometry.KindFraction, X: fraction.X, Y: fraction.Y, Width: fraction.Width, Height: fraction.Height}, true
-}
-
-// geometryOptionsOf starts from the palette defaults and applies the options an extension may set.
-func geometryOptionsOf(options api.WindowManagementOptions) geometry.Options {
-	out := geometry.DefaultOptions()
-	if options.OuterGap != nil {
-		out.OuterGap = geometry.EdgeGaps{Top: float64(options.OuterGap.Top), Right: float64(options.OuterGap.Right), Bottom: float64(options.OuterGap.Bottom), Left: float64(options.OuterGap.Left)}
-	}
-	if options.InnerGap != nil {
-		out.InnerGap = float64(*options.InnerGap)
-	}
-	if options.ApplyGapToMaximize != nil {
-		out.ApplyGapToMaximize = *options.ApplyGapToMaximize
-	}
-	return out
-}
-
-func outcomeName(outcome geometry.Outcome) string {
-	switch outcome {
-	case geometry.Applied:
-		return "applied"
-	case geometry.Partial:
-		return "partial"
-	}
-	return "failed"
+	result, err := x.engine.ApplyToWindow(ctx, string(handle), geometryLayout, geometryOptions)
+	return applyResultOf(result, err)
 }
 
 func apiRect(rect geometry.Rect) api.Rect {

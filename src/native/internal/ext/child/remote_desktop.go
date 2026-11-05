@@ -101,34 +101,3 @@ func (a remoteApps) Icon(path string) (string, bool, error) {
 	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpIcon, protocol.PathArgs{Path: path}, &icon)
 	return icon.DataURL, icon.Found, err
 }
-
-// remoteWindowManagement lists displays and windows and places or focuses listed windows. Layouts other than
-// fractions and the rest of the engine's commands are not served yet.
-type remoteWindowManagement struct {
-	api.WindowManagement
-	link *hostLink
-}
-
-func (w remoteWindowManagement) Displays() ([]api.DisplayInfo, error) {
-	var displays []api.DisplayInfo
-	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpDisplays, nil, &displays)
-	return displays, err
-}
-
-func (w remoteWindowManagement) Windows(query api.WindowQuery) ([]api.WindowInfo, error) {
-	var windows []api.WindowInfo
-	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpWindows, query, &windows)
-	return windows, err
-}
-
-func (w remoteWindowManagement) Focus(handle api.WindowHandle) (api.FocusResult, error) {
-	var result api.FocusResult
-	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpFocus, protocol.FocusArgs{Handle: handle}, &result)
-	return result, err
-}
-
-func (w remoteWindowManagement) ApplyTo(handle api.WindowHandle, layout api.WindowLayout, options api.WindowManagementOptions) (api.ApplyResult, error) {
-	var result api.ApplyResult
-	err := w.link.Call(protocol.ServiceDesktopWindows, protocol.OpApplyTo, protocol.ApplyToArgs{Handle: handle, Layout: layout, Options: options}, &result)
-	return result, err
-}
