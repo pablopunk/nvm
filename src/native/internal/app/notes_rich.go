@@ -13,6 +13,15 @@ import (
 type noteRichText struct {
 	doc    *richtext.Document
 	source string
+	// focusNext is set when the view showing this editor was just pushed, so its next frame gives the editor the keyboard.
+	focusNext bool
+}
+
+// takeFocusRequest reports whether the editor asked for the keyboard since the last frame, and clears the request.
+func (r *noteRichText) takeFocusRequest() bool {
+	requested := r.focusNext
+	r.focusNext = false
+	return requested
 }
 
 // sync returns the document showing text, made when there is none and remade when the text changed since it was
@@ -32,6 +41,9 @@ func (r *noteRichText) sync(text string) *richtext.Document {
 func editNoteRich(c *ui.Context, edit *noteEdit, rich *noteRichText, placeholder string) {
 	doc := rich.sync(edit.text)
 	editor := design.MarkdownEditor(c, doc, placeholder).AutoFocus()
+	if rich.takeFocusRequest() {
+		editor.Focus()
+	}
 	if editor.Changed() {
 		markdown := doc.Text().Markdown()
 		rich.source = markdown

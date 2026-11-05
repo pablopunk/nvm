@@ -82,6 +82,7 @@ func (p *App) noteEditorView(id string) (*palette.View, *noteEdit) {
 		return nil, nil
 	}
 	edit.editors++
+	edit.paletteRich.focusNext = true
 	view := &palette.View{
 		Title: "Note", HideInput: true, Hint: "esc Back   ⌃N New   ⌃O All notes",
 		TitleFn: func() string { return notes.Title(edit.text) },
