@@ -14,12 +14,21 @@ func (r *shortcutRecorder) stage(c *ui.Context) {
 		stageCaption(c, "Save shortcut for “"+r.entry.Title+"”")
 		return
 	}
-	if held := shortcuts.ModifierNames(recordedModifiers(c.Modifiers())); len(held) > 0 {
+	if held := r.heldModifierNames(c); len(held) > 0 {
 		keyRow(c, heldKeyLabels(r.labels, held))
 		stageCaption(c, "Press a key with them")
 		return
 	}
 	shortcutPrompt(c)
+}
+
+// heldModifierNames are the modifiers the stage spells out. Only the Hyper recorder does, as 1.x does: any other recorder
+// records a key press, so a modifier held before it opened keeps its prompt.
+func (r *shortcutRecorder) heldModifierNames(c *ui.Context) []string {
+	if !r.hyper {
+		return nil
+	}
+	return shortcuts.ModifierNames(recordedModifiers(c.Modifiers()))
 }
 
 // keyRow lays the large keys of a stage out in one centred row.
