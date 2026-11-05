@@ -59,6 +59,8 @@ type View struct {
 	// HintFn, when set, gives the right footer text instead of Hint; it is read on every frame.
 	HintFn  func() string
 	OnLeave func()
+	// OnReveal runs when a page above this one is popped and this page is the top again, after it has shown its rows.
+	OnReveal func()
 	// OnHide runs on every page of the stack when the palette hides. The pages stay on the stack until the next Show,
 	// so a question waiting for an answer can end at once.
 	OnHide func()

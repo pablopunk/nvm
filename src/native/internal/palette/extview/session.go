@@ -216,6 +216,9 @@ func (s *Session) listPage() *palette.View {
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
+	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
+		page.OnReveal = s.refreshNow
+	}
 	page.Accessory = s.searchAccessory()
 	page.Actions = s.pageActions
 	page.OnKey = s.tabCyclesAccessory(page.Accessory)
