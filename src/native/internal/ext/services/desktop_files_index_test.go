@@ -189,8 +189,8 @@ func TestDisplayPathShowsTheHomeFolderAsTilde(t *testing.T) {
 	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopFiles, protocol.OpDisplayPath, protocol.PathArgs{Path: filepath.Join(home, "Documents", "a.txt")})), &display); err != nil {
 		t.Fatal(err)
 	}
-	if display != "~/Documents/a.txt" {
-		t.Fatalf("display = %q, want ~/Documents/a.txt", display)
+	if want := filepath.Join("~", "Documents", "a.txt"); display != want {
+		t.Fatalf("display = %q, want %s", display, want)
 	}
 }
 

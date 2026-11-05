@@ -6,8 +6,20 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// notesPath is the indexed app every probe names; the host answers for it only when the index lists it.
-const notesPath = "/Applications/Notes.app"
+// notesPath is the path of the indexed Notes app every probe names. The index supplies it, so it is absolute on every
+// operating system, and the host answers for it only when the index lists it.
+func notesPath(ctx api.Context) (string, error) {
+	apps, err := ctx.Desktop().Apps().List()
+	if err != nil {
+		return "", err
+	}
+	for _, app := range apps {
+		if app.Name == "Notes" {
+			return app.Path, nil
+		}
+	}
+	return "", fmt.Errorf("the index does not list Notes")
+}
 
 // checks maps each probe row to the lifecycle call it makes. Each row's title says what the host answered.
 var checks = map[string]func(api.Context) string{
@@ -27,7 +39,11 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 }
 
 func runningCheck(ctx api.Context) string {
-	running, err := ctx.Desktop().Apps().Running([]string{notesPath})
+	path, err := notesPath(ctx)
+	if err != nil {
+		return "running failed: " + err.Error()
+	}
+	running, err := ctx.Desktop().Apps().Running([]string{path})
 	if err != nil {
 		return "running failed: " + err.Error()
 	}
@@ -35,7 +51,11 @@ func runningCheck(ctx api.Context) string {
 }
 
 func quitCheck(ctx api.Context) string {
-	result, err := ctx.Desktop().Apps().Quit(notesPath)
+	path, err := notesPath(ctx)
+	if err != nil {
+		return "quit failed: " + err.Error()
+	}
+	result, err := ctx.Desktop().Apps().Quit(path)
 	if err != nil {
 		return "quit failed: " + err.Error()
 	}
@@ -43,7 +63,11 @@ func quitCheck(ctx api.Context) string {
 }
 
 func hideCheck(ctx api.Context) string {
-	if err := ctx.Desktop().Apps().Hide(notesPath); err != nil {
+	path, err := notesPath(ctx)
+	if err != nil {
+		return "hide failed: " + err.Error()
+	}
+	if err := ctx.Desktop().Apps().Hide(path); err != nil {
 		return "hide failed: " + err.Error()
 	}
 	return "hide sent=true"

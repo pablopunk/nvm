@@ -1,6 +1,7 @@
 package app
 
 import (
+	"runtime"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -36,6 +37,9 @@ func stageBounds(t *testing.T, tt *ui.Tester, labels ...string) (left, top, righ
 // TestRecordedKeysAreLargeAndCentred records Super+Alt+V and checks the keys are large, centred on the page, and that
 // the caption sits under them.
 func TestRecordedKeysAreLargeAndCentred(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("the key and caption sizes come from the platform's fonts; the layout is checked where the goldens render")
+	}
 	p := goldenPalette(t)
 	goldenOpen(p, p.shortcutRecorderView(clipboardEntry))
 	tt := ui.NewTester(p.View, width, height)

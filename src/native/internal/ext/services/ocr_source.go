@@ -30,7 +30,7 @@ func ocrPathOf(source, home string) string {
 		return fileURLPath(parsed)
 	}
 	if home != "" && (source == "~" || strings.HasPrefix(source, "~/")) {
-		return home + source[1:]
+		return filepath.Join(home, source[1:])
 	}
 	return source
 }
