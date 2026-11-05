@@ -38,14 +38,10 @@ func (c *rootRowCache) reset() {
 	c.epoch++
 }
 
-// stream hands the root rows of the extensions to emit as each one answers, so a slow extension never holds back the
-// others. A refresh that asks only the pending extensions emits the cached rows of the others at once. The pass is
-// complete only when its context was not cancelled; then the extensions it did not hear from lose their rows.
+// stream revalidates root rows independently after the caller paints the complete cached snapshot. The pass is complete
+// only when its context was not cancelled; then the extensions it did not hear from lose their rows.
 func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func(manager.SearchResult)) {
 	scope, epoch := c.takeScope()
-	for _, result := range c.cachedOutside(nil) {
-		emit(result)
-	}
 	answered := map[string]bool{}
 	receive := func(result manager.SearchResult) {
 		answered[result.ExtensionID] = true

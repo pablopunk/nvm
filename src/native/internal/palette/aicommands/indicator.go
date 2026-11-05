@@ -35,8 +35,8 @@ func Indicator(c *ui.Context, s commands.Status) {
 		ui.Row(c).Grow(1).Padding(10, 14).Gap(10).AlignItems(ui.Center).Children(func() {
 			ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone)
 			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
-				ui.Text(c, s.Title).FontSize(13).FontWeight(600).TextColor(k.Strong).SingleLine()
-				subtitle := ui.Text(c, s.Subtitle).FontSize(11).TextColor(subtitleColor)
+				ui.Text(c, s.Title).FontSize(13).FontWeight(600).TextColor(k.Strong).SingleLine().ContentTransition(design.IndicatorContentTransition())
+				subtitle := ui.Text(c, s.Subtitle).FontSize(11).TextColor(subtitleColor).ContentTransition(design.IndicatorContentTransition())
 				if s.Tone != commands.ToneError {
 					subtitle.SingleLine()
 				}

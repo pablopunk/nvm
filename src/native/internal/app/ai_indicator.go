@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette/aicommands"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -22,6 +23,7 @@ type aiIndicator struct {
 	window *mygo.Window
 	status commands.Status
 	height int
+	entry  uint64
 }
 
 // aiPanelFor returns the app's AI indicator, created on first use.
@@ -35,7 +37,13 @@ func (p *App) aiPanelFor() *aiIndicator {
 // show sets the panel to status, sizes it to fit and shows it without taking focus.
 func (i *aiIndicator) show(status commands.Status) {
 	w := i.windowFor()
-	w.Update(func() { i.status = status })
+	entering := !w.IsVisible()
+	w.Update(func() {
+		if entering {
+			i.entry++
+		}
+		i.status = status
+	})
 	if height := aicommands.Height(status); height != i.height {
 		i.height = height
 		x, y := aiPanelOrigin(i.app.cursorWorkArea(), height)
@@ -78,7 +86,9 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 		DisableMinimize:   true,
 		DisableMaximize:   true,
 		DisableFullScreen: true,
-		Content:           ui.View(func(c *ui.Context) { aicommands.Indicator(c, i.status) }),
+		Content: ui.View(func(c *ui.Context) {
+			design.IndicatorEntrance(c, i.entry, func() { aicommands.Indicator(c, i.status) })
+		}),
 	})
 	applyIndicatorAppearance(i.window)
 	i.window.OnClosed(func() { i.window = nil })

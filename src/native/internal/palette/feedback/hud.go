@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/design"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -60,6 +61,7 @@ type HUD struct {
 	tone           Tone
 	generation     int
 	height         int
+	entry          uint64
 }
 
 // New returns a HUD whose panel comes from panel each time it shows, so the composition root can create it on
@@ -75,7 +77,13 @@ func (h *HUD) Show(title, message string, tone Tone) {
 	w := h.panel()
 	h.generation++
 	generation := h.generation
-	w.Update(func() { h.draw(title, message, tone) })
+	entering := !w.IsVisible()
+	w.Update(func() {
+		if entering {
+			h.entry++
+		}
+		h.draw(title, message, tone)
+	})
 	if height := Height(message, tone); height != h.height {
 		h.height = height
 		w.SetSize(Width, height)
@@ -105,5 +113,5 @@ func (h *HUD) draw(title, message string, tone Tone) {
 
 // View draws the message the HUD holds. The panel's content is this view.
 func (h *HUD) View(c *ui.Context) {
-	Indicator(c, h.title, h.message, h.tone)
+	design.IndicatorEntrance(c, h.entry, func() { Indicator(c, h.title, h.message, h.tone) })
 }

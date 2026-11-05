@@ -70,6 +70,6 @@ func Indicator(c *ui.Context, title, message string, tone Tone) {
 
 // indicatorText draws the title and the message of the panel.
 func indicatorText(c *ui.Context, k *design.TokenSet, title, message string) {
-	ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(k.Muted).SingleLine()
-	ui.Text(c, message).FontSize(13).TextColor(k.Strong)
+	ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(k.Muted).SingleLine().ContentTransition(design.IndicatorContentTransition())
+	ui.Text(c, message).FontSize(13).TextColor(k.Strong).ContentTransition(design.IndicatorContentTransition())
 }
