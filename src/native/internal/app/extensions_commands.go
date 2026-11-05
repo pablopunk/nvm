@@ -25,7 +25,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 	}
 	var out []search.Item
 	for _, command := range result.Commands {
-		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
+		actionID := commandShortcutKey(result.ExtensionID, command)
 		score, listed := commandRowScore(m, result.ExtensionID, command, q, aliases[actionID])
 		if !listed {
 			continue

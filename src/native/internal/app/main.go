@@ -91,11 +91,13 @@ type App struct {
 	aliasList      *shortcuts.Aliases
 	github         *githubProbe
 	shortcutTitles shortcutTitles
-	legacySnips    []snippetsbuiltin.Snippet
-	notes          *notes.Store
-	files          *fileService
-	chats          *chat.Service
-	builder        *builder.Workshop
+	// globalShortcuts is the extension commands the shortcut manager binds and runs by key. The UI thread owns it.
+	globalShortcuts globalShortcutTable
+	legacySnips     []snippetsbuiltin.Snippet
+	notes           *notes.Store
+	files           *fileService
+	chats           *chat.Service
+	builder         *builder.Workshop
 	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
 	previews map[string]*extensionPreview
 	learn    *usage.Learner

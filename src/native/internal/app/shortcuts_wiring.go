@@ -23,6 +23,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
 		Resolve:   p.resolveShortcutTitle,
+		Declared:  p.declaredGlobalShortcuts,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,

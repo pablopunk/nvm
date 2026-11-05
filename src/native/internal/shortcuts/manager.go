@@ -128,6 +128,11 @@ func (m *Manager) Accelerators() map[string]string {
 	return out
 }
 
+// Refresh binds the shortcuts again, after the declared shortcuts changed.
+func (m *Manager) Refresh() {
+	m.applyActions()
+}
+
 // SetAction saves accelerator as actionID's shortcut and binds it.
 func (m *Manager) SetAction(actionID, accelerator string) error {
 	next, err := m.load().WithAction(actionID, accelerator, m.Reserved, m.titleOf)

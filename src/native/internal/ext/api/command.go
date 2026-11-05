@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // Command is a durable, searchable, alias-able and shortcut-able action. Its run handler is the
@@ -12,8 +13,11 @@ import (
 // by CommandProvider; an Item is produced per query or per view and never registered. Putting a
 // global shortcut on an Item is therefore not expressible, which prevents duplicate search rows.
 type Command struct {
-	// ID is the local stable id. The host's global action id defaults to "<extension>:<ID>".
-	ID       string   `json:"id"`
+	// ID is the local stable id. The host's global action id defaults to "extension:<extension>:<ID>".
+	ID string `json:"id"`
+	// ActionID is the key shortcuts and aliases bind to, instead of the default "extension:<extension>:<ID>". It must end
+	// with ":" and the ID. A built-in that keeps the key 1.x stored its shortcut under sets it, as "extension-action:...".
+	ActionID string   `json:"actionId,omitempty"`
 	Title    string   `json:"title"`
 	Subtitle string   `json:"subtitle,omitempty"`
 	Aliases  []string `json:"aliases,omitempty"`
@@ -21,7 +25,8 @@ type Command struct {
 	Keywords []string `json:"keywords,omitempty"`
 	Icon     string   `json:"icon,omitempty"`
 	Score    float64  `json:"score,omitempty"`
-	// GlobalShortcut opens or runs this command from anywhere, e.g. "CommandOrControl+Alt+K".
+	// GlobalShortcut runs this command from anywhere, e.g. "CommandOrControl+Alt+K". A command in mode noView or
+	// background runs without opening the palette and never takes focus; a view command opens the palette.
 	GlobalShortcut  string         `json:"globalShortcut,omitempty"`
 	Appearance      *Appearance    `json:"appearance,omitempty"`
 	Mode            BackgroundMode `json:"mode,omitempty"`
@@ -43,6 +48,9 @@ type Command struct {
 func (c Command) Validate() error {
 	if c.ID == "" || c.Title == "" {
 		return errors.New("command needs an id and a title")
+	}
+	if c.ActionID != "" && !strings.HasSuffix(c.ActionID, ":"+c.ID) {
+		return fmt.Errorf("command %q: actionId %q must end with its id", c.ID, c.ActionID)
 	}
 	if c.Mode != "" && !oneOf(c.Mode, ModeView, ModeNoView, ModeBackground) {
 		return fmt.Errorf("command %q has unknown mode %q", c.ID, c.Mode)

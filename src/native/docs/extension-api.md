@@ -1022,8 +1022,9 @@ Decisions behind the table:
 - **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents. `waitForWindow` runs in the child over the listing, so it needs no host call of its own.
 - **Notifications have a title and a body, and no click action.** The Electron extension API had none, so there is nothing to match. `notify` needs the `system` declaration, the host's `notifications.show` capability and a rate limit of 10 a minute. A title of 1 to 120 characters and a body of up to 500 are accepted. A refusal by the user or the OS is `permission`; a system without notifications answers unavailable.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
+- **Global shortcuts on commands (`Command.GlobalShortcut`).** Declared shortcuts bind with the ones the user sets in the Keyboard Shortcuts list. A command in mode `noView` or `background` runs without opening the palette and never takes focus; its failure or toast is a notification. A `view` command opens the palette. `Command.ActionID` names the key a shortcut binds to, so a built-in keeps the 1.x key. The commands are listed again whenever the extensions change.
 
-Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ### 21.1 Selection, replacement and undo as built (WP2.5)
 

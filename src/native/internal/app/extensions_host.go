@@ -156,6 +156,7 @@ func (p *App) extensionHistory() *clipboard.History {
 // the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
 func (p *App) extensionsStateChanged() {
 	p.rootRows.reset()
+	p.refreshGlobalShortcuts()
 	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
 }
