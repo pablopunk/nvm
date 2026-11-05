@@ -79,7 +79,7 @@ func (ed *editorState) body(c *ui.Context, _ search.Host) {
 		if ed.markdown {
 			ui.Column(c).Grow(1).Margin(12).Padding(8, 4).Children(func() { ed.markdownBody(c) })
 		} else {
-			ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus()
+			ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus().Value(ed.text)
 		}
 		ed.noticeTextChange()
 		ui.Text(c, ed.statusLine()).FontSize(11).TextColor(t.Tertiary).Margin(12)
