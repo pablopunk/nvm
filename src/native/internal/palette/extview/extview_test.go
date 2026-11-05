@@ -101,8 +101,8 @@ func TestListRowsCarryTitleAccessoryDetailAndPrimaryFirst(t *testing.T) {
 	if got := []string{row.Actions[0].Title, row.Actions[1].Title}; got[0] != "Copy" || got[1] != "Open" {
 		t.Fatalf("actions = %v, want the primary Copy once, then Open", got)
 	}
-	if len(row.Actions) != 2 {
-		t.Fatalf("repeated primary listed twice: %d actions", len(row.Actions))
+	if len(row.Actions) != 3 || row.Actions[2].Title != api.PreviewTitle {
+		t.Fatalf("the primary is listed twice or Preview is missing: %d actions", len(row.Actions))
 	}
 }
 

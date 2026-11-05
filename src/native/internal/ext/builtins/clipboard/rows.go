@@ -88,7 +88,7 @@ func copyActionOf(entry api.ClipboardEntry) *api.Action {
 // platform can paste, then the removals.
 func rowActions(entry api.ClipboardEntry, canPaste bool) []api.Action {
 	preview := api.Run(refPreview, "Preview", map[string]string{argID: entry.ID})
-	preview.Shortcut = shortcutPreview
+	preview.Shortcut, preview.Preview = shortcutPreview, true
 	actions := []api.Action{preview}
 	if canPaste && isText(entry.Type) {
 		paste := api.PasteText("Paste Text", entry.Text)

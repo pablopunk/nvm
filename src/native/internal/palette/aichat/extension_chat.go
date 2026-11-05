@@ -227,12 +227,14 @@ func (x *ExtensionChat) tierPicker(c *ui.Context) {
 	}
 }
 
-// actions are the view's action rows, then the preview toggle and focus rows when the view has a side page.
+// actions are the view's action rows, the reasoning toggle before the tier row, then the preview toggle and focus rows
+// when the view has a side page.
 func (x *ExtensionChat) actions() []search.Action {
 	var out []search.Action
 	if x.spec.Actions != nil {
 		out = x.spec.Actions()
 	}
+	out = withThinkingRow(out, x.thinkingAction())
 	if x.spec.Side == nil || x.spec.Side() == nil {
 		return out
 	}

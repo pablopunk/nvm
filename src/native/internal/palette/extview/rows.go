@@ -39,6 +39,7 @@ func rowIcon(item api.Item) string {
 // row is the palette row of one item: its tile, title, subtitle, the first accessory, its detail pane and its actions.
 // A disabled item keeps its text but has no actions.
 func (s *Session) row(item api.Item) search.Item {
+	item = WithPreviewActions(item)
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
 		Icon: rowIcon(item), Tone: rowTone(item), TintTitle: item.TintTitle,

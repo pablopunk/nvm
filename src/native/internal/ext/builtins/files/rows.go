@@ -8,9 +8,8 @@ import (
 // Shortcuts of a file row, as 1.x's platform modifier spells them: Preview is the row's own key, and Reveal runs on Enter
 // with the modifier.
 const (
-	previewShortcut = "CommandOrControl+Y"
-	revealShortcut  = "CommandOrControl+Enter"
-	quickLookCap    = "quick-look"
+	revealShortcut = "CommandOrControl+Enter"
+	quickLookCap   = "quick-look"
 )
 
 // recentFiles lists the newest files of the index, of one kind when kind is set.
@@ -55,7 +54,7 @@ func fileItem(ctx api.Context, file api.FileRef, score float64) api.Item {
 func fileActions(ctx api.Context, file api.FileRef) []api.Action {
 	labels := ctx.System().Labels()
 	preview := api.PreviewFile(previewTitle(file), file)
-	preview.Shortcut = previewShortcut
+	preview.Shortcut = api.PreviewShortcut
 	actions := []api.Action{preview}
 	if ctx.System().HasCapability(quickLookCap) {
 		actions = append(actions, api.QuickLook(labels.PreviewFile, file.Path))

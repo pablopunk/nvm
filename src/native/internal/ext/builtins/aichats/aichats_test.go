@@ -311,11 +311,31 @@ func TestTranscriptActionsCarryTheirShortcuts(t *testing.T) {
 	detail := chat("4", "conversation", "Keys", user("q"), assistant("a"))
 	detail.Tier = api.ModelFast
 	actions := chatActions(detail)
-	for title, want := range map[string]string{"Ask Again": "CommandOrControl+R", "Copy Reply": "CommandOrControl+Alt+C", "Switch to Smart": "CommandOrControl+Shift+M", "Delete Chat": "CommandOrControl+D"} {
+	for title, want := range map[string]string{"Ask Again": "CommandOrControl+R", "Copy Reply": "CommandOrControl+Alt+C", "Switch to Smart": "CommandOrControl+Shift+M"} {
 		action, ok := actionNamed(actions, title)
 		if !ok || action.Shortcut != want {
 			t.Fatalf("%s shortcut = %q, want %q", title, action.Shortcut, want)
 		}
+	}
+}
+
+// TestDeleteChatHasNoKeyWhileRefuseHoldsCommandD keeps ⌘D on Refuse alone: Delete Chat is unbound, as 1.x's Remove Chat is,
+// and Refuse binds ⌘D only while a tool call waits.
+func TestDeleteChatHasNoKeyWhileRefuseHoldsCommandD(t *testing.T) {
+	idle := chat("6", "conversation", "Idle", user("q"), assistant("a"))
+	idle.Tier = api.ModelFast
+	if del, _ := actionNamed(chatActions(idle), "Delete Chat"); del.Shortcut != "" {
+		t.Fatalf("Delete Chat shortcut = %q, want none", del.Shortcut)
+	}
+	waiting := api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: "read_file", Status: "waiting"}}
+	busy := chat("7", "conversation", "Waiting", user("q"), waiting)
+	busy.Tier = api.ModelFast
+	actions := chatActions(busy)
+	if del, _ := actionNamed(actions, "Delete Chat"); del.Shortcut != "" {
+		t.Fatalf("Delete Chat while a tool call waits shortcut = %q, want none", del.Shortcut)
+	}
+	if refuse, _ := actionNamed(actions, "Refuse"); refuse.Shortcut != "CommandOrControl+D" {
+		t.Fatalf("Refuse shortcut = %q, want CommandOrControl+D", refuse.Shortcut)
 	}
 }
 

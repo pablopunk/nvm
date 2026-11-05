@@ -192,7 +192,7 @@ func (s *Session) gridPage() *palette.View {
 		page.OnKey = s.categoryKeys
 	}
 	if s.view.Grid != nil && s.view.Grid.SelectionFooter {
-		page.Footer = s.selectionFooter
+		page.Footer = selectionFooter
 	}
 	page.Limit = s.view.MaxVisibleItems
 	return page

@@ -28,31 +28,12 @@ func drawCompactCell(c *ui.Context, it search.Item) {
 	design.Tile(c, design.TileData{Icon: it.Icon, Tone: it.Tone, Title: it.Title})
 }
 
-// selectionFooter is the footer of a grid with SelectionFooter: the chosen tile's title and subtitle, then the view's
-// subtitle, or the view's subtitle alone when no tile is chosen.
-func (s *Session) selectionFooter(chosen *search.Item) string {
-	category := s.categoryTitle()
+// selectionFooter is the left footer of a grid with SelectionFooter: the chosen tile's title and subtitle, or nothing.
+func selectionFooter(chosen *search.Item) string {
 	if chosen == nil {
-		return category
+		return ""
 	}
-	text := chosen.Title + "  " + chosen.Subtitle
-	if category != "" {
-		text += "  ·  " + category
-	}
-	return text
-}
-
-// categoryTitle is the title of the search accessory's option that is shown, or the view's subtitle without one.
-func (s *Session) categoryTitle() string {
-	if s.accessory == nil || s.view.SearchAccessory == nil {
-		return s.view.Subtitle
-	}
-	for _, option := range s.view.SearchAccessory.Options {
-		if option.Value == s.accessory.Value {
-			return option.Title
-		}
-	}
-	return s.view.Subtitle
+	return chosen.Title + "  " + chosen.Subtitle
 }
 
 // gridCellHeight is one tile's height: the tile, a title line and the cell padding.
