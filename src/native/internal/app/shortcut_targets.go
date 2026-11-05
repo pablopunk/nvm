@@ -1,7 +1,6 @@
 package app
 
 import (
-	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	"strings"
 	"sync"
 
@@ -9,7 +8,9 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
+	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
+	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
@@ -82,10 +83,25 @@ func splitExtensionCommandShortcutID(actionID string) (extID, commandID string, 
 	}
 	for _, prefix := range []string{extensionShortcutPrefix, extensionActionShortcutPrefix} {
 		if rest, found := strings.CutPrefix(actionID, prefix); found {
-			return strings.Cut(rest, ":")
+			extID, commandID, ok := strings.Cut(rest, ":")
+			return builtInIDOfShortcutName(extID), commandID, ok
 		}
 	}
 	return "", "", false
+}
+
+// shortcutNamesOfBuiltIns maps the short extension names 1.x writes into shortcut keys to the built-ins' ids.
+var shortcutNamesOfBuiltIns = map[string]string{
+	"window-management": windowmanagementbuiltin.ID,
+}
+
+// builtInIDOfShortcutName is the id a shortcut key's extension name stands for: a built-in's id under its 1.x name, or the
+// name itself.
+func builtInIDOfShortcutName(name string) string {
+	if id, ok := shortcutNamesOfBuiltIns[name]; ok {
+		return id
+	}
+	return name
 }
 
 // splitMovedCommandShortcutID names the built-in command a moved shortcut key stands for.
