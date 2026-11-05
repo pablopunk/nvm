@@ -54,11 +54,13 @@ type Ports struct {
 	Updates services.UpdateSurface
 	// Diagnostics reads the support records and files problem reports. Nil keeps none.
 	Diagnostics services.DiagnosticsSurface
-	Shortcuts   services.ShortcutTable
-	Account     services.AccountState
-	OCR         *ocr.Service
-	History     func() *clipboard.History
-	Confirm     services.ConfirmFunc
+	// Jobs lists the background jobs and changes them for the jobs service. Nil lists none.
+	Jobs      services.JobsSurface
+	Shortcuts services.ShortcutTable
+	Account   services.AccountState
+	OCR       *ocr.Service
+	History   func() *clipboard.History
+	Confirm   services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
@@ -180,6 +182,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Permissions:  ports.Permissions,
 			Updates:      ports.Updates,
 			Diagnostics:  ports.Diagnostics,
+			Jobs:         ports.Jobs,
 			Shortcuts:    ports.Shortcuts,
 			Account:      ports.Account,
 			OCR:          ports.OCR,

@@ -4,19 +4,18 @@ import (
 	"context"
 	"log"
 	"os"
-	"sync"
-	"time"
 
 	"github.com/egoist/mygo"
 
+	backgroundtasksbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/backgroundtasks"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/jobs"
 	"github.com/pablopunk/nvm/native/internal/jobs/extjobs"
 	"github.com/pablopunk/nvm/native/internal/jobs/hostjobs"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/palette/background"
 	"github.com/pablopunk/nvm/native/internal/safego"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // startJobs builds the background scheduler, registers the host jobs and the sync that keeps the extension triggers
@@ -126,45 +125,9 @@ func (p *App) frontmostAppID(ctx context.Context) (string, error) {
 	return app.Name, nil
 }
 
-// backgroundTasksView is the Background Tasks page over the scheduler. The open page re-reads the jobs whenever one
-// changes, and stops listening when the palette leaves it.
-func (p *App) backgroundTasksView() *palette.View {
-	view := background.View(p.backgroundSource(), time.Now)
-	view.OnLeave = p.refreshOnJobChanges()
-	return view
-}
-
-// refreshOnJobChanges re-runs the open palette search each time a job changes, so a run that finishes shows up in
-// the Background Tasks list without reopening it. The returned function stops the refreshing.
-func (p *App) refreshOnJobChanges() func() {
-	if p.background == nil {
-		return func() {}
-	}
-	changes, cancel := p.background.Subscribe()
-	stop := make(chan struct{})
-	safego.Go("jobs.background.refresh", func(context.Context) {
-		for {
-			select {
-			case <-stop:
-				return
-			case <-changes:
-				p.Refresh()
-			}
-		}
-	})
-	var once sync.Once
-	return func() {
-		once.Do(func() {
-			cancel()
-			close(stop)
-		})
-	}
-}
-
-// backgroundSource is the scheduler as the page reads it, or nil before the scheduler starts.
-func (p *App) backgroundSource() background.Source {
-	if p.background == nil {
-		return nil
-	}
-	return p.background
+// backgroundTasksPage is the Background Tasks page the root's command opens. The Background Tasks built-in declares its
+// rows, and the palette re-reads them while the page is open.
+func (p *App) backgroundTasksPage() *palette.View {
+	fallback := &palette.View{Title: "Background Tasks", Placeholder: "Search background tasks", EmptyTitle: "No background tasks registered.", Search: func(string) []search.Item { return nil }}
+	return p.builtInOpenPage(backgroundtasksbuiltin.ID, fallback)
 }

@@ -68,6 +68,8 @@ type Deps struct {
 	Updates UpdateSurface
 	// Diagnostics reads the support records and files problem reports. Nil keeps none and answers unavailable.
 	Diagnostics DiagnosticsSurface
+	// Jobs lists the background jobs and runs or changes them. Nil answers unavailable.
+	Jobs JobsSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
@@ -259,6 +261,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveUpdates(call)
 	case protocol.ServiceDiagnostics:
 		return h.serveDiagnostics(call)
+	case protocol.ServiceJobs:
+		return h.serveJobs(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

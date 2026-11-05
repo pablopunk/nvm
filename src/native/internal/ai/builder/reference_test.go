@@ -35,8 +35,9 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // maxReferenceBytes bounds the reference the model reads on every builder turn. The reference was 64 KB of text before
 // the Context services were cut to signatures; this keeps it from growing back past that. It grew by about 1 KB for the
 // uninstall review and the alias read of the applications built-in, the API surface the builder reads.
-// The settings views (section 33 of the extension API doc) added about 1.5 KB, so the budget is 52 KB.
-const maxReferenceBytes = 52 << 10
+// The settings views (section 33 of the extension API doc) added about 1.5 KB, so the budget was 52 KB. The Background
+// Tasks jobs namespace (section 38) added about 250 bytes, so the budget is 53 KB.
+const maxReferenceBytes = 53 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
@@ -47,8 +48,8 @@ func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 // maxCompactReferenceBytes bounds the terse reference every builder request carries. It keeps a typical turn's second
 // request under the size of the request a turn used to send. It grew by about 1 KB for the uninstall review and the
 // alias read of the applications built-in, which the builder reads as API surface. The diagnostics built-in's records and
-// report added about 300 bytes, so the budget is 35 KB.
-const maxCompactReferenceBytes = 35 << 10
+// report added about 300 bytes, so the budget was 35 KB. The jobs namespace added about 850 bytes, so the budget is 36 KB.
+const maxCompactReferenceBytes = 36 << 10
 
 func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReferenceCompact) > maxCompactReferenceBytes {

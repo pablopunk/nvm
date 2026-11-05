@@ -62,6 +62,7 @@ func init() {
 		"CapabilityDesktopSelection":    reflect.ValueOf(api.CapabilityDesktopSelection),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
+		"CapabilityJobs":                reflect.ValueOf(api.CapabilityJobs),
 		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
 		"CapabilityOCR":                 reflect.ValueOf(api.CapabilityOCR),
 		"CapabilityPlaces":              reflect.ValueOf(api.CapabilityPlaces),
@@ -151,6 +152,20 @@ func init() {
 		"IndicatorSuccess":              reflect.ValueOf(api.IndicatorSuccess),
 		"IndicatorTranscribing":         reflect.ValueOf(api.IndicatorTranscribing),
 		"IsPermissionKind":              reflect.ValueOf(api.IsPermissionKind),
+		"JobOutcomeFailed":              reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
+		"JobOutcomeSkipped":             reflect.ValueOf(constant.MakeFromLiteral("\"skipped\"", token.STRING, 0)),
+		"JobOutcomeSucceeded":           reflect.ValueOf(constant.MakeFromLiteral("\"succeeded\"", token.STRING, 0)),
+		"JobOwnerExtension":             reflect.ValueOf(constant.MakeFromLiteral("\"extension\"", token.STRING, 0)),
+		"JobOwnerHost":                  reflect.ValueOf(constant.MakeFromLiteral("\"host\"", token.STRING, 0)),
+		"JobStatusBackingOff":           reflect.ValueOf(constant.MakeFromLiteral("\"backing-off\"", token.STRING, 0)),
+		"JobStatusDisabled":             reflect.ValueOf(constant.MakeFromLiteral("\"disabled\"", token.STRING, 0)),
+		"JobStatusFailed":               reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
+		"JobStatusIdle":                 reflect.ValueOf(constant.MakeFromLiteral("\"idle\"", token.STRING, 0)),
+		"JobStatusRunning":              reflect.ValueOf(constant.MakeFromLiteral("\"running\"", token.STRING, 0)),
+		"JobStatusSucceeded":            reflect.ValueOf(constant.MakeFromLiteral("\"succeeded\"", token.STRING, 0)),
+		"JobTriggerEvent":               reflect.ValueOf(constant.MakeFromLiteral("\"event\"", token.STRING, 0)),
+		"JobTriggerInterval":            reflect.ValueOf(constant.MakeFromLiteral("\"interval\"", token.STRING, 0)),
+		"JobTriggerStartup":             reflect.ValueOf(constant.MakeFromLiteral("\"startup\"", token.STRING, 0)),
 		"KnownCapabilities":             reflect.ValueOf(api.KnownCapabilities),
 		"KnownMenuBarIcon":              reflect.ValueOf(api.KnownMenuBarIcon),
 		"LayoutCenter":                  reflect.ValueOf(api.LayoutCenter),
@@ -411,6 +426,10 @@ func init() {
 		"Invocation":              reflect.ValueOf((*api.Invocation)(nil)),
 		"Item":                    reflect.ValueOf((*api.Item)(nil)),
 		"ItemSection":             reflect.ValueOf((*api.ItemSection)(nil)),
+		"Job":                     reflect.ValueOf((*api.Job)(nil)),
+		"JobRun":                  reflect.ValueOf((*api.JobRun)(nil)),
+		"JobTrigger":              reflect.ValueOf((*api.JobTrigger)(nil)),
+		"Jobs":                    reflect.ValueOf((*api.Jobs)(nil)),
 		"Keyboard":                reflect.ValueOf((*api.Keyboard)(nil)),
 		"LaunchContext":           reflect.ValueOf((*api.LaunchContext)(nil)),
 		"LayoutKind":              reflect.ValueOf((*api.LayoutKind)(nil)),
@@ -542,6 +561,7 @@ func init() {
 		"_Files":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Files)(nil)),
 		"_Indicators":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Indicators)(nil)),
 		"_Input":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Input)(nil)),
+		"_Jobs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Jobs)(nil)),
 		"_Keyboard":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Keyboard)(nil)),
 		"_Logs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Logs)(nil)),
 		"_MenuBarProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider)(nil)),
@@ -866,6 +886,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WIdentity    func() api.Identity
 	WIndicators  func() api.Indicators
 	WInput       func() api.Input
+	WJobs        func() api.Jobs
 	WLaunch      func() api.LaunchContext
 	WLogs        func() api.Logs
 	WNavigation  func() api.Navigation
@@ -926,6 +947,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Indicators() 
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Input() api.Input {
 	return W.WInput()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Jobs() api.Jobs {
+	return W.WJobs()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Launch() api.LaunchContext {
 	return W.WLaunch()
@@ -1213,6 +1237,28 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Input struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Input) Prompt(spec api.PromptSpec) api.Action {
 	return W.WPrompt(spec)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Jobs is an interface wrapper for Jobs type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Jobs struct {
+	IValue      interface{}
+	WClearError func(id string) error
+	WList       func() []api.Job
+	WRun        func(id string) error
+	WSetEnabled func(id string, enabled bool) error
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) ClearError(id string) error {
+	return W.WClearError(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) List() []api.Job {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) Run(id string) error {
+	return W.WRun(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) SetEnabled(id string, enabled bool) error {
+	return W.WSetEnabled(id, enabled)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Keyboard is an interface wrapper for Keyboard type

@@ -84,6 +84,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Permissions:   permissionSurface{p: p},
 		Updates:       updatesSurface{p: p},
 		Diagnostics:   diagnosticsSurface{p: p},
+		Jobs:          jobsSurface{p: p},
 		Shortcuts:     p.extensionShortcuts(),
 		Account:       extensionAccount{p: p},
 		OCR:           textReader,
