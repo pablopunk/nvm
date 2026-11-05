@@ -17,3 +17,10 @@ func TestThePalettePanelDrawsItsGlassAsActive(t *testing.T) {
 		t.Fatal("palette panel is not drawn as active, so macOS frosts its glass while it is not key")
 	}
 }
+
+func TestIndicatorAppearanceMatchesPaletteGlass(t *testing.T) {
+	appearance := paletteWindowAppearance()
+	if appearance.Vibrancy != mygo.VibrancyGlass || !appearance.ActiveAppearance {
+		t.Fatalf("indicator appearance = %#v, want active glass", appearance)
+	}
+}

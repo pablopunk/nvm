@@ -20,6 +20,7 @@ const (
 
 // Indicator draws the status pane of an AI command: the command's title and one line of copy in the tone's colour.
 func Indicator(c *ui.Context, s commands.Status) {
+	c.Root().Background(ui.Transparent)
 	k := design.Tokens(c)
 	tone, subtitleColor := k.Accent, k.Muted
 	icon := "sparkles"

@@ -59,6 +59,7 @@ func (p *App) hudPanel() feedback.Window {
 			DisableFullScreen: true,
 			Content:           ui.View(p.hud.View),
 		})
+		applyIndicatorAppearance(p.hudWindow)
 		p.hudWindow.OnClosed(func() { p.hudWindow = nil })
 	}
 	return p.hudWindow

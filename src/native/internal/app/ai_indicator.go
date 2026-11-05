@@ -80,6 +80,7 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 		DisableFullScreen: true,
 		Content:           ui.View(func(c *ui.Context) { aicommands.Indicator(c, i.status) }),
 	})
+	applyIndicatorAppearance(i.window)
 	i.window.OnClosed(func() { i.window = nil })
 	return i.window
 }
