@@ -51,6 +51,8 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.encode(protocol.MethodMenuBars, e.contextArgument(api.LaunchContext{}))
 	case protocol.MethodMenuBarTriggers:
 		return e.encode(protocol.MethodMenuBarTriggers)
+	case protocol.MethodRestoreWindow:
+		return e.restoreWindow(req.Invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }
@@ -71,6 +73,15 @@ func (e *extension) loadItems(invocation *api.Invocation) (json.RawMessage, erro
 		loader = invocation.Ref.ID
 	}
 	return e.encode(protocol.MethodLoad, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(loader))
+}
+
+// restoreWindow passes the restore key of the invocation to RestoreWindow, which returns the window's fresh view.
+func (e *extension) restoreWindow(invocation *api.Invocation) (json.RawMessage, error) {
+	key := ""
+	if invocation != nil {
+		key = invocation.Ref.ID
+	}
+	return e.encode(protocol.MethodRestoreWindow, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(key))
 }
 
 // encode calls an entry point and marshals its first result. Results are JSON before they leave the child, so

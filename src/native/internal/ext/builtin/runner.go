@@ -53,6 +53,9 @@ func (r *Runner) Provides(method string) bool {
 	case protocol.MethodMenuBars, protocol.MethodMenuBarTriggers:
 		_, ok := r.ext.(api.MenuBarProvider)
 		return ok
+	case protocol.MethodRestoreWindow:
+		_, ok := r.ext.(api.WindowRestorer)
+		return ok
 	}
 	return false
 }

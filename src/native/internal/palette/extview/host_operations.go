@@ -18,9 +18,21 @@ func (s *Session) runDeclared(h search.Host, action api.Action) {
 		s.revealPath(h, action.Path)
 	case api.ActionSystem:
 		s.runSystemOp(h, action.Op)
+	case api.ActionWindow:
+		s.runWindow(h, action)
 	default:
 		h.Toast(unavailableMessage)
 	}
+}
+
+// runWindow hands a window action to the host, after the palette hides so that the window takes the focus.
+func (s *Session) runWindow(h search.Host, action api.Action) {
+	if s.deps.Window == nil {
+		h.Toast(unavailableMessage)
+		return
+	}
+	h.Hide()
+	s.deps.Window(s.extID, action)
 }
 
 func (s *Session) openPath(h search.Host, path string) {

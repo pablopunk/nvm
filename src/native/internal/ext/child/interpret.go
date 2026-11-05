@@ -28,6 +28,7 @@ var entryPoints = map[string]string{
 
 	protocol.MethodMenuBars:        "MenuBars",
 	protocol.MethodMenuBarTriggers: "MenuBarTriggers",
+	protocol.MethodRestoreWindow:   "RestoreWindow",
 }
 
 // extension is one interpreted extension: the functions it declares and the services it may use.

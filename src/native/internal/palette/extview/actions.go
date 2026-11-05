@@ -80,7 +80,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
 		}
 		return s.hostOperation(action, title)
-	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery:
+	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionWindow:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:
 		if action.Op != api.AccountSignIn || s.deps.SignIn == nil {

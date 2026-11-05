@@ -46,6 +46,7 @@ func (p *App) startExtensions() {
 		return
 	}
 	p.exts.mgr.Store(m)
+	p.restoreExtensionWindows(m)
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 

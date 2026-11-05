@@ -32,6 +32,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palindicator "github.com/pablopunk/nvm/native/internal/palette/dictation"
+	"github.com/pablopunk/nvm/native/internal/palette/extwindow"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -133,8 +134,9 @@ type App struct {
 	quitting bool
 	edits    map[string]*noteEdit
 	// floating is the floating note window, when it is open.
-	floating  *floatingWindow
-	floatPane floatingPaneState
+	floating   *floatingWindow
+	extWindows *extwindow.Manager
+	floatPane  floatingPaneState
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 
@@ -217,6 +219,7 @@ func (p *App) ready() {
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
 	p.recoverDictationMute()
 	p.attachWindows()
+	p.attachExtensionWindows()
 	p.attachDeepLinks()
 	prepareCatalog()
 	p.clip = p.openClipboard()

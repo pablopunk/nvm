@@ -57,6 +57,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
+		Window:                p.performExtensionWindow,
 		SignIn:                p.signInFromRoot,
 		OpenPath:              func(path string) { _ = ports.Shell.OpenPath(path) },
 		RevealPath:            func(path string) { _ = ports.Shell.Reveal(path) },

@@ -56,6 +56,9 @@ type Deps struct {
 	Dialog platform.FileDialog
 	// Drafts keeps the unsaved text of editors. Nil keeps editors without autosave.
 	Drafts DraftStore
+	// Window performs a window action of extension extID: a companion window it opens, shows, hides, toggles or closes.
+	// The palette hides before the call. Nil makes the action report unavailable.
+	Window func(extID string, action api.Action)
 	// Pages opens the web page of a webview or camera view. Nil, or a system without a web view, makes those views
 	// say the system cannot show them.
 	Pages platform.WebPages
