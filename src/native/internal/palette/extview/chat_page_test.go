@@ -74,7 +74,7 @@ func TestChatPrimaryKeyIsStopWhileAReplyStreams(t *testing.T) {
 	s := NewSession(Deps{}, "acme.chat", chatFixtureView())
 	page := s.chatPage()
 	if page.Primary == nil || page.Primary().Title != "Stop" {
-		t.Fatalf("primary while streaming = %+v, want Stop", page.Primary)
+		t.Fatalf("primary while streaming is not Stop")
 	}
 	done := chatFixtureView()
 	for i := range done.Chat.Messages {
