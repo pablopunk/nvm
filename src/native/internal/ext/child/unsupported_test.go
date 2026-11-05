@@ -29,6 +29,7 @@ func everyService() map[string]any {
 		"aiBuilder":        unsupportedAIBuilder{},
 		"ownership":        unsupportedOwnership{},
 		"updates":          remoteUpdates{link: link},
+		"diagnostics":      remoteDiagnostics{link: link},
 		"keyboard":         remoteKeyboard{link: link},
 		"selection":        remoteSelection{link: link},
 		"apps":             remoteApps{link: link},

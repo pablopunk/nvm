@@ -66,6 +66,8 @@ type Deps struct {
 	Permissions PermissionSurface
 	// Updates reads the state of the app's updater. Nil answers unavailable.
 	Updates UpdateSurface
+	// Diagnostics reads the support records and files problem reports. Nil keeps none and answers unavailable.
+	Diagnostics DiagnosticsSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
@@ -255,6 +257,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveAccount(call)
 	case protocol.ServiceUpdates:
 		return h.serveUpdates(call)
+	case protocol.ServiceDiagnostics:
+		return h.serveDiagnostics(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

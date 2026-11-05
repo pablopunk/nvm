@@ -13,8 +13,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/logx"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	paldiag "github.com/pablopunk/nvm/native/internal/palette/diagnostics"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -111,25 +109,9 @@ func (p *App) trackedRun(cmd command) func(h search.Host) {
 	}
 }
 
-// diagnosticsView is the Recent Errors page over the app's recorder.
-func (p *App) diagnosticsView() *palette.View {
-	var records paldiag.Records = paldiag.Static{}
-	if p.recorder != nil {
-		records = p.recorder
-	}
-	return paldiag.View(records, p.reportingState, p.copyText)
-}
-
 // reportingState says how records are reported now, for the page's labels.
 func (p *App) reportingState() analytics.Reporting {
 	return p.analytics.Reporting()
-}
-
-// reportProblem records a problem report, shows its reference, and lists the recent errors where it appears.
-func (p *App) reportProblem(h search.Host) {
-	ref := analytics.ReportProblem(p.recorder, p.analytics)
-	h.Toast("Problem report " + ref + " recorded")
-	h.Push(p.diagnosticsView())
 }
 
 // toggleDiagnostics flips "Send Technical Diagnostics". The client gets the new consent at once, so a withdrawal drops

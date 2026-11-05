@@ -83,6 +83,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Notifier:      ports.Notifier,
 		Permissions:   permissionSurface{p: p},
 		Updates:       updatesSurface{p: p},
+		Diagnostics:   diagnosticsSurface{p: p},
 		Shortcuts:     p.extensionShortcuts(),
 		Account:       extensionAccount{p: p},
 		OCR:           textReader,

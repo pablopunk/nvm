@@ -57,6 +57,11 @@ type PendingReply struct {
 	Pending bool      `json:"pending"`
 }
 
+// ExportArgs names the record whose safe text is read.
+type ExportArgs struct {
+	Ref string `json:"ref"`
+}
+
 // IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
 type IndicatorHideArgs struct {
 	ID string `json:"id,omitempty"`

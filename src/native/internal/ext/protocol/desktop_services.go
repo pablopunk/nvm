@@ -14,6 +14,7 @@ const (
 	ServiceShortcuts        = "shortcuts"
 	ServiceAccount          = "account"
 	ServiceUpdates          = "updates"
+	ServiceDiagnostics      = "diagnostics"
 	ServiceDesktopSelection = "desktop.selection"
 	ServiceDesktopKeyboard  = "desktop.keyboard"
 	ServiceDesktopPaste     = "desktop.paste"
@@ -23,6 +24,9 @@ const (
 const (
 	OpSignedIn           = "signed-in"
 	OpState              = "state"
+	OpExport             = "export"
+	OpReport             = "report"
+	OpReporting          = "reporting"
 	OpReadText           = "read-text"
 	OpWriteText          = "write-text"
 	OpList               = "list"

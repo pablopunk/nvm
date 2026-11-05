@@ -58,6 +58,8 @@ type View struct {
 	ContentSizing string `json:"contentSizing,omitempty"`
 	// Placeholder is the search input placeholder.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Hint is the right footer text of a list, a few words about what the page shows.
+	Hint string `json:"hint,omitempty"`
 	// WindowCompact renders the result as a compact overlay in independent windows.
 	WindowCompact bool `json:"windowCompact,omitempty"`
 

@@ -98,6 +98,10 @@ func init() {
 		"DecisionPredicate":             reflect.ValueOf(api.DecisionPredicate),
 		"DecisionScore":                 reflect.ValueOf(api.DecisionScore),
 		"Destructive":                   reflect.ValueOf(api.Destructive),
+		"DiagnosticsOff":                reflect.ValueOf(constant.MakeFromLiteral("\"off\"", token.STRING, 0)),
+		"DiagnosticsProblemComponent":   reflect.ValueOf(constant.MakeFromLiteral("\"support.report\"", token.STRING, 0)),
+		"DiagnosticsRequested":          reflect.ValueOf(constant.MakeFromLiteral("\"requested\"", token.STRING, 0)),
+		"DiagnosticsStored":             reflect.ValueOf(constant.MakeFromLiteral("\"stored\"", token.STRING, 0)),
 		"DictationError":                reflect.ValueOf(api.DictationError),
 		"DictationIdle":                 reflect.ValueOf(api.DictationIdle),
 		"DictationRecording":            reflect.ValueOf(api.DictationRecording),
@@ -357,6 +361,8 @@ func init() {
 		"Desktop":                 reflect.ValueOf((*api.Desktop)(nil)),
 		"Detail":                  reflect.ValueOf((*api.Detail)(nil)),
 		"DetailPane":              reflect.ValueOf((*api.DetailPane)(nil)),
+		"DiagnosticRecord":        reflect.ValueOf((*api.DiagnosticRecord)(nil)),
+		"Diagnostics":             reflect.ValueOf((*api.Diagnostics)(nil)),
 		"Dictation":               reflect.ValueOf((*api.Dictation)(nil)),
 		"DictationDevice":         reflect.ValueOf((*api.DictationDevice)(nil)),
 		"DictationStartOptions":   reflect.ValueOf((*api.DictationStartOptions)(nil)),
@@ -529,6 +535,7 @@ func init() {
 		"_Data":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Data)(nil)),
 		"_DataLoader":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_DataLoader)(nil)),
 		"_Desktop":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Desktop)(nil)),
+		"_Diagnostics":       reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics)(nil)),
 		"_Dictation":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Dictation)(nil)),
 		"_Drafts":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Drafts)(nil)),
 		"_Extension":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Extension)(nil)),
@@ -844,37 +851,38 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_CommandProvider) Comma
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Context is an interface wrapper for Context type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
-	IValue      interface{}
-	WAI         func() api.AI
-	WAIBuilder  func() api.AIBuilder
-	WAccount    func() api.Account
-	WCache      func() api.Cache
-	WClipboard  func() api.ClipboardHistory
-	WClock      func() api.Clock
-	WData       func() api.Data
-	WDesktop    func() api.Desktop
-	WDictation  func() api.Dictation
-	WDrafts     func() api.Drafts
-	WIdentity   func() api.Identity
-	WIndicators func() api.Indicators
-	WInput      func() api.Input
-	WLaunch     func() api.LaunchContext
-	WLogs       func() api.Logs
-	WNavigation func() api.Navigation
-	WNetwork    func() api.Network
-	WOCR        func() api.OCR
-	WOwnership  func() api.Ownership
-	WScheduler  func() api.Scheduler
-	WSecrets    func() api.Secrets
-	WSettings   func() api.Settings
-	WShortcuts  func() api.Shortcuts
-	WStd        func() context.Context
-	WStorage    func() api.Storage
-	WSystem     func() api.System
-	WText       func() api.Text
-	WUpdates    func() api.Updates
-	WViews      func() api.Views
-	WWindows    func() api.Windows
+	IValue       interface{}
+	WAI          func() api.AI
+	WAIBuilder   func() api.AIBuilder
+	WAccount     func() api.Account
+	WCache       func() api.Cache
+	WClipboard   func() api.ClipboardHistory
+	WClock       func() api.Clock
+	WData        func() api.Data
+	WDesktop     func() api.Desktop
+	WDiagnostics func() api.Diagnostics
+	WDictation   func() api.Dictation
+	WDrafts      func() api.Drafts
+	WIdentity    func() api.Identity
+	WIndicators  func() api.Indicators
+	WInput       func() api.Input
+	WLaunch      func() api.LaunchContext
+	WLogs        func() api.Logs
+	WNavigation  func() api.Navigation
+	WNetwork     func() api.Network
+	WOCR         func() api.OCR
+	WOwnership   func() api.Ownership
+	WScheduler   func() api.Scheduler
+	WSecrets     func() api.Secrets
+	WSettings    func() api.Settings
+	WShortcuts   func() api.Shortcuts
+	WStd         func() context.Context
+	WStorage     func() api.Storage
+	WSystem      func() api.System
+	WText        func() api.Text
+	WUpdates     func() api.Updates
+	WViews       func() api.Views
+	WWindows     func() api.Windows
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AI() api.AI {
@@ -900,6 +908,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Data() api.Da
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Desktop() api.Desktop {
 	return W.WDesktop()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Diagnostics() api.Diagnostics {
+	return W.WDiagnostics()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Dictation() api.Dictation {
 	return W.WDictation()
@@ -1024,6 +1035,28 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Shell() api.S
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) WindowManagement() api.WindowManagement {
 	return W.WWindowManagement()
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics is an interface wrapper for Diagnostics type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics struct {
+	IValue         interface{}
+	WExport        func(ref string) (string, error)
+	WRecent        func() []api.DiagnosticRecord
+	WReportProblem func() string
+	WReporting     func() string
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Export(ref string) (string, error) {
+	return W.WExport(ref)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Recent() []api.DiagnosticRecord {
+	return W.WRecent()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) ReportProblem() string {
+	return W.WReportProblem()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Reporting() string {
+	return W.WReporting()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Dictation is an interface wrapper for Dictation type

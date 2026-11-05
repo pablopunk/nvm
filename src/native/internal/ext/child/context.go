@@ -143,6 +143,10 @@ func (c hostContext) Updates() api.Updates {
 	return remoteUpdates{link: c.link}
 }
 
+func (c hostContext) Diagnostics() api.Diagnostics {
+	return remoteDiagnostics{link: c.link}
+}
+
 func (c hostContext) Windows() api.Windows {
 	return childWindows{}
 }

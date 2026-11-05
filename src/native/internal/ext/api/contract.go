@@ -87,6 +87,7 @@ type Context interface {
 	Scheduler() Scheduler
 	System() System
 	Updates() Updates
+	Diagnostics() Diagnostics
 	AI() AI
 	AIBuilder() AIBuilder
 	Ownership() Ownership

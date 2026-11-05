@@ -186,6 +186,7 @@ func (s *Session) listPage() *palette.View {
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
+	page.Hint = s.view.Hint
 	return page
 }
 
