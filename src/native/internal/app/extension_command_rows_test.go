@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
-	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 )
 
 // TestCommandSubtitleFallsBackToTheExtensionTitle: a command with no subtitle shows the extension's title, as 1.x does.
@@ -20,12 +19,7 @@ func TestCommandSubtitleFallsBackToTheExtensionTitle(t *testing.T) {
 // TestEnabledConvertedToggleShowsItsCommandInTheRoot: an enabled extension's command is a root row, named by its
 // extension at the right edge and by its own subtitle.
 func TestEnabledConvertedToggleShowsItsCommandInTheRoot(t *testing.T) {
-	m := newFixtureManager(t, "acme.theme")
-	waitForState(t, m, "acme.theme", supervisor.StateRunning)
-	p := &App{}
-	p.exts.mgr.Store(m)
-
-	row := findRowTitled(t, collectExtensionRows(t, p, "toggle system theme"), "Toggle System Theme")
+	_, _, row := awaitFixtureCommand(t, "acme.theme", "toggle system theme", "Toggle System Theme")
 	if row.Kind != "Acme Theme" || row.Subtitle != "Switch between light and dark mode" {
 		t.Fatalf("row kind %q subtitle %q; want the extension at the right edge and the command's subtitle", row.Kind, row.Subtitle)
 	}

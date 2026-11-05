@@ -57,6 +57,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 // signed-in account, the clipboard ports and the palette's own surfaces. A nil field keeps the service absent, as the
 // app without it does.
 type managerFakes struct {
+	onChange     func()
 	index        services.FileIndex
 	ai           *extai.Service
 	account      services.AccountState
@@ -162,6 +163,7 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Home:            userHomeDir(),
 		BuiltIns:        builtins,
 		BuiltInSettings: fakes.settingsHost,
+		OnChange:        fakes.onChange,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},
