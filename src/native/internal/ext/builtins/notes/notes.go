@@ -151,6 +151,6 @@ func (Extension) RestoreWindow(ctx api.Context, restoreKey string) (*api.WindowR
 	if err != nil {
 		return nil, err
 	}
-	options := floatingWindowOptions(note)
+	options := floatingWindowOptions(windowTitle)
 	return &api.WindowRestore{View: editorView(ctx, note, modeWindow), Options: &options}, nil
 }

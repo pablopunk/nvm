@@ -81,6 +81,9 @@ func (c extensionChatPages) Start(kind, prompt, extension string) (string, error
 		if err := c.p.chats.Bind(record.ID, extension); err != nil {
 			log.Println("chat: could not bind the chat to its extension:", err)
 		}
+		if err := c.p.chats.Retitle(record.ID, tweakChatTitle(c.p.extensionTitle(extension))); err != nil {
+			log.Println("chat: could not title the chat:", err)
+		}
 	}
 	if prompt != "" {
 		c.p.onUI(func() {
@@ -90,6 +93,11 @@ func (c extensionChatPages) Start(kind, prompt, extension string) (string, error
 		})
 	}
 	return record.ID, nil
+}
+
+// tweakChatTitle names a builder chat that edits the extension titled title, as 1.x names its tweak chats.
+func tweakChatTitle(title string) string {
+	return "Tweak " + title
 }
 
 // startedChatKind is the store's kind and tier of a chat a chat action starts: a conversation runs on the fast tier, a

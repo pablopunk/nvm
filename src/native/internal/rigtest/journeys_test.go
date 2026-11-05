@@ -71,9 +71,9 @@ func TestJourneyJ01SummonAndDismiss(t *testing.T) {
 	started := time.Now()
 	must(t, app.SummonPalette())
 	t.Logf("summon took %s", time.Since(started).Round(time.Millisecond))
-	// The tree holds the rows the palette draws, and Clipboard History sits below them at the root; the first AI row
-	// stands for the root.
-	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
+	// Lock Screen stands for the root. 1.x shows it in the first visible rows; Fix Selected Text with AI scores lower
+	// there and sits below the fold.
+	_, err := app.WaitFor("Lock Screen", elementWait)
 	must(t, err)
 	shoot(t, app, "j01-1-summoned")
 

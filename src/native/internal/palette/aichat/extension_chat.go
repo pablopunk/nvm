@@ -275,6 +275,7 @@ func (x *ExtensionChat) sideFor() *palette.Side {
 	}
 	if x.side == nil {
 		x.side = palette.NewSide(view)
+		x.input.Focus()
 	} else if view != x.sideRoot {
 		x.side.SetRoot(view)
 	}
