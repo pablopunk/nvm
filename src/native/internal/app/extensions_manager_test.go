@@ -1,9 +1,9 @@
 package app
 
 import (
+	"context"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
-	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -69,11 +69,11 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 	}
 	m, err := manager.New(manager.Ports{
 		Files: ports.FS, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
-		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
-		Places:       fixturePlaces,
-		Network:      network,
-		Apps:         apps,
-		History:      extras.history,
+		Capabilities:    platform.NewCapabilities(platform.AllCapabilities()...),
+		Places:          fixturePlaces,
+		Network:         network,
+		Apps:            apps,
+		History:         extras.history,
 		ClipboardImages: extras.images,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
@@ -110,13 +110,27 @@ func fixtureFiles(t testing.TB, id string) map[string][]byte {
 	return files
 }
 
-// waitForState blocks until extension id reports the state want, or fails the test.
+// fixtureRestartPoll is how often waitForState calls the extensions while a failed child waits out its backoff.
+const fixtureRestartPoll = 25 * time.Millisecond
+
+// waitForState blocks until extension id reports the state want, or fails the test. A child that failed to start
+// (a start that missed its budget under load, or a child that died) restarts only on a call once its backoff has
+// passed, as the palette's own calls restart it, so the wait makes that call rather than waiting for a state no one
+// will reach.
 func waitForState(t *testing.T, m *manager.Manager, id string, want supervisor.State) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), fixtureWaitTimeout)
 	defer cancel()
-	if err := m.WaitFor(ctx, id, func(s supervisor.Status) bool { return s.State == want }); err != nil {
-		t.Fatalf("waiting for %s to be %s: %v", id, want, err)
+	for {
+		if err := m.WaitFor(ctx, id, func(s supervisor.Status) bool { return s.State == want || s.State == supervisor.StateFailed }); err != nil {
+			t.Fatalf("waiting for %s to be %s: %v; last status %+v", id, want, err, listingFor(t, m, id).Runtime)
+		}
+		status := listingFor(t, m, id).Runtime
+		if status.State == want {
+			return
+		}
+		_ = m.Commands(ctx)
+		time.Sleep(fixtureRestartPoll)
 	}
 }
 
