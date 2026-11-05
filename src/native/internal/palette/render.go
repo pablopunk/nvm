@@ -276,10 +276,10 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	data := design.FooterData{Name: name}
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
-		if len(it.Actions) > 1 {
+		if len(p.menuActions()) > 1 {
 			data.Secondary = actionsKeyHint()
 		}
-	} else if v.Body != nil && (v.Primary != nil || len(p.actions()) > 0) {
+	} else if v.Body != nil && (v.Primary != nil || len(p.menuActions()) > 0) {
 		p.bodyFooterKeys(v, &data)
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
@@ -293,7 +293,7 @@ func (p *Palette) bodyFooterKeys(v *View, data *design.FooterData) {
 	if v.Primary != nil {
 		data.Primary = v.Primary()
 	}
-	if len(p.actions()) > 0 {
+	if len(p.menuActions()) > 0 {
 		data.Secondary = actionsKeyHint()
 	}
 }
@@ -305,7 +305,7 @@ func actionsKeyHint() *design.KeyHint {
 
 // actionPanel is the action menu, a popover over the pane.
 func (p *Palette) actionPanel(c *ui.Context) {
-	acts := p.actions()
+	acts := p.menuActions()
 	p.actList.Selected = &p.actChosen
 	rows := make([]design.MenuRow, len(acts))
 	for i, a := range acts {

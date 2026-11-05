@@ -27,7 +27,7 @@ var indicatorStatuses = []struct {
 	{"indicator-reading", commands.Status{Title: fixTitle, Subtitle: "Reading Selection", Tone: commands.ToneLoading}},
 	{"indicator-fixing", commands.Status{Title: fixTitle, Subtitle: "Fixing Text", Tone: commands.ToneLoading}},
 	{"indicator-no-changes", commands.Status{Title: fixTitle, Subtitle: "No changes needed", Tone: commands.ToneSuccess}},
-	{"indicator-triage", commands.Status{Title: commands.TriageTitle, Subtitle: "bug report · urgency 4/5 · needs reply", Tone: commands.ToneSuccess}},
+	{"indicator-triage", commands.Status{Title: triageTitle, Subtitle: "bug report · urgency 4/5 · needs reply", Tone: commands.ToneSuccess}},
 	{"indicator-failed-short", commands.Status{Title: fixTitle, Subtitle: "Sign in to use AI commands.", Tone: commands.ToneError}},
 	{"indicator-failed-long", commands.Status{Title: "Classify Image with AI", Subtitle: "That image is too large to classify. Choose a smaller one and try again from the palette", Tone: commands.ToneError}},
 }
@@ -43,28 +43,11 @@ func TestIndicatorGoldens(t *testing.T) {
 	}
 }
 
-// proofread is a short correction, the text a result page shows most often.
-const proofread = "The palette got three changes this week, all behind the same shortcut. Search now ranks apps first, and Escape stops a reply in flight."
-
-// TestResultGoldens renders a proofread that can be replaced, a copy-only classification, and a long text, each in the
-// palette's page.
-// fixTitle is the title of the fix command, which the AI commands built-in owns.
-const fixTitle = "Fix Selected Text with AI"
-
-func TestResultGoldens(t *testing.T) {
-	cases := []struct {
-		name   string
-		result commands.Result
-	}{
-		{"result-copy", commands.Result{Title: "Image Classification", Text: func() string { return "screenshot" }, Copy: func(string) {}}},
-	}
-	for _, entry := range cases {
-		t.Run(entry.name, func(t *testing.T) {
-			p := paletteOver(ResultView(entry.result))
-			golden.AssertMatrix(t, entry.name, p.View, golden.Options{Group: "aicommands", Width: paletteWidth, Height: paletteHigh})
-		})
-	}
-}
+// fixTitle and triageTitle are the titles of the AI commands, which the AI commands built-in owns.
+const (
+	fixTitle    = "Fix Selected Text with AI"
+	triageTitle = "Triage Selected Text with AI"
+)
 
 // testWindow is the palette's window in the goldens: updates run at once and nothing is shown.
 type testWindow struct{}

@@ -214,6 +214,7 @@ func (s *Session) listPage() *palette.View {
 	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
+	page.Actions = s.pageActions
 	page.OnKey = s.tabCyclesAccessory(page.Accessory)
 	page.Footer = s.footerName
 	page.Hint = s.view.Hint

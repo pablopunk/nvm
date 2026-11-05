@@ -42,10 +42,12 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 
 // commandRow is the row of one command of an extension, at score. Its Run action runs the command.
 func commandRow(p *App, m *manager.Manager, result manager.CommandResult, command api.Command, score int) search.Item {
+	primary := commandAction(command)
+	wire := extview.MenuWireActions(&primary, command.ActionPanel, command.Actions)
 	row := search.Item{
 		Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
 		Tone: commandTone(command), Score: score,
-		Actions: []search.Action{extview.ActionFor(p.extensionViewDeps(m), result.ExtensionID, commandAction(command))},
+		Actions: extview.MenuActionsFor(p.extensionViewDeps(m), result.ExtensionID, wire),
 	}
 	if m.IsBuiltIn(result.ExtensionID) {
 		row = builtInCommandRow(row, command)

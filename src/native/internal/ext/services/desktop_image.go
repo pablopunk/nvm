@@ -5,7 +5,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -70,13 +69,4 @@ func decodePNGDataURL(dataURL string) ([]byte, error) {
 		return nil, invalid("the image is larger than %d MB", maxClipboardImageBytes>>20)
 	}
 	return png, nil
-}
-
-// ocrPNGInput returns the PNG bytes an OCR input carries as a data URL, or false when it names a file instead.
-func ocrPNGInput(input api.OCRInput) ([]byte, bool, error) {
-	if !strings.HasPrefix(input.Source, "data:") {
-		return nil, false, nil
-	}
-	png, err := decodePNGDataURL(input.Source)
-	return png, true, err
 }

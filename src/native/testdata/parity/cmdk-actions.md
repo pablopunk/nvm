@@ -67,7 +67,7 @@ File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 | C3 | clipboard-history.ts:443 | Paste Text | none | text entries only (not image or video) | done (2.0 label ⌃↵) |
 | C4 | clipboard-removal-actions.ts:1-140, clipboard-history.ts:469 | Manage History section: Remove Item | none | entry present; destructive, confirm "Remove “<title>” from clipboard history?" | done |
 | C5 | clipboard-removal-actions.ts:50 | Remove Last... (submenu): 5 Minutes, Hour, Day, Week | none | entry present | done |
-| C6 | clipboard-removal-actions.ts:124-139 | (history level, Clipboard History view) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | none | history not empty | removed from the entry menu; the view-level set is not changed by this pass |
+| C6 | clipboard-removal-actions.ts:124-139, clipboard-history.ts:508-512 | (history level, the view's `actionPanel` "Manage History", `actionPanelVisibility: 'menu'`) Remove Entries from Last Hour, Remove Entries from Last Day, Remove All Entries | history not empty | the view's actions join each entry's menu after the entry's own, as 1.x's `viewActionsForItem` does (F1, see the visibility table in B6); no "View" header is drawn yet |
 | — | none | Pin, Unpin | | 1.x has none | removed; pinned state and sorting are gone from the store too |
 | — | none | Ask AI, Clear All Unpinned | | 1.x has none | removed from the entry menu |
 
@@ -98,6 +98,8 @@ Commands are durable actions (`commandFromItem`, extension-action-builders.ts:2)
 | Open Documents | system.ts:103 | extension-action | Open Documents | done (stable ID) |
 | Open Desktop | system.ts:103 | extension-action | Open Desktop | done (stable ID) |
 | Force Quit Apps | apps.ts:255 | extension-action | Force Quit Apps | done |
+| Dictate | dictation extension `dictateCommand` | extension-action | Dictate | done: panel action Settings (`command.ActionPanel`), built-in and customizable |
+| Triage Selected Text with AI | ai-commands.ts:224 (`triage-selected-text-with-ai`) | extension-action | Triage Selected Text with AI | done: built-in `aicommands` (`triageCommand`), listed with the selection capability, customizable; its shortcut key is the 1.x key |
 | Clipboard History, AI Chats, Emoji & Symbols, Find Files by Meaning, Quick Notes, New Floating Note, Dictate, Extensions, Keyboard Shortcuts, Background Tasks, Settings, Check for Updates, Recent Errors, Report a Problem, OS Permissions | various | extension / extension-root | command title | done (ID-mapped in `portable_keys.go`) |
 | Window layouts (Left Half, Maximize, …) | window-management-commands.ts | extension-action | layout title | not re-traced in this pass; shortcuts keyed by the layout prefix |
 
@@ -110,6 +112,16 @@ Root items are customizable only when the item sets `customizable` or it has a p
 | Generated extension row | extension-root-action.ts:96 (`removable`) | primary, panel actions, G1, G2, G5, G6 Duplicate, G7 Rename, G8 Submit as PR, G9 Tweak with AI, G10-G11 when overridden, G12 Remove action |
 | File-backed extension row | extension-root-action.ts:96 | primary, panel actions, G1, G2, G5, G7 Rename, G9 Tweak with AI |
 | Command-backed row, not generated | extension-root-action.ts:128 | primary, panel actions, G1, G2, G5 |
+| Built-in command with a panel (Dictate) | dictation extension `dictateCommand`, `actionPanel` Settings | primary, panel actions (Settings), G1, G2, G5 (done: `commandRow` maps the panel, `MenuWireActions`) |
+
+`actionPanelVisibility` on an item or a view (follow-up F1, done in 2.0; see `internal/palette/extview/menu.go`):
+
+| Setting | 1.x | 2.0 |
+|---|---|---|
+| item `visible` or `menu` | ⌘K lists the primary, the panel and the view's actions | same; `menu` and `visible` are equal because 2.0 draws no inline panel |
+| item `hidden` | ⌘K does not open for the row; no row shortcut label; local shortcuts of its actions still run (`localActionCandidates`) | all its actions kept on the row for Enter and their shortcuts, marked `MenuHidden`, so the menu does not open |
+| view `visible` or `menu` | view actions join each row's menu under View, and an empty list's ⌘K lists them | view actions join a row's menu when the row has its own actions (Enter stays on the row's first action); an empty list's ⌘K lists them. The "View" section title is not drawn (the palette menu has no section headers yet) |
+| view `hidden` | view actions leave every ⌘K menu; their shortcuts still run | view actions kept as `MenuHidden` shortcut-only actions |
 
 Extension authoring actions (G6-G12) are missing in 2.0. See the report for the implementation status.
 

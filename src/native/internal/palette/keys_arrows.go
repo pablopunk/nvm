@@ -62,7 +62,7 @@ func (p *Palette) leftLeavesSearch() bool {
 
 // rightOpensMenu reports whether ArrowRight at the end of the query opens the menu of the chosen row.
 func (p *Palette) rightOpensMenu() bool {
-	return !p.actionsOpen && p.listsRows() && len(p.actions()) > 0
+	return !p.actionsOpen && p.listsRows() && len(p.menuActions()) > 0
 }
 
 // listsRows reports whether the arrows act on the view's rows: a grid moves with them, and a body draws its own keys.

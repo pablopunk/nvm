@@ -54,8 +54,8 @@ func (Extension) Manifest() api.Manifest {
 	}
 }
 
-// Commands lists the fix command when the OS can copy the selection. Without that capability the command does not
-// exist, so the palette never offers a fix that cannot run.
+// Commands lists the fix and the triage when the OS can copy the selection. Without that capability the commands do not
+// exist, so the palette never offers one that cannot run.
 func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 	if !ctx.System().HasCapability(selectionCopyCapability) {
 		return nil, nil
@@ -68,7 +68,7 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 		DismissAfterRun: true,
 		Customizable:    true,
 		Placement:       []api.Placement{api.PlacementRoot, api.PlacementSearch},
-	}}, nil
+	}, triageCommand()}, nil
 }
 
 // RootItems lists the undo row at the empty root while a fix can still be undone.
@@ -105,6 +105,8 @@ func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, er
 	switch in.Ref.ID {
 	case FixCommandID:
 		return api.Result{}, e.fix(ctx)
+	case TriageCommandID:
+		return api.Result{}, e.triage(ctx)
 	case UndoID:
 		return api.Result{}, e.undo(ctx)
 	}
