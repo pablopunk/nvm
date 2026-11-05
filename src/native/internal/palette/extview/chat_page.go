@@ -17,10 +17,18 @@ import (
 // the view's reply replaces what is shown, as a form's submit does.
 func (s *Session) chatPage() *palette.View {
 	if s.chatRenderer == nil {
-		s.chatRenderer = aichat.NewExtensionChat(s.replyRenderer(), time.Now)
+		s.chatRenderer = aichat.NewExtensionChat(s.replyRenderer(), s.now)
 	}
 	s.chatRenderer.SetSpec(s.chatSpec())
 	return s.chatRenderer.View()
+}
+
+// now reads the session clock, the zero time when the host gave none.
+func (s *Session) now() time.Time {
+	if s.deps.Clock == nil {
+		return time.Time{}
+	}
+	return s.deps.Clock.Now()
 }
 
 // replyRenderer is the Markdown drawer for replies, or plain text when the host gave none.
@@ -36,7 +44,7 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 	spec := s.view.Chat
 	out := aichat.ExtensionChatSpec{
 		Title:       s.view.Title,
-		Messages:    chatMessages(spec.Messages, time.Now()),
+		Messages:    chatMessages(spec.Messages, s.now()),
 		Placeholder: spec.Placeholder,
 		Tier:        chatTier(spec.Tier),
 		Actions:     s.pageActions,
