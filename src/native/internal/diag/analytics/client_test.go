@@ -32,9 +32,38 @@ func newTestClient(t *testing.T, set *fake.Set) *Client {
 		Dir:       "/config",
 		Version:   "0.9.0",
 		OS:        "darwin",
+		OSRelease: "24.6.0",
 		Arch:      "arm64",
 		Consent:   true,
 	})
+}
+
+func TestCommonPropertiesCarryOnlyAvailableOSRelease(t *testing.T) {
+	for _, tc := range []struct {
+		name, release string
+	}{
+		{name: "available", release: "24.6.0"},
+		{name: "unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			props := commonProperties(Config{Version: "0.9.0", OS: "darwin", Arch: "arm64", OSRelease: tc.release})
+			got, exists := props["os_release"]
+			if tc.release == "" {
+				if exists {
+					t.Fatalf("unavailable release must be omitted, got %#v", got)
+				}
+				return
+			}
+			if got != tc.release {
+				t.Fatalf("os_release = %#v, want %q", got, tc.release)
+			}
+			for _, private := range []string{"email", "distinct_id", "user_id", "prompt", "clipboard"} {
+				if _, exists := props[private]; exists {
+					t.Fatalf("common metadata included private field %q", private)
+				}
+			}
+		})
+	}
 }
 
 // sentBatches decodes every batch the fake transport received.

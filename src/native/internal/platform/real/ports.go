@@ -12,6 +12,7 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 func NewPorts() platform.Ports {
 	env := processSystemEnvironment()
 	return platform.Ports{
+		OSRelease:    newOSRelease(),
 		Clock:        realClock{},
 		FS:           osFS{},
 		HTTP:         newHTTPClient(),

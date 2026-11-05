@@ -39,10 +39,11 @@ type Config struct {
 	FS        platform.FS
 	Clock     platform.Clock
 	// Dir holds the install identifier file.
-	Dir     string
-	Version string
-	OS      string
-	Arch    string
+	Dir       string
+	Version   string
+	OS        string
+	OSRelease string
+	Arch      string
 	// Consent is the starting state of "Send Technical Diagnostics". SetConsent changes it later.
 	Consent bool
 	Log     *logx.Logger
@@ -121,13 +122,17 @@ func Channel(version string) string {
 
 // commonProperties are the fields every event carries. Callers cannot set them.
 func commonProperties(cfg Config) map[string]any {
-	return map[string]any{
+	properties := map[string]any{
 		"$process_person_profile": false,
 		"app_version":             cfg.Version,
 		"os_type":                 cfg.OS,
 		"arch":                    cfg.Arch,
 		"channel":                 Channel(cfg.Version),
 	}
+	if cfg.OSRelease != "" {
+		properties["os_release"] = cfg.OSRelease
+	}
+	return properties
 }
 
 // SetConsent turns sending on or off. Turning it off drops what is queued at once, so a batch that was waiting

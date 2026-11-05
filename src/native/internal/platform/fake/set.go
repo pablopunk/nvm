@@ -6,6 +6,7 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 // fields to script the world and assert on what the code did.
 type Set struct {
 	Clock        *Clock
+	OSRelease    *OSRelease
 	FS           *FS
 	HTTP         *HTTP
 	PublicHTTP   *HTTP
@@ -44,6 +45,7 @@ func NewSet() *Set {
 	clipboard := NewClipboard()
 	return &Set{
 		Clock:        NewClock(),
+		OSRelease:    NewOSRelease(),
 		FS:           NewFS(),
 		HTTP:         NewHTTP(),
 		PublicHTTP:   NewHTTP(),
@@ -82,6 +84,7 @@ func NewSet() *Set {
 func (s *Set) Ports() platform.Ports {
 	return platform.Ports{
 		Clock:        s.Clock,
+		OSRelease:    s.OSRelease,
 		FS:           s.FS,
 		HTTP:         s.HTTP,
 		PublicHTTP:   s.PublicHTTP,

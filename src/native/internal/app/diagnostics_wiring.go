@@ -33,6 +33,7 @@ const logDirectoryName = "logs"
 func (p *App) openDiagnostics(ports platform.Ports) {
 	openLogFile(ports)
 	p.recorder = diag.NewRecorder(searchClock, logx.NewRedactor())
+	osRelease := availableOSRelease(ports.OSRelease)
 	p.analytics = analytics.New(analytics.Config{
 		Endpoint:  analyticsEndpoint(packagedBuild()),
 		APIKey:    analytics.IngestKey,
@@ -42,11 +43,24 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 		Dir:       dataDir(),
 		Version:   nativeClientVersion,
 		OS:        runtime.GOOS,
+		OSRelease: osRelease,
 		Arch:      runtime.GOARCH,
 		Consent:   !p.diagnosticsOff(),
 	})
 	p.failures = analytics.NewFailureReporter(diag.NewReporter(logx.Default(), p.recorder), p.analytics, p.recorder)
 	p.startAnalytics()
+}
+
+// availableOSRelease omits the optional kernel release when the platform does not provide it or cannot read it.
+func availableOSRelease(source platform.OSRelease) string {
+	if source == nil {
+		return ""
+	}
+	release, err := source.KernelRelease()
+	if err != nil {
+		return ""
+	}
+	return release
 }
 
 // openLogFile writes the log to a size-rotated file under the config directory and mirrors it to stderr, so a

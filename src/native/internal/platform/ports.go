@@ -5,9 +5,10 @@ package platform
 // they use, through narrow parameters; this struct exists for the composition root and for tests that
 // need the whole platform at once.
 type Ports struct {
-	Clock Clock
-	FS    FS
-	HTTP  HTTP
+	Clock     Clock
+	OSRelease OSRelease
+	FS        FS
+	HTTP      HTTP
 	// PublicHTTP fetches public web pages and images for link previews. It refuses every destination that
 	// is not a public address at connect time (see HTTP and netpolicy.go); HTTP stays unrestricted for the
 	// backend and its local development servers.

@@ -6,6 +6,7 @@ require (
 	github.com/ebitengine/purego v0.11.1
 	github.com/egoist/mygo v0.7.4
 	github.com/traefik/yaegi v0.16.1
+	golang.org/x/sys v0.49.0
 )
 
 require (
