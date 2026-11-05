@@ -143,10 +143,14 @@ func (p *Palette) listBody(c *ui.Context) {
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
+		previousChoice := p.chosen
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
 			list = ui.List(c, &p.list, listRowCount(p.results, p.pendingBatch()), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6)
 		})
+		if p.chosen != previousChoice {
+			p.choicePinned = true
+		}
 		p.focusListIfRequested(c)
 		if list.Submitted() && !p.interact.clickedThisFrame {
 			p.runDefault()

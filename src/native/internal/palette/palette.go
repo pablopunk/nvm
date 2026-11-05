@@ -87,12 +87,13 @@ type Palette struct {
 	stack []*View
 	query string
 	// caretToEnd is set when the query was replaced: the input takes the caret to the end of the text once.
-	caretToEnd bool
-	results    []search.Item
-	chosen     int
-	list       ui.ListState
-	input      ui.Handle
-	interact   interactionState // pointer and click state of rows and cells, see interact.go
+	caretToEnd   bool
+	results      []search.Item
+	chosen       int
+	choicePinned bool
+	list         ui.ListState
+	input        ui.Handle
+	interact     interactionState // pointer and click state of rows and cells, see interact.go
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
 	focusList bool
 
@@ -188,6 +189,11 @@ func (p *Palette) Results() []search.Item { return p.results }
 func (p *Palette) Chosen() int { return p.chosen }
 
 func (p *Palette) choose(i int) {
+	p.choicePinned = true
+	p.clampChoice(i)
+}
+
+func (p *Palette) clampChoice(i int) {
 	p.chosen = p.enabledNear(max(0, min(i, len(p.results)-1)), i)
 	if len(p.results) > 0 {
 		p.list.ScrollIntoView(p.rowOf(p.chosen))

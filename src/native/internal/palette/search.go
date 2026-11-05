@@ -58,23 +58,25 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
 }
 
-// showRows shows rows for a view and a query. The cursor moves to the top when the view or the query changed,
-// and stays where it is when the same query is refreshed.
+// showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
+// changing the view or query resets that choice.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
 	if p.shownView != v || p.shownQuery != q {
-		p.chosen = 0
-	} else if selected := p.chosenItem(); selected != nil && selected.ID != "" {
+		p.chosen, p.choicePinned = 0, false
+	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {
 		for i := range rows {
 			if rows[i].ID == selected.ID {
 				p.chosen = i
 				break
 			}
 		}
+	} else if !p.choicePinned {
+		p.chosen = 0
 	}
 	p.shownView, p.shownQuery = v, q
 	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
-	p.choose(p.chosen)
+	p.clampChoice(p.chosen)
 }
 
 // loadingMore reports whether the rows on screen are missing a second batch that is still arriving: the providers of
@@ -101,7 +103,7 @@ func (p *Palette) chooseRequested(v *View) {
 	}
 	for i, row := range p.results {
 		if row.ID == v.SelectID {
-			p.chosen = i
+			p.chosen, p.choicePinned = i, true
 			break
 		}
 	}

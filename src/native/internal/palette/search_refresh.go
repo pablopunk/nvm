@@ -62,8 +62,6 @@ func (p *Palette) runSearchRefresh() {
 	if !p.win.IsVisible() || !queries[strings.TrimSpace(p.query)] {
 		return
 	}
-	keep := p.chosen
 	p.invalidateRows()
 	p.search()
-	p.choose(keep)
 }
