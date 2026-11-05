@@ -37,8 +37,7 @@ func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 	_, err = app.WaitFor("Save shortcut for “Left Half”", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	must(t, app.Key("Escape"))
-	must(t, app.DismissWithEscape())
+	dismissPalette(t, app)
 
 	must(t, app.SummonPalette())
 	must(t, app.Type("keyboard shortcuts"))
@@ -51,13 +50,28 @@ func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 	_, err = app.WaitFor("Left Half", elementWait)
 	must(t, err)
 	shoot(t, app, "j19s-1-bound")
-	must(t, app.Key("Escape"))
-	must(t, app.DismissWithEscape())
+	dismissPalette(t, app)
 	waitActiveWindow(t, probeID)
 
 	must(t, app.PressHotkey(accelerator))
 	waitProbeFrame(t, probeID, leftHalfOfWorkArea(t))
 	shoot(t, app, "j19s-2-applied")
+}
+
+// dismissPalette presses Escape while the palette is shown, until it hides. A press after it hides goes to the window
+// that got the keyboard back, the probe, so the journey does not send one.
+func dismissPalette(t *testing.T, app *App) {
+	t.Helper()
+	for range 4 {
+		visible, err := app.PaletteVisible()
+		must(t, err)
+		if !visible {
+			return
+		}
+		must(t, app.Key("Escape"))
+		time.Sleep(pollInterval)
+	}
+	t.Fatal("the palette did not hide after four Escape presses")
 }
 
 // waitActiveWindow waits until the X11 active window is id, which the palette's focus return must leave in place.
