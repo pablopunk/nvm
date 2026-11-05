@@ -46,6 +46,23 @@ func (s remoteSystem) Notify(title, body string) error {
 	return s.link.Call(protocol.ServiceSystem, protocol.OpNotify, protocol.NotifyArgs{Title: title, Body: body}, nil)
 }
 
+// Permissions reads the OS permissions the platform lists. A failed exchange reads as none.
+func (s remoteSystem) Permissions() []api.PermissionStatus {
+	var permissions []api.PermissionStatus
+	_ = s.link.Call(protocol.ServiceSystem, protocol.OpPermissions, nil, &permissions)
+	return permissions
+}
+
+// RequestPermission asks the host to show the OS prompt for a permission kind.
+func (s remoteSystem) RequestPermission(kind string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpRequestPermission, protocol.PermissionArgs{Kind: kind}, nil)
+}
+
+// OpenPermissionPane asks the host to open the settings pane of a permission kind.
+func (s remoteSystem) OpenPermissionPane(kind string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpOpenPermissionPane, protocol.PermissionArgs{Kind: kind}, nil)
+}
+
 // remoteShortcuts reads the shortcut table. A failed exchange reads as an empty table.
 type remoteShortcuts struct {
 	link *hostLink

@@ -45,6 +45,11 @@ type CapabilityArgs struct {
 	Name string `json:"name"`
 }
 
+// PermissionArgs names a permission kind, as api.System.RequestPermission and OpenPermissionPane do.
+type PermissionArgs struct {
+	Kind string `json:"kind"`
+}
+
 // IconResult is an app icon as a data URL, or Found false when the system has none.
 type IconResult struct {
 	DataURL string `json:"dataUrl,omitempty"`

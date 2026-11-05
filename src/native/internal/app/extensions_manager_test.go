@@ -38,18 +38,18 @@ func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *
 // newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
 // is the real one; a nil network refuses every fetch.
 func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
-	return newManagerWithApps(t, builtins, clock, network, nil, nil, enabled...)
+	return newManagerWithApps(t, builtins, clock, network, nil, nil, nil, enabled...)
 }
 
 // newFixtureManagerWithApps is newFixtureManager with the palette's apps lifecycle, so the applications built-in lists
 // the apps the palette indexed.
 func newFixtureManagerWithApps(t *testing.T, p *App) *manager.Manager {
 	t.Helper()
-	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, p.appsvc, p.builtInSettingsStore)
+	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, p.appsvc, p.builtInSettingsStore, permissionSurface{p: p})
 }
 
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
-func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, settingsHost func(string) services.SettingsHost, enabled ...string) *manager.Manager {
+func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, settingsHost func(string) services.SettingsHost, permissions services.PermissionSurface, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -71,6 +71,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 		Places:       fixturePlaces,
 		Network:      network,
 		Apps:         apps,
+		Permissions:  permissions,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dir, "extension-data"),

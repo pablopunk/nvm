@@ -47,12 +47,14 @@ type Ports struct {
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
 	// Notifier shows the notifications of the system service. Nil answers unavailable.
-	Notifier  platform.Notifier
-	Shortcuts services.ShortcutTable
-	Account   services.AccountState
-	OCR       *ocr.Service
-	History   func() *clipboard.History
-	Confirm   services.ConfirmFunc
+	Notifier platform.Notifier
+	// Permissions reads and acts on the OS permissions of the system service. Nil lists none.
+	Permissions services.PermissionSurface
+	Shortcuts   services.ShortcutTable
+	Account     services.AccountState
+	OCR         *ocr.Service
+	History     func() *clipboard.History
+	Confirm     services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
@@ -171,6 +173,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Windows:      ports.Windows,
 			Frontmost:    ports.Frontmost,
 			Notifier:     ports.Notifier,
+			Permissions:  ports.Permissions,
 			Shortcuts:    ports.Shortcuts,
 			Account:      ports.Account,
 			OCR:          ports.OCR,

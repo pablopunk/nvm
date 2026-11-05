@@ -62,6 +62,8 @@ type Deps struct {
 	Windows WindowEngine
 	// Frontmost names the app in front. Nil answers unavailable.
 	Frontmost FrontmostSource
+	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.
+	Permissions PermissionSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.

@@ -27,6 +27,7 @@ func init() {
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
+		"ActionHost":                    reflect.ValueOf(api.ActionHost),
 		"ActionOpenPalette":             reflect.ValueOf(api.ActionOpenPalette),
 		"ActionOpenPath":                reflect.ValueOf(api.ActionOpenPath),
 		"ActionOpenURL":                 reflect.ValueOf(api.ActionOpenURL),
@@ -145,6 +146,7 @@ func init() {
 		"IndicatorRecording":            reflect.ValueOf(api.IndicatorRecording),
 		"IndicatorSuccess":              reflect.ValueOf(api.IndicatorSuccess),
 		"IndicatorTranscribing":         reflect.ValueOf(api.IndicatorTranscribing),
+		"IsPermissionKind":              reflect.ValueOf(api.IsPermissionKind),
 		"KnownCapabilities":             reflect.ValueOf(api.KnownCapabilities),
 		"KnownMenuBarIcon":              reflect.ValueOf(api.KnownMenuBarIcon),
 		"LayoutCenter":                  reflect.ValueOf(api.LayoutCenter),
@@ -198,6 +200,16 @@ func init() {
 		"PatchMerge":                    reflect.ValueOf(api.PatchMerge),
 		"PatchPrepend":                  reflect.ValueOf(api.PatchPrepend),
 		"PatchReplace":                  reflect.ValueOf(api.PatchReplace),
+		"PermissionAccessibility":       reflect.ValueOf(constant.MakeFromLiteral("\"accessibility\"", token.STRING, 0)),
+		"PermissionAllowed":             reflect.ValueOf(constant.MakeFromLiteral("\"allowed\"", token.STRING, 0)),
+		"PermissionCamera":              reflect.ValueOf(constant.MakeFromLiteral("\"camera\"", token.STRING, 0)),
+		"PermissionDenied":              reflect.ValueOf(constant.MakeFromLiteral("\"denied\"", token.STRING, 0)),
+		"PermissionFilesAndFolders":     reflect.ValueOf(constant.MakeFromLiteral("\"files-and-folders\"", token.STRING, 0)),
+		"PermissionKinds":               reflect.ValueOf(api.PermissionKinds),
+		"PermissionMicrophone":          reflect.ValueOf(constant.MakeFromLiteral("\"microphone\"", token.STRING, 0)),
+		"PermissionNotDetermined":       reflect.ValueOf(constant.MakeFromLiteral("\"not-determined\"", token.STRING, 0)),
+		"PermissionScreenRecording":     reflect.ValueOf(constant.MakeFromLiteral("\"screen-recording\"", token.STRING, 0)),
+		"PermissionUnknown":             reflect.ValueOf(constant.MakeFromLiteral("\"unknown\"", token.STRING, 0)),
 		"PlacementHidden":               reflect.ValueOf(api.PlacementHidden),
 		"PlacementRoot":                 reflect.ValueOf(api.PlacementRoot),
 		"PlacementSearch":               reflect.ValueOf(api.PlacementSearch),
@@ -407,6 +419,7 @@ func init() {
 		"PanelVisibility":         reflect.ValueOf((*api.PanelVisibility)(nil)),
 		"PasteOptions":            reflect.ValueOf((*api.PasteOptions)(nil)),
 		"PatchMode":               reflect.ValueOf((*api.PatchMode)(nil)),
+		"PermissionStatus":        reflect.ValueOf((*api.PermissionStatus)(nil)),
 		"Place":                   reflect.ValueOf((*api.Place)(nil)),
 		"Placement":               reflect.ValueOf((*api.Placement)(nil)),
 		"Popover":                 reflect.ValueOf((*api.Popover)(nil)),
@@ -1446,13 +1459,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Storage) Set(key strin
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_System is an interface wrapper for System type
 type _github_com_pablopunk_nvm_native_internal_ext_api_System struct {
-	IValue         interface{}
-	WHasCapability func(name string) bool
-	WLabels        func() api.SystemLabels
-	WNotify        func(title string, body string) error
-	WOS            func() string
-	WPlaces        func() []api.Place
-	WSettingsPanes func() []api.SettingsPane
+	IValue              interface{}
+	WHasCapability      func(name string) bool
+	WLabels             func() api.SystemLabels
+	WNotify             func(title string, body string) error
+	WOS                 func() string
+	WOpenPermissionPane func(kind string) error
+	WPermissions        func() []api.PermissionStatus
+	WPlaces             func() []api.Place
+	WRequestPermission  func(kind string) error
+	WSettingsPanes      func() []api.SettingsPane
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) HasCapability(name string) bool {
@@ -1467,8 +1483,17 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Notify(title s
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OS() string {
 	return W.WOS()
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OpenPermissionPane(kind string) error {
+	return W.WOpenPermissionPane(kind)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Permissions() []api.PermissionStatus {
+	return W.WPermissions()
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Places() []api.Place {
 	return W.WPlaces()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) RequestPermission(kind string) error {
+	return W.WRequestPermission(kind)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) SettingsPanes() []api.SettingsPane {
 	return W.WSettingsPanes()

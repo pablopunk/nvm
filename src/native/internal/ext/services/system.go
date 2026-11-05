@@ -24,6 +24,12 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 		return h.places(), nil
 	case protocol.OpNotify:
 		return nil, h.notify(call.Args)
+	case protocol.OpPermissions:
+		return h.permissionStatuses(), nil
+	case protocol.OpRequestPermission:
+		return nil, h.requestPermission(call.Args)
+	case protocol.OpOpenPermissionPane:
+		return nil, h.openPermissionPane(call.Args)
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }

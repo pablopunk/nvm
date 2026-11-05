@@ -70,16 +70,15 @@ func TestPermissionPromptsOnlyWhereTheOSCanAsk(t *testing.T) {
 	states := permissionFake(t, p)
 	states.SetState(platform.PermissionMicrophone, platform.PermissionNotDetermined)
 	states.SetState(platform.PermissionCamera, platform.PermissionAllowed)
-	for _, row := range p.systemSvc.PermissionRows() {
-		item := p.permissionItem(row)
-		switch row.Kind {
-		case platform.PermissionMicrophone:
-			if len(item.Actions) != 2 || !strings.HasPrefix(item.Actions[0].Title, "Allow ") {
-				t.Fatalf("microphone actions = %+v, want an Allow prompt then Open Settings", item.Actions)
+	for _, status := range (permissionSurface{p: p}).Statuses() {
+		switch status.Kind {
+		case string(platform.PermissionMicrophone):
+			if !status.Prompt {
+				t.Fatalf("microphone status = %+v, want Enter to ask the OS", status)
 			}
-		case platform.PermissionCamera:
-			if len(item.Actions) != 1 || !strings.HasPrefix(item.Actions[0].Title, "Open ") {
-				t.Fatalf("camera actions = %+v, want only Open Settings", item.Actions)
+		case string(platform.PermissionCamera):
+			if status.Prompt {
+				t.Fatalf("camera status = %+v, want Enter to open Settings", status)
 			}
 		}
 	}
@@ -111,7 +110,7 @@ func TestPaletteOSPermissions(t *testing.T) {
 	states := permissionFake(t, p)
 	states.SetState(platform.PermissionMicrophone, platform.PermissionNotDetermined)
 	states.SetState(platform.PermissionCamera, platform.PermissionAllowed)
-	goldenOpen(p, p.permissionsView())
+	goldenOpen(p, p.permissionsPage())
 	golden.AssertMatrix(t, "os-permissions", p.View, systemGoldens)
 }
 

@@ -242,9 +242,10 @@ type SystemLabels struct {
 	SettingsCommand string `json:"settingsCommand"`
 }
 
-// System is read-only host metadata. Use HasCapability to omit unsupported rows from discovery
+// System is host metadata and a few system actions. Use HasCapability to omit unsupported rows from discovery
 // instead of duplicating platform checks. Names are dotted: "windows.always-on-top", "ocr",
-// "keyboard.type-text", "quick-look", "window-management".
+// "keyboard.type-text", "quick-look", "window-management". Notify, RequestPermission and OpenPermissionPane act, and
+// they need the system declaration.
 type System interface {
 	OS() string
 	HasCapability(name string) bool
@@ -257,6 +258,13 @@ type System interface {
 	// click action: the Electron extension API had none. It returns an error when the user or the OS turned notifications
 	// off, and when the system cannot show them.
 	Notify(title, body string) error
+	// Permissions lists the OS permissions the platform has, with the state the OS reports for each.
+	Permissions() []PermissionStatus
+	// RequestPermission asks the OS to show its prompt for a permission kind. It fails with the reason when the OS has
+	// no prompt for it, and the extension then opens the pane instead.
+	RequestPermission(kind string) error
+	// OpenPermissionPane opens the System Settings pane that reviews a permission kind.
+	OpenPermissionPane(kind string) error
 }
 
 // SettingsPane is one pane of the operating system's settings app. Setting an ActionSystem op of

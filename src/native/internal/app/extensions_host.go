@@ -81,6 +81,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Windows:       p.extensionWindows(),
 		Frontmost:     ports.Windows,
 		Notifier:      ports.Notifier,
+		Permissions:   permissionSurface{p: p},
 		Shortcuts:     p.extensionShortcuts(),
 		Account:       extensionAccount{p: p},
 		OCR:           textReader,
