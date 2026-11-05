@@ -124,7 +124,7 @@ const goldenClipboardLink = "https://nevermind.app/docs/palette"
 func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 	t.Helper()
 	h := f.engine.history
-	shot := goldenBitmap(t, 640, 360, goldenPictureFill)
+	shot := goldenPictureBytes(t, 640, 360, goldenPictureFill)
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -139,7 +139,8 @@ func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 	must(h.Remember(clipboard.Entry{ID: "e-shot", Kind: clipboard.KindImage, ImageRef: goldenClipboardImageName, Width: 640, Height: 360, Bytes: 1, CreatedAt: goldenNow.Add(-40 * time.Minute)}))
 	must(h.Remember(clipboard.Entry{ID: "e-notes", Kind: clipboard.KindText, Text: "Meeting notes: ship the design package by Friday and review the goldens with Ana", CreatedAt: goldenNow.Add(-2 * time.Hour)}))
 	must(h.Remember(clipboard.Entry{ID: "e-rebase", Kind: clipboard.KindText, Text: "git rebase -i HEAD~3", CreatedAt: goldenNow.Add(-3 * time.Minute)}))
-	f.engine.pics.seed(goldenClipboardImageName, shot)
+	_, err := f.engine.images.Save(strings.Repeat("c", clipboard.HashLength), shot)
+	must(err)
 }
 
 // goldenPictureFill is the colour of the golden picture.

@@ -191,3 +191,38 @@ type OpenWithArgs struct {
 	Path    string `json:"path"`
 	AppPath string `json:"appPath"`
 }
+
+// WriteHTMLArgs puts HTML and its plain-text flavor on the clipboard.
+type WriteHTMLArgs struct {
+	HTML      string `json:"html"`
+	Text      string `json:"text"`
+	Concealed bool   `json:"concealed,omitempty"`
+}
+
+// WriteFilesArgs puts a list of file paths on the clipboard, as a file manager copy does.
+type WriteFilesArgs struct {
+	Paths     []string `json:"paths"`
+	Concealed bool     `json:"concealed,omitempty"`
+}
+
+// WriteImageFileArgs puts the PNG file at Path on the clipboard.
+type WriteImageFileArgs struct {
+	Path      string `json:"path"`
+	Concealed bool   `json:"concealed,omitempty"`
+}
+
+// ImageFileResult is a clipboard image written to a file the host owns, or Found false when there is no image.
+type ImageFileResult struct {
+	File  api.FileRef `json:"file"`
+	Found bool        `json:"found"`
+}
+
+// FormatsArgs names the formats a Read takes, in order. Empty means every format.
+type FormatsArgs struct {
+	Formats []string `json:"formats,omitempty"`
+}
+
+// ContentArgs carries one ClipboardContent to write.
+type ContentArgs struct {
+	Content api.ClipboardContent `json:"content"`
+}

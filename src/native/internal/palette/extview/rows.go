@@ -12,12 +12,16 @@ import (
 // extensionTone is the tint of every extension row's tile, the same as the rows the extension list shows.
 const extensionTone = "purple"
 
-// rowTone is the tint of an item's tile: the extension tone, or none when the item names the neutral foreground.
+// rowTone is the tint of an item's tile and title: the item's Appearance color, the extension tone when it names none,
+// or no tint when it names the neutral foreground.
 func rowTone(item api.Item) string {
-	if item.Appearance != nil && item.Appearance.Foreground == api.ColorNone {
+	if item.Appearance == nil || item.Appearance.Foreground == "" {
+		return extensionTone
+	}
+	if item.Appearance.Foreground == api.ColorNone {
 		return ""
 	}
-	return extensionTone
+	return string(item.Appearance.Foreground)
 }
 
 // defaultIcon draws an item that names no icon.
@@ -36,7 +40,7 @@ func rowIcon(item api.Item) string {
 func (s *Session) row(item api.Item) search.Item {
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
-		Icon: rowIcon(item), Tone: rowTone(item),
+		Icon: rowIcon(item), Tone: rowTone(item), TintTitle: item.TintTitle,
 		Accessory: accessoryText(item.Accessories),
 		Detail:    s.detailPane(item.Detail),
 		Image:     s.bitmap(item.Image),

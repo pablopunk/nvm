@@ -12,6 +12,7 @@ import (
 	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
+	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	dictationbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
@@ -45,6 +46,7 @@ type builtInInputs struct {
 	Dictation     dictationbuiltin.Legacy
 	GuideDone     bool
 	SearchEngine  string
+	Clipboard     func() clipboardbuiltin.Options
 }
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
@@ -56,6 +58,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), dictationbuiltin.New(in.Dictation), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
 		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
+		clipboardbuiltin.New(in.Clipboard),
 	}
 }
 

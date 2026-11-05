@@ -64,6 +64,8 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		},
 		OpenURL:               func(url string) { _ = mygo.Shell.OpenExternal(url) },
 		CopyText:              func(h search.Host, text string) { p.copyText(h, text) },
+		CopyImage:             func(h search.Host, path string) { p.copyImageFile(h, path) },
+		LinkCard:              p.linkCardOf,
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },

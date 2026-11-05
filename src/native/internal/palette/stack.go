@@ -72,6 +72,9 @@ func (p *Palette) Hide() {
 
 // Refresh runs the current search again and keeps the cursor where it is. It is safe from any goroutine.
 func (p *Palette) Refresh() {
+	if p.win == nil {
+		return
+	}
 	p.win.Update(func() {
 		keep := p.chosen
 		p.invalidateRows()

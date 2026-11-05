@@ -90,6 +90,7 @@ func init() {
 		"ColorRed":                      reflect.ValueOf(api.ColorRed),
 		"ColorTeal":                     reflect.ValueOf(api.ColorTeal),
 		"ColorYellow":                   reflect.ValueOf(api.ColorYellow),
+		"CopyImage":                     reflect.ValueOf(api.CopyImage),
 		"CopyText":                      reflect.ValueOf(api.CopyText),
 		"Current":                       reflect.ValueOf(&api.Current).Elem(),
 		"DataSourceFrom":                reflect.ValueOf(api.DataSourceFrom),
@@ -1517,17 +1518,20 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) SettingsPanes(
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard is an interface wrapper for SystemClipboard type
 type _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard struct {
-	IValue      interface{}
-	WRead       func(formats []string) (api.ClipboardContent, error)
-	WReadFiles  func() ([]api.FileRef, error)
-	WReadHTML   func() (string, error)
-	WReadImage  func() (dataURL string, found bool, err error)
-	WReadText   func() (string, error)
-	WWrite      func(content api.ClipboardContent) error
-	WWriteFiles func(paths []string, concealed bool) error
-	WWriteHTML  func(html string, text string, concealed bool) error
-	WWriteImage func(dataURL string, concealed bool) error
-	WWriteText  func(text string, concealed bool) error
+	IValue          interface{}
+	WRead           func(formats []string) (api.ClipboardContent, error)
+	WReadFiles      func() ([]api.FileRef, error)
+	WReadHTML       func() (string, error)
+	WReadImage      func() (dataURL string, found bool, err error)
+	WReadImageFile  func() (image api.FileRef, found bool, err error)
+	WReadRTF        func() (string, error)
+	WReadText       func() (string, error)
+	WWrite          func(content api.ClipboardContent) error
+	WWriteFiles     func(paths []string, concealed bool) error
+	WWriteHTML      func(html string, text string, concealed bool) error
+	WWriteImage     func(dataURL string, concealed bool) error
+	WWriteImageFile func(path string, concealed bool) error
+	WWriteText      func(text string, concealed bool) error
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) Read(formats []string) (api.ClipboardContent, error) {
@@ -1541,6 +1545,12 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) ReadH
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) ReadImage() (dataURL string, found bool, err error) {
 	return W.WReadImage()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) ReadImageFile() (image api.FileRef, found bool, err error) {
+	return W.WReadImageFile()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) ReadRTF() (string, error) {
+	return W.WReadRTF()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) ReadText() (string, error) {
 	return W.WReadText()
@@ -1556,6 +1566,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) Write
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) WriteImage(dataURL string, concealed bool) error {
 	return W.WWriteImage(dataURL, concealed)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) WriteImageFile(path string, concealed bool) error {
+	return W.WWriteImageFile(path, concealed)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_SystemClipboard) WriteText(text string, concealed bool) error {
 	return W.WWriteText(text, concealed)

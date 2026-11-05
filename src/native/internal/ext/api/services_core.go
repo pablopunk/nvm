@@ -178,6 +178,10 @@ type ClipboardEntry struct {
 	ImagePath    string `json:"imagePath,omitempty"`
 	VideoURL     string `json:"videoUrl,omitempty"`
 	FilePath     string `json:"filePath,omitempty"`
+	// FilePaths is every file of a file-list copy. FilePath is the first of them, as 1.x names it.
+	FilePaths []string `json:"filePaths,omitempty"`
+	// HTML is the markup of an HTML copy; Text is its plain-text flavor.
+	HTML         string `json:"html,omitempty"`
 	ThumbnailURL string `json:"thumbnailUrl,omitempty"`
 	CreatedAtMs  int64  `json:"createdAtMs,omitempty"`
 }

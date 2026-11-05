@@ -83,7 +83,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	services := fake.NewSet()
 	services.System.SetHome(goldenHome(t))
 	p.attachServices(services.Ports(), goldenOS, goldenData, time.UTC)
-	p.exts.mgr.Store(newFixtureManagerWithIndex(t, p.appsvc, fileIndexPort{p: p}))
+	p.exts.mgr.Store(newFixtureManagerWithIndex(t, p.appsvc, fileIndexPort{p: p}, p.testExtensionPorts()))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")
@@ -137,7 +137,7 @@ func goldenUsage() *usage.Learner {
 func goldenClockNow() time.Time { return goldenNow }
 
 // goldenBitmap is a solid image with a lighter block, decoded as the palette decodes real images.
-func goldenBitmap(t *testing.T, width, height int, fill color.NRGBA) *ui.Bitmap {
+func goldenPictureBytes(t testing.TB, width, height int, fill color.NRGBA) []byte {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, width, height))
 	for y := 0; y < height; y++ {
@@ -154,7 +154,12 @@ func goldenBitmap(t *testing.T, width, height int, fill color.NRGBA) *ui.Bitmap 
 	if err := png.Encode(&buf, img); err != nil {
 		t.Fatal(err)
 	}
-	bm, err := ui.DecodeBitmap(buf.Bytes())
+	return buf.Bytes()
+}
+
+func goldenBitmap(t *testing.T, width, height int, fill color.NRGBA) *ui.Bitmap {
+	t.Helper()
+	bm, err := ui.DecodeBitmap(goldenPictureBytes(t, width, height, fill))
 	if err != nil {
 		t.Fatal(err)
 	}

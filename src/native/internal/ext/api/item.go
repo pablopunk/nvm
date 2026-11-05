@@ -43,6 +43,9 @@ type Item struct {
 	// (for example "Commands") and the key the usage learner ranks it by. The host ignores both for folder extensions.
 	Section  string `json:"section,omitempty"`
 	LearnKey string `json:"learnKey,omitempty"`
+	// TintTitle draws the title in the row's Appearance color, as the native clipboard rows did. Like Section, it is a
+	// presentation the host offers built-in extensions.
+	TintTitle bool `json:"tintTitle,omitempty"`
 	// Shortcut is a local shortcut that is active only while this item is selected.
 	Shortcut string `json:"shortcut,omitempty"`
 	// QueryFallback marks an open-ended row that echoes the query (for example a web search row). The host offers it

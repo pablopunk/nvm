@@ -14,10 +14,8 @@ import (
 // are copied, the snippets are cloned, and the slices the UI thread replaces as a whole (apps,
 // extensions, file paths) are shared as they are. The clipboard history locks its own state, so it is shared too.
 type rootInput struct {
-	learn      *usage.Learner
-	clip       *clipEngine
-	clipInRoot bool
-	clipSearch bool
+	learn *usage.Learner
+	clip  *clipEngine
 	// updatePrompt is whether the root shows an update prompt, which replaces the Check for Updates row, as in 1.x.
 	updatePrompt bool
 	chats        []chatHead
@@ -54,8 +52,6 @@ func (p *App) captureRoot() *rootInput {
 	return &rootInput{
 		learn:        p.learn,
 		clip:         p.clip,
-		clipInRoot:   !p.S.ClipRootOff,
-		clipSearch:   !p.S.ClipRootSearchOff,
 		updatePrompt: rootShowsUpdate(p.updateSnapshot().State),
 		chats:        chats,
 		shortcuts:    p.boundShortcuts(),

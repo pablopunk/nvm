@@ -49,7 +49,7 @@ func (p *App) shortcutCommands() []shortcuts.Action {
 	if p.windowManagementEnabled() {
 		actions = append(actions, windows.ShortcutActions()...)
 	}
-	return actions
+	return append(actions, movedCommandShortcutActions...)
 }
 
 // startShortcuts binds the palette shortcut and the actions. It runs once the palette exists. Summon retries a shortcut

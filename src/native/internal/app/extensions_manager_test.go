@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,42 +41,33 @@ func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *
 // newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
 // is the real one; a nil network refuses every fetch.
 func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
-	return newManagerWithApps(t, builtins, clock, network, nil, enabled...)
+	return newManagerWithApps(t, builtins, clock, network, nil, extensionPorts{}, enabled...)
 }
 
-// newFixtureManagerWithApps is newFixtureManager with the palette's apps lifecycle, so the applications built-in lists
-// the apps the palette indexed.
-func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manager.Manager {
+// newFixtureManagerWithIndex is newFixtureManager with the palette's apps lifecycle, the file index the built-in files
+// extension reads, and the clipboard history and pictures of the palette the goldens run against.
+func newFixtureManagerWithIndex(t *testing.T, apps services.AppLifecycle, index services.FileIndex, extras extensionPorts) *manager.Manager {
 	t.Helper()
-	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+	return newManagerWithFakes(t, managerFakes{index: index, extras: extras}, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: extras.options}), extras.clock, nil, apps)
 }
 
-// newFixtureManagerWithIndex is newFixtureManagerWithApps with the file index the built-in files extension reads.
-func newFixtureManagerWithIndex(t *testing.T, apps services.AppLifecycle, index services.FileIndex) *manager.Manager {
+// newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services and the clipboard
+// ports the extensions read.
+func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, extras extensionPorts, enabled ...string) *manager.Manager {
 	t.Helper()
-	return newManagerWithIndex(t, index, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+	return newManagerWithFakes(t, managerFakes{extras: extras}, builtins, clock, network, apps, enabled...)
 }
 
-// newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
-func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
-	t.Helper()
-	return newManagerWithIndex(t, nil, builtins, clock, network, apps, enabled...)
-}
-
-// newManagerWithIndex is newManagerWithApps with the file index the built-in files extension reads.
-func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
-	return newManagerWithFakes(t, managerFakes{index: index}, builtins, clock, network, apps, enabled...)
-}
-
-// managerFakes are the host services a test puts in place of the real ones: the file index, the model calls and the
-// signed-in account. A nil field keeps the service absent, as the app without it does.
+// managerFakes are the host services a test puts in place of the real ones: the file index, the model calls, the
+// signed-in account and the clipboard ports. A nil field keeps the service absent, as the app without it does.
 type managerFakes struct {
 	index   services.FileIndex
 	ai      *extai.Service
 	account services.AccountState
+	extras  extensionPorts
 }
 
-// newManagerWithFakes is newManagerWithIndex with the host services of fakes.
+// newManagerWithFakes is newManagerWithApps with the host services of fakes.
 func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
@@ -93,10 +86,12 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 	}
 	m, err := manager.New(manager.Ports{
 		Files: ports.FS, FileIndex: fakes.index, AI: fakes.ai, Account: fakes.account, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
-		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
-		Places:       fixturePlaces,
-		Network:      network,
-		Apps:         apps,
+		Capabilities:    platform.NewCapabilities(platform.AllCapabilities()...),
+		Places:          fixturePlaces,
+		Network:         network,
+		Apps:            apps,
+		History:         fakes.extras.history,
+		ClipboardImages: fakes.extras.images,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
@@ -133,13 +128,27 @@ func fixtureFiles(t testing.TB, id string) map[string][]byte {
 	return files
 }
 
-// waitForState blocks until extension id reports the state want, or fails the test.
+// fixtureRestartPoll is how often waitForState calls the extensions while a failed child waits out its backoff.
+const fixtureRestartPoll = 25 * time.Millisecond
+
+// waitForState blocks until extension id reports the state want, or fails the test. A child that failed to start
+// (a start that missed its budget under load, or a child that died) restarts only on a call once its backoff has
+// passed, as the palette's own calls restart it, so the wait makes that call rather than waiting for a state no one
+// will reach.
 func waitForState(t *testing.T, m *manager.Manager, id string, want supervisor.State) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), fixtureWaitTimeout)
 	defer cancel()
-	if err := m.WaitFor(ctx, id, func(s supervisor.Status) bool { return s.State == want }); err != nil {
-		t.Fatalf("waiting for %s to be %s: %v", id, want, err)
+	for {
+		if err := m.WaitFor(ctx, id, func(s supervisor.Status) bool { return s.State == want || s.State == supervisor.StateFailed }); err != nil {
+			t.Fatalf("waiting for %s to be %s: %v; last status %+v", id, want, err, listingFor(t, m, id).Runtime)
+		}
+		status := listingFor(t, m, id).Runtime
+		if status.State == want {
+			return
+		}
+		_ = m.Commands(ctx)
+		time.Sleep(fixtureRestartPoll)
 	}
 }
 
@@ -158,4 +167,32 @@ func listingFor(t *testing.T, m *manager.Manager, id string) manager.Listing {
 func fixturePlaces() []api.Place {
 	home, _ := os.UserHomeDir()
 	return apiPlaces(systemfeat.Places(home))
+}
+
+// extensionPorts are the clipboard history and pictures a test manager's services read. A zero value serves none.
+type extensionPorts struct {
+	history func() *clipboard.History
+	images  services.ClipboardImages
+	options func() clipboardbuiltin.Options
+	clock   platform.Clock
+}
+
+// pinnedNowClock is the real clock with its instant pinned, so the relative times a golden draws are the same every run.
+type pinnedNowClock struct {
+	platform.Clock
+	now time.Time
+}
+
+// Now is the pinned instant.
+func (c pinnedNowClock) Now() time.Time { return c.now }
+
+// goldenClock is the clock the goldens' extensions read: the real one with the golden instant pinned.
+func goldenClock() platform.Clock {
+	return pinnedNowClock{Clock: real.NewPorts().Clock, now: goldenNow}
+}
+
+// testExtensionPorts are the clipboard history and pictures the palette's extension services read, for the golden
+// palette's manager. They follow the palette's clipboard engine as it changes.
+func (p *App) testExtensionPorts() extensionPorts {
+	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions, clock: goldenClock()}
 }

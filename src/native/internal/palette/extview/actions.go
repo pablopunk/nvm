@@ -60,6 +60,12 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 	case api.ActionCopyText:
 		text := action.Text
 		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyText(h, text) }}
+	case api.ActionCopyImage:
+		if s.deps.CopyImage == nil || action.Path == "" {
+			break
+		}
+		path := action.Path
+		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, path) }}
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
 		return s.pasteOperation(action, title)
 	case api.ActionPushView:

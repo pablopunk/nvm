@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -14,7 +13,6 @@ import (
 const (
 	scoreExtension    = 960
 	scoreFileFirst    = 75
-	scoreClipboard    = 55
 	scoreAutomate     = 40
 	scoreCommandAlias = 45
 )
@@ -23,20 +21,16 @@ const (
 // a conversation 13, a recent file the rest of the band below the commands. A command with no 1.x score sits at the
 // 1.x default for commands.
 const (
-	scoreRootClipboard    = 60
 	scoreRootApplication  = 55
 	scoreRootConversation = 13
 	scoreRootCommand      = 12
-	rootClipboardLimit    = 10
-	// rootSearchClipboardLimit is how many copies a search from the root lists, as 1.x does.
-	rootSearchClipboardLimit = 5
 )
 
 // checkForUpdatesTitle names the command that checks for an update.
 const checkForUpdatesTitle = "Check for Updates"
 
 // rootCommandScores are the 1.x scores of the commands the empty root lists.
-var rootCommandScores = map[string]int{"Clipboard History": 14, "Keyboard Shortcuts": 16, "AI Chats": 16,
+var rootCommandScores = map[string]int{"Keyboard Shortcuts": 16, "AI Chats": 16,
 	checkForUpdatesTitle: 23, "Log in to Nevermind": 18, "Log out of Nevermind": 18}
 
 // rootCommandScore is the score of a command at the empty root.
@@ -78,7 +72,6 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		if commandShortcutID(cmd) != "" {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		}
-		it.LastUsed = commandLastUsed(cmd.Title, in)
 		if lq == "" {
 			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
 				it.Score = rootCommandScore(cmd.Title)
@@ -97,40 +90,6 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			it.Score = s
 			out = append(out, it)
 		}
-	}
-	return out
-}
-
-// clipboardTextKinds are the history kinds the root answers with: copies that are text, with or without markup.
-var clipboardTextKinds = []clipboard.Kind{clipboard.KindText, clipboard.KindHTML, clipboard.KindRTF}
-
-// clipboardRows shows the copies at the empty root, up to rootClipboardLimit when the root list shows them, and
-// otherwise the best text copies that contain the query, up to rootSearchClipboardLimit when the root search shows
-// them. Pinned copies come first, then the newest. The history is read on the search goroutine; it locks its own state.
-func clipboardRows(p *App, in *rootInput, q string) []search.Item {
-	if q == "" {
-		if !in.clipInRoot {
-			return nil
-		}
-		return clipboardEntryRows(p, in, clipboard.Query{Limit: rootClipboardLimit}, func(int) int { return scoreRootClipboard })
-	}
-	if !in.clipSearch {
-		return nil
-	}
-	return clipboardEntryRows(p, in, clipboard.Query{Text: q, Kinds: clipboardTextKinds, Limit: rootSearchClipboardLimit}, func(i int) int { return scoreClipboard - i })
-}
-
-// clipboardEntryRows turns the history entries of query into rows, scored by their position.
-func clipboardEntryRows(p *App, in *rootInput, query clipboard.Query, score func(position int) int) []search.Item {
-	entries := in.clip.history.Find(query)
-	historyLen := in.clip.history.Len()
-	out := make([]search.Item, 0, len(entries))
-	for i, e := range entries {
-		ci := p.clipItem(e, historyLen)
-		ci.Kind = search.KindClipboard
-		ci.Score = score(i)
-		ci.LastUsed = clipboardLastUsed(e)
-		out = append(out, ci)
 	}
 	return out
 }
@@ -177,31 +136,6 @@ func automateRows(p *App, _ *rootInput, q string) []search.Item {
 func conversationTiePriority(kind chat.Kind) int {
 	if kind == chat.KindBuilder {
 		return -1
-	}
-	return 0
-}
-
-// clipboardLastUsed is the copy time of a clipboard row, the time 1.x sorts clipboard rows by
-// (src/app/electron/clipboard/clipboard-history.ts:418).
-func clipboardLastUsed(e clipboard.Entry) int64 {
-	if e.CreatedAt.IsZero() {
-		return 0
-	}
-	return e.CreatedAt.UnixMilli()
-}
-
-// commandLastUsed is the last use 1.x gives a root command: Clipboard History sorts just before the newest copy
-// (src/app/electron/clipboard/clipboard-history.ts:804). Other commands have none.
-func commandLastUsed(title string, in *rootInput) int64 {
-	if title != "Clipboard History" || in.clip == nil {
-		return 0
-	}
-	newest := in.clip.history.Find(clipboard.Query{Limit: 1})
-	if len(newest) == 0 {
-		return 0
-	}
-	if last := clipboardLastUsed(newest[0]); last != 0 {
-		return last - 1
 	}
 	return 0
 }

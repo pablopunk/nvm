@@ -120,9 +120,11 @@ type ActionSection struct {
 
 // ClipboardContent is a value written to the system clipboard or pasted.
 type ClipboardContent struct {
+	// Type is text, html, image, files, or empty when Read found nothing.
 	Type         string   `json:"type"`
 	Text         string   `json:"text,omitempty"`
 	HTML         string   `json:"html,omitempty"`
+	RTF          string   `json:"rtf,omitempty"`
 	ImageDataURL string   `json:"imageDataUrl,omitempty"`
 	ImagePath    string   `json:"imagePath,omitempty"`
 	Paths        []string `json:"paths,omitempty"`

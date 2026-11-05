@@ -54,7 +54,9 @@ type Ports struct {
 	Account   services.AccountState
 	OCR       *ocr.Service
 	History   func() *clipboard.History
-	Confirm   services.ConfirmFunc
+	// ClipboardImages makes the files and thumbnails of clipboard pictures for the desktop.clipboard and history services.
+	ClipboardImages services.ClipboardImages
+	Confirm         services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
@@ -163,26 +165,27 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			SearchRefresh:  opts.SearchRefresh,
 			Bundles:        bundled.Shipped(),
 
-			Shell:        ports.Shell,
-			Commands:     ports.Commands,
-			Home:         opts.Home,
-			Capabilities: ports.Capabilities,
-			OS:           ports.OS,
-			Windows:      ports.Windows,
-			Frontmost:    ports.Frontmost,
-			Notifier:     ports.Notifier,
-			Shortcuts:    ports.Shortcuts,
-			Account:      ports.Account,
-			OCR:          ports.OCR,
-			Indicators:   ports.Indicators,
-			Dictation:    ports.Dictation,
-			AI:           ports.AI,
-			Selection:    ports.Selection,
-			Paste:        ports.Paste,
-			Apps:         ports.Apps,
-			History:      ports.History,
-			Confirm:      ports.Confirm,
-			Notify:       ports.Notify,
+			Shell:           ports.Shell,
+			Commands:        ports.Commands,
+			Home:            opts.Home,
+			Capabilities:    ports.Capabilities,
+			OS:              ports.OS,
+			Windows:         ports.Windows,
+			Frontmost:       ports.Frontmost,
+			Notifier:        ports.Notifier,
+			Shortcuts:       ports.Shortcuts,
+			Account:         ports.Account,
+			OCR:             ports.OCR,
+			Indicators:      ports.Indicators,
+			Dictation:       ports.Dictation,
+			AI:              ports.AI,
+			Selection:       ports.Selection,
+			Paste:           ports.Paste,
+			Apps:            ports.Apps,
+			History:         ports.History,
+			ClipboardImages: ports.ClipboardImages,
+			Confirm:         ports.Confirm,
+			Notify:          ports.Notify,
 
 			SettingsPanes: ports.SettingsPanes,
 			Places:        ports.Places,

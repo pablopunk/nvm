@@ -67,8 +67,9 @@ func TestConcealedCopyIsNotShownInTheHistoryView(t *testing.T) {
 	f.set.Clock.AwaitTimers(1)
 	f.set.Clock.Advance(time.Second)
 	f.set.Clock.AwaitTimers(1)
-	p, _ := clipPalette(t, f)
-	goldenOpen(p, p.clipboardView())
+	p := goldenPalette(t)
+	p.clip = f.engine
+	goldenOpen(p, clipboardBuiltInView(t, f.engine))
 	goldenQuery(p, "canary")
 	if rows := p.Results(); len(rows) != 0 {
 		t.Fatalf("the view shows the concealed copy: %v", rowTitles(p))

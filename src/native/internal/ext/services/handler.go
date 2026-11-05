@@ -89,6 +89,8 @@ type Deps struct {
 	History func() *clipboard.History
 	// Bundles reads the datasets the app ships. Nil answers unavailable.
 	Bundles *bundled.Store
+	// ClipboardImages makes files and thumbnails of clipboard pictures. Nil leaves image handles out of the results.
+	ClipboardImages ClipboardImages
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.

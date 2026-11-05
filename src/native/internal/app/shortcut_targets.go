@@ -7,6 +7,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
+	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
@@ -35,6 +36,12 @@ func (s *shortcutTitles) titleOr(actionID, fallback string) string {
 	return fallback
 }
 
+// movedCommandShortcutActions are the commands that moved from the native list to a built-in. Their bindings keep the
+// native keys, so the setup lists them under those keys as the native list did.
+var movedCommandShortcutActions = []shortcuts.Action{
+	{ID: shortcuts.CommandClipboardHistory, Title: "Clipboard History"},
+}
+
 // commandShortcutID names a palette command for the shortcut document by its stable ID. A command without one takes no
 // shortcut.
 func commandShortcutID(cmd command) string {
@@ -44,12 +51,13 @@ func commandShortcutID(cmd command) string {
 // movedCommandShortcutIDs are the shortcut keys of the built-in commands that were native commands before. Their
 // bindings keep the keys the user set, so these commands are keyed by the native IDs in place of their extension IDs.
 var movedCommandShortcutIDs = map[string]string{
-	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                  shortcuts.CommandForceQuitApps,
-	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                    shortcuts.CommandQuitAllApps,
-	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID: shortcuts.CommandSnippets,
-	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:           shortcuts.CommandEmojiSymbols,
-	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:      shortcuts.CommandDictate,
-	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:      shortcuts.CommandDictationHistory,
+	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                    shortcuts.CommandForceQuitApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                      shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID:   shortcuts.CommandSnippets,
+	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:             shortcuts.CommandEmojiSymbols,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:        shortcuts.CommandDictate,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:        shortcuts.CommandDictationHistory,
+	extensionShortcutPrefix + clipboardbuiltin.ID + ":" + clipboardbuiltin.ListCommandID: shortcuts.CommandClipboardHistory,
 }
 
 func extensionCommandShortcutID(extID, commandID string) string {
