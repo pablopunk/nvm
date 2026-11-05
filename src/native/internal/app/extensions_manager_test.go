@@ -91,6 +91,8 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Network:         network,
 		Apps:            apps,
 		History:         fakes.extras.history,
+		Chats:           fakes.extras.chats,
+		Builder:         fakes.extras.builder,
 		ClipboardImages: fakes.extras.images,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
@@ -175,6 +177,8 @@ type extensionPorts struct {
 	images  services.ClipboardImages
 	options func() clipboardbuiltin.Options
 	clock   platform.Clock
+	chats   services.ChatReader
+	builder services.BuilderPort
 }
 
 // pinnedNowClock is the real clock with its instant pinned, so the relative times a golden draws are the same every run.
@@ -194,5 +198,6 @@ func goldenClock() platform.Clock {
 // testExtensionPorts are the clipboard history and pictures the palette's extension services read, for the golden
 // palette's manager. They follow the palette's clipboard engine as it changes.
 func (p *App) testExtensionPorts() extensionPorts {
-	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions, clock: goldenClock()}
+	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions, clock: goldenClock(),
+		chats: extensionChats{p: p}, builder: extensionBuilder{p: p}}
 }

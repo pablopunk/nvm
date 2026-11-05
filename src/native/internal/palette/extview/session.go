@@ -90,27 +90,16 @@ type Deps struct {
 	// PickImages opens the chooser for the pictures a chat message attaches, and hands the ones read to done on the UI
 	// thread. Nil hides the picture control of chat views.
 	PickImages func(done func([]chat.Image))
-	// Chats runs the chat actions of extensions: the chat pages and the chat store. Nil makes those actions report
-	// unavailable.
+	// Chats runs the chat actions: the chat store takes the new chats, sends, stops, tier changes and removals. Nil makes
+	// those actions report unavailable.
 	Chats ChatPages
-	// Builder runs the AI builder actions of built-in extensions. Nil makes those actions report unavailable.
-	Builder BuilderPages
 }
 
-// BuilderPages is what a builder action runs on the host: the pages of the builder chats and the AI Chats list.
-type BuilderPages interface {
-	Start(prompt string) *palette.View
-	Open(chatID string) *palette.View
-	Tweak(extensionID string) *palette.View
-	List() *palette.View
-	Remove(chatID string) error
-}
-
-// ChatPages is what a chat action runs on the host. Open, New and the chat store calls act on the user's chats; the
-// palette pushes the pages Open and New return. Send with an empty text and no pictures allows a tool call that waits.
+// ChatPages is the chat store as the chat actions use it. Start creates a chat of kind (conversation or builder), bound to
+// extension when it is not empty, and sends prompt first when it is not empty; it returns the chat's ID. The built-in shows
+// the chat, so the store never builds a page. Send with an empty text and no pictures allows a tool call that waits.
 type ChatPages interface {
-	Open(chatID string) *palette.View
-	New(prompt string) *palette.View
+	Start(kind, prompt, extension string) (chatID string, err error)
 	Send(chatID, text string, images []chat.Image) error
 	Stop(chatID string)
 	SetTier(chatID string, tier chat.Tier) error

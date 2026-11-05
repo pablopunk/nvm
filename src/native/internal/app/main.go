@@ -168,7 +168,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Position:    p.placementOption(),
 		Focus:       p.focusOption(),
 		Icon:        p.fileIcon,
-		AskAI:       p.newChatView,
+		AskAI:       p.askAI,
 		OnShow:      p.onPaletteShown,
 		OnHide:      p.onPaletteHide,
 		History:     p.history,

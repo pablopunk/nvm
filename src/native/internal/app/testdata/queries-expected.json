@@ -568,7 +568,7 @@
       {
         "kind": "Commands",
         "title": "AI Chats",
-        "subtitle": "Chat with the assistant",
+        "subtitle": "2 AI chats",
         "section": "",
         "id": "",
         "icon": "sparkles",
@@ -716,7 +716,7 @@
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-release",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -735,7 +735,7 @@
         "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-tokyo",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -917,7 +917,7 @@
         "title": "Automate \"cl\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -926,7 +926,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"cl\"",
             "label": ""
           }
         ]
@@ -1176,7 +1176,7 @@
         "title": "Automate \"clip\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1185,7 +1185,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"clip\"",
             "label": ""
           }
         ]
@@ -1273,7 +1273,7 @@
         "title": "Automate \"clipboard\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1282,7 +1282,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"clipboard\"",
             "label": ""
           }
         ]
@@ -1374,7 +1374,7 @@
         "title": "Automate \"calc\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1383,7 +1383,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"calc\"",
             "label": ""
           }
         ]
@@ -1550,7 +1550,7 @@
         "title": "Automate \"timer 5m\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1559,7 +1559,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"timer 5m\"",
             "label": ""
           }
         ]
@@ -1612,7 +1612,7 @@
         "title": "Automate \"hn rust\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1621,7 +1621,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"hn rust\"",
             "label": ""
           }
         ]
@@ -1686,7 +1686,7 @@
         "title": "Automate \";sig\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1695,7 +1695,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \";sig\"",
             "label": ""
           }
         ]
@@ -1729,7 +1729,7 @@
         "title": "Automate \"fixture\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1738,7 +1738,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"fixture\"",
             "label": ""
           }
         ]
@@ -1880,7 +1880,7 @@
         "title": "Automate \"set\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -1889,7 +1889,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"set\"",
             "label": ""
           }
         ]
@@ -1918,7 +1918,7 @@
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-release",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -2056,7 +2056,7 @@
         "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-tokyo",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -2538,7 +2538,7 @@
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -2547,7 +2547,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"term\"",
             "label": ""
           }
         ]
@@ -2812,7 +2812,7 @@
         "title": "Automate \"fire\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -2821,7 +2821,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"fire\"",
             "label": ""
           }
         ]
@@ -2944,7 +2944,7 @@
         "title": "Automate \"meeting\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -2953,7 +2953,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"meeting\"",
             "label": ""
           }
         ]
@@ -3041,7 +3041,7 @@
         "title": "Continue conversation: Release notes",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-release",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -3087,7 +3087,7 @@
         "title": "Automate \"release\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -3096,7 +3096,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"release\"",
             "label": ""
           }
         ]
@@ -3157,7 +3157,7 @@
         "title": "Continue conversation: Time zones",
         "subtitle": "AI conversation",
         "section": "",
-        "id": "",
+        "id": "chat:c-tokyo",
         "icon": "message-circle",
         "tone": "yellow",
         "accessory": "",
@@ -3195,7 +3195,7 @@
         "title": "Automate \"time\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -3204,7 +3204,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"time\"",
             "label": ""
           }
         ]
@@ -3471,7 +3471,7 @@
         "title": "Automate \"show the current time in tokyo and london\"",
         "subtitle": "Build a reusable command with AI",
         "section": "",
-        "id": "",
+        "id": "automate",
         "icon": "zap",
         "tone": "yellow",
         "accessory": "",
@@ -3480,7 +3480,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Automate",
+            "title": "Automate \"show the current time in tokyo and london\"",
             "label": ""
           }
         ]

@@ -3,8 +3,6 @@ package app
 import (
 	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -92,50 +90,4 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		}
 	}
 	return out
-}
-
-// conversationRows shows up to four recent AI chats, conversations and builder chats alike, filtered by title when a
-// query is typed.
-func conversationRows(p *App, in *rootInput, q string) []search.Item {
-	lq := strings.ToLower(q)
-	var out []search.Item
-	for _, ch := range in.chats {
-		if !chat.Listed(ch.kind) || ch.title == "" || len(out) >= 4 {
-			continue
-		}
-		s := scoreRootConversation
-		if lq != "" {
-			if s = search.Score(ch.title, lq); s == 0 {
-				continue
-			}
-		}
-		id := ch.id
-		title, subtitle := aichat.ContinueLabels(ch.kind, oneLine(ch.title))
-		out = append(out, search.Item{Kind: search.KindConversations, Title: title, Subtitle: subtitle, Icon: aichat.ChatIcon(ch.kind), Tone: "yellow", TintTitle: true, Score: s,
-			TiePriority: conversationTiePriority(ch.kind),
-			LastUsed:    ch.lastUsed,
-			Actions:     []search.Action{{Title: "Open", Run: func(h search.Host) { h.Push(aichat.ChatView(p.chatDeps(), id)) }}}})
-	}
-	return out
-}
-
-// automateRows offers Automate for a typed query that does not name a website: the AI builder writes a command for it.
-// The web built-in answers the same query with the search and the website rows. Automate stays native, because the
-// builder's write path is host-only (docs/extension-api.md, section 4). It is a query fallback, which an answer row
-// leaves out.
-func automateRows(p *App, _ *rootInput, q string) []search.Item {
-	if q == "" || search.URLFromQuery(q) != "" {
-		return nil
-	}
-	return []search.Item{{Kind: search.KindSearch, Title: `Automate "` + oneLine(q) + `"`, Subtitle: "Build a reusable command with AI", Icon: "zap", Tone: "yellow", Prominent: true, Score: scoreAutomate, QueryFallback: true,
-		Actions: []search.Action{{Title: "Automate", Run: func(h search.Host) { h.Push(p.builderViewWith(q)) }}}}}
-}
-
-// conversationTiePriority puts builder chats after conversations at equal score and last use, as 1.x does
-// (src/app/electron/search/action-ranking.ts:100-111).
-func conversationTiePriority(kind chat.Kind) int {
-	if kind == chat.KindBuilder {
-		return -1
-	}
-	return 0
 }

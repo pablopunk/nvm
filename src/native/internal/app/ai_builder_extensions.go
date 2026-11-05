@@ -45,7 +45,6 @@ func (e builderExtensions) Install(id string, files map[string][]byte, enable bo
 	if err := m.Install(id, files, enable); err != nil {
 		return err
 	}
-	e.app.refreshPreview(id)
 	return nil
 }
 

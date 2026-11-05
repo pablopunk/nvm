@@ -99,7 +99,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		return s.chatOperation(action, title)
 	case api.ActionBuilder:
-		if action.Builder == nil || s.deps.Builder == nil || !api.IsBuiltInID(s.extID) {
+		if action.Builder == nil || s.deps.Chats == nil || !api.IsBuiltInID(s.extID) {
 			break
 		}
 		return s.builderOperation(action, title)

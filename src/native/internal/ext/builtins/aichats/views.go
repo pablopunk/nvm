@@ -129,7 +129,7 @@ func continueRow(chat api.ChatSummary, score float64) api.Item {
 	open := openAction(chat.ID, opOpenChat, "Open")
 	return api.Item{
 		ID: "chat:" + chat.ID, Title: title, Subtitle: subtitle, Icon: chatIcon(chat.Kind), Section: search.KindConversations,
-		Score: score, LastUsedMs: lastChangeMs(chat), TiePriority: chatTiePriority(chat.Kind),
+		Score: score, LastUsedMs: lastChangeMs(chat), TiePriority: chatTiePriority(chat.Kind), TintTitle: true,
 		Appearance: &api.Appearance{Foreground: "yellow"}, Primary: &open,
 	}
 }

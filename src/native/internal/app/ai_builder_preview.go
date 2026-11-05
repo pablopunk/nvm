@@ -20,44 +20,6 @@ type extensionPreview struct {
 	side    *palette.Side
 }
 
-// previewSide is the side that shows an extension beside its builder chat, or nil until the extension was read.
-func (p *App) previewSide(extension string) *palette.Side {
-	if preview := p.previews[extension]; preview != nil {
-		return preview.side
-	}
-	return nil
-}
-
-// refreshPreview reads what an extension shows now, its root rows and its commands, off the UI thread, and shows the
-// result on the UI thread. It runs after each write, so the preview follows the extension.
-func (p *App) refreshPreview(extension string) {
-	m := p.extensionManager()
-	if m == nil {
-		return
-	}
-	go func() {
-		view := extensionPreviewView(m, extension)
-		p.onUI(func() { p.showPreview(m, extension, view) })
-	}()
-}
-
-// showPreview keeps an extension's preview. The first read creates its session and side; later reads replace the
-// session's list and search the side again.
-func (p *App) showPreview(m *manager.Manager, extension string, view api.View) {
-	if preview := p.previews[extension]; preview != nil {
-		preview.session.Replace(view)
-		preview.side.Refresh()
-		return
-	}
-	if p.previews == nil {
-		p.previews = map[string]*extensionPreview{}
-	}
-	session := extview.NewSession(p.extensionViewDeps(m), extension, view)
-	root := session.Palette()
-	root.HideInput = true
-	p.previews[extension] = &extensionPreview{session: session, side: palette.NewSide(root)}
-}
-
 // extensionPreviewView is the list an extension's preview shows: its root rows, then one row per command. A command row
 // runs the command, and its view opens in the preview.
 func extensionPreviewView(m *manager.Manager, extension string) api.View {

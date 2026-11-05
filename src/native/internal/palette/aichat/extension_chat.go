@@ -47,7 +47,7 @@ type ExtensionChat struct {
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
 func NewExtensionChat(reply func(c *ui.Context, src string, streaming bool), now func() time.Time) *ExtensionChat {
-	return &ExtensionChat{page: newPage(Deps{Reply: reply, Now: now}, "")}
+	return &ExtensionChat{page: newPage(renderDeps{Reply: reply, Now: now})}
 }
 
 // SetSpec replaces what the view shows with spec, as the owner does after each render.

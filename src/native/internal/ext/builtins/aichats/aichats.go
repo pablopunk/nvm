@@ -124,7 +124,11 @@ func newChatSubmit(ctx api.Context, in api.Invocation) api.Result {
 	if text == "" {
 		return api.Result{}
 	}
-	return next(ctx.AI().Chats().New(text))
+	action := ctx.AI().Chats().New(text)
+	if action.Chat != nil {
+		action.Chat.Replace = true
+	}
+	return next(action)
 }
 
 // next returns a result that runs action on the host once the handler returns.
@@ -203,6 +207,7 @@ func cleanupCommand() api.Command {
 func aiChatsCommand(count int) api.Command {
 	return api.Command{
 		ID: CommandAIChats, Title: "AI Chats", Subtitle: chatsSubtitle(count), Icon: "sparkles", Score: scoreAIChatsCommand,
+		Section: search.KindCommands, Customizable: true,
 		Keywords:   strings.Fields("ai chat assistant gpt llm ask conversations history"),
 		Appearance: &api.Appearance{Foreground: "purple"},
 	}

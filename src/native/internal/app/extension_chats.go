@@ -2,11 +2,10 @@ package app
 
 import (
 	"errors"
+	"log"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 )
 
 // extensionChats reads the host's chats for the extensions that hold the ai capability.
@@ -62,19 +61,44 @@ func (p *App) onChatsThread(read func()) {
 	<-done
 }
 
-// extensionChatPages runs the chat actions of extensions on the palette's stack and the chat store.
+// extensionChatPages is the chat store as the chat actions of extensions use it. The built-in shows the chats it starts.
 type extensionChatPages struct {
 	p *App
 }
 
-// Open returns the page of the chat with id.
-func (c extensionChatPages) Open(chatID string) *palette.View {
-	return aichat.ChatView(c.p.chatDeps(), chatID)
+// Start creates a chat of kind, bound to extension when it is not empty, and sends prompt first when it is not empty. It
+// returns the new chat's ID.
+func (c extensionChatPages) Start(kind, prompt, extension string) (string, error) {
+	if c.p.chats == nil {
+		return "", errChatsUnavailable
+	}
+	chatKind, tier := startedChatKind(kind)
+	record, err := c.p.chats.NewChat(chatKind, tier)
+	if err != nil {
+		return "", err
+	}
+	if extension != "" {
+		if err := c.p.chats.Bind(record.ID, extension); err != nil {
+			log.Println("chat: could not bind the chat to its extension:", err)
+		}
+	}
+	if prompt != "" {
+		c.p.onUI(func() {
+			if err := c.p.chats.Send(record.ID, prompt); err != nil {
+				log.Println("chat: could not send:", err)
+			}
+		})
+	}
+	return record.ID, nil
 }
 
-// New starts a conversation with prompt as its first message.
-func (c extensionChatPages) New(prompt string) *palette.View {
-	return c.p.newChatView(prompt)
+// startedChatKind is the store's kind and tier of a chat a chat action starts: a conversation runs on the fast tier, a
+// builder chat on the smart tier.
+func startedChatKind(kind string) (chat.Kind, chat.Tier) {
+	if kind == "builder" {
+		return chat.KindBuilder, chat.TierSmart
+	}
+	return chat.KindConversation, chat.TierFast
 }
 
 // Send sends text and pictures to the chat with id, as its composer does. Empty text with no pictures allows the tool
@@ -102,21 +126,6 @@ func (c extensionChatPages) SetTier(chatID string, tier chat.Tier) error {
 		return errChatsUnavailable
 	}
 	return c.p.chats.SetTier(chatID, tier)
-}
-
-// Start opens a builder chat that begins with prompt, as the Automate flow does.
-func (c extensionChatPages) Start(prompt string) *palette.View {
-	return c.p.builderViewWith(prompt)
-}
-
-// Tweak opens a builder chat that changes the extension with the id.
-func (c extensionChatPages) Tweak(extensionID string) *palette.View {
-	return c.p.builderEditView(extensionID)
-}
-
-// List opens the AI Chats page, which lists the saved conversations.
-func (c extensionChatPages) List() *palette.View {
-	return c.p.chatHistoryView()
 }
 
 // Remove deletes the chat with id.

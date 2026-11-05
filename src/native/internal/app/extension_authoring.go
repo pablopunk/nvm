@@ -19,7 +19,6 @@ const (
 	duplicateTitle    = "Duplicate"
 	renameTitle       = "Rename"
 	submitPRTitle     = "Submit as PR"
-	tweakWithAITitle  = "Tweak with AI"
 	removeActionTitle = "Remove action"
 )
 
@@ -40,9 +39,6 @@ func (p *App) extensionAuthoringActions(extID, commandID, title string) []search
 		}
 	}
 	out = append(out, p.builtInRowActions(extID, commandID, title)...)
-	out = append(out, search.Action{Title: tweakWithAITitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		h.Push(p.builderEditView(extID))
-	}})
 	if owned {
 		out = append(out, search.Action{Title: removeActionTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			h.Push(p.removeActionConfirmation(extID, title))
@@ -59,7 +55,7 @@ func (p *App) duplicateAction(extID string) search.Action {
 			h.Toast("Could not duplicate: " + err.Error())
 			return
 		}
-		h.Push(p.builderEditView(id))
+		h.Push(p.startedChatView("builder", "", id))
 	}}
 }
 

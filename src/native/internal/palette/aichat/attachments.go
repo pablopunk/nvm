@@ -54,37 +54,3 @@ func imageLabel(image chat.Image, index int) string {
 	}
 	return "image " + string(rune('1'+index))
 }
-
-// addImages attaches pictures to the next message, as many as the limits allow, and says which limit refused the rest.
-// The composer takes the keyboard back, as the chooser that picked them took it away.
-func (p *page) addImages(incoming []chat.Image) {
-	kept, problem := chat.AddImages(p.attachments, incoming)
-	p.attachments = kept
-	p.input.Focus()
-	if problem != "" && p.host != nil {
-		p.host.Toast(problem)
-	}
-}
-
-// removeImage takes the picture at index off the next message.
-func (p *page) removeImage(index int) {
-	p.attachments = append(p.attachments[:index:index], p.attachments[index+1:]...)
-}
-
-// paste takes a paste that holds no text as a picture from the clipboard, when the clipboard holds one. A picture it
-// refuses is said on the palette. A paste of text is left to the input.
-func (p *page) paste(text string) bool {
-	if text != "" || p.deps.PasteImage == nil {
-		return false
-	}
-	image, ok, err := p.deps.PasteImage()
-	switch {
-	case err != nil:
-		p.report(err)
-	case ok:
-		p.addImages([]chat.Image{image})
-	default:
-		return false
-	}
-	return true
-}

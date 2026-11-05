@@ -35,7 +35,7 @@ func extensionRowActions(p *App, ctl extensionController, l manager.Listing) []s
 	}})
 	if p.ownedByBuilder(l.ID) {
 		actions = append(actions, search.Action{Title: "Edit with AI", Run: func(h search.Host) {
-			h.Push(p.builderEditView(l.ID))
+			h.Push(p.startedChatView("builder", "", l.ID))
 		}})
 	}
 	if l.Enabled {

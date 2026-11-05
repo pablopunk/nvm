@@ -91,7 +91,6 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Reply:                 p.drawReply,
 		PickImages:            p.chooseChatImages,
 		Chats:                 extensionChatPages{p: p},
-		Builder:               extensionChatPages{p: p},
 	}
 }
 

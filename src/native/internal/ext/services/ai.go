@@ -15,6 +15,12 @@ func (h *Handler) serveAI(ctx context.Context, call protocol.ServiceCall) (any, 
 	if err := h.require(api.CapabilityAI); err != nil {
 		return nil, err
 	}
+	switch call.Op {
+	case protocol.OpChatList:
+		return h.listChats()
+	case protocol.OpChatGet:
+		return h.getChat(call.Args)
+	}
 	if h.deps.AI == nil {
 		return nil, unavailable("AI is not available in this build")
 	}
@@ -39,10 +45,6 @@ func (h *Handler) serveAI(ctx context.Context, call protocol.ServiceCall) (any, 
 		return h.clipboardAttachments(ctx, call.Args)
 	case protocol.OpAttachOCR:
 		return h.ocrAttachment(ctx, call.Args)
-	case protocol.OpChatList:
-		return h.listChats()
-	case protocol.OpChatGet:
-		return h.getChat(call.Args)
 	}
 	return nil, invalid("ai has no operation %q", call.Op)
 }

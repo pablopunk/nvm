@@ -161,6 +161,8 @@ type ChatAction struct {
 	Images  []ChatImage `json:"images,omitempty"`
 	Prompt  string      `json:"prompt,omitempty"`
 	Tier    ModelTier   `json:"tier,omitempty"`
+	// Replace, on a New, shows the new chat in place of the page the action runs from.
+	Replace bool `json:"replace,omitempty"`
 }
 
 // BuilderAction is the payload of an ActionBuilder. ChatID names a builder chat, Prompt starts or seeds one, and

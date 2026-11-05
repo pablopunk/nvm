@@ -17,6 +17,4 @@ var rootSources = []rootSource{
 	{id: "extensions", provider: extensionProvider},
 	{id: "commands", rows: commandRows},
 	{id: "updates", rows: updateRootRows},
-	{id: "conversations", rows: conversationRows},
-	{id: "web", rows: automateRows},
 }
