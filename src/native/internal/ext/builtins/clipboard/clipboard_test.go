@@ -336,3 +336,16 @@ func hasType(types []string, want string) bool {
 	}
 	return false
 }
+
+// TestListMenuGroupsTheRemovalsUnderManageHistory checks the list's own menu: the removals sit in the "Manage History" group,
+// as 1.x titles them.
+func TestListMenuGroupsTheRemovalsUnderManageHistory(t *testing.T) {
+	read := options(true, true)
+	view := New(read).listView(newFakeContext(text("a", "copy", 1)), read())
+	if view.ActionPanel == nil || len(view.ActionPanel.Sections) != 1 || view.ActionPanel.Sections[0].Title != "Manage History" {
+		t.Fatalf("the list menu sections = %+v, want one group titled Manage History", view.ActionPanel)
+	}
+	if n := len(view.ActionPanel.Sections[0].Actions); n != 3 {
+		t.Fatalf("the Manage History group holds %d removals, want 3", n)
+	}
+}

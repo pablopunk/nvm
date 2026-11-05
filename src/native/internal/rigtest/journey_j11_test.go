@@ -37,6 +37,7 @@ func TestJourneyJ11TakenHotkeyShowsTheBannerAndTheRecoveryShortcut(t *testing.T)
 	must(t, second.DismissWithEscape())
 	second.hotkey = recoveryHotkey
 	must(t, second.SummonPalette())
+	must(t, second.Type("clipboard"))
 	_, err = second.WaitFor("Clipboard History", elementWait)
 	must(t, err)
 	shoot(t, second, "j11-2-recovery-shortcut-opens")

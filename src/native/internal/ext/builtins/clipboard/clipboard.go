@@ -26,6 +26,9 @@ const (
 	emptySubtitle   = "Copy text or images and they will appear here."
 )
 
+// manageSectionTitle titles the group of the list's removal actions, as 1.x does.
+const manageSectionTitle = "Manage History"
+
 // Refs of the actions the rows, the views and the removals run. Args carry the entry id or the removal window.
 const (
 	refCopy         = "copy"
