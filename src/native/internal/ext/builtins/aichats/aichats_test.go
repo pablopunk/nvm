@@ -182,6 +182,21 @@ func TestStreamingChatRefreshesOnATickUntilTheReplyEnds(t *testing.T) {
 	}
 }
 
+// TestChatRefreshesWhileItsToolRunsAndStopsWhenItSettles: a turn whose last tool call is still running keeps the
+// transcript refreshing, so the row settles when the call ends, as an edit chat's write does.
+func TestChatRefreshesWhileItsToolRunsAndStopsWhenItSettles(t *testing.T) {
+	running := chat("3", "builder", "Tweak Clock", user("make it red"),
+		api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: "write_extension", Status: "running"}})
+	if view := chatView(contextWith(), running); view.Refresh == nil {
+		t.Fatal("a chat whose tool is running must refresh until the tool settles")
+	}
+	settled := chat("3", "builder", "Tweak Clock", user("make it red"),
+		api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: "write_extension", Status: "done"}})
+	if view := chatView(contextWith(), settled); view.Refresh != nil {
+		t.Fatalf("a chat whose tool settled must not refresh, got %+v", view.Refresh)
+	}
+}
+
 func TestAIChatsCommandSubtitleCountsTheChats(t *testing.T) {
 	commands, err := Extension{}.Commands(contextWith(chat("1", "conversation", "A"), chat("2", "builder", "B")))
 	if err != nil {
