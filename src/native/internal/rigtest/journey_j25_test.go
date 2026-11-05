@@ -25,7 +25,11 @@ func TestJourneyJ25FirstRunGuideBecomesHelp(t *testing.T) {
 	_, err = app.WaitFor("Done for now", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // Done for now pops the guide back to the root, as 1.x does; it does not hide the palette
+	_, err = app.WaitFor("Help", elementWait)
+	must(t, err)
+	shoot(t, app, "j25-3-done-root")
 	must(t, app.Key("Escape"))
+	shoot(t, app, "j25-4-after-escape")
 	must(t, app.DismissWithEscape())
 
 	must(t, app.SummonPalette())
