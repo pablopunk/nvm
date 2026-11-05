@@ -56,8 +56,8 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 }
 
 // commandRowScore is the score of a command's row for q, and whether the command's row is listed at all. The empty root
-// lists the commands placed there. A built-in command with a Section is found and ranked as the native command of that
-// section was. Other commands are found by their title, aliases or keywords and rank in the extension band.
+// lists the commands placed there. A built-in command is ranked as its 1.x action was. Other extensions' commands are
+// found by their title, aliases or keywords and rank in the extension band.
 func commandRowScore(m *manager.Manager, extID string, command api.Command, q string, aliases []string) (int, bool) {
 	if q == "" {
 		return rootCommandRowScore(m, extID, command), commandPlacedAtRoot(command)
@@ -65,13 +65,8 @@ func commandRowScore(m *manager.Manager, extID string, command api.Command, q st
 	if !commandPlacedInSearch(command) {
 		return 0, false
 	}
-	if m.IsBuiltIn(extID) && command.Section != "" {
-		lq := strings.ToLower(q)
-		score := commandTitleScore(command.Title, strings.Join(command.Keywords, " "), false, lq)
-		if score == 0 {
-			score = aliasMatchScore(aliases, lq)
-		}
-		return score, score > 0
+	if m.IsBuiltIn(extID) {
+		return builtInCommandSearchScore(command, q, aliases)
 	}
 	if manager.CommandMatches(command, q) || aliasMatchScore(aliases, q) > 0 {
 		return scoreExtension, true
@@ -79,13 +74,25 @@ func commandRowScore(m *manager.Manager, extID string, command api.Command, q st
 	return 0, false
 }
 
-// rootCommandRowScore is a command's score at the empty root. A built-in command that names a score keeps it, as its
-// native command did; other commands share the extension band.
+// rootCommandRowScore is a command's score at the empty root. A built-in command scores as its 1.x action did: the score
+// it names, or 0 when it names none. Other extensions' commands share the extension band.
 func rootCommandRowScore(m *manager.Manager, extID string, command api.Command) int {
-	if m.IsBuiltIn(extID) && command.Score != 0 {
+	if m.IsBuiltIn(extID) {
 		return int(command.Score)
 	}
 	return scoreExtension
+}
+
+// builtInCommandSearchScore ranks a built-in command for a typed query as 1.x ranks an action: by its title, then by its
+// keywords and aliases. It never takes the extension band, which would put an AI command above the native rows it shares a
+// prefix with (Triage above Clipboard History for "cl").
+func builtInCommandSearchScore(command api.Command, q string, aliases []string) (int, bool) {
+	lq := strings.ToLower(q)
+	score := commandTitleScore(command.Title, strings.Join(command.Keywords, " "), false, lq)
+	if score == 0 {
+		score = aliasMatchScore(append(slices.Clone(command.Aliases), aliases...), lq)
+	}
+	return score, score > 0
 }
 
 // commandPlacedAtRoot reports whether a command's row shows at the empty root. Only commands with no placement or one
