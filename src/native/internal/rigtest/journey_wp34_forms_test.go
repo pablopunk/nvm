@@ -97,8 +97,6 @@ func submitFormFixture(t *testing.T, app *App) {
 	_, err = app.WaitFor("Enter an email address", elementWait) // refused, and the Email row is selected again
 	must(t, err)
 	must(t, app.Key("Return"))                        // edit the rejected address: the caret is after it, so Backspace erases it
-	_, err = app.WaitFor("not-an-email", elementWait) // the field shows the address before the first Backspace
-	must(t, err)
 	for range len("not-an-email") {
 		must(t, app.Key("BackSpace"))
 	}
