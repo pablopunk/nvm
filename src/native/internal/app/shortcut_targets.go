@@ -34,6 +34,12 @@ func (s *shortcutTitles) titleOr(actionID, fallback string) string {
 	return fallback
 }
 
+// movedCommandShortcutActions are the commands that moved from the native list to a built-in. Their bindings keep the
+// native keys, so the setup lists them under those keys as the native list did.
+var movedCommandShortcutActions = []shortcuts.Action{
+	{ID: shortcuts.CommandClipboardHistory, Title: "Clipboard History"},
+}
+
 // commandShortcutID names a palette command for the shortcut document by its stable ID. A command without one takes no
 // shortcut.
 func commandShortcutID(cmd command) string {

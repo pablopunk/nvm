@@ -143,6 +143,7 @@ func builtInRow(row search.Item, item api.Item) search.Item {
 		row.Score = int(item.Score)
 	}
 	row.LearnKey = item.LearnKey
+	row.TintTitle = item.TintTitle
 	if item.File != nil && item.Image == nil && item.Icon == "" {
 		row.Icon = ""
 		row.IconPath = item.File.Path

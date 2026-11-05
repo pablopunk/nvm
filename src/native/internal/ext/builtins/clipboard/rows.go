@@ -33,7 +33,7 @@ const (
 func copyRow(entry api.ClipboardEntry, score float64, canPaste bool, options Options) api.Item {
 	row := api.Item{
 		ID: "clipboard:" + entry.ID, Title: titleOf(entry), Subtitle: subtitleOf(entry), Icon: iconOf(entry.Type),
-		Appearance: &api.Appearance{Foreground: api.ColorBlue}, Section: search.KindClipboard,
+		Appearance: &api.Appearance{Foreground: api.ColorBlue}, Section: search.KindClipboard, TintTitle: true,
 		LearnKey: "clipboard:" + entry.ID, Score: score, LastUsedMs: entry.CreatedAtMs,
 		Detail: detailOf(entry, options),
 	}

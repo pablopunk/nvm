@@ -1,6 +1,8 @@
 package app
 
 import (
+	"net/url"
+
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 )
@@ -18,8 +20,8 @@ func (p *App) linkCardOf(rawURL string) api.LinkCard {
 	}
 	card.Status = linkStatusName(status.State)
 	card.Title, card.Description, card.SiteName = status.Title, status.Description, status.SiteName
-	if status.ImageRef != "" {
-		card.Image = p.clip.files.Thumbnail(status.ImageRef)
+	if path, err := p.clip.images.FilePath(status.ImageRef); err == nil && status.ImageRef != "" {
+		card.Image = (&url.URL{Scheme: "file", Path: path}).String()
 	}
 	return card
 }

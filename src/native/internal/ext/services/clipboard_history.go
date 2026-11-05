@@ -168,13 +168,14 @@ func (h *Handler) entryOf(entry clipboard.Entry) api.ClipboardEntry {
 	return out
 }
 
-// attachImageHandles fills the file and the thumbnail of a stored picture. A picture that is gone keeps neither.
+// attachImageHandles fills the file of a stored picture, and the file URL the palette draws its thumbnail from. The
+// palette decodes that URL in the background, so a listing never decodes a picture.
 func (h *Handler) attachImageHandles(out *api.ClipboardEntry, ref string) {
 	if h.deps.ClipboardImages == nil {
 		return
 	}
 	if path, err := h.deps.ClipboardImages.Path(ref); err == nil {
 		out.ImagePath = path
+		out.ThumbnailURL = fileURLFor(path)
 	}
-	out.ThumbnailURL = h.deps.ClipboardImages.Thumbnail(ref)
 }

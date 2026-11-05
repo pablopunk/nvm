@@ -19,8 +19,6 @@ type ClipboardImages interface {
 	Handle(png []byte) (string, error)
 	// Path returns the PNG file of a stored history picture. It is valid while the entry stays in history.
 	Path(ref string) (string, error)
-	// Thumbnail returns a small PNG data URL of a stored history picture, or "" when there is none.
-	Thumbnail(ref string) string
 	// Preview returns the PNG data URL of a stored history picture at preview size, or "" when there is none.
 	Preview(ref string) string
 }

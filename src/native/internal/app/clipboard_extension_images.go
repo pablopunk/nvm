@@ -14,23 +14,22 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Folder and limits of the pictures extensions see. Handles are the PNG files a read picture is written to; thumbnails
-// are small enough to keep a few hundred in memory for the rows, and previews are the size a detail pane draws.
+// Folder and limits of the pictures extensions see. Handles are the PNG files a read picture is written to. Previews are
+// the size a detail pane draws, and the memory keeps a few hundred of them.
 const (
-	clipHandleDirName    = "clipboard-handles"
-	clipThumbnailEdge    = 160
-	clipPreviewEdge      = 1024
-	clipPictureMemoMax   = 256
-	pngDataURLPrefix     = "data:image/png;base64,"
+	clipHandleDirName  = "clipboard-handles"
+	clipPreviewEdge    = 1024
+	clipPictureMemoMax = 256
+	pngDataURLPrefix   = "data:image/png;base64,"
 )
 
 // clipImageFiles is the picture side of the clipboard engine: it names the stored pictures for the extension services,
 // writes the pictures extensions read to files, and keeps the thumbnails and previews the rows draw. The history owns
 // the stored pictures; this only reads them.
 type clipImageFiles struct {
-	engine  *clipEngine
-	dir     string
-	mu      sync.Mutex
+	engine   *clipEngine
+	dir      string
+	mu       sync.Mutex
 	pictures map[string]string
 	order    []string
 }
@@ -57,11 +56,6 @@ func (c *clipImageFiles) Handle(png []byte) (string, error) {
 // Path returns the PNG file of a stored picture. The history keeps the file while the entry stays in it.
 func (c *clipImageFiles) Path(ref string) (string, error) {
 	return c.engine.images.FilePath(ref)
-}
-
-// Thumbnail returns the small PNG data URL of a stored picture, for the rows.
-func (c *clipImageFiles) Thumbnail(ref string) string {
-	return c.cached("thumb:"+ref, func() string { return c.render(ref, clipThumbnailEdge) })
 }
 
 // Preview returns the PNG data URL of a stored picture at the size a detail pane draws.
@@ -135,13 +129,6 @@ func (x clipFilesProxy) Path(ref string) (string, error) {
 		return files.Path(ref)
 	}
 	return "", platform.ErrUnsupported
-}
-
-func (x clipFilesProxy) Thumbnail(ref string) string {
-	if files := x.files(); files != nil {
-		return files.Thumbnail(ref)
-	}
-	return ""
 }
 
 func (x clipFilesProxy) Preview(ref string) string {

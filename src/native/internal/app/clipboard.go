@@ -149,11 +149,6 @@ func (e *clipEngine) flush() {
 	_ = e.log.Flush()
 }
 
-// copy puts an entry on the clipboard and records the use.
-func (e *clipEngine) copy(entry clipboard.Entry) error {
-	return e.actions.Copy(entry)
-}
-
 // paste puts an entry on the clipboard and sends the paste gesture to the app that had focus.
 func (e *clipEngine) paste(entry clipboard.Entry) error {
 	return e.actions.Paste(entry, "")
@@ -184,4 +179,9 @@ func (p *App) openClipboard() *clipEngine {
 	})
 	e.setEnabled(!p.S.ClipOff && !p.userReadOnly)
 	return e
+}
+
+// ports returns the history and pictures of the engine as the extension services read them.
+func (e *clipEngine) ports() extensionPorts {
+	return extensionPorts{history: func() *clipboard.History { return e.history }, images: e.files}
 }

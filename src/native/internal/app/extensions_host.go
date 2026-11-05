@@ -243,3 +243,9 @@ func extensionsDir() string {
 	_ = os.MkdirAll(d, 0o755)
 	return d
 }
+
+// testExtensionPorts are the clipboard history and pictures the palette's extension services read, for the golden
+// palette's manager. They follow the palette's clipboard engine as it changes.
+func (p *App) testExtensionPorts() extensionPorts {
+	return extensionPorts{history: p.extensionHistory, images: p.extensionClipboardImages(), options: p.clipboardOptions}
+}

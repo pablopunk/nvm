@@ -1,6 +1,8 @@
 package app
 
 import (
+	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"context"
 	"os"
 	"path/filepath"
@@ -38,18 +40,18 @@ func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *
 // newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
 // is the real one; a nil network refuses every fetch.
 func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
-	return newManagerWithApps(t, builtins, clock, network, nil, enabled...)
+	return newManagerWithApps(t, builtins, clock, network, nil, extensionPorts{}, enabled...)
 }
 
 // newFixtureManagerWithApps is newFixtureManager with the palette's apps lifecycle, so the applications built-in lists
 // the apps the palette indexed.
-func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manager.Manager {
+func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle, extras extensionPorts) *manager.Manager {
 	t.Helper()
-	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: extras.options}), nil, nil, apps, extras)
 }
 
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
-func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, extras extensionPorts, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -71,6 +73,8 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 		Places:       fixturePlaces,
 		Network:      network,
 		Apps:         apps,
+		History:      extras.history,
+		ClipboardImages: extras.images,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable: exe,
 		DataRoot:   filepath.Join(dir, "extension-data"),
@@ -131,4 +135,11 @@ func listingFor(t *testing.T, m *manager.Manager, id string) manager.Listing {
 func fixturePlaces() []api.Place {
 	home, _ := os.UserHomeDir()
 	return apiPlaces(systemfeat.Places(home))
+}
+
+// extensionPorts are the clipboard history and pictures a test manager's services read. A zero value serves none.
+type extensionPorts struct {
+	history func() *clipboard.History
+	images  services.ClipboardImages
+	options func() clipboardbuiltin.Options
 }
