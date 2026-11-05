@@ -88,7 +88,8 @@ func (s *Session) afterFirstLoad() {
 	}
 }
 
-// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result.
+// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result. A chat view
+// takes a whole new view instead, since its transcript, tier and side page change together while a reply streams.
 func (s *Session) refreshNow() {
 	refresh := s.view.Refresh
 	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
@@ -97,6 +98,11 @@ func (s *Session) refreshNow() {
 	s.refreshing = true
 	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
+		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat && result.View.Chat != nil {
+			s.view = *result.View
+			s.refreshHost()
+			return
+		}
 		if failure != nil || result.Patch == nil {
 			return
 		}

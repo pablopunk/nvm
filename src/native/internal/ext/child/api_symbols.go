@@ -81,6 +81,8 @@ func init() {
 		"ChatNew":                       reflect.ValueOf(constant.MakeFromLiteral("\"new\"", token.STRING, 0)),
 		"ChatOpen":                      reflect.ValueOf(constant.MakeFromLiteral("\"open\"", token.STRING, 0)),
 		"ChatRemove":                    reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
+		"ChatStop":                      reflect.ValueOf(constant.MakeFromLiteral("\"stop\"", token.STRING, 0)),
+		"ChatTier":                      reflect.ValueOf(constant.MakeFromLiteral("\"tier\"", token.STRING, 0)),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
 		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
@@ -636,6 +638,8 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AIChats struct {
 	WNew      func(prompt string) api.Action
 	WOpen     func(chatID string) api.Action
 	WRemove   func(chatID string) api.Action
+	WStop     func(chatID string) api.Action
+	WTier     func(chatID string, tier api.ModelTier) api.Action
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Continue(chatID string, message string) api.Action {
@@ -655,6 +659,12 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Open(chatID s
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Remove(chatID string) api.Action {
 	return W.WRemove(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Stop(chatID string) api.Action {
+	return W.WStop(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Tier(chatID string, tier api.ModelTier) api.Action {
+	return W.WTier(chatID, tier)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AISession is an interface wrapper for AISession type

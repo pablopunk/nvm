@@ -77,12 +77,31 @@ func (c extensionChatPages) New(prompt string) *palette.View {
 	return c.p.newChatView(prompt)
 }
 
-// Send sends text to the chat with id, as its composer does.
-func (c extensionChatPages) Send(chatID, text string) error {
+// Send sends text and pictures to the chat with id, as its composer does. Empty text with no pictures allows the tool
+// call that waits, as Enter on an empty composer does.
+func (c extensionChatPages) Send(chatID, text string, images []chat.Image) error {
 	if c.p.chats == nil {
 		return errChatsUnavailable
 	}
-	return c.p.chats.Send(chatID, text)
+	if text == "" && len(images) == 0 && c.p.chats.Awaiting(chatID) {
+		return c.p.chats.Decide(chatID, true)
+	}
+	return c.p.chats.SendWithImages(chatID, text, images)
+}
+
+// Stop ends the reply the chat with id is streaming.
+func (c extensionChatPages) Stop(chatID string) {
+	if c.p.chats != nil {
+		c.p.chats.Stop(chatID)
+	}
+}
+
+// SetTier changes the model tier the chat with id uses for its next reply.
+func (c extensionChatPages) SetTier(chatID string, tier chat.Tier) error {
+	if c.p.chats == nil {
+		return errChatsUnavailable
+	}
+	return c.p.chats.SetTier(chatID, tier)
 }
 
 // Start opens a builder chat that begins with prompt, as the Automate flow does.
@@ -113,6 +132,7 @@ func chatSummary(record chat.Chat) api.ChatSummary {
 	return api.ChatSummary{
 		ID:             record.ID,
 		Kind:           string(record.Kind),
+		Tier:           api.ModelTier(record.Tier),
 		Title:          record.Title,
 		CreatedAtMs:    record.CreatedAt.UnixMilli(),
 		UpdatedAtMs:    record.UpdatedAt.UnixMilli(),

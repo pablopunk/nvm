@@ -37,6 +37,14 @@ func (c remoteChats) Continue(chatID, message string) api.Action {
 	return chatAction("Continue Chat", api.ChatContinue, api.ChatAction{ChatID: chatID, Message: message})
 }
 
+func (c remoteChats) Stop(chatID string) api.Action {
+	return chatAction("Stop", api.ChatStop, api.ChatAction{ChatID: chatID})
+}
+
+func (c remoteChats) Tier(chatID string, tier api.ModelTier) api.Action {
+	return chatAction("Change Tier", api.ChatTier, api.ChatAction{ChatID: chatID, Tier: tier})
+}
+
 func (c remoteChats) Remove(chatID string) api.Action {
 	action := chatAction("Remove Chat", api.ChatRemove, api.ChatAction{ChatID: chatID})
 	action.Confirm = &api.Confirmation{Title: "Remove this chat?", ConfirmLabel: "Remove", Destructive: true}

@@ -52,12 +52,15 @@ const (
 // AccountSignIn starts the sign-in flow.
 const AccountSignIn = "sign-in"
 
-// Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat,
+// Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat
+// (an empty message allows a tool call that waits), Stop ends a reply that streams, Tier changes the chat's model tier,
 // and Remove deletes a chat the user asked to remove.
 const (
 	ChatOpen     = "open"
 	ChatNew      = "new"
 	ChatContinue = "continue"
+	ChatStop     = "stop"
+	ChatTier     = "tier"
 	ChatRemove   = "remove"
 )
 
@@ -77,7 +80,7 @@ var (
 	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps  = []string{"check", "download", "install"}
 	accountOps = []string{AccountSignIn}
-	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatRemove}
+	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove}
 	builderOps = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )

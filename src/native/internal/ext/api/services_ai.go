@@ -153,12 +153,14 @@ type AI interface {
 	Chats() AIChats
 }
 
-// ChatAction is the payload of an ActionChat. ChatID names the chat; Message is what a Continue sends; Prompt is the
-// first message of a New chat.
+// ChatAction is the payload of an ActionChat. ChatID names the chat; Message and Images are what a Continue sends; Prompt
+// is the first message of a New chat; Tier is the tier a Tier change selects.
 type ChatAction struct {
-	ChatID  string `json:"chatId,omitempty"`
-	Message string `json:"message,omitempty"`
-	Prompt  string `json:"prompt,omitempty"`
+	ChatID  string      `json:"chatId,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Images  []ChatImage `json:"images,omitempty"`
+	Prompt  string      `json:"prompt,omitempty"`
+	Tier    ModelTier   `json:"tier,omitempty"`
 }
 
 // BuilderAction is the payload of an ActionBuilder. ChatID names a builder chat, Prompt starts or seeds one, and
@@ -175,14 +177,16 @@ type ChatDetail struct {
 	Messages []ChatMessage `json:"messages"`
 }
 
-// AIChats lists chats and returns the actions that open, start, continue or remove them. Reads are answered by the
-// host; the actions run when the user picks them, on the palette.
+// AIChats lists chats and returns the actions that open, start, continue, stop, re-tier or remove them. Reads are answered
+// by the host; the actions run when the user picks them, on the palette.
 type AIChats interface {
 	List() []ChatSummary
 	Get(chatID string) (ChatDetail, bool)
 	New(prompt string) Action
 	Open(chatID string) Action
 	Continue(chatID, message string) Action
+	Stop(chatID string) Action
+	Tier(chatID string, tier ModelTier) Action
 	Remove(chatID string) Action
 }
 
@@ -190,13 +194,14 @@ type AIChats interface {
 type ChatSummary struct {
 	ID string `json:"id"`
 	// Kind is conversation, builder or proofread.
-	Kind           string   `json:"kind,omitempty"`
-	Title          string   `json:"title,omitempty"`
-	Query          string   `json:"query,omitempty"`
-	Status         string   `json:"status,omitempty"`
-	CreatedAtMs    int64    `json:"createdAtMs,omitempty"`
-	UpdatedAtMs    int64    `json:"updatedAtMs,omitempty"`
-	ExtensionFiles []string `json:"extensionFiles"`
+	Kind           string    `json:"kind,omitempty"`
+	Tier           ModelTier `json:"tier,omitempty"`
+	Title          string    `json:"title,omitempty"`
+	Query          string    `json:"query,omitempty"`
+	Status         string    `json:"status,omitempty"`
+	CreatedAtMs    int64     `json:"createdAtMs,omitempty"`
+	UpdatedAtMs    int64     `json:"updatedAtMs,omitempty"`
+	ExtensionFiles []string  `json:"extensionFiles"`
 }
 
 // TweakRequest asks the builder to change an existing extension.

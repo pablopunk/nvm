@@ -107,11 +107,13 @@ type BuilderPages interface {
 }
 
 // ChatPages is what a chat action runs on the host. Open, New and the chat store calls act on the user's chats; the
-// palette pushes the pages Open and New return.
+// palette pushes the pages Open and New return. Send with an empty text and no pictures allows a tool call that waits.
 type ChatPages interface {
 	Open(chatID string) *palette.View
 	New(prompt string) *palette.View
-	Send(chatID, text string) error
+	Send(chatID, text string, images []chat.Image) error
+	Stop(chatID string)
+	SetTier(chatID string, tier chat.Tier) error
 	Remove(chatID string) error
 }
 
