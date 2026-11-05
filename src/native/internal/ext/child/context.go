@@ -97,7 +97,7 @@ func (c hostContext) Clipboard() api.ClipboardHistory {
 }
 
 func (c hostContext) Desktop() api.Desktop {
-	return remoteDesktop{link: c.link}
+	return remoteDesktop{link: c.link, clock: c.clock}
 }
 
 func (c hostContext) OCR() api.OCR {

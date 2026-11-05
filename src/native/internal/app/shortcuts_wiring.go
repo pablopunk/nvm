@@ -3,7 +3,7 @@ package app
 import (
 	"runtime"
 
-	"github.com/pablopunk/nvm/native/internal/palette/windows"
+	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
@@ -23,6 +23,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
 		Resolve:   p.resolveShortcutTitle,
+		Declared:  p.declaredGlobalShortcuts,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,
@@ -47,7 +48,9 @@ func (p *App) shortcutCommands() []shortcuts.Action {
 		}
 	}
 	if p.windowManagementEnabled() {
-		actions = append(actions, windows.ShortcutActions()...)
+		for _, command := range windowmanagementbuiltin.ShortcutCommands() {
+			actions = append(actions, shortcuts.Action{ID: command.ActionID, Title: command.Title})
+		}
 	}
 	return append(actions, movedCommandShortcutActions...)
 }

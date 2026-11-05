@@ -1628,6 +1628,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement struct {
 	WDisplays      func() ([]api.DisplayInfo, error)
 	WFocus         func(handle api.WindowHandle) (api.FocusResult, error)
 	WFocusNeighbor func(direction string, wrap bool) (api.FocusResult, error)
+	WSwitchDesktop func(direction string) (api.FocusResult, error)
 	WWaitForWindow func(query api.WindowQuery, timeout time.Duration) (window api.WindowInfo, found bool, err error)
 	WWindows       func(query api.WindowQuery) ([]api.WindowInfo, error)
 }
@@ -1646,6 +1647,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement) Focu
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement) FocusNeighbor(direction string, wrap bool) (api.FocusResult, error) {
 	return W.WFocusNeighbor(direction, wrap)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement) SwitchDesktop(direction string) (api.FocusResult, error) {
+	return W.WSwitchDesktop(direction)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_WindowManagement) WaitForWindow(query api.WindowQuery, timeout time.Duration) (window api.WindowInfo, found bool, err error) {
 	return W.WWaitForWindow(query, timeout)

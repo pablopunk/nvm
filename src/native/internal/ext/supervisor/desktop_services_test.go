@@ -30,6 +30,14 @@ func (listedWindows) ApplyTo(context.Context, api.WindowHandle, api.WindowLayout
 	return api.ApplyResult{OK: true}, nil
 }
 
+func (listedWindows) Apply(context.Context, api.WindowLayout, api.WindowManagementOptions) (api.ApplyResult, error) {
+	return api.ApplyResult{OK: true}, nil
+}
+
+func (listedWindows) FocusNeighbor(context.Context, string, bool) (api.FocusResult, error) {
+	return api.FocusResult{OK: true}, nil
+}
+
 // fixedShortcuts is the shortcut table the desktop fixture reads.
 type fixedShortcuts struct{}
 

@@ -22,4 +22,8 @@ type WindowManagement interface {
 	Focus(handle WindowHandle) (FocusResult, error)
 	// FocusNeighbor focuses the nearest window in a direction: left, right, up or down.
 	FocusNeighbor(direction string, wrap bool) (FocusResult, error)
+	// SwitchDesktop moves to the next or previous desktop (Space), as the Mission Control shortcut does. Direction is
+	// next or previous. It works on macOS only and needs Automation access to System Events; elsewhere it fails with
+	// the reason "unavailable".
+	SwitchDesktop(direction string) (FocusResult, error)
 }

@@ -28,10 +28,12 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	ports := p.ports
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			p.beginPaletteRun()
 			go func() {
 				ctx, cancel := context.WithTimeout(context.Background(), runTimeoutOf(in))
 				defer cancel()
 				result, failure, err := m.Run(ctx, extID, in)
+				p.endPaletteRun()
 				if err != nil {
 					failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
 				}

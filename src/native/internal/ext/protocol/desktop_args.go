@@ -56,6 +56,23 @@ type FocusArgs struct {
 	Handle api.WindowHandle `json:"handle"`
 }
 
+// ApplyArgs lays out the focused window of the app the invocation targets.
+type ApplyArgs struct {
+	Layout  api.WindowLayout            `json:"layout"`
+	Options api.WindowManagementOptions `json:"options"`
+}
+
+// FocusNeighborArgs names a direction and whether the search wraps around.
+type FocusNeighborArgs struct {
+	Direction string `json:"direction"`
+	Wrap      bool   `json:"wrap"`
+}
+
+// SwitchDesktopArgs names the desktop to move to: next or previous.
+type SwitchDesktopArgs struct {
+	Direction string `json:"direction"`
+}
+
 // ApplyToArgs places one listed window.
 type ApplyToArgs struct {
 	Handle  api.WindowHandle            `json:"handle"`

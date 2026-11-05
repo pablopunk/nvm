@@ -32,8 +32,8 @@ func TestOneXKeysBindAsTheirTwoOhActions(t *testing.T) {
 	tests := map[string]string{
 		"extension-root:nevermind.apps:app:/Applications/Slack.app": "app:/Applications/Slack.app",
 		"extension-root:nevermind.dictation:dictation":              CommandDictate,
-		"extension-action:window-management:layout.left-half":       "window.left-half",
-		"extension-action:window-management:layout.focus-right":     "window.focus-right",
+		"extension-action:window-management:layout.left-half":       "extension-action:window-management:layout.left-half",
+		"extension-action:window-management:layout.focus-right":     "extension-action:window-management:layout.focus-right",
 		"extension:nevermind.emoji-symbols:emoji-symbols":           CommandEmojiSymbols,
 		"command:snippets": CommandSnippets,
 	}
@@ -46,8 +46,8 @@ func TestOneXKeysBindAsTheirTwoOhActions(t *testing.T) {
 			t.Errorf("PortableKeyOf(%q) = %q; want %q", got, back, key)
 		}
 	}
-	if _, bound := ActionIDOf("extension-action:other-extension:thing"); bound {
-		t.Error("an action of another 1.x extension is bound")
+	if got, bound := ActionIDOf("extension-action:other-extension:thing"); !bound || got != "extension-action:other-extension:thing" {
+		t.Error("an action of another 1.x extension is not kept under its key")
 	}
 }
 
@@ -69,14 +69,14 @@ func TestPortableDocumentLoadsOneXShortcutsAndDisabledMarkers(t *testing.T) {
 	if got := doc.Actions["app:/Applications/Slack.app"]; got != "Command+Control+Alt+D" {
 		t.Errorf("app shortcut = %q", got)
 	}
-	if got := doc.Actions["window.left-half"]; got != "Command+Control+Alt+Shift+H" {
+	if got := doc.Actions["extension-action:window-management:layout.left-half"]; got != "Command+Control+Alt+Shift+H" {
 		t.Errorf("layout shortcut = %q", got)
 	}
-	if !doc.Disabled["window.restore"] {
+	if !doc.Disabled["extension-action:window-management:layout.restore"] {
 		t.Error("a null shortcut is not a disabled marker")
 	}
-	if len(doc.Actions) != 5 {
-		t.Errorf("actions = %v; the other extension's key must not be bound", doc.Actions)
+	if len(doc.Actions) != 6 {
+		t.Errorf("actions = %v; every extension key is kept under its own ID", doc.Actions)
 	}
 }
 
@@ -91,9 +91,9 @@ func TestPortableDocumentWritesOnlyTheKeysItChangesAndKeepsUnknownOnes(t *testin
 	store := portable.Open(files, "/home/owner/.config/nevermind/config.json")
 	persistence := NewPortableDocument(store)
 	if err := persistence.Update(func(d *Document) {
-		delete(d.Actions, "window.left-half")
-		d.Actions["window.center"] = "Command+Alt+C"
-		d.Disabled["window.restore"] = false
+		delete(d.Actions, "extension-action:window-management:layout.left-half")
+		d.Actions["extension-action:window-management:layout.center"] = "Command+Alt+C"
+		d.Disabled["extension-action:window-management:layout.restore"] = false
 		d.Palette = "Alt+Space"
 	}); err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestBlankPaletteInConfigStaysBlankWhenAnActionChanges(t *testing.T) {
 	store := portable.Open(files, path)
 	manager := NewManager(Setup{Doc: NewPortableDocument(store), Hotkeys: fake.NewHotkeys(), Clock: fake.NewClock(), GOOS: "linux"})
 	manager.Start()
-	if err := manager.SetAction("window.center", "Command+Alt+C"); err != nil {
+	if err := manager.SetAction("extension-action:window-management:layout.center", "Command+Alt+C"); err != nil {
 		t.Fatal(err)
 	}
 	doc, err := store.Load()

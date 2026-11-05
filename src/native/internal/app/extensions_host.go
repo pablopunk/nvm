@@ -105,7 +105,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		RootRefresh:     p.refreshRootRows,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,
-		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine, Clipboard: p.clipboardOptions}),
+		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine, Clipboard: p.clipboardOptions, WindowSettings: p.legacyWindowSettings()}),
 		AIQuota:         p.aiQuotas(),
 		LegacyStatePath: p.legacyStatePath(),
 	})
@@ -138,7 +138,7 @@ func (p *App) extensionWindows() services.WindowEngine {
 	if p.windows == nil {
 		return nil
 	}
-	return windowmgmt.NewExtension(p.windows)
+	return windowmgmt.NewExtension(p.windows, p.extensionWindowInvocation)
 }
 
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.
@@ -159,6 +159,7 @@ func (p *App) extensionHistory() *clipboard.History {
 // the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
 func (p *App) extensionsStateChanged() {
 	p.rootRows.reset()
+	p.refreshGlobalShortcuts()
 	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
 }

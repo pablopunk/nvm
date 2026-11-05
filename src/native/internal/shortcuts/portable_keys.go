@@ -41,15 +41,15 @@ const (
 	CommandBackendStatus      = "command:backend-status"
 )
 
-// config.json keys shortcuts by 1.x action ID, so both apps read one file. The 2.0 IDs of window layouts and apps
-// translate by prefix. A 2.0 command with no 1.x equivalent keeps its own ID as its key; 1.x reads such a key as an
-// unknown one and leaves it alone.
+// config.json keys shortcuts by 1.x action ID, so both apps read one file. The 2.0 IDs of apps translate by prefix. An
+// extension action or command keeps its key as its ID, so a binding made in 1.x and one made here are the same entry.
+// A key of another 1.x extension this build does not serve stays in the file, unbound, until its action comes back.
 const (
-	layoutKeyPrefix = "extension-action:window-management:layout."
-	appKeyPrefix    = "extension-root:nevermind.apps:app:"
-	windowIDPrefix  = "window."
-	appIDPrefix     = "app:"
-	commandIDPrefix = "command:"
+	appKeyPrefix             = "extension-root:nevermind.apps:app:"
+	appIDPrefix              = "app:"
+	commandIDPrefix          = "command:"
+	extensionKeyPrefix       = "extension:"
+	extensionActionKeyPrefix = "extension-action:"
 )
 
 // builtInCommandKeys maps the stable ID of each built-in command that 1.x also lists to the key 1.x stores its shortcut
@@ -98,9 +98,6 @@ func PortableKeyOf(actionID string) string {
 	if key, ok := builtInCommandKeys[actionID]; ok {
 		return key
 	}
-	if rest, ok := strings.CutPrefix(actionID, windowIDPrefix); ok {
-		return layoutKeyPrefix + rest
-	}
 	if rest, ok := strings.CutPrefix(actionID, appIDPrefix); ok {
 		return appKeyPrefix + rest
 	}
@@ -112,11 +109,8 @@ func ActionIDOf(key string) (string, bool) {
 	if actionID, ok := builtInCommandIDs[key]; ok {
 		return actionID, true
 	}
-	if rest, ok := strings.CutPrefix(key, layoutKeyPrefix); ok {
-		return windowIDPrefix + rest, true
-	}
 	if rest, ok := strings.CutPrefix(key, appKeyPrefix); ok {
 		return appIDPrefix + rest, true
 	}
-	return key, strings.HasPrefix(key, commandIDPrefix)
+	return key, strings.HasPrefix(key, commandIDPrefix) || strings.HasPrefix(key, extensionKeyPrefix) || strings.HasPrefix(key, extensionActionKeyPrefix) || strings.HasPrefix(key, extensionKeyPrefix) || strings.HasPrefix(key, extensionActionKeyPrefix)
 }

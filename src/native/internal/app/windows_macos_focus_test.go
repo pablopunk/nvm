@@ -4,11 +4,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt"
-	"github.com/pablopunk/nvm/native/internal/windowmgmt/commands"
-	"github.com/pablopunk/nvm/native/internal/windowmgmt/geometry"
 )
 
 // withoutFocusPort makes the palette look as it does on macOS: no focus port, so a summon captures only the app in front.
@@ -22,21 +21,22 @@ func withoutFocusPort(p *App) {
 	p.ports.Capabilities = platform.NewCapabilities(capabilities...)
 }
 
-// runPaletteCommand runs one window command the way the palette does: on the app the summon captured.
-func runPaletteCommand(t *testing.T, p *App, id string) string {
+// runPaletteCommand runs the left-half layout the way the built-in does for a palette run: the palette captures its
+// window, hides, and the engine call follows. It returns the message the user would see, empty when the window reached
+// its frame.
+func runPaletteCommand(t *testing.T, p *App) string {
 	t.Helper()
-	for _, command := range commands.All() {
-		if command.ID != id {
-			continue
-		}
-		invocation := windowmgmt.Invocation{Source: windowmgmt.SourcePalette}
-		if target, ok := p.windowTarget(); ok {
-			invocation.Target = &target
-		}
-		runner := commands.Runner{Engine: p.windows, Settings: geometry.DefaultSettings}
-		return runner.Execute(context.Background(), command, invocation)
+	p.beginPaletteRun()
+	defer p.endPaletteRun()
+	p.Palette.Hide()
+	left := api.WindowLayout{Kind: api.LayoutFraction, Fraction: &api.Rect{Width: 0.5, Height: 1}, CycleGroup: "left"}
+	result, err := p.extensionWindows().Apply(context.Background(), left, api.WindowManagementOptions{})
+	switch {
+	case err != nil:
+		return err.Error()
+	case !result.OK:
+		return result.Message
 	}
-	t.Fatalf("no window command %q", id)
 	return ""
 }
 
@@ -75,7 +75,7 @@ func TestPaletteWindowCommandMovesTheAppThatWasFrontWhenSummoned(t *testing.T) {
 	windows.Focus(notes)
 	p.Show()
 
-	if message := runPaletteCommand(t, p, "window.left-half"); message != "" {
+	if message := runPaletteCommand(t, p); message != "" {
 		t.Fatalf("left half refused: %s", message)
 	}
 	if palette.IsVisible() {
@@ -104,7 +104,7 @@ func TestPaletteWindowCommandSaysSoWhenNoAppWasCaptured(t *testing.T) {
 	windows.FailNext("Frontmost", platform.ErrNotFound)
 	p.Show()
 
-	if message := runPaletteCommand(t, p, "window.left-half"); message == "" {
+	if message := runPaletteCommand(t, p); message == "" {
 		t.Fatal("the command reported success without an app to act on")
 	}
 	if unmoved, _ := windows.Window(notes); unmoved.Frame.X != 200 {
