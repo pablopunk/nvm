@@ -41,6 +41,9 @@ type Manifest struct {
 	// On its first scan the folder takes that file's enabled state from 1.x, so a converted extension that was on stays
 	// on. It is host metadata: extension code never reads it.
 	ConvertedFrom string `json:"convertedFrom,omitempty"`
+	// AIQuotaKey is the owner the extension's model calls count under, so they share a limit with the 1.x extension of
+	// that name. Only a built-in may set it: a folder extension cannot borrow another owner's window.
+	AIQuotaKey string `json:"aiQuotaKey,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -101,6 +104,9 @@ func (m Manifest) UnknownCapabilities() []Capability {
 func (m Manifest) Validate() error {
 	if strings.HasPrefix(m.ID, reservedIDPrefix) {
 		return fmt.Errorf("extension id %q uses the reserved %q prefix", m.ID, reservedIDPrefix)
+	}
+	if m.AIQuotaKey != "" {
+		return fmt.Errorf("extension %q cannot set an AI quota key", m.ID)
 	}
 	return m.validateShape()
 }

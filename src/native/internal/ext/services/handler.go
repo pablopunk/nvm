@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ext/bundled"
 	"path/filepath"
 	"sync"
 
@@ -82,6 +83,8 @@ type Deps struct {
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
+	// Bundles reads the datasets the app ships. Nil answers unavailable.
+	Bundles *bundled.Store
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
 	// AI makes the model calls of ctx.AI. Nil answers unavailable.
@@ -162,7 +165,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
 		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
 		rootRefreshes:    newBurstRateLimiter(deps.Clock, rootRefreshBurst, rootRefreshesPerMinute),
-		aiCalls:          aiCallWindow(deps, manifest.ID),
+		aiCalls:          aiCallWindow(deps, quotaOwner(manifest)),
 		ai:               newAIState(),
 		schedules:        newScheduleBook(deps.Clock, scheduledFire(deps, manifest.ID)),
 		reviews:          newUninstallReviews(),
@@ -217,6 +220,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveLogs(call)
 	case protocol.ServiceText:
 		return h.serveText(call)
+	case protocol.ServiceBundle:
+		return h.serveBundle(call)
 	case protocol.ServiceNetwork:
 		return h.serveNetwork(ctx, call)
 	case protocol.ServiceDrafts:

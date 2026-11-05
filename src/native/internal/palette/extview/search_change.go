@@ -21,6 +21,7 @@ type searchChange struct {
 	asked    string
 	query    string
 	ids      []string
+	items    []api.Item
 	gen      int
 	inFlight bool
 }
@@ -37,7 +38,7 @@ func (s *Session) scheduleSearchChange(query string) {
 	s.searchChange.gen++
 	s.searchChange.inFlight = false
 	if text == "" {
-		s.searchChange.query, s.searchChange.ids = "", nil
+		s.searchChange.query, s.searchChange.ids, s.searchChange.items = "", nil, nil
 		return
 	}
 	gen := s.searchChange.gen
@@ -56,14 +57,15 @@ func (s *Session) runSearchChange(gen int, ref api.ActionRef, text string) {
 	}
 	s.searchChange.inFlight = true
 	s.refreshHost()
-	s.invokeRaw(ref, text, func(result api.Result, failure *api.Failure) {
+	s.invokeRaw(s.withAccessoryArg(ref), text, func(result api.Result, failure *api.Failure) {
 		if gen != s.searchChange.gen {
 			return
 		}
 		s.searchChange.inFlight = false
-		s.searchChange.query, s.searchChange.ids = text, nil
+		s.searchChange.query, s.searchChange.ids, s.searchChange.items = text, nil, nil
 		if failure == nil && result.Patch != nil {
 			s.searchChange.ids = result.Patch.SearchResultIds
+			s.searchChange.items = result.Patch.SearchItems
 		}
 		s.refreshHost()
 	})
@@ -77,9 +79,18 @@ func (s *Session) searchChangePending() bool {
 // searchChangeRows returns the second batch for query: the items the handler named, in its order, skipping any row
 // already in local and any id the view no longer holds. Their rows are not filtered by the query.
 func (s *Session) searchChangeRows(local []search.Item, query string) []search.Item {
-	if len(s.searchChange.ids) == 0 || s.searchChange.query != strings.TrimSpace(query) {
+	if s.searchChange.query != strings.TrimSpace(query) {
 		return nil
 	}
+	out := s.searchChangeIDRows(local)
+	for _, item := range s.searchChange.items {
+		out = append(out, s.row(item))
+	}
+	return out
+}
+
+// searchChangeIDRows returns the rows of the batch's held ids that the local rows do not already show.
+func (s *Session) searchChangeIDRows(local []search.Item) []search.Item {
 	shown := make(map[string]bool, len(local))
 	for _, row := range local {
 		shown[row.ID] = true

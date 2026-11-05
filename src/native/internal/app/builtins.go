@@ -5,12 +5,14 @@ import (
 	"slices"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/charsearch"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
+	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
@@ -28,12 +30,18 @@ import (
 // its value until its own storage or setting holds one. Rates is the calculator's exchange-rate cache and Zone the zone
 // its calendar answers use.
 type builtInInputs struct {
-	Rates        calc.RateCache
-	Zone         *time.Location
-	Quicklinks   []quicklinks.Link
-	Snippets     []snippetsbuiltin.Snippet
-	GuideDone    bool
-	SearchEngine string
+	Rates calc.RateCache
+	Zone  *time.Location
+	Clock platform.Clock
+	// EmojiDecider answers the picker's meaning batch in place of the account's model; nil in the app.
+	EmojiDecider charsearch.Decider
+	// EmojiSkinTone is the skin tone the settings file held before the picker kept its own; it answers until the
+	// picker's storage holds a tone.
+	EmojiSkinTone int
+	Quicklinks    []quicklinks.Link
+	Snippets      []snippetsbuiltin.Snippet
+	GuideDone     bool
+	SearchEngine  string
 }
 
 // builtInExtensions are the extensions compiled into the app. They run in the host, are always on, and answer the
@@ -44,7 +52,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
-		appsbuiltin.New(),
+		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider),
 	}
 }
 

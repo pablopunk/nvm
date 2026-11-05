@@ -79,6 +79,13 @@ type View struct {
 	// second batch of item ids, shown after the local matches. While the call runs the host shows the batch as loading
 	// after the rows, with no field to set. Only list and grid views carry it.
 	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
+	// Search answers every typed query with the rows of the search, in the order the handler gives them. The host does not
+	// filter or sort them, and shows the rows of the latest answer while the next one runs. The handler gets the trimmed
+	// text as Invocation.Value, and the value of SearchAccessory as Ref.Args under the accessory's id. It runs off the
+	// UI thread under the search budget, so it must answer quickly. Only list and grid views carry it.
+	Search *ActionRef `json:"search,omitempty"`
+	// Hint is the right footer text of a list or grid view, such as the keys it answers. Empty shows the host's default.
+	Hint string `json:"hint,omitempty"`
 
 	Actions               []Action        `json:"actions,omitempty"`
 	ActionPanel           *ActionPanel    `json:"actionPanel,omitempty"`
@@ -122,6 +129,9 @@ func (v View) Validate() error {
 	}
 	if v.Title == "" {
 		return errors.New("view title is required")
+	}
+	if v.Search != nil && v.Kind != ViewList && v.Kind != ViewGrid {
+		return fmt.Errorf("view %q: search needs a list or grid view, not %q", v.Title, v.Kind)
 	}
 	if v.OnSearchChange != nil && v.Kind != ViewList && v.Kind != ViewGrid {
 		return fmt.Errorf("view %q: onSearchChange needs a list or grid view, not %q", v.Title, v.Kind)

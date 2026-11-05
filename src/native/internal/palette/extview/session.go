@@ -7,6 +7,9 @@
 package extview
 
 import (
+	"context"
+	"sync"
+
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
@@ -20,7 +23,10 @@ import (
 // host owns the timeouts and the processes. A nil Clock or Cache disables snapshots, and a nil OnUI runs callbacks in
 // place (tests).
 type Deps struct {
-	Invoke    func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	Invoke func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their
+	// provider runs off the UI thread and needs the answer to build its rows. Nil leaves those rows empty.
+	Answer    func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)
 	Load      func(extID, loader string, done func([]api.Item, *api.Failure))
 	LoadImage func(ref string, done func(*ui.Bitmap))
 	OpenURL   func(url string)
@@ -94,6 +100,9 @@ type Session struct {
 	page         platform.WebPage
 	camera       *cameraView
 	searchChange searchChange
+	accessory    *palette.Accessory
+	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
+	guard sync.Mutex
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
@@ -156,11 +165,15 @@ func (s *Session) Palette() *palette.View {
 
 // listPage is the searchable list of items, with its search accessory, its loading state and its close hook.
 func (s *Session) listPage() *palette.View {
-	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder, Presentation: palettePresentation(s.view.Presentation)}
-	page.Search = func(q string) []search.Item {
-		page.SelectID = s.takeSelectID()
-		s.scheduleSearchChange(q)
-		return s.rows(q)
+	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder, Presentation: palettePresentation(s.view.Presentation), Hint: s.view.Hint}
+	if s.view.Search != nil {
+		page.Providers = s.searchProviders
+	} else {
+		page.Search = func(q string) []search.Item {
+			page.SelectID = s.takeSelectID()
+			s.scheduleSearchChange(q)
+			return s.rows(q)
+		}
 	}
 	page.Loading = s.isLoadingEmpty
 	page.Pending = s.searchChangePending
@@ -184,7 +197,14 @@ func palettePresentation(presentation api.Presentation) palette.Presentation {
 
 func (s *Session) gridPage() *palette.View {
 	page := s.listPage()
-	page.Grid = &palette.Grid{Columns: s.gridColumns(), CellHeight: gridCellHeight, Cell: drawGridCell}
+	page.Grid = s.gridSpecOf()
+	if s.view.Grid != nil && s.view.Grid.CategoryKeys {
+		page.OnKey = s.categoryKeys
+	}
+	if s.view.Grid != nil && s.view.Grid.SelectionFooter {
+		page.Footer = s.selectionFooter
+	}
+	page.Limit = s.view.MaxVisibleItems
 	return page
 }
 
@@ -200,6 +220,7 @@ func (s *Session) searchAccessory() *palette.Accessory {
 	}
 	accessory := &palette.Accessory{Value: spec.Value, Options: options}
 	accessory.OnChange = func(value string) { s.invokeInPlace(*spec.OnChange, value) }
+	s.accessory = accessory
 	return accessory
 }
 

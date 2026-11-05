@@ -1,6 +1,7 @@
 package app
 
 import (
+	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	"strings"
 	"sync"
 
@@ -45,6 +46,7 @@ var movedCommandShortcutIDs = map[string]string{
 	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                  shortcuts.CommandForceQuitApps,
 	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                    shortcuts.CommandQuitAllApps,
 	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID: shortcuts.CommandSnippets,
+	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:           shortcuts.CommandEmojiSymbols,
 }
 
 func extensionCommandShortcutID(extID, commandID string) string {

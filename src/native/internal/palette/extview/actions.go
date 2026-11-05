@@ -137,6 +137,8 @@ func defaultTitle(kind api.ActionKind) string {
 }
 
 func (s *Session) issue(key string, r route) handle {
+	s.guard.Lock()
+	defer s.guard.Unlock()
 	token := handle(s.extID + "#" + key)
 	s.handles[token] = r
 	return token
@@ -144,7 +146,9 @@ func (s *Session) issue(key string, r route) handle {
 
 // runHandle runs the action behind token, after its confirmation if it has one.
 func (s *Session) runHandle(h search.Host, token handle) {
+	s.guard.Lock()
 	r, ok := s.handles[token]
+	s.guard.Unlock()
 	if !ok {
 		h.Toast("This action expired; reopen the view")
 		return

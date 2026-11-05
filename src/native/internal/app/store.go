@@ -65,13 +65,14 @@ type Settings struct {
 	ClipRootSearchOff bool
 	// Quicklinks are the links 2.0 kept here. The quicklinks built-in reads them until the user creates a link, which
 	// stores them in the built-in's own storage.
-	Quicklinks  []quicklinks.Link
-	Disabled    map[string]bool // extension ids
-	LoginAtOpen bool
+	// EmojiSkinTone is the skin tone the emoji picker applied before the built-in kept its own. The built-in reads it until
+	// its storage holds a tone.
+	EmojiSkinTone int
+	Quicklinks    []quicklinks.Link
+	Disabled      map[string]bool // extension ids
+	LoginAtOpen   bool
 	// DiagnosticsOff is the "Send Technical Diagnostics" switch, inverted so that a missing key means on.
 	DiagnosticsOff bool
-	// EmojiSkinTone is the skin tone the emoji picker applies, as emoji.SkinTone (0 is the default tone).
-	EmojiSkinTone int
 	// FileRoots are the folders the Files index covers; empty means the standard personal folders.
 	FileRoots []string
 	// FileIgnore adds ignore patterns to the Files index, on top of the defaults.

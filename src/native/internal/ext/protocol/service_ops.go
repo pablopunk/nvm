@@ -24,6 +24,8 @@ const (
 	OpCommit      = "commit"
 	OpDiscard     = "discard"
 
+	OpRecords = "records"
+
 	OpRefreshMenuBar = "refreshMenuBar"
 	OpInvalidateRoot = "invalidateRoot"
 
@@ -60,6 +62,11 @@ type PendingReply struct {
 // IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
 type IndicatorHideArgs struct {
 	ID string `json:"id,omitempty"`
+}
+
+// BundleArgs names one bundled dataset the app ships.
+type BundleArgs struct {
+	Name string `json:"name"`
 }
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.

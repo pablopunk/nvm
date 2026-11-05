@@ -27,6 +27,8 @@ func (s *Session) bitmap(image *api.Image) *ui.Bitmap {
 	if ref == "" {
 		return nil
 	}
+	s.guard.Lock()
+	defer s.guard.Unlock()
 	if bm, ok := s.images[ref]; ok {
 		return bm
 	}

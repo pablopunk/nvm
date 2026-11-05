@@ -15,6 +15,14 @@ const (
 	sessionMessages = 40
 )
 
+// quotaOwner is the owner a manifest's model calls count under: its quota key when it names one, else its id.
+func quotaOwner(manifest api.Manifest) string {
+	if manifest.AIQuotaKey != "" {
+		return manifest.AIQuotaKey
+	}
+	return manifest.ID
+}
+
 // aiCallWindow is the call count of one extension. With a registry it is the count the app shares with the picker's
 // decisions for the same owner; without one the extension counts alone.
 func aiCallWindow(deps Deps, extensionID string) *aiquota.Window {
