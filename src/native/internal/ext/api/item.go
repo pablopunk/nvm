@@ -89,6 +89,9 @@ type Appearance struct {
 	Prominence string `json:"prominence,omitempty"`
 }
 
+// ProminencePrimary is the Appearance.Prominence that elevates a row as the surface's primary result.
+const ProminencePrimary = "primary"
+
 // Detail is the inspector content for a side or bottom pane.
 type Detail struct {
 	Title    string `json:"title,omitempty"`

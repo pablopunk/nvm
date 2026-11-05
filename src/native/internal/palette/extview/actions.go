@@ -80,6 +80,12 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
 		}
 		return s.hostOperation(action, title)
+	case api.ActionUpdate:
+		if s.deps.RunUpdate == nil {
+			break
+		}
+		op := action.Op
+		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
 	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:

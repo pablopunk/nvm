@@ -53,7 +53,7 @@ const AccountSignIn = "sign-in"
 var (
 	windowOps  = []string{"create", "show", "hide", "toggle", "close"}
 	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
-	updateOps  = []string{"check", "download", "install"}
+	updateOps  = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
 	accountOps = []string{AccountSignIn}
 	hostOps    = []string{"config-folder", "dictation-settings", "updates", "account-page"}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}

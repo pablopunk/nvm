@@ -140,7 +140,7 @@ func (c hostContext) Dictation() api.Dictation {
 }
 
 func (c hostContext) Updates() api.Updates {
-	return unsupportedUpdates{}
+	return remoteUpdates{link: c.link}
 }
 
 func (c hostContext) Windows() api.Windows {

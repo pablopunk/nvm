@@ -41,6 +41,13 @@ func (s *Session) revealPath(h search.Host, path string) {
 	s.deps.RevealPath(path)
 }
 
+// runUpdate performs an update operation of the host's updater. A refused operation shows its reason as a toast.
+func (s *Session) runUpdate(h search.Host, op string) {
+	if err := s.deps.RunUpdate(op); err != nil {
+		h.Toast(err.Error())
+	}
+}
+
 func (s *Session) runSystemOp(h search.Host, op string) {
 	if s.deps.RunSystem == nil {
 		h.Toast(unavailableMessage)

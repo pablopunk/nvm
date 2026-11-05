@@ -58,6 +58,9 @@ type Deps struct {
 	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
 	// run it, and "" when it did. Nil makes system ops report unavailable.
 	RunSystem func(op string, done func(failure string))
+	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
+	// reason it refused, if it did. Nil makes update actions report unavailable.
+	RunUpdate func(op string) error
 	Files     platform.FS
 	Clock     platform.Clock
 	Cache     Cache

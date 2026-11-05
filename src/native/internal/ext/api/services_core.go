@@ -280,11 +280,12 @@ type Place struct {
 	Path string `json:"path"`
 }
 
-// UpdateState is a snapshot of the host update manager. Empty strings mean "none".
+// UpdateState is a snapshot of the host update manager. Empty strings mean "none". Message is the one line the person
+// reads about the update, the same line the menu bar and the root show.
 type UpdateState struct {
 	CurrentVersion    string `json:"currentVersion"`
-	Channel           string `json:"channel"` // stable or nightly
-	Status            string `json:"status"`
+	Channel           string `json:"channel"` // one of the UpdateChannel values
+	Status            string `json:"status"`  // one of the UpdateStatus values
 	Supported         bool   `json:"supported"`
 	Checking          bool   `json:"checking"`
 	Downloading       bool   `json:"downloading"`
@@ -292,7 +293,38 @@ type UpdateState struct {
 	AvailableVersion  string `json:"availableVersion,omitempty"`
 	DownloadedVersion string `json:"downloadedVersion,omitempty"`
 	ErrorMessage      string `json:"errorMessage,omitempty"`
+	Message           string `json:"message,omitempty"`
 }
+
+// Status values of UpdateState.Status, as the host's update manager reports them.
+const (
+	UpdateStatusIdle        = "idle"
+	UpdateStatusCurrent     = "current"
+	UpdateStatusUnsupported = "unsupported"
+	UpdateStatusChecking    = "checking"
+	UpdateStatusAvailable   = "available"
+	UpdateStatusDownloading = "downloading"
+	UpdateStatusDownloaded  = "downloaded"
+	UpdateStatusInstalling  = "installing"
+	UpdateStatusError       = "error"
+)
+
+// Channel values of UpdateState.Channel. Stable offers final releases only; nightly and dev also offer prereleases,
+// and a final release still wins whenever it is newer.
+const (
+	UpdateChannelStable  = "stable"
+	UpdateChannelNightly = "nightly"
+	UpdateChannelDev     = "dev"
+)
+
+// Operations of an ActionUpdate action. Check looks for a newer version, download starts one that waits, install
+// restarts into a downloaded one, and channel moves to the next channel and checks it.
+const (
+	UpdateOpCheck    = "check"
+	UpdateOpDownload = "download"
+	UpdateOpInstall  = "install"
+	UpdateOpChannel  = "channel"
+)
 
 // Clock is the only source of the current time for extension code. Hosts inject it so that tests
 // can advance time instead of sleeping, the same rule the host follows for its own packages.
@@ -300,8 +332,8 @@ type Clock interface {
 	Now() time.Time
 }
 
-// Updates reads update state. Check, download and install are ActionUpdate actions, and the
-// host renders their progress.
+// Updates reads update state. Check, download, install and channel are ActionUpdate actions, and the
+// host performs them and renders their progress.
 type Updates interface {
 	State() UpdateState
 }

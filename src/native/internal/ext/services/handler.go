@@ -64,6 +64,8 @@ type Deps struct {
 	Frontmost FrontmostSource
 	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.
 	Permissions PermissionSurface
+	// Updates reads the state of the app's updater. Nil answers unavailable.
+	Updates UpdateSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
@@ -251,6 +253,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveShortcuts(call)
 	case protocol.ServiceAccount:
 		return h.serveAccount(call)
+	case protocol.ServiceUpdates:
+		return h.serveUpdates(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

@@ -50,11 +50,13 @@ type Ports struct {
 	Notifier platform.Notifier
 	// Permissions reads and acts on the OS permissions of the system service. Nil lists none.
 	Permissions services.PermissionSurface
-	Shortcuts   services.ShortcutTable
-	Account     services.AccountState
-	OCR         *ocr.Service
-	History     func() *clipboard.History
-	Confirm     services.ConfirmFunc
+	// Updates reads the state of the app's updater for the updates service. Nil answers unavailable.
+	Updates   services.UpdateSurface
+	Shortcuts services.ShortcutTable
+	Account   services.AccountState
+	OCR       *ocr.Service
+	History   func() *clipboard.History
+	Confirm   services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
@@ -174,6 +176,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Frontmost:    ports.Frontmost,
 			Notifier:     ports.Notifier,
 			Permissions:  ports.Permissions,
+			Updates:      ports.Updates,
 			Shortcuts:    ports.Shortcuts,
 			Account:      ports.Account,
 			OCR:          ports.OCR,

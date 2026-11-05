@@ -20,6 +20,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	timersbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/timers"
+	updatesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/updates"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -46,7 +47,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
 		timersbuiltin.New(),
-		appsbuiltin.New(), settingsbuiltin.New(), permissionsbuiltin.New(),
+		appsbuiltin.New(), settingsbuiltin.New(), permissionsbuiltin.New(), updatesbuiltin.New(),
 	}
 }
 
