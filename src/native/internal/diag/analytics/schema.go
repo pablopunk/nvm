@@ -3,10 +3,10 @@ package analytics
 // The event names. The ingest route accepts only these names from an install and drops every other, so a new event
 // needs a row here and a matching rule on the route.
 const (
-	EventAppLaunched   = "app.launched"
-	EventFeatureUsed   = "feature.used"
-	EventException     = "$exception"
-	EventSupportReport = "support_report"
+	EventAppLaunched          = "app.launched"
+	EventFeatureUsed          = "feature.used"
+	EventException            = "$exception"
+	EventSupportReport        = "support_report"
 	EventInstallOwnerObserved = "install.owner_observed"
 )
 
@@ -15,10 +15,10 @@ const FeatureCommandRun = "command.run"
 
 // schema lists the property keys each event may carry. Capture drops every other key.
 var schema = map[string][]string{
-	EventAppLaunched:   nil,
-	EventFeatureUsed:   {"feature", "variant"},
-	EventException:     {"support_ref", "component", "message", "frames", "attributes"},
-	EventSupportReport: {"support_ref"},
+	EventAppLaunched:          nil,
+	EventFeatureUsed:          {"feature", "variant"},
+	EventException:            {"support_ref", "component", "message", "frames", "attributes"},
+	EventSupportReport:        {"support_ref"},
 	EventInstallOwnerObserved: {"owner_source", "owner_id"},
 }
 
