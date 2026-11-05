@@ -347,7 +347,7 @@ Rules:
 | `ClipboardHistory` | `List`, `Get`, `Remove`, `Clear` | Needs `clipboard.history`. |
 | `Desktop` | `Keyboard`, `Clipboard`, `Selection`, `Apps`, `WindowManagement`, `Files`, `Shell` | `WindowManagement()` is nil where unsupported. |
 | `OCR` | `Image`, `Screen`, `Region` | Needs `ocr`; screen needs OS permission. |
-| `Dictation` | `Status`, `APIAvailable`, `Devices`, `Start`, `Stop`, `Cancel` | Audio never reaches extension code. |
+| `Dictation` | `Status`, `APIAvailable`, `Devices`, `Start`, `Stop`, `Cancel`, `Recordings`, `Retry`, `DeleteRecording` | Audio never reaches extension code. Served, section 33. |
 | `Shortcuts` | `List`, `Palette` | Reads only; registration goes through `Command.GlobalShortcut`. |
 | `Indicators` | `Show`, `Update`, `Hide` | Passive, never takes focus. Added in this revision. |
 | `System` | `OS`, `HasCapability`, `Labels`, `SettingsPanes`, `Places`, `Notify` | Use `HasCapability` to omit rows, not to duplicate platform checks. `Notify` needs `system`. |
@@ -828,7 +828,7 @@ What the examples show:
 | `ExtensionSettings` | `Settings`, `SettingDefinition` | `Value` is `json.RawMessage`. |
 | `ExtensionDictationDevice` | `DictationDevice` | |
 | `ExtensionDictationStatus` | `DictationStatus` | |
-| `ExtensionDictation` | `Dictation`, `DictationStartOptions` | Recovery helpers (`recordings`, `retry`, `deleteRecording`) are built-in only and omitted. |
+| `ExtensionDictation` | `Dictation`, `DictationStartOptions`, `SavedDictation` | Recovery helpers are served as `Recordings`, `Retry` and `DeleteRecording` (section 33). |
 | `ExtensionShortcutRecord` | `ShortcutRecord` | |
 | `ExtensionPaletteShortcut` | `ShortcutRecord` | Scope is `palette`. |
 | `ExtensionLogs` | `Logs` | |
@@ -961,7 +961,7 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
-Not wired in this build (still an internal failure when called, with a reference): `Dictation`, `Indicators`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Navigation`, `Views` except `RefreshMenuBar` (section 19), and the desktop surfaces section 21 does not list. The settings view has no goldens yet.
+Not wired in this build (still an internal failure when called, with a reference): `Updates`, `AI`, `AIBuilder`, `Ownership`, `Navigation`, `Views` except `RefreshMenuBar` (section 19), and the desktop surfaces section 21 does not list. The settings view has no goldens yet.
 
 ## 19. Menu bar as built (WP3.5)
 
@@ -1023,7 +1023,7 @@ Decisions behind the table:
 - **Notifications have a title and a body, and no click action.** The Electron extension API had none, so there is nothing to match. `notify` needs the `system` declaration, the host's `notifications.show` capability and a rate limit of 10 a minute. A title of 1 to 120 characters and a body of up to 500 are accepted. A refusal by the user or the OS is `permission`; a system without notifications answers unavailable.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
-Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ### 21.1 Selection, replacement and undo as built (WP2.5)
 
@@ -1221,3 +1221,19 @@ Code: `Context().Scheduler()` (`internal/ext/api/scheduler.go`), served by `inte
 - **Fixture.** `acme.schedule` (`internal/ext/testdata/extensions/acme.schedule`) arms, cancels and reports a run through the search box, through a child process. `internal/ext/manager/schedule_test.go` runs it: a due run calls the action, and a cancelled run never does.
 - **Tests.** `internal/ext/services/schedule_test.go` runs the book on the fake clock: due time, cancel, replacement, past times, the limits, the key rules, close and the rate limit. `internal/ext/builtins/timers` covers the duration parsing, the root row, the commands, the countdown, cancel and finish on a fake scheduler. The root and learned tables and the goldens are unchanged.
 
+## 33. Dictation as built (dogfood batch 4)
+
+Code: `internal/ext/services/dictation.go` (the service and its `DictationEngine` port), `internal/dictation/engine.go` (the host engine: one dictation, the output mute, saved recordings), `internal/ext/child/remote_dictation.go` (the extension side), `internal/ext/builtins/dictation` (the built-in, with `cleanup` and `history` subpackages), `internal/app/dictation_wiring.go` and `dictation_legacy.go` (the wiring and the 1.x documents). Fixtures: `testdata/extensions/acme.dictation`; L2 in `internal/ext/supervisor/dictation_test.go`; L1 in `internal/ext/services`, `internal/dictation` and the built-in.
+
+- **Surface.** `Dictation` has `Status`, `APIAvailable`, `Devices`, `Start(DictationStartOptions)`, `Stop`, `Cancel` and, new in this batch, `Recordings` (`SavedDictation`: id, `CreatedAtMs`, `SegmentCount`), `Retry(id)` and `DeleteRecording(id)`. The 1.x recovery helpers are no longer built-in only: any extension that declares `dictation` can list, retry and delete the saved audio of a dictation whose transcript did not complete.
+- **Capability.** Every call needs `dictation`; a refusal is `permission` and names it. Audio stays in the host.
+- **Mute.** `Start` with `MuteSystemAudioWhileRecord` mutes the output until the dictation stops, is cancelled or fails to start. A crash leaves a journal the next start restores.
+- **Devices.** `""` and `"default"` both name the system microphone. A failed start that is not a refusal falls back to the default device, as before.
+- **Failures.** Errors carry the words the user reads as their message, and a cause that classifies them (`unavailable`, `permission`, `not-found`). A cancelled dictation has an empty message: the built-in closes its indicator without saying anything.
+- **Background.** `Stop` waits for the hosted transcript, and `Start` for the microphone, so a run that calls them is declared `Background` on its action. Such a run has a two-minute budget (the background job's), not the five seconds of an ordinary action. This is a host primitive: `Invocation.Background` is set from the action, and `Manager.Run` picks the budget.
+- **Built-in.** `nevermind.dictation` declares `dictation`, `ai`, `ocr` and `desktop.apps`. Dictate is a background root row that starts or stops a dictation; the paste goes to the app that had focus at the start (`PasteOptions.ExpectedFrontmostID`), concealed from clipboard history unless the settings keep the text. Dictation History lists unfinished dictations first (Retry, Delete) and transcripts (View, Copy, Delete), with Clear History behind a confirmation. The settings form has the six 1.x fields. Cleaning uses `ctx.AI` on the fast tier with the 6-second deadline and falls back to the raw transcript; screen words come from `ctx.OCR().Screen` with a 2-second timeout.
+- **Indicator.** The dictation indicator is the extension indicator surface (`ctx.Indicators`) with the 1.x states: Listening, Waiting for microphone (shown after one second, then the device's name), Transcribing, Cleaning, No speech detected (2.2 s) and a failure with its words (4 s).
+- **Shortcuts.** Dictate and Dictation History are customizable rows with the action ids `command:dictate` and `command:dictation-history`. The host maps them to the 1.x keys `extension-root:nevermind.dictation:dictation` and `...:dictation-history`, so a shortcut the user set in 1.x works unchanged.
+- **Legacy.** The settings (`dictation.json`) and transcripts (`dictation-history.json`) of the native app answer until the built-in saves its own. Recordings stay in `dictation-recordings` in the data folder.
+- **Not carried over.** The native indicator's Cancel and Open Microphone Settings buttons and its level meter: 1.x's indicator had neither, and the extension indicator surface draws title, subtitle and status only. The native "Dictionary" view is the settings form's Custom dictionary field, as in 1.x.
+- **Tests.** L1: `internal/ext/services/dictation_test.go` (each operation, the refusal, the missing engine, an unknown operation), `internal/dictation/engine_test.go` (each engine method on fakes) and `internal/ext/builtins/dictation/dictation_test.go` (the flows, cleanup, screen words, history, retry, settings, legacy state and the root rows). L2: the `acme.dictation` fixture runs in a child process against a fake engine.

@@ -17,13 +17,13 @@ import (
 // ID is the built-in's identity. It is the 1.x dictation extension id, so the shortcuts of its rows keep their 1.x keys.
 const ID = "nevermind.dictation"
 
-// Row ids and the shortcut keys 1.x stored them under. The keys are the rows' CustomizeAs, so the shortcut and alias
-// keep working as they did in 1.x.
+// Row ids and the shortcut actions 1.x stored their keys under. The shortcut actions are the rows' CustomizeAs: the
+// host maps "command:dictate" and "command:dictation-history" to the 1.x keys, so the shortcuts keep working as in 1.x.
 const (
 	dictateRowID        = "dictation"
 	historyRowID        = "dictation-history"
-	dictateShortcutKey  = "extension-root:nevermind.dictation:dictation"
-	historyShortcutKey  = "extension-root:nevermind.dictation:dictation-history"
+	dictateActionID     = "command:dictate"
+	historyActionID     = "command:dictation-history"
 	dictateTitle        = "Dictate"
 	historyTitle        = "Dictation History"
 	dictateSubtitle     = "Start or stop cloud voice dictation"
@@ -101,7 +101,7 @@ func rootItems() []api.Item {
 func dictateItem() api.Item {
 	return api.Item{
 		ID: dictateRowID, Title: dictateTitle, Subtitle: dictateSubtitle, Icon: "mic", Score: scoreRootCommand,
-		Aliases: []string{"dictate", "dictation", "voice dictation"}, CustomizeAs: dictateShortcutKey,
+		Aliases: []string{"dictate", "dictation", "voice dictation"}, CustomizeAs: dictateActionID,
 		Section: search.KindCommands, LearnKey: "cmd:" + dictateTitle,
 		Primary: &api.Action{
 			Kind: api.ActionRun, Title: dictateTitle, Ref: &api.ActionRef{ID: refDictate},
@@ -115,7 +115,7 @@ func dictateItem() api.Item {
 func historyItem() api.Item {
 	return api.Item{
 		ID: historyRowID, Title: historyTitle, Subtitle: historySubtitle, Icon: "history", Score: scoreRootCommand,
-		Aliases: []string{"dictation history", "transcripts", "voice history"}, CustomizeAs: historyShortcutKey,
+		Aliases: []string{"dictation history", "transcripts", "voice history"}, CustomizeAs: historyActionID,
 		Section: search.KindCommands, LearnKey: "cmd:" + historyTitle,
 		Primary: &api.Action{Kind: api.ActionRun, Title: historyTitle, Ref: &api.ActionRef{ID: refOpenHistory}},
 	}
