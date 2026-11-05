@@ -33,12 +33,13 @@ const (
 
 // Action is something you can do with a result: the first one runs on Enter, all are in the action menu.
 type Action struct {
-	Title   string
-	Mods    ui.Modifiers
-	Key     ui.Key
-	Label   string // shortcut as displayed, e.g. "⌃⌫"
-	Run     func(h Host)
-	Dismiss Dismissal
+	Title    string
+	Subtitle string
+	Mods     ui.Modifiers
+	Key      ui.Key
+	Label    string // shortcut as displayed, e.g. "⌃⌫"
+	Run      func(h Host)
+	Dismiss  Dismissal
 	// Disabled names why the action cannot run now, as 1.x shows it under the title of a disabled menu row. A
 	// disabled action stays in the menu, muted, and choosing it does nothing. Empty means the action runs.
 	Disabled string

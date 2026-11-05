@@ -59,6 +59,9 @@ func (p *Palette) cellContent(c *ui.Context, g *Grid, cell ui.Element, i int) ui
 // hoverChoose chooses result i when the pointer itself moved over it, as 1.x does. A list that scrolls under a still
 // pointer chooses nothing, so keyboard movement is not undone. A press that is dragging chooses nothing either.
 func (p *Palette) hoverChoose(el ui.Element, i int) {
+	if p.actionsOpen {
+		return
+	}
 	p.notePress(el)
 	x, y, over := el.PointerPosition()
 	if !over {
@@ -83,6 +86,9 @@ func (p *Palette) notePress(el ui.Element) {
 // clickRun chooses result i and runs it when a click lands on its element. A press that moves past the drag threshold
 // is no click, so a drag neither chooses nor runs.
 func (p *Palette) clickRun(el ui.Element, i int) {
+	if p.actionsOpen {
+		return
+	}
 	if !el.Clicked() {
 		return
 	}

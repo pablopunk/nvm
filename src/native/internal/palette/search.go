@@ -77,6 +77,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
+	if p.actionsOpen && p.menuOwner != p.menuOwnerKey() {
+		p.closeActionMenu()
+	}
 }
 
 // loadingMore reports whether the rows on screen are missing a second batch that is still arriving: the providers of

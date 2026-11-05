@@ -4,6 +4,7 @@ package palette
 // given state, and the goldens use it to render one.
 func (p *Palette) SetStack(views ...*View) {
 	p.cancelAction()
+	p.resetActionMenu()
 	p.stack = append([]*View(nil), views...)
 	p.shownView = nil
 }
@@ -25,7 +26,7 @@ func (p *Palette) Show() {
 	}
 	p.phIndex++
 	p.query = ""
-	p.actionsOpen = false
+	p.resetActionMenu()
 	p.shownView = nil
 	p.resetRootHistory()
 	p.leaveUnsurvivingPages()
@@ -64,6 +65,7 @@ func (p *Palette) Hide() {
 
 // hide performs dismissal after its caller decides whether pending action completion remains valid.
 func (p *Palette) hide() {
+	p.resetActionMenu()
 	p.actionPending = false
 	for _, v := range p.stack {
 		if v.OnHide != nil {
@@ -125,7 +127,7 @@ func (p *Palette) push(v *View) {
 	p.stack = append(p.stack, v)
 	p.pushes++
 	p.query = ""
-	p.actionsOpen = false
+	p.resetActionMenu()
 	p.syncActive(covered)
 	p.syncPresentation()
 	p.search()
@@ -183,7 +185,7 @@ func (p *Palette) Pop() {
 	p.leave(p.cur())
 	p.stack = p.stack[:len(p.stack)-1]
 	p.query = ""
-	p.actionsOpen = false
+	p.resetActionMenu()
 	p.syncActive(nil)
 	p.syncPresentation()
 	p.search()

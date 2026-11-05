@@ -123,6 +123,15 @@ func ScoreFuzzy(text, query string) int {
 	return 10
 }
 
+// ScoreText matches 1.x action-menu text ranking, without root search's character-bag typo fallback.
+func ScoreText(text, query string) int {
+	query = strings.ToLower(strings.TrimSpace(query))
+	if query == "" {
+		return 1
+	}
+	return scoreSequential(strings.ToLower(text), query)
+}
+
 // Score is ScoreFuzzy for text and query in any case, trimmed of surrounding space.
 func Score(text, query string) int {
 	return ScoreFuzzy(strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query)))

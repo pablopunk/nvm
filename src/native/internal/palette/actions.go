@@ -113,12 +113,11 @@ func (p *Palette) onEnter() {
 
 // runMenuAction closes the action menu and runs its action at index i, when there is one.
 func (p *Palette) runMenuAction(i int) {
-	acts := p.menuActions()
-	if i >= 0 && i < len(acts) && acts[i].Disabled != "" {
+	acts := p.filteredMenuActions()
+	if i < 0 || i >= len(acts) || acts[i].Disabled != "" || acts[i].Run == nil {
 		return
 	}
-	p.actionsOpen = false
-	if i >= 0 && i < len(acts) {
-		p.runAction(acts[i])
-	}
+	action := acts[i]
+	p.closeActionMenu()
+	p.runAction(action)
 }

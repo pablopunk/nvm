@@ -74,7 +74,7 @@ func (s *Side) Refresh() {
 // keys routes the keyboard to the side while it has the focus. Escape is the side's own: it pops a page, or gives the
 // focus back at its first page, and never hides the palette.
 func (s *Side) keys(c *ui.Context) {
-	if c.Shortcut(0, ui.KeyEscape) && !s.shell.actionsOpen {
+	if !s.shell.actionsOpen && c.Shortcut(0, ui.KeyEscape) {
 		if len(s.shell.stack) > 1 {
 			s.shell.Pop()
 		} else {
@@ -96,7 +96,7 @@ func (p *Palette) replaceRoot(v *View) {
 	}
 	p.stack[0] = v
 	p.query = ""
-	p.actionsOpen = false
+	p.resetActionMenu()
 	p.shownView = nil
 	p.search()
 }

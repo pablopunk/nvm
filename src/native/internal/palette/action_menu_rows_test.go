@@ -16,7 +16,7 @@ func TestActionMenuDrawsEachGroupTitleAboveItsFirstAction(t *testing.T) {
 		{Title: "Unpin", Section: "Manage"},
 		{Title: "Clear all", Section: "View", MenuOnly: true},
 	}
-	rows, rowAction := actionMenuRows(acts, 1)
+	rows, rowAction := actionMenuRows(acts, 1, "")
 
 	var titles []string
 	for _, row := range rows {

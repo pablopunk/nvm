@@ -35,6 +35,7 @@ func (s *Session) actionAt(itemID string, index int, action api.Action) search.A
 func (s *Session) action(action api.Action, key string) search.Action {
 	mapped := s.withShortcut(s.actionBody(action, key), action.Shortcut)
 	mapped.MenuOnly = action.Preview
+	mapped.Subtitle = action.Subtitle
 	return mapped
 }
 

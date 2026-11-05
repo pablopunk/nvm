@@ -97,9 +97,17 @@ type Palette struct {
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
 	focusList bool
 
-	actionsOpen bool
-	actChosen   int
-	actList     ui.ListState
+	actionsOpen     bool
+	actChosen       int
+	menuQuery       string
+	menuSnapshot    []search.Action
+	menuOwner       string
+	menuRanked      []search.Action
+	menuRankedQuery string
+	menuInput       ui.Handle
+	menuScroll      ui.ScrollState
+	menuReveal      bool
+	menuPointer     pointerAt
 
 	notice *Notice
 	// returnTo is the window the keyboard goes back to when the palette hides, captured when it was shown.
@@ -173,7 +181,7 @@ func (p *Palette) Choose(i int) { p.choose(i) }
 
 // OpenActionMenu opens the action menu of the chosen row with the action at index chosen selected.
 func (p *Palette) OpenActionMenu(chosen int) {
-	p.actionsOpen, p.actChosen = true, chosen
+	p.openActionMenu(chosen)
 }
 
 // Settled reports whether the rows on screen are the complete answer to the shown query.

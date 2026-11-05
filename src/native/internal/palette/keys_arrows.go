@@ -86,9 +86,9 @@ func (p *Palette) runSearchEdge(edge searchEdge) {
 	case edge == edgeCellForward:
 		p.choose(p.chosen + 1)
 	case edge == edgeRight:
-		p.actionsOpen, p.actChosen = true, 0
+		p.openActionMenu(0)
 	case p.actionsOpen:
-		p.actionsOpen = false
+		p.closeActionMenu()
 	default:
 		p.Pop()
 	}

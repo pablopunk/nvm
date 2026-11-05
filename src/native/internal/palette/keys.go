@@ -19,16 +19,16 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		return
 	}
 	if p.actionsOpen {
-		acts := p.menuActions()
 		switch {
 		case c.Shortcut(0, ui.KeyEscape), c.Shortcut(Mod, ui.KeyK):
-			p.actionsOpen = false
-		case v.Input != nil && c.Shortcut(0, ui.KeyEnter):
-			p.onEnter()
+			p.closeActionMenu()
 		case c.Shortcut(0, ui.KeyDown):
-			p.actChosen = min(p.actChosen+1, len(acts)-1)
+			p.moveMenuChoice(1)
 		case c.Shortcut(0, ui.KeyUp):
-			p.actChosen = max(p.actChosen-1, 0)
+			p.moveMenuChoice(-1)
+		case c.Shortcut(0, ui.KeyTab):
+		default:
+			p.runActionShortcut(c)
 		}
 		return
 	}
@@ -36,7 +36,7 @@ func (p *Palette) keys(c *ui.Context, v *View) {
 		return
 	}
 	if c.Shortcut(Mod, ui.KeyK) && len(p.menuActions()) > 0 {
-		p.actionsOpen, p.actChosen = true, 0
+		p.openActionMenu(0)
 		return
 	}
 	if len(p.stack) == 1 && p.opts.AskAI != nil && strings.TrimSpace(p.query) != "" && c.Shortcut(0, ui.KeyTab) {
@@ -83,6 +83,9 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 func (p *Palette) runActionShortcut(c *ui.Context) {
 	for _, a := range p.shortcutActions() {
 		if a.Key != 0 && c.Shortcut(a.Mods, a.Key) {
+			if p.actionsOpen {
+				p.closeActionMenu()
+			}
 			p.runAction(a)
 			return
 		}

@@ -41,7 +41,9 @@ func (p *Palette) viewThemed(c *ui.Context) {
 		design.Etched(c)
 		p.footer(c, v)
 	})
-	if p.actionsOpen {
+	if side := v.sideNow(); side.Focused() && side.shell != nil && side.shell.actionsOpen {
+		side.shell.actionPanel(c)
+	} else if p.actionsOpen {
 		p.actionPanel(c)
 	}
 }
@@ -325,19 +327,6 @@ func (p *Palette) bodyFooterKeys(v *View, data *design.FooterData) {
 // actionsKeyHint is the footer's "Actions" entry: the key that opens the action menu.
 func actionsKeyHint() *design.KeyHint {
 	return &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
-}
-
-// actionPanel is the action menu, a popover over the pane.
-func (p *Palette) actionPanel(c *ui.Context) {
-	p.actList.Selected = &p.actChosen
-	rows, rowAction := actionMenuRows(p.menuActions(), p.actChosen)
-	events := design.ActionMenu(c, rows)
-	if events.Hovered >= 0 && rowAction[events.Hovered] >= 0 {
-		p.actChosen = rowAction[events.Hovered]
-	}
-	if events.Clicked >= 0 && rowAction[events.Clicked] >= 0 {
-		p.runMenuAction(rowAction[events.Clicked])
-	}
 }
 
 // accessoryChoices are the picker's option titles and the index of its current option; no titles when the view has
