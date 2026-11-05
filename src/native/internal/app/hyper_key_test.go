@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"slices"
 	"strings"
 	"testing"
@@ -94,6 +95,8 @@ func TestKeyboardShortcutsRowShowsTheHyperSparkle(t *testing.T) {
 		t.Fatal(err)
 	}
 	p.exts.mgr.Store(newFixtureManagerWithApps(t, p))
+	p.globalShortcuts = globalShortcutTableOf(p.exts.mgr.Load().Commands(context.Background()))
+	p.shortcutsManager().Refresh()
 	rows := p.keyboardShortcutsPage().Search("")
 	for _, row := range rows {
 		if row.Title == "Dictate" {

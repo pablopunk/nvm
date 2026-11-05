@@ -35,7 +35,7 @@ func (t ExtensionTable) Aliases(prefix string) map[string][]string {
 // List returns every shortcut the user has bound to a command or to the palette.
 func (t ExtensionTable) List() []api.ShortcutRecord {
 	var records []api.ShortcutRecord
-	for _, entry := range Entries(t.manager.load(), t.manager.setup.Commands, nil, nil) {
+	for _, entry := range t.manager.Entries() {
 		if entry.Accelerator != "" {
 			records = append(records, t.labeled(recordOf(entry)))
 		}

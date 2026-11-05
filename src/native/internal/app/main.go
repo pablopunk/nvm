@@ -83,11 +83,11 @@ type App struct {
 	// background runs the host jobs and the extension triggers; nil until ready has started it.
 	background *jobs.Scheduler
 	// paletteHidden carries one signal per hide of the palette window; a paste waits on it before the gesture.
-	paletteHidden   chan struct{}
-	shortcutMgr     *shortcuts.Manager
-	aliasList       *shortcuts.Aliases
-	github          *githubProbe
-	shortcutTitles  shortcutTitles
+	paletteHidden  chan struct{}
+	shortcutMgr    *shortcuts.Manager
+	aliasList      *shortcuts.Aliases
+	github         *githubProbe
+	shortcutTitles shortcutTitles
 	// globalShortcuts is the extension commands the shortcut manager binds and runs by key. The UI thread owns it.
 	globalShortcuts globalShortcutTable
 	legacySnips     []snippetsbuiltin.Snippet
