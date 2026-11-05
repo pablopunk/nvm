@@ -62,8 +62,7 @@ func TestJourneyWP43CameraFailsWithAReasonAndWebviewOpens(t *testing.T) {
 // score alike are ordered by title, as 1.x orders them, so a longer title can sort above the exact one.
 func openRootFixtureRowExactly(t *testing.T, app *App, label string) {
 	t.Helper()
-	_, err := app.WaitFor(label, elementWait)
-	must(t, err)
+	waitForRow(t, app, label, elementWait)
 	tree, err := app.Tree()
 	must(t, err)
 	index := -1
