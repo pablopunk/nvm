@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -173,7 +174,7 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 	for _, kv := range parent {
 		key, _, _ := strings.Cut(kv, "=")
 		switch key {
-		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID", "NVM_RIG_BACKEND":
+		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID", "NVM_RIG_BACKEND":
 			continue
 		}
 		env = append(env, kv)
@@ -184,6 +185,8 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
+		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+		"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
 		"XDG_RUNTIME_DIR="+runtimeDir,
 		"MYGO_AUTOMATION="+socket,
 		"NVM_RIG_BACKEND="+backend,
@@ -234,19 +237,21 @@ func (a *App) waitReady(t *testing.T) {
 	}
 }
 
-// Stop asks the app to quit (SIGTERM to its pid only), escalates to SIGKILL after a grace period
-// and removes its socket. It is idempotent and runs at test cleanup.
+// Stop asks the app to quit and escalates to SIGKILL after a grace period. Launch makes the app its own session
+// and process group, so the signals reach the helpers it started too (the extension host, WebKit's processes), and
+// a helper still alive after the app exits is killed with the group. It is idempotent and runs at test cleanup.
 func (a *App) Stop() {
 	if a.pid == 0 || a.isExited() {
 		return
 	}
-	_ = syscall.Kill(a.pid, syscall.SIGTERM)
+	_ = syscall.Kill(-a.pid, syscall.SIGTERM)
 	select {
 	case <-a.done:
 	case <-time.After(stopTimeout):
-		_ = syscall.Kill(a.pid, syscall.SIGKILL)
+		_ = syscall.Kill(-a.pid, syscall.SIGKILL)
 		<-a.done
 	}
+	_ = syscall.Kill(-a.pid, syscall.SIGKILL)
 	_ = os.Remove(a.socket)
 }
 
@@ -292,12 +297,15 @@ func (a *App) isExited() bool {
 }
 
 // ArtifactsDir is the per-test directory for screenshots and logs. NVM_RIG_ARTIFACTS selects the
-// root; CI uploads it.
+// root; CI uploads it. Without it, each test binary gets its own root, so two runs on one machine never share logs.
 func ArtifactsDir(t *testing.T) string {
 	t.Helper()
 	root := os.Getenv("NVM_RIG_ARTIFACTS")
 	if root == "" {
-		root = filepath.Join(os.TempDir(), "nvm-rig-artifacts")
+		var err error
+		if root, err = processArtifactsRoot(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	dir := filepath.Join(root, sanitizeName(t.Name()))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -305,6 +313,11 @@ func ArtifactsDir(t *testing.T) string {
 	}
 	return dir
 }
+
+// processArtifactsRoot is the temp folder this test binary writes to when NVM_RIG_ARTIFACTS is unset.
+var processArtifactsRoot = sync.OnceValues(func() (string, error) {
+	return os.MkdirTemp(os.TempDir(), "nvm-rig-artifacts-")
+})
 
 func sanitizeName(name string) string {
 	var b strings.Builder
