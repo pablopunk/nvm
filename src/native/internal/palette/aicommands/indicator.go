@@ -1,6 +1,8 @@
 package aicommands
 
 import (
+	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
@@ -24,6 +26,10 @@ func Indicator(c *ui.Context, s commands.Status) {
 	k := design.Tokens(c)
 	tone, subtitleColor := k.Accent, k.Muted
 	icon := "sparkles"
+	listening := strings.Contains(strings.ToLower(s.Title+" "+s.Subtitle), "dictat") && s.Tone == commands.ToneLoading
+	if listening {
+		icon = "mic"
+	}
 	switch s.Tone {
 	case commands.ToneSuccess:
 		tone = k.Tones["green"]
@@ -33,7 +39,15 @@ func Indicator(c *ui.Context, s commands.Status) {
 	}
 	design.Pane(c, func() {
 		ui.Row(c).Grow(1).Padding(10, 14).Gap(10).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone)
+			if listening {
+				// The native indicator reports truthful activity without implying microphone amplitude.
+				progress := ui.Row(c).Key("dictation-activity").Keyframes("activity", []ui.Keyframe{
+					{Value: 0.72}, {At: 420 * time.Millisecond, Value: 1, Ease: ui.EaseInOut},
+				})
+				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone).Opacity(progress)
+			} else {
+				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone)
+			}
 			ui.Column(c).Grow(1).MinHeight(0).Children(func() {
 				ui.Text(c, s.Title).FontSize(13).FontWeight(600).TextColor(k.Strong).SingleLine().ContentTransition(design.IndicatorContentTransition())
 				subtitle := ui.Text(c, s.Subtitle).FontSize(11).TextColor(subtitleColor).ContentTransition(design.IndicatorContentTransition())
