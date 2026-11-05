@@ -27,6 +27,7 @@ func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 	must(t, app.Key(actionMenuKey))
 	_, err = app.WaitFor("Set keyboard shortcut", elementWait)
 	must(t, err)
+	must(t, app.Key("Down")) // the menu lists the run action, then the settings, then Set keyboard shortcut
 	must(t, app.Key("Down"))
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Press a keyboard shortcut", elementWait)
