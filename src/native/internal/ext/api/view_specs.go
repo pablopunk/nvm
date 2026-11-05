@@ -180,8 +180,9 @@ type ChatImage struct {
 	DataURL string `json:"dataUrl"`
 }
 
-// ChatTool is a tool row: its name, its status (running, waiting, done or failed) and its result text. A waiting
-// tool asks the user to allow it; the chat's Submit action with an empty message answers the allow.
+// ChatTool is transient activity: running or waiting tools share one live status slot; done and failed tools stay
+// out of the visible conversation. Result describes an outcome or approval request. Submit an empty message to allow
+// a waiting tool. Protocol records may remain in Messages for the model.
 type ChatTool struct {
 	Name   string `json:"name"`
 	Status string `json:"status"`

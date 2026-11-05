@@ -37,6 +37,7 @@ type ExtensionChatSpec struct {
 // keeps what the user opened, typed and attached between frames, so the owner replaces its spec on every render.
 type ExtensionChat struct {
 	spec          ExtensionChatSpec
+	presentation  chatPresentation
 	page          *page
 	draft         string
 	images        []chat.Image
@@ -50,12 +51,13 @@ type ExtensionChat struct {
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
 func NewExtensionChat(reply func(c *ui.Context, src string, streaming bool), now func() time.Time) *ExtensionChat {
-	return &ExtensionChat{page: newPage(renderDeps{Reply: reply, Now: now})}
+	return &ExtensionChat{page: newPage(renderDeps{Reply: reply, Now: now}), presentation: presentChat(nil)}
 }
 
 // SetSpec replaces what the view shows with spec, as the owner does after each render.
 func (x *ExtensionChat) SetSpec(spec ExtensionChatSpec) {
 	x.spec = spec
+	x.presentation = presentChatInto(spec.Messages, x.presentation.visible)
 }
 
 // SpecFrom makes the view read its spec from fn at every frame, so a view the owner changed between renders, such as a
@@ -82,7 +84,7 @@ func (x *ExtensionChat) View() *palette.View {
 func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 	x.host = h
 	if x.specFrom != nil {
-		x.spec = x.specFrom()
+		x.SetSpec(x.specFrom())
 	}
 	if x.spec.Host != nil {
 		x.spec.Host(h)
@@ -90,22 +92,9 @@ func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 	k := design.Tokens(c)
 	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
 		x.transcript(c)
+		x.activity(c)
 		x.composer(c, k)
 	})
-}
-
-// transcript is the scrolling list of messages, which follows the newest one. An empty chat is blank.
-func (x *ExtensionChat) transcript(c *ui.Context) {
-	messages := x.spec.Messages
-	if len(messages) == 0 {
-		ui.Column(c).Grow(1)
-		return
-	}
-	ui.List(c, &x.page.list, len(messages), func(i int) {
-		ui.Column(c).Padding(6, 4).Children(func() {
-			renderMessage(c, x.page, i, messages[i], i == len(messages)-1)
-		})
-	}).Grow(1)
 }
 
 // composer is the card under the transcript: the pictures the next message carries, the palette's text input, the
@@ -115,7 +104,7 @@ func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 	if placeholder == "" {
 		placeholder = "Message AI"
 	}
-	ui.Column(c).Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+	ui.Column(c).Key("chat-composer").Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
 		if len(x.images) > 0 {
 			attachmentsRow(c, x.images, x.removeImage)
 		}
@@ -169,7 +158,7 @@ func (x *ExtensionChat) composerKey(key ui.TextKey) bool {
 // that allows the tool call waiting for the user.
 func (x *ExtensionChat) send(text string) bool {
 	text = strings.TrimSpace(text)
-	if !x.canSend(text) || x.spec.Send == nil || x.streaming() {
+	if !x.canSend(text) || x.spec.Send == nil || (x.streaming() && !x.awaitingAnswer()) {
 		return false
 	}
 	x.spec.Send(x.host, text, x.images)
@@ -182,17 +171,12 @@ func (x *ExtensionChat) canSend(text string) bool {
 }
 
 func (x *ExtensionChat) awaitingAnswer() bool {
-	return chat.MessagesAwaitAnswer(x.spec.Messages)
+	return x.presentation.awaiting
 }
 
 // streaming reports whether the newest message is still arriving, which is when the view offers Stop.
 func (x *ExtensionChat) streaming() bool {
-	for _, m := range x.spec.Messages {
-		if m.Status == chat.StatusStreaming {
-			return true
-		}
-	}
-	return false
+	return x.presentation.busy
 }
 
 // sendOrStop is the control at the end of the composer: Stop while a reply streams, otherwise send.
@@ -207,7 +191,7 @@ func (x *ExtensionChat) sendOrStop(c *ui.Context, k *design.TokenSet) {
 		}
 		return
 	}
-	empty := strings.TrimSpace(x.draft) == "" && len(x.images) == 0
+	empty := !x.canSend(x.draft)
 	send := ui.ButtonBase(c).Padding(4).Radius(14).Background(k.AccentFill).Disabled(empty)
 	if empty {
 		send.Opacity(0.35)

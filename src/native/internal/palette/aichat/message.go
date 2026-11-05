@@ -24,9 +24,7 @@ func renderMessage(c *ui.Context, p *page, index int, m chat.Message, last bool)
 	case chat.AuthorNotice:
 		noticeCard(c, *m.Notice)
 	case chat.AuthorTool:
-		if m.Tool != nil {
-			toolRow(c, p, index, m)
-		}
+		return
 	default:
 		reply(c, p, index, m, last)
 	}
@@ -41,8 +39,8 @@ func reply(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 		reasoningBlock(c, p, index, m.Reasoning)
 	}
 	if strings.TrimSpace(m.Text) == "" {
-		if streaming {
-			progressRow(c, k, "Thinking", m.At, p.deps.Now())
+		if m.Status == chat.StatusStopped {
+			ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 		}
 		return
 	}

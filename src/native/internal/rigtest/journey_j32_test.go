@@ -63,6 +63,8 @@ func TestJourneyJ32ApprovalRowAllowsWithEnterAndRefusesWithCtrlD(t *testing.T) {
 	if bodies := chatRequestBodies(fake); len(bodies) < 2 || !strings.Contains(bodies[1], approvalClipboardText) {
 		t.Fatalf("after Enter the model did not receive the clipboard text (%d chat requests)", len(bodies))
 	}
+	assertNoRow(t, app, approvalWaiting)
+	assertNoRow(t, app, "Result")
 	shoot(t, app, "j32-2-allowed")
 
 	must(t, app.Type(approvalSecondQuestion))
@@ -75,5 +77,7 @@ func TestJourneyJ32ApprovalRowAllowsWithEnterAndRefusesWithCtrlD(t *testing.T) {
 	if bodies := chatRequestBodies(fake); len(bodies) < 4 || !strings.Contains(bodies[3], approvalRefusedResult) {
 		t.Fatalf("after ⌘D the model did not receive the refusal (%d chat requests)", len(bodies))
 	}
+	assertNoRow(t, app, approvalWaiting)
+	assertNoRow(t, app, "Result")
 	shoot(t, app, "j32-3-refused")
 }

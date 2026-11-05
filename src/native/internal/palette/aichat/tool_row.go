@@ -2,105 +2,86 @@ package aichat
 
 import (
 	"github.com/egoist/mygo/ui"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"strings"
+	"time"
 )
 
-// awaitingCopy is the line a tool call that waits for the user shows: Enter allows it, and the refuse key refuses it.
 func awaitingCopy() string {
 	return "Waiting for you. Enter allows it, " + palette.KeyLabel("⌃D") + " refuses it."
 }
 
-// toolRow draws one tool call of the transcript, the same for every chat: its icon and title, its short detail, the
-// line that says what it is doing or how it ended, and, once it has ended, a Result disclosure that opens what the
-// model read. A call waiting for the user says which keys answer it. The transcript never shows what a call was given
-// beyond its short detail, so a written extension's source stays out of the chat.
-func toolRow(c *ui.Context, p *page, index int, m chat.Message) {
+// activity has one stable home above the composer. Completed tool protocol entries never become conversation rows.
+func (x *ExtensionChat) activity(c *ui.Context) {
+	if x.presentation.activity < 0 {
+		return
+	}
+	m := x.spec.Messages[x.presentation.activity]
 	k := design.Tokens(c)
-	run := m.Tool
-	ui.Column(c).Gap(4).Padding(8, 12).Radius(8).Background(k.Surface).Border(1, k.EdgeSubtle).Children(func() {
-		ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-			ui.Icon(c, design.Icon(toolIcon(run.Name))).FontSize(12).TextColor(k.Muted)
-			ui.Text(c, run.Label).FontSize(12).FontWeight(600).TextColor(k.Strong).NoWrap()
-			if run.Input != "" {
-				ui.Text(c, run.Input).FontSize(12).TextColor(k.Muted).MaxLines(1)
+	label := "Thinking"
+	if m.Tool != nil {
+		label = humanToolLabel(m.Tool.Label, m.Tool.Name)
+	}
+	awaiting := m.Status == chat.StatusAwaiting
+	box := ui.Column(c).Key("chat-live-activity").Gap(4).Padding(4, 4, 8, 4)
+	if !c.Preferences().ReduceMotion {
+		box.Transition(ui.ElementTransition{Duration: 160 * time.Millisecond, Position: true, Enter: &ui.Motion{Y: 2}, Exit: &ui.Motion{Y: -2}})
+	}
+	box.Children(func() {
+		ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+			if !awaiting && !c.Preferences().ReduceMotion {
+				ui.Spinner(c)
+			} else {
+				icon := "sparkles"
+				if awaiting {
+					icon = "shield-check"
+				}
+				ui.Icon(c, design.Icon(icon)).FontSize(12).TextColor(k.Muted)
+			}
+			text := ui.Text(c, label).FontSize(12).FontWeight(500).TextColor(k.Muted).SingleLine()
+			if !c.Preferences().ReduceMotion {
+				text.ContentTransition(ui.ContentTransition{Animation: &ui.Animation{Duration: 160 * time.Millisecond, Ease: ui.EaseOut}})
 			}
 		})
-		ui.Text(c, toolLine(m)).FontSize(11).TextColor(toolLineColor(k, m.Status)).MaxLines(2)
-		if resultReady(m) {
-			resultDisclosure(c, p, index, m.Text)
+		if awaiting {
+			if m.Tool.Outcome != "" {
+				ui.Text(c, m.Tool.Outcome).FontSize(12).TextColor(k.Strong).MaxLines(3)
+			}
+			if m.Tool.Input != "" {
+				ui.Text(c, m.Tool.Input).FontSize(11).TextColor(k.Muted).MaxLines(2)
+			}
+			ui.Text(c, awaitingCopy()).FontSize(11).TextColor(k.Muted)
 		}
 	})
 }
 
-// resultReady reports whether a tool row has a result to show: the call has ended and the model read something.
-func resultReady(m chat.Message) bool {
-	return m.Text != "" && m.Status != chat.StatusRunning && m.Status != chat.StatusAwaiting
+var toolActivityLabels = map[string]string{
+	"web_search": "Searching the web", "code_search": "Searching code", "fetch_content": "Reading a page",
+	"get_search_content": "Reading a search result", "read_extension_api": "Reading the extension API",
+	"list_capabilities": "Listing capabilities", "list_shortcuts": "Listing shortcuts", "read_app_logs": "Reading app logs",
+	"list_extensions": "Listing extensions", "read_extension": "Reading an extension", "read_current_extension": "Reading the current extension",
+	"write_extension": "Writing the extension", "read_preview_run": "Checking the preview run", "remove_extension": "Removing the extension",
+	"validate_extension": "Validating the extension", "install_extension": "Installing the extension",
+	"read_file": "Reading a file", "search_files": "Searching files", "list_folder": "Listing files", "list_apps": "Finding apps",
+	"read_clipboard": "Reading the clipboard", "open_url": "Opening a link", "open_app": "Opening an app",
+	"copy_text": "Copying text", "trash_file": "Moving a file to Trash",
 }
 
-// resultDisclosure is the closed Result disclosure of a tool row; opened, it shows the newest part of the result.
-func resultDisclosure(c *ui.Context, p *page, index int, result string) {
-	k := design.Tokens(c)
-	open := p.resultOpen[index]
-	if ui.Collapsible(c, "Result", &open, func() {
-		ui.Text(c, clipResult(result)).FontSize(11).TextColor(k.Muted)
-	}).Changed() {
-		p.resultOpen[index] = open
+func humanToolLabel(label, name string) string {
+	if label != "" && label != name && !strings.Contains(label, "_") {
+		return label
 	}
-}
-
-// clipResult is the start of a result, at most shownResultBytes, cut on a whole rune and marked when cut.
-func clipResult(result string) string {
-	if len(result) <= shownResultBytes {
-		return result
+	if activity, ok := toolActivityLabels[name]; ok {
+		return activity
 	}
-	return truncateBytesForShow(result, shownResultBytes) + "…"
-}
-
-// toolIcon names the icon of a tool. A tool without one of its own shows the sparkles.
-func toolIcon(name string) string {
-	icons := map[string]string{
-		"search_files":   "search",
-		"read_file":      "file-text",
-		"list_folder":    "folder",
-		"list_apps":      "app-window",
-		"open_app":       "play",
-		"open_url":       "globe",
-		"read_clipboard": "clipboard",
-		"copy_text":      "copy",
-		"trash_file":     "trash-2",
+	if name == "" {
+		name = label
 	}
-	if icon, ok := icons[name]; ok {
-		return icon
+	name = strings.TrimSpace(strings.ReplaceAll(name, "_", " "))
+	if name == "" {
+		return "Working"
 	}
-	return "sparkles"
-}
-
-// toolLine is the second line of a tool row: what the call is doing, or the outcome it ended with.
-func toolLine(m chat.Message) string {
-	switch m.Status {
-	case chat.StatusRunning:
-		return "Running…"
-	case chat.StatusAwaiting:
-		return awaitingCopy()
-	case chat.StatusCancelled:
-		return "Stopped before it finished."
-	}
-	if m.Tool != nil && m.Tool.Outcome != "" {
-		return m.Tool.Outcome
-	}
-	return "Done."
-}
-
-// toolLineColor colors the outcome line: a failure reads as a failure, a wait is accented, anything else is muted.
-func toolLineColor(k *design.TokenSet, status chat.Status) ui.Color {
-	switch status {
-	case chat.StatusFailed:
-		return k.Danger
-	case chat.StatusAwaiting:
-		return k.Accent
-	}
-	return k.Muted
+	return "Using " + name
 }
