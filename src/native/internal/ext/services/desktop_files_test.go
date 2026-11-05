@@ -14,6 +14,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
@@ -22,6 +23,9 @@ func realFilesHandler(t *testing.T, deps Deps) *Handler {
 	t.Helper()
 	deps.DataRoot = t.TempDir()
 	deps.Files = real.NewPorts().FS
+	if deps.Clock == nil {
+		deps.Clock = fake.NewClock()
+	}
 	deps.Logs = nil
 	handler := New(deps, manifestFor("acme.files", api.CapabilityDesktopFiles))
 	t.Cleanup(func() { _ = handler.Close() })

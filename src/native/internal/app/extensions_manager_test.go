@@ -48,8 +48,20 @@ func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manage
 	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
 }
 
+// newFixtureManagerWithIndex is newFixtureManagerWithApps with the file index the built-in files extension reads.
+func newFixtureManagerWithIndex(t *testing.T, apps services.AppLifecycle, index services.FileIndex) *manager.Manager {
+	t.Helper()
+	return newManagerWithIndex(t, index, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+}
+
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
 func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+	t.Helper()
+	return newManagerWithIndex(t, nil, builtins, clock, network, apps, enabled...)
+}
+
+// newManagerWithIndex is newManagerWithApps with the file index the built-in files extension reads.
+func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -66,7 +78,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 		clock = ports.Clock
 	}
 	m, err := manager.New(manager.Ports{
-		Files: ports.FS, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
+		Files: ports.FS, FileIndex: index, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 		Places:       fixturePlaces,
 		Network:      network,
