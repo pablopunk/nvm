@@ -5,7 +5,7 @@ import "testing"
 // TestNoteConflictViewOffersRestoreKeepAndCompare: the conflict view lists the two resolutions the note editor offers,
 // then Compare, which pushes the preview of the two texts.
 func TestNoteConflictViewOffersRestoreKeepAndCompare(t *testing.T) {
-	view := NoteConflictView(Note{ID: "note-1", Markdown: "Saved text"}, "Typed text", "- Saved text")
+	view := NoteConflictView(Note{ID: "note-1", Markdown: "Saved text"}, "Typed text", "- Saved text", nil)
 	if view.Kind != ViewList || len(view.Items) != 3 {
 		t.Fatalf("view = %+v; want a list of three rows", view)
 	}

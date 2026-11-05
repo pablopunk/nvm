@@ -26,11 +26,11 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 	var out []search.Item
 	for _, command := range result.Commands {
 		actionID := extensionCommandShortcutID(result.ExtensionID, command.ID)
+		p.shortcutTitles.remember(actionID, command.Title)
 		score, listed := commandRowScore(m, result.ExtensionID, command, q, aliases[actionID])
 		if !listed {
 			continue
 		}
-		p.shortcutTitles.remember(actionID, command.Title)
 		row := commandRow(p, m, result, command, score)
 		if commandTakesShortcuts(m, result.ExtensionID, command) {
 			row = p.withShortcutActions(row, actionID, bound)

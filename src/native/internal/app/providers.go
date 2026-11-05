@@ -60,10 +60,6 @@ func leadingCommands(p *App) []command {
 		{ID: shortcuts.CommandAIChats, Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
 		{ID: shortcuts.CommandEmojiSymbols, Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
 		{ID: shortcuts.CommandSearchFiles, Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(h search.Host) { h.Push(p.filesView()) }},
-		{ID: shortcuts.CommandQuickNotes, Title: "Floating Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
-		{Title: "Toggle Floating Notes", Keywords: "notes note float floating window sticky toggle", Icon: "sticky-note", Subtitle: "Show or hide your floating Markdown notes", Hidden: true, Run: func(h search.Host) { h.Hide(); p.toggleFloatingNotes() }},
-		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
-		{ID: shortcuts.CommandNewFloatingNote, Title: "New Floating Note", Keywords: "note float floating window sticky", Icon: "sticky-note", Hidden: true, Run: func(h search.Host) { h.Hide(); p.newFloatingNote() }},
 		{ID: shortcuts.CommandDictate, Title: "Dictate", Keywords: "dictate dictation voice speech transcribe", Icon: "mic", Subtitle: "Start or stop cloud voice dictation", Run: func(h search.Host) { h.Hide(); p.dictationFlowFor().Toggle() }},
 		{ID: shortcuts.CommandDictationHistory, Title: "Dictation History", Keywords: "dictation history transcripts voice history", Icon: "history", Subtitle: "Browse and copy previous dictations", Run: func(h search.Host) { h.Push(p.dictationHistoryView()) }},
 		{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
@@ -99,8 +95,7 @@ func builtInSlot(id string, width int) command {
 func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
-var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Floating Notes": "yellow",
-	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
+var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Extensions": "purple", aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
 
 // numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.
 func numberCommands(cmds []command) {

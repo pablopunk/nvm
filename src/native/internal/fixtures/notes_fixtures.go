@@ -12,5 +12,5 @@ func NoteConflictFixture() api.View {
 	saved := "Ship the floating window\n\n- keyboard first"
 	unsaved := "Ship the floating window\n\n- keyboard first\n- ship the goldens"
 	savedAt := time.Date(2026, 11, 4, 9, 30, 0, 0, time.UTC)
-	return api.NoteConflictView(api.Note{ID: "note-ideas", Markdown: saved, UpdatedAt: savedAt}, unsaved, "- ship the goldens (unsaved)\n\n"+saved)
+	return api.NoteConflictView(api.Note{ID: "note-ideas", Markdown: saved, UpdatedAt: savedAt}, unsaved, "- ship the goldens (unsaved)\n\n"+saved, nil)
 }

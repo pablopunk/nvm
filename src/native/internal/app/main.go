@@ -242,7 +242,6 @@ func (p *App) ready() {
 	})
 	p.panel.SetActiveAppearance(paletteWindowAppearance().ActiveAppearance)
 	p.Attach(p.panel)
-	p.restoreFloatingNotes()
 	p.panel.OnClose(p.hidePanelUnlessQuitting)
 	p.panel.OnBlur(p.DismissOnBlur)
 	mygo.App.OnDidResignActive(func() { p.panel.Update(p.DismissOnBlur) })

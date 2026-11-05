@@ -10,11 +10,11 @@ import (
 
 // The Toggle Floating Notes command is searchable but not suggested at the empty root, so the root list stays as it was.
 func TestToggleFloatingNotesIsSearchedButNotSuggested(t *testing.T) {
-	p := goldenPalette(t)
-	if hasRowTitled(commandRows(p, &rootInput{}, ""), "Toggle Floating Notes") {
+	p := rootTableFixture(t)
+	if hasRowTitled(rootResultsForTable(p, ""), "Toggle Floating Notes") {
 		t.Fatal("the empty root suggests Toggle Floating Notes")
 	}
-	if !hasRowTitled(commandRows(p, &rootInput{}, "toggle floating"), "Toggle Floating Notes") {
+	if !hasRowTitled(rootResultsForTable(p, "toggle floating"), "Toggle Floating Notes") {
 		t.Fatal("searching for the command does not find it")
 	}
 }
