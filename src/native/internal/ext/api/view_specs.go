@@ -197,4 +197,10 @@ type ChatSpec struct {
 	OnTier      *ActionRef    `json:"onTier,omitempty"`
 	Submit      *ActionRef    `json:"submit,omitempty"`
 	Stop        *ActionRef    `json:"stop,omitempty"`
+	// Attach shows the composer's picture control. A submit then carries the pictures in Invocation.Images.
+	Attach bool `json:"attach,omitempty"`
+
+	// Side is a view drawn beside the transcript, as the AI Chats page draws the preview of a builder's extension. The
+	// host hides and shows it with a palette action, and keeps the side's place while the owner returns the same view.
+	Side *View `json:"side,omitempty"`
 }

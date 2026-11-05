@@ -63,9 +63,39 @@ func TestChatSendRunsSubmitWithTheTypedText(t *testing.T) {
 	var got api.Invocation
 	deps := Deps{Invoke: func(_ string, in api.Invocation, _ func(api.Result, *api.Failure)) { got = in }}
 	s := NewSession(deps, "acme.chat", chatFixtureView())
-	s.chatSpec().Send(nil, "hello")
+	s.chatSpec().Send(nil, "hello", nil)
 	if got.Ref.ID != "send" || got.Form["message"].Text != "hello" {
 		t.Fatalf("submit = %+v, want send with the message", got)
+	}
+}
+
+// TestChatSubmitCarriesTheAttachedPictures checks the pictures a message attaches reach the submit as data URLs.
+func TestChatSubmitCarriesTheAttachedPictures(t *testing.T) {
+	var got api.Invocation
+	deps := Deps{Invoke: func(_ string, in api.Invocation, _ func(api.Result, *api.Failure)) { got = in }}
+	s := NewSession(deps, "acme.chat", chatFixtureView())
+	s.chatSpec().Send(nil, "look", []chat.Image{{Name: "shot.png", MimeType: "image/png", Data: "AAAA"}})
+	if len(got.Images) != 1 || got.Images[0].DataURL != "data:image/png;base64,AAAA" || got.Images[0].Title != "shot.png" {
+		t.Fatalf("submit images = %+v, want the picture as a data URL", got.Images)
+	}
+}
+
+// TestChatSideIsBuiltOnceAndFollowsTheView checks the side page of a chat view is one palette page across renders, and
+// that a render with a new side view replaces its content rather than the page.
+func TestChatSideIsBuiltOnceAndFollowsTheView(t *testing.T) {
+	view := chatFixtureView()
+	view.Chat.Side = &api.View{Kind: api.ViewList, Title: "Preview"}
+	s := NewSession(Deps{}, "acme.chat", view)
+	first := s.chatSpec().Side()
+	if first == nil {
+		t.Fatalf("side page is nil, want the view's side")
+	}
+	s.view.Chat.Side = &api.View{Kind: api.ViewList, Title: "Preview v2"}
+	if again := s.chatSpec().Side(); again != first {
+		t.Fatalf("side page changed identity between renders")
+	}
+	if s.chatSideSession.view.Title != "Preview v2" {
+		t.Fatalf("side title = %q, want the returned side", s.chatSideSession.view.Title)
 	}
 }
 

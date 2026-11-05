@@ -14,27 +14,35 @@ import (
 )
 
 // ExtensionChatSpec is what an extension's chat view shows. Messages are the transcript; Send receives the typed text
-// on the UI thread; Stop is nil when the view offers no stop; ChooseTier is nil when the view has no tier picker.
-// Actions are the view's action panel rows. Placeholder is the composer's prompt.
+// and the pictures attached to it on the UI thread; Stop is nil when the view offers no stop; ChooseTier is nil when the
+// view has no tier picker. Attach with PickImages shows the picture control. Side returns the page drawn beside the
+// transcript, or nil for none. Actions are the view's action panel rows. Placeholder is the composer's prompt.
 type ExtensionChatSpec struct {
 	Title       string
 	Messages    []chat.Message
 	Placeholder string
 	Tier        chat.Tier
-	Send        func(h search.Host, text string)
+	Attach      bool
+	PickImages  func(done func([]chat.Image))
+	Send        func(h search.Host, text string, images []chat.Image)
 	Stop        func(h search.Host)
 	ChooseTier  func(h search.Host, tier chat.Tier)
 	Actions     func() []search.Action
+	Side        func() *palette.View
 }
 
 // ExtensionChat draws an extension's chat view with the host's transcript, reasoning and tool rows, and composer. It
-// keeps what the user opened and what they typed between frames, so the owner replaces its spec on every render.
+// keeps what the user opened, typed and attached between frames, so the owner replaces its spec on every render.
 type ExtensionChat struct {
-	spec  ExtensionChatSpec
-	page  *page
-	draft string
-	input ui.Handle
-	host  search.Host
+	spec          ExtensionChatSpec
+	page          *page
+	draft         string
+	images        []chat.Image
+	input         ui.Handle
+	host          search.Host
+	side          *palette.Side
+	sideRoot      *palette.View
+	previewHidden bool
 }
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
@@ -47,14 +55,16 @@ func (x *ExtensionChat) SetSpec(spec ExtensionChatSpec) {
 	x.spec = spec
 }
 
-// View is the palette page that draws the chat: the transcript above the composer, with the view's actions.
+// View is the palette page that draws the chat: the transcript above the composer, with the view's actions and, when
+// the spec has one, the side page beside it.
 func (x *ExtensionChat) View() *palette.View {
 	return &palette.View{
 		Title:        x.spec.Title,
 		Body:         x.body,
 		Input:        &x.input,
-		Actions:      x.spec.Actions,
+		Actions:      x.actions,
 		Primary:      x.primaryKey,
+		Side:         x.sideFor,
 		SurvivesHide: true,
 	}
 }
@@ -83,22 +93,50 @@ func (x *ExtensionChat) transcript(c *ui.Context) {
 	}).Grow(1)
 }
 
-// composer is the card under the transcript: the palette's text input, the tier picker and the send or stop control.
+// composer is the card under the transcript: the pictures the next message carries, the palette's text input, the
+// tier picker, the picture control and the send or stop control.
 func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 	placeholder := x.spec.Placeholder
 	if placeholder == "" {
 		placeholder = "Message AI"
 	}
 	ui.Column(c).Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
+		if len(x.images) > 0 {
+			attachmentsRow(c, x.images, x.removeImage)
+		}
 		ui.TextAreaBase(c, &x.draft).Bind(&x.input).Lines(1, 6).Placeholder(placeholder).
 			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
 			OnTextKey(x.composerKey)
 		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
 			x.tierPicker(c)
+			if x.attaches() {
+				attachButton(c, x.spec.PickImages, x.addImages)
+			}
 			ui.Spacer(c)
 			x.sendOrStop(c, k)
 		})
 	})
+}
+
+// attaches reports whether the composer offers pictures: the view asked for them and the host can read them.
+func (x *ExtensionChat) attaches() bool {
+	return x.spec.Attach && x.spec.PickImages != nil
+}
+
+// addImages attaches pictures to the next message, as many as the limits allow, and says which limit refused the rest.
+// The composer takes the keyboard back, as the chooser that picked them took it away.
+func (x *ExtensionChat) addImages(incoming []chat.Image) {
+	kept, problem := chat.AddImages(x.images, incoming)
+	x.images = kept
+	x.input.Focus()
+	if problem != "" && x.host != nil {
+		x.host.Toast(problem)
+	}
+}
+
+// removeImage takes the picture at index off the next message.
+func (x *ExtensionChat) removeImage(index int) {
+	x.images = append(x.images[:index:index], x.images[index+1:]...)
 }
 
 // composerKey answers the composer's text: Enter sends what is typed, Shift+Enter breaks the line.
@@ -112,14 +150,14 @@ func (x *ExtensionChat) composerKey(key ui.TextKey) bool {
 	return true
 }
 
-// send hands the typed text to the view. Empty text is not sent, except that a waiting tool is allowed with it.
+// send hands the typed text and the attached pictures to the view. A message needs text or a picture.
 func (x *ExtensionChat) send(text string) bool {
 	text = strings.TrimSpace(text)
-	if text == "" || x.spec.Send == nil || x.streaming() {
+	if (text == "" && len(x.images) == 0) || x.spec.Send == nil || x.streaming() {
 		return false
 	}
-	x.spec.Send(x.host, text)
-	x.draft = ""
+	x.spec.Send(x.host, text, x.images)
+	x.draft, x.images = "", nil
 	return true
 }
 
@@ -145,7 +183,7 @@ func (x *ExtensionChat) sendOrStop(c *ui.Context, k *design.TokenSet) {
 		}
 		return
 	}
-	empty := strings.TrimSpace(x.draft) == ""
+	empty := strings.TrimSpace(x.draft) == "" && len(x.images) == 0
 	send := ui.ButtonBase(c).Padding(4).Radius(14).Background(k.AccentFill).Disabled(empty)
 	if empty {
 		send.Opacity(0.35)
@@ -172,6 +210,61 @@ func (x *ExtensionChat) tierPicker(c *ui.Context) {
 	if chosen >= 0 {
 		x.spec.ChooseTier(x.host, tierOrder[chosen])
 	}
+}
+
+// actions are the view's action rows, then the preview toggle and focus rows when the view has a side page.
+func (x *ExtensionChat) actions() []search.Action {
+	var out []search.Action
+	if x.spec.Actions != nil {
+		out = x.spec.Actions()
+	}
+	if x.spec.Side == nil || x.spec.Side() == nil {
+		return out
+	}
+	out = append(out, x.previewAction())
+	if !x.previewHidden {
+		out = append(out, x.focusPreviewAction())
+	}
+	return out
+}
+
+// previewAction shows or hides the side page beside the transcript, as ⌃⇧P does on the AI Chats page.
+func (x *ExtensionChat) previewAction() search.Action {
+	title := "Show Preview"
+	if !x.previewHidden {
+		title = "Hide Preview"
+	}
+	return search.Action{Title: title, Label: "⌃⇧P", Key: ui.KeyP, Mods: palette.Mod | ui.Shift, Dismiss: search.DismissNever,
+		Run: func(h search.Host) {
+			x.previewHidden = !x.previewHidden
+			h.Refresh()
+		}}
+}
+
+// focusPreviewAction gives the keyboard to the side page.
+func (x *ExtensionChat) focusPreviewAction() search.Action {
+	return search.Action{Title: "Focus Preview", Dismiss: search.DismissNever, Run: func(search.Host) {
+		x.side.Focus()
+	}}
+}
+
+// sideFor is the side page beside the transcript, or nil while the user hides it or the view has none. The palette
+// page of the side is kept between frames, so its search and cursor survive, and it follows the view the owner returns.
+func (x *ExtensionChat) sideFor() *palette.Side {
+	if x.spec.Side == nil || x.previewHidden {
+		return nil
+	}
+	view := x.spec.Side()
+	if view == nil {
+		return nil
+	}
+	if x.side == nil {
+		x.side = palette.NewSide(view)
+	} else if view != x.sideRoot {
+		x.side.SetRoot(view)
+	}
+	x.sideRoot = view
+	return x.side
 }
 
 // primaryKey is the footer's primary action: Stop while a reply streams, otherwise Send.

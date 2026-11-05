@@ -18,7 +18,7 @@ func composerRow(c *ui.Context, p *page, record chat.Chat, h search.Host) {
 	ui.Column(c).Radius(8).Background(k.Surface).Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi).Children(func() {
 		ui.Column(c).Children(func() {
 			if len(p.attachments) > 0 {
-				attachmentsRow(c, p)
+				attachmentsRow(c, p.attachments, p.removeImage)
 			}
 		})
 		ui.TextAreaBase(c, &p.draft).Bind(&p.input).Lines(1, 6).Placeholder(placeholderFor(p.deps.Service, p.id)).
@@ -28,7 +28,7 @@ func composerRow(c *ui.Context, p *page, record chat.Chat, h search.Host) {
 			tierPicker(c, p, record, h)
 			ui.Row(c).Children(func() {
 				if record.Tier == chat.TierSmart && p.deps.PickImages != nil {
-					attachButton(c, p)
+					attachButton(c, p.deps.PickImages, p.addImages)
 				}
 			})
 			ui.Spacer(c)

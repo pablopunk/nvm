@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/egoist/mygo/ui/markdown"
 
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
@@ -86,36 +87,42 @@ type Deps struct {
 	IsDark func() bool
 	// Reply draws a chat reply's Markdown, streaming while it arrives. Nil draws the text plain.
 	Reply func(c *ui.Context, src string, streaming bool)
+	// PickImages opens the chooser for the pictures a chat message attaches, and hands the ones read to done on the UI
+	// thread. Nil hides the picture control of chat views.
+	PickImages func(done func([]chat.Image))
 }
 
 // Session is one open extension view. It is used on the UI thread only.
 type Session struct {
 	deps         Deps
 	chatRenderer *aichat.ExtensionChat
-	extID        string
-	view         api.View
-	host         search.Host
-	items        []api.Item
-	sections     []api.ItemSection
-	loading      bool
-	failure      *api.Failure
-	hasMore      bool
-	selectID     string
-	images       map[string]*ui.Bitmap
-	requested    map[string]bool
-	handles      map[handle]route
-	markdown     *markdown.Options
-	started      bool
-	immediate    bool
-	dismissed    bool
-	refreshing   bool
-	stopInterval chan struct{}
-	form         *formState
-	media        *palette.View
-	page         platform.WebPage
-	camera       *cameraView
-	searchChange searchChange
-	accessory    *palette.Accessory
+	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
+	chatSideSession *Session
+	chatSidePage    *palette.View
+	extID           string
+	view            api.View
+	host            search.Host
+	items           []api.Item
+	sections        []api.ItemSection
+	loading         bool
+	failure         *api.Failure
+	hasMore         bool
+	selectID        string
+	images          map[string]*ui.Bitmap
+	requested       map[string]bool
+	handles         map[handle]route
+	markdown        *markdown.Options
+	started         bool
+	immediate       bool
+	dismissed       bool
+	refreshing      bool
+	stopInterval    chan struct{}
+	form            *formState
+	media           *palette.View
+	page            platform.WebPage
+	camera          *cameraView
+	searchChange    searchChange
+	accessory       *palette.Accessory
 	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
 	guard        sync.Mutex
 	filePreviews map[string]filePreviewText

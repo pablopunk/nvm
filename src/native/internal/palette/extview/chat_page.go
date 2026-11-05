@@ -48,11 +48,16 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 		Placeholder: spec.Placeholder,
 		Tier:        chatTier(spec.Tier),
 		Actions:     s.pageActions,
+		Attach:      spec.Attach,
+		PickImages:  s.deps.PickImages,
+	}
+	if spec.Side != nil {
+		out.Side = s.chatSide
 	}
 	if spec.Submit != nil {
 		submit := *spec.Submit
-		out.Send = func(h search.Host, text string) {
-			s.submit(h, api.Invocation{Ref: submit, Form: api.FormValues{"message": {Kind: api.FormText, Text: text}}}, nil)
+		out.Send = func(h search.Host, text string, images []chat.Image) {
+			s.submit(h, api.Invocation{Ref: submit, Form: api.FormValues{"message": {Kind: api.FormText, Text: text}}, Images: apiChatImages(images)}, nil)
 		}
 	}
 	if spec.Stop != nil {
@@ -66,6 +71,28 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 			ref.Args = map[string]string{"tier": string(tier)}
 			s.submit(h, api.Invocation{Ref: ref}, nil)
 		}
+	}
+	return out
+}
+
+// chatSide is the side page of a chat view: a palette page over the view's side, built once and kept, so its search and
+// cursor survive the renders. Each render hands the page the side the owner returned.
+func (s *Session) chatSide() *palette.View {
+	side := *s.view.Chat.Side
+	if s.chatSideSession == nil {
+		s.chatSideSession = NewSession(s.deps, s.extID, side)
+		s.chatSidePage = s.chatSideSession.Palette()
+		return s.chatSidePage
+	}
+	s.chatSideSession.Replace(side)
+	return s.chatSidePage
+}
+
+// apiChatImages maps the pictures a user attached to a message to the API's data URLs, which a submit carries.
+func apiChatImages(images []chat.Image) []api.ChatImage {
+	out := make([]api.ChatImage, 0, len(images))
+	for _, image := range images {
+		out = append(out, api.ChatImage{Title: image.Name, DataURL: "data:" + image.MimeType + ";base64," + image.Data})
 	}
 	return out
 }
