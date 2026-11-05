@@ -11,20 +11,35 @@ import (
 // settingsSections are the sections the settings view groups its rows under, in order.
 var settingsSections = []string{sectionGaps, sectionSizes, sectionBehavior, sectionDisplays}
 
-// settingsView lists every setting with its value. A flag toggles, a choice cycles, and a number opens a prompt.
+// settingsView groups the settings under their sections, each row showing its value at the edge. A flag toggles, a
+// choice cycles, and a number opens a prompt. The reset row closes the page, as 1.x's page does.
 func settingsView(ctx api.Context, start Settings) api.View {
 	current := LoadSettings(ctx, start)
 	fields := bindings(&current)
-	items := make([]api.Item, 0, len(fields)+len(settingsSections)+1)
-	for _, field := range fields {
-		items = append(items, settingItem(ctx, field))
+	sections := make([]api.ItemSection, 0, len(settingsSections)+1)
+	for _, name := range settingsSections {
+		section := api.ItemSection{Title: name}
+		for _, field := range fields {
+			if field.section == name {
+				section.Items = append(section.Items, settingItem(ctx, field))
+			}
+		}
+		sections = append(sections, section)
 	}
-	items = append(items, resetItems()...)
-	return api.ListView("Window Management Settings", items...)
+	sections = append(sections, api.ItemSection{Items: resetItems()})
+	view := api.ListView(settingsTitle)
+	view.Placeholder, view.Sections = settingsPlaceholder, sections
+	return view
 }
 
+// settingsTitle and settingsPlaceholder are the page's title and search placeholder, as 1.x's settings page shows them.
+const (
+	settingsTitle       = "Window Management Settings"
+	settingsPlaceholder = "Search Settings"
+)
+
 func settingItem(ctx api.Context, field binding) api.Item {
-	item := api.Item{ID: field.id, Title: field.title, Subtitle: field.section + " · " + valueText(field), Icon: "sliders-horizontal"}
+	item := api.Item{ID: field.id, Title: field.title, Icon: settingIcon(field), Accessories: []api.Accessory{{Text: valueText(field)}}}
 	switch field.kind {
 	case kindFlag:
 		toggle := api.Run(settingToggle, "Toggle", map[string]string{"id": field.id})
@@ -39,30 +54,46 @@ func settingItem(ctx api.Context, field binding) api.Item {
 	return item
 }
 
+// settingIcon is the icon of a setting's row by its kind: a ruler for a number, a switch for a flag, a list for a choice.
+func settingIcon(field binding) string {
+	switch field.kind {
+	case kindFlag:
+		return "toggle-right"
+	case kindChoice:
+		return "list-ordered"
+	}
+	return "ruler"
+}
+
 // numberPrompt asks for the value of a number setting. A blank optional gap keeps the outer gap.
 func numberPrompt(ctx api.Context, field binding) api.Action {
 	hint := fmt.Sprintf("Enter a number from %s to %s%s.", formatNumber(field.min), formatNumber(field.max), unitSuffix(field))
 	if field.kind == kindOptionalGap {
 		hint = "Blank inherits the outer gap. " + hint
 	}
-	return ctx.Input().Prompt(api.PromptSpec{
+	prompt := ctx.Input().Prompt(api.PromptSpec{
 		Title: field.title, Message: hint, SubmitTitle: "Save",
 		Fields: []api.Field{{
 			ID: "value", Label: field.title, Type: api.FieldNumber, Value: api.TextValue(currentText(field)),
 		}},
 		Action: api.Run(settingSet, field.title, map[string]string{"id": field.id}),
 	})
+	prompt.Title = numberRowAction
+	return prompt
 }
+
+// numberRowAction titles the row action of a number setting, which opens its prompt, as 1.x's settings rows do.
+const numberRowAction = "Change…"
 
 // resetItems are the Reset to Defaults row and one row per section.
 func resetItems() []api.Item {
 	items := []api.Item{{
-		ID: "reset-all", Title: "Reset to Defaults", Subtitle: "Restore every window management setting to its default.", Icon: "undo-2",
+		ID: "reset-all", Title: "Reset to Defaults", Subtitle: "Restore every window management setting to its default.", Icon: "rotate-ccw",
 		Primary: ptrAction(api.Run(settingsReset, "Reset to Defaults", nil)),
 	}}
 	for _, section := range settingsSections {
 		items = append(items, api.Item{
-			ID: "reset-" + strings.ToLower(section), Title: "Reset " + section, Icon: "undo-2",
+			ID: "reset-" + strings.ToLower(section), Title: "Reset " + section, Icon: "rotate-ccw",
 			Subtitle: fmt.Sprintf("Restore %s settings to their defaults.", strings.ToLower(section)),
 			Primary:  ptrAction(api.Run(settingsReset, "Reset "+section, map[string]string{"section": section})),
 		})

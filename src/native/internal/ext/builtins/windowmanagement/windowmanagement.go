@@ -2,7 +2,7 @@
 // moves, Next and Previous Desktop, the exact move and resize, Switch Window and the settings that shape the layouts.
 // It is built on the extension API alone; the window engine and the OS sit behind ctx.Desktop().WindowManagement().
 //
-// Layer: ext. The package imports api and the standard library.
+// Layer: ext. The package imports api, search and the standard library.
 package windowmanagement
 
 import (
@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // ID is the built-in's identity.
@@ -96,15 +97,20 @@ func allCommands() []api.Command {
 }
 
 // inPlaceCommand is a command that runs without the palette: its row is searchable, takes a shortcut, and offers the
-// settings in its action menu, as the 1.x action does.
+// settings in its action menu, as the 1.x action does. Its row is a neutral command row in the Commands section, as the
+// native window rows were, so a search for "settings" ranks the Settings built-in's own row first.
 func inPlaceCommand(id string, p presentation) api.Command {
 	return api.Command{
 		ID: id, ActionID: actionKey(id), Title: p.title, Subtitle: WindowManagementSubtitle, Icon: p.icon, Keywords: p.keywords,
 		Mode: api.ModeNoView, DismissAfterRun: true, Placement: []api.Placement{api.PlacementSearch}, Customizable: true,
+		Appearance: neutralAppearance, Section: search.KindCommands,
 		LearnKey: "cmd:" + p.title,
 		Actions:  []api.Action{api.Run(settingsCommandID, "Window Management Settings", nil)},
 	}
 }
+
+// neutralAppearance is the foreground of a window command's row: none, as the 1.x action without an appearance draws it.
+var neutralAppearance = &api.Appearance{Foreground: api.ColorNone}
 
 // viewCommands are the commands that open a view: the exact forms, Switch Window, the settings and Custom Window Commands.
 func viewCommands() []api.Command {
@@ -121,6 +127,7 @@ func viewCommand(id, title, icon, keywords string) api.Command {
 	command := api.Command{
 		ID: id, Title: title, Subtitle: WindowManagementSubtitle, Icon: icon, Keywords: strings.Fields(keywords),
 		Mode: api.ModeView, Placement: []api.Placement{api.PlacementSearch},
+		Appearance: neutralAppearance, Section: search.KindCommands,
 		LearnKey: "cmd:" + title,
 	}
 	if id == moveWindowID || id == resizeWindowID {
