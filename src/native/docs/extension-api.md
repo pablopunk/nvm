@@ -1051,6 +1051,10 @@ Code: `internal/features/selection` (the engine), `internal/ext/services/desktop
 - **Failures.** A window action from a palette row hides the palette first, then runs. A failure, such as an unknown window, shows as a toast on the app. Success is silent: the window itself shows.
 - **Not served.** `focusable`, `showInactive` and `ignoreMouseEvents` are accepted and ignored, because the MyGo window port does not expose them. Capability diagnostics (`windows.*`) are not reported.
 
+### 21.3 Editor Markdown and autosave as built (P15)
+
+An editor view with `format: markdown` draws a Markdown editor (`design.MarkdownEditor`) instead of a plain text area; its text stays Markdown. A draft with `autosave` runs that action with the draft's text each time the draft is written, after the 400 ms debounce; a failure shows on the editor's status line. Conflicts resolve through `onConflict`, as before. Code: `internal/palette/extview/editor.go`, `editor_markdown.go`. Not yet: the editor's view-level action panel, and the Markdown editor's live preview.
+
 ## 22. Triggers and background jobs as built (WP3.6)
 
 Code: `internal/jobs` (scheduler, persisted state, wake detection), `internal/jobs/extjobs` (extension triggers and folder watches), `internal/jobs/hostjobs` (host jobs), `internal/palette/background` (the Background Tasks page). The API types in section 9 are unchanged; the host runs them.
