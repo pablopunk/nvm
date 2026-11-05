@@ -128,6 +128,13 @@ func (s *Session) Open(host search.Host) *palette.View {
 // Palette returns the palette page that draws the view. The page reads the session on every search, so patches show
 // on the next frame after the host refreshes it.
 func (s *Session) Palette() *palette.View {
+	page := s.pageOfKind()
+	page.Subtitle = s.view.Subtitle
+	return page
+}
+
+// pageOfKind builds the palette page of the view's kind.
+func (s *Session) pageOfKind() *palette.View {
 	switch s.view.Kind {
 	case api.ViewList:
 		return s.listPage()

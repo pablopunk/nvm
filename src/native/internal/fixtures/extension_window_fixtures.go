@@ -17,7 +17,7 @@ func ExtensionWindowFixtures() []ExtensionWindowFixture {
 	return []ExtensionWindowFixture{
 		{
 			Name: "floating-ticker",
-			View: api.View{ID: "ticker-floating", Kind: api.ViewList, Title: "Ticker",
+			View: api.View{ID: "ticker-floating", Kind: api.ViewList, Title: "Ticker", Subtitle: "Live quotes",
 				Items: []api.Item{{ID: "ticker-row", Title: "ACME 142.10", Subtitle: "Up 1.2%"}}},
 			Options: api.WindowOptions{
 				RestoreKey: "ticker.floating", Persistent: true, RemembersFrame: true, AlwaysOnTop: &alwaysOnTop,

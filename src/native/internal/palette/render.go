@@ -25,6 +25,9 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
 	design.Pane(c, func() {
+		if p.drawsWindowHeader() {
+			p.windowHeader(c, v)
+		}
 		p.header(c, v)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
 			p.splitBody(c, v, func() {
@@ -46,7 +49,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 // header is the top of the pane: the search field and the notices under it. A page that draws its own input has no
 // search field, only the notices.
 func (p *Palette) header(c *ui.Context, v *View) {
-	if v.Input != nil {
+	if v.Input != nil || (p.drawsWindowHeader() && v.HideInput) {
 		p.noticeRow(c)
 		return
 	}

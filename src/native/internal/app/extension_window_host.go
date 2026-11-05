@@ -79,6 +79,7 @@ func (o extWindowOpener) Open(spec extwindow.Spec) extwindow.Surface {
 		Icon:    o.p.fileIcon,
 		Learner: o.p.learn,
 		DragRow: o.p.dragRow,
+		Layout:  extensionWindowLayout(spec),
 	})
 	frame := o.p.extensionWindowFrame(spec)
 	options := mygo.WindowOptions{
@@ -95,6 +96,15 @@ func (o extWindowOpener) Open(spec extwindow.Spec) extwindow.Surface {
 	surface := extWindowSurface{pal: pal, window: window}
 	surface.Reconfigure(spec)
 	return surface
+}
+
+// extensionWindowLayout is how a window's palette sits in it: a companion when the title bar is hidden, otherwise the
+// window layout with the native title bar.
+func extensionWindowLayout(spec extwindow.Spec) palette.WindowLayout {
+	if spec.TitleBarHidden {
+		return palette.LayoutCompanion
+	}
+	return palette.LayoutWindow
 }
 
 // extensionWindowFrame is where a window opens: the frame it remembers, moved onto a connected display, or a place on

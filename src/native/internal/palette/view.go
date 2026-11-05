@@ -23,8 +23,10 @@ const (
 // state) or Providers (answered off the UI thread, through the view's coordinator) supplies the rows; a View
 // with Body draws its own content in place of the list.
 type View struct {
-	Title        string
-	TitleFn      func() string
+	Title   string
+	TitleFn func() string
+	// Subtitle is the line under the title of a companion window. The launcher does not draw it.
+	Subtitle     string
 	Placeholder  string
 	Presentation Presentation
 
