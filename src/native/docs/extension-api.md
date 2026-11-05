@@ -1246,6 +1246,7 @@ extension's calls (`internal/ext/services/desktop_files*.go`, child side `intern
 | `reindex` | `Reindex` | starts a rescan and returns the count now; the scan finishes later |
 | `recent` | `Recent` | newest first from the index |
 | `searchIndex` | `SearchIndex` | name matches from the index |
+| `indexStatus` | `IndexStatus` | whether the index holds a snapshot and whether it is scanning; read from memory |
 
 Actions: `openPath`, `revealPath`, `quickLook`, `openWith(path, app)` and `trash(paths)` are declarative
 (`api.OpenPath`, `api.RevealPath`, `api.QuickLook`, `api.OpenWith`, `api.Trash`). The palette runs them itself; trash

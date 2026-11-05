@@ -20,6 +20,8 @@ func (f fixedFileIndex) Search(context.Context, files.Query) []files.Result {
 
 func (fixedFileIndex) Rebuild() int { return 1 }
 
+func (fixedFileIndex) Status() files.Status { return files.Status{Ready: true, Entries: 1} }
+
 // TestFilesFixtureUsesEveryFilesMethodThroughTheChild runs the files fixture in its child process. Each row shows what the
 // host answered for one method of ctx.desktop.files, and the quick look reaches the shell.
 func TestFilesFixtureUsesEveryFilesMethodThroughTheChild(t *testing.T) {

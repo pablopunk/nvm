@@ -15,4 +15,7 @@ type ViewPatch struct {
 	// SearchResultIds is read only from an onSearchChange result: ids of items already in the view, best first. The host
 	// shows them after the local matches of the search text, and drops them when the text changes.
 	SearchResultIds []string `json:"searchResultIds,omitempty"`
+	// Status and EmptyView, when set, replace the view's footer Status and empty state.
+	Status    string      `json:"status,omitempty"`
+	EmptyView *EmptyState `json:"emptyView,omitempty"`
 }

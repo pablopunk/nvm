@@ -21,6 +21,7 @@ type fakeIndex struct {
 	results []files.Result
 	last    files.Query
 	rebuilt int
+	status  files.Status
 }
 
 func (f *fakeIndex) Roots() []string { return f.roots }
@@ -33,6 +34,28 @@ func (f *fakeIndex) Search(_ context.Context, query files.Query) []files.Result 
 func (f *fakeIndex) Rebuild() int {
 	f.rebuilt++
 	return len(f.results)
+}
+
+func (f *fakeIndex) Status() files.Status { return f.status }
+
+// TestIndexStatusReportsReadinessAndCounts is what the Search Files view shows while the first index loads and after it.
+func TestIndexStatusReportsReadinessAndCounts(t *testing.T) {
+	index := &fakeIndex{status: files.Status{Scanning: true, ScannedFiles: 7}}
+	h := indexHandler(t, t.TempDir(), index)
+	var status api.IndexStatus
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopFiles, protocol.OpIndexStatus, nil)), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Ready || !status.Scanning || status.ScannedFiles != 7 {
+		t.Fatalf("status while loading = %+v, want not ready and scanning 7 files", status)
+	}
+	index.status = files.Status{Ready: true, Entries: 42}
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopFiles, protocol.OpIndexStatus, nil)), &status); err != nil {
+		t.Fatal(err)
+	}
+	if !status.Ready || status.Scanning || status.Entries != 42 {
+		t.Fatalf("status once ready = %+v, want ready with 42 entries", status)
+	}
 }
 
 // unsupportedShell is a shell whose OS has no Quick Look and no open-with choice.

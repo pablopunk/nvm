@@ -39,6 +39,8 @@ type SearchAccessory struct {
 	Value    string                  `json:"value,omitempty"`
 	Options  []SearchAccessoryOption `json:"options"`
 	OnChange *ActionRef              `json:"onChange,omitempty"`
+	// CycleOnTab makes Tab choose the next option, wrapping, and run OnChange.
+	CycleOnTab bool `json:"cycleOnTab,omitempty"`
 }
 
 // SearchAccessoryOption is one value of a SearchAccessory.

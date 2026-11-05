@@ -38,6 +38,14 @@ func (f fileIndexPort) Search(ctx context.Context, query files.Query) []files.Re
 	return last
 }
 
+// Status describes the index. Until the file service exists the index is not ready.
+func (f fileIndexPort) Status() files.Status {
+	if f.p.files == nil {
+		return files.Status{}
+	}
+	return f.p.files.ix.Status()
+}
+
 // Rebuild starts a rescan and returns the entries the index holds now.
 func (f fileIndexPort) Rebuild() int {
 	if f.p.files == nil {

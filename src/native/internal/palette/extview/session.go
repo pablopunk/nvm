@@ -99,6 +99,7 @@ type Session struct {
 	page         platform.WebPage
 	camera       *cameraView
 	searchChange searchChange
+	filePreviews map[string]filePreviewText
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
@@ -169,10 +170,18 @@ func (s *Session) listPage() *palette.View {
 	}
 	page.Loading = s.isLoadingEmpty
 	page.Pending = s.searchChangePending
-	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
+	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
 	page.Accessory = s.searchAccessory()
+	page.OnKey = s.tabCyclesAccessory(page.Accessory)
+	page.Footer = s.footerName
+	page.Hint = s.view.Hint
 	return page
+}
+
+// emptyState is the empty state of a list as the view says it now: a refresh can change it while the view is open.
+func (s *Session) emptyState() (string, string) {
+	return s.emptyTitle(), s.emptySubtitle()
 }
 
 // palettePresentation maps a view's presentation to the palette's. A side-preview list shows the detail of the chosen row

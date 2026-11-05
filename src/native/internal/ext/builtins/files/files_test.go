@@ -11,6 +11,7 @@ type fakeFiles struct {
 	api.Files
 	recent   []api.IndexedFile
 	matches  []api.IndexedFile
+	status   api.IndexStatus
 	lastText string
 	lastKind string
 }
@@ -26,6 +27,8 @@ func (f *fakeFiles) SearchIndex(query string, options api.IndexOptions) []api.In
 }
 
 func (f *fakeFiles) Thumbnail(path string) (string, bool) { return "data:image/png;base64,AAAA", true }
+
+func (f *fakeFiles) IndexStatus() api.IndexStatus { return f.status }
 
 type fakeDesktop struct {
 	api.Desktop

@@ -85,6 +85,15 @@ func (f remoteFiles) Recent(options api.IndexOptions) []api.IndexedFile {
 	return files
 }
 
+// IndexStatus reports whether the index holds a snapshot and whether it scans. Failures report an index that is not ready.
+func (f remoteFiles) IndexStatus() api.IndexStatus {
+	var status api.IndexStatus
+	if err := f.link.Call(protocol.ServiceDesktopFiles, protocol.OpIndexStatus, nil, &status); err != nil {
+		return api.IndexStatus{}
+	}
+	return status
+}
+
 // SearchIndex lists the index entries whose name or path matches the query. Failures answer nothing.
 func (f remoteFiles) SearchIndex(query string, options api.IndexOptions) []api.IndexedFile {
 	var files []api.IndexedFile

@@ -18,6 +18,8 @@ type FileIndex interface {
 	Search(ctx context.Context, query files.Query) []files.Result
 	// Rebuild rescans the roots in the background and returns the number of files indexed now.
 	Rebuild() int
+	// Status describes the index: whether a snapshot is published and whether a scan runs.
+	Status() files.Status
 }
 
 // serveFileIndex answers the index operations of desktop.files. Without an index the reads answer nothing, as the
@@ -34,8 +36,19 @@ func (h *Handler) serveFileIndex(ctx context.Context, call protocol.ServiceCall)
 		return h.searchIndexRead(ctx, call.Args)
 	case protocol.OpReindex:
 		return h.reindexFiles(call.Args)
+	case protocol.OpIndexStatus:
+		return h.indexStatus(), nil
 	}
 	return nil, invalid("desktop.files has no index operation %q", call.Op)
+}
+
+// indexStatus describes the index as the api reports it. Without an index it is not ready and never scanning.
+func (h *Handler) indexStatus() api.IndexStatus {
+	if h.deps.FileIndex == nil {
+		return api.IndexStatus{}
+	}
+	st := h.deps.FileIndex.Status()
+	return api.IndexStatus{Ready: st.Ready, Scanning: st.Scanning, Entries: st.Entries, ScannedFiles: st.ScannedFiles}
 }
 
 func (h *Handler) indexedRoots() []string {

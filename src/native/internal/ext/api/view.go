@@ -57,6 +57,10 @@ type View struct {
 	ContentSizing string `json:"contentSizing,omitempty"`
 	// Placeholder is the search input placeholder.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Status replaces the footer's title, such as counts. Refresh it with ViewPatch.Status.
+	Status string `json:"status,omitempty"`
+	// Hint is the footer's right-hand key hint.
+	Hint string `json:"hint,omitempty"`
 	// WindowCompact renders the result as a compact overlay in independent windows.
 	WindowCompact bool `json:"windowCompact,omitempty"`
 

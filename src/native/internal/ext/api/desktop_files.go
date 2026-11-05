@@ -29,6 +29,14 @@ type IndexReport struct {
 	Roots []string `json:"roots"`
 }
 
+// IndexStatus describes the file index: Ready once it holds a snapshot, Scanning while a rescan runs.
+type IndexStatus struct {
+	Ready        bool  `json:"ready"`
+	Scanning     bool  `json:"scanning"`
+	Entries      int   `json:"entries"`
+	ScannedFiles int64 `json:"scannedFiles"`
+}
+
 // Files finds, reads, writes and previews local files. Paths may start with "~".
 type Files interface {
 	// Find walks roots. Missing roots are skipped with a logged warning, so one batch covers them all.
@@ -58,4 +66,6 @@ type Files interface {
 	Reindex(options IndexOptions) (IndexReport, error)
 	Recent(options IndexOptions) []IndexedFile
 	SearchIndex(query string, options IndexOptions) []IndexedFile
+	// IndexStatus reports whether the index is ready and scanning.
+	IndexStatus() IndexStatus
 }

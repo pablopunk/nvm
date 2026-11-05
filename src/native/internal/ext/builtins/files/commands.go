@@ -46,6 +46,8 @@ func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, er
 		return e.searchChanged(ctx, in.Value), nil
 	case refKind:
 		return e.kindChanged(ctx, in.Value), nil
+	case refStatus:
+		return e.statusRefresh(ctx), nil
 	case refMeaningSearch:
 		return e.meaningSearchChanged(ctx, in.Value), nil
 	case refMeaningAsk:

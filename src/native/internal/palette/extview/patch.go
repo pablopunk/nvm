@@ -12,6 +12,12 @@ func (s *Session) Apply(patch api.ViewPatch) {
 	if patch.SelectedItemID != "" {
 		s.selectID = patch.SelectedItemID
 	}
+	if patch.Status != "" {
+		s.view.Status = patch.Status
+	}
+	if patch.EmptyView != nil {
+		s.view.EmptyView = patch.EmptyView
+	}
 	if len(s.sections) > 0 {
 		for i := range s.sections {
 			s.sections[i].Items = applyPatch(s.sections[i].Items, patch)

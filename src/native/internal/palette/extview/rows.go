@@ -107,8 +107,7 @@ func (s *Session) collectionPage() *palette.View {
 	spec := s.view.Collection
 	s.items = collectionItems(spec)
 	page := s.listPage()
-	page.EmptyTitle = orDefault(spec.EmptyTitle, "No items")
-	page.EmptySub = spec.EmptySubtitle
+	page.EmptyFn = func() (string, string) { return orDefault(spec.EmptyTitle, "No items"), spec.EmptySubtitle }
 	page.Placeholder = orDefault(spec.SearchPlaceholder, page.Placeholder)
 	return page
 }

@@ -366,6 +366,7 @@ func init() {
 		"ImageShape":              reflect.ValueOf((*api.ImageShape)(nil)),
 		"IndexOptions":            reflect.ValueOf((*api.IndexOptions)(nil)),
 		"IndexReport":             reflect.ValueOf((*api.IndexReport)(nil)),
+		"IndexStatus":             reflect.ValueOf((*api.IndexStatus)(nil)),
 		"IndexedFile":             reflect.ValueOf((*api.IndexedFile)(nil)),
 		"IndicatorInput":          reflect.ValueOf((*api.IndicatorInput)(nil)),
 		"IndicatorStatus":         reflect.ValueOf((*api.IndicatorStatus)(nil)),
@@ -1054,6 +1055,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Files struct {
 	WFindMedia     func(roots []string, options api.FindOptions) ([]api.FileRef, error)
 	WFindVideos    func(roots []string, options api.FindOptions) ([]api.FileRef, error)
 	WIndexSnapshot func(options api.IndexOptions) []api.IndexedFile
+	WIndexStatus   func() api.IndexStatus
 	WIndexedRoots  func() []string
 	WMetadata      func(path string) (api.FileRef, error)
 	WOpen          func(path string) error
@@ -1089,6 +1091,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) FindVideos(root
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexSnapshot(options api.IndexOptions) []api.IndexedFile {
 	return W.WIndexSnapshot(options)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexStatus() api.IndexStatus {
+	return W.WIndexStatus()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Files) IndexedRoots() []string {
 	return W.WIndexedRoots()

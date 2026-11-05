@@ -63,6 +63,7 @@ const (
 	OpIndexSnapshot   = "index-snapshot"
 	OpReindex         = "reindex"
 	OpIndexRecent     = "index-recent"
+	OpIndexStatus     = "index-status"
 	OpSearchIndex     = "search-index"
 	OpText            = "text"
 	OpReplace         = "replace"
