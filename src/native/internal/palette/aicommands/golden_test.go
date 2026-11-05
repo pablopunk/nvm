@@ -23,6 +23,8 @@ var indicatorStatuses = []struct {
 }{
 	{"indicator-reading", commands.Status{Title: fixTitle, Subtitle: "Reading Selection", Tone: commands.ToneLoading}},
 	{"indicator-fixing", commands.Status{Title: fixTitle, Subtitle: "Fixing Text", Tone: commands.ToneLoading}},
+	{"indicator-dictation-recording", commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}},
+	{"indicator-dictation-transcribing", commands.Status{Title: "Dictate", Subtitle: "Transcribing", Tone: commands.ToneLoading, Activity: commands.ActivityTranscribing}},
 	{"indicator-no-changes", commands.Status{Title: fixTitle, Subtitle: "No changes needed", Tone: commands.ToneSuccess}},
 	{"indicator-triage", commands.Status{Title: triageTitle, Subtitle: "bug report · urgency 4/5 · needs reply", Tone: commands.ToneSuccess}},
 	{"indicator-failed-short", commands.Status{Title: fixTitle, Subtitle: "Sign in to use AI commands.", Tone: commands.ToneError}},

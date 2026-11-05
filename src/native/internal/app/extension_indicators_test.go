@@ -23,6 +23,14 @@ func TestIndicatorStatusMapsExtensionStatusesOntoThePanelTones(t *testing.T) {
 			t.Fatalf("status %q has tone %q; want %q", c.status, got, c.want)
 		}
 	}
+	for _, tc := range []struct {
+		input api.IndicatorStatus
+		want  commands.Activity
+	}{{api.IndicatorRecording, commands.ActivityRecording}, {api.IndicatorTranscribing, commands.ActivityTranscribing}, {api.IndicatorLoading, commands.ActivityLoading}} {
+		if got := indicatorStatusOf(api.IndicatorInput{Title: "Localized", Status: tc.input}).Activity; got != tc.want {
+			t.Errorf("activity for %q = %q, want %q", tc.input, got, tc.want)
+		}
+	}
 }
 
 func TestIndicatorProgressJoinsTheSubtitle(t *testing.T) {

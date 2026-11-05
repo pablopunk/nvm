@@ -76,6 +76,12 @@ func (s *extensionIndicators) hideLocked() {
 func indicatorStatusOf(input api.IndicatorInput) commands.Status {
 	status := commands.Status{Title: input.Title, Subtitle: input.Subtitle, Tone: commands.ToneLoading}
 	switch input.Status {
+	case api.IndicatorRecording:
+		status.Activity = commands.ActivityRecording
+	case api.IndicatorTranscribing:
+		status.Activity = commands.ActivityTranscribing
+	case api.IndicatorLoading:
+		status.Activity = commands.ActivityLoading
 	case api.IndicatorSuccess:
 		status.Tone = commands.ToneSuccess
 	case api.IndicatorError:

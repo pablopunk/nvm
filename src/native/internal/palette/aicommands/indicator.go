@@ -1,7 +1,6 @@
 package aicommands
 
 import (
-	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -26,9 +25,11 @@ func Indicator(c *ui.Context, s commands.Status) {
 	k := design.Tokens(c)
 	tone, subtitleColor := k.Accent, k.Muted
 	icon := "sparkles"
-	listening := strings.Contains(strings.ToLower(s.Title+" "+s.Subtitle), "dictat") && s.Tone == commands.ToneLoading
-	if listening {
+	if s.Activity == commands.ActivityRecording {
 		icon = "mic"
+	}
+	if s.Activity == commands.ActivityTranscribing {
+		icon = "waveform"
 	}
 	switch s.Tone {
 	case commands.ToneSuccess:
@@ -39,11 +40,9 @@ func Indicator(c *ui.Context, s commands.Status) {
 	}
 	design.Pane(c, func() {
 		ui.Row(c).Grow(1).Padding(10, 14).Gap(10).AlignItems(ui.Center).Children(func() {
-			if listening {
-				// The native indicator reports truthful activity without implying microphone amplitude.
-				progress := ui.Row(c).Key("dictation-activity").Keyframes("activity", []ui.Keyframe{
-					{Value: 0.72}, {At: 420 * time.Millisecond, Value: 1, Ease: ui.EaseInOut},
-				})
+			if s.Activity == commands.ActivityRecording || s.Activity == commands.ActivityTranscribing {
+				// Distinct native glyph and accent treatment identify actual host-reported phases.
+				progress := ui.Row(c).Key(string(s.Activity)).Keyframes("activity", []ui.Keyframe{{Value: 0.76}, {At: 520 * time.Millisecond, Value: 1, Ease: ui.EaseInOut}})
 				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone).Opacity(progress)
 			} else {
 				ui.Icon(c, design.Icon(icon)).FontSize(16).TextColor(tone)
