@@ -49,6 +49,8 @@ func SerializableTypes() []reflect.Type {
 		reflect.TypeFor[WebviewSpec](),
 		reflect.TypeFor[ChatSpec](),
 		reflect.TypeFor[ChatMessage](),
+		reflect.TypeFor[ChatImage](),
+		reflect.TypeFor[ChatTool](),
 		reflect.TypeFor[ItemSection](),
 		reflect.TypeFor[DetailPane](),
 		reflect.TypeFor[EmptyState](),

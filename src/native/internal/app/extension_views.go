@@ -88,6 +88,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Permissions:           ports.Permissions,
 		Cameras:               extensionCameras,
 		IsDark:                func() bool { return mygo.Theme.IsDark() },
+		Reply:                 p.drawReply,
 	}
 }
 

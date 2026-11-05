@@ -15,6 +15,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -83,11 +84,14 @@ type Deps struct {
 	Cameras CameraMemory
 	// IsDark reports the palette's appearance, which a web page's theme follows. Nil means light.
 	IsDark func() bool
+	// Reply draws a chat reply's Markdown, streaming while it arrives. Nil draws the text plain.
+	Reply func(c *ui.Context, src string, streaming bool)
 }
 
 // Session is one open extension view. It is used on the UI thread only.
 type Session struct {
 	deps         Deps
+	chatRenderer *aichat.ExtensionChat
 	extID        string
 	view         api.View
 	host         search.Host
@@ -170,6 +174,10 @@ func (s *Session) Palette() *palette.View {
 	case api.ViewWebview, api.ViewCamera:
 		if s.media != nil {
 			return s.media
+		}
+	case api.ViewChat:
+		if s.view.Chat != nil {
+			return s.chatPage()
 		}
 	}
 	return s.unsupportedPage()

@@ -37,7 +37,7 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // uninstall review and the alias read of the applications built-in, and by about 1 KB more for the bundled datasets, the
 // view search and the grid categories. It grew again for the files built-in's footer, Tab kind key, indexing empty state,
 // file detail and index status, the API surface the builder reads.
-const maxReferenceBytes = 53 << 10
+const maxReferenceBytes = 54 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
