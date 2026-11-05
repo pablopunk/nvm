@@ -78,6 +78,8 @@ type Deps struct {
 	Paste PasteEngine
 	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil answers unavailable.
 	Apps AppLifecycle
+	// FileIndex is the host's file index, which the files service reads. Nil answers the index calls with nothing.
+	FileIndex FileIndex
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
 	// History returns the clipboard history, or nil while it is still starting.

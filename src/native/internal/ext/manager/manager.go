@@ -31,6 +31,7 @@ import (
 // nil ones make the services that need them unavailable.
 type Ports struct {
 	Files     platform.FS
+	FileIndex services.FileIndex
 	Clock     platform.Clock
 	Worker    platform.Worker
 	Processes platform.Processes
@@ -146,6 +147,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		},
 		serviceDeps: services.Deps{
 			Files:          ports.Files,
+			FileIndex:      ports.FileIndex,
 			Clock:          ports.Clock,
 			DataRoot:       opts.DataRoot,
 			Keychain:       ports.Keychain,

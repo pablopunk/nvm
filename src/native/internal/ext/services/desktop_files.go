@@ -31,6 +31,18 @@ func (h *Handler) serveDesktopFiles(ctx context.Context, call protocol.ServiceCa
 		return h.openWithApps(ctx, call.Args)
 	case protocol.OpWriteBytes:
 		return h.writeBytes(call.Args)
+	case protocol.OpWriteText:
+		return h.writeText(call.Args)
+	case protocol.OpReadText:
+		return h.readText(call.Args)
+	case protocol.OpQuickLook:
+		return nil, h.quickLookFile(call.Args)
+	case protocol.OpOpenWith:
+		return nil, h.openWithApp(call.Args)
+	case protocol.OpDisplayPath:
+		return h.displayPathOf(call.Args)
+	case protocol.OpIndexedRoots, protocol.OpIndexSnapshot, protocol.OpReindex, protocol.OpIndexRecent, protocol.OpSearchIndex:
+		return h.serveFileIndex(ctx, call)
 	}
 	return nil, invalid("desktop.files has no operation %q", call.Op)
 }

@@ -33,6 +33,11 @@ type IndexReport struct {
 type Files interface {
 	// Find walks roots. Missing roots are skipped with a logged warning, so one batch covers them all.
 	Find(roots []string, options FindOptions) ([]FileRef, error)
+	// FindImages, FindVideos and FindMedia are Find with the kind fixed to image, video or media. The kind in options
+	// is ignored.
+	FindImages(roots []string, options FindOptions) ([]FileRef, error)
+	FindVideos(roots []string, options FindOptions) ([]FileRef, error)
+	FindMedia(roots []string, options FindOptions) ([]FileRef, error)
 	OpenWithApps(path string) ([]App, error)
 	Open(path string) error
 	Reveal(path string) error

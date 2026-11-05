@@ -59,7 +59,6 @@ func leadingCommands(p *App) []command {
 		{ID: shortcuts.CommandClipboardHistory, Title: "Clipboard History", Keywords: "clipboard paste copy history", Icon: "clipboard", Tone: "blue", Subtitle: "Browse and paste what you copied", Run: func(h search.Host) { h.Push(p.clipboardView()) }},
 		{ID: shortcuts.CommandAIChats, Title: "AI Chats", Keywords: "ai chat assistant gpt llm ask conversations history", Icon: "sparkles", Tone: "yellow", Subtitle: "Chat with the assistant", Run: func(h search.Host) { h.Push(p.chatHistoryView()) }},
 		{ID: shortcuts.CommandEmojiSymbols, Title: "Emoji & Symbols", Keywords: "emoji symbols unicode smiley", Icon: "smile", Subtitle: "Search and paste emoji", Run: func(h search.Host) { h.Push(p.emojiView()) }},
-		{ID: shortcuts.CommandSearchFiles, Title: "Search Files", Keywords: "files find documents locate", Icon: "folder", Subtitle: "Find files in your home folder", Run: func(h search.Host) { h.Push(p.filesView()) }},
 		{ID: shortcuts.CommandQuickNotes, Title: "Floating Notes", Keywords: "notes note scratch memo floating", Icon: "sticky-note", Subtitle: "Jot something down", Run: func(h search.Host) { h.Push(p.notesView()) }},
 		{Title: "Toggle Floating Notes", Keywords: "notes note float floating window sticky toggle", Icon: "sticky-note", Subtitle: "Show or hide your floating Markdown notes", Hidden: true, Run: func(h search.Host) { h.Hide(); p.toggleFloatingNotes() }},
 		{Title: "New Note", Keywords: "note create scratch", Icon: "plus", Hidden: true, Run: func(h search.Host) { p.newNote() }},
@@ -72,8 +71,7 @@ func leadingCommands(p *App) []command {
 
 // trailingCommands are the commands listed after the built-in system commands.
 func trailingCommands(p *App) []command {
-	cmds := p.meaningFilesCommands()
-	cmds = append(cmds, []command{
+	cmds := []command{
 		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
 		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksView()) }},
 		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
@@ -82,7 +80,7 @@ func trailingCommands(p *App) []command {
 		{ID: shortcuts.CommandReportProblem, Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		builtInSlot(appcommands.ID, 1),
 		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
-	}...)
+	}
 	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.aiCommandRows()...)
@@ -99,7 +97,7 @@ func builtInSlot(id string, width int) command {
 func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
-var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Search Files": "blue", "Floating Notes": "yellow",
+var commandTones = map[string]string{"Clipboard History": "blue", "AI Chats": "purple", "Emoji & Symbols": "yellow", "Floating Notes": "yellow",
 	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
 
 // numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.

@@ -37,7 +37,6 @@ func newTestFiles(tb testing.TB, home string, paths []string) *fileService {
 		thumbDir:  "/cache/files-thumbs",
 		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, func() {}),
 		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, func() {}),
-		previews:  newAsyncCache[*filePreview](ctx, fileWorkers, fileQueue, filePreviewEntries, func() {}),
 		redraw:    func() {},
 		ctx:       ctx,
 		log:       logx.Default(),
