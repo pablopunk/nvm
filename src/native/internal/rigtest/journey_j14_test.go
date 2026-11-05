@@ -32,11 +32,14 @@ const (
 const badClockSource = "package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
 	"func RootItems(ctx api.Context) ([]api.Itme, error) { return nil, nil }\n"
 
-// clockSource is the extension with one root row titled row.
+// clockSource provides one suggestion at the empty root and the same item when its title is searched.
 func clockSource(row string) string {
-	return "package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
+	return "package main\n\nimport (\n\"strings\"\n\"github.com/pablopunk/nvm/native/internal/ext/api\"\n)\n\n" +
 		"func RootItems(ctx api.Context) ([]api.Item, error) {\n" +
-		"\treturn []api.Item{{ID: \"clock-row\", Title: \"" + row + "\", Subtitle: \"Built by the builder\"}}, nil\n}\n"
+		"\treturn []api.Item{{ID: \"clock-row\", Title: \"" + row + "\", Subtitle: \"Built by the builder\"}}, nil\n}\n" +
+		"func SearchItems(ctx api.Context, query string) ([]api.Item, error) {\n" +
+		"\tif strings.Contains(strings.ToLower(\"" + row + "\"), strings.ToLower(query)) { return RootItems(ctx) }\n" +
+		"\treturn nil, nil\n}\n"
 }
 
 // writeCall is a write_extension call with the manifest and source given, as the model sends them.
@@ -77,6 +80,7 @@ func TestJourneyJ14AutomateBuildsAndRunsAnExtension(t *testing.T) {
 
 	hidePalette(t, app)
 	must(t, app.SummonPalette())
+	must(t, app.Type(builderListQuery))
 	waitForRow(t, app, builderRootRow, builderWait)
 	shoot(t, app, "j14-2-row-on-root")
 }

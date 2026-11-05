@@ -215,12 +215,12 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
-	current := func() bool { return !s.dismissed }
+	current := func() bool { return r.action.DismissAfterRun || !s.dismissed }
 	if loading, ok := h.(search.ActionLoadingHost); ok {
 		current = loading.BeginAction()
 	}
 	s.deps.Invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
-		if !current() || s.dismissed {
+		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
 			return
 		}
 		s.finish(h, r.extID, r.action.Title, result, failure)

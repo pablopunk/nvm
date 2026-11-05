@@ -55,11 +55,8 @@ func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 func createNoteWith(t *testing.T, app *App, text string) {
 	t.Helper()
 	must(t, app.SummonPalette())
-	must(t, app.Type("Floating Notes"))
-	_, err := app.WaitFor("Floating Notes", elementWait)
-	must(t, err)
-	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Find a note", elementWait)
+	must(t, app.Type("New Note"))
+	_, err := app.WaitFor("New Note", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Untitled note", elementWait)
@@ -68,9 +65,7 @@ func createNoteWith(t *testing.T, app *App, text string) {
 	_, err = app.WaitFor(text, elementWait)
 	must(t, err)
 	time.Sleep(autosaveSettle)
-	must(t, app.Key("Escape")) // the editor back to the list
-	must(t, app.Key("Escape")) // the list back to the root
-	must(t, app.DismissWithEscape())
+	hidePalette(t, app)
 
 	must(t, app.SummonPalette())
 	must(t, app.Type("Toggle Floating Notes"))

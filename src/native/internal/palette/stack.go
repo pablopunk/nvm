@@ -58,7 +58,12 @@ func (p *Palette) Open(v *View) {
 
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
 func (p *Palette) Hide() {
-	p.actionSequence++
+	p.cancelAction()
+	p.hide()
+}
+
+// hide performs dismissal after its caller decides whether pending action completion remains valid.
+func (p *Palette) hide() {
 	p.actionPending = false
 	for _, v := range p.stack {
 		if v.OnHide != nil {

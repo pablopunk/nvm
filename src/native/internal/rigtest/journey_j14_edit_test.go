@@ -61,6 +61,7 @@ func TestJourneyJ14EditChangesAnExtensionAndShowsTheNewRow(t *testing.T) {
 	hidePalette(t, app)
 
 	must(t, app.SummonPalette())
+	must(t, app.Type(builderListQuery))
 	waitForRow(t, app, builderEditedRow, builderWait)
 	assertNoRow(t, app, builderRootRow)
 	shoot(t, app, "j14e-2-edited-row-on-root")
