@@ -8,6 +8,7 @@ const (
 	EventException            = "$exception"
 	EventSupportReport        = "support_report"
 	EventInstallOwnerObserved = "install.owner_observed"
+	EventOperationCompleted   = "operation_completed"
 )
 
 // FeatureCommandRun is the feature name of a palette command the person ran.
@@ -20,6 +21,7 @@ var schema = map[string][]string{
 	EventException:            {"support_ref", "component", "message", "frames", "attributes", "release"},
 	EventSupportReport:        {"support_ref"},
 	EventInstallOwnerObserved: {"owner_source", "owner_id"},
+	EventOperationCompleted:   {"operation", "label", "outcome", "stage", "duration_ms", "boot_id", "journey_id", "action_id", "release"},
 }
 
 // commandVariants maps the palette's built-in command titles to their ids. A command outside this closed set is
