@@ -66,8 +66,9 @@ func newMenuUpdates(t *testing.T, engine *updatefake.Engine) *menuUpdates {
 // onChange redraws the menu on the UI thread, as the app does, and records what it drew.
 func (m *menuUpdates) onChange(update.State) {
 	m.app.onUI(func() {
+		status := m.app.updates.State().Status
 		m.app.refreshUpdateSurfaces()
-		m.record(m.app.updates.State().Status)
+		m.record(status)
 	})
 }
 
