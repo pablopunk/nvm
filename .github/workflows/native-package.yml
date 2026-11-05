@@ -136,13 +136,13 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
+          bash scripts/packaging/stamp-mygo-config.sh
           echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           retry_bin="$RUNNER_TEMP/stapler-retry-bin"
           mkdir -p "$retry_bin"
           cp scripts/packaging/xcrun-with-stapler-retry.sh "$retry_bin/xcrun"
           chmod +x "$retry_bin/xcrun"
           echo "$retry_bin" >> "$GITHUB_PATH"
-          bash scripts/packaging/stamp-mygo-config.sh
 
       - name: Build and package
         working-directory: src/native
@@ -256,8 +256,8 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           bash scripts/packaging/stamp-mygo-config.sh
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
 
       - name: Build and package
         working-directory: src/native
@@ -345,8 +345,8 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           bash scripts/packaging/stamp-mygo-config.sh
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
 
       - name: Build and package
         working-directory: src/native

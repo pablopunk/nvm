@@ -22,6 +22,9 @@ import (
 // development builds remain endpoint-free.
 var releaseBuild = "false"
 
+// analyticsAppVersion is linked to the packaged MyGo version; development uses the backend client version.
+var analyticsAppVersion = nativeClientVersion
+
 // quitFlushTimeout bounds the diagnostics sent while the app quits, so an unreachable endpoint cannot hold the quit.
 const quitFlushTimeout = 2 * time.Second
 
@@ -41,7 +44,7 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 		FS:        ports.FS,
 		Clock:     ports.Clock,
 		Dir:       dataDir(),
-		Version:   nativeClientVersion,
+		Version:   analyticsAppVersion,
 		OS:        runtime.GOOS,
 		OSRelease: osRelease,
 		Arch:      runtime.GOARCH,
