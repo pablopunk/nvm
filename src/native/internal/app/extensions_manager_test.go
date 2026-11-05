@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -62,6 +63,19 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 
 // newManagerWithIndex is newManagerWithApps with the file index the built-in files extension reads.
 func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+	return newManagerWithFakes(t, managerFakes{index: index}, builtins, clock, network, apps, enabled...)
+}
+
+// managerFakes are the host services a test puts in place of the real ones: the file index, the model calls and the
+// signed-in account. A nil field keeps the service absent, as the app without it does.
+type managerFakes struct {
+	index   services.FileIndex
+	ai      *extai.Service
+	account services.AccountState
+}
+
+// newManagerWithFakes is newManagerWithIndex with the host services of fakes.
+func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -78,7 +92,7 @@ func newManagerWithIndex(t testing.TB, index services.FileIndex, builtins []api.
 		clock = ports.Clock
 	}
 	m, err := manager.New(manager.Ports{
-		Files: ports.FS, FileIndex: index, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
+		Files: ports.FS, FileIndex: fakes.index, AI: fakes.ai, Account: fakes.account, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 		Places:       fixturePlaces,
 		Network:      network,

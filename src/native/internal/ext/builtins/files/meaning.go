@@ -2,7 +2,9 @@ package files
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -15,14 +17,14 @@ const (
 	askRowScore        = 1000
 	meaningScoreBase   = 10
 	meaningAskID       = "meaning-ask"
-	meaningFailureID   = "meaning-failure"
+	meaningFailureID   = "files-meaning-error"
 	meaningAskTitle    = "Find more files with AI"
 	meaningAskSub      = "Send the names of your most recent files for analysis"
 	meaningFindTitle   = "Find Files"
 	meaningTitle       = "Find Files by Meaning"
 	meaningPlaceholder = "Describe the file you want"
 	meaningEmptySub    = "Type what the file is about. Your recent file names can be checked with AI."
-	meaningFailure     = "Could not search files by meaning."
+	meaningFailure     = "Could not search files by meaning"
 	questionFormat     = "Is %s relevant to the search query?"
 )
 
@@ -81,20 +83,21 @@ func matchedIndexes(result api.DecisionResult, count int) []int {
 	return matches
 }
 
-// meaningRows are the view rows of Find Files by Meaning for a query: the name matches, then either the ask row, the
-// decision's matches, or the failure the decision left. The decision runs only after the user asks for this query.
+// meaningRows are the view rows of Find Files by Meaning for a query. Before the user asks, the ask row leads the name
+// matches; after, the name matches come first and then the decision's matches or the failure it left. The decision runs
+// only after the user asks for this query.
 func (e Extension) meaningRows(ctx api.Context, query string) []api.Item {
-	items := withThumbnails(ctx, e.rowsFor(ctx, query, "", meaningLocal))
+	names := withThumbnails(ctx, e.rowsFor(ctx, query, "", meaningLocal))
 	if query == "" {
-		return items
+		return names
 	}
-	if !e.state.askedFor(query) {
-		if ctx.Account().SignedIn() {
-			items = append(items, askRow(query))
-		}
-		return items
+	if e.state.askedFor(query) {
+		return append(names, e.state.decisionRows(query)...)
 	}
-	return append(items, e.state.decisionRows(query)...)
+	if !ctx.Account().SignedIn() {
+		return names
+	}
+	return append([]api.Item{askRow(query)}, names...)
 }
 
 // askRow is the row that asks the model about the query.
@@ -102,8 +105,17 @@ func askRow(query string) api.Item {
 	ask := api.Run(refMeaningAsk, meaningFindTitle, map[string]string{argQuery: query})
 	return api.Item{
 		ID: meaningAskID, Title: meaningAskTitle, Subtitle: meaningAskSub, Icon: "sparkles",
-		Score: askRowScore, Primary: &ask, Section: search.KindFiles,
+		Score: askRowScore, Primary: &ask, Section: search.KindFiles, Keywords: []string{query},
 	}
+}
+
+// withKeyword names the query as a keyword of each row. The palette keeps a row whose text matches the typed query, and a
+// meaning match or a failure names no file that the query finds, so each one keeps the query it answers.
+func withKeyword(rows []api.Item, query string) []api.Item {
+	for i := range rows {
+		rows[i].Keywords = append(rows[i].Keywords, query)
+	}
+	return rows
 }
 
 // meaningSearchChanged answers a new text of Find Files by Meaning: the list is rebuilt for it.
@@ -117,16 +129,15 @@ func (e Extension) meaningSearchChanged(ctx api.Context, query string) api.Resul
 // contextual failure row, and the ask does not repeat.
 func (e Extension) askMeaning(ctx api.Context, query string) api.Result {
 	rows, failure := e.decide(ctx, query)
-	e.state.recordDecision(query, rows)
-	items := withThumbnails(ctx, e.rowsFor(ctx, query, "", meaningLocal))
-	items = append(items, rows...)
 	if failure != nil {
-		items = append(items, failureRow(failure))
+		rows = append(rows, failureRow(failure))
 	}
-	return api.Result{Patch: &api.ViewPatch{Mode: api.PatchReplace, Items: items}}
+	e.state.recordDecision(query, withKeyword(rows, query))
+	return api.Result{Patch: &api.ViewPatch{Mode: api.PatchReplace, Items: e.meaningRows(ctx, query)}}
 }
 
-// decide finds the recent files the model judges relevant, scored by rank so the model's order holds.
+// decide finds the recent files the model judges relevant, scored by rank so the model's order holds. A failed decision
+// returns the error and no rows.
 func (e Extension) decide(ctx api.Context, query string) ([]api.Item, error) {
 	candidates := recentFiles(ctx, meaningCandidates, "")
 	matches, err := judge(ctx, query, candidates)
@@ -141,12 +152,24 @@ func (e Extension) decide(ctx api.Context, query string) ([]api.Item, error) {
 	return rows, nil
 }
 
-// failureRow is the contextual row a failed decision leaves in the list.
+// failureRow is the contextual row a failed decision leaves in the list. It says why the decision did not run, as the
+// backend's reason, when there is one.
 func failureRow(err error) api.Item {
-	return api.Item{
-		ID: meaningFailureID, Title: meaningFailure, Subtitle: err.Error(), Disabled: true, Contextual: true,
-		Section: search.KindFiles,
+	title := meaningFailure + "."
+	if reason := failureReason(err); reason != "" {
+		title = meaningFailure + ": " + reason
 	}
+	return api.Item{ID: meaningFailureID, Title: title, Contextual: true, Section: search.KindFiles}
+}
+
+// failureReason is the message of a failed call. The host wraps the message with the name of its error class, which is
+// the error the call unwraps to; the name is left out.
+func failureReason(err error) string {
+	reason := err.Error()
+	if class := errors.Unwrap(err); class != nil {
+		reason = strings.TrimSuffix(reason, ": "+class.Error())
+	}
+	return reason
 }
 
 // meaningView is the Find Files by Meaning view: the name matches of the typed text, the ask row, and the decision's

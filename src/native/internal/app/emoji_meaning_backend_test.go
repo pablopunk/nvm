@@ -23,6 +23,12 @@ func (fixedToken) Get() (string, error) { return "test-token", nil }
 // pleadingModel does, read from the wire request. The port records every request the picker sends.
 func decisionsBackend(t *testing.T) (*backend.Client, *fake.HTTP) {
 	t.Helper()
+	return decisionsBackendServing(t, serveDecisions)
+}
+
+// decisionsBackendServing is decisionsBackend with the handler of the decisions route given.
+func decisionsBackendServing(t *testing.T, serve http.HandlerFunc) (*backend.Client, *fake.HTTP) {
+	t.Helper()
 	clock := fake.NewClock()
 	logger, err := logx.New(nil, clock, "", logx.Options{})
 	if err != nil {
@@ -34,7 +40,7 @@ func decisionsBackend(t *testing.T) (*backend.Client, *fake.HTTP) {
 		t.Fatalf("NewEnvironment: %v", err)
 	}
 	port := fake.NewHTTP()
-	port.Handle(http.HandlerFunc(serveDecisions))
+	port.Handle(serve)
 	client, err := backend.New(port, logger, env, fixedToken{}, backend.WithClock(clock), backend.WithJitter(func(d time.Duration) time.Duration { return d }))
 	if err != nil {
 		t.Fatalf("backend.New: %v", err)

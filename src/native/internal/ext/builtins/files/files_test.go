@@ -134,15 +134,15 @@ func TestMeaningRowsAskOnlyForTheQueryTheUserAsked(t *testing.T) {
 	ctx := fakeContext{files: files, signed: true}
 	ext := Extension{state: &viewState{}}
 	rows := ext.meaningRows(ctx, "tax")
-	if len(rows) != 2 || rows[1].ID != meaningAskID || rows[1].Primary == nil || rows[1].Primary.Ref.Args[argQuery] != "tax" {
-		t.Fatalf("rows before the ask = %+v, want the name match and the ask row for tax", rows)
+	if len(rows) != 2 || rows[0].ID != meaningAskID || rows[0].Primary == nil || rows[0].Primary.Ref.Args[argQuery] != "tax" {
+		t.Fatalf("rows before the ask = %+v, want the ask row for tax above the name match", rows)
 	}
 	ext.state.recordDecision("tax", []api.Item{{ID: "decided"}})
 	rows = ext.meaningRows(ctx, "tax")
 	if len(rows) != 2 || rows[1].ID != "decided" {
-		t.Fatalf("rows after the ask = %+v, want the decision rows and no ask row", rows)
+		t.Fatalf("rows after the ask = %+v, want the name match and the decision rows and no ask row", rows)
 	}
-	if other := ext.meaningRows(ctx, "receipt"); len(other) != 2 || other[1].ID != meaningAskID {
+	if other := ext.meaningRows(ctx, "receipt"); len(other) == 0 || other[0].ID != meaningAskID {
 		t.Fatalf("a new query = %+v, want the ask row again", other)
 	}
 }
