@@ -100,6 +100,19 @@ func TestChatSideIsBuiltOnceAndFollowsTheView(t *testing.T) {
 }
 
 // TestChatPrimaryKeyIsStopWhileAReplyStreams checks the footer offers Stop only while a reply streams.
+// TestChatTitleFollowsTheRefreshedView: the host renames a chat the page already shows, as a refresh of an opened edit
+// chat does, and the page's title shows the new name.
+func TestChatTitleFollowsTheRefreshedView(t *testing.T) {
+	s := NewSession(Deps{}, "acme.chat", chatFixtureView())
+	page := s.chatPage()
+	renamed := chatFixtureView()
+	renamed.Title = "Tweak Clock journey"
+	s.view = renamed
+	if got := page.TitleFn(); got != "Tweak Clock journey" {
+		t.Fatalf("page title = %q, want the refreshed title", got)
+	}
+}
+
 func TestChatPrimaryKeyIsStopWhileAReplyStreams(t *testing.T) {
 	s := NewSession(Deps{}, "acme.chat", chatFixtureView())
 	page := s.chatPage()

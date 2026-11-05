@@ -11,7 +11,7 @@ import (
 const (
 	builderEditedRow = "Clock journey edited row"
 	builderEditWords = "say edited instead"
-	builderChatHint  = "Edit Extension"
+	builderChatHint  = "Tweak " + builderTitle
 	builderListQuery = "clock journey"
 	builderTitle     = "Clock journey"
 	builderEditDone  = "The edited clock is on the root."

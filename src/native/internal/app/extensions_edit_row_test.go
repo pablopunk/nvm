@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -69,5 +70,25 @@ func TestEditWithAIStartsAChatBoundToTheExtension(t *testing.T) {
 	}
 	if owners := chats.Owners("acme.good"); len(owners) != 1 {
 		t.Fatalf("owners of acme.good = %d chats; want only the recorded original, since an opened edit has no message yet", len(owners))
+	}
+}
+
+// TestEditWithAINamesTheChatTweakOfTheExtension: the chat an edit opens is titled Tweak and the extension's title, as
+// 1.x titles its tweak chats, before any message is sent.
+func TestEditWithAINamesTheChatTweakOfTheExtension(t *testing.T) {
+	chats := goldenChatService(t, fake.NewSet())
+	bindBuilderChat(t, chats, "acme.good")
+	m := newFixtureManager(t, "acme.good")
+	waitForState(t, m, "acme.good", supervisor.StateRunning)
+	p := &App{chats: chats}
+	p.exts.mgr.Store(m)
+
+	id, err := extensionChatPages{p: p}.Start("builder", "", "acme.good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, ok := chats.Chat(id)
+	if !ok || record.Title != "Tweak Good fixture" {
+		t.Fatalf("the edit chat is titled %q (found %v); want Tweak Good fixture", record.Title, ok)
 	}
 }

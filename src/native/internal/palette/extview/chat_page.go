@@ -21,7 +21,14 @@ func (s *Session) chatPage() *palette.View {
 		s.chatRenderer.SpecFrom(s.chatSpec)
 	}
 	s.chatRenderer.SetSpec(s.chatSpec())
-	return s.chatRenderer.View()
+	page := s.chatRenderer.View()
+	page.TitleFn = s.currentViewTitle
+	return page
+}
+
+// currentViewTitle is the view's title as the host last sent it: a refresh can rename a chat the page already shows.
+func (s *Session) currentViewTitle() string {
+	return s.view.Title
 }
 
 // now reads the session clock, the zero time when the host gave none.

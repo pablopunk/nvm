@@ -231,6 +231,12 @@ func (s *Service) Bind(id, extension string) error {
 	return s.mutate(id, func(c *Chat) { c.Extension = extension })
 }
 
+// Retitle names the chat id. A chat an extension action opens is named before its first message, so the list and the
+// transcript show what it edits.
+func (s *Service) Retitle(id, title string) error {
+	return s.mutate(id, func(c *Chat) { c.Title = title })
+}
+
 // Owners returns the builder chats bound to the extension id, most recently changed first.
 func (s *Service) Owners(extension string) []Chat {
 	var owners []Chat

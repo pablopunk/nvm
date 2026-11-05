@@ -92,9 +92,18 @@ func chatRef(handler, id string) *api.ActionRef {
 	return &api.ActionRef{ID: handler, Args: map[string]string{argChatID: id}}
 }
 
-// replyStreams reports whether the transcript ends with a reply that is still arriving.
+// replyStreams reports whether the transcript still changes: its last reply is arriving, or its last tool call is running.
 func replyStreams(messages []api.ChatMessage) bool {
-	return len(messages) > 0 && messages[len(messages)-1].Streaming
+	if len(messages) == 0 {
+		return false
+	}
+	last := messages[len(messages)-1]
+	return last.Streaming || toolInProgress(last.Tool)
+}
+
+// toolInProgress reports whether a tool row is running or waits for the user, so the transcript refreshes until it settles.
+func toolInProgress(tool *api.ChatTool) bool {
+	return tool != nil && (tool.Status == "running" || tool.Status == "waiting")
 }
 
 // attachable reports whether the composer offers pictures: only on the smart tier, which the empty tier means.
