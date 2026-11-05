@@ -22,4 +22,5 @@ func openGuide(t *testing.T, p *App) {
 	t.Helper()
 	goldenQuery(p, "welcome")
 	itemTitled(t, p, "Welcome to Nevermind").Actions[0].Run(p)
+	awaitTopView(t, p, "Getting Started")
 }
