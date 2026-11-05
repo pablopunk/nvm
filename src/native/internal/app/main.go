@@ -16,7 +16,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
@@ -142,9 +141,8 @@ type App struct {
 	windowFocus    windowSummon
 	// dictation is the extensions' dictation engine, created on first use.
 	dictation *extensionDictation
-	// aiCommands runs Fix, Triage and Classify; aiPanel is its indicator, created on first use.
-	aiCommands *commands.Service
-	aiPanel    *aiIndicator
+	// aiPanel is the AI indicator, created on first use.
+	aiPanel *aiIndicator
 	// hud shows what an action did while the palette is hidden; hudWindow is its panel, created on first use.
 	hud       *feedback.HUD
 	hudWindow *mygo.Window
@@ -219,7 +217,6 @@ func (p *App) ready() {
 	mygo.App.OnBeforeQuit(p.beginQuit)
 	mygo.App.OnWillQuit(p.closeMenubarItems)
 	p.attachChats()
-	p.attachAICommands()
 	notices := p.openLearning()
 	p.startAppServices()
 	p.newPalette(searchClock, false)

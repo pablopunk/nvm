@@ -14,7 +14,6 @@ func TestClassifyImageIsABuiltInCommand(t *testing.T) {
 	if !p.extensionManager().IsBuiltIn(classifyimage.ID) {
 		t.Fatalf("%s is not a built-in", classifyimage.ID)
 	}
-	p.attachAICommands()
 	goldenQuery(p, "classify image")
 	row := itemTitled(t, p, classifyimage.Title)
 	if row.Kind != search.KindCommands || row.LearnKey != "cmd:"+classifyimage.Title {
@@ -25,14 +24,15 @@ func TestClassifyImageIsABuiltInCommand(t *testing.T) {
 	}
 }
 
-// TestClassifyImageRowNeedsTheChatStore checks that the row is offered only where the AI commands are, as the native
-// command was.
-func TestClassifyImageRowNeedsTheChatStore(t *testing.T) {
+// TestClassifyImageRowIsListedAtTheRoot checks the row is offered on the root, as 1.x's AI commands extension lists it
+// on every platform: nothing but the query has to match it.
+func TestClassifyImageRowIsListedAtTheRoot(t *testing.T) {
 	p := goldenPalette(t)
 	goldenQuery(p, "classify image")
 	for _, it := range p.Results() {
 		if it.Title == classifyimage.Title {
-			t.Fatal("the classify row is offered without the AI commands")
+			return
 		}
 	}
+	t.Fatal("the classify row is not offered")
 }

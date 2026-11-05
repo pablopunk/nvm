@@ -8,7 +8,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 
 	"github.com/egoist/mygo"
-	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
@@ -79,7 +78,6 @@ func trailingCommands(p *App) []command {
 	}
 	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
-	cmds = append(cmds, p.aiCommandRows()...)
 	cmds = append(cmds, p.classifyImageSlot()...)
 	cmds = append(cmds, p.windowCommands()...)
 	return cmds
@@ -94,7 +92,7 @@ func isBuiltInSlot(c command) bool { return c.builtIn != "" }
 
 // commandTones colors the commands the root shows in a tone of their own.
 var commandTones = map[string]string{"AI Chats": "purple", "Emoji & Symbols": "yellow", "Floating Notes": "yellow",
-	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", aicommands.FixTitle: "purple", commands.TriageTitle: "purple"}
+	"New Note": "yellow", "New Floating Note": "yellow", "Extensions": "purple", "Toggle Floating Notes": "yellow", aicommands.FixTitle: "purple", aicommands.TriageTitle: "purple"}
 
 // numberCommands sets each command's Order and tone. A placeholder moves Order on by the places it takes.
 func numberCommands(cmds []command) {

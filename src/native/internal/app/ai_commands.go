@@ -1,99 +1,14 @@
 package app
 
 import (
-	"context"
-	"time"
-
-	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
-	"github.com/pablopunk/nvm/native/internal/palette/aicommands"
-	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/safego"
-	"github.com/pablopunk/nvm/native/internal/search"
-	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-// attachAICommands builds the triage and classify commands over the app's ports. Fix Selected Text with AI is the AI
-// commands built-in, which runs through the extension API.
-func (p *App) attachAICommands() {
-	p.aiCommands = commands.NewService(commands.Options{
-		Clock:        searchClock,
-		Clipboard:    p.ports.Clipboard,
-		SelectedText: p.ports.SelectedText,
-		Focus:        p.focusOption(),
-		Client:       p.backendClient,
-		Connected:    p.signedIn,
-		Surface:      aiSurface{app: p},
-		Dispatch:     p.onUI,
-		Background:   supervisedCommand,
-		After:        p.commandAfter,
-	})
-}
-
-// supervisedCommand runs an AI command's background work on a supervised goroutine, so a panic is reported.
-func supervisedCommand(name string, fn func()) {
-	safego.Go(name, func(context.Context) { fn() })
-}
-
-// commandAfter runs fn on the UI thread after d.
-func (p *App) commandAfter(d time.Duration, fn func()) {
-	time.AfterFunc(d, func() { p.redraw(fn) })
-}
-
-// aiSurface is what the AI commands draw on: the indicator panel, the palette's result page and its toasts.
-type aiSurface struct {
-	app *App
-}
-
-// ShowStatus shows the indicator with status.
-func (s aiSurface) ShowStatus(status commands.Status) {
-	s.app.aiPanelFor().show(status)
-}
-
-// HideStatus closes the indicator.
-func (s aiSurface) HideStatus() {
-	s.app.aiPanelFor().hide()
-}
-
-// Present opens the result page on the palette.
-func (s aiSurface) Present(result commands.Result) {
-	s.app.Open(aicommands.ResultView(result))
-}
-
-// Toast shows a one-line message on the palette.
-func (s aiSurface) Toast(message string) {
-	s.app.Toast(message)
-}
-
-// aiCommandRows are the AI commands in the root list. Triage needs a selection the OS can copy. Classify Image with AI
-// is a built-in, placed after them (see classifyImageSlot).
-func (p *App) aiCommandRows() []command {
-	if p.aiCommands == nil {
-		return nil
-	}
-	selection := p.ports.Capabilities.Supported(platform.CapabilitySelectionCopy)
-	return []command{
-		{ID: shortcuts.CommandTriageSelectedText, Title: commands.TriageTitle, Keywords: "triage classify decide reply urgency selected text ai", Icon: "sparkles", Subtitle: "Reply needed, category and urgency in one call", Hidden: !selection,
-			Run: func(h search.Host) { p.runSelectionCommand(h, p.aiCommands.Triage) }},
-	}
-}
-
-// classifyImageSlot is the place of the Classify Image with AI built-in's row in the command list. Like the other AI
-// commands it is offered only when the chat store opened.
+// classifyImageSlot is the place of the Classify Image with AI built-in's row in the command list. Fix and Triage are
+// built-in commands too, listed with their extension.
 func (p *App) classifyImageSlot() []command {
-	if p.aiCommands == nil {
-		return nil
-	}
 	return []command{builtInSlot(classifyimage.ID, 1)}
 }
 
 // chooserUnavailable is the line shown when the operating system's chooser cannot open.
 const chooserUnavailable = "The file dialog could not open"
-
-// runSelectionCommand hides the palette, which gives the keyboard back to the app the selection is in, and starts the
-// command on that app. The app is read before the hide, while the palette still knows it.
-func (p *App) runSelectionCommand(h search.Host, start func(source platform.FocusTarget)) {
-	source, _ := p.Summoned()
-	h.Hide()
-	start(source)
-}

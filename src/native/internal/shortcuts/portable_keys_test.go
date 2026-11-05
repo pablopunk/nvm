@@ -10,7 +10,7 @@ var allBuiltInCommandIDs = []string{
 	CommandQuickNotes, CommandNewFloatingNote, CommandDictate, CommandDictationHistory, CommandSnippets, CommandExtensions, CommandForceQuitApps,
 	CommandQuitAllApps, CommandKeyboardShortcuts, CommandBackgroundTasks, CommandSettings, CommandCheckForUpdates,
 	CommandShowRecentErrors, CommandReportProblem, CommandOSPermissions, CommandFixSelectedText,
-	CommandTriageSelectedText, CommandClassifyImage, CommandLockScreen, CommandSleep, CommandRestart,
+	CommandClassifyImage, CommandLockScreen, CommandSleep, CommandRestart,
 	CommandSystemSettings, CommandQuitNevermind, CommandPlaceDownloads, CommandPlaceDocuments, CommandPlaceDesktop,
 	CommandSignInOut, CommandSwitchBackend, CommandBackendStatus,
 }

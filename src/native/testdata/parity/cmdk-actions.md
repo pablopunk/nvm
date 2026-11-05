@@ -99,6 +99,7 @@ Commands are durable actions (`commandFromItem`, extension-action-builders.ts:2)
 | Open Desktop | system.ts:103 | extension-action | Open Desktop | done (stable ID) |
 | Force Quit Apps | apps.ts:255 | extension-action | Force Quit Apps | done |
 | Dictate | dictation extension `dictateCommand` | extension-action | Dictate | done: panel action Settings (`command.ActionPanel`), built-in and customizable |
+| Triage Selected Text with AI | ai-commands.ts:224 (`triage-selected-text-with-ai`) | extension-action | Triage Selected Text with AI | done: built-in `aicommands` (`triageCommand`), listed with the selection capability, customizable; its shortcut key is the 1.x key |
 | Clipboard History, AI Chats, Emoji & Symbols, Find Files by Meaning, Quick Notes, New Floating Note, Dictate, Extensions, Keyboard Shortcuts, Background Tasks, Settings, Check for Updates, Recent Errors, Report a Problem, OS Permissions | various | extension / extension-root | command title | done (ID-mapped in `portable_keys.go`) |
 | Window layouts (Left Half, Maximize, …) | window-management-commands.ts | extension-action | layout title | not re-traced in this pass; shortcuts keyed by the layout prefix |
 

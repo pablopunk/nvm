@@ -16,11 +16,3 @@ type Status struct {
 	Subtitle string
 	Tone     Tone
 }
-
-// Result is a finished command the palette shows. Text returns the text to show, read on every frame. Copy takes the
-// text as the user's own copy when Enter or the copy key is pressed.
-type Result struct {
-	Title string
-	Text  func() string
-	Copy  func(text string)
-}

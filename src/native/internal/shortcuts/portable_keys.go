@@ -26,7 +26,6 @@ const (
 	CommandReportProblem      = "command:report-problem"
 	CommandOSPermissions      = "command:os-permissions"
 	CommandFixSelectedText    = "command:fix-selected-text"
-	CommandTriageSelectedText = "command:triage-selected-text"
 	CommandClassifyImage      = "command:classify-image"
 	CommandLockScreen         = "command:lock-screen"
 	CommandSleep              = "command:sleep"

@@ -30,6 +30,33 @@
         ]
       },
       {
+        "kind": "AI Commands",
+        "title": "Triage Selected Text with AI",
+        "subtitle": "Reply needed, category and urgency in one call",
+        "section": "",
+        "id": "",
+        "icon": "sparkles",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Triage Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Welcome to Nevermind",
         "subtitle": "Search apps and files, then press Enter. Launch the app to open the palette or set an optional shortcut.",
@@ -748,33 +775,6 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Background Tasks",
-        "subtitle": "Run, pause, and inspect background work",
-        "section": "",
-        "id": "",
-        "icon": "activity",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Background Tasks",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
       }
     ]
   },
@@ -923,6 +923,25 @@
         "actions": [
           {
             "title": "Create Quicklink",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Classify Image with AI",
+        "subtitle": "Choose an image and identify its category",
+        "section": "",
+        "id": "",
+        "icon": "image",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Classify Image with AI",
             "label": ""
           }
         ]
@@ -1448,6 +1467,25 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Classify Image with AI",
+        "subtitle": "Choose an image and identify its category",
+        "section": "",
+        "id": "",
+        "icon": "image",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Classify Image with AI",
             "label": ""
           }
         ]
@@ -1986,33 +2024,6 @@
         "actions": [
           {
             "title": "Open clipboard-export.csv",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "meeting-notes.md",
-        "subtitle": "~/Documents/meeting-notes.md",
-        "section": "",
-        "id": "$HOME/Documents/meeting-notes.md",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Documents/meeting-notes.md",
-        "actions": [
-          {
-            "title": "Open meeting-notes.md",
             "label": ""
           },
           {
