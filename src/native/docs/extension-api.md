@@ -1004,7 +1004,7 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | `desktop.apps` | `list`, `search`, `launch`, `icon`, `frontmost`, `running`, `quit`, `force quit`, `hide` (section 28.2), `quit all` (also needs `system`) | `desktop.apps` |
 | `desktop.files` | `open`, `reveal`, `find` (existing folders; missing and relative ones are skipped), `metadata`, `thumbnail` (a PNG data URL for pictures), `fileUrl` (a `file:` URL), `openWithApps` (bundles ranked by their document types through `mdls` and `plutil`, else every bundle by name), `writeBytes` (512 KiB per call; refuses an existing file unless `overwrite`, never creates folders). Absolute paths only. | `desktop.files` |
 | `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
-| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
+| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` and `apply` (every layout kind and option, as the 1.x API declares them; `apply` acts on the window the palette was summoned from, or the app in front for a shortcut), `focusNeighbor` (left, right, up, down; `wrap`), and `waitForWindow` (polls `windows` every 150 ms; default 5 s, at most 30 s). A layout the host cannot read is a result with `invalid-spec`; a malformed kind is an invalid-input error. A partial placement is `ok: true` with outcome `partial` and a reason. | `desktop.window-management` |
 | `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
 | `ocr` | `image`, `screen`, `region` | `ocr` |
 | `shortcuts` | `list`, `palette` (read only) | `shortcuts` |
@@ -1019,11 +1019,11 @@ Decisions behind the table:
 - **Destructive calls ask the user.** `remove` and `clear` run only under a palette run, and only after the host shows a palette question ("Confirm" or "Cancel") that names the extension and the action. The extension cannot skip it. Cancel, Escape, leaving the question or hiding the palette refuses the call at once. A hidden palette is shown for the question and hidden again after the answer. The wait ends with the extension's lifetime, so stopping the extension refuses it too, and after 60 seconds without an answer the call is refused. The time the user takes to answer does not count against the request's hard budget.
 - **History images stay on the host.** An image entry carries its type only; no bytes or paths leave the host.
 - **Rates.** Opens, launches, frontmost reads, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
-- **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
+- **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents. `waitForWindow` runs in the child over the listing, so it needs no host call of its own.
 - **Notifications have a title and a body, and no click action.** The Electron extension API had none, so there is nothing to match. `notify` needs the `system` declaration, the host's `notifications.show` capability and a rate limit of 10 a minute. A title of 1 to 120 characters and a body of up to 500 are accepted. A refusal by the user or the OS is `permission`; a system without notifications answers unavailable.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
 
-Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: selected files, clipboard formats other than text, file text reads and writes, previews and the file index, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
 
 ### 21.1 Selection, replacement and undo as built (WP2.5)
 
