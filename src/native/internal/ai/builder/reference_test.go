@@ -47,8 +47,10 @@ func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 
 // maxCompactReferenceBytes bounds the terse reference every builder request carries. It keeps a typical turn's second
 // request under the size of the request a turn used to send. It grew by about 1 KB for the uninstall review and the
-// alias read of the applications built-in, which the builder reads as API surface.
-const maxCompactReferenceBytes = 34 << 10
+// alias read of the applications built-in, which the builder reads as API surface. It grew by about 1.2 KB for the
+// files built-in's preview, open-with and trash actions, its index status and the bundled datasets, the API surface the
+// built-ins moved onto.
+const maxCompactReferenceBytes = 35 << 10
 
 func TestCompactReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReferenceCompact) > maxCompactReferenceBytes {
