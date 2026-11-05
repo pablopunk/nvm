@@ -121,3 +121,8 @@ jobs:
 
       - name: Test
         run: go test -count=1 -timeout 40m ./...
+
+      - name: macOS clipboard preservation smoke
+        if: runner.os == 'macOS'
+        timeout-minutes: 2
+        run: go run ./cmd/clipboardcheck

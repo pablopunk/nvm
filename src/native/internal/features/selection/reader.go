@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"sync"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -19,6 +20,8 @@ const (
 // gesture it puts a random marker on the clipboard, concealed so clipboard history never records it; a copy has
 // landed when the clipboard holds anything else.
 type Reader struct {
+	pending   *clipboardSnapshot
+	mu        sync.Mutex
 	clock     platform.Clock
 	clip      platform.Clipboard
 	selection platform.SelectedText
@@ -32,9 +35,10 @@ func NewReader(clock platform.Clock, clip platform.Clipboard, selection platform
 }
 
 // Read returns the text selected in source, or "" when nothing was selected. The clipboard is put back as it was.
-// It returns ErrSourceGone when the source window has gone and ErrFormattedClipboard when the clipboard holds
-// content the restore could not preserve.
-func (r *Reader) Read(source platform.FocusTarget) (string, error) {
+// A clipboard without full snapshot support refuses rich content it could not preserve.
+func (r *Reader) Read(source platform.FocusTarget) (text string, err error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	if err := restoreSource(r.clock, r.focus, source); err != nil {
 		return "", err
 	}
@@ -42,15 +46,15 @@ func (r *Reader) Read(source platform.FocusTarget) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer r.restore(snapshot)
+	defer func() { err = errors.Join(err, r.restore(snapshot)) }()
 	marker := r.marker()
-	if err := writeConcealed(r.clip, marker); err != nil {
+	if err := r.writeTemporary(&snapshot, marker); err != nil {
 		return "", err
 	}
 	if err := r.selection.CopySelection(""); err != nil {
 		return "", err
 	}
-	return r.awaitCopy(marker)
+	return r.awaitCopy(marker, &snapshot)
 }
 
 // keyboardWait bounds the wait for the OS to report the source window as active after the keyboard is given back.
@@ -86,7 +90,7 @@ func awaitKeyboard(clock platform.Clock, focus platform.Focus, source platform.F
 
 // awaitCopy polls until the clipboard holds something other than marker. The copied text is concealed at once, as
 // the desktop app does, so the watcher skips it. An empty result means nothing was selected.
-func (r *Reader) awaitCopy(marker string) (string, error) {
+func (r *Reader) awaitCopy(marker string, snapshot *clipboardSnapshot) (string, error) {
 	for attempt := 1; attempt <= pollAttempts; attempt++ {
 		text, err := r.clip.ReadText()
 		if err != nil {
@@ -96,46 +100,13 @@ func (r *Reader) awaitCopy(marker string) (string, error) {
 			if text == "" {
 				return "", nil
 			}
-			return text, writeConcealed(r.clip, text)
+			return text, r.writeTemporary(snapshot, text)
 		}
 		if attempt < pollAttempts {
 			<-r.clock.After(pollInterval)
 		}
 	}
 	return "", nil
-}
-
-// clipboardSnapshot is the plain text that was on the clipboard before the read.
-type clipboardSnapshot struct {
-	text string
-}
-
-// snapshot records the clipboard's plain text. Formatted content (HTML, RTF, files, images) cannot be put back
-// exactly, so the read refuses it rather than losing it.
-func (r *Reader) snapshot() (clipboardSnapshot, error) {
-	formats, err := r.clip.Formats()
-	if err != nil && !errors.Is(err, platform.ErrUnsupported) {
-		return clipboardSnapshot{}, err
-	}
-	for _, format := range formats {
-		if isFormatted(format) {
-			return clipboardSnapshot{}, ErrFormattedClipboard
-		}
-	}
-	text, err := r.clip.ReadText()
-	if err != nil {
-		return clipboardSnapshot{}, err
-	}
-	return clipboardSnapshot{text: text}, nil
-}
-
-// restore puts the snapshot back, concealed so the watcher does not record the restored text as a new copy.
-func (r *Reader) restore(snapshot clipboardSnapshot) {
-	if snapshot.text == "" {
-		_ = r.clip.Clear()
-		return
-	}
-	_ = writeConcealed(r.clip, snapshot.text)
 }
 
 // isFormatted reports whether a clipboard format holds content that a plain-text restore would lose.

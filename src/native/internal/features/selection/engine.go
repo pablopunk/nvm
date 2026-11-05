@@ -2,9 +2,11 @@ package selection
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
@@ -55,13 +57,20 @@ func (e *Engine) Text() (string, bool, error) {
 // Replace puts text in place of the selection of the source window. The text goes on the clipboard concealed, the
 // keyboard goes back to the source, the paste gesture is sent, and the clipboard the replace displaced comes back
 // after the restore delay, unless the user has copied something since.
-func (e *Engine) Replace(text string) (bool, error) {
+func (e *Engine) Replace(text string) (replaced bool, err error) {
+	e.reader.mu.Lock()
+	defer e.reader.mu.Unlock()
 	source := e.deps.Source()
 	snapshot, err := e.reader.snapshot()
 	if err != nil {
 		return false, err
 	}
-	if err := writeConcealed(e.deps.Clipboard, text); err != nil {
+	defer func() {
+		if !replaced {
+			err = errors.Join(err, e.reader.restore(snapshot))
+		}
+	}()
+	if err := e.reader.writeTemporary(&snapshot, text); err != nil {
 		return false, err
 	}
 	if err := restoreSource(e.deps.Clock, e.deps.Focus, source); err != nil {
@@ -126,10 +135,21 @@ func (e *Engine) restoreLater(text string, snapshot clipboardSnapshot) {
 
 // restoreAfter puts the snapshot back after delay, when stillHeld reports the clipboard still holds what was written.
 func (e *Engine) restoreAfter(delay time.Duration, snapshot clipboardSnapshot, stillHeld func() bool) {
+	pending := &snapshot
+	e.reader.pending = pending
 	safego.Go("selection.restore", func(context.Context) {
 		<-e.deps.Clock.After(delay)
+		e.reader.mu.Lock()
+		defer e.reader.mu.Unlock()
+		defer func() {
+			if e.reader.pending == pending {
+				e.reader.pending = nil
+			}
+		}()
 		if stillHeld() {
-			e.reader.restore(snapshot)
+			if err := e.reader.restore(snapshot); err != nil {
+				logx.Default().Warn("could not restore the clipboard", logx.F{"error": err.Error()})
+			}
 		}
 	})
 }

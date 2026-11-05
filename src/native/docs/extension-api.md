@@ -1031,7 +1031,7 @@ Not built yet: selected files, previews and the file index, indicators and updat
 Code: `internal/features/selection` (the engine), `internal/ext/services/desktop_selection.go` (the served operations), `internal/ext/child/remote_selection.go` (the child side), `internal/ext/builtins/aicommands` (the first user).
 
 - **Source window.** Selection and replacement act on the window the palette was summoned from. The host returns the keyboard there before any copy or paste gesture, so an extension never needs to name a window.
-- **Read.** `Selection().Text()` sends the copy gesture, reads the clipboard the gesture filled, and puts the clipboard back. It refuses formatted clipboards (HTML, RTF, files, images) rather than losing them. `found` is false when nothing was copied.
+- **Read.** `Selection().Text()` sends the copy gesture, reads the clipboard the gesture filled, and puts the clipboard back. The host snapshots every advertised clipboard representation and restores it while its temporary write is still owned. A newer user copy is kept. A backend without full snapshot support refuses rich content before changing it. `found` is false when nothing was copied.
 - **Replace.** `Selection().ReplaceText(text)` puts the text on the clipboard concealed, sends the paste gesture, and restores the displaced clipboard after half a second, unless the user copied something since.
 - **Undo.** `Keyboard().Undo()` sends the undo gesture to the source window. It needs a replacement pending in that same window and is refused for any other window, and each replacement is undone at most once.
 - **Capabilities.** `desktop.selection` gates the selection calls and `desktop.keyboard` gates undo. Both are enforced by the host, not only declared for review.

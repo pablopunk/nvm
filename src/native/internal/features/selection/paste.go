@@ -1,6 +1,7 @@
 package selection
 
 import (
+	"errors"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -28,7 +29,7 @@ type Content struct {
 }
 
 // PasteOptions tunes one paste. RestoreClipboard puts back what the clipboard held, implies Concealed, and needs a
-// clipboard without formatted content. RestoreDelay zero means DefaultRestoreDelay. ExpectedAppID is the app that
+// clipboard that can snapshot its formats. RestoreDelay zero means DefaultRestoreDelay. ExpectedAppID is the app that
 // must still have focus; see platform.Paster.
 type PasteOptions struct {
 	RestoreClipboard bool
@@ -46,13 +47,20 @@ func (e *Engine) Paste(content Content, options PasteOptions) error {
 	if !options.RestoreClipboard {
 		return e.pasteContent(source, content, options)
 	}
+	e.reader.mu.Lock()
+	defer e.reader.mu.Unlock()
 	snapshot, err := e.reader.snapshot()
 	if err != nil {
 		return err
 	}
-	if err := e.pasteContent(source, content, options); err != nil {
-		e.reader.restore(snapshot)
+	if content.Kind != KindText || content.HTML != "" {
+		return ErrConcealedContent
+	}
+	if err := e.reader.writeTemporary(&snapshot, content.Text); err != nil {
 		return err
+	}
+	if err := e.pasteWritten(source, options); err != nil {
+		return errors.Join(err, e.reader.restore(snapshot))
 	}
 	e.restoreAfter(e.restoreDelayFor(options), snapshot, e.stillHolds(content))
 	return nil
@@ -76,8 +84,14 @@ func (e *Engine) pasteContent(source platform.FocusTarget, content Content, opti
 	if err := e.writeContent(content, options.Concealed || options.RestoreClipboard); err != nil {
 		return err
 	}
-	if err := restoreSource(e.deps.Clock, e.deps.Focus, source); err != nil {
-		return err
+	return e.pasteWritten(source, options)
+}
+
+func (e *Engine) pasteWritten(source platform.FocusTarget, options PasteOptions) error {
+	if options.ExpectedAppID == "" {
+		if err := restoreSource(e.deps.Clock, e.deps.Focus, source); err != nil {
+			return err
+		}
 	}
 	return e.paster().PasteIntoFrontmost(options.ExpectedAppID)
 }

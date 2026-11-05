@@ -37,6 +37,7 @@ type Clipboard struct {
 	files     []string
 	concealed bool
 	changed   chan struct{}
+	revision  uint64
 	faults    faultSet
 }
 
@@ -235,6 +236,7 @@ func (c *Clipboard) setTextLocked(text string, concealed bool) {
 
 // notifyLocked sends one coalesced change notification. The caller holds c.mu.
 func (c *Clipboard) notifyLocked() {
+	c.revision++
 	select {
 	case c.changed <- struct{}{}:
 	default:

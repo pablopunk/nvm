@@ -49,6 +49,21 @@ type ConcealedClipboard interface {
 	WriteConcealedText(text string) error
 }
 
+// ClipboardSnapshotter borrows the clipboard for a concealed text operation and preserves every representation.
+// Ownership belongs to one temporary write; a later user copy prevents restoration even when its text is identical.
+type ClipboardSnapshotter interface {
+	Snapshot() (ClipboardSnapshot, error)
+	WriteTemporaryText(text string) (ClipboardOwnership, error)
+	StillOwns(ClipboardOwnership) (bool, error)
+	RestoreIfOwned(ClipboardSnapshot, ClipboardOwnership) error
+}
+
+// ClipboardSnapshot is an opaque, backend-owned copy of clipboard content.
+type ClipboardSnapshot interface{}
+
+// ClipboardOwnership is an opaque token identifying one temporary clipboard write.
+type ClipboardOwnership interface{}
+
 // RichClipboard is an optional extension of Clipboard for HTML, RTF and file lists. A clipboard that
 // cannot read or write these formats does not implement it; callers type-assert and treat a missing
 // implementation as "format absent", so plain-text behavior never depends on it.

@@ -75,19 +75,22 @@ func TestReadWithNothingSelectedReturnsEmptyAfterTheCopyPolls(t *testing.T) {
 	}
 }
 
-// TestReadRefusesFormattedClipboards: a clipboard with an image or files cannot be put back exactly, so nothing is
-// copied over it.
-func TestReadRefusesFormattedClipboards(t *testing.T) {
+// TestReadPreservesFormattedClipboard: unrelated rich data must not block reading selected text.
+func TestReadPreservesFormattedClipboard(t *testing.T) {
 	r := newReaderRig(t, nil)
-	r.set.Clipboard.SetFilePaths("/tmp/a.txt")
+	_ = r.set.Clipboard.WriteRich("keep", "<b>keep</b>")
 	r.set.SelectedText.Select("text")
 
-	_, err := r.reader.Read(fixSource)
-	if !errors.Is(err, ErrFormattedClipboard) {
-		t.Fatalf("Read error = %v, want the formatted-clipboard refusal", err)
+	got, err := r.reader.Read(fixSource)
+	if err != nil || got != "text" {
+		t.Fatalf("Read = %q, %v; want selected text", got, err)
 	}
-	if reqs := r.set.SelectedText.Requests(); len(reqs) != 0 {
-		t.Fatalf("copy gestures = %v, want none before the refusal", reqs)
+	html, _ := r.set.Clipboard.ReadHTML()
+	if html != "<b>keep</b>" {
+		t.Fatalf("HTML after Read = %q, want formatted clipboard restored", html)
+	}
+	if reqs := r.set.SelectedText.Requests(); len(reqs) != 1 {
+		t.Fatalf("copy gestures = %v, want one", reqs)
 	}
 }
 
