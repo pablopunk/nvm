@@ -35,7 +35,19 @@ func (s *Session) settingItem(row api.SettingRow) search.Item {
 	for _, also := range row.Also {
 		actions = append(actions, s.settingAction(also))
 	}
-	return search.Item{Title: row.Title, Subtitle: row.Subtitle, Icon: row.Icon, Accessory: s.settingAccessory(row), Actions: actions}
+	subtitle := row.Subtitle
+	if text, ok := s.hostRowSubtitle(row.ID); ok {
+		subtitle = text
+	}
+	return search.Item{Title: row.Title, Subtitle: subtitle, Icon: row.Icon, Accessory: s.settingAccessory(row), Actions: actions}
+}
+
+func (s *Session) hostRowSubtitle(rowID string) (string, bool) {
+	if s.deps.RowAccessory == nil {
+		return "", false
+	}
+	_, subtitle, ok := s.deps.RowAccessory(s.extID, rowID)
+	return subtitle, ok && subtitle != ""
 }
 
 // settingAccessory is the host's text for a row: the host's own text for the row when it has one, else the stored value
@@ -66,7 +78,8 @@ func (s *Session) hostRowAccessory(rowID string) (string, bool) {
 	if s.deps.RowAccessory == nil {
 		return "", false
 	}
-	return s.deps.RowAccessory(s.extID, rowID)
+	accessory, _, ok := s.deps.RowAccessory(s.extID, rowID)
+	return accessory, ok
 }
 
 // settingAction maps a row to the action it runs. Toggle, choice, recorder and text rows edit their setting; an action

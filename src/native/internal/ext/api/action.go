@@ -37,6 +37,8 @@ const (
 	ActionSetQuery      ActionKind = "set-query"
 	// ActionAccount runs an account operation the host owns, such as sign-in.
 	ActionAccount ActionKind = "account"
+	// ActionHost runs a host operation a built-in may name, such as opening a host page. Op is one of hostOps.
+	ActionHost ActionKind = "host"
 	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
@@ -53,6 +55,7 @@ var (
 	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps  = []string{"check", "download", "install"}
 	accountOps = []string{AccountSignIn}
+	hostOps    = []string{"config-folder", "dictation-settings", "updates", "account-page"}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )
 
@@ -215,6 +218,8 @@ func (a Action) validateDeclarative() error {
 		return validateOp(a.Op, cameraOps)
 	case ActionAccount:
 		return validateOp(a.Op, accountOps)
+	case ActionHost:
+		return validateOp(a.Op, hostOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

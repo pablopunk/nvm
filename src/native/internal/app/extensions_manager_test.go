@@ -38,18 +38,18 @@ func newManagerOver(t testing.TB, builtins []api.Extension, enabled ...string) *
 // newManagerOverNetwork is newManagerOver with the clock and the public network port the extensions use. A nil clock
 // is the real one; a nil network refuses every fetch.
 func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, enabled ...string) *manager.Manager {
-	return newManagerWithApps(t, builtins, clock, network, nil, enabled...)
+	return newManagerWithApps(t, builtins, clock, network, nil, nil, enabled...)
 }
 
 // newFixtureManagerWithApps is newFixtureManager with the palette's apps lifecycle, so the applications built-in lists
 // the apps the palette indexed.
-func newFixtureManagerWithApps(t *testing.T, apps services.AppLifecycle) *manager.Manager {
+func newFixtureManagerWithApps(t *testing.T, p *App) *manager.Manager {
 	t.Helper()
-	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, apps)
+	return newManagerWithApps(t, builtInExtensions(builtInInputs{Zone: time.UTC}), nil, nil, p.appsvc, p.builtInSettingsStore)
 }
 
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services.
-func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, enabled ...string) *manager.Manager {
+func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, settingsHost func(string) services.SettingsHost, enabled ...string) *manager.Manager {
 	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
@@ -72,9 +72,10 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 		Network:      network,
 		Apps:         apps,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
-		Executable: exe,
-		DataRoot:   filepath.Join(dir, "extension-data"),
-		BuiltIns:   builtins,
+		Executable:      exe,
+		DataRoot:        filepath.Join(dir, "extension-data"),
+		BuiltIns:        builtins,
+		BuiltInSettings: settingsHost,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},

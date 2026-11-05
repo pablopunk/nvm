@@ -87,6 +87,15 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.SignIn(h) }}
+	case api.ActionHost:
+		op := action.Op
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if s.deps.HostOperation == nil {
+				h.Toast(unavailableMessage)
+				return
+			}
+			s.deps.HostOperation(h, s.extID, op)
+		}}
 	case api.ActionRecordPaletteShortcut:
 		if s.deps.RecordPaletteShortcut == nil {
 			break

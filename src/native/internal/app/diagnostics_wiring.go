@@ -141,11 +141,3 @@ func (p *App) toggleDiagnostics() {
 	}
 	p.analytics.SetConsent(!off)
 }
-
-// diagnosticsLabel is the Settings accessory for the consent switch.
-func diagnosticsLabel(off bool) string {
-	if off {
-		return "Off"
-	}
-	return "On"
-}

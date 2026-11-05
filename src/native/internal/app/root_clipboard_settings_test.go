@@ -66,7 +66,7 @@ func (h *refreshRecorder) Refresh() { h.refreshes++ }
 func TestSettingsTogglesShowClipboardInTheRoot(t *testing.T) {
 	p := goldenPalette(t)
 	for _, title := range []string{"Show Clipboard Items in Root List", "Show Clipboard Items in Root Search"} {
-		row := findRowTitled(t, p.settingsView().Search(""), title)
+		row := findRowTitled(t, p.settingsPage().Search(""), title)
 		if row.Accessory != "On" {
 			t.Fatalf("%q starts %s, want On by default", title, row.Accessory)
 		}
@@ -75,7 +75,7 @@ func TestSettingsTogglesShowClipboardInTheRoot(t *testing.T) {
 		if host.refreshes != 1 {
 			t.Fatalf("%q refreshed the settings %d times, want once", title, host.refreshes)
 		}
-		if after := findRowTitled(t, p.settingsView().Search(""), title); after.Accessory != "Off" {
+		if after := findRowTitled(t, p.settingsPage().Search(""), title); after.Accessory != "Off" {
 			t.Fatalf("%q shows %s after the toggle, want Off", title, after.Accessory)
 		}
 	}

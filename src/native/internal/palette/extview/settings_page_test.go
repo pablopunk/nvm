@@ -41,11 +41,11 @@ func (st *settingStore) deps(files *fake.FS) Deps {
 			return nil
 		},
 		RecordSetting: func(_ search.Host, _, key string) { st.recorded = append(st.recorded, key) },
-		RowAccessory: func(_, rowID string) (string, bool) {
+		RowAccessory: func(_, rowID string) (string, string, bool) {
 			if rowID == "shortcut" {
-				return "Not active", true
+				return "Not active", "", true
 			}
-			return "", false
+			return "", "", false
 		},
 	}
 }

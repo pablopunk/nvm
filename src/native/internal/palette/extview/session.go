@@ -43,7 +43,9 @@ type Deps struct {
 	ReadSetting   func(extID, key string) (json.RawMessage, error)
 	WriteSetting  func(extID, key string, value json.RawMessage) error
 	RecordSetting func(h search.Host, extID, key string)
-	RowAccessory  func(extID, rowID string) (string, bool)
+	RowAccessory  func(extID, rowID string) (accessory, subtitle string, ok bool)
+	// HostOperation runs a host operation of a built-in's ActionHost action on h. Nil makes it report unavailable.
+	HostOperation func(h search.Host, extID, op string)
 	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.
 	SignIn func(h search.Host)
 	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes

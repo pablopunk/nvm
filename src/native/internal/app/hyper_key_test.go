@@ -103,7 +103,7 @@ func TestKeyboardShortcutsRowShowsTheHyperSparkle(t *testing.T) {
 func TestSettingsShortcutRowsMatchOneX(t *testing.T) {
 	p := goldenPalette(t)
 	rows := map[string]search.Item{}
-	for _, row := range p.settingsView().Search("") {
+	for _, row := range p.settingsPage().Search("") {
 		rows[row.Title] = row
 	}
 	for title, subtitle := range map[string]string{
