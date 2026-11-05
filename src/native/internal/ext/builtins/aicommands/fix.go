@@ -51,6 +51,6 @@ func (e Extension) fix(ctx api.Context) error {
 // askModel is the one-shot model call of a correction. The system prompt and the message travel apart.
 func askModel(ctx api.Context) commands.Asker {
 	return func(system, user string) (string, error) {
-		return ctx.AI().Ask(user, api.AIOptions{Model: api.ModelFast, System: system})
+		return ctx.AI().Fast(user, system)
 	}
 }

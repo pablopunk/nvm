@@ -144,6 +144,8 @@ type AI interface {
 	IsAvailable() (bool, error)
 	Decide(request DecisionRequest) (DecisionResult, error)
 	Ask(prompt string, options AIOptions) (string, error)
+	// Fast sends a one-shot prompt through the host's fast route. System instructions stay separate from the prompt.
+	Fast(prompt, system string) (string, error)
 	Stream(prompt string, options AIOptions) (AIStream, error)
 	// Prepare warms the model route before latency-sensitive work.
 	Prepare(options AIOptions) error

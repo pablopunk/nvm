@@ -40,6 +40,10 @@ func (a remoteAI) Ask(prompt string, options api.AIOptions) (string, error) {
 	return text, err
 }
 
+func (a remoteAI) Fast(prompt, system string) (string, error) {
+	return a.Ask(prompt, api.AIOptions{Model: api.ModelFast, System: system})
+}
+
 func (a remoteAI) Stream(prompt string, options api.AIOptions) (api.AIStream, error) {
 	return a.open(protocol.AIAskArgs{Prompt: prompt, Options: options})
 }

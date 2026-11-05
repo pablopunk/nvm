@@ -653,6 +653,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AI struct {
 	WAttachments func() api.AttachmentBuilder
 	WChats       func() api.AIChats
 	WDecide      func(request api.DecisionRequest) (api.DecisionResult, error)
+	WFast        func(prompt string, system string) (string, error)
 	WIsAvailable func() (bool, error)
 	WPrepare     func(options api.AIOptions) error
 	WSession     func(id string, options api.AIOptions) (api.AISession, error)
@@ -670,6 +671,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Chats() api.AIChat
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Decide(request api.DecisionRequest) (api.DecisionResult, error) {
 	return W.WDecide(request)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Fast(prompt string, system string) (string, error) {
+	return W.WFast(prompt, system)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) IsAvailable() (bool, error) {
 	return W.WIsAvailable()
