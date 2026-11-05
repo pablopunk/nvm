@@ -161,6 +161,14 @@ type ChatAction struct {
 	Prompt  string `json:"prompt,omitempty"`
 }
 
+// BuilderAction is the payload of an ActionBuilder. ChatID names a builder chat, Prompt starts or seeds one, and
+// ExtensionID names the extension a tweak changes.
+type BuilderAction struct {
+	ChatID      string `json:"chatId,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	ExtensionID string `json:"extensionId,omitempty"`
+}
+
 // ChatDetail is one chat with its transcript, as the host keeps it.
 type ChatDetail struct {
 	ChatSummary

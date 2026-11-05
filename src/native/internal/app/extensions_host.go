@@ -87,6 +87,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		OCR:             textReader,
 		AI:              p.extensionAI(textReader),
 		Chats:           extensionChats{p: p},
+		Builder:         extensionBuilder{p: p},
 		History:         p.extensionHistory,
 		ClipboardImages: p.extensionClipboardImages(),
 		Confirm:         p.askExtensionConfirmation,

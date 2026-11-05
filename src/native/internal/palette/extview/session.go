@@ -93,6 +93,17 @@ type Deps struct {
 	// Chats runs the chat actions of extensions: the chat pages and the chat store. Nil makes those actions report
 	// unavailable.
 	Chats ChatPages
+	// Builder runs the AI builder actions of built-in extensions. Nil makes those actions report unavailable.
+	Builder BuilderPages
+}
+
+// BuilderPages is what a builder action runs on the host: the pages of the builder chats and the AI Chats list.
+type BuilderPages interface {
+	Start(prompt string) *palette.View
+	Open(chatID string) *palette.View
+	Tweak(extensionID string) *palette.View
+	List() *palette.View
+	Remove(chatID string) error
 }
 
 // ChatPages is what a chat action runs on the host. Open, New and the chat store calls act on the user's chats; the

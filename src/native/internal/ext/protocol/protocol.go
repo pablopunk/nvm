@@ -37,6 +37,7 @@ const (
 	ServiceIndicators = "indicators"
 	ServiceScheduler  = "scheduler"
 	ServiceAI         = "ai"
+	ServiceBuilder    = "builder"
 	ServiceBundle     = "bundle"
 	ServiceDictation  = "dictation"
 )

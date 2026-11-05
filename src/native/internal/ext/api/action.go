@@ -39,6 +39,9 @@ const (
 	ActionAccount ActionKind = "account"
 	// ActionChat opens, starts, continues or removes a host-owned chat. Chat holds its payload.
 	ActionChat ActionKind = "chat"
+	// ActionBuilder opens, starts, tweaks or removes an AI builder chat, or opens the list of them. Builder holds its
+	// payload. Only built-in extensions may return it.
+	ActionBuilder ActionKind = "builder"
 	// ActionRecordPaletteShortcut opens the host's shortcut recorder.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
@@ -58,6 +61,16 @@ const (
 	ChatRemove   = "remove"
 )
 
+// Ops of the builder action: Start begins a builder chat with a prompt, Open shows one, Remove deletes one, Tweak opens
+// a chat that changes an extension, and List shows the builder chats.
+const (
+	BuilderStart  = "start"
+	BuilderOpen   = "open"
+	BuilderRemove = "remove"
+	BuilderTweak  = "tweak"
+	BuilderList   = "list"
+)
+
 // Op values for the kinds that have sub-operations.
 var (
 	windowOps  = []string{"create", "show", "hide", "toggle", "close"}
@@ -65,6 +78,7 @@ var (
 	updateOps  = []string{"check", "download", "install"}
 	accountOps = []string{AccountSignIn}
 	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatRemove}
+	builderOps = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )
 
@@ -100,6 +114,7 @@ type Action struct {
 	Window  *WindowRef        `json:"window,omitempty"`
 	Submenu *ActionPanel      `json:"submenu,omitempty"`
 	Chat    *ChatAction       `json:"chat,omitempty"`
+	Builder *BuilderAction    `json:"builder,omitempty"`
 }
 
 // ActionRef names a handler the extension registered. IDs are stable across runs because
@@ -235,6 +250,11 @@ func (a Action) validateDeclarative() error {
 			return fmt.Errorf("chat action %q needs its chat payload", a.Title)
 		}
 		return validateOp(a.Op, chatOps)
+	case ActionBuilder:
+		if a.Builder == nil {
+			return fmt.Errorf("builder action %q needs its builder payload", a.Title)
+		}
+		return validateOp(a.Op, builderOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

@@ -16,31 +16,50 @@ type extensionChats struct {
 
 // List returns the chats, in the order the chat store keeps them.
 func (c extensionChats) List() []api.ChatSummary {
-	if c.p.chats == nil {
-		return nil
-	}
-	records := c.p.chats.Chats()
-	out := make([]api.ChatSummary, 0, len(records))
-	for _, record := range records {
-		out = append(out, chatSummary(record))
-	}
+	var out []api.ChatSummary
+	c.p.onChatsThread(func() {
+		if c.p.chats == nil {
+			return
+		}
+		records := c.p.chats.Chats()
+		out = make([]api.ChatSummary, 0, len(records))
+		for _, record := range records {
+			out = append(out, chatSummary(record))
+		}
+	})
 	return out
 }
 
 // Get returns one chat with its transcript, and false when the store has no chat with the id.
 func (c extensionChats) Get(chatID string) (api.ChatDetail, bool) {
-	if c.p.chats == nil {
-		return api.ChatDetail{}, false
-	}
-	record, ok := c.p.chats.Chat(chatID)
-	if !ok {
-		return api.ChatDetail{}, false
-	}
-	messages := make([]api.ChatMessage, 0, len(record.Messages))
-	for _, message := range record.Messages {
-		messages = append(messages, apiChatMessage(message))
-	}
-	return api.ChatDetail{ChatSummary: chatSummary(record), Messages: messages}, true
+	var detail api.ChatDetail
+	found := false
+	c.p.onChatsThread(func() {
+		if c.p.chats == nil {
+			return
+		}
+		record, ok := c.p.chats.Chat(chatID)
+		if !ok {
+			return
+		}
+		messages := make([]api.ChatMessage, 0, len(record.Messages))
+		for _, message := range record.Messages {
+			messages = append(messages, apiChatMessage(message))
+		}
+		detail, found = api.ChatDetail{ChatSummary: chatSummary(record), Messages: messages}, true
+	})
+	return detail, found
+}
+
+// onChatsThread runs read on the UI thread, where the chat cache lives, and waits until it has run. Extension services
+// call the chat reads from their own goroutines.
+func (p *App) onChatsThread(read func()) {
+	done := make(chan struct{})
+	p.onUI(func() {
+		read()
+		close(done)
+	})
+	<-done
 }
 
 // extensionChatPages runs the chat actions of extensions on the palette's stack and the chat store.
@@ -64,6 +83,21 @@ func (c extensionChatPages) Send(chatID, text string) error {
 		return errChatsUnavailable
 	}
 	return c.p.chats.Send(chatID, text)
+}
+
+// Start opens a builder chat that begins with prompt, as the Automate flow does.
+func (c extensionChatPages) Start(prompt string) *palette.View {
+	return c.p.builderViewWith(prompt)
+}
+
+// Tweak opens a builder chat that changes the extension with the id.
+func (c extensionChatPages) Tweak(extensionID string) *palette.View {
+	return c.p.builderEditView(extensionID)
+}
+
+// List opens the AI Chats page, which lists the saved conversations.
+func (c extensionChatPages) List() *palette.View {
+	return c.p.chatHistoryView()
 }
 
 // Remove deletes the chat with id.
