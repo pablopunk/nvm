@@ -12,16 +12,16 @@ import (
 func TestRootRowCacheAsksOnlyPendingExtensionsOnceFilled(t *testing.T) {
 	var c rootRowCache
 	c.markPending("a")
-	if scope := c.takeScope(); scope != nil {
+	if scope, _ := c.takeScope(); scope != nil {
 		t.Fatalf("an unfilled cache asked the scope %v; it must ask every extension", scope)
 	}
 	fillRootCache(&c, "a", "b")
 	c.markPending("a")
-	scope := c.takeScope()
+	scope, _ := c.takeScope()
 	if !scope["a"] || scope["b"] || len(scope) != 1 {
 		t.Fatalf("scope = %v, want only a", scope)
 	}
-	if again := c.takeScope(); again != nil {
+	if again, _ := c.takeScope(); again != nil {
 		t.Fatalf("the pending scope was not consumed: %v", again)
 	}
 }
@@ -31,7 +31,7 @@ func TestRootRowCacheResetAsksEveryExtension(t *testing.T) {
 	fillRootCache(&c, "a")
 	c.markPending("a")
 	c.reset()
-	if scope := c.takeScope(); scope != nil {
+	if scope, _ := c.takeScope(); scope != nil {
 		t.Fatalf("a reset cache asked the scope %v; it must ask every extension", scope)
 	}
 }
@@ -83,13 +83,13 @@ func TestRootRowCacheDoesNotStoreACancelledAnswer(t *testing.T) {
 func TestRootRowCacheSettleDropsOnlyTheRowsOfSilentExtensions(t *testing.T) {
 	var c rootRowCache
 	fillRootCache(&c, "a", "b", "c")
-	c.settle(nil, map[string]bool{"a": true})
+	c.settle(context.Background(), c.epoch, nil, map[string]bool{"a": true})
 	if len(c.rows) != 1 || c.rows["a"].ExtensionID != "a" || !c.filled {
 		t.Fatalf("full pass left rows %v filled=%v, want only a and filled", c.rows, c.filled)
 	}
 
 	fillRootCache(&c, "a", "b", "c")
-	c.settle(map[string]bool{"b": true}, map[string]bool{"a": true})
+	c.settle(context.Background(), c.epoch, map[string]bool{"b": true}, map[string]bool{"a": true})
 	if _, ok := c.rows["b"]; ok || len(c.rows) != 2 {
 		t.Fatalf("scoped pass left rows %v, want a and c", c.rows)
 	}
@@ -103,5 +103,34 @@ func TestRootRowCacheCachedOutsideIsTheRowsNotInScope(t *testing.T) {
 	got := c.cachedOutside(map[string]bool{"b": true})
 	if len(got) != 2 || got[0].ExtensionID != "a" || got[1].ExtensionID != "c" {
 		t.Fatalf("cachedOutside(b) = %+v, want a then c", got)
+	}
+}
+
+func TestRootRowCacheResetRejectsObsoleteSettlement(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a", "b")
+	scope, epoch := c.takeScope()
+	c.reset()
+	removed := c.settle(context.Background(), epoch, scope, map[string]bool{"a": true})
+	if len(removed) != 0 || len(c.rows) != 2 || c.filled {
+		t.Fatalf("obsolete settlement changed reset cache: removed=%v rows=%v filled=%v", removed, c.rows, c.filled)
+	}
+	if c.remember(context.Background(), epoch, manager.SearchResult{ExtensionID: "a", Title: "obsolete"}) {
+		t.Fatal("obsolete answer was accepted after reset")
+	}
+	rows := c.cachedOutside(nil)
+	if len(rows) != 2 || rows[0].ExtensionID != "a" || rows[1].ExtensionID != "b" {
+		t.Fatalf("full refresh lost stale snapshot: %+v", rows)
+	}
+}
+
+func TestRootRowCacheCancelledPassCannotSettle(t *testing.T) {
+	var c rootRowCache
+	fillRootCache(&c, "a", "b")
+	scope, epoch := c.takeScope()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if removed := c.settle(ctx, epoch, scope, nil); len(removed) != 0 || len(c.rows) != 2 {
+		t.Fatalf("cancelled pass removed cached rows: removed=%v rows=%v", removed, c.rows)
 	}
 }

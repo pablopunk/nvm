@@ -30,7 +30,7 @@ func (c *rootRowCache) markPending(id string) {
 	c.pending[id] = true
 }
 
-// reset forgets every row and pending refresh, so the next root asks every extension.
+// reset keeps the last snapshot visible while the next root revalidates every extension.
 func (c *rootRowCache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -42,10 +42,7 @@ func (c *rootRowCache) reset() {
 // others. A refresh that asks only the pending extensions emits the cached rows of the others at once. The pass is
 // complete only when its context was not cancelled; then the extensions it did not hear from lose their rows.
 func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func(manager.SearchResult)) {
-	c.mu.Lock()
-	epoch := c.epoch
-	c.mu.Unlock()
-	scope := c.takeScope()
+	scope, epoch := c.takeScope()
 	for _, result := range c.cachedOutside(nil) {
 		emit(result)
 	}
@@ -61,26 +58,21 @@ func (c *rootRowCache) stream(ctx context.Context, m *manager.Manager, emit func
 	} else {
 		m.RootsOfEach(ctx, scope, receive)
 	}
-	c.mu.Lock()
-	current := ctx.Err() == nil && epoch == c.epoch
-	c.mu.Unlock()
-	if current {
-		for _, id := range c.settle(scope, answered) {
-			emit(manager.SearchResult{ExtensionID: id})
-		}
+	for _, id := range c.settle(ctx, epoch, scope, answered) {
+		emit(manager.SearchResult{ExtensionID: id})
 	}
 }
 
 // takeScope returns the pending extensions and clears them, or nil when the root asks every extension.
-func (c *rootRowCache) takeScope() map[string]bool {
+func (c *rootRowCache) takeScope() (map[string]bool, uint64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	scope := c.pending
 	c.pending = nil
 	if !c.filled || len(scope) == 0 {
-		return nil
+		return nil, c.epoch
 	}
-	return scope
+	return scope, c.epoch
 }
 
 // remember stores the rows of one extension. An answer that comes after the pass was cancelled is a cancellation, not the
@@ -100,10 +92,13 @@ func (c *rootRowCache) remember(ctx context.Context, epoch uint64, result manage
 
 // settle ends a pass that was not cut off. The extensions the pass asked and did not hear from lose their rows, and a
 // full pass marks the cache filled, so later refreshes ask only the pending extensions.
-func (c *rootRowCache) settle(scope map[string]bool, answered map[string]bool) []string {
+func (c *rootRowCache) settle(ctx context.Context, epoch uint64, scope map[string]bool, answered map[string]bool) []string {
 	var removed []string
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if ctx.Err() != nil || epoch != c.epoch {
+		return nil
+	}
 	for id := range c.rows {
 		if !answered[id] && (scope == nil || scope[id]) {
 			delete(c.rows, id)
