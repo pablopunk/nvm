@@ -87,9 +87,9 @@ func FormView(title string, fields []Field, submit Action) View {
 	return View{Kind: ViewForm, Title: title, Form: &FormSpec{Fields: fields, Submit: &submit}}
 }
 
-// EditorView builds an editable text or Markdown surface.
+// EditorView builds an editable plain-text surface, as ui.editor does; set Editor.Format to "markdown" for Markdown.
 func EditorView(title, content string, submit Action) View {
-	return View{Kind: ViewEditor, Title: title, Editor: &EditorSpec{Content: content, Format: "markdown", Submit: &submit}}
+	return View{Kind: ViewEditor, Title: title, Editor: &EditorSpec{Content: content, Submit: &submit}}
 }
 
 // PreviewView builds a read-only Markdown preview.

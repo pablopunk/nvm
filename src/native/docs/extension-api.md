@@ -1053,7 +1053,7 @@ Code: `internal/features/selection` (the engine), `internal/ext/services/desktop
 
 ### 21.3 Editor Markdown and autosave as built (P15)
 
-An editor view with `format: markdown` draws a Markdown editor (`design.MarkdownEditor`) instead of a plain text area; its text stays Markdown. A draft with `autosave` runs that action with the draft's text each time the draft is written, after the 400 ms debounce; a failure shows on the editor's status line. Conflicts resolve through `onConflict`, as before. Code: `internal/palette/extview/editor.go`, `editor_markdown.go`. Not yet: the editor's view-level action panel, and the Markdown editor's live preview.
+An editor view draws plain text unless it has `format: markdown` (the default matches 1.x and `EditorView`); with markdown it draws a Markdown editor (`design.MarkdownEditor`) instead of a plain text area; its text stays Markdown. A draft with `autosave` runs that action with the draft's text each time the draft is written, after the 400 ms debounce; a failure shows on the editor's status line. Conflicts resolve through `onConflict`, as before. Code: `internal/palette/extview/editor.go`, `editor_markdown.go`. Not yet: the editor's view-level action panel, and the Markdown editor's live preview.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
