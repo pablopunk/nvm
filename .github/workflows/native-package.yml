@@ -124,6 +124,14 @@ jobs:
           echo "NOTARY_PROFILE=nvm-notary" >> "$GITHUB_ENV"
           echo "NOTARY_KEYCHAIN=$SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
 
+      # Keep stapler on HTTPS/TCP on the affected ephemeral Intel runners.
+      # https://github.com/actions/runner-images/issues/14924#issuecomment-6188826956
+      - name: Route Intel stapler traffic over HTTPS
+        if: matrix.arch == 'amd64' && steps.decide.outputs.notarize == 'true'
+        run: |
+          echo "block return out quick proto udp from any to any port 443" | sudo pfctl -f -
+          sudo pfctl -E
+
       - name: Stamp the package settings
         working-directory: src/native
         run: |
