@@ -44,13 +44,6 @@ func newManagerOverNetwork(t testing.TB, builtins []api.Extension, clock platfor
 	return newManagerWithApps(t, builtins, clock, network, nil, extensionPorts{}, enabled...)
 }
 
-// newFixtureManagerWithIndex is newFixtureManager with the palette's apps lifecycle, the file index the built-in files
-// extension reads, and the clipboard history and pictures of the palette the goldens run against.
-func newFixtureManagerWithIndex(t *testing.T, apps services.AppLifecycle, index services.FileIndex, extras extensionPorts) *manager.Manager {
-	t.Helper()
-	return newManagerWithFakes(t, managerFakes{index: index, extras: extras}, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: extras.options}), extras.clock, nil, apps)
-}
-
 // newManagerWithApps is newManagerOverNetwork with the apps lifecycle the host hands the services and the clipboard
 // ports the extensions read.
 func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.Clock, network platform.HTTP, apps services.AppLifecycle, extras extensionPorts, enabled ...string) *manager.Manager {
@@ -59,12 +52,73 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 }
 
 // managerFakes are the host services a test puts in place of the real ones: the file index, the model calls, the
-// signed-in account and the clipboard ports. A nil field keeps the service absent, as the app without it does.
+// signed-in account, the clipboard ports and the palette's own surfaces. A nil field keeps the service absent, as the
+// app without it does.
 type managerFakes struct {
-	index   services.FileIndex
-	ai      *extai.Service
-	account services.AccountState
-	extras  extensionPorts
+	index        services.FileIndex
+	ai           *extai.Service
+	account      services.AccountState
+	extras       extensionPorts
+	settingsHost func(string) services.SettingsHost
+	permissions  services.PermissionSurface
+	updates      services.UpdateSurface
+	diagnostics  services.DiagnosticsSurface
+	jobs         services.JobsSurface
+	shortcuts    services.ShortcutTable
+}
+
+// paletteSurfaces are the palette's own surfaces as the app hands them to the built-ins: its settings, permissions,
+// updates, diagnostics, background jobs and shortcuts.
+func paletteSurfaces(p *App) managerFakes {
+	return managerFakes{
+		settingsHost: p.builtInSettingsStore,
+		permissions:  permissionSurface{p: p},
+		updates:      updatesSurface{p: p},
+		diagnostics:  diagnosticsSurface{p: p},
+		jobs:         jobsSurface{p: p},
+		shortcuts:    p.extensionShortcuts(),
+	}
+}
+
+// newFixtureManagerWithSurfaces is newFixtureManager with the palette's apps lifecycle, the fixture's clock and
+// clipboard, and the surfaces given, so a golden shows the states its fixture names.
+func newFixtureManagerWithSurfaces(t *testing.T, p *App, surfaces managerFakes) *manager.Manager {
+	t.Helper()
+	return newManagerWithFakes(t, surfaces, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: surfaces.extras.options}), surfaces.extras.clock, nil, p.appsvc)
+}
+
+// newFixtureManagerWithApps is newFixtureManagerWithSurfaces with the palette's own surfaces, so the applications
+// built-in lists the apps the palette indexed.
+func newFixtureManagerWithApps(t *testing.T, p *App) *manager.Manager {
+	t.Helper()
+	return newFixtureManagerWithSurfaces(t, p, paletteSurfaces(p))
+}
+
+// newFixtureManagerWithDiagnostics is newFixtureManagerWithApps with the support records given, so a golden can show the
+// records its fixture names.
+func newFixtureManagerWithDiagnostics(t *testing.T, p *App, diagnostics services.DiagnosticsSurface) *manager.Manager {
+	t.Helper()
+	surfaces := paletteSurfaces(p)
+	surfaces.diagnostics = diagnostics
+	return newFixtureManagerWithSurfaces(t, p, surfaces)
+}
+
+// newFixtureManagerWithJobs is newFixtureManagerWithApps with the background jobs given, so a golden can show the jobs its
+// fixture names.
+func newFixtureManagerWithJobs(t *testing.T, p *App, jobs services.JobsSurface) *manager.Manager {
+	t.Helper()
+	surfaces := paletteSurfaces(p)
+	surfaces.jobs = jobs
+	return newFixtureManagerWithSurfaces(t, p, surfaces)
+}
+
+// newFixtureManagerWithUpdates is newFixtureManagerWithApps with the updates surface given, so a golden can show a state
+// the host does not have.
+func newFixtureManagerWithUpdates(t *testing.T, p *App, updates services.UpdateSurface) *manager.Manager {
+	t.Helper()
+	surfaces := paletteSurfaces(p)
+	surfaces.updates = updates
+	return newFixtureManagerWithSurfaces(t, p, surfaces)
 }
 
 // newManagerWithFakes is newManagerWithApps with the host services of fakes.
@@ -92,11 +146,17 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Apps:            apps,
 		History:         fakes.extras.history,
 		ClipboardImages: fakes.extras.images,
+		Permissions:     fakes.permissions,
+		Updates:         fakes.updates,
+		Diagnostics:     fakes.diagnostics,
+		Jobs:            fakes.jobs,
+		Shortcuts:       fakes.shortcuts,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
-		Executable: exe,
-		DataRoot:   filepath.Join(dir, "extension-data"),
-		Home:       userHomeDir(),
-		BuiltIns:   builtins,
+		Executable:      exe,
+		DataRoot:        filepath.Join(dir, "extension-data"),
+		Home:            userHomeDir(),
+		BuiltIns:        builtins,
+		BuiltInSettings: fakes.settingsHost,
 		Budgets: map[string]supervisor.Budget{
 			protocol.MethodSearch: {Soft: 50 * time.Millisecond, Hard: 300 * time.Millisecond},
 		},

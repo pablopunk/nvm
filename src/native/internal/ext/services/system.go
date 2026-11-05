@@ -24,6 +24,12 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 		return h.places(), nil
 	case protocol.OpNotify:
 		return nil, h.notify(call.Args)
+	case protocol.OpPermissions:
+		return h.permissionStatuses(), nil
+	case protocol.OpRequestPermission:
+		return nil, h.requestPermission(call.Args)
+	case protocol.OpOpenPermissionPane:
+		return nil, h.openPermissionPane(call.Args)
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }
@@ -48,7 +54,7 @@ func (h *Handler) publicCapability(name string) bool {
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",
 		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "clipboard.paste", "selection.copy",
-		"keyboard.type-text", "apps.running", "apps.quit", "apps.hide", "apps.uninstall",
+		"keyboard.type-text", "apps.running", "apps.quit", "apps.hide", "apps.uninstall", "autostart.signIn",
 		"system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
 		return h.deps.Capabilities.Supported(platform.Capability(name))
 	case "clipboard.concealed":

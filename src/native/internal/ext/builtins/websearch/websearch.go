@@ -43,6 +43,11 @@ var engines = []Engine{
 	{Key: "brave", Name: "Brave Search", URL: "https://search.brave.com/search?q={query}"},
 }
 
+// Engines returns the engines in the order the settings row offers them, as key and name pairs.
+func Engines() []Engine {
+	return append([]Engine(nil), engines...)
+}
+
 // NextEngine is the key of the engine after key in the order the settings row cycles them. An unknown key starts at the
 // first engine.
 func NextEngine(key string) string {

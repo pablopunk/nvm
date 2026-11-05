@@ -86,6 +86,12 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
 		}
 		return s.hostOperation(action, title)
+	case api.ActionUpdate:
+		if s.deps.RunUpdate == nil {
+			break
+		}
+		op := action.Op
+		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
 	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:
@@ -93,6 +99,21 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.SignIn(h) }}
+	case api.ActionHost:
+		op := action.Op
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if s.deps.HostOperation == nil {
+				h.Toast(unavailableMessage)
+				return
+			}
+			s.deps.HostOperation(h, s.extID, op)
+		}}
+	case api.ActionShortcut:
+		if s.deps.ShortcutAction == nil {
+			break
+		}
+		op, target := action.Op, action.Target
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.ShortcutAction(h, op, target) }}
 	case api.ActionRecordPaletteShortcut:
 		if s.deps.RecordPaletteShortcut == nil {
 			break

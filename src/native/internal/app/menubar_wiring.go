@@ -117,7 +117,7 @@ func (p *App) menubarActions() menubar.Actions {
 	return menubar.Actions{
 		Open:            func() { p.Show(); p.focusPanel() },
 		CheckForUpdates: p.openUpdatesAndCheck,
-		Settings:        func() { p.Open(p.settingsView()); p.focusPanel() },
+		Settings:        func() { p.Open(p.settingsPage()); p.focusPanel() },
 		Quit:            p.requestQuit,
 	}
 }

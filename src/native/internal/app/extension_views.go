@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -71,6 +72,15 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
+		ReadSetting:           func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
+		RowAccessory:          p.settingRowAccessory,
+		HostOperation:         p.settingsHostOperation,
+		RecordSetting:         p.settingRecorder,
+		WriteSetting: func(extID, key string, value json.RawMessage) error {
+			return m.WriteSetting(extID, key, value)
+		},
+		RunUpdate:      p.runUpdateOp,
+		ShortcutAction: p.runShortcutAction,
 		SignIn:                p.signInFromRoot,
 		OpenPath:              func(path string) { _ = ports.Shell.OpenPath(path) },
 		RevealPath:            func(path string) { _ = ports.Shell.Reveal(path) },

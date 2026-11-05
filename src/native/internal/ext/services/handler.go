@@ -63,6 +63,14 @@ type Deps struct {
 	Windows WindowEngine
 	// Frontmost names the app in front. Nil answers unavailable.
 	Frontmost FrontmostSource
+	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.
+	Permissions PermissionSurface
+	// Updates reads the state of the app's updater. Nil answers unavailable.
+	Updates UpdateSurface
+	// Diagnostics reads the support records and files problem reports. Nil keeps none and answers unavailable.
+	Diagnostics DiagnosticsSurface
+	// Jobs lists the background jobs and runs or changes them. Nil answers unavailable.
+	Jobs JobsSurface
 	// Notifier shows operating-system notifications. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
@@ -145,6 +153,8 @@ type Handler struct {
 	closeOnce        sync.Once
 	docs             *documents
 	secretsMu        sync.Mutex
+	// hostSettings keeps the settings of a built-in in the host's store. Nil means the extension's settings file.
+	hostSettings SettingsHost
 }
 
 // New returns the services of one extension. Nothing is opened until the extension makes its first call.
@@ -258,6 +268,12 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveShortcuts(call)
 	case protocol.ServiceAccount:
 		return h.serveAccount(call)
+	case protocol.ServiceUpdates:
+		return h.serveUpdates(call)
+	case protocol.ServiceDiagnostics:
+		return h.serveDiagnostics(call)
+	case protocol.ServiceJobs:
+		return h.serveJobs(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:

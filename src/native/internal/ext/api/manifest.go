@@ -69,6 +69,7 @@ const (
 	CapabilityOCR                 Capability = "ocr"
 	CapabilityNetwork             Capability = "network"
 	CapabilitySecrets             Capability = "secrets"
+	CapabilityJobs                Capability = "jobs"
 )
 
 // KnownCapabilities lists every capability this host version can review.
@@ -79,7 +80,7 @@ func KnownCapabilities() []Capability {
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
 		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,
-		CapabilityNetwork, CapabilitySecrets,
+		CapabilityNetwork, CapabilitySecrets, CapabilityJobs,
 	}
 }
 

@@ -76,6 +76,6 @@ func (p *App) installFromMenu() {
 
 // openUpdatesPage shows the Updates page in the palette and gives it the keyboard.
 func (p *App) openUpdatesPage() {
-	p.Open(p.updatesView())
+	p.Open(p.updatesPage())
 	p.focusPanel()
 }

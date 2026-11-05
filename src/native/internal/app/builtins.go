@@ -10,19 +10,25 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
+	backgroundtasksbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/backgroundtasks"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
 	dictationbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
+	diagnosticsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/diagnostics"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
+	permissionsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/permissions"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	settingsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/settings"
+	shortcutsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/shortcuts"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
 	timersbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/timers"
+	updatesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/updates"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
@@ -62,6 +68,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		timersbuiltin.New(),
 		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
 		clipboardbuiltin.New(in.Clipboard), windowmanagementbuiltin.New(in.WindowSettings),
+		settingsbuiltin.New(), permissionsbuiltin.New(), updatesbuiltin.New(), diagnosticsbuiltin.New(), backgroundtasksbuiltin.New(), shortcutsbuiltin.New(),
 	}
 }
 

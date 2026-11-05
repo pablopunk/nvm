@@ -49,10 +49,3 @@ func (unsupportedOwnership) OwnerOf(string) (string, bool) { return "", false }
 func (unsupportedOwnership) FilesForChat(string) []string { return nil }
 
 func (unsupportedOwnership) CanWrite(string, string) bool { return false }
-
-// unsupportedUpdates reports that the update service is not served, so the palette does not offer updates.
-type unsupportedUpdates struct{}
-
-func (unsupportedUpdates) State() api.UpdateState {
-	return api.UpdateState{Status: "unavailable", ErrorMessage: "Updates are not available in this Nevermind version yet."}
-}

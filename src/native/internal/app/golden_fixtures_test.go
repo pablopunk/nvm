@@ -83,7 +83,10 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	services := fake.NewSet()
 	services.System.SetHome(goldenHome(t))
 	p.attachServices(services.Ports(), goldenOS, goldenData, time.UTC)
-	p.exts.mgr.Store(newFixtureManagerWithIndex(t, p.appsvc, fileIndexPort{p: p}, p.testExtensionPorts()))
+	surfaces := paletteSurfaces(p)
+	surfaces.index = fileIndexPort{p: p}
+	surfaces.extras = p.testExtensionPorts()
+	p.exts.mgr.Store(newFixtureManagerWithSurfaces(t, p, surfaces))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")

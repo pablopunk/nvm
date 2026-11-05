@@ -8,6 +8,7 @@ package extview
 
 import (
 	"context"
+	"encoding/json"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -46,6 +47,16 @@ type Deps struct {
 	OpenSettingsPane func(id string)
 	// RecordPaletteShortcut pushes the recorder of the palette shortcut onto h. Nil makes the action report unavailable.
 	RecordPaletteShortcut func(h search.Host)
+	// ReadSetting returns the stored value of a declared setting of extension extID, and WriteSetting saves one (both
+	// through the extension's settings service). RecordSetting pushes the host's recorder for a setting that holds an
+	// accelerator, and RowAccessory gives the host's edge text for a settings row, when it has one. Nil makes the
+	// settings rows report unavailable, or show their own text.
+	ReadSetting   func(extID, key string) (json.RawMessage, error)
+	WriteSetting  func(extID, key string, value json.RawMessage) error
+	RecordSetting func(h search.Host, extID, key string)
+	RowAccessory  func(extID, rowID string) (accessory, subtitle string, ok bool)
+	// HostOperation runs a host operation of a built-in's ActionHost action on h. Nil makes it report unavailable.
+	HostOperation func(h search.Host, extID, op string)
 	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.
 	SignIn func(h search.Host)
 	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
@@ -63,6 +74,12 @@ type Deps struct {
 	// RunSystem runs an OS command by its op, off the UI thread. done receives the sentence to show when the OS did not
 	// run it, and "" when it did. Nil makes system ops report unavailable.
 	RunSystem func(op string, done func(failure string))
+	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and
+	// remove drops the user's shortcut. Nil makes the action report unavailable.
+	ShortcutAction func(h search.Host, op, target string)
+	// RunUpdate performs an update operation of the app's updater (check, download, install or channel) and returns the
+	// reason it refused, if it did. Nil makes update actions report unavailable.
+	RunUpdate func(op string) error
 	Files     platform.FS
 	Clock     platform.Clock
 	Cache     Cache
@@ -170,6 +187,10 @@ func (s *Session) Palette() *palette.View {
 	case api.ViewWebview, api.ViewCamera:
 		if s.media != nil {
 			return s.media
+		}
+	case api.ViewSettings:
+		if s.view.Settings != nil {
+			return s.settingsPage()
 		}
 	}
 	return s.unsupportedPage()

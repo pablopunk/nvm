@@ -37,8 +37,13 @@ const (
 	ActionSetQuery      ActionKind = "set-query"
 	// ActionAccount runs an account operation the host owns, such as sign-in.
 	ActionAccount ActionKind = "account"
-	// ActionRecordPaletteShortcut opens the host's shortcut recorder.
+	// ActionHost runs a host operation a built-in may name, such as opening a host page. Op is one of hostOps.
+	ActionHost ActionKind = "host"
+	// ActionRecordPaletteShortcut opens the host's recorder for the palette shortcut. Key capture stays with the host.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
+	// ActionShortcut changes the user's shortcut for the action Target names: Op record opens the host's recorder for it,
+	// and remove drops the shortcut the user chose. Key capture stays with the host.
+	ActionShortcut ActionKind = "shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
 	// shows "This action is not available yet" when it runs.
 	ActionUnavailable ActionKind = "unavailable"
@@ -49,11 +54,13 @@ const AccountSignIn = "sign-in"
 
 // Op values for the kinds that have sub-operations.
 var (
-	windowOps  = []string{"create", "show", "hide", "toggle", "close"}
-	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
-	updateOps  = []string{"check", "download", "install"}
-	accountOps = []string{AccountSignIn}
-	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
+	windowOps   = []string{"create", "show", "hide", "toggle", "close"}
+	systemOps   = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
+	updateOps   = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
+	accountOps  = []string{AccountSignIn}
+	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page"}
+	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
+	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove}
 )
 
 // Action is one declarative operation attached to an item, view, command or menu row. Helper
@@ -73,13 +80,15 @@ type Action struct {
 	// Ref names the handler for ActionRun.
 	Ref *ActionRef `json:"ref,omitempty"`
 	// Payload fields used by the declarative kinds. Only the ones the kind documents are read.
-	Path    string            `json:"path,omitempty"`
-	Paths   []string          `json:"paths,omitempty"`
-	URL     string            `json:"url,omitempty"`
-	Text    string            `json:"text,omitempty"`
-	Query   string            `json:"query,omitempty"`
-	App     string            `json:"app,omitempty"`
-	Setting string            `json:"setting,omitempty"`
+	Path    string   `json:"path,omitempty"`
+	Paths   []string `json:"paths,omitempty"`
+	URL     string   `json:"url,omitempty"`
+	Text    string   `json:"text,omitempty"`
+	Query   string   `json:"query,omitempty"`
+	App     string   `json:"app,omitempty"`
+	Setting string   `json:"setting,omitempty"`
+	// Target names the action a shortcut kind changes: its action ID.
+	Target  string            `json:"target,omitempty"`
 	Content *ClipboardContent `json:"content,omitempty"`
 	Paste   *PasteOptions     `json:"paste,omitempty"`
 	Typing  *TypeOptions      `json:"typing,omitempty"`
@@ -213,10 +222,17 @@ func (a Action) validateDeclarative() error {
 		return validateOp(a.Op, systemOps)
 	case ActionUpdate:
 		return validateOp(a.Op, updateOps)
+	case ActionShortcut:
+		if a.Target == "" {
+			return errors.New("a shortcut action needs the action it changes")
+		}
+		return validateOp(a.Op, shortcutOps)
 	case ActionCamera:
 		return validateOp(a.Op, cameraOps)
 	case ActionAccount:
 		return validateOp(a.Op, accountOps)
+	case ActionHost:
+		return validateOp(a.Op, hostOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

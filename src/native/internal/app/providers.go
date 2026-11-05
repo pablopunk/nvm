@@ -2,8 +2,6 @@ package app
 
 import (
 	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 
@@ -13,7 +11,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
-	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -68,14 +65,14 @@ func leadingCommands(p *App) []command {
 // trailingCommands are the commands listed after the built-in system commands.
 func trailingCommands(p *App) []command {
 	cmds := []command{
-		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsView()) }},
-		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksView()) }},
-		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsView()) }},
-		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(h.Toast) }},
-		{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsView()) }},
+		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsPage()) }},
+		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksPage()) }},
+		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsPage()) }},
+		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(func(string) {}); h.Push(p.updatesPage()) }},
+		{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsPage()) }},
 		{ID: shortcuts.CommandReportProblem, Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		builtInSlot(appcommands.ID, 1),
-		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsView()) }},
+		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsPage()) }},
 	}
 	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
@@ -127,94 +124,4 @@ const rootEmptyTitle = "Type anything"
 // score order with no section labels, as 1.x's root list shows them.
 func (p *App) rootView() *palette.View {
 	return &palette.View{Title: rootViewTitle, Providers: p.rootProviders, Hint: "esc Close", Limit: rootRowLimit, Flat: true, EmptyTitle: rootEmptyTitle}
-}
-
-// ---- settings ----
-
-func (p *App) settingsView() *palette.View {
-	return &palette.View{
-		Title: "Settings", Placeholder: "Search Settings",
-		Search: func(q string) []search.Item {
-			lq := strings.ToLower(q)
-			clip := "On"
-			if p.S.ClipOff {
-				clip = "Off"
-			}
-			rows := []search.Item{
-				{Title: paletteSettingTitle, Subtitle: paletteSettingSubtitle, Accessory: p.paletteSettingAccessory(), Icon: "keyboard", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.paletteRecorderView()) }}}},
-				{Title: hyperKeyTitle, Subtitle: hyperKeySubtitle, Icon: "command", Actions: []search.Action{{Title: "Change…", Run: func(h search.Host) { h.Push(p.hyperRecorderView()) }}}},
-				{Title: "Default Search Engine", Accessory: websearch.EngineName(p.webEngineKey()), Icon: "search", Actions: []search.Action{{Title: "Next Engine", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					if err := p.cycleWebEngine(); err != nil {
-						h.Toast(err.Error())
-					}
-					h.Refresh()
-				}}}},
-				{Title: "Clipboard History", Accessory: clip, Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					p.S.ClipOff = !p.S.ClipOff
-					p.S.save()
-					p.clip.setEnabled(!p.S.ClipOff)
-					h.Refresh()
-				}}, {Title: "Link Previews", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					p.S.ClipNoLinks = !p.S.ClipNoLinks
-					p.S.save()
-					p.clip.setLinkPreviews(!p.S.ClipNoLinks)
-					h.Refresh()
-				}}}},
-				{Title: "Clipboard History Size", Accessory: strconv.Itoa(p.S.ClipLimit), Icon: "clipboard", Actions: []search.Action{{Title: "Cycle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					sizes := []int{50, 300, 500, 1000}
-					i := slices.Index(sizes, p.S.ClipLimit)
-					p.S.ClipLimit = sizes[(i+1)%len(sizes)]
-					p.S.save()
-					p.clip.setLimit(p.S.ClipLimit)
-					h.Refresh()
-				}}}},
-				{Title: "Show Clipboard Items in Root List", Subtitle: "Show copied items inline in the root list", Accessory: onOff(!p.S.ClipRootOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					p.S.ClipRootOff = !p.S.ClipRootOff
-					p.S.save()
-					h.Refresh()
-				}}}},
-				{Title: "Show Clipboard Items in Root Search", Subtitle: "Show copied items when searching from the root list", Accessory: onOff(!p.S.ClipRootSearchOff), Icon: "clipboard", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					p.S.ClipRootSearchOff = !p.S.ClipRootSearchOff
-					p.S.save()
-					h.Refresh()
-				}}}},
-				{Title: "Dictation", Icon: "mic", Actions: []search.Action{p.dictationSettingsAction()}},
-				{Title: "Send Technical Diagnostics", Subtitle: "Errors, usage and performance, without prompts or clipboard content", Accessory: diagnosticsLabel(p.diagnosticsOff()), Icon: "shield-check", Actions: []search.Action{{Title: "Toggle", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					p.toggleDiagnostics()
-					h.Refresh()
-				}}}},
-				{Title: "Updates", Accessory: updateAccessory(p.updateSnapshot().State), Icon: "rotate-ccw", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { h.Push(p.updatesView()) }}}},
-				{Title: "Update Channel", Accessory: p.updateSnapshot().Channel.Label(), Icon: "shield-check", Actions: []search.Action{{Title: "Switch", Dismiss: search.DismissNever, Run: func(h search.Host) {
-					if err := p.toggleUpdateChannel(); err != nil {
-						h.Toast(err.Error())
-					}
-					h.Refresh()
-				}}}},
-				{Title: "Account", Accessory: p.accountSummary(), Icon: "user", Actions: []search.Action{{Title: "Open", Dismiss: search.DismissNever, Run: func(h search.Host) { p.openAccountPage(h) }}}},
-				{Title: "Open Config Folder", Subtitle: p.displayPath(sharedDir()), Icon: "folder", Actions: []search.Action{{Title: "Open", Run: func(h search.Host) { h.Hide(); _ = mygo.Shell.OpenPath(sharedDir()) }}}},
-			}
-			rows = slices.Insert(rows, rowIndexAfter(rows, "Dictation"), p.launchAtLoginRows()...)
-			if lq == "" {
-				return rows
-			}
-			return slices.DeleteFunc(rows, func(it search.Item) bool { return !strings.Contains(strings.ToLower(it.Title), lq) })
-		},
-	}
-}
-
-// rowIndexAfter is the position just after the row titled title, or the end when no row has that title, so an
-// optional group of rows can follow a named row without counting positions.
-func rowIndexAfter(rows []search.Item, title string) int {
-	if i := slices.IndexFunc(rows, func(it search.Item) bool { return it.Title == title }); i >= 0 {
-		return i + 1
-	}
-	return len(rows)
-}
-
-// onOff is the palette's word for a switch's state.
-func onOff(on bool) string {
-	if on {
-		return "On"
-	}
-	return "Off"
 }

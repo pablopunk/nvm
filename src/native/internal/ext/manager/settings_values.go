@@ -33,3 +33,16 @@ func (m *Manager) WriteSetting(id, key string, value any) error {
 	}
 	return m.callService(id, protocol.ServiceSettings, protocol.OpSet, protocol.KeyValueArgs{Key: key, Value: raw}, nil, settingCallBudget)
 }
+
+// SettingValue returns the stored value of the declared setting key of extension id, or its default when none is stored.
+// It reads through the extension's settings service, as the extension's own Settings().Get does.
+func (m *Manager) SettingValue(id, key string) (json.RawMessage, error) {
+	var result protocol.GetResult
+	if err := m.callService(id, protocol.ServiceSettings, protocol.OpGet, protocol.KeyArgs{Key: key}, &result, settingCallBudget); err != nil {
+		return nil, err
+	}
+	if !result.Found {
+		return nil, api.ErrNotFound
+	}
+	return result.Value, nil
+}

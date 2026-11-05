@@ -27,6 +27,7 @@ func init() {
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
+		"ActionHost":                    reflect.ValueOf(api.ActionHost),
 		"ActionOpenPalette":             reflect.ValueOf(api.ActionOpenPalette),
 		"ActionOpenPath":                reflect.ValueOf(api.ActionOpenPath),
 		"ActionOpenURL":                 reflect.ValueOf(api.ActionOpenURL),
@@ -43,6 +44,7 @@ func init() {
 		"ActionRun":                     reflect.ValueOf(api.ActionRun),
 		"ActionSetQuery":                reflect.ValueOf(api.ActionSetQuery),
 		"ActionShellExec":               reflect.ValueOf(api.ActionShellExec),
+		"ActionShortcut":                reflect.ValueOf(api.ActionShortcut),
 		"ActionSystem":                  reflect.ValueOf(api.ActionSystem),
 		"ActionToggleSetting":           reflect.ValueOf(api.ActionToggleSetting),
 		"ActionTrash":                   reflect.ValueOf(api.ActionTrash),
@@ -61,6 +63,7 @@ func init() {
 		"CapabilityDesktopSelection":    reflect.ValueOf(api.CapabilityDesktopSelection),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
+		"CapabilityJobs":                reflect.ValueOf(api.CapabilityJobs),
 		"CapabilityNetwork":             reflect.ValueOf(api.CapabilityNetwork),
 		"CapabilityOCR":                 reflect.ValueOf(api.CapabilityOCR),
 		"CapabilityPlaces":              reflect.ValueOf(api.CapabilityPlaces),
@@ -98,6 +101,10 @@ func init() {
 		"DecisionPredicate":             reflect.ValueOf(api.DecisionPredicate),
 		"DecisionScore":                 reflect.ValueOf(api.DecisionScore),
 		"Destructive":                   reflect.ValueOf(api.Destructive),
+		"DiagnosticsOff":                reflect.ValueOf(constant.MakeFromLiteral("\"off\"", token.STRING, 0)),
+		"DiagnosticsProblemComponent":   reflect.ValueOf(constant.MakeFromLiteral("\"support.report\"", token.STRING, 0)),
+		"DiagnosticsRequested":          reflect.ValueOf(constant.MakeFromLiteral("\"requested\"", token.STRING, 0)),
+		"DiagnosticsStored":             reflect.ValueOf(constant.MakeFromLiteral("\"stored\"", token.STRING, 0)),
 		"DictationError":                reflect.ValueOf(api.DictationError),
 		"DictationIdle":                 reflect.ValueOf(api.DictationIdle),
 		"DictationRecording":            reflect.ValueOf(api.DictationRecording),
@@ -146,6 +153,21 @@ func init() {
 		"IndicatorRecording":            reflect.ValueOf(api.IndicatorRecording),
 		"IndicatorSuccess":              reflect.ValueOf(api.IndicatorSuccess),
 		"IndicatorTranscribing":         reflect.ValueOf(api.IndicatorTranscribing),
+		"IsPermissionKind":              reflect.ValueOf(api.IsPermissionKind),
+		"JobOutcomeFailed":              reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
+		"JobOutcomeSkipped":             reflect.ValueOf(constant.MakeFromLiteral("\"skipped\"", token.STRING, 0)),
+		"JobOutcomeSucceeded":           reflect.ValueOf(constant.MakeFromLiteral("\"succeeded\"", token.STRING, 0)),
+		"JobOwnerExtension":             reflect.ValueOf(constant.MakeFromLiteral("\"extension\"", token.STRING, 0)),
+		"JobOwnerHost":                  reflect.ValueOf(constant.MakeFromLiteral("\"host\"", token.STRING, 0)),
+		"JobStatusBackingOff":           reflect.ValueOf(constant.MakeFromLiteral("\"backing-off\"", token.STRING, 0)),
+		"JobStatusDisabled":             reflect.ValueOf(constant.MakeFromLiteral("\"disabled\"", token.STRING, 0)),
+		"JobStatusFailed":               reflect.ValueOf(constant.MakeFromLiteral("\"failed\"", token.STRING, 0)),
+		"JobStatusIdle":                 reflect.ValueOf(constant.MakeFromLiteral("\"idle\"", token.STRING, 0)),
+		"JobStatusRunning":              reflect.ValueOf(constant.MakeFromLiteral("\"running\"", token.STRING, 0)),
+		"JobStatusSucceeded":            reflect.ValueOf(constant.MakeFromLiteral("\"succeeded\"", token.STRING, 0)),
+		"JobTriggerEvent":               reflect.ValueOf(constant.MakeFromLiteral("\"event\"", token.STRING, 0)),
+		"JobTriggerInterval":            reflect.ValueOf(constant.MakeFromLiteral("\"interval\"", token.STRING, 0)),
+		"JobTriggerStartup":             reflect.ValueOf(constant.MakeFromLiteral("\"startup\"", token.STRING, 0)),
 		"KnownCapabilities":             reflect.ValueOf(api.KnownCapabilities),
 		"KnownMenuBarIcon":              reflect.ValueOf(api.KnownMenuBarIcon),
 		"LayoutCenter":                  reflect.ValueOf(api.LayoutCenter),
@@ -200,6 +222,16 @@ func init() {
 		"PatchMerge":                    reflect.ValueOf(api.PatchMerge),
 		"PatchPrepend":                  reflect.ValueOf(api.PatchPrepend),
 		"PatchReplace":                  reflect.ValueOf(api.PatchReplace),
+		"PermissionAccessibility":       reflect.ValueOf(constant.MakeFromLiteral("\"accessibility\"", token.STRING, 0)),
+		"PermissionAllowed":             reflect.ValueOf(constant.MakeFromLiteral("\"allowed\"", token.STRING, 0)),
+		"PermissionCamera":              reflect.ValueOf(constant.MakeFromLiteral("\"camera\"", token.STRING, 0)),
+		"PermissionDenied":              reflect.ValueOf(constant.MakeFromLiteral("\"denied\"", token.STRING, 0)),
+		"PermissionFilesAndFolders":     reflect.ValueOf(constant.MakeFromLiteral("\"files-and-folders\"", token.STRING, 0)),
+		"PermissionKinds":               reflect.ValueOf(api.PermissionKinds),
+		"PermissionMicrophone":          reflect.ValueOf(constant.MakeFromLiteral("\"microphone\"", token.STRING, 0)),
+		"PermissionNotDetermined":       reflect.ValueOf(constant.MakeFromLiteral("\"not-determined\"", token.STRING, 0)),
+		"PermissionScreenRecording":     reflect.ValueOf(constant.MakeFromLiteral("\"screen-recording\"", token.STRING, 0)),
+		"PermissionUnknown":             reflect.ValueOf(constant.MakeFromLiteral("\"unknown\"", token.STRING, 0)),
 		"PlacementHidden":               reflect.ValueOf(api.PlacementHidden),
 		"PlacementRoot":                 reflect.ValueOf(api.PlacementRoot),
 		"PlacementSearch":               reflect.ValueOf(api.PlacementSearch),
@@ -212,6 +244,7 @@ func init() {
 		"PreviewView":                   reflect.ValueOf(api.PreviewView),
 		"Primary":                       reflect.ValueOf(api.Primary),
 		"ProgressView":                  reflect.ValueOf(api.ProgressView),
+		"ProminencePrimary":             reflect.ValueOf(constant.MakeFromLiteral("\"primary\"", token.STRING, 0)),
 		"PushView":                      reflect.ValueOf(api.PushView),
 		"QuickLook":                     reflect.ValueOf(api.QuickLook),
 		"RevealPath":                    reflect.ValueOf(api.RevealPath),
@@ -228,10 +261,18 @@ func init() {
 		"SetQuery":                      reflect.ValueOf(api.SetQuery),
 		"SettingBoolean":                reflect.ValueOf(constant.MakeFromLiteral("\"boolean\"", token.STRING, 0)),
 		"SettingNumber":                 reflect.ValueOf(constant.MakeFromLiteral("\"number\"", token.STRING, 0)),
+		"SettingRowAction":              reflect.ValueOf(api.SettingRowAction),
+		"SettingRowChoice":              reflect.ValueOf(api.SettingRowChoice),
+		"SettingRowRecorder":            reflect.ValueOf(api.SettingRowRecorder),
+		"SettingRowText":                reflect.ValueOf(api.SettingRowText),
+		"SettingRowToggle":              reflect.ValueOf(api.SettingRowToggle),
 		"SettingString":                 reflect.ValueOf(constant.MakeFromLiteral("\"string\"", token.STRING, 0)),
+		"SettingsView":                  reflect.ValueOf(api.SettingsView),
 		"ShapeCircle":                   reflect.ValueOf(api.ShapeCircle),
 		"ShapeRounded":                  reflect.ValueOf(api.ShapeRounded),
 		"ShapeSquare":                   reflect.ValueOf(api.ShapeSquare),
+		"ShortcutOpRecord":              reflect.ValueOf(constant.MakeFromLiteral("\"record\"", token.STRING, 0)),
+		"ShortcutOpRemove":              reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
 		"SizeDefault":                   reflect.ValueOf(api.SizeDefault),
 		"SizeLarge":                     reflect.ValueOf(api.SizeLarge),
 		"StepActive":                    reflect.ValueOf(api.StepActive),
@@ -255,6 +296,22 @@ func init() {
 		"TriggerStartup":                reflect.ValueOf(api.TriggerStartup),
 		"TriggerWake":                   reflect.ValueOf(api.TriggerWake),
 		"TypeText":                      reflect.ValueOf(api.TypeText),
+		"UpdateChannelDev":              reflect.ValueOf(constant.MakeFromLiteral("\"dev\"", token.STRING, 0)),
+		"UpdateChannelNightly":          reflect.ValueOf(constant.MakeFromLiteral("\"nightly\"", token.STRING, 0)),
+		"UpdateChannelStable":           reflect.ValueOf(constant.MakeFromLiteral("\"stable\"", token.STRING, 0)),
+		"UpdateOpChannel":               reflect.ValueOf(constant.MakeFromLiteral("\"channel\"", token.STRING, 0)),
+		"UpdateOpCheck":                 reflect.ValueOf(constant.MakeFromLiteral("\"check\"", token.STRING, 0)),
+		"UpdateOpDownload":              reflect.ValueOf(constant.MakeFromLiteral("\"download\"", token.STRING, 0)),
+		"UpdateOpInstall":               reflect.ValueOf(constant.MakeFromLiteral("\"install\"", token.STRING, 0)),
+		"UpdateStatusAvailable":         reflect.ValueOf(constant.MakeFromLiteral("\"available\"", token.STRING, 0)),
+		"UpdateStatusChecking":          reflect.ValueOf(constant.MakeFromLiteral("\"checking\"", token.STRING, 0)),
+		"UpdateStatusCurrent":           reflect.ValueOf(constant.MakeFromLiteral("\"current\"", token.STRING, 0)),
+		"UpdateStatusDownloaded":        reflect.ValueOf(constant.MakeFromLiteral("\"downloaded\"", token.STRING, 0)),
+		"UpdateStatusDownloading":       reflect.ValueOf(constant.MakeFromLiteral("\"downloading\"", token.STRING, 0)),
+		"UpdateStatusError":             reflect.ValueOf(constant.MakeFromLiteral("\"error\"", token.STRING, 0)),
+		"UpdateStatusIdle":              reflect.ValueOf(constant.MakeFromLiteral("\"idle\"", token.STRING, 0)),
+		"UpdateStatusInstalling":        reflect.ValueOf(constant.MakeFromLiteral("\"installing\"", token.STRING, 0)),
+		"UpdateStatusUnsupported":       reflect.ValueOf(constant.MakeFromLiteral("\"unsupported\"", token.STRING, 0)),
 		"ValidateFieldValue":            reflect.ValueOf(api.ValidateFieldValue),
 		"ValidateScheduleKey":           reflect.ValueOf(api.ValidateScheduleKey),
 		"ViewCamera":                    reflect.ValueOf(api.ViewCamera),
@@ -267,6 +324,7 @@ func init() {
 		"ViewList":                      reflect.ValueOf(api.ViewList),
 		"ViewPreview":                   reflect.ValueOf(api.ViewPreview),
 		"ViewProgress":                  reflect.ValueOf(api.ViewProgress),
+		"ViewSettings":                  reflect.ValueOf(api.ViewSettings),
 		"ViewWebview":                   reflect.ValueOf(api.ViewWebview),
 		"WebviewAutoplay":               reflect.ValueOf(api.WebviewAutoplay),
 		"WebviewCamera":                 reflect.ValueOf(api.WebviewCamera),
@@ -329,6 +387,8 @@ func init() {
 		"Desktop":                 reflect.ValueOf((*api.Desktop)(nil)),
 		"Detail":                  reflect.ValueOf((*api.Detail)(nil)),
 		"DetailPane":              reflect.ValueOf((*api.DetailPane)(nil)),
+		"DiagnosticRecord":        reflect.ValueOf((*api.DiagnosticRecord)(nil)),
+		"Diagnostics":             reflect.ValueOf((*api.Diagnostics)(nil)),
 		"Dictation":               reflect.ValueOf((*api.Dictation)(nil)),
 		"DictationDevice":         reflect.ValueOf((*api.DictationDevice)(nil)),
 		"DictationStartOptions":   reflect.ValueOf((*api.DictationStartOptions)(nil)),
@@ -378,6 +438,10 @@ func init() {
 		"Invocation":              reflect.ValueOf((*api.Invocation)(nil)),
 		"Item":                    reflect.ValueOf((*api.Item)(nil)),
 		"ItemSection":             reflect.ValueOf((*api.ItemSection)(nil)),
+		"Job":                     reflect.ValueOf((*api.Job)(nil)),
+		"JobRun":                  reflect.ValueOf((*api.JobRun)(nil)),
+		"JobTrigger":              reflect.ValueOf((*api.JobTrigger)(nil)),
+		"Jobs":                    reflect.ValueOf((*api.Jobs)(nil)),
 		"Keyboard":                reflect.ValueOf((*api.Keyboard)(nil)),
 		"LaunchContext":           reflect.ValueOf((*api.LaunchContext)(nil)),
 		"LayoutKind":              reflect.ValueOf((*api.LayoutKind)(nil)),
@@ -409,6 +473,7 @@ func init() {
 		"PanelVisibility":         reflect.ValueOf((*api.PanelVisibility)(nil)),
 		"PasteOptions":            reflect.ValueOf((*api.PasteOptions)(nil)),
 		"PatchMode":               reflect.ValueOf((*api.PatchMode)(nil)),
+		"PermissionStatus":        reflect.ValueOf((*api.PermissionStatus)(nil)),
 		"Place":                   reflect.ValueOf((*api.Place)(nil)),
 		"Placement":               reflect.ValueOf((*api.Placement)(nil)),
 		"Popover":                 reflect.ValueOf((*api.Popover)(nil)),
@@ -433,9 +498,13 @@ func init() {
 		"Selection":               reflect.ValueOf((*api.Selection)(nil)),
 		"SelectionAccess":         reflect.ValueOf((*api.SelectionAccess)(nil)),
 		"SelectionState":          reflect.ValueOf((*api.SelectionState)(nil)),
+		"SettingChoice":           reflect.ValueOf((*api.SettingChoice)(nil)),
 		"SettingDefinition":       reflect.ValueOf((*api.SettingDefinition)(nil)),
+		"SettingRow":              reflect.ValueOf((*api.SettingRow)(nil)),
+		"SettingRowKind":          reflect.ValueOf((*api.SettingRowKind)(nil)),
 		"Settings":                reflect.ValueOf((*api.Settings)(nil)),
 		"SettingsPane":            reflect.ValueOf((*api.SettingsPane)(nil)),
+		"SettingsSpec":            reflect.ValueOf((*api.SettingsSpec)(nil)),
 		"Shell":                   reflect.ValueOf((*api.Shell)(nil)),
 		"ShellCommand":            reflect.ValueOf((*api.ShellCommand)(nil)),
 		"ShellOptions":            reflect.ValueOf((*api.ShellOptions)(nil)),
@@ -499,12 +568,14 @@ func init() {
 		"_Data":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Data)(nil)),
 		"_DataLoader":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_DataLoader)(nil)),
 		"_Desktop":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Desktop)(nil)),
+		"_Diagnostics":       reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics)(nil)),
 		"_Dictation":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Dictation)(nil)),
 		"_Drafts":            reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Drafts)(nil)),
 		"_Extension":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Extension)(nil)),
 		"_Files":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Files)(nil)),
 		"_Indicators":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Indicators)(nil)),
 		"_Input":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Input)(nil)),
+		"_Jobs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Jobs)(nil)),
 		"_Keyboard":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Keyboard)(nil)),
 		"_Logs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Logs)(nil)),
 		"_MenuBarProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider)(nil)),
@@ -824,37 +895,39 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_CommandProvider) Comma
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Context is an interface wrapper for Context type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
-	IValue      interface{}
-	WAI         func() api.AI
-	WAIBuilder  func() api.AIBuilder
-	WAccount    func() api.Account
-	WCache      func() api.Cache
-	WClipboard  func() api.ClipboardHistory
-	WClock      func() api.Clock
-	WData       func() api.Data
-	WDesktop    func() api.Desktop
-	WDictation  func() api.Dictation
-	WDrafts     func() api.Drafts
-	WIdentity   func() api.Identity
-	WIndicators func() api.Indicators
-	WInput      func() api.Input
-	WLaunch     func() api.LaunchContext
-	WLogs       func() api.Logs
-	WNavigation func() api.Navigation
-	WNetwork    func() api.Network
-	WOCR        func() api.OCR
-	WOwnership  func() api.Ownership
-	WScheduler  func() api.Scheduler
-	WSecrets    func() api.Secrets
-	WSettings   func() api.Settings
-	WShortcuts  func() api.Shortcuts
-	WStd        func() context.Context
-	WStorage    func() api.Storage
-	WSystem     func() api.System
-	WText       func() api.Text
-	WUpdates    func() api.Updates
-	WViews      func() api.Views
-	WWindows    func() api.Windows
+	IValue       interface{}
+	WAI          func() api.AI
+	WAIBuilder   func() api.AIBuilder
+	WAccount     func() api.Account
+	WCache       func() api.Cache
+	WClipboard   func() api.ClipboardHistory
+	WClock       func() api.Clock
+	WData        func() api.Data
+	WDesktop     func() api.Desktop
+	WDiagnostics func() api.Diagnostics
+	WDictation   func() api.Dictation
+	WDrafts      func() api.Drafts
+	WIdentity    func() api.Identity
+	WIndicators  func() api.Indicators
+	WInput       func() api.Input
+	WJobs        func() api.Jobs
+	WLaunch      func() api.LaunchContext
+	WLogs        func() api.Logs
+	WNavigation  func() api.Navigation
+	WNetwork     func() api.Network
+	WOCR         func() api.OCR
+	WOwnership   func() api.Ownership
+	WScheduler   func() api.Scheduler
+	WSecrets     func() api.Secrets
+	WSettings    func() api.Settings
+	WShortcuts   func() api.Shortcuts
+	WStd         func() context.Context
+	WStorage     func() api.Storage
+	WSystem      func() api.System
+	WText        func() api.Text
+	WUpdates     func() api.Updates
+	WViews       func() api.Views
+	WWindows     func() api.Windows
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AI() api.AI {
@@ -881,6 +954,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Data() api.Da
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Desktop() api.Desktop {
 	return W.WDesktop()
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Diagnostics() api.Diagnostics {
+	return W.WDiagnostics()
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Dictation() api.Dictation {
 	return W.WDictation()
 }
@@ -895,6 +971,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Indicators() 
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Input() api.Input {
 	return W.WInput()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Jobs() api.Jobs {
+	return W.WJobs()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Launch() api.LaunchContext {
 	return W.WLaunch()
@@ -1008,6 +1087,28 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Shell() api.S
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) WindowManagement() api.WindowManagement {
 	return W.WWindowManagement()
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics is an interface wrapper for Diagnostics type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics struct {
+	IValue         interface{}
+	WExport        func(ref string) (string, error)
+	WRecent        func() []api.DiagnosticRecord
+	WReportProblem func() string
+	WReporting     func() string
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Export(ref string) (string, error) {
+	return W.WExport(ref)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Recent() []api.DiagnosticRecord {
+	return W.WRecent()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) ReportProblem() string {
+	return W.WReportProblem()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Diagnostics) Reporting() string {
+	return W.WReporting()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Dictation is an interface wrapper for Dictation type
@@ -1192,6 +1293,28 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Input struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Input) Prompt(spec api.PromptSpec) api.Action {
 	return W.WPrompt(spec)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Jobs is an interface wrapper for Jobs type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Jobs struct {
+	IValue      interface{}
+	WClearError func(id string) error
+	WList       func() []api.Job
+	WRun        func(id string) error
+	WSetEnabled func(id string, enabled bool) error
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) ClearError(id string) error {
+	return W.WClearError(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) List() []api.Job {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) Run(id string) error {
+	return W.WRun(id)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Jobs) SetEnabled(id string, enabled bool) error {
+	return W.WSetEnabled(id, enabled)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Keyboard is an interface wrapper for Keyboard type
@@ -1488,13 +1611,16 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Storage) Set(key strin
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_System is an interface wrapper for System type
 type _github_com_pablopunk_nvm_native_internal_ext_api_System struct {
-	IValue         interface{}
-	WHasCapability func(name string) bool
-	WLabels        func() api.SystemLabels
-	WNotify        func(title string, body string) error
-	WOS            func() string
-	WPlaces        func() []api.Place
-	WSettingsPanes func() []api.SettingsPane
+	IValue              interface{}
+	WHasCapability      func(name string) bool
+	WLabels             func() api.SystemLabels
+	WNotify             func(title string, body string) error
+	WOS                 func() string
+	WOpenPermissionPane func(kind string) error
+	WPermissions        func() []api.PermissionStatus
+	WPlaces             func() []api.Place
+	WRequestPermission  func(kind string) error
+	WSettingsPanes      func() []api.SettingsPane
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) HasCapability(name string) bool {
@@ -1509,8 +1635,17 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Notify(title s
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OS() string {
 	return W.WOS()
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) OpenPermissionPane(kind string) error {
+	return W.WOpenPermissionPane(kind)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Permissions() []api.PermissionStatus {
+	return W.WPermissions()
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) Places() []api.Place {
 	return W.WPlaces()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) RequestPermission(kind string) error {
+	return W.WRequestPermission(kind)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_System) SettingsPanes() []api.SettingsPane {
 	return W.WSettingsPanes()

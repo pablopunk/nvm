@@ -98,13 +98,13 @@ func TestPaletteCalculatorResult(t *testing.T) {
 
 func TestPaletteSettingsList(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.settingsView())
+	goldenOpen(p, p.settingsPage())
 	golden.AssertMatrix(t, "settings", p.View, paletteGoldens)
 }
 
 func TestPaletteSearchNoResults(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.settingsView())
+	goldenOpen(p, p.settingsPage())
 	goldenQuery(p, "zzqx")
 	golden.AssertMatrix(t, "no-results", p.View, paletteGoldens)
 }

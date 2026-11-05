@@ -262,9 +262,10 @@ type SystemLabels struct {
 	SettingsCommand string `json:"settingsCommand"`
 }
 
-// System is read-only host metadata. Use HasCapability to omit unsupported rows from discovery
+// System is host metadata and a few system actions. Use HasCapability to omit unsupported rows from discovery
 // instead of duplicating platform checks. Names are dotted: "windows.always-on-top", "ocr",
-// "keyboard.type-text", "quick-look", "window-management".
+// "keyboard.type-text", "quick-look", "window-management". Notify, RequestPermission and OpenPermissionPane act, and
+// they need the system declaration.
 type System interface {
 	OS() string
 	HasCapability(name string) bool
@@ -277,6 +278,13 @@ type System interface {
 	// click action: the Electron extension API had none. It returns an error when the user or the OS turned notifications
 	// off, and when the system cannot show them.
 	Notify(title, body string) error
+	// Permissions lists the OS permissions the platform has, with the state the OS reports for each.
+	Permissions() []PermissionStatus
+	// RequestPermission asks the OS to show its prompt for a permission kind. It fails with the reason when the OS has
+	// no prompt for it, and the extension then opens the pane instead.
+	RequestPermission(kind string) error
+	// OpenPermissionPane opens the System Settings pane that reviews a permission kind.
+	OpenPermissionPane(kind string) error
 }
 
 // SettingsPane is one pane of the operating system's settings app. Setting an ActionSystem op of
@@ -292,11 +300,12 @@ type Place struct {
 	Path string `json:"path"`
 }
 
-// UpdateState is a snapshot of the host update manager. Empty strings mean "none".
+// UpdateState is a snapshot of the host update manager. Empty strings mean "none". Message is the one line the person
+// reads about the update, the same line the menu bar and the root show.
 type UpdateState struct {
 	CurrentVersion    string `json:"currentVersion"`
-	Channel           string `json:"channel"` // stable or nightly
-	Status            string `json:"status"`
+	Channel           string `json:"channel"` // one of the UpdateChannel values
+	Status            string `json:"status"`  // one of the UpdateStatus values
 	Supported         bool   `json:"supported"`
 	Checking          bool   `json:"checking"`
 	Downloading       bool   `json:"downloading"`
@@ -304,7 +313,38 @@ type UpdateState struct {
 	AvailableVersion  string `json:"availableVersion,omitempty"`
 	DownloadedVersion string `json:"downloadedVersion,omitempty"`
 	ErrorMessage      string `json:"errorMessage,omitempty"`
+	Message           string `json:"message,omitempty"`
 }
+
+// Status values of UpdateState.Status, as the host's update manager reports them.
+const (
+	UpdateStatusIdle        = "idle"
+	UpdateStatusCurrent     = "current"
+	UpdateStatusUnsupported = "unsupported"
+	UpdateStatusChecking    = "checking"
+	UpdateStatusAvailable   = "available"
+	UpdateStatusDownloading = "downloading"
+	UpdateStatusDownloaded  = "downloaded"
+	UpdateStatusInstalling  = "installing"
+	UpdateStatusError       = "error"
+)
+
+// Channel values of UpdateState.Channel. Stable offers final releases only; nightly and dev also offer prereleases,
+// and a final release still wins whenever it is newer.
+const (
+	UpdateChannelStable  = "stable"
+	UpdateChannelNightly = "nightly"
+	UpdateChannelDev     = "dev"
+)
+
+// Operations of an ActionUpdate action. Check looks for a newer version, download starts one that waits, install
+// restarts into a downloaded one, and channel moves to the next channel and checks it.
+const (
+	UpdateOpCheck    = "check"
+	UpdateOpDownload = "download"
+	UpdateOpInstall  = "install"
+	UpdateOpChannel  = "channel"
+)
 
 // Clock is the only source of the current time for extension code. Hosts inject it so that tests
 // can advance time instead of sleeping, the same rule the host follows for its own packages.
@@ -312,8 +352,8 @@ type Clock interface {
 	Now() time.Time
 }
 
-// Updates reads update state. Check, download and install are ActionUpdate actions, and the
-// host renders their progress.
+// Updates reads update state. Check, download, install and channel are ActionUpdate actions, and the
+// host performs them and renders their progress.
 type Updates interface {
 	State() UpdateState
 }
@@ -332,3 +372,10 @@ type Windows interface {
 func DataSourceFrom(loader string) DataSource {
 	return DataSource{Loader: loader}
 }
+
+// Operations of an ActionShortcut action. Record opens the recorder for the action's shortcut, and remove drops the
+// shortcut the user chose for it.
+const (
+	ShortcutOpRecord = "record"
+	ShortcutOpRemove = "remove"
+)

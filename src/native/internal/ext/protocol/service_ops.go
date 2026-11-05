@@ -77,6 +77,22 @@ type PendingReply struct {
 	Pending bool      `json:"pending"`
 }
 
+// JobArgs names the job an operation acts on.
+type JobArgs struct {
+	ID string `json:"id"`
+}
+
+// JobEnabledArgs names the job to enable or disable.
+type JobEnabledArgs struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+}
+
+// ExportArgs names the record whose safe text is read.
+type ExportArgs struct {
+	Ref string `json:"ref"`
+}
+
 // IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
 type IndicatorHideArgs struct {
 	ID string `json:"id,omitempty"`
