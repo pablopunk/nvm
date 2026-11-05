@@ -76,15 +76,38 @@ func TestHiddenViewPanelLeavesItsActionsOutOfTheItemMenu(t *testing.T) {
 	}
 }
 
-// TestRowWithoutActionsGetsNoViewAction checks a row that has no action of its own takes none from the view, since its
-// first action is what Enter runs.
-func TestRowWithoutActionsGetsNoViewAction(t *testing.T) {
+// TestRowWithoutActionsListsTheViewActionsButRunsNone checks a row with no action of its own still lists the view's
+// actions in its menu, as 1.x does, and Enter runs none of them.
+func TestRowWithoutActionsListsTheViewActionsButRunsNone(t *testing.T) {
 	item := api.Item{ID: "plain", Title: "Plain"}
 	view := api.ListView("Notes", item)
 	view.ActionPanel = panelOf("Clear all")
 
-	if actions := menuRig(view).row(item).Actions; len(actions) != 0 {
-		t.Fatalf("a plain row got %d actions from the view; want none", len(actions))
+	row := menuRig(view).row(item)
+	titles, _ := menuTitles(row.Actions)
+	if !slices.Equal(titles, []string{"Clear all"}) || !row.Actions[0].MenuOnly {
+		t.Fatalf("menu = %v menu-only = %v; want the view action listed and held back from Enter", titles, row.Actions[0].MenuOnly)
+	}
+	if _, ok := row.DefaultAction(); ok {
+		t.Fatal("a row with only view actions has a default action; Enter would run a view action")
+	}
+}
+
+// TestMenuGroupsTitleThePanelSectionsAndTheViewActions checks each action carries the title of its group: the panel's
+// section titles, and View for the view's actions an item does not repeat.
+func TestMenuGroupsTitleThePanelSectionsAndTheViewActions(t *testing.T) {
+	primary := api.Run("open", "Open", nil)
+	item := api.Item{ID: "note", Title: "Note", Primary: &primary, ActionPanel: api.Panel(
+		api.Section("Manage", api.Run("pin", "Pin", nil)), api.Section("", api.Run("copy", "Copy", nil)))}
+	view := api.ListView("Notes", item)
+	view.ActionPanel = panelOf("Clear all")
+
+	var groups []string
+	for _, action := range menuRig(view).row(item).Actions {
+		groups = append(groups, action.Section)
+	}
+	if !slices.Equal(groups, []string{"", "Manage", "", "View"}) {
+		t.Fatalf("groups = %q, want the primary, the Manage section, the untitled section and View", groups)
 	}
 }
 

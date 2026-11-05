@@ -42,13 +42,17 @@ func (p *Palette) chosenItem() *search.Item {
 // first, and the row's learn key is recorded with the query after its action has run.
 func (p *Palette) runDefault() {
 	it := p.chosenItem()
-	if it == nil || len(it.Actions) == 0 {
+	if it == nil {
+		return
+	}
+	action, ok := it.DefaultAction()
+	if !ok {
 		return
 	}
 	query, key := strings.TrimSpace(p.query), it.LearnKey
 	concealed := p.cur().Concealed
 	p.rememberQuery(query)
-	p.runAction(it.Actions[0])
+	p.runAction(action)
 	if key != "" && p.opts.Learner != nil && !concealed {
 		p.opts.Learner.Record(key, query)
 	}
