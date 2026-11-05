@@ -92,17 +92,18 @@ func TestJourneyJ01SummonAndDismiss(t *testing.T) {
 	must(t, app.DismissWithEscape())
 }
 
-// TestJourneyJ02SearchAndOpenClipboardHistory is the J02 smoke: typing "cl" shows the Clipboard
-// History row, and Enter opens it. The frecency part of J02 (the intended app becomes the top hit
-// after three launches) is not covered yet.
+// TestJourneyJ02SearchAndOpenClipboardHistory is the J02 smoke: typing "clip" shows the Clipboard
+// History row first, and Enter opens it. "cl" is not used: as in 1.x, Classify Image with AI and
+// Triage Selected Text with AI match it by prefix too, and Enter would run the first of those. The
+// frecency part of J02 (the intended app becomes the top hit after three launches) is not covered yet.
 func TestJourneyJ02SearchAndOpenClipboardHistory(t *testing.T) {
 	app := Launch(t, Options{})
 	must(t, app.SummonPalette())
 
-	must(t, app.Type("cl"))
+	must(t, app.Type("clip"))
 	_, err := app.WaitFor("Clipboard History", elementWait)
 	must(t, err)
-	shoot(t, app, "j02-1-typed-cl")
+	shoot(t, app, "j02-1-typed-clip")
 
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Search Clipboard History", elementWait)

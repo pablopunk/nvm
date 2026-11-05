@@ -176,7 +176,8 @@ func TestJourneyJ22QuitAndUninstallFakeApp(t *testing.T) {
 	shoot(t, app, "j22-1-running")
 
 	// Force quit through Force Quit Apps: Enter asks for the Force Quit confirmation, and the confirmation force quits.
-	must(t, app.Key("Escape"))
+	must(t, app.DismissWithEscape())
+	must(t, app.SummonPalette())
 	must(t, app.Type("force quit"))
 	_, err = app.WaitFor("Force Quit Apps", elementWait)
 	must(t, err)
