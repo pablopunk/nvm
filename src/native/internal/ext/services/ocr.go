@@ -50,14 +50,12 @@ func (h *Handler) readImage(ctx context.Context, support ocr.Features, raw json.
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.OCRResult{}, err
 	}
-	png, isData, err := ocrPNGInput(args.Input)
+	source := ocrSourceOf(args.Input)
+	png, isData, err := ocrDataURLInput(source)
 	if err != nil {
 		return api.OCRResult{}, err
 	}
-	path := args.Input.Source
-	if args.Input.File != nil && path == "" {
-		path = args.Input.File.Path
-	}
+	path := ocrPathOf(source, h.deps.Home)
 	if !isData && path == "" {
 		return api.OCRResult{}, invalid("OCR needs an image file path or a PNG data URL")
 	}
