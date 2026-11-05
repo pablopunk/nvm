@@ -42,7 +42,7 @@ func (h *TrayHost) NewTray(opts platform.TrayOptions) (platform.Tray, error) {
 	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
-	tray := &Tray{options: opts, title: opts.Title}
+	tray := &Tray{options: opts, title: opts.Title, toolTip: opts.ToolTip}
 	h.trays = append(h.trays, tray)
 	return tray, nil
 }
@@ -60,6 +60,7 @@ type Tray struct {
 	mu         sync.Mutex
 	options    platform.TrayOptions
 	title      string
+	toolTip    string
 	icon       []byte
 	template   bool
 	dark       bool
@@ -145,6 +146,22 @@ func (t *Tray) RightClick() {
 // Options returns the options the item was created with.
 func (t *Tray) Options() platform.TrayOptions {
 	return t.options
+}
+
+// SetToolTip records the new hover text.
+func (t *Tray) SetToolTip(tip string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.closed {
+		t.toolTip = tip
+	}
+}
+
+// ToolTip returns the hover text last set, or the one the item was created with.
+func (t *Tray) ToolTip() string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.toolTip
 }
 
 // SetTitle records the new title.
