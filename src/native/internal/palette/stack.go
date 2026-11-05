@@ -6,6 +6,7 @@ func (p *Palette) SetStack(views ...*View) {
 	p.cancelAction()
 	p.resetActionMenu()
 	p.stack = append([]*View(nil), views...)
+	p.entryBoundary = 0
 	p.shownView = nil
 }
 
@@ -36,6 +37,7 @@ func (p *Palette) prepareShow() {
 	p.resetActionMenu()
 	p.shownView = nil
 	p.resetRootHistory()
+	p.entryBoundary = 0
 }
 
 func (p *Palette) present() {
@@ -64,6 +66,7 @@ func (p *Palette) Toggle() {
 func (p *Palette) Open(v *View) {
 	p.prepareShow()
 	p.leaveUnsurvivingPages()
+	p.entryBoundary = len(p.stack)
 	p.push(v)
 	p.present()
 }

@@ -99,7 +99,11 @@ func (p *Palette) escape(v *View) {
 	case p.restoreRootDraft():
 	case v.OnEscape != nil && v.OnEscape():
 	case len(p.stack) > 1:
-		p.Pop()
+		if p.entryBoundary > 0 && len(p.stack) == p.entryBoundary+1 {
+			p.Hide()
+		} else {
+			p.Pop()
+		}
 	default:
 		p.Hide()
 	}

@@ -69,3 +69,31 @@ func TestEscapeAsksThePageFirst(t *testing.T) {
 		t.Fatal("Escape the page did not use should go back to the root")
 	}
 }
+
+func TestIndependentEntryEscapeDismissesAndNestedEscapeReturnsToEntry(t *testing.T) {
+	root := rowsView("root", nil)
+	h := newHarness(t, root, true)
+	entry := rowsView("entry", nil)
+	h.p.Open(entry)
+	nested := rowsView("nested", nil)
+	h.p.Push(nested)
+	h.key(0, ui.KeyEscape)
+	if h.p.Top() != entry || !h.p.Visible() {
+		t.Fatal("Escape in a nested entry view should return to the entry")
+	}
+	h.key(0, ui.KeyEscape)
+	if h.p.Visible() {
+		t.Fatal("Escape at the independent entry should dismiss the palette")
+	}
+}
+
+func TestRootNavigationEscapeStillReturnsToRoot(t *testing.T) {
+	root := rowsView("root", nil)
+	h := newHarness(t, root, true)
+	view := rowsView("view", nil)
+	h.p.Push(view)
+	h.key(0, ui.KeyEscape)
+	if h.p.Top() != root || !h.p.Visible() {
+		t.Fatal("Escape in ordinary root navigation should return to root")
+	}
+}

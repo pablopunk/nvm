@@ -91,6 +91,11 @@ func TestJourneyClipboardShortcutNeverPaintsTheRoot(t *testing.T) {
 			must(t, err)
 			must(t, app.Key("Escape"))
 			hidePalette(t, app)
+			window, err = app.PaletteWindow()
+			must(t, err)
+			if window.Visible {
+				t.Fatal("Escape at the independent clipboard shortcut entry exposed the root palette")
+			}
 		})
 	}
 }

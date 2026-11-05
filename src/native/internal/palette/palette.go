@@ -88,6 +88,9 @@ type Palette struct {
 	refresh searchRefresher
 
 	stack []*View
+	// entryBoundary is the first view opened by an independent shortcut. Escape at that view
+	// returns focus instead of exposing the root underneath it.
+	entryBoundary int
 	query string
 	// caretToEnd is set when the query was replaced: the input takes the caret to the end of the text once.
 	caretToEnd   bool
