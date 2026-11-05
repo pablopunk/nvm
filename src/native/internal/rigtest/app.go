@@ -29,7 +29,8 @@ type Options struct {
 	// Theme is NVM_THEME ("dark" forces the dark palette). Empty keeps the light default.
 	Theme string
 	// Hotkey is written to the isolated config.json, for a rig that must not share a grab with
-	// another app on the display. Empty keeps the app default, Alt+Shift+Space.
+	// another app on the display. Empty writes DefaultHotkey when the HOME holds no palette shortcut
+	// yet, and keeps the one a previous launch of that HOME left.
 	Hotkey string
 	// Home is the HOME of this launch, kept by the caller. A second launch with the same Home runs
 	// the app over the state the first one left (J10). Empty gives the launch a fresh HOME.
@@ -111,7 +112,7 @@ func Launch(t *testing.T, opts Options) *App {
 			t.Fatal(err)
 		}
 	}
-	if opts.Hotkey != "" || opts.Home == "" {
+	if opts.Hotkey != "" || paletteHotkeyMissing(home) {
 		if err := writeHotkeySettings(home, hotkey); err != nil {
 			t.Fatal(err)
 		}

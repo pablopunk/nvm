@@ -71,7 +71,9 @@ func TestJourneyJ01SummonAndDismiss(t *testing.T) {
 	started := time.Now()
 	must(t, app.SummonPalette())
 	t.Logf("summon took %s", time.Since(started).Round(time.Millisecond))
-	_, err := app.WaitFor("Clipboard History", elementWait)
+	// The tree holds the rows the palette draws, and Clipboard History sits below them at the root; the first AI row
+	// stands for the root.
+	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
 	must(t, err)
 	shoot(t, app, "j01-1-summoned")
 

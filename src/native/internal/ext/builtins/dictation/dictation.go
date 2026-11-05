@@ -76,12 +76,16 @@ func (Extension) Manifest() api.Manifest {
 		Capabilities: []api.Capability{
 			api.CapabilityDictation, api.CapabilityAI, api.CapabilityOCR, api.CapabilityDesktopApps,
 		},
+		Settings:  []api.SettingDefinition{{ID: SettingDevice, Title: "Microphone", Type: api.SettingString}},
+		Publishes: []string{SettingDevice},
 	}
 }
 
 // Commands lists Dictate and Dictation History at the root. Their shortcuts are keyed by the command ids, which the host
-// maps to the 1.x keys, so the shortcuts a user set in 1.x keep working.
-func (Extension) Commands(api.Context) ([]api.Command, error) {
+// maps to the 1.x keys, so the shortcuts a user set in 1.x keep working. Loading them publishes the microphone's title
+// for the Settings page's Dictation row.
+func (e Extension) Commands(ctx api.Context) ([]api.Command, error) {
+	publishDeviceTitle(ctx, e.readSettings(ctx))
 	return []api.Command{dictateCommand(), historyCommand()}, nil
 }
 

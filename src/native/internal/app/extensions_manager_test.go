@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
+	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"os"
 	"path/filepath"
@@ -85,7 +86,7 @@ func paletteSurfaces(p *App) managerFakes {
 // clipboard, and the surfaces given, so a golden shows the states its fixture names.
 func newFixtureManagerWithSurfaces(t *testing.T, p *App, surfaces managerFakes) *manager.Manager {
 	t.Helper()
-	return newManagerWithFakes(t, surfaces, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: surfaces.extras.options}), surfaces.extras.clock, nil, p.appsvc)
+	return newManagerWithFakes(t, surfaces, builtInExtensions(builtInInputs{Zone: time.UTC, Clipboard: surfaces.extras.options, WindowSettings: windowmanagementbuiltin.DefaultSettings()}), surfaces.extras.clock, nil, p.appsvc)
 }
 
 // newFixtureManagerWithApps is newFixtureManagerWithSurfaces with the palette's own surfaces, so the applications

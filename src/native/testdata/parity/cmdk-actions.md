@@ -120,7 +120,7 @@ Root items are customizable only when the item sets `customizable` or it has a p
 |---|---|---|
 | item `visible` or `menu` | ⌘K lists the primary, the panel and the view's actions | same; `menu` and `visible` are equal because 2.0 draws no inline panel |
 | item `hidden` | ⌘K does not open for the row; no row shortcut label; local shortcuts of its actions still run (`localActionCandidates`) | all its actions kept on the row for Enter and their shortcuts, marked `MenuHidden`, so the menu does not open |
-| view `visible` or `menu` | view actions join each row's menu under View, and an empty list's ⌘K lists them | view actions join a row's menu when the row has its own actions (Enter stays on the row's first action); an empty list's ⌘K lists them. The "View" section title is not drawn (the palette menu has no section headers yet) |
+| view `visible` or `menu` | view actions join each row's menu under View, and an empty list's ⌘K lists them | done: view actions join every row's menu under a View header, with or without the row's own actions; they are menu-only, so Enter runs the row's first own action (or nothing when it has none). Panel section titles are drawn as headers too (`palette/action_menu_rows.go`) |
 | view `hidden` | view actions leave every ⌘K menu; their shortcuts still run | view actions kept as `MenuHidden` shortcut-only actions |
 
 Extension authoring actions (G6-G12) are missing in 2.0. See the report for the implementation status.

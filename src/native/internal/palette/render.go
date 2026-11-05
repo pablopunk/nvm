@@ -278,7 +278,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	}
 	data := design.FooterData{Name: name}
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
-		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
+		if action, ok := it.DefaultAction(); ok {
+			data.Primary = &design.KeyHint{Title: action.Title, Key: KeyLabel("↵")}
+		}
 		if len(p.menuActions()) > 1 {
 			data.Secondary = actionsKeyHint()
 		}
@@ -308,19 +310,14 @@ func actionsKeyHint() *design.KeyHint {
 
 // actionPanel is the action menu, a popover over the pane.
 func (p *Palette) actionPanel(c *ui.Context) {
-	acts := p.menuActions()
 	p.actList.Selected = &p.actChosen
-	rows := make([]design.MenuRow, len(acts))
-	for i, a := range acts {
-		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen,
-			Disabled: a.Disabled != "", Subtitle: a.Disabled}
-	}
+	rows, rowAction := actionMenuRows(p.menuActions(), p.actChosen)
 	events := design.ActionMenu(c, rows)
-	if events.Hovered >= 0 {
-		p.actChosen = events.Hovered
+	if events.Hovered >= 0 && rowAction[events.Hovered] >= 0 {
+		p.actChosen = rowAction[events.Hovered]
 	}
-	if events.Clicked >= 0 {
-		p.runMenuAction(events.Clicked)
+	if events.Clicked >= 0 && rowAction[events.Clicked] >= 0 {
+		p.runMenuAction(rowAction[events.Clicked])
 	}
 }
 

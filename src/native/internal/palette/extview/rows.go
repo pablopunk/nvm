@@ -59,24 +59,19 @@ func (s *Session) row(item api.Item) search.Item {
 }
 
 // itemActions is the item's menu: its primary action first, then its action panel's actions (its actions when the
-// panel is empty), then the view's actions the item does not repeat. The view's actions join only a row that has its
-// own, since the first action is what Enter runs. A hidden item panel keeps the primary and the shortcuts but no menu,
-// and a hidden view panel keeps its actions' shortcuts out of the menu.
+// panel is empty), then the view's actions the item does not repeat, under the View group. The view's actions are
+// menu-only, so Enter still runs the item's own first action. A hidden item panel keeps the primary and the shortcuts
+// but no menu, and a hidden view panel keeps its actions' shortcuts out of the menu.
 func (s *Session) itemActions(item api.Item) []search.Action {
-	own := MenuWireActions(item.Primary, item.ActionPanel, item.Actions)
-	if item.Shortcut != "" && len(own) > 0 && own[0].Shortcut == "" {
-		own[0].Shortcut = item.Shortcut
+	own := MenuSections(item.Primary, item.ActionPanel, item.Actions)
+	if item.Shortcut != "" && len(own) > 0 && own[0].Actions[0].Shortcut == "" {
+		own[0].Actions[0].Shortcut = item.Shortcut
 	}
-	out := make([]search.Action, 0, len(own))
-	for i, action := range own {
-		out = append(out, s.actionAt(item.ID, i, action))
-	}
-	if len(own) > 0 {
-		for i, action := range s.viewActionsNotIn(own) {
-			mapped := s.actionAt(item.ID, len(own)+i, action)
-			mapped.MenuHidden = s.viewHidesMenu()
-			out = append(out, mapped)
-		}
+	out := s.sectionActions(item.ID, 0, own)
+	view := []MenuSection{{Title: viewGroupTitle, Actions: s.viewActionsNotIn(flattenSections(own))}}
+	for _, mapped := range s.sectionActions(item.ID, len(out), view) {
+		mapped.MenuHidden, mapped.MenuOnly = s.viewHidesMenu(), true
+		out = append(out, mapped)
 	}
 	if item.ActionPanelVisibility == api.PanelHidden {
 		return HideFromMenu(out)

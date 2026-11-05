@@ -111,7 +111,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	} else {
 		row.LearnKey = folderLearnKey(extID, item.LearnKey)
 	}
-	row.Actions = extview.MenuActionsFor(deps, extID, extview.MenuWireActions(item.Primary, item.ActionPanel, item.Actions))
+	row.Actions = extview.MenuActionsFor(deps, extID, extview.MenuSections(item.Primary, item.ActionPanel, item.Actions))
 	if item.ActionPanelVisibility == api.PanelHidden {
 		row.Actions = extview.HideFromMenu(row.Actions)
 	}

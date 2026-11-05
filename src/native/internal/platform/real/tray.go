@@ -31,6 +31,11 @@ func (t *nativeTray) SetTitle(title string) {
 	t.tray.SetTitle(title)
 }
 
+// SetToolTip changes the hover text without recreating the item.
+func (t *nativeTray) SetToolTip(tip string) {
+	t.tray.SetToolTip(tip)
+}
+
 // SetMenu replaces the click menu. An empty list removes it.
 func (t *nativeTray) SetMenu(items []platform.MenuItem) {
 	if len(items) == 0 {

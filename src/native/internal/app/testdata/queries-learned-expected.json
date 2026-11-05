@@ -782,37 +782,6 @@
     "query": "cal",
     "rows": [
       {
-        "kind": "Window Management",
-        "title": "Maximize Height",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "",
-        "icon": "move-vertical",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Maximize Height",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Applications",
         "title": "Calendar",
         "subtitle": "",
@@ -875,6 +844,37 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Maximize Height",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "move-vertical",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Maximize Height",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"cal\"",
         "subtitle": "Build a reusable command with AI",
@@ -908,6 +908,37 @@
         "actions": [
           {
             "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Center Half",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "square-dashed",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Center Half",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1188,6 +1219,99 @@
       },
       {
         "kind": "Commands",
+        "title": "Bottom Center Sixth",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "grid-3x3",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Bottom Center Sixth",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Bottom Left Quarter",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "grid-2x2",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Bottom Left Quarter",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Bottom Right Quarter",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "grid-2x2",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Bottom Right Quarter",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Empty Trash",
         "subtitle": "Permanently delete trashed files",
         "section": "",
@@ -1201,6 +1325,99 @@
         "actions": [
           {
             "title": "Empty Trash",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Middle Third",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "rows-3",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Middle Third",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Middle Two Thirds",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "rows-2",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Middle Two Thirds",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Move Right",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "move-right",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Move Right",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1311,44 +1528,6 @@
     "query": "set",
     "rows": [
       {
-        "kind": "Window Management",
-        "title": "Move Window…",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "",
-        "icon": "move",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Move Window…",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Window Management",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
-        "section": "",
-        "id": "",
-        "icon": "settings",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Commands",
         "title": "Settings",
         "subtitle": "Hotkey, search engine, clipboard",
@@ -1398,6 +1577,44 @@
           },
           {
             "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "",
+        "id": "",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "move",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Move Window…",
             "label": ""
           }
         ]
@@ -1499,6 +1716,37 @@
       },
       {
         "kind": "Commands",
+        "title": "Focus Window Left",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "arrow-left",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Focus Window Left",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Nevermind: Switch Backend Environment",
         "subtitle": "Switch Development, Preview, Production, or custom backend",
         "section": "",
@@ -1512,6 +1760,68 @@
         "actions": [
           {
             "title": "Nevermind: Switch Backend Environment",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Previous Desktop",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "arrow-left",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Previous Desktop",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Second Fourth",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "columns-4",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Second Fourth",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
             "label": ""
           },
           {
@@ -1593,6 +1903,130 @@
         "actions": [
           {
             "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Almost Maximize",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "expand",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Almost Maximize",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Bottom Center Sixth",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "grid-3x3",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Bottom Center Sixth",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Bottom Left Sixth",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "grid-3x3",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Bottom Left Sixth",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Center Two Thirds",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "columns-2",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Center Two Thirds",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1807,6 +2241,37 @@
       },
       {
         "kind": "Commands",
+        "title": "Middle Two Thirds",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "",
+        "icon": "rows-2",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Middle Two Thirds",
+            "label": ""
+          },
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Nevermind: Backend Status",
         "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
         "section": "",
@@ -1829,198 +2294,6 @@
           {
             "title": "Set alias",
             "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Pictures",
-        "subtitle": "$HOME/Pictures",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open Pictures",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Restart Computer",
-        "subtitle": "Restart this computer",
-        "section": "",
-        "id": "restart",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Restart Computer",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Start Timer",
-        "subtitle": "Type e.g. “timer 5m”",
-        "section": "",
-        "id": "",
-        "icon": "timer",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Start Timer",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Toggle Floating Notes",
-        "subtitle": "Show or hide your floating Markdown notes",
-        "section": "",
-        "id": "",
-        "icon": "sticky-note",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Toggle Floating Notes",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "Settings.png",
-        "subtitle": "~/Desktop/Settings.png",
-        "section": "",
-        "id": "$HOME/Desktop/Settings.png",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Desktop/Settings.png",
-        "actions": [
-          {
-            "title": "Open Settings.png",
-            "label": ""
-          },
-          {
-            "title": "Preview",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "cloud-setup.jpg",
-        "subtitle": "~/Pictures/cloud-setup.jpg",
-        "section": "",
-        "id": "$HOME/Pictures/cloud-setup.jpg",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Pictures/cloud-setup.jpg",
-        "actions": [
-          {
-            "title": "Open cloud-setup.jpg",
-            "label": ""
-          },
-          {
-            "title": "Preview",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "release-plan.txt",
-        "subtitle": "~/Documents/release-plan.txt",
-        "section": "",
-        "id": "$HOME/Documents/release-plan.txt",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Documents/release-plan.txt",
-        "actions": [
-          {
-            "title": "Open release-plan.txt",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads/clipboard-export.csv",
-        "section": "",
-        "id": "$HOME/Downloads/clipboard-export.csv",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Downloads/clipboard-export.csv",
-        "actions": [
-          {
-            "title": "Open clipboard-export.csv",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
           }
         ]
       }

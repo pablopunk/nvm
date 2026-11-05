@@ -13,6 +13,8 @@ type MenuRow struct {
 	// Disabled draws the action muted, with Subtitle beneath it as the reason it cannot run. Choosing it does nothing.
 	Disabled bool
 	Subtitle string
+	// Header draws Title as the header of a menu group, such as View: muted, with no selection, hover or click.
+	Header bool
 }
 
 // MenuEvents is what the pointer did on an ActionMenu this frame: the row clicked and the row under the pointer, each
@@ -30,6 +32,12 @@ func ActionMenu(c *ui.Context, rows []MenuRow) MenuEvents {
 	events := MenuEvents{Clicked: -1, Hovered: -1}
 	Popover(c, ActionPlacement, func() {
 		for i, r := range rows {
+			if r.Header {
+				PlatePadding(ui.Row(c).AlignItems(ui.Center), false, 6, 10).Children(func() {
+					ui.Text(c, r.Title).FontSize(11).FontWeight(600).TextColor(k.Muted).SingleLine()
+				})
+				continue
+			}
 			rowEl := PlatePadding(ui.Row(c).Radius(8).AlignItems(ui.Center).Gap(8), r.Selected, 6, 10)
 			hovered := rowEl.Hovered()
 			switch {

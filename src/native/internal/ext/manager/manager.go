@@ -181,6 +181,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			SearchRefresh:  opts.SearchRefresh,
 			Bundles:        bundled.Shipped(),
 			Notes:          ports.Notes,
+			Displays:       services.NewSharedDisplays(),
 
 			Shell:           ports.Shell,
 			Commands:        ports.Commands,

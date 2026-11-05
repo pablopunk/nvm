@@ -68,6 +68,8 @@ type Popover interface {
 type Tray interface {
 	// SetTitle changes the text shown next to (or instead of) the icon.
 	SetTitle(title string)
+	// SetToolTip changes the hover text in place, so a status item whose text changes each render keeps its place.
+	SetToolTip(tip string)
 	// SetMenu replaces the menu shown on click. An empty list removes the menu.
 	SetMenu(items []MenuItem)
 	// SetIcon replaces the icon with a PNG, at 16 points (32 pixels for Retina). A template icon is a black

@@ -112,7 +112,7 @@ func TestOffMacOSTheTitleJoinsTheTooltip(t *testing.T) {
 	if tray.Title() != "" {
 		t.Fatalf("Linux title = %q, want none; the title joins the tooltip", tray.Title())
 	}
-	if tip := tray.Options().ToolTip; tip != "Clock — 04:59" {
+	if tip := tray.ToolTip(); tip != "Clock — 04:59" {
 		t.Fatalf("Linux tooltip = %q, want the title after an em dash", tip)
 	}
 }

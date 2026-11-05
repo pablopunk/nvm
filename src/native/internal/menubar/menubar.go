@@ -94,6 +94,14 @@ func New(opts Options) (*Item, error) {
 	return item, nil
 }
 
+// SetToolTip changes the hover text of the item in place.
+func (m *Item) SetToolTip(tip string) {
+	if m == nil {
+		return
+	}
+	m.tray.SetToolTip(tip)
+}
+
 // SetTitle shows text next to the icon. An empty title shows only the icon.
 func (m *Item) SetTitle(title string) {
 	if m == nil {

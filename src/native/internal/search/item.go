@@ -45,6 +45,23 @@ type Action struct {
 	// MenuHidden keeps the action out of the action menu while its shortcut still runs it, as an action panel hidden by
 	// its extension does. The menu does not open on a row whose actions are all hidden.
 	MenuHidden bool
+	// Section is the title of the action menu group the action sits in, such as View. The menu draws it above the group's
+	// first action. Empty means the action has no group.
+	Section string
+	// MenuOnly lists the action in the action menu without making it the row's default: Enter runs the first action that
+	// is not MenuOnly, as 1.x's View actions never run on Enter.
+	MenuOnly bool
+}
+
+// DefaultAction is the action Enter runs on the row: its first action the menu does not hold back as MenuOnly. It is false
+// when the row has none.
+func (i Item) DefaultAction() (Action, bool) {
+	for _, action := range i.Actions {
+		if !action.MenuOnly {
+			return action, true
+		}
+	}
+	return Action{}, false
 }
 
 // Item is one row in the palette.

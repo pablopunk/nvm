@@ -1,9 +1,12 @@
 package settings
 
-import "github.com/pablopunk/nvm/native/internal/ext/api"
+import (
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
+)
 
-// Row ids the host draws its own text for: the shortcut's status, the dictation device, the account, the updates, the
-// menu bar and the config folder path. The rows themselves are declared here.
+// Row ids the host draws its own text for: the shortcut's status, the account, the updates and the config folder path.
+// The rows themselves are declared here.
 const (
 	RowDictation    = "dictation"
 	RowUpdates      = "updates"
@@ -50,7 +53,8 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 			Subtitle: "Show copied items inline in the root list", Icon: "clipboard", ActionTitle: "Toggle"},
 		{ID: SettingClipboardRootSearch, Kind: api.SettingRowToggle, Setting: SettingClipboardRootSearch, Title: "Show Clipboard Items in Root Search",
 			Subtitle: "Show copied items when searching from the root list", Icon: "clipboard", ActionTitle: "Toggle"},
-		{ID: RowDictation, Kind: api.SettingRowAction, Title: "Dictation", Icon: "mic", Action: hostAction(opDictationSettings, "Open")},
+		{ID: RowDictation, Kind: api.SettingRowAction, Title: "Dictation", Icon: "mic", Action: hostAction(opDictationSettings, "Open"),
+			Shows: sharedDictationDevice()},
 	}
 	if launchAtLoginSupported {
 		rows = append(rows, api.SettingRow{ID: SettingLaunchAtLogin, Kind: api.SettingRowToggle, Setting: SettingLaunchAtLogin, Title: "Launch at Login",
@@ -67,6 +71,12 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 		api.SettingRow{ID: RowAccount, Kind: api.SettingRowAction, Title: "Account", Icon: "user", Action: hostAction(opAccountPage, "Open")},
 		api.SettingRow{ID: RowConfigFolder, Kind: api.SettingRowAction, Title: "Open Config Folder", Icon: "folder", Action: hostAction(opConfigFolder, "Open")},
 	)
+}
+
+// sharedDictationDevice is the setting the dictation built-in publishes the microphone's title under. The Dictation row
+// shows it, so the choice reads here without the Settings built-in knowing how dictation stores it.
+func sharedDictationDevice() *api.SettingRef {
+	return &api.SettingRef{Extension: dictation.ID, Setting: dictation.SettingDevice}
 }
 
 func hostAction(op, title string) *api.Action {

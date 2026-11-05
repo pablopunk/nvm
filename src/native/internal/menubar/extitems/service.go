@@ -79,8 +79,8 @@ type extension struct {
 	items    map[string]*barItem
 }
 
-// barItem is one platform item and the icon and tooltip it was created with. Those are fixed at creation, so a change
-// makes a new item.
+// barItem is one platform item, the icon it was created with, and the hover text it shows now. The icon is fixed at
+// creation, so a change makes a new item; the hover text is set in place.
 type barItem struct {
 	item    *menubar.Item
 	icon    api.MenuBarIcon
@@ -273,7 +273,7 @@ func (s *Service) refreshPopovers(ext *extension, bars []api.MenuBar) {
 func (s *Service) showBar(ext *extension, bar api.MenuBar) {
 	title, tooltip := menubar.StatusText(s.goos(), bar.Title, bar.Tooltip)
 	current := ext.items[bar.ID]
-	if current != nil && (current.icon != bar.Icon || current.tooltip != tooltip) {
+	if current != nil && current.icon != bar.Icon {
 		current.item.Close()
 		delete(ext.items, bar.ID)
 		current = nil
@@ -290,6 +290,10 @@ func (s *Service) showBar(ext *extension, bar api.MenuBar) {
 		ext.items[bar.ID] = current
 	}
 	current.item.SetTitle(title)
+	if current.tooltip != tooltip {
+		current.item.SetToolTip(tooltip)
+		current.tooltip = tooltip
+	}
 	current.item.SetMenu(s.menu(ext, bar, current.item.Tray()))
 	current.item.SetPrimaryAction(s.popoverClick(ext.id, bar, current.item.Tray()))
 }
