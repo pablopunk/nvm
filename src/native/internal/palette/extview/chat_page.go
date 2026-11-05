@@ -18,6 +18,7 @@ import (
 func (s *Session) chatPage() *palette.View {
 	if s.chatRenderer == nil {
 		s.chatRenderer = aichat.NewExtensionChat(s.replyRenderer(), s.now)
+		s.chatRenderer.SpecFrom(s.chatSpec)
 	}
 	s.chatRenderer.SetSpec(s.chatSpec())
 	return s.chatRenderer.View()
@@ -54,6 +55,7 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 	if spec.Side != nil {
 		out.Side = s.chatSide
 	}
+	out.Host = s.attachHost
 	if spec.Submit != nil {
 		submit := *spec.Submit
 		out.Send = func(h search.Host, text string, images []chat.Image) {
@@ -117,7 +119,7 @@ func chatMessage(m api.ChatMessage, now time.Time) chat.Message {
 	case m.Role == "user":
 		return chat.Message{Author: chat.AuthorUser, Text: m.Content, Images: chatImages(m.Images), At: now, Status: chat.StatusComplete}
 	case m.Role == "system":
-		return chat.Message{Author: chat.AuthorNotice, Notice: &chat.Notice{Title: "Note", Message: m.Content}, At: now}
+		return chat.Message{Author: chat.AuthorNotice, Notice: &chat.Notice{Title: noticeTitle(m.Title), Message: m.Content}, At: now}
 	}
 	status := chat.StatusComplete
 	if m.Streaming {
@@ -171,4 +173,22 @@ func splitDataURL(dataURL string) (mime, data string) {
 		return "", dataURL
 	}
 	return mime, data
+}
+
+// attachHost gives a session that was built without a host one, the first time its chat page draws, and starts its
+// background work, such as the refresh that fills a loading view in. A session opened with Open already has its host.
+func (s *Session) attachHost(h search.Host) {
+	if s.host != nil {
+		return
+	}
+	s.host = h
+	s.start()
+}
+
+// noticeTitle is the title of a system row: the title the message names, or Note.
+func noticeTitle(title string) string {
+	if title == "" {
+		return "Note"
+	}
+	return title
 }

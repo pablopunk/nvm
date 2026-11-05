@@ -29,6 +29,8 @@ type ExtensionChatSpec struct {
 	ChooseTier  func(h search.Host, tier chat.Tier)
 	Actions     func() []search.Action
 	Side        func() *palette.View
+	// Host receives the palette host each frame the transcript draws, so the owner can start work that needs it.
+	Host func(h search.Host)
 }
 
 // ExtensionChat draws an extension's chat view with the host's transcript, reasoning and tool rows, and composer. It
@@ -43,6 +45,7 @@ type ExtensionChat struct {
 	side          *palette.Side
 	sideRoot      *palette.View
 	previewHidden bool
+	specFrom      func() ExtensionChatSpec
 }
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
@@ -53,6 +56,12 @@ func NewExtensionChat(reply func(c *ui.Context, src string, streaming bool), now
 // SetSpec replaces what the view shows with spec, as the owner does after each render.
 func (x *ExtensionChat) SetSpec(spec ExtensionChatSpec) {
 	x.spec = spec
+}
+
+// SpecFrom makes the view read its spec from fn at every frame, so a view the owner changed between renders, such as a
+// refreshed transcript, draws its current state without the owner rebuilding the page.
+func (x *ExtensionChat) SpecFrom(fn func() ExtensionChatSpec) {
+	x.specFrom = fn
 }
 
 // View is the palette page that draws the chat: the transcript above the composer, with the view's actions and, when
@@ -72,6 +81,12 @@ func (x *ExtensionChat) View() *palette.View {
 // body draws the transcript and the composer on the pane's own surface.
 func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 	x.host = h
+	if x.specFrom != nil {
+		x.spec = x.specFrom()
+	}
+	if x.spec.Host != nil {
+		x.spec.Host(h)
+	}
 	k := design.Tokens(c)
 	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
 		x.transcript(c)

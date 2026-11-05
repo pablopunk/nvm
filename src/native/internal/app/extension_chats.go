@@ -161,11 +161,10 @@ func apiChatMessage(message chat.Message) api.ChatMessage {
 	case chat.AuthorTool:
 		return api.ChatMessage{Role: "assistant", Tool: &api.ChatTool{Name: toolName(message), Status: toolStatusWord(message.Status), Result: toolOutcome(message)}}
 	case chat.AuthorNotice:
-		content := ""
-		if message.Notice != nil {
-			content = message.Notice.Message
+		if message.Notice == nil {
+			return api.ChatMessage{Role: "system"}
 		}
-		return api.ChatMessage{Role: "system", Content: content}
+		return api.ChatMessage{Role: "system", Title: message.Notice.Title, Content: message.Notice.Message}
 	}
 	return api.ChatMessage{Role: "assistant", Content: message.Text, Thinking: message.Reasoning, Streaming: message.Status == chat.StatusStreaming}
 }

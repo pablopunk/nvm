@@ -164,7 +164,9 @@ type WebviewSpec struct {
 // opens on request, Images are pictures sent with a user turn, Tool is a tool row, and Streaming marks an assistant
 // turn still arriving: the host shows progress for it and the chat's Stop action.
 type ChatMessage struct {
-	Role      string      `json:"role"`
+	Role string `json:"role"`
+	// Title names a system row, such as a refusal's notice; empty shows it as Note.
+	Title     string      `json:"title,omitempty"`
 	Content   string      `json:"content"`
 	Thinking  string      `json:"thinking,omitempty"`
 	Images    []ChatImage `json:"images,omitempty"`
