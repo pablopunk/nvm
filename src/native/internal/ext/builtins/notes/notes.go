@@ -86,16 +86,16 @@ func (Extension) Commands(api.Context) ([]api.Command, error) {
 		{
 			ID: ToggleCommandID, Title: "Toggle Floating Notes", Subtitle: "Show or hide your floating Markdown notes",
 			Icon: "sticky-note", Appearance: yellow, Placement: []api.Placement{api.PlacementSearch},
-			Keywords: []string{"notes", "note", "float", "floating window", "sticky", "toggle"},
+			Keywords:        []string{"notes", "note", "float", "floating window", "sticky", "toggle"},
 			DismissAfterRun: true,
-			Section:  search.KindCommands, LearnKey: "cmd:Toggle Floating Notes",
+			Section:         search.KindCommands, LearnKey: "cmd:Toggle Floating Notes",
 		},
 		{
 			ID: NewWindowCommandID, Title: "New Floating Note", Subtitle: "Start a fresh local Markdown note",
 			Icon: "sticky-note", Appearance: yellow, Placement: []api.Placement{api.PlacementSearch}, Customizable: true,
-			Keywords: []string{"note", "float", "floating window", "sticky"},
+			Keywords:        []string{"note", "float", "floating window", "sticky"},
 			DismissAfterRun: true,
-			Section:  search.KindCommands, LearnKey: "cmd:New Floating Note",
+			Section:         search.KindCommands, LearnKey: "cmd:New Floating Note",
 		},
 		{
 			ID: NewNoteCommandID, Title: "New Note", Icon: "plus", Placement: []api.Placement{api.PlacementSearch},

@@ -17,6 +17,18 @@ func (p *Palette) actions() []search.Action {
 	return nil
 }
 
+// shortcutActions are the actions whose keys run now: the chosen row's, then the page on top's own.
+func (p *Palette) shortcutActions() []search.Action {
+	var out []search.Action
+	if it := p.chosenItem(); it != nil {
+		out = append(out, it.Actions...)
+	}
+	if v := p.cur(); v.Actions != nil {
+		out = append(out, v.Actions()...)
+	}
+	return out
+}
+
 // chosenItem returns the chosen row, or nil on a Body view and without rows.
 func (p *Palette) chosenItem() *search.Item {
 	if p.cur().Body != nil || p.chosen < 0 || p.chosen >= len(p.results) {

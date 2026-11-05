@@ -19,13 +19,21 @@ import (
 // extensionRunTimeout bounds one action an extension runs from the palette. Actions run off the UI thread.
 const extensionRunTimeout = 10 * time.Second
 
+// settleExtensionCalls waits for the extension calls the palette started to return and to deliver their results. The
+// app never waits for them before it draws; goldens and tests do, so they see the view the call opened.
+func (p *App) settleExtensionCalls() {
+	p.extCalls.Wait()
+}
+
 // extensionViewDeps are the services of extension views: an action runs on the manager's supervised child, and its
 // result returns to the UI thread, where the palette applies it.
 func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	ports := p.ports
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			p.extCalls.Add(1)
 			go func() {
+				defer p.extCalls.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
 				defer cancel()
 				result, failure, err := m.Run(ctx, extID, in)
@@ -36,7 +44,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			}()
 		},
 		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
+			p.extCalls.Add(1)
 			go func() {
+				defer p.extCalls.Done()
 				ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
 				defer cancel()
 				items, failure, err := m.Load(ctx, extID, loader)

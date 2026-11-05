@@ -3,10 +3,16 @@ package app
 import (
 	"strings"
 	"testing"
-
-	"github.com/egoist/mygo/ui"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	notesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/notes"
+	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
+	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // floatingGoldens is the group of the floating window's goldens under testdata/golden/floating, at the window's
@@ -36,46 +42,65 @@ var floatingGoldenMarkdown = strings.Join([]string{
 	"```",
 }, "\n")
 
-// The floating window with a note that has headings, bold, a list and code: the editor draws the Markdown styled.
-func TestFloatingNoteWindowShowsMarkdownStyled(t *testing.T) {
-	p := goldenPalette(t)
+// builtInWindowPalette draws a built-in's view the way the floating window draws it: a companion palette, shown on a
+// window the golden never displays, so the golden is the window's content.
+func builtInWindowPalette(t *testing.T, m *manager.Manager, view api.View) *palette.Palette {
+	t.Helper()
+	page := extview.NewSession(syncViewDeps(m), notesbuiltin.ID, view).Palette()
+	p := palette.New(palette.Options{Root: page, Clock: fake.NewClock(), Synchronous: true, Layout: palette.LayoutCompanion})
+	p.Attach(&testWindow{})
+	p.Show()
+	return p
+}
+
+// goldenNoteWithText creates a note and saves markdown into it, as the editor does, so the note has its saved version.
+func goldenNoteWithText(t *testing.T, p *App, markdown string) notes.Note {
+	t.Helper()
 	n, err := p.notes.Create(goldenNow)
 	if err != nil {
 		t.Fatal(err)
 	}
-	edit, _ := p.acquireEdit(n.ID)
-	if err := edit.sess.Edit(floatingGoldenMarkdown); err != nil {
+	saved, _, err := p.notes.SaveIfUnchanged(n.ID, markdown, n.UpdatedAt, goldenNow.Add(time.Second))
+	if err != nil {
 		t.Fatal(err)
 	}
-	golden.AssertMatrix(t, "note-markdown", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingTallGoldens)
+	return saved
+}
+
+// The floating window with a note that has headings, bold, a list and code: the editor draws the Markdown styled.
+func TestFloatingNoteWindowShowsMarkdownStyled(t *testing.T) {
+	p := goldenPalette(t)
+	m := goldenNotesManager(t, p)
+	n := goldenNoteWithText(t, p, floatingGoldenMarkdown)
+	inv := api.Invocation{Ref: api.ActionRef{ID: notesbuiltin.OpenNoteActionID, Args: goldenNoteArgs(n.ID, notesbuiltin.ModeWindow)}}
+	window := builtInWindowPalette(t, m, builtInInvocationView(t, m, notesbuiltin.ID, inv))
+	golden.AssertMatrix(t, "note-markdown", window.View, floatingTallGoldens)
 }
 
 // The conflict replaces the editor with its two choices, as 1.x's window does.
 func TestFloatingNoteWindowConflictChoices(t *testing.T) {
-	p := goldenPaletteWith(t, true)
-	edit, _ := p.acquireEdit("note-ideas")
-	golden.AssertMatrix(t, "note-conflict", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
+	p := goldenPalette(t)
+	m := goldenNotesManager(t, p)
+	window := builtInWindowPalette(t, m, builtInInvocationView(t, m, notesbuiltin.ID, goldenConflictInvocation(notesbuiltin.ModeWindow)))
+	golden.AssertMatrix(t, "note-conflict", window.View, floatingGoldens)
 }
 
 // All notes in the window: the search, the count, New note and the notes newest first.
 func TestFloatingNoteWindowAllNotes(t *testing.T) {
 	p := goldenPalette(t)
-	edit, _ := p.acquireEdit("note-ideas")
-	p.floatPane = floatingPaneState{pane: paneAllNotes}
-	golden.AssertMatrix(t, "all-notes", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingGoldens)
+	m := goldenNotesManager(t, p)
+	inv := api.Invocation{Ref: api.ActionRef{ID: notesbuiltin.AllNotesActionID, Args: map[string]string{notesbuiltin.ArgMode: notesbuiltin.ModeWindow}}}
+	window := builtInWindowPalette(t, m, builtInInvocationView(t, m, notesbuiltin.ID, inv))
+	golden.AssertMatrix(t, "all-notes", window.View, floatingGoldens)
 }
 
 // The ⌘K menu over the note: its actions with their key caps, the first row selected, and the footer's Back hint.
 func TestFloatingNoteWindowActionsMenu(t *testing.T) {
 	p := goldenPalette(t)
-	n, err := p.notes.Create(goldenNow)
-	if err != nil {
-		t.Fatal(err)
-	}
-	edit, _ := p.acquireEdit(n.ID)
-	if err := edit.sess.Edit(floatingGoldenMarkdown); err != nil {
-		t.Fatal(err)
-	}
-	p.floatPane.actionsOpen = true
-	golden.AssertMatrix(t, "actions-menu", func(c *ui.Context) { floatingNoteWindow(c, p, edit) }, floatingTallGoldens)
+	m := goldenNotesManager(t, p)
+	n := goldenNoteWithText(t, p, floatingGoldenMarkdown)
+	inv := api.Invocation{Ref: api.ActionRef{ID: notesbuiltin.OpenNoteActionID, Args: goldenNoteArgs(n.ID, notesbuiltin.ModeWindow)}}
+	window := builtInWindowPalette(t, m, builtInInvocationView(t, m, notesbuiltin.ID, inv))
+	window.OpenActionMenu(0)
+	golden.AssertMatrix(t, "actions-menu", window.View, floatingTallGoldens)
 }

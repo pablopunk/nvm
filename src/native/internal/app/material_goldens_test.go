@@ -28,8 +28,7 @@ func TestPaletteMaterialShortcutRecorder(t *testing.T) {
 
 func TestPaletteMaterialNoteEditor(t *testing.T) {
 	p := goldenPalette(t)
-	view, _ := p.noteEditorView("note-ideas")
-	goldenOpen(p, view)
+	goldenOpen(p, goldenNoteEditorPage(t, p))
 	golden.AssertMatrix(t, "material-note-editor", p.View, materialGoldens)
 }
 

@@ -63,6 +63,7 @@ func TestPaletteQuicklinkForm(t *testing.T) {
 	p := goldenPalette(t)
 	goldenQuery(p, "create quicklink")
 	itemTitled(t, p, quicklinks.CreateTitle).Actions[0].Run(p)
+	p.settleExtensionCalls()
 	golden.AssertMatrix(t, "quicklink-form", p.View, paletteGoldens)
 }
 

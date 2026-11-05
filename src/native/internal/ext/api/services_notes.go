@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// noteConflictSubtitle is the line under the conflict view's title, as 1.x shows it.
+const noteConflictSubtitle = "This note has unsaved changes from another session."
+
 // Arg keys the conflict view's rows carry back to the extension.
 const (
 	argNoteID   = "id"
@@ -45,14 +48,16 @@ const (
 func NoteConflictView(saved Note, unsaved, compareMarkdown string, args map[string]string) View {
 	restore := withArgs(args, map[string]string{argNoteID: saved.ID, argNoteText: unsaved})
 	keep := withArgs(args, map[string]string{argNoteID: saved.ID})
-	return ListView("Unsaved changes found",
-		Item{ID: "note-conflict-restore", Title: "Restore unsaved changes", Subtitle: firstLine(unsaved),
+	view := ListView("Unsaved changes found",
+		Item{ID: "note-conflict-restore", Title: "Restore unsaved changes", Subtitle: firstLine(unsaved), Icon: "rotate-ccw",
 			Primary: Primary(Run(NoteConflictRestoreRef, "Restore unsaved changes", restore))},
-		Item{ID: "note-conflict-keep", Title: "Keep saved version", Subtitle: firstLine(saved.Markdown),
+		Item{ID: "note-conflict-keep", Title: "Keep saved version", Subtitle: firstLine(saved.Markdown), Icon: "check",
 			Primary: Primary(Run(NoteConflictKeepRef, "Keep saved version", keep))},
-		Item{ID: "note-conflict-compare", Title: "Compare", Subtitle: "See the unsaved and saved text side by side",
+		Item{ID: "note-conflict-compare", Title: "Compare", Subtitle: "See the unsaved and saved text side by side", Icon: "scan",
 			Primary: Primary(PushView("Compare", PreviewView("Compare", compareMarkdown)))},
 	)
+	view.Subtitle, view.Placeholder = noteConflictSubtitle, noteConflictSubtitle
+	return view
 }
 
 // withArgs returns a copy of base with the pairs of extra written over it.

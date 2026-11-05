@@ -130,6 +130,9 @@ func (s *Session) Open(host search.Host) *palette.View {
 func (s *Session) Palette() *palette.View {
 	page := s.pageOfKind()
 	page.Subtitle = s.view.Subtitle
+	if len(s.viewWireActions()) > 0 {
+		page.Actions = s.viewActions
+	}
 	return page
 }
 

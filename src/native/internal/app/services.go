@@ -62,7 +62,7 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 	if p.userReadOnly {
 		log.Println("store: not persisting, the directory is held elsewhere:", err)
 	}
-	st, err := store.Open(ports.FS, ports.Clock, dir, store.WithDebounce(notes.DraftDelay), store.WithLease(lease))
+	st, err := store.Open(ports.FS, ports.Clock, dir, store.WithDebounce(notes.WriteDelay), store.WithLease(lease))
 	if err != nil {
 		log.Println("store: open failed, not persisting:", err)
 		if lease != nil {

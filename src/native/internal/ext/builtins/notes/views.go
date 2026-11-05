@@ -47,7 +47,7 @@ func editorView(ctx api.Context, note api.Note, mode string) api.View {
 // palette, and Control+F opens it in the floating window. In the window, a note replaces the window's view.
 func listView(ctx api.Context, notes []api.Note, mode string) api.View {
 	newNote := api.Item{
-		ID: "new-note", Title: newRowTitle, Subtitle: newNoteSubtitle, Icon: "square-pen",
+		ID: "new-note", Title: newRowTitle, Subtitle: newNoteSubtitle, Icon: "plus",
 		Primary: api.Primary(api.Run(refNewNote, newNoteTitle, navArgs(mode, navPushFor(mode)))),
 	}
 	items := []api.Item{newNote}
@@ -73,7 +73,7 @@ func noteItem(ctx api.Context, n api.Note, mode string) api.Item {
 	remove := api.Run(refDeleteFromList, deleteTitle, map[string]string{argID: n.ID, argMode: mode})
 	remove.Style = "destructive"
 	item := api.Item{
-		ID: "note:" + n.ID, Title: noteTitle(n), Subtitle: notePreview(n), Icon: "notebook-pen",
+		ID: "note:" + n.ID, Title: noteTitle(n), Subtitle: notePreview(n), Icon: "file-text",
 		Accessories: []api.Accessory{{Text: relativeTime(ctx, n)}},
 		Primary:     api.Primary(api.Run(refOpenNote, "Open note", navArgs(mode, navPushFor(mode), argID, n.ID))),
 		Actions:     []api.Action{remove},

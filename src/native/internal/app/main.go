@@ -5,6 +5,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"log"
 	"runtime"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -121,8 +122,7 @@ type App struct {
 	// visibility holds which extensions show their menu bar items.
 	visibility menuBarVisibility
 
-	// userStore holds the notes and snippets, whose notices arrive on userNotices. edits are the notes being
-	// edited, shared by the palette and the floating windows.
+	// userStore holds the notes and snippets, whose notices arrive on userNotices.
 	userStore    *store.Store
 	userNotices  <-chan store.Notice
 	userReadOnly bool
@@ -132,11 +132,9 @@ type App struct {
 	// hyper is the Hyper key config.json holds, read on first use; nil until then. saveHyperKey keeps it in step.
 	hyper    *string
 	quitting bool
-	edits    map[string]*noteEdit
-	// floating is the floating note window, when it is open.
-	floating   *floatingWindow
+	// extCalls counts the extension calls the palette has in flight, so goldens and tests can wait for them.
+	extCalls   sync.WaitGroup
 	extWindows *extwindow.Manager
-	floatPane  floatingPaneState
 	// launchShown records that the palette opened at launch because its shortcut could not be bound.
 	launchShown bool
 
