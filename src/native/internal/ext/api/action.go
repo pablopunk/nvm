@@ -37,6 +37,8 @@ const (
 	ActionSetQuery      ActionKind = "set-query"
 	// ActionAccount runs an account operation the host owns, such as sign-in.
 	ActionAccount ActionKind = "account"
+	// ActionChat opens, starts, continues or removes a host-owned chat. Chat holds its payload.
+	ActionChat ActionKind = "chat"
 	// ActionRecordPaletteShortcut opens the host's shortcut recorder.
 	ActionRecordPaletteShortcut ActionKind = "record-palette-shortcut"
 	// ActionUnavailable is a placeholder for an operation this host does not offer. It validates, and the palette
@@ -47,12 +49,22 @@ const (
 // AccountSignIn starts the sign-in flow.
 const AccountSignIn = "sign-in"
 
+// Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat,
+// and Remove deletes a chat the user asked to remove.
+const (
+	ChatOpen     = "open"
+	ChatNew      = "new"
+	ChatContinue = "continue"
+	ChatRemove   = "remove"
+)
+
 // Op values for the kinds that have sub-operations.
 var (
 	windowOps  = []string{"create", "show", "hide", "toggle", "close"}
 	systemOps  = []string{"lock-screen", "sleep", "restart", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps  = []string{"check", "download", "install"}
 	accountOps = []string{AccountSignIn}
+	chatOps    = []string{ChatOpen, ChatNew, ChatContinue, ChatRemove}
 	cameraOps  = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 )
 
@@ -87,6 +99,7 @@ type Action struct {
 	View    *View             `json:"view,omitempty"`
 	Window  *WindowRef        `json:"window,omitempty"`
 	Submenu *ActionPanel      `json:"submenu,omitempty"`
+	Chat    *ChatAction       `json:"chat,omitempty"`
 }
 
 // ActionRef names a handler the extension registered. IDs are stable across runs because
@@ -217,6 +230,11 @@ func (a Action) validateDeclarative() error {
 		return validateOp(a.Op, cameraOps)
 	case ActionAccount:
 		return validateOp(a.Op, accountOps)
+	case ActionChat:
+		if a.Chat == nil {
+			return fmt.Errorf("chat action %q needs its chat payload", a.Title)
+		}
+		return validateOp(a.Op, chatOps)
 	default:
 		return fmt.Errorf("unknown action kind %q", a.Kind)
 	}

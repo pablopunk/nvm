@@ -116,6 +116,8 @@ type fakeAI struct {
 
 func (a *fakeAI) IsAvailable() (bool, error) { return a.available, nil }
 
+func (a *fakeAI) Chats() api.AIChats { return nil }
+
 func (a *fakeAI) Ask(prompt string, options api.AIOptions) (string, error) {
 	a.prompts = append(a.prompts, prompt)
 	a.options = append(a.options, options)

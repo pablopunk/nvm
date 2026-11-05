@@ -39,6 +39,10 @@ func (h *Handler) serveAI(ctx context.Context, call protocol.ServiceCall) (any, 
 		return h.clipboardAttachments(ctx, call.Args)
 	case protocol.OpAttachOCR:
 		return h.ocrAttachment(ctx, call.Args)
+	case protocol.OpChatList:
+		return h.listChats()
+	case protocol.OpChatGet:
+		return h.getChat(call.Args)
 	}
 	return nil, invalid("ai has no operation %q", call.Op)
 }

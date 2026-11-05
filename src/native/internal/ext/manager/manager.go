@@ -52,6 +52,7 @@ type Ports struct {
 	Notifier  platform.Notifier
 	Shortcuts services.ShortcutTable
 	Account   services.AccountState
+	Chats     services.ChatReader
 	OCR       *ocr.Service
 	History   func() *clipboard.History
 	// ClipboardImages makes the files and thumbnails of clipboard pictures for the desktop.clipboard and history services.
@@ -179,6 +180,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Indicators:      ports.Indicators,
 			Dictation:       ports.Dictation,
 			AI:              ports.AI,
+			Chats:           ports.Chats,
 			Selection:       ports.Selection,
 			Paste:           ports.Paste,
 			Apps:            ports.Apps,

@@ -25,6 +25,7 @@ func init() {
 		"AccountSignIn":                 reflect.ValueOf(constant.MakeFromLiteral("\"sign-in\"", token.STRING, 0)),
 		"ActionAccount":                 reflect.ValueOf(api.ActionAccount),
 		"ActionCamera":                  reflect.ValueOf(api.ActionCamera),
+		"ActionChat":                    reflect.ValueOf(api.ActionChat),
 		"ActionCopyImage":               reflect.ValueOf(api.ActionCopyImage),
 		"ActionCopyText":                reflect.ValueOf(api.ActionCopyText),
 		"ActionOpenPalette":             reflect.ValueOf(api.ActionOpenPalette),
@@ -70,6 +71,10 @@ func init() {
 		"CapabilitySystem":              reflect.ValueOf(api.CapabilitySystem),
 		"CapabilityUpdates":             reflect.ValueOf(api.CapabilityUpdates),
 		"CapabilityWindowManagement":    reflect.ValueOf(api.CapabilityWindowManagement),
+		"ChatContinue":                  reflect.ValueOf(constant.MakeFromLiteral("\"continue\"", token.STRING, 0)),
+		"ChatNew":                       reflect.ValueOf(constant.MakeFromLiteral("\"new\"", token.STRING, 0)),
+		"ChatOpen":                      reflect.ValueOf(constant.MakeFromLiteral("\"open\"", token.STRING, 0)),
+		"ChatRemove":                    reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),
 		"Checkbox":                      reflect.ValueOf(api.Checkbox),
 		"CodeCancelled":                 reflect.ValueOf(api.CodeCancelled),
@@ -279,6 +284,7 @@ func init() {
 		// type definitions
 		"AI":                      reflect.ValueOf((*api.AI)(nil)),
 		"AIBuilder":               reflect.ValueOf((*api.AIBuilder)(nil)),
+		"AIChats":                 reflect.ValueOf((*api.AIChats)(nil)),
 		"AIOptions":               reflect.ValueOf((*api.AIOptions)(nil)),
 		"AISession":               reflect.ValueOf((*api.AISession)(nil)),
 		"AIStream":                reflect.ValueOf((*api.AIStream)(nil)),
@@ -303,6 +309,8 @@ func init() {
 		"Cache":                   reflect.ValueOf((*api.Cache)(nil)),
 		"CameraSpec":              reflect.ValueOf((*api.CameraSpec)(nil)),
 		"Capability":              reflect.ValueOf((*api.Capability)(nil)),
+		"ChatAction":              reflect.ValueOf((*api.ChatAction)(nil)),
+		"ChatDetail":              reflect.ValueOf((*api.ChatDetail)(nil)),
 		"ChatImage":               reflect.ValueOf((*api.ChatImage)(nil)),
 		"ChatMessage":             reflect.ValueOf((*api.ChatMessage)(nil)),
 		"ChatSpec":                reflect.ValueOf((*api.ChatSpec)(nil)),
@@ -486,6 +494,7 @@ func init() {
 		// interface wrapper definitions
 		"_AI":                reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AI)(nil)),
 		"_AIBuilder":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder)(nil)),
+		"_AIChats":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIChats)(nil)),
 		"_AISession":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AISession)(nil)),
 		"_AIStream":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIStream)(nil)),
 		"_Account":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Account)(nil)),
@@ -539,6 +548,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AI struct {
 	IValue       interface{}
 	WAsk         func(prompt string, options api.AIOptions) (string, error)
 	WAttachments func() api.AttachmentBuilder
+	WChats       func() api.AIChats
 	WDecide      func(request api.DecisionRequest) (api.DecisionResult, error)
 	WIsAvailable func() (bool, error)
 	WPrepare     func(options api.AIOptions) error
@@ -551,6 +561,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Ask(prompt string,
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Attachments() api.AttachmentBuilder {
 	return W.WAttachments()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Chats() api.AIChats {
+	return W.WChats()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Decide(request api.DecisionRequest) (api.DecisionResult, error) {
 	return W.WDecide(request)
@@ -572,6 +585,7 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Stream(prompt stri
 type _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder struct {
 	IValue                       interface{}
 	WCleanupExpiredConversations func() (removed int, err error)
+	WGetChat                     func(chatID string) (api.ChatDetail, bool)
 	WListChats                   func() []api.ChatSummary
 	WOpenChat                    func(chatID string) api.Action
 	WOpenChatsList               func(title string) api.Action
@@ -582,6 +596,9 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder struct {
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) CleanupExpiredConversations() (removed int, err error) {
 	return W.WCleanupExpiredConversations()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) GetChat(chatID string) (api.ChatDetail, bool) {
+	return W.WGetChat(chatID)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) ListChats() []api.ChatSummary {
 	return W.WListChats()
@@ -600,6 +617,36 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) StartChat(p
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder) TweakExtension(request api.TweakRequest) api.Action {
 	return W.WTweakExtension(request)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_AIChats is an interface wrapper for AIChats type
+type _github_com_pablopunk_nvm_native_internal_ext_api_AIChats struct {
+	IValue    interface{}
+	WContinue func(chatID string, message string) api.Action
+	WGet      func(chatID string) (api.ChatDetail, bool)
+	WList     func() []api.ChatSummary
+	WNew      func(prompt string) api.Action
+	WOpen     func(chatID string) api.Action
+	WRemove   func(chatID string) api.Action
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Continue(chatID string, message string) api.Action {
+	return W.WContinue(chatID, message)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Get(chatID string) (api.ChatDetail, bool) {
+	return W.WGet(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) List() []api.ChatSummary {
+	return W.WList()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) New(prompt string) api.Action {
+	return W.WNew(prompt)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Open(chatID string) api.Action {
+	return W.WOpen(chatID)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_AIChats) Remove(chatID string) api.Action {
+	return W.WRemove(chatID)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AISession is an interface wrapper for AISession type

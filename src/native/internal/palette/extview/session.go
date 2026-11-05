@@ -90,6 +90,18 @@ type Deps struct {
 	// PickImages opens the chooser for the pictures a chat message attaches, and hands the ones read to done on the UI
 	// thread. Nil hides the picture control of chat views.
 	PickImages func(done func([]chat.Image))
+	// Chats runs the chat actions of extensions: the chat pages and the chat store. Nil makes those actions report
+	// unavailable.
+	Chats ChatPages
+}
+
+// ChatPages is what a chat action runs on the host. Open, New and the chat store calls act on the user's chats; the
+// palette pushes the pages Open and New return.
+type ChatPages interface {
+	Open(chatID string) *palette.View
+	New(prompt string) *palette.View
+	Send(chatID, text string) error
+	Remove(chatID string) error
 }
 
 // Session is one open extension view. It is used on the UI thread only.

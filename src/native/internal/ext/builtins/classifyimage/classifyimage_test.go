@@ -34,6 +34,8 @@ type fakeAI struct {
 
 func (a *fakeAI) IsAvailable() (bool, error) { return a.available, nil }
 
+func (a *fakeAI) Chats() api.AIChats { return nil }
+
 func (a *fakeAI) Decide(request api.DecisionRequest) (api.DecisionResult, error) {
 	a.requests = append(a.requests, request)
 	if a.err != nil {

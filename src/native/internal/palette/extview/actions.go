@@ -93,6 +93,11 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.deps.SignIn(h) }}
+	case api.ActionChat:
+		if action.Chat == nil || s.deps.Chats == nil {
+			break
+		}
+		return s.chatOperation(action, title)
 	case api.ActionRecordPaletteShortcut:
 		if s.deps.RecordPaletteShortcut == nil {
 			break

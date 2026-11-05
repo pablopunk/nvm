@@ -16,7 +16,20 @@ const (
 	OpSessionReset    = "session-reset"
 	OpAttachClipboard = "attach-clipboard"
 	OpAttachOCR       = "attach-ocr"
+	OpChatList        = "chat-list"
+	OpChatGet         = "chat-get"
 )
+
+// AIChatGetArgs names the chat to read.
+type AIChatGetArgs struct {
+	ID string `json:"id"`
+}
+
+// AIChatFound is the answer to chat-get: the chat when Found is set.
+type AIChatFound struct {
+	Chat  api.ChatDetail `json:"chat"`
+	Found bool           `json:"found"`
+}
 
 // AIAskArgs is one model call: the prompt and its options. Session names the extension's session the call belongs
 // to; empty means a one-shot call. The same args open a stream.

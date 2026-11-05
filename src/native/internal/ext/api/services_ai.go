@@ -149,11 +149,40 @@ type AI interface {
 	Prepare(options AIOptions) error
 	Attachments() AttachmentBuilder
 	Session(id string, options AIOptions) (AISession, error)
+	// Chats reads and opens the host's chats: the conversations the AI Chats page lists. Each is kept by the host.
+	Chats() AIChats
+}
+
+// ChatAction is the payload of an ActionChat. ChatID names the chat; Message is what a Continue sends; Prompt is the
+// first message of a New chat.
+type ChatAction struct {
+	ChatID  string `json:"chatId,omitempty"`
+	Message string `json:"message,omitempty"`
+	Prompt  string `json:"prompt,omitempty"`
+}
+
+// ChatDetail is one chat with its transcript, as the host keeps it.
+type ChatDetail struct {
+	ChatSummary
+	Messages []ChatMessage `json:"messages"`
+}
+
+// AIChats lists chats and returns the actions that open, start, continue or remove them. Reads are answered by the
+// host; the actions run when the user picks them, on the palette.
+type AIChats interface {
+	List() []ChatSummary
+	Get(chatID string) (ChatDetail, bool)
+	New(prompt string) Action
+	Open(chatID string) Action
+	Continue(chatID, message string) Action
+	Remove(chatID string) Action
 }
 
 // ChatSummary is one builder conversation. Only built-in extensions may call AIBuilder.
 type ChatSummary struct {
-	ID             string   `json:"id"`
+	ID string `json:"id"`
+	// Kind is conversation, builder or proofread.
+	Kind           string   `json:"kind,omitempty"`
 	Title          string   `json:"title,omitempty"`
 	Query          string   `json:"query,omitempty"`
 	Status         string   `json:"status,omitempty"`
@@ -180,6 +209,7 @@ type AIBuilder interface {
 	OpenChatsList(title string) Action
 	ListChats() []ChatSummary
 	CleanupExpiredConversations() (removed int, err error)
+	GetChat(chatID string) (ChatDetail, bool)
 }
 
 // Ownership says which builder conversation wrote which extension file. It is host-only, and it is

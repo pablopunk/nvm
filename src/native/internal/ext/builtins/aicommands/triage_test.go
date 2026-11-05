@@ -58,6 +58,8 @@ type fakeTriageAI struct {
 
 func (a *fakeTriageAI) IsAvailable() (bool, error) { return a.available, nil }
 
+func (a *fakeTriageAI) Chats() api.AIChats { return nil }
+
 func (a *fakeTriageAI) Decide(request api.DecisionRequest) (api.DecisionResult, error) {
 	a.requests = append(a.requests, request)
 	return api.DecisionResult{Answers: a.answers}, nil

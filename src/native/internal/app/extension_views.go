@@ -90,6 +90,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		IsDark:                func() bool { return mygo.Theme.IsDark() },
 		Reply:                 p.drawReply,
 		PickImages:            p.chooseChatImages,
+		Chats:                 extensionChatPages{p: p},
 	}
 }
 
