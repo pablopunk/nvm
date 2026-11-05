@@ -35,6 +35,7 @@ const (
 	ServiceText       = "text"
 	ServiceNetwork    = "network"
 	ServiceDrafts     = "drafts"
+	ServiceNotes      = "notes"
 	ServiceViews      = "views"
 	ServiceIndicators = "indicators"
 	ServiceScheduler  = "scheduler"

@@ -77,6 +77,7 @@ type Context interface {
 	Data() Data
 	Network() Network
 	Drafts() Drafts
+	Notes() Notes
 	Clipboard() ClipboardHistory
 	Desktop() Desktop
 	OCR() OCR

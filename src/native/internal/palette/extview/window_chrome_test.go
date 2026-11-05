@@ -52,3 +52,10 @@ func TestGoldenCompanionWindowFixture(t *testing.T) {
 	p.Show()
 	golden.AssertMatrix(t, "companion-ticker", p.View, golden.Options{Group: "extension-window", Width: 560, Height: 420})
 }
+
+// TestGoldenNoteConflictWindow draws the note conflict view in a window: the two resolutions and Compare.
+func TestGoldenNoteConflictWindow(t *testing.T) {
+	p := windowPalette(fixtures.NoteConflictFixture(), palette.LayoutWindow)
+	p.Show()
+	golden.AssertMatrix(t, "note-conflict", p.View, golden.Options{Group: "extension-window", Width: 560, Height: 420})
+}

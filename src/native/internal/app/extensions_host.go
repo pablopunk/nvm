@@ -17,6 +17,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -87,6 +88,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		OCR:           textReader,
 		AI:            p.extensionAI(textReader),
 		History:       p.extensionHistory,
+		Notes:         p.extensionNotes,
 		Confirm:       p.askExtensionConfirmation,
 		Notify:        p.notifyExtensionFailure,
 		SettingsPanes: p.systemSettingsPanes,
@@ -145,6 +147,11 @@ func (p *App) extensionShortcuts() services.ShortcutTable {
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.
+// extensionNotes is the notes store the notes service answers from, or nil before the user's data is open.
+func (p *App) extensionNotes() *notes.Store {
+	return p.notes
+}
+
 func (p *App) extensionHistory() *clipboard.History {
 	if p.clip == nil {
 		return nil

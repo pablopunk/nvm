@@ -78,6 +78,10 @@ func (c hostContext) Drafts() api.Drafts {
 	return remoteDrafts{link: c.link}
 }
 
+func (c hostContext) Notes() api.Notes {
+	return remoteNotes{link: c.link}
+}
+
 func (c hostContext) Input() api.Input {
 	return api.NewInput()
 }

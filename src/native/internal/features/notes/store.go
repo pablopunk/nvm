@@ -177,6 +177,20 @@ func (s *Store) Drafts() []Draft {
 	return out
 }
 
+// SaveIfUnchanged writes markdown as the note's saved text at now when the note is still at the saved version
+// savedAt. A newer saved version is not overwritten: the call returns that note with conflict set, and writes nothing.
+func (s *Store) SaveIfUnchanged(id, markdown string, savedAt, now time.Time) (note Note, conflict bool, err error) {
+	current, ok := s.Get(id)
+	if !ok {
+		return Note{}, false, ErrNotFound
+	}
+	if !current.UpdatedAt.Equal(savedAt) {
+		return current, true, nil
+	}
+	saved, err := s.saveText(id, markdown, now)
+	return saved, false, err
+}
+
 // saveText writes markdown as the note's saved text at now and returns the note as saved.
 func (s *Store) saveText(id, markdown string, now time.Time) (Note, error) {
 	if s.readOnly {

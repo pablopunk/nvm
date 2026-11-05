@@ -23,6 +23,7 @@ const (
 	OpSave        = "save"
 	OpCommit      = "commit"
 	OpDiscard     = "discard"
+	OpCreate      = "create"
 
 	OpRefreshMenuBar = "refreshMenuBar"
 	OpInvalidateRoot = "invalidateRoot"

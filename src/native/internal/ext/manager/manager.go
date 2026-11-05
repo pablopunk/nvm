@@ -21,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -52,6 +53,7 @@ type Ports struct {
 	Account   services.AccountState
 	OCR       *ocr.Service
 	History   func() *clipboard.History
+	Notes     func() *notes.Store
 	Confirm   services.ConfirmFunc
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
@@ -156,6 +158,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			RootRefresh:    opts.RootRefresh,
 			AIQuota:        opts.AIQuota,
 			SearchRefresh:  opts.SearchRefresh,
+			Notes:          ports.Notes,
 
 			Shell:        ports.Shell,
 			Commands:     ports.Commands,

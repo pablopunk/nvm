@@ -1240,3 +1240,23 @@ Code: `Context().Scheduler()` (`internal/ext/api/scheduler.go`), served by `inte
 - **Fixture.** `acme.schedule` (`internal/ext/testdata/extensions/acme.schedule`) arms, cancels and reports a run through the search box, through a child process. `internal/ext/manager/schedule_test.go` runs it: a due run calls the action, and a cancelled run never does.
 - **Tests.** `internal/ext/services/schedule_test.go` runs the book on the fake clock: due time, cancel, replacement, past times, the limits, the key rules, close and the rate limit. `internal/ext/builtins/timers` covers the duration parsing, the root row, the commands, the countdown, cancel and finish on a fake scheduler. The root and learned tables and the goldens are unchanged.
 
+
+## 33. Notes service and the conflict view (dogfood batch 4)
+
+Code: `api.Notes` (`internal/ext/api/services_notes.go`), served by `internal/ext/services/notes.go` over `internal/features/notes`, which is the store the Notes built-in shows.
+
+- **Access.** `Context().Notes()` needs the `notes` capability in the manifest. It is the user's own notes, so an extension without the capability gets a permission failure.
+- **Operations.** `List`, `Get`, `Create`, `Recent` (the most recent note, or a new one when there is none), `Update` and `Delete`. `Delete` runs only from a palette action and asks the user first; a refused question removes nothing.
+- **Conflicts.** `Update(id, markdown, updatedAt)` takes the saved version the text was typed on and returns the note with a conflict flag. A newer saved version refuses the write: nothing is written, the saved note comes back with `true`, and the unsaved text stays with the extension. A note carries `id`, `markdown` and `updatedAt` only.
+- **Conflict view.** `api.NoteConflictView(saved, unsaved, compareMarkdown)` lists "Restore unsaved changes" (runs `NoteConflictRestoreRef`), "Keep saved version" (runs `NoteConflictKeepRef`) and "Compare", which pushes a preview of the two texts. The extension decides what each resolution writes; the Markdown diff comes from `features/notes`.
+- **Storage.** The service reads and writes the same `notes.json` as the native notes store. The 1.x floating-notes storage key `notes` is not read here.
+- **Tests.** `internal/ext/services/notes_test.go` covers create, list, get, an in-place update, the conflict refusal, the capability and the delete confirmation. `internal/ext/api/services_notes_test.go` covers the conflict view. The palette's golden `extension-window/note-conflict` draws the view in a window.
+
+## 34. Extension window chrome (dogfood batch 4)
+
+Code: `internal/palette/window_chrome.go`, `internal/app/extension_window_host.go`.
+
+- **Header.** Every extension window draws its view's title over the view's subtitle at the top of its page. The launcher panel draws neither.
+- **Companion.** A window whose `titleBar` is `hidden` uses the companion layout: a 36 px strip above the header drags the window, under the traffic lights at 12, 12. A native title bar draws no strip.
+- **Footer and menu.** The footer shows the action menu's key (⌘K) when the row has actions. The menu draws over the footer, as before.
+- **Tests.** `internal/palette/extview/window_chrome_test.go` draws a companion window and a launcher page on the fake window; the golden `extension-window/companion-ticker` is the floating ticker fixture, light and dark.
