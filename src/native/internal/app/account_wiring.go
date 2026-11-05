@@ -41,7 +41,15 @@ func (p *App) attachAccount(ports platform.Ports, st *store.Store) {
 		return
 	}
 	p.account = session
+	p.observeAnalyticsOwner()
 	p.refreshBackendReport()
+}
+
+// observeAnalyticsOwner reports only the account's one-way identifier; email and profile data stay local.
+func (p *App) observeAnalyticsOwner() {
+	if p.account != nil && p.analytics != nil {
+		p.analytics.ObserveInstallOwner(p.account.Snapshot().UserID)
+	}
 }
 
 // accountDeps is the session wiring of this build. Only automation builds change it, to point the account at the
@@ -107,6 +115,7 @@ func deviceLabel() string {
 // refreshAccountPage redraws the palette after an account change. Flows report from their own goroutines, so the
 // redraw is queued on the UI thread.
 func (p *App) refreshAccountPage() {
+	p.observeAnalyticsOwner()
 	p.onUI(func() {
 		p.syncCompatibilityAccount()
 		p.Refresh()

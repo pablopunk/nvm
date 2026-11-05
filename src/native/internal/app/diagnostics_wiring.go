@@ -18,8 +18,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// releaseBuild is "true" in release builds, the only builds with an analytics endpoint. It is set at link time, so a
-// development build never sends.
+// releaseBuild is the legacy link-time release marker. Packaged builds also send from preview packaging; unpackaged
+// development builds remain endpoint-free.
 var releaseBuild = "false"
 
 // quitFlushTimeout bounds the diagnostics sent while the app quits, so an unreachable endpoint cannot hold the quit.
@@ -34,7 +34,7 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 	openLogFile(ports)
 	p.recorder = diag.NewRecorder(searchClock, logx.NewRedactor())
 	p.analytics = analytics.New(analytics.Config{
-		Endpoint:  analyticsEndpoint(),
+		Endpoint:  analyticsEndpoint(packagedBuild()),
 		APIKey:    analytics.IngestKey,
 		Transport: ports.HTTP,
 		FS:        ports.FS,
@@ -63,9 +63,9 @@ func openLogFile(ports platform.Ports) {
 	log.SetOutput(logger.Writer(logx.Warn))
 }
 
-// analyticsEndpoint is the ingest route in release builds, and nowhere otherwise.
-func analyticsEndpoint() string {
-	if releaseBuild == "true" {
+// analyticsEndpoint enables ingest for packaged builds and legacy release builds only.
+func analyticsEndpoint(packaged bool) string {
+	if packaged || releaseBuild == "true" {
 		return analytics.IngestEndpoint
 	}
 	return ""
@@ -121,5 +121,16 @@ func (p *App) toggleDiagnostics() {
 	if err := p.setDiagnosticsOff(off); err != nil {
 		log.Println("diagnostics setting not saved:", err)
 	}
-	p.analytics.SetConsent(!off)
+	p.updateAnalyticsConsent(!off)
+}
+
+// updateAnalyticsConsent applies a user-facing consent change and identifies the current owner on opt-in.
+func (p *App) updateAnalyticsConsent(on bool) {
+	if p.analytics == nil {
+		return
+	}
+	p.analytics.SetConsent(on)
+	if on {
+		p.observeAnalyticsOwner()
+	}
 }

@@ -141,7 +141,7 @@ func (s *settingsStore) saveDiagnostics(raw json.RawMessage) error {
 		if err := s.p.setDiagnosticsOff(!on); err != nil {
 			log.Println("diagnostics setting not saved:", err)
 		}
-		s.p.analytics.SetConsent(on)
+		s.p.updateAnalyticsConsent(on)
 	})
 }
 

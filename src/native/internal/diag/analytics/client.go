@@ -79,11 +79,11 @@ type Client struct {
 	dropped int
 
 	// sendMu serializes flushes, and guards the identifier and the attempt count, which only flushes touch.
-	sendMu    sync.Mutex
-	installID string
-	ownerMu sync.Mutex
+	sendMu         sync.Mutex
+	installID      string
+	ownerMu        sync.Mutex
 	observedOwners map[string]struct{}
-	attempts  int
+	attempts       int
 }
 
 // New returns a client with its consent set to cfg.Consent. It sends nothing until Start or Flush runs.
@@ -93,14 +93,30 @@ func New(cfg Config) *Client {
 	return c
 }
 
-// Channel names the release channel of a version: "stable" for 0.x releases; "prerelease" for CalVer dev and nightly
-// builds, and for any version it cannot read, so an unknown build never counts as a stable user.
+// Channel names semantic releases stable, except explicit Go/Next prereleases. CalVer 2000+ and malformed versions
+// are prerelease so unknown builds never count as stable users.
 func Channel(version string) string {
-	major, _, _ := strings.Cut(version, ".")
-	if n, err := strconv.Atoi(major); err == nil && n < 2000 {
-		return "stable"
+	if strings.Contains(version, "-") {
+		return "prerelease"
 	}
-	return "prerelease"
+	core, _, _ := strings.Cut(version, "+")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return "prerelease"
+	}
+	for _, part := range parts {
+		if part == "" {
+			return "prerelease"
+		}
+		if _, err := strconv.Atoi(part); err != nil {
+			return "prerelease"
+		}
+	}
+	n, _ := strconv.Atoi(parts[0])
+	if n >= 2000 {
+		return "prerelease"
+	}
+	return "stable"
 }
 
 // commonProperties are the fields every event carries. Callers cannot set them.
