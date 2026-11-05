@@ -191,6 +191,8 @@ type Shortcuts interface {
 	List() []ShortcutRecord
 	// Palette returns the app-wide shortcut that opens Nevermind.
 	Palette() ShortcutRecord
+	// Aliases returns the user's aliases for the action IDs that start with prefix.
+	Aliases(prefix string) map[string][]string
 }
 
 // Account reports whether the palette is signed in. Credentials never reach an extension.

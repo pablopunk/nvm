@@ -22,7 +22,7 @@ func (w *shownWindow) SetPosition(x, y int)      {}
 
 func windowCommandIDs(p *App) map[string]bool {
 	ids := map[string]bool{}
-	for _, command := range p.commands(false) {
+	for _, command := range p.commands() {
 		ids[command.ID] = true
 	}
 	return ids

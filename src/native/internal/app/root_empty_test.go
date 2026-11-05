@@ -3,29 +3,8 @@ package app
 import (
 	"testing"
 
-	"github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
-
-// TestRootEmptyListsEveryAppNewestFirst pins the empty root's app order to 1.x: every app, by when it was first seen,
-// newest first, then by name.
-func TestRootEmptyListsEveryAppNewestFirst(t *testing.T) {
-	installed := []apps.App{
-		{Name: "Zed", FirstSeenAt: 1},
-		{Name: "Beta", FirstSeenAt: 3},
-		{Name: "Alpha", FirstSeenAt: 3},
-	}
-	list, scores := matchingApps(installed, "", nil)
-	want := []string{"Alpha", "Beta", "Zed"}
-	for i, a := range list {
-		if a.Name != want[i] || scores[i] != scoreRootApplication {
-			t.Fatalf("row %d = %q at %d, want %q at %d", i, a.Name, scores[i], want[i], scoreRootApplication)
-		}
-	}
-	if len(installed) != 3 || installed[0].Name != "Zed" {
-		t.Fatal("ordering the root's apps changed the installed list the palette keeps")
-	}
-}
 
 // TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty pins the root's layout for the empty query and a typed one: rows in
 // 1.x score order, no section labels, and the 30-row cap.

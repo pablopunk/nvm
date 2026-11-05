@@ -156,3 +156,14 @@ type TypeTextArgs struct {
 type PathsArgs struct {
 	Paths []string `json:"paths"`
 }
+
+// PrefixArgs names the action IDs a shortcut read covers: those that start with Prefix.
+type PrefixArgs struct {
+	Prefix string `json:"prefix"`
+}
+
+// UninstallTrashArgs names a reviewed uninstall by its token and the items of it to move to the Trash.
+type UninstallTrashArgs struct {
+	Token string   `json:"token"`
+	IDs   []string `json:"ids"`
+}

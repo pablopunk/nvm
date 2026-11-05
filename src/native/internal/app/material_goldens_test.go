@@ -1,6 +1,7 @@
 package app
 
 import (
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -34,6 +35,6 @@ func TestPaletteMaterialNoteEditor(t *testing.T) {
 
 func TestPaletteMaterialSnippetForm(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.snippetForm(nil))
+	goldenOpen(p, snippetsBuiltInPage(t, goldenLegacySnippets(t), snippetsbuiltin.CreateCommandID, nil))
 	golden.AssertMatrix(t, "material-snippet-form", p.View, materialGoldens)
 }

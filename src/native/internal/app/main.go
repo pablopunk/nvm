@@ -21,11 +21,11 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
-	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/jobs"
 	"github.com/pablopunk/nvm/native/internal/menubar"
@@ -91,14 +91,13 @@ type App struct {
 	aliasList      *shortcuts.Aliases
 	github         *githubProbe
 	shortcutTitles shortcutTitles
-	snips          *snippets.Store
+	legacySnips    []snippetsbuiltin.Snippet
 	notes          *notes.Store
 	files          *fileService
 	chats          *chat.Service
 	builder        *builder.Workshop
 	// previews is the preview of each extension beside its builder chats, read off the UI thread after each write.
 	previews map[string]*extensionPreview
-	timer    *Timer
 	learn    *usage.Learner
 	history  *palette.QueryHistory
 

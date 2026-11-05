@@ -8,13 +8,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/appcommands"
+	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	calculatorbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/calculator"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/classifyimage"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/syspanes"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/systemcommands"
+	timersbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/timers"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/features/calc"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -28,6 +31,7 @@ type builtInInputs struct {
 	Rates        calc.RateCache
 	Zone         *time.Location
 	Quicklinks   []quicklinks.Link
+	Snippets     []snippetsbuiltin.Snippet
 	GuideDone    bool
 	SearchEngine string
 }
@@ -38,7 +42,9 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 	return []api.Extension{
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(),
-		quicklinks.New(in.Quicklinks), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
+		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
+		timersbuiltin.New(),
+		appsbuiltin.New(),
 	}
 }
 
@@ -67,5 +73,5 @@ func builtInRows(p *App, id, q string) []search.Item {
 	if !ok {
 		return nil
 	}
-	return searchRowsFor(p, m, q, result)
+	return searchRowsFor(p, m, q, result, nil)
 }

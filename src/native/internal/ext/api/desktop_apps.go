@@ -27,6 +27,7 @@ type Apps interface {
 	// index lists the app, which is the path Icon takes; it is empty otherwise.
 	Frontmost() (App, error)
 	Launch(path string) error
+	// List returns the apps the host index lists, with the time each was first seen.
 	List() ([]App, error)
 	Search(query string) ([]App, error)
 	Icon(path string) (dataURL string, found bool, err error)
@@ -43,4 +44,40 @@ type Apps interface {
 	QuitAll() ([]App, error)
 	// Hide hides the app's windows. Only macOS can; elsewhere the call fails.
 	Hide(path string) error
+	// UninstallReview reviews what uninstalling the app at path would move. Token names the review for UninstallTrash.
+	UninstallReview(path string) (UninstallReview, error)
+	// UninstallTrash moves the review's items with these IDs to the Trash, checking each one again first.
+	UninstallTrash(token string, ids []string) (UninstallResult, error)
+}
+
+// UninstallReview is an uninstall review: its candidates and notes about them.
+type UninstallReview struct {
+	Token   string          `json:"token,omitempty"`
+	Ready   bool            `json:"ready"`
+	Message string          `json:"message,omitempty"`
+	Notes   []string        `json:"notes,omitempty"`
+	Items   []UninstallItem `json:"items,omitempty"`
+}
+
+// UninstallItem is a candidate of an uninstall review.
+type UninstallItem struct {
+	ID       string `json:"id"`
+	Path     string `json:"path"`
+	Kind     string `json:"kind"`
+	Reason   string `json:"reason,omitempty"`
+	Selected bool   `json:"selected"`
+}
+
+// UninstallResult says what a Trash run moved; Status is complete, partial or failed.
+type UninstallResult struct {
+	Status      string               `json:"status"`
+	TrashFolder string               `json:"trashFolder,omitempty"`
+	Moved       []string             `json:"moved,omitempty"`
+	Untouched   []UninstallUntouched `json:"untouched,omitempty"`
+}
+
+// UninstallUntouched is a selected item a Trash run left in place.
+type UninstallUntouched struct {
+	Path    string `json:"path"`
+	Message string `json:"message"`
 }

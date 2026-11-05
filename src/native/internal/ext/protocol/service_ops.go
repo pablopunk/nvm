@@ -2,6 +2,7 @@ package protocol
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
@@ -33,7 +34,28 @@ const (
 	OpUpdate        = "update"
 	OpHide          = "hide"
 	OpRefreshSearch = "refreshSearch"
+	OpOnce          = "once"
+	OpCancel        = "cancel"
+	OpPending       = "pending"
 )
+
+// OnceArgs schedules one run of the handler Ref names, at At, under Key.
+type OnceArgs struct {
+	Key string        `json:"key"`
+	At  time.Time     `json:"at"`
+	Ref api.ActionRef `json:"ref"`
+}
+
+// ScheduleKeyArgs names the scheduled run to cancel or ask about.
+type ScheduleKeyArgs struct {
+	Key string `json:"key"`
+}
+
+// PendingReply says whether a run is pending under the key, and when it runs.
+type PendingReply struct {
+	At      time.Time `json:"at"`
+	Pending bool      `json:"pending"`
+}
 
 // IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
 type IndicatorHideArgs struct {

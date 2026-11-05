@@ -43,6 +43,8 @@ func (stubShortcuts) List() []api.ShortcutRecord {
 	return []api.ShortcutRecord{{ActionID: "palette", Accelerator: "Command+Alt+K", Source: "user"}}
 }
 
+func (stubShortcuts) Aliases(string) map[string][]string { return nil }
+
 func (stubShortcuts) Palette() api.ShortcutRecord {
 	return api.ShortcutRecord{ActionID: "palette", Accelerator: "Command+Alt+K", Source: "user"}
 }

@@ -23,7 +23,9 @@ const (
 	ColorRed    Color = "red"
 	ColorOrange Color = "orange"
 	ColorPink   Color = "pink"
-	// ColorNone is the neutral foreground: the row's tile takes no accent.
+	ColorTeal   Color = "teal"
+	// ColorNone is the neutral foreground: the row's tile takes no accent, as the native rows of the palette had.
+	// An extension's rows are tinted by default.
 	ColorNone Color = "none"
 )
 

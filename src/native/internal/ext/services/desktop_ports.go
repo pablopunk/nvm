@@ -31,4 +31,5 @@ type AccountState interface {
 type ShortcutTable interface {
 	List() []api.ShortcutRecord
 	Palette() api.ShortcutRecord
+	Aliases(prefix string) map[string][]string
 }

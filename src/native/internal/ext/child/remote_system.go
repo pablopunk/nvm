@@ -63,6 +63,13 @@ func (s remoteShortcuts) Palette() api.ShortcutRecord {
 	return record
 }
 
+// Aliases reads the aliases of the actions under prefix. A failed exchange reads as none.
+func (s remoteShortcuts) Aliases(prefix string) map[string][]string {
+	var aliases map[string][]string
+	_ = s.link.Call(protocol.ServiceShortcuts, protocol.OpAliases, protocol.PrefixArgs{Prefix: prefix}, &aliases)
+	return aliases
+}
+
 // remoteAccount reads whether the palette is signed in. A failed exchange reads as signed out.
 type remoteAccount struct {
 	link *hostLink

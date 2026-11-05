@@ -313,7 +313,7 @@ The palette-first rule stands: prefer `Input().Prompt` for two or three short va
 
 Background mode per command: `view` (default), `noView`, `background`. The host owns scheduling, enablement, no-overlap, backoff and diagnostics. A background command never shows the palette.
 
-`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`), and `StartedAtMs`.
+`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`, `once` for a scheduled run, section 32), and `StartedAtMs`.
 
 ## 10. Menu bar
 
@@ -1001,7 +1001,7 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | Service | Surface served | Declaration |
 | --- | --- | --- |
 | `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
-| `desktop.apps` | `list`, `search`, `launch`, `icon`, `frontmost`, `running`, `quit`, `force quit`, `hide` (section 29.2), `quit all` (also needs `system`) | `desktop.apps` |
+| `desktop.apps` | `list`, `search`, `launch`, `icon`, `frontmost`, `running`, `quit`, `force quit`, `hide` (section 28.2), `quit all` (also needs `system`) | `desktop.apps` |
 | `desktop.files` | `open`, `reveal`, `find` (existing folders; missing and relative ones are skipped), `metadata`, `thumbnail` (a PNG data URL for pictures), `fileUrl` (a `file:` URL), `openWithApps` (bundles ranked by their document types through `mdls` and `plutil`, else every bundle by name), `writeBytes` (512 KiB per call; refuses an existing file unless `overwrite`, never creates folders). Absolute paths only. | `desktop.files` |
 | `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
 | `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
@@ -1034,7 +1034,7 @@ Code: `internal/features/selection` (the engine), `internal/ext/services/desktop
 - **Replace.** `Selection().ReplaceText(text)` puts the text on the clipboard concealed, sends the paste gesture, and restores the displaced clipboard after half a second, unless the user copied something since.
 - **Undo.** `Keyboard().Undo()` sends the undo gesture to the source window. It needs a replacement pending in that same window and is refused for any other window, and each replacement is undone at most once.
 - **Capabilities.** `desktop.selection` gates the selection calls and `desktop.keyboard` gates undo. Both are enforced by the host, not only declared for review.
-- **Not served.** `Selection().Files()` answers unsupported. Typing is in section 29.
+- **Not served.** `Selection().Files()` answers unsupported. Typing is in section 28.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
@@ -1139,11 +1139,34 @@ Code: `internal/ext/builtins/calculator` (the built-in), `internal/features/calc
 - **Answers and fallbacks.** An item with `AnswersQuery` answers the query. While any answer is in the merged rows, every row with `QueryFallback` (web search, Automate) is left out, from any source. Until every provider has answered, fallback rows are held back, so an answer that arrives a moment later does not make a fallback flash. Both fields are honoured for folder extensions as well as built-ins.
 - **Search refresh.** `Views().RefreshSearch(query)` asks the palette to search again for `query` after a short debounce (30 ms). It returns at once. The search runs only when the palette is open and still shows that query; an empty query is the root. A background source calls it when its data arrives, for example a rate quote.
 - **Detail facts.** `Detail.Facts` draws labelled values, a small label over a large value, in a column. The calculator's detail lines are facts, so its pane matches the native one (golden `calc-result`). Detail panes now show on search and root rows of every extension, not only in views.
-- **Paste.** Paste and typing actions run through the paste family in section 29. `copy-text` shows a failed copy as a toast.
+- **Paste.** Paste and typing actions run through the paste family in section 28. `copy-text` shows a failed copy as a toast.
 - **Calculator rates.** The built-in fetches exchange rates through `Network()`, so the public-address policy and the request limits (5 s, 64 KiB) apply. Its quotes are kept in `rates.json` in the app's store, through a rate cache the composition root passes in. That port is host-only: a folder extension cannot reach `rates.json`, and it is the one host-only input a built-in takes besides its context. The built-in declares the `network` capability. Calendar answers are dated by the context's clock, and the zone database is shared across calls.
 - **Native parity.** The calculator row is ranked 1000 with the `Calculator` section, orange tone and the calculator icon. Its actions are Copy Result (primary), Continue Calculation and Swap Units (search again, palette open), Copy Unformatted Result (only when formatting changed the value) and Paste Result (`CommandOrControl+Enter`).
 
-## 28. Dogfood batch 2: quicklinks, getting started and web search as built-ins (WP3.10)
+
+## 28. Paste family and app lifecycle as built (dogfood batch 2)
+
+### 28.1 Paste, typing and frontmost
+
+- **Actions.** `api.Paste` (text, HTML, image or files), `api.PasteText` and `api.TypeText` are declarative. The palette hides first, then the extension's `desktop.paste` service performs the action off the UI thread, so the extension's own capabilities apply. The HUD says Pasted or Typed, or the reason the action did not run. Pastes keep the 1.x order: the keys reach the app the content came from.
+- **Capabilities.** A paste needs `desktop.clipboard` and `desktop.keyboard`. Typing needs `desktop.keyboard`, and the host also needs the `keyboard.type-text` system capability, which only macOS offers, as in 1.x. The child's `Keyboard().TypeText` takes the same route.
+- **Options.** `RestoreClipboard` puts back the clipboard the paste displaced, after `RestoreDelayMs` (clamped to 50 ms to 5 s, default 250 ms, as 1.x). It implies `Concealed`. A clipboard that holds HTML, RTF, files or an image is refused rather than lost, as the selection engine refuses it. `Concealed` keeps the write out of clipboard history; this build can conceal text only, so concealed HTML, images and files are refused. `ExpectedFrontmostID` pastes only while that app is in front. `PlainTextOnly` (default true) writes HTML only when it is false. `KeepPaletteOpen` is accepted and ignored, because a paste always hides the palette first, as 1.x did.
+- **Limits.** Typed text is capped at 64 KiB and the delay between characters at 1 s. Images are PNG, from a data URL or an absolute path, at most 16 MiB. Files must be absolute. RTF is not written, because the 1.x content kinds have none.
+- **Engine.** The paste and typing gestures run on the paste port (`platform.Paster`, with the optional `platform.Typist`). The selection engine's focus return and clipboard save and restore serve both, in `features/selection/paste.go`.
+- **Fixture.** `internal/ext/testdata/extensions/acme.paste` types through the keyboard service and returns a paste primary action.
+
+### 28.2 App lifecycle
+
+- **Calls.** `Apps()` gains `Running(paths)` (the paths whose app has a live process, in request order, at most 30 at a time), `Quit(path)`, `ForceQuit(path)`, `QuitAll()` and `Hide(path)`. `Launch` has been served since batch 1. Every path must be an app the index lists. A quit or hide answers `QuitResult`: `wasRunning`, `quit` (no live process remains after the request) and `killed`.
+- **Capabilities.** `Running` needs `apps.running`. `Quit` and `ForceQuit` need `apps.quit`. `Hide` needs `apps.hide`, which only macOS offers. `QuitAll` needs `apps.quit` and the `system` declaration, as the 1.x Quit All command did. The same names answer `ctx.system.capabilities.has` (`HasCapability`).
+- **macOS.** Quit asks the app itself through AppleScript, as 1.x did, and waits the grace period (5 s). The app may decline, for example to show a save sheet; then `quit` is false and nothing is forced. Force quit runs `killall -KILL` on the app's process name. Quit All asks every visible app but Nevermind and Finder, and returns the names it asked. Hide runs System Events and needs the Automation permission. Running status reads one `ps` listing for all candidates, because the process port does not list processes on macOS.
+- **Linux.** Running status and quit use the process listing and signals, as the Quit Apps command did before this batch. Quit All skips the desktop shell and the file manager's desktop, and Hide is unsupported.
+- **Failures.** A refused AppleScript shows its reason in the HUD under the extension's title and writes a warning to the log. The Automation hint is shown when macOS refused the grant. Any other failure is logged and shown with its message.
+- **Confirmation.** The service never asks. A built-in that quits or hides apps shows its own confirmation first, through the palette, as the macOS confirms do.
+- **Not in this batch.** Uninstall moved to the Apps built-in in section 30.
+- **Fixture.** `internal/ext/testdata/extensions/acme.lifecycle` probes each call, and `acme.paste` (section 28.1) probes the paste family.
+
+## 29. Dogfood batch 2: quicklinks, getting started and web search as built-ins (WP3.10)
 
 Code: `internal/ext/builtins/quicklinks` (Create Quicklink, keyword rows, six defaults), `internal/app/extensions_commands.go` (how the host lists a built-in's commands).
 
@@ -1157,25 +1180,44 @@ Code: `internal/ext/builtins/quicklinks` (Create Quicklink, keyword rows, six de
 - **Tests.** L2: `internal/ext/builtins/quicklinks`, `internal/ext/builtins/gettingstarted` and `internal/ext/builtins/websearch` run each built-in's handlers on fake services; `internal/app/guide_shortcut_test.go` runs the guide through the palette. The root table and learned table are unchanged.
 - **Sign-in row (1.x parity).** The guide lists the optional account as 1.x does: "Sign in to Nevermind" while signed out, whose primary action is the new `account` action with op `sign-in` (`api.AccountSignIn`), which opens the host's sign-in flow as the Log in command does; "Nevermind account", disabled, once signed in. `Context.Account().SignedIn()` (new) reports the state. Credentials never reach the extension (HO2). The row's icon is `user`, the icon of the host's Log in command, because the palette's icon set has no `person`.
 
+## 30. Dogfood batch 3a: the applications built-in (rows, quit commands, uninstall)
 
-## 29. Paste family and app lifecycle as built (dogfood batch 2)
+Code: `internal/ext/builtins/apps` (rows, Force Quit Apps, Quit All Apps, the uninstall review, the result view). The host's index, running state and quit services stay in `internal/features/apps`, which the services layer reads through `AppLifecycle`.
 
-### 29.1 Paste, typing and frontmost
+- **Rows.** Every indexed app is a root row, newest first by when the host first saw it, then by name. A search matches the name, or an alias the user gave the app. Enter opens the app; Uninstall is in the row's menu when the platform has `apps.uninstall`. A row shows Running while the app has a live process, and its system icon loads in the background.
+- **Keys.** A row sets `CustomizeAs` to `app:<path>`, so its keyboard shortcut and alias keep the 1.x key `extension-root:nevermind.apps:app:<path>`. The learning key is `app:<bundle id>`, as before.
+- **Drag.** The row's `File` is the app bundle, so it drags out to other applications.
+- **Commands.** Force Quit Apps lists the running apps; each one asks `Force Quit?` before it is force quit, as 1.x does. Quit All Apps asks once, then asks each running app to quit except Nevermind and the desktop's own apps. Both keep their native shortcut keys (`command:force-quit-apps`, `command:quit-all-apps`) through the host's moved-command table, and their root scores are the native ones.
+- **Uninstall.** `Apps().UninstallReview` runs discovery and keeps the review under a token; `Apps().UninstallTrash` moves the reviewed items the IDs select, checking each one again first, with the same guards as before. The built-in keeps the selection; the review is dropped once it has run. The result view reveals the Trash folder the host reports.
+- **API added.** `Item.CustomizeAs`; `Shortcuts().Aliases(prefix)`; `Apps().List()` now lists the index with `FirstSeenMs`; `Apps().UninstallReview`, `Apps().UninstallTrash` and `UninstallResult.TrashFolder`; the `apps.uninstall` capability. A built-in command's `Score` is honoured at the empty root.
+- **Not on the row.** Show in Finder is not a row action: 1.x has none on app rows, and the root goldens do not list it.
+- **Not used.** Hide and Frontmost are served but the applications built-in does not call them; 1.x does not.
+- **Host-kept.** A global shortcut bound to an app still launches it through the host's shortcut dispatch, which reads the index and the platform launch port.
+- **Budgets.** The new surface grew the builder's reference by about 1 KB. Its size ratchets were raised to 50 KB and 34 KB; the terse reference is what the builder reads on every turn.
+- **Tests.** L2: `internal/ext/builtins/apps` runs each handler on fake services; `internal/ext/services` covers the uninstall and alias operations on fake lifecycles; `internal/app` runs the root goldens through the built-in with the palette's apps service. The root table, the learned table and the goldens are unchanged.
 
-- **Actions.** `api.Paste` (text, HTML, image or files), `api.PasteText` and `api.TypeText` are declarative. The palette hides first, then the extension's `desktop.paste` service performs the action off the UI thread, so the extension's own capabilities apply. The HUD says Pasted or Typed, or the reason the action did not run. Pastes keep the 1.x order: the keys reach the app the content came from.
-- **Capabilities.** A paste needs `desktop.clipboard` and `desktop.keyboard`. Typing needs `desktop.keyboard`, and the host also needs the `keyboard.type-text` system capability, which only macOS offers, as in 1.x. The child's `Keyboard().TypeText` takes the same route.
-- **Options.** `RestoreClipboard` puts back the clipboard the paste displaced, after `RestoreDelayMs` (clamped to 50 ms to 5 s, default 250 ms, as 1.x). It implies `Concealed`. A clipboard that holds HTML, RTF, files or an image is refused rather than lost, as the selection engine refuses it. `Concealed` keeps the write out of clipboard history; this build can conceal text only, so concealed HTML, images and files are refused. `ExpectedFrontmostID` pastes only while that app is in front. `PlainTextOnly` (default true) writes HTML only when it is false. `KeepPaletteOpen` is accepted and ignored, because a paste always hides the palette first, as 1.x did.
-- **Limits.** Typed text is capped at 64 KiB and the delay between characters at 1 s. Images are PNG, from a data URL or an absolute path, at most 16 MiB. Files must be absolute. RTF is not written, because the 1.x content kinds have none.
-- **Engine.** The paste and typing gestures run on the paste port (`platform.Paster`, with the optional `platform.Typist`). The selection engine's focus return and clipboard save and restore serve both, in `features/selection/paste.go`.
-- **Fixture.** `internal/ext/testdata/extensions/acme.paste` types through the keyboard service and returns a paste primary action.
+## 31. Dogfood batch 3b: the snippets built-in
 
-### 29.2 App lifecycle
+Code: `internal/ext/builtins/snippets`. The app's native snippet views, rows, form and paste path are gone; the built-in is the only snippets code.
 
-- **Calls.** `Apps()` gains `Running(paths)` (the paths whose app has a live process, in request order, at most 30 at a time), `Quit(path)`, `ForceQuit(path)`, `QuitAll()` and `Hide(path)`. `Launch` has been served since batch 1. Every path must be an app the index lists. A quit or hide answers `QuitResult`: `wasRunning`, `quit` (no live process remains after the request) and `killed`.
-- **Capabilities.** `Running` needs `apps.running`. `Quit` and `ForceQuit` need `apps.quit`. `Hide` needs `apps.hide`, which only macOS offers. `QuitAll` needs `apps.quit` and the `system` declaration, as the 1.x Quit All command did. The same names answer `ctx.system.capabilities.has` (`HasCapability`).
-- **macOS.** Quit asks the app itself through AppleScript, as 1.x did, and waits the grace period (5 s). The app may decline, for example to show a save sheet; then `quit` is false and nothing is forced. Force quit runs `killall -KILL` on the app's process name. Quit All asks every visible app but Nevermind and Finder, and returns the names it asked. Hide runs System Events and needs the Automation permission. Running status reads one `ps` listing for all candidates, because the process port does not list processes on macOS.
-- **Linux.** Running status and quit use the process listing and signals, as the Quit Apps command did before this batch. Quit All skips the desktop shell and the file manager's desktop, and Hide is unsupported.
-- **Failures.** A refused AppleScript shows its reason in the HUD under the extension's title and writes a warning to the log. The Automation hint is shown when macOS refused the grant. Any other failure is logged and shown with its message.
-- **Confirmation.** The service never asks. A built-in that quits or hides apps shows its own confirmation first, through the palette, as the macOS confirms do.
-- **Not in this batch.** Uninstall discovery and the Trash step stay in the host. The Apps built-in is not migrated yet.
-- **Fixture.** `internal/ext/testdata/extensions/acme.lifecycle` probes each call, and `acme.paste` (section 29.1) probes the paste family.
+- **Rows.** A keyword typed at the root finds the snippet whose keyword is the query (ranked above prefixes, 975 and 970, as before). Enter pastes the text through `PasteText` when the platform has `clipboard.paste` and copies it where it does not. Copy to Clipboard, Edit and Delete are the row's menu; ⌃C, ⌃E and ⌃⌫ keep their keys as `CommandOrControl` shortcuts. Delete asks first through `WithConfirmation`.
+- **Commands.** Snippets lists at the root with the native score and is customizable, so its shortcut keeps `command:snippets` through the host's moved-command table. Create Snippet is search only.
+- **Storage.** Snippets live in the extension's storage under `snippets`. The snippets document the app kept before this built-in is read once, and answers until the first save stores the list with it. A save keeps entries the list does not show, such as malformed ones, so nothing is dropped.
+- **Placeholders.** `{clipboard}` and `{date}` are filled when the snippet is pasted or copied, in one pass, as before.
+- **API added.** `ColorTeal`, the teal foreground the native snippet rows used; `System().HasCapability("clipboard.paste")`, the name the host answers for the paste gesture.
+- **Differences from the native views.** The form is the palette's row form, not a stacked form: each field is a row, and a refused save shows its message in the palette's feedback instead of under the fields. The list filters its rows by title, subtitle, keyword and alias, as every extension list does, so the Create Snippet row filters too. The detail pane shows the placeholders as a labelled row under the text rather than a footer.
+- **Tests.** Unit: `internal/ext/builtins/snippets` covers the rows, paste, copy, validation, keyword uniqueness, storage and legacy answers. Goldens: `snippets-list`, `snippet-form` and `material-snippet-form` now render through the built-in; the three were regenerated for the row form and the detail row. The root and learned tables are unchanged.
+
+## 32. One-shot runs and the timers built-in (dogfood batch 3b)
+
+Code: `Context().Scheduler()` (`internal/ext/api/scheduler.go`), served by `internal/ext/services/schedule.go` and run by the manager's `runScheduled`; the built-in is `internal/ext/builtins/timers`.
+
+- **Primitive.** `Scheduler().Once(key, at, ref)` runs the extension's own action `ref` at the time `at`, under `key`. A second `Once` under the same key replaces the pending run, so a timer restart replaces the one before. `Cancel(key)` drops it and reports whether one was pending; `Pending(key)` reports when it is due. A time already past runs at once. Keys are at most 64 bytes, and 16 runs may be pending per extension; scheduling is rate limited to 60 a minute. The run arrives as a normal action with `Launch.Reason` and `Launch.Event` both `once`.
+- **Lifetime.** A pending run lives in the app's memory, as the 2.0 timer was: it is not kept across a restart, and it is dropped when the extension is reloaded or disabled. Nothing waits for its result; a run that fails is logged.
+- **Why not a trigger.** `Trigger` declares fixed schedules on a command or a menu bar item. A timer's time is known only when the user starts it, so the primitive is a call. Interval and startup triggers are unchanged.
+- **Timers built-in.** `nevermind.timers` keeps no state of its own. Start Timer is a search-only command that sets the query to `timer 5m`; `timer 5m`, `countdown 90s` and the like at the root start one (a row with the native score and kind). Cancel Timer is listed only while a timer runs, because `Commands` is read on every search. The menu bar shows the time left as its own item, rendered each second while the item exists and removed when the time is up, and the finish shows the notification "Timer finished" with the duration.
+- **Diff from the native timer.** The countdown is an extension menu bar item, not the title of the app's own status item, so it sits beside that item. The app's own item no longer carries a title. Starting and cancelling a timer refresh the menu bar at once. A notification the system refuses does not fail the finish, as before.
+- **API added.** `Context.Scheduler()`, `Scheduler`, `MaxScheduledRuns`, `ScheduleKeyLimit`, `ValidateScheduleKey`, `Launch.Reason` `once`, and the `once`, `cancel` and `pending` operations of the scheduler service.
+- **Fixture.** `acme.schedule` (`internal/ext/testdata/extensions/acme.schedule`) arms, cancels and reports a run through the search box, through a child process. `internal/ext/manager/schedule_test.go` runs it: a due run calls the action, and a cancelled run never does.
+- **Tests.** `internal/ext/services/schedule_test.go` runs the book on the fake clock: due time, cancel, replacement, past times, the limits, the key rules, close and the rate limit. `internal/ext/builtins/timers` covers the duration parsing, the root row, the commands, the countdown, cancel and finish on a fake scheduler. The root and learned tables and the goldens are unchanged.
+

@@ -49,6 +49,7 @@ const (
 	CapabilityAppRunning       Capability = "apps.running"
 	CapabilityAppQuit          Capability = "apps.quit"
 	CapabilityAppHide          Capability = "apps.hide"
+	CapabilityAppUninstall     Capability = "apps.uninstall"
 )
 
 // AllCapabilities lists every capability, sorted by name.
@@ -63,6 +64,7 @@ func AllCapabilities() []Capability {
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
 		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
+		CapabilityAppUninstall,
 	}
 	slices.Sort(list)
 	return list

@@ -37,3 +37,17 @@ func (a remoteApps) QuitAll() ([]api.App, error) {
 func (a remoteApps) Hide(path string) error {
 	return a.link.Call(protocol.ServiceDesktopApps, protocol.OpHideApp, protocol.PathArgs{Path: path}, nil)
 }
+
+// UninstallReview asks the host to review the uninstall of one indexed app. A failed exchange reads as an unready review.
+func (a remoteApps) UninstallReview(path string) (api.UninstallReview, error) {
+	var review api.UninstallReview
+	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpUninstallReview, protocol.PathArgs{Path: path}, &review)
+	return review, err
+}
+
+// UninstallTrash asks the host to move the selected items of a review to the Trash.
+func (a remoteApps) UninstallTrash(token string, ids []string) (api.UninstallResult, error) {
+	var result api.UninstallResult
+	err := a.link.Call(protocol.ServiceDesktopApps, protocol.OpUninstallTrash, protocol.UninstallTrashArgs{Token: token, IDs: ids}, &result)
+	return result, err
+}

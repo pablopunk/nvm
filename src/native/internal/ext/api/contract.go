@@ -84,6 +84,7 @@ type Context interface {
 	Shortcuts() Shortcuts
 	Account() Account
 	Indicators() Indicators
+	Scheduler() Scheduler
 	System() System
 	Updates() Updates
 	AI() AI

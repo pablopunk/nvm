@@ -1,6 +1,7 @@
 package app
 
 import (
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -54,7 +55,7 @@ func TestPaletteClipboardEmptyState(t *testing.T) {
 
 func TestPaletteSnippetForm(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.snippetForm(nil))
+	goldenOpen(p, snippetsBuiltInPage(t, goldenLegacySnippets(t), snippetsbuiltin.CreateCommandID, nil))
 	golden.AssertMatrix(t, "snippet-form", p.View, paletteGoldens)
 }
 

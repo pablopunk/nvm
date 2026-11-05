@@ -29,6 +29,18 @@ func (fixedApps) QuitAllApps() ([]appfeature.App, error) {
 
 func (fixedApps) HideApp(appfeature.App) error { return nil }
 
+func (fixedApps) IndexedApps() []appfeature.App {
+	return []appfeature.App{{Name: "Notes", ID: "com.example.notes", Path: "/Applications/Notes.app"}}
+}
+
+func (fixedApps) TrashFolder() string { return "" }
+
+func (fixedApps) DiscoverUninstall(string) appfeature.Discovery { return appfeature.Discovery{} }
+
+func (fixedApps) TrashUninstall(appfeature.UninstallSnapshot, map[string]bool) appfeature.TrashResult {
+	return appfeature.TrashResult{}
+}
+
 // TestLifecycleFixtureUsesTheAppServicesThroughTheChild runs the lifecycle fixture in its child. Each probe reads what
 // the host answered; without the declarations every probe is refused before the port is reached.
 func TestLifecycleFixtureUsesTheAppServicesThroughTheChild(t *testing.T) {

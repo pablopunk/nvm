@@ -129,8 +129,3 @@ func (p *App) focusPanel() {
 		p.panel.Focus()
 	}
 }
-
-// setTrayTitle shows text next to the app's menu bar icon, as the running timer does. An empty title shows only the icon.
-func (p *App) setTrayTitle(s string) {
-	p.menubar.SetTitle(s)
-}

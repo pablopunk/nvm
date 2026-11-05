@@ -35,6 +35,7 @@ const (
 	ServiceDrafts     = "drafts"
 	ServiceViews      = "views"
 	ServiceIndicators = "indicators"
+	ServiceScheduler  = "scheduler"
 	ServiceAI         = "ai"
 )
 

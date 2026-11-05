@@ -41,6 +41,8 @@ func (fixedShortcuts) Palette() api.ShortcutRecord {
 	return api.ShortcutRecord{ActionID: "palette", Accelerator: "Command+Alt+K", Source: "user"}
 }
 
+func (fixedShortcuts) Aliases(string) map[string][]string { return nil }
+
 // desktopRig is the services rig with every desktop port wired to a fake, so the fixtures run without a desktop.
 type desktopRig struct {
 	servicesRig

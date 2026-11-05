@@ -118,6 +118,11 @@ func (c hostContext) Indicators() api.Indicators {
 	return remoteIndicators{link: c.link}
 }
 
+// Scheduler schedules one-shot runs of this extension in the host.
+func (c hostContext) Scheduler() api.Scheduler {
+	return remoteScheduler{link: c.link}
+}
+
 func (c hostContext) AI() api.AI {
 	return remoteAI{link: c.link}
 }

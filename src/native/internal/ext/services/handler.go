@@ -70,6 +70,8 @@ type Deps struct {
 	Account AccountState
 	// Indicators draws the passive indicators. Nil answers unavailable.
 	Indicators IndicatorSurface
+	// RunScheduled runs the handler of a one-shot run the extension scheduled, when it is due. Nil drops the run.
+	RunScheduled func(extID string, inv api.Invocation)
 	// Selection reads, replaces and undoes the selected text of the summoned app. Nil answers unavailable.
 	Selection SelectionEngine
 	// Paste puts content on the clipboard, pastes it and types text into the app in front. Nil answers unavailable.
@@ -122,11 +124,13 @@ type Handler struct {
 	notifications    *rateLimiter
 	processes        *rateLimiter
 	indicatorUpdates *rateLimiter
+	schedules        *scheduleBook
 	ocrReads         *rateLimiter
 	screenReads      *rateLimiter
 	rootRefreshes    *rateLimiter
 	aiCalls          *aiquota.Window
 	ai               *aiState
+	reviews          *uninstallReviews
 	openOnce         sync.Once
 	openErr          error
 	closeOnce        sync.Once
@@ -160,6 +164,8 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		rootRefreshes:    newBurstRateLimiter(deps.Clock, rootRefreshBurst, rootRefreshesPerMinute),
 		aiCalls:          aiCallWindow(deps, manifest.ID),
 		ai:               newAIState(),
+		schedules:        newScheduleBook(deps.Clock, scheduledFire(deps, manifest.ID)),
+		reviews:          newUninstallReviews(),
 	}
 }
 
@@ -167,6 +173,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 // and every later call answers unavailable. Close is safe to call more than once.
 func (h *Handler) Close() error {
 	h.ai.close()
+	h.schedules.close()
 	h.openOnce.Do(func() { h.openErr = errHandlerClosed })
 	var closeErr error
 	h.closeOnce.Do(func() {
@@ -244,6 +251,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveViews(call)
 	case protocol.ServiceIndicators:
 		return h.serveIndicators(call)
+	case protocol.ServiceScheduler:
+		return h.serveScheduler(call)
 	case protocol.ServiceAI:
 		return h.serveAI(ctx, call)
 	}
@@ -331,4 +340,13 @@ func decodeArgs(raw json.RawMessage, into any) error {
 		return invalid("the arguments do not fit the operation")
 	}
 	return nil
+}
+
+// scheduledFire hands a due run to the host, which runs it through the extension's manager.
+func scheduledFire(deps Deps, extID string) func(api.Invocation) {
+	return func(inv api.Invocation) {
+		if deps.RunScheduled != nil {
+			deps.RunScheduled(extID, inv)
+		}
+	}
 }

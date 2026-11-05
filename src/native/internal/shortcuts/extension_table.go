@@ -1,18 +1,35 @@
 package shortcuts
 
-import "github.com/pablopunk/nvm/native/internal/ext/api"
+import (
+	"strings"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+)
 
 // ExtensionTable is the shortcut table as extensions read it. It reads the stored document and the commands only, so
 // it never reads the state the UI thread writes; the extension goroutine can call it at any time.
 type ExtensionTable struct {
 	manager *Manager
 	labeler func() Labeler
+	aliases *Aliases
 }
 
 // NewExtensionTable returns the extension view of m. labeler spells the accelerators the table reports, as the user
-// reads them now; it is asked on each call, because the Hyper key can change.
-func NewExtensionTable(m *Manager, labeler func() Labeler) ExtensionTable {
-	return ExtensionTable{manager: m, labeler: labeler}
+// reads them now; it is asked on each call, because the Hyper key can change. aliases are the user's aliases, which the
+// table reads under a prefix.
+func NewExtensionTable(m *Manager, labeler func() Labeler, aliases *Aliases) ExtensionTable {
+	return ExtensionTable{manager: m, labeler: labeler, aliases: aliases}
+}
+
+// Aliases returns the aliases of the actions whose ID starts with prefix, keyed by action ID.
+func (t ExtensionTable) Aliases(prefix string) map[string][]string {
+	out := map[string][]string{}
+	for actionID, phrases := range t.aliases.All() {
+		if strings.HasPrefix(actionID, prefix) {
+			out[actionID] = phrases
+		}
+	}
+	return out
 }
 
 // List returns every shortcut the user has bound to a command or to the palette.

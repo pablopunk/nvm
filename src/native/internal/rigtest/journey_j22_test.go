@@ -30,7 +30,7 @@ const (
 	fakeAppTitle    = "fakeapp-window"
 	sleeperExitWait = 15 * time.Second
 	actionMenuKey   = "ctrl+k"
-	uninstallIndex  = 3 // Open, Show in Folder, Copy Path, then Uninstall: the app is not running by then
+	uninstallIndex  = 1 // Open, then Uninstall: the app is not running by then
 )
 
 // seedFakeApp writes the desktop entry, its program and its own data folder, and one unrelated folder that the

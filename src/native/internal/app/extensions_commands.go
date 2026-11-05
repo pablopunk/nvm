@@ -58,7 +58,7 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 // section was. Other commands are found by their title, aliases or keywords and rank in the extension band.
 func commandRowScore(m *manager.Manager, extID string, command api.Command, q string, aliases []string) (int, bool) {
 	if q == "" {
-		return scoreExtension, commandPlacedAtRoot(command)
+		return rootCommandRowScore(m, extID, command), commandPlacedAtRoot(command)
 	}
 	if !commandPlacedInSearch(command) {
 		return 0, false
@@ -75,6 +75,15 @@ func commandRowScore(m *manager.Manager, extID string, command api.Command, q st
 		return scoreExtension, true
 	}
 	return 0, false
+}
+
+// rootCommandRowScore is a command's score at the empty root. A built-in command that names a score keeps it, as its
+// native command did; other commands share the extension band.
+func rootCommandRowScore(m *manager.Manager, extID string, command api.Command) int {
+	if m.IsBuiltIn(extID) && command.Score != 0 {
+		return int(command.Score)
+	}
+	return scoreExtension
 }
 
 // commandPlacedAtRoot reports whether a command's row shows at the empty root. Only commands with no placement or one

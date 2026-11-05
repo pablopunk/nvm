@@ -88,6 +88,7 @@ func init() {
 		"ColorPink":                     reflect.ValueOf(api.ColorPink),
 		"ColorPurple":                   reflect.ValueOf(api.ColorPurple),
 		"ColorRed":                      reflect.ValueOf(api.ColorRed),
+		"ColorTeal":                     reflect.ValueOf(api.ColorTeal),
 		"ColorYellow":                   reflect.ValueOf(api.ColorYellow),
 		"CopyText":                      reflect.ValueOf(api.CopyText),
 		"Current":                       reflect.ValueOf(&api.Current).Elem(),
@@ -167,6 +168,7 @@ func init() {
 		"MaskNone":                      reflect.ValueOf(api.MaskNone),
 		"MaskRounded":                   reflect.ValueOf(api.MaskRounded),
 		"MaxRunningPaths":               reflect.ValueOf(constant.MakeFromLiteral("30", token.INT, 0)),
+		"MaxScheduledRuns":              reflect.ValueOf(constant.MakeFromLiteral("16", token.INT, 0)),
 		"MenuBarIcons":                  reflect.ValueOf(&api.MenuBarIcons).Elem(),
 		"MenuIconDefault":               reflect.ValueOf(api.MenuIconDefault),
 		"MetadataLink":                  reflect.ValueOf(api.MetadataLink),
@@ -210,6 +212,7 @@ func init() {
 		"RevealPath":                    reflect.ValueOf(api.RevealPath),
 		"RootView":                      reflect.ValueOf(api.RootView),
 		"Run":                           reflect.ValueOf(api.Run),
+		"ScheduleKeyLimit":              reflect.ValueOf(constant.MakeFromLiteral("64", token.INT, 0)),
 		"Section":                       reflect.ValueOf(api.Section),
 		"SelectionAllowed":              reflect.ValueOf(api.SelectionAllowed),
 		"SelectionDenied":               reflect.ValueOf(api.SelectionDenied),
@@ -247,6 +250,7 @@ func init() {
 		"TriggerWake":                   reflect.ValueOf(api.TriggerWake),
 		"TypeText":                      reflect.ValueOf(api.TypeText),
 		"ValidateFieldValue":            reflect.ValueOf(api.ValidateFieldValue),
+		"ValidateScheduleKey":           reflect.ValueOf(api.ValidateScheduleKey),
 		"ViewCamera":                    reflect.ValueOf(api.ViewCamera),
 		"ViewChat":                      reflect.ValueOf(api.ViewChat),
 		"ViewCollection":                reflect.ValueOf(api.ViewCollection),
@@ -411,6 +415,7 @@ func init() {
 		"Result":                  reflect.ValueOf((*api.Result)(nil)),
 		"RootProvider":            reflect.ValueOf((*api.RootProvider)(nil)),
 		"Rules":                   reflect.ValueOf((*api.Rules)(nil)),
+		"Scheduler":               reflect.ValueOf((*api.Scheduler)(nil)),
 		"SearchAccessory":         reflect.ValueOf((*api.SearchAccessory)(nil)),
 		"SearchAccessoryOption":   reflect.ValueOf((*api.SearchAccessoryOption)(nil)),
 		"SearchProvider":          reflect.ValueOf((*api.SearchProvider)(nil)),
@@ -440,6 +445,10 @@ func init() {
 		"TriggerType":             reflect.ValueOf((*api.TriggerType)(nil)),
 		"TweakRequest":            reflect.ValueOf((*api.TweakRequest)(nil)),
 		"TypeOptions":             reflect.ValueOf((*api.TypeOptions)(nil)),
+		"UninstallItem":           reflect.ValueOf((*api.UninstallItem)(nil)),
+		"UninstallResult":         reflect.ValueOf((*api.UninstallResult)(nil)),
+		"UninstallReview":         reflect.ValueOf((*api.UninstallReview)(nil)),
+		"UninstallUntouched":      reflect.ValueOf((*api.UninstallUntouched)(nil)),
 		"UpdateState":             reflect.ValueOf((*api.UpdateState)(nil)),
 		"Updates":                 reflect.ValueOf((*api.Updates)(nil)),
 		"Version":                 reflect.ValueOf((*api.Version)(nil)),
@@ -493,6 +502,7 @@ func init() {
 		"_OCR":               reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_OCR)(nil)),
 		"_Ownership":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Ownership)(nil)),
 		"_RootProvider":      reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_RootProvider)(nil)),
+		"_Scheduler":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Scheduler)(nil)),
 		"_SearchProvider":    reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider)(nil)),
 		"_Secrets":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Secrets)(nil)),
 		"_Selection":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Selection)(nil)),
@@ -637,17 +647,19 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_ActionHandler) RunActi
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Apps is an interface wrapper for Apps type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Apps struct {
-	IValue     interface{}
-	WForceQuit func(path string) (api.QuitResult, error)
-	WFrontmost func() (api.App, error)
-	WHide      func(path string) error
-	WIcon      func(path string) (dataURL string, found bool, err error)
-	WLaunch    func(path string) error
-	WList      func() ([]api.App, error)
-	WQuit      func(path string) (api.QuitResult, error)
-	WQuitAll   func() ([]api.App, error)
-	WRunning   func(paths []string) ([]string, error)
-	WSearch    func(query string) ([]api.App, error)
+	IValue           interface{}
+	WForceQuit       func(path string) (api.QuitResult, error)
+	WFrontmost       func() (api.App, error)
+	WHide            func(path string) error
+	WIcon            func(path string) (dataURL string, found bool, err error)
+	WLaunch          func(path string) error
+	WList            func() ([]api.App, error)
+	WQuit            func(path string) (api.QuitResult, error)
+	WQuitAll         func() ([]api.App, error)
+	WRunning         func(paths []string) ([]string, error)
+	WSearch          func(query string) ([]api.App, error)
+	WUninstallReview func(path string) (api.UninstallReview, error)
+	WUninstallTrash  func(token string, ids []string) (api.UninstallResult, error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) ForceQuit(path string) (api.QuitResult, error) {
@@ -679,6 +691,12 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Running(paths []
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) Search(query string) ([]api.App, error) {
 	return W.WSearch(query)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) UninstallReview(path string) (api.UninstallReview, error) {
+	return W.WUninstallReview(path)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Apps) UninstallTrash(token string, ids []string) (api.UninstallResult, error) {
+	return W.WUninstallTrash(token, ids)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AttachmentBuilder is an interface wrapper for AttachmentBuilder type
@@ -805,6 +823,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WNetwork    func() api.Network
 	WOCR        func() api.OCR
 	WOwnership  func() api.Ownership
+	WScheduler  func() api.Scheduler
 	WSecrets    func() api.Secrets
 	WSettings   func() api.Settings
 	WShortcuts  func() api.Shortcuts
@@ -873,6 +892,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) OCR() api.OCR
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Ownership() api.Ownership {
 	return W.WOwnership()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Scheduler() api.Scheduler {
+	return W.WScheduler()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Secrets() api.Secrets {
 	return W.WSecrets()
@@ -1243,6 +1265,24 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_RootProvider) RootItem
 	return W.WRootItems(ctx)
 }
 
+// _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler is an interface wrapper for Scheduler type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler struct {
+	IValue   interface{}
+	WCancel  func(key string) (bool, error)
+	WOnce    func(key string, at time.Time, ref api.ActionRef) error
+	WPending func(key string) (time.Time, bool, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Cancel(key string) (bool, error) {
+	return W.WCancel(key)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Once(key string, at time.Time, ref api.ActionRef) error {
+	return W.WOnce(key, at, ref)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Scheduler) Pending(key string) (time.Time, bool, error) {
+	return W.WPending(key)
+}
+
 // _github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider is an interface wrapper for SearchProvider type
 type _github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider struct {
 	IValue       interface{}
@@ -1348,10 +1388,14 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shell) Which(command s
 // _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts is an interface wrapper for Shortcuts type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts struct {
 	IValue   interface{}
+	WAliases func(prefix string) map[string][]string
 	WList    func() []api.ShortcutRecord
 	WPalette func() api.ShortcutRecord
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) Aliases(prefix string) map[string][]string {
+	return W.WAliases(prefix)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts) List() []api.ShortcutRecord {
 	return W.WList()
 }

@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -72,7 +73,7 @@ func rootTableFixture(t *testing.T) *App {
 		t.Fatal(err)
 	}
 	hackerNews := []quicklinks.Link{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
-	p.exts.mgr.Store(newManagerOver(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews})))
+	p.exts.mgr.Store(newManagerWithApps(t, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips}), nil, nil, p.appsvc))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),
@@ -180,7 +181,7 @@ func firstDifference(want, got string) string {
 			g = gotLines[i]
 		}
 		if w != g {
-			return "line " + itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
+			return "line " + strconv.Itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
 		}
 	}
 	return "no line differs"

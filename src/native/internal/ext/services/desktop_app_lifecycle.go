@@ -14,6 +14,10 @@ import (
 // AppLifecycle reads and controls the installed apps the host indexed: running state, quit, force quit, quit all and
 // hide. The apps feature implements it; a build without one answers unavailable.
 type AppLifecycle interface {
+	IndexedApps() []appfeature.App
+	DiscoverUninstall(appPath string) appfeature.Discovery
+	TrashUninstall(snapshot appfeature.UninstallSnapshot, values map[string]bool) appfeature.TrashResult
+	TrashFolder() string
 	RunningApps(list []appfeature.App) ([]appfeature.App, error)
 	QuitApp(app appfeature.App) (appfeature.QuitOutcome, error)
 	ForceQuitApp(app appfeature.App) (appfeature.QuitOutcome, error)

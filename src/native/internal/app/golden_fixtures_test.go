@@ -15,9 +15,9 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
-	"github.com/pablopunk/nvm/native/internal/features/snippets"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/testpath"
@@ -68,14 +68,14 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 			Engine: "google", ClipLimit: 200,
 			Disabled: map[string]bool{},
 		},
-		learn:  goldenUsage(),
-		clip:   goldenClipboard(t),
-		snips:  userSnippets,
-		notes:  userNotes,
-		chats:  goldenChatService(t, set),
-		files:  newTestFiles(t, testpath.Abs("home", "golden"), nil),
-		appsvc: newFixtureAppServices(goldenApps()),
-		ports:  set.Ports(),
+		learn:       goldenUsage(),
+		clip:        goldenClipboard(t),
+		legacySnips: userSnippets,
+		notes:       userNotes,
+		chats:       goldenChatService(t, set),
+		files:       newTestFiles(t, testpath.Abs("home", "golden"), nil),
+		appsvc:      newFixtureAppServices(goldenApps()),
+		ports:       set.Ports(),
 	}
 	for _, app := range p.appsSnapshot() {
 		p.files.icons.Put(systemIconKey(app.Path), goldenBitmap(t, 56, 56, goldenAppColor(app.Name)))
@@ -83,7 +83,7 @@ func goldenPaletteWith(t *testing.T, withConflict bool) *App {
 	services := fake.NewSet()
 	services.System.SetHome(goldenHome(t))
 	p.attachServices(services.Ports(), goldenOS, goldenData, time.UTC)
-	p.exts.mgr.Store(newFixtureManager(t))
+	p.exts.mgr.Store(newFixtureManagerWithApps(t, p.appsvc))
 	p.newPalette(searchClock, true)
 	p.SetStack(p.rootView())
 	p.SetQuery("")
@@ -174,7 +174,7 @@ func goldenApps() []appfeat.App {
 // goldenUserData opens the notes and snippets over a fake disk seeded with the fixtures, so the goldens run the
 // code the app runs. With withConflict, the disk also holds an unsaved draft of the first note that was typed on an
 // older version, so opening that note raises the conflict.
-func goldenUserData(t *testing.T, set *fake.Set, withConflict bool) (*notes.Store, *snippets.Store) {
+func goldenUserData(t *testing.T, set *fake.Set, withConflict bool) (*notes.Store, []snippetsbuiltin.Snippet) {
 	t.Helper()
 	dir := goldenData
 	set.FS.Seed(dir+"/notes.json", goldenEnvelope(t, map[string]any{"notes": goldenNoteRecords()}))
@@ -190,7 +190,21 @@ func goldenUserData(t *testing.T, set *fake.Set, withConflict bool) (*notes.Stor
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	return notes.New(st, set.Clock, false), snippets.New(st, set.Clock, false)
+	return notes.New(st, set.Clock, false), loadLegacySnippets(st)
+}
+
+// goldenLegacySnippets are the fixture snippets as the app reads them from its snippets document.
+func goldenLegacySnippets(t *testing.T) []snippetsbuiltin.Snippet {
+	t.Helper()
+	raw, err := json.Marshal(goldenSnippetRecords())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []snippetsbuiltin.Snippet
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // goldenEnvelope is a document as the store writes it, for seeding the fake disk.
