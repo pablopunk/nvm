@@ -90,6 +90,7 @@ type slot struct {
 	id           string
 	appended     bool
 	items        []Item
+	refreshing   bool
 	started      time.Time
 	budget       Budget
 	finished     bool
@@ -126,11 +127,18 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.query = q
 	c.slots = make([]*slot, len(providers))
 	for i, p := range providers {
-		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), selfBudgeted: ownsCallBudgets(p), done: make(chan struct{})}
+		c.slots[i] = &slot{id: p.ID(), appended: isAppended(p), started: c.opts.Clock.Now(), budget: budgetOf(p), selfBudgeted: ownsCallBudgets(p), done: make(chan struct{}), refreshing: true}
 	}
 	c.pending = len(providers)
 	c.emitted = false
 	remembered, hit := c.cache.get(q)
+	var warm Snapshot
+	if hit {
+		for _, s := range c.slots {
+			s.items = append([]Item(nil), remembered.providers[s.id]...)
+		}
+		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, c.limit(), q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
+	}
 	c.mu.Unlock()
 
 	if c.opts.Synchronous {
@@ -149,7 +157,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	if !hit {
 		return Snapshot{}, false
 	}
-	return Snapshot{Gen: gen, Query: q, Items: remembered.items, Settled: remembered.settled}, true
+	return warm, true
 }
 
 // Cancel stops the providers of the current query and drops their rows. It is what happens to a view when
@@ -163,8 +171,8 @@ func (c *Coordinator) Cancel() {
 	c.query = ""
 }
 
-// Invalidate forgets the remembered rows, so the next query asks the providers afresh. The palette calls it
-// when the data behind a query changed (a deleted clipboard item, a renamed snippet).
+// Invalidate forgets remembered rows. Use it when a snapshot must be discarded; ordinary refreshes call Query,
+// which always revalidates providers while keeping cached navigation immediate.
 func (c *Coordinator) Invalidate() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -222,6 +230,18 @@ func answerCall(ctx context.Context, p Provider, q string, emit func(Batch)) {
 	emit(Batch{Items: p.Root(ctx), Final: true})
 }
 
+func mergeCached(slots []*slot, limit int, searching, flat, settled bool) []Item {
+	var ranked, appended [][]Item
+	for _, s := range slots {
+		if s.appended {
+			appended = append(appended, s.items)
+		} else {
+			ranked = append(ranked, s.items)
+		}
+	}
+	return mergeAppended(ranked, appended, limit, searching, flat, settled)
+}
+
 // start runs one provider on its own goroutine, supervised by safego, with the budget watch beside it.
 func (c *Coordinator) start(ctx context.Context, gen, idx int, p Provider, q string) {
 	pctx, cancel := context.WithCancel(ctx)
@@ -235,8 +255,10 @@ func (c *Coordinator) start(ctx context.Context, gen, idx int, p Provider, q str
 	c.statsLocked(p.ID()).Calls++
 	c.mu.Unlock()
 	safego.Go("search."+p.ID(), func(context.Context) {
-		defer c.complete(gen, idx)
+		returned := false
+		defer func() { c.complete(gen, idx, returned) }()
 		c.invoke(pctx, gen, idx, p, q)
+		returned = true
 	}, safego.WithContext(pctx), safego.WithClock(c.opts.Clock))
 	go c.watch(gen, idx)
 }
@@ -255,7 +277,8 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	settled := c.pending == 0
 	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled), Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
-	c.cache.put(c.query, cachedRows{items: snap.Items, settled: snap.Settled})
+	providerRows := c.providerCache(snap.Items)
+	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled})
 	return snap
 }
 

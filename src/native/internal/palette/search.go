@@ -61,7 +61,8 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 // showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
 // changing the view or query resets that choice.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
-	if p.shownView != v || p.shownQuery != q {
+	newQuery := p.shownView != v || p.shownQuery != q
+	if newQuery {
 		p.chosen, p.choicePinned = 0, false
 	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {
 		for i := range rows {
@@ -87,15 +88,6 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 func (p *Palette) loadingMore() bool {
 	v := p.cur()
 	return (p.shownView == v && p.pending) || (v.Pending != nil && v.Pending()) || (v.Loading != nil && v.Loading())
-}
-
-// invalidateRows forgets the remembered rows of every view on the stack, for when the data behind them changed.
-func (p *Palette) invalidateRows() {
-	for _, v := range p.stack {
-		if v.coord != nil {
-			v.coord.Invalidate()
-		}
-	}
 }
 
 // chooseRequested moves the choice to the row the view asked for, once. A view whose rows change later keeps the

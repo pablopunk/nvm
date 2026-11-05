@@ -24,7 +24,7 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 	if it := p.chosenItem(); it != nil {
 		p.announceSelection(c, it)
 	}
-	p.list.Selected, p.list.Key, p.list.Label = nil, gridRowKey, nil
+	p.list.Selected, p.list.Selection, p.list.Key, p.list.Label = nil, nil, gridRowKey, nil
 	cols := max(g.Columns, 1)
 	slots := p.gridSlots(p.pendingBatch())
 	rows := (slots + cols - 1) / cols

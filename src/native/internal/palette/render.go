@@ -18,6 +18,7 @@ func (p *Palette) View(c *ui.Context) {
 	theme := design.WindowTheme(os.Getenv("NVM_THEME") == "dark" || c.Theme().Dark)
 	theme.Background = ui.Transparent
 	ui.Themed(c, theme).Fill().Children(func() { p.viewThemed(c) })
+	p.revealRenderedWindow()
 }
 
 func (p *Palette) viewThemed(c *ui.Context) {
@@ -128,6 +129,12 @@ func (p *Palette) listBody(c *ui.Context) {
 		return
 	}
 	p.list.Selected = &p.chosen
+	// A controlled single selection tells the list when ranking chose a new item at the same index.
+	p.listChoice.Clear()
+	if p.chosen >= 0 && p.chosen < len(p.results) {
+		p.listChoice.Add(listRowKey(p.results, p.chosen).(string))
+	}
+	p.list.Selection = &p.listChoice
 	if len(p.results) == 0 {
 		p.list.Selected = nil
 	}
@@ -312,6 +319,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 		}
 		if len(p.menuActions()) > 1 {
 			data.Secondary = actionsKeyHint()
+		}
+		if v.Primary != nil {
+			data.Secondary = v.Primary()
 		}
 	} else if v.Body != nil && (v.Primary != nil || len(p.menuActions()) > 0) && !v.HintReplacesActions {
 		p.bodyFooterKeys(v, &data)

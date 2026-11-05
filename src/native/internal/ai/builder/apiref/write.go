@@ -14,7 +14,11 @@ import (
 func (index *pkgIndex) render(wire, services []string) string {
 	var b strings.Builder
 	b.WriteString("# Extension API reference\n\n")
-	b.WriteString("Entry points: an extension source defines these top-level functions, each optional, with these signatures.\n\n")
+	if index.terse {
+		b.WriteString("Optional top-level entry points:\n\n")
+	} else {
+		b.WriteString("Entry points: an extension source defines these top-level functions, each optional, with these signatures.\n\n")
+	}
 	for _, iface := range entryInterfaces {
 		index.writeInterfaceMethods(&b, iface)
 	}
@@ -24,7 +28,10 @@ func (index *pkgIndex) render(wire, services []string) string {
 			index.writeType(&b, name, true)
 		}
 	}
-	b.WriteString("## Context services\n\nThe host services a handler reaches through Context. Names and signatures only.\n\n")
+	b.WriteString("## Context services\n\n")
+	if !index.terse {
+		b.WriteString("The host services a handler reaches through Context. Names and signatures only.\n\n")
+	}
 	for _, name := range services {
 		index.writeType(&b, name, false)
 	}

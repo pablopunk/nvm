@@ -16,6 +16,9 @@ func (p *Palette) BeginAction() func() bool {
 		}
 		completed = true
 		p.actionPending = false
+		if view == p.openingView && view == p.cur() {
+			p.search()
+		}
 		p.requestActionFrame()
 		return view == p.cur() && (!root || query == p.query) && shows == p.shows
 	}
@@ -24,6 +27,7 @@ func (p *Palette) BeginAction() func() bool {
 func (p *Palette) cancelAction() {
 	p.actionSequence++
 	p.actionPending = false
+	p.openingView = nil
 }
 
 func (p *Palette) requestActionFrame() {

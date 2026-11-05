@@ -14,6 +14,13 @@ func (p *Palette) cur() *View { return p.stack[len(p.stack)-1] }
 // Show shows the palette with every search reset, on the root or on the chat page that survived the last hide, then
 // runs OnShow.
 func (p *Palette) Show() {
+	p.prepareShow()
+	p.leaveUnsurvivingPages()
+	p.present()
+}
+
+func (p *Palette) prepareShow() {
+	p.cancelAction()
 	if !p.win.IsVisible() || !p.win.IsFocused() {
 		p.captureFocus()
 	}
@@ -29,14 +36,16 @@ func (p *Palette) Show() {
 	p.resetActionMenu()
 	p.shownView = nil
 	p.resetRootHistory()
-	p.leaveUnsurvivingPages()
+}
+
+func (p *Palette) present() {
 	p.syncPresentation()
 	p.search()
 	if p.opts.OnShow != nil {
 		p.opts.OnShow()
 	}
 	p.focusInput()
-	p.win.Show()
+	p.showPreparedWindow()
 	p.syncActive(nil)
 }
 
@@ -53,8 +62,10 @@ func (p *Palette) Toggle() {
 
 // Open shows the palette with v pushed above the root, as the tray and the hotkey's sub-commands do.
 func (p *Palette) Open(v *View) {
-	p.Show()
+	p.prepareShow()
+	p.leaveUnsurvivingPages()
 	p.push(v)
+	p.present()
 }
 
 // Hide closes the palette window and runs OnHide. The stack stays as it is until the next Show.
@@ -86,7 +97,6 @@ func (p *Palette) Refresh() {
 		return
 	}
 	p.win.Update(func() {
-		p.invalidateRows()
 		p.syncPresentation()
 		p.search()
 	})
@@ -99,15 +109,13 @@ func (p *Palette) RefreshTop(pred func(*View) bool) {
 		if !p.win.IsVisible() || !pred(p.cur()) {
 			return
 		}
-		p.invalidateRows()
 		p.search()
 	})
 }
 
-// ReloadRows forgets the rows of every view and searches again, from the UI thread: the host calls it when
-// the data behind the root changed (applications, extensions).
+// ReloadRows revalidates the visible rows from the UI thread after host data changes. Cached snapshots stay
+// available for instant navigation; every search revalidates its providers.
 func (p *Palette) ReloadRows() {
-	p.invalidateRows()
 	p.shownView = nil
 	p.search()
 }
@@ -122,6 +130,10 @@ func (p *Palette) Push(v any) {
 }
 
 func (p *Palette) push(v *View) {
+	if p.openingView == p.cur() {
+		p.leave(p.cur())
+		p.stack = p.stack[:len(p.stack)-1]
+	}
 	p.cancelAction()
 	covered := p.cur()
 	p.stack = append(p.stack, v)

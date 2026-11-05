@@ -93,8 +93,8 @@ type View struct {
 	// Actions, for a Body page, is its action menu, built each time the menu opens or a key is checked. An action with a
 	// Key runs while the page is on top, as a row's shortcut does.
 	Actions func() []search.Action
-	// Primary, for a Body page, is the footer's primary action: the key that does what the page's main control does.
-	// Nil leaves the footer to the Hint.
+	// Primary is the page action kept in the footer: primary for a Body page, beside the selected row action for lists.
+	// Forms use it for submission while Enter continues to edit the selected field. Nil leaves the footer to Hint.
 	Primary func() *design.KeyHint
 	// Side, when it returns a side, draws that page beside this one as a split: this page's body on one half, the side on
 	// the other (1.x's builder workspace). It is read on each frame, so a view shows a side only in some states, and the

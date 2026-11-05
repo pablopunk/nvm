@@ -26,3 +26,29 @@ func TestDefaultChoiceFollowsRankingUntilTheUserChooses(t *testing.T) {
 		t.Fatal("new query inherited the old choice")
 	}
 }
+
+func TestRenderedListDefaultChoiceFollowsNewTopResult(t *testing.T) {
+	weaker := search.Item{ID: "weaker", Title: "Weaker"}
+	best := search.Item{ID: "best", Title: "Best"}
+	view := &View{Title: "Root", Search: func(string) []search.Item { return []search.Item{weaker} }}
+	h := newHarness(t, view, true)
+	h.p.showRows(view, "query", []search.Item{weaker}, false, false)
+	h.frame()
+	h.p.showRows(view, "query", []search.Item{best, weaker}, true, false)
+	h.frame()
+	if h.p.Chosen() != 0 || h.p.choicePinned {
+		t.Fatalf("list auto-follow overruled ranked default: chosen=%d pinned=%v", h.p.Chosen(), h.p.choicePinned)
+	}
+	h.p.Choose(1)
+	h.frame()
+	h.p.showRows(view, "query", []search.Item{weaker, best}, true, false)
+	h.frame()
+	if h.p.Chosen() != 0 || !h.p.choicePinned {
+		t.Fatal("explicit choice did not follow its item")
+	}
+	h.p.showRows(view, "new query", []search.Item{best, weaker}, true, false)
+	h.frame()
+	if h.p.Chosen() != 0 || h.p.choicePinned {
+		t.Fatal("new query inherited the list's old default item")
+	}
+}

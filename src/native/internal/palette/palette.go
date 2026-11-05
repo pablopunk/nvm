@@ -42,6 +42,8 @@ type Options struct {
 	AskAI func(q string) *View
 	// OnShow runs each time the palette is shown, after its state is reset; the host loads what its rows need.
 	OnShow func()
+	// OnPresented runs after a newly shown window reveals its fresh content frame.
+	OnPresented func()
 	// OnHide runs each time the palette is hidden, by any route; the host stops what only a visible palette needs.
 	// It may run more than once per show, so it must be idempotent.
 	OnHide func()
@@ -78,6 +80,7 @@ type DragSource struct {
 type Palette struct {
 	actionSequence uint64
 	actionPending  bool
+	openingView    *View
 	actionQuery    string
 	opts           Options
 	win            Window
@@ -92,6 +95,7 @@ type Palette struct {
 	chosen       int
 	choicePinned bool
 	list         ui.ListState
+	listChoice   ui.Selection[string]
 	input        ui.Handle
 	interact     interactionState // pointer and click state of rows and cells, see interact.go
 	// focusList is set while the view on top hides its field and its list must take the keyboard when it is built.
@@ -116,7 +120,9 @@ type Palette struct {
 	// hide, because an action that chooses where the keyboard goes clears returnTo first.
 	summoned *platform.FocusTarget
 	// shows counts the times the palette was shown, so a delayed dismissal can tell it was shown again.
-	shows int
+	shows         int
+	revealFrame   int
+	revealWaiting bool
 	// announcedNotice is the alert assistive technology was last told about.
 	announcedNotice *Notice
 	phIndex         int

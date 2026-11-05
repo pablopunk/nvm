@@ -176,6 +176,7 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		Icon:        p.fileIcon,
 		AskAI:       p.askAI,
 		OnShow:      p.onPaletteShown,
+		OnPresented: p.recordPalettePresentation,
 		OnHide:      p.onPaletteHide,
 		History:     p.history,
 		Learner:     p.learn,

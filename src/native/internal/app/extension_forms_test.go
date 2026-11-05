@@ -79,7 +79,7 @@ func setField(t *testing.T, page *palette.View, h *viewHost, title, text string)
 
 func submitForm(t *testing.T, page *palette.View, h *viewHost, title string) {
 	t.Helper()
-	actionTitled(t, findRowTitled(t, page.Search(""), title), "Create").Run(h)
+	actionTitled(t, findRowTitled(t, page.Search(""), title), title).Run(h)
 }
 
 // TestFormFixtureSubmitRunsThroughTheChild sets the required fields of the form fixture and submits it. The submit
@@ -92,7 +92,7 @@ func TestFormFixtureSubmitRunsThroughTheChild(t *testing.T) {
 
 	setField(t, page, h, "Name", "Ada Lovelace")
 	editField(t, page, h, "Accept the terms")
-	submitForm(t, page, h, "Create")
+	submitForm(t, page, h, "Create Ticket")
 
 	if len(h.pushed) != 1 || pushedTitle(h) != "Submitted" {
 		t.Fatalf("pushed = %d views; want the submitted preview from the child", len(h.pushed))
@@ -107,7 +107,7 @@ func TestFormFixtureRefusesAMissingRequiredFieldBeforeTheChild(t *testing.T) {
 	page := session.Palette()
 	h := &viewHost{}
 
-	submitForm(t, page, h, "Create")
+	submitForm(t, page, h, "Create Ticket")
 	if len(h.pushed) != 0 {
 		t.Fatal("a form with a missing required field reached the child")
 	}
@@ -195,7 +195,7 @@ func TestGoldenFormValidationErrors(t *testing.T) {
 	m := formsManager(t)
 	p := goldenPalette(t)
 	page, h := goldenFormPage(t, p, m, formFixture, "form", formDeps(m, nil, nil))
-	submitForm(t, page, h, "Create")
+	submitForm(t, page, h, "Create Ticket")
 	goldenQuery(p, "")
 	golden.AssertMatrix(t, "form-errors", p.View, formsGoldens)
 }

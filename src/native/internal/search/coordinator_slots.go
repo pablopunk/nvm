@@ -36,6 +36,12 @@ func (c *Coordinator) deliver(gen, idx int, b Batch) {
 		return
 	}
 	s := c.slots[idx]
+	if s.refreshing {
+		// A provider's first batch belongs to the new invocation. It is authoritative even
+		// when empty; subsequent batches extend its streamed answer.
+		s.items = nil
+		s.refreshing = false
+	}
 	if b.Replace {
 		s.items = nil
 	}
@@ -55,7 +61,7 @@ func (c *Coordinator) deliver(gen, idx int, b Batch) {
 
 // complete marks a provider's call as returned, whatever it did. It runs after the call, panics included. A call that
 // was cut off has already settled its slot; returning only ends what the slot still accepts and releases its context.
-func (c *Coordinator) complete(gen, idx int) {
+func (c *Coordinator) complete(gen, idx int, returned bool) {
 	c.mu.Lock()
 	if gen != c.gen || idx >= len(c.slots) {
 		c.mu.Unlock()
@@ -69,6 +75,11 @@ func (c *Coordinator) complete(gen, idx int) {
 	if s.finished {
 		c.mu.Unlock()
 		return
+	}
+	if s.refreshing && returned {
+		// A provider that returned without emitting has answered with an empty result.
+		s.items = nil
+		s.refreshing = false
 	}
 	c.finishLocked(s)
 	snap := c.snapshotLocked()

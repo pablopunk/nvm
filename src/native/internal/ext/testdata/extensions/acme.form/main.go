@@ -31,7 +31,7 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "form":
 		view := api.FormView("Create Ticket", allFields(), api.Run("save", "Create", nil))
-		view.Form.SubmitTitle = "Create"
+		view.Form.SubmitTitle = "Create Ticket"
 		return api.Result{View: &view}, nil
 	case "prompt":
 		prompt := ctx.Input().Prompt(api.PromptSpec{

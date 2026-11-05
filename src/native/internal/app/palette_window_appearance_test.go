@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+	"github.com/pablopunk/nvm/native/internal/palette"
 )
 
 // TestThePalettePanelDrawsItsGlassAsActive checks the palette keeps its material and draws it as the active window, so
@@ -24,3 +25,8 @@ func TestIndicatorAppearanceMatchesPaletteGlass(t *testing.T) {
 		t.Fatalf("indicator appearance = %#v, want active glass", appearance)
 	}
 }
+
+var _ interface {
+	palette.Window
+	SetOpacity(float64)
+} = (*mygo.Window)(nil)

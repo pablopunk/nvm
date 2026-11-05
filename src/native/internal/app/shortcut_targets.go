@@ -203,8 +203,8 @@ func (p *App) runShortcutCommand(actionID string) {
 // runShortcutInPalette opens the palette and runs the row actionID names, as choosing it from the root does.
 func (p *App) runShortcutInPalette(actionID string) {
 	if action, ok := p.shortcutAction(actionID); ok {
-		p.Show()
-		p.RunAction(action)
+		title, _ := p.resolveShortcutTitle(actionID)
+		p.Palette.OpenAction(title, action)
 	}
 }
 

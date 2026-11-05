@@ -139,3 +139,19 @@ func TestValidationRetryEditsTheRejectedValueAtItsEnd(t *testing.T) {
 	f.key(palette.Mod, ui.KeyEnter)
 	f.expectSubmitted("email", "ada@example.test")
 }
+
+func TestFormShortcutSavesTheCurrentDraftAndKeepsItsCTAVisible(t *testing.T) {
+	f := openFormInPalette(t, api.FormSpec{Fields: []api.Field{prefilledName("Ada")}, SubmitTitle: "Create Ticket",
+		Submit: &api.Action{Kind: api.ActionRun, Ref: &api.ActionRef{ID: "create"}}})
+	row := f.r.row("Create Ticket")
+	if !row.Prominent || row.Tone != "yellow" || row.Accessory != palette.KeyLabel("⌃↵") {
+		t.Fatalf("form submit is not presented as a CTA: %+v", row)
+	}
+	if hint := f.r.page.Primary(); hint.Title != "Create Ticket" || hint.Key != palette.KeyLabel("⌃↵") {
+		t.Fatalf("persistent form action = %+v", hint)
+	}
+	f.key(0, ui.KeyEnter)
+	f.typeText(" Lovelace")
+	f.key(palette.Mod, ui.KeyEnter)
+	f.expectSubmitted("name", "Ada Lovelace")
+}
