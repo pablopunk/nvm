@@ -5,36 +5,28 @@ import (
 	"fmt"
 )
 
-// SettingRowKind selects how the host draws and edits one row of a settings view.
+// SettingRowKind is how a settings row is drawn and edited: toggle flips a boolean, choice steps through Choices,
+// recorder opens the host's shortcut recorder, text edits a string, and action runs its Action.
 type SettingRowKind string
 
 const (
-	// SettingRowToggle flips a boolean setting. Its edge shows On or Off.
-	SettingRowToggle SettingRowKind = "toggle"
-	// SettingRowChoice steps a string setting through its Choices, in order. Its edge shows the current choice's title.
-	SettingRowChoice SettingRowKind = "choice"
-	// SettingRowRecorder opens the host's shortcut recorder for a setting that holds an accelerator. Key capture stays
-	// with the host.
+	SettingRowToggle   SettingRowKind = "toggle"
+	SettingRowChoice   SettingRowKind = "choice"
 	SettingRowRecorder SettingRowKind = "recorder"
-	// SettingRowText edits a string setting in the palette: the text typed is the new value, and Enter saves it.
-	SettingRowText SettingRowKind = "text"
-	// SettingRowAction runs its declared Action, such as opening a folder. It stores nothing.
-	SettingRowAction SettingRowKind = "action"
+	SettingRowText     SettingRowKind = "text"
+	SettingRowAction   SettingRowKind = "action"
 )
 
 // settingRowLimit bounds the rows of one settings view, counting the extra actions of each row.
 const settingRowLimit = 200
 
-// SettingChoice is one value a choice row steps through.
+// SettingChoice is one value of a choice row.
 type SettingChoice struct {
 	Value string `json:"value"`
 	Title string `json:"title"`
 }
 
-// SettingRow is one row of a settings view. Setting names the declared setting that a toggle, choice, recorder or text
-// row stores. An action row names no setting and runs Action. ID is unique within the view and names the row to the
-// host, which may compute its edge text (Accessory is the fixed text when the host does not). ActionTitle titles the
-// row's primary action; Also are further actions of the row, shown in its action panel.
+// SettingRow is one row of a settings view, storing Setting.
 type SettingRow struct {
 	ID          string          `json:"id"`
 	Kind        SettingRowKind  `json:"kind"`
@@ -49,12 +41,12 @@ type SettingRow struct {
 	Also        []SettingRow    `json:"also,omitempty"`
 }
 
-// SettingsSpec is the body of a settings view: its rows, in order.
+// SettingsSpec is a settings view's rows.
 type SettingsSpec struct {
 	Rows []SettingRow `json:"rows"`
 }
 
-// SettingsView is a settings page with rows. The host searches the rows by their titles.
+// SettingsView is a settings page.
 func SettingsView(title string, rows ...SettingRow) View {
 	return View{Kind: ViewSettings, Title: title, Settings: &SettingsSpec{Rows: rows}}
 }
@@ -105,6 +97,9 @@ func validateSettingRow(row SettingRow, seen map[string]bool, count *int, primar
 func validateSettingRowKind(row SettingRow) error {
 	switch row.Kind {
 	case SettingRowToggle, SettingRowRecorder, SettingRowText:
+		if len(row.Choices) > 0 {
+			return fmt.Errorf("settings row %q (%s) takes no choices", row.ID, row.Kind)
+		}
 		return requireSetting(row)
 	case SettingRowChoice:
 		if err := requireSetting(row); err != nil {
@@ -130,8 +125,8 @@ func requireSetting(row SettingRow) error {
 	if !settingIDPattern.MatchString(row.Setting) {
 		return fmt.Errorf("settings row %q names setting %q, which is not a valid setting id", row.ID, row.Setting)
 	}
-	if len(row.Choices) > 0 || row.Action != nil {
-		return fmt.Errorf("settings row %q (%s) takes no choices or action", row.ID, row.Kind)
+	if row.Action != nil {
+		return fmt.Errorf("settings row %q (%s) takes no action", row.ID, row.Kind)
 	}
 	return nil
 }

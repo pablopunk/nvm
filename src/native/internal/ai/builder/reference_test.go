@@ -35,7 +35,8 @@ func TestReferenceNamesTheEntryPointsAndTheirContext(t *testing.T) {
 // maxReferenceBytes bounds the reference the model reads on every builder turn. The reference was 64 KB of text before
 // the Context services were cut to signatures; this keeps it from growing back past that. It grew by about 1 KB for the
 // uninstall review and the alias read of the applications built-in, the API surface the builder reads.
-const maxReferenceBytes = 50 << 10
+// The settings views (section 33 of the extension API doc) added about 1.5 KB, so the budget is 52 KB.
+const maxReferenceBytes = 52 << 10
 
 func TestReferenceStaysWithinItsSizeBudget(t *testing.T) {
 	if len(apiReference) > maxReferenceBytes {
