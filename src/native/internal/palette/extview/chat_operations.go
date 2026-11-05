@@ -22,9 +22,6 @@ func (s *Session) chatOperation(action api.Action, title string) search.Action {
 		return s.startChat(title, kindConversation, payload.Prompt, "", payload.Replace)
 	case api.ChatContinue:
 		return s.chatStep(title, payload.ChatID, func() error {
-			if payload.Message == "" && len(payload.Images) == 0 {
-				return nil
-			}
 			return s.deps.Chats.Send(payload.ChatID, payload.Message, chatImages(payload.Images))
 		})
 	case api.ChatAgain:
