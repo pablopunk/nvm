@@ -28,7 +28,7 @@ type command struct {
 	// every query with scattered letters. Keywords still match as aliases.
 	PhraseMatch bool
 	Run         func(h search.Host)
-	Complete    func(h search.Host, finish func(bool))
+	Complete    func(context.Context, search.Host, func(analytics.OperationOutcome))
 	Dismiss     search.Dismissal
 	Order       int
 	Hidden      bool
@@ -64,7 +64,10 @@ func trailingCommands(p *App) []command {
 	cmds := []command{
 		completedNavigation(command{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts"}, func(h search.Host) { h.Push(p.keyboardShortcutsPage()) }),
 		completedNavigation(command{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work"}, func(h search.Host) { h.Push(p.backgroundTasksPage()) }),
-		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsPage()) }, Complete: func(h search.Host, finish func(bool)) { h.Push(p.settingsPage()); finish(true) }},
+		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsPage()) }, Complete: func(_ context.Context, h search.Host, finish func(analytics.OperationOutcome)) {
+			h.Push(p.settingsPage())
+			finish(analytics.OutcomeSuccess)
+		}},
 		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) {
 			variant, ok := analytics.CommandVariant(checkForUpdatesTitle)
 			if ok {
@@ -89,9 +92,9 @@ func trailingCommands(p *App) []command {
 // completedNavigation marks a synchronous command complete after its destination is pushed.
 func completedNavigation(cmd command, navigate func(search.Host)) command {
 	cmd.Run = navigate
-	cmd.Complete = func(h search.Host, finish func(bool)) {
+	cmd.Complete = func(_ context.Context, h search.Host, finish func(analytics.OperationOutcome)) {
 		navigate(h)
-		finish(true)
+		finish(analytics.OutcomeSuccess)
 	}
 	return cmd
 }
