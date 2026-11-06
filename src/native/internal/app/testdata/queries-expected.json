@@ -3138,13 +3138,13 @@
         ]
       },
       {
-        "kind": "Commands",
+        "kind": "Diagnostics",
         "title": "Report a Problem",
         "subtitle": "Record a problem reference without screen content",
         "section": "",
-        "id": "",
+        "id": "ext:nevermind.diagnostics:command:report-problem",
         "icon": "message-circle",
-        "tone": "",
+        "tone": "purple",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
