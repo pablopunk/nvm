@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -30,12 +31,14 @@ type correlation struct {
 }
 
 type Completion struct {
-	once    sync.Once
-	tracker *Tracker
-	ids     correlation
-	started time.Time
-	job     bool
-	session analytics.SessionSnapshot
+	once         sync.Once
+	tracker      *Tracker
+	ids          correlation
+	started      time.Time
+	job          bool
+	session      analytics.SessionSnapshot
+	usage        bool
+	usageVariant string
 }
 
 func New(clock platform.Clock, sink Sink) *Tracker {
@@ -45,6 +48,19 @@ func New(clock platform.Clock, sink Sink) *Tracker {
 // Start creates a correlated child operation. Its journey inherits from the parent context.
 func (t *Tracker) Start(parent context.Context) (context.Context, *Completion) {
 	return t.start(parent, false)
+}
+
+// StartCommand opts an explicitly marked extension command into feature usage reporting.
+func (t *Tracker) StartCommand(parent context.Context, origin manager.CommandOrigin) (context.Context, *Completion) {
+	ctx, completion := t.start(parent, false)
+	completion.usage = true
+	completion.usageVariant = "user-extension"
+	if origin.ExtensionID() != "" {
+		if variant, ok := analytics.BuiltInCommandVariant("extension-command", origin.ExtensionID(), origin.CommandID()); ok {
+			completion.usageVariant = variant
+		}
+	}
+	return ctx, completion
 }
 
 func (t *Tracker) start(parent context.Context, freshJourney bool) (context.Context, *Completion) {
@@ -94,6 +110,13 @@ func (c *Completion) Finish(outcome analytics.OperationOutcome) {
 			}
 		} else {
 			c.tracker.sink.CommandCompleted(completion)
+			if c.usage && !c.ids.background {
+				if usageSink, ok := c.tracker.sink.(interface {
+					CommandUsed(analytics.Completion, string) bool
+				}); ok {
+					usageSink.CommandUsed(completion, c.usageVariant)
+				}
+			}
 		}
 	})
 }

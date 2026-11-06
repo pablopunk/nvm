@@ -74,7 +74,7 @@ func (p *App) runExtensionCommandInPlace(entry extensionCommandEntry) {
 		return
 	}
 	safego.Go("shortcuts.command", func(ctx context.Context) {
-		result, failure, err := runShortcutCommand(manager.WithCommandRun(ctx), m, entry, func() error {
+		result, failure, err := runShortcutCommand(manager.WithCommandRunOrigin(ctx, m.ResolveCommandOrigin(entry.extID, entry.command.ID)), m, entry, func() error {
 			hidden := make(chan struct{})
 			p.onUI(func() {
 				if p.Palette != nil && p.Palette.Visible() {

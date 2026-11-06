@@ -53,7 +53,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			invoke(context.Background(), extID, in, done)
 		},
 		InvokeCommand: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
-			invoke(manager.WithCommandRun(context.Background()), extID, in, done)
+			invoke(manager.WithCommandRunOrigin(context.Background(), m.ResolveCommandOrigin(extID, in.Ref.ID)), extID, in, done)
 		},
 		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
 			p.extCalls.Add(1)

@@ -21,11 +21,11 @@ func (o extensionRunObserver) BeginRun(ctx context.Context) (context.Context, fu
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx, marked := manager.ConsumeCommandRun(ctx)
+	ctx, origin, marked := manager.ConsumeCommandOrigin(ctx)
 	if !marked {
 		return ctx, nil
 	}
-	ctx, completion := o.tracker.Start(ctx)
+	ctx, completion := o.tracker.StartCommand(ctx, origin)
 	return ctx, func(outcome manager.RunOutcome) {
 		mapped, ok := mapRunOutcome(outcome)
 		if ok {
