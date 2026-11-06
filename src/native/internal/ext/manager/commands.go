@@ -40,7 +40,7 @@ func (m *Manager) commandsWithin(ctx context.Context, budget supervisor.Budget) 
 
 func (m *Manager) commandsOf(ctx context.Context, target runtimeTarget, budget supervisor.Budget) CommandResult {
 	result := CommandResult{ExtensionID: target.id, Title: target.title}
-	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
+	callCtx, cancel := m.callContext(ctx, target.id, budget)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, protocol.MethodCommands, "", nil)
 	switch {

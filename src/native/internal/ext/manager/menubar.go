@@ -52,7 +52,7 @@ func (m *Manager) callProvider(ctx context.Context, id, method string, invocatio
 		return nil, err
 	}
 	budget := m.config.BudgetFor(method)
-	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
+	callCtx, cancel := m.callContext(ctx, id, budget)
 	defer cancel()
 	response, err := runtime.Call(callCtx, method, "", invocation)
 	if err != nil {

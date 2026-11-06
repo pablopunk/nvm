@@ -141,7 +141,7 @@ func isAnswerable(state supervisor.State) bool {
 
 func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {
 	result := SearchResult{ExtensionID: target.id, Title: target.title}
-	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
+	callCtx, cancel := m.callContext(ctx, target.id, budget)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, method, query, nil)
 	if err != nil {
@@ -186,7 +186,7 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	if invocation.Background {
 		budget = backgroundRunBudget
 	}
-	callCtx, cancel := context.WithTimeout(observedCtx, budget.Hard+budgetSlack)
+	callCtx, cancel := m.callContext(observedCtx, id, budget)
 	defer cancel()
 	response, err := runtime.Call(callCtx, protocol.MethodRun, "", &invocation)
 	if err != nil {

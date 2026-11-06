@@ -15,8 +15,8 @@ func (m *Manager) Load(ctx context.Context, id, loader string) ([]api.Item, *api
 	if err != nil {
 		return nil, nil, err
 	}
-	budget := m.config.BudgetFor(protocol.MethodRun)
-	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
+	budget := m.config.BudgetFor(protocol.MethodLoad)
+	callCtx, cancel := m.callContext(ctx, id, budget)
 	defer cancel()
 	response, err := runtime.Call(callCtx, protocol.MethodLoad, "", &api.Invocation{Ref: api.ActionRef{ID: loader}})
 	if err != nil {
