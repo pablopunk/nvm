@@ -18,13 +18,14 @@ const DefaultRestoreDelay = 500 * time.Millisecond
 // Deps are the ports the engine runs on. Source returns the window the palette was summoned from: the keyboard goes
 // back there before any gesture, and Undo only applies to it.
 type Deps struct {
-	Clock        platform.Clock
-	Clipboard    platform.Clipboard
-	SelectedText platform.SelectedText
-	Paster       platform.Paster
-	Focus        platform.Focus
-	Source       func() platform.FocusTarget
-	RestoreDelay time.Duration
+	Clock         platform.Clock
+	Clipboard     platform.Clipboard
+	SelectedText  platform.SelectedText
+	SelectedFiles platform.SelectedFiles
+	Paster        platform.Paster
+	Focus         platform.Focus
+	Source        func() platform.FocusTarget
+	RestoreDelay  time.Duration
 }
 
 // Engine reads, replaces and undoes the selection of the source window. It remembers the window the last replacement
@@ -52,6 +53,17 @@ func (e *Engine) Text() (string, bool, error) {
 		return "", false, err
 	}
 	return text, text != "", nil
+}
+
+// Files reads paths from the captured source without changing focus or the clipboard.
+func (e *Engine) Files(ctx context.Context) ([]string, error) {
+	if e.deps.SelectedFiles == nil {
+		return nil, platform.ErrUnsupported
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return e.deps.SelectedFiles.Paths(ctx, e.deps.Source())
 }
 
 // Replace puts text in place of the selection of the source window. The text goes on the clipboard concealed, the

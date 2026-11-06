@@ -1,6 +1,8 @@
 package services
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -22,7 +24,31 @@ type SelectionEngine interface {
 // in part.
 const maxReplaceText = 1 << 20
 
-func (h *Handler) serveDesktopSelection(call protocol.ServiceCall) (any, error) {
+type selectionFilesEngine interface {
+	Files(context.Context) ([]string, error)
+}
+
+func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.ServiceCall) (any, error) {
+	if call.Op == protocol.OpFiles {
+		if err := h.require(api.CapabilityDesktopFiles); err != nil {
+			return nil, err
+		}
+		if len(call.Args) != 0 && !bytes.Equal(bytes.TrimSpace(call.Args), []byte("null")) {
+			return nil, invalid("selection.files takes no arguments")
+		}
+		engine, ok := h.deps.Selection.(selectionFilesEngine)
+		if !ok {
+			return nil, unavailable("selected files are not available in this build")
+		}
+		paths, err := engine.Files(ctx)
+		if errors.Is(err, platform.ErrDenied) {
+			return nil, unavailable("Allow Nevermind to access Finder in System Settings.")
+		}
+		if errors.Is(err, platform.ErrUnsupported) {
+			return nil, unavailable("Selected files are not available on this system yet.")
+		}
+		return paths, err
+	}
 	if err := h.require(api.CapabilityDesktopSelection); err != nil {
 		return nil, err
 	}

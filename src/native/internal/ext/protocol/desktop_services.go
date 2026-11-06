@@ -74,6 +74,7 @@ const (
 	OpIndexRecent        = "index-recent"
 	OpIndexStatus        = "index-status"
 	OpSearchIndex        = "search-index"
+	OpFiles              = "files"
 	OpText               = "text"
 	OpReplace            = "replace"
 	OpUndo               = "undo"

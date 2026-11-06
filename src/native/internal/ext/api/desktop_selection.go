@@ -18,7 +18,7 @@ type SelectionAccess struct {
 }
 
 // Selection reads and replaces the text selected in the app the palette was summoned from. It requires the
-// desktop.selection capability. The host snapshots all clipboard representations before capture or replacement and
+// desktop.selection capability for text and replacement. Files requires desktop.files. The host snapshots all clipboard representations before capture or replacement and
 // restores them while its temporary write is still owned. A later user copy is kept. A backend unable to snapshot
 // rich content refuses it before changing the clipboard.
 type Selection interface {
@@ -30,5 +30,6 @@ type Selection interface {
 	// paste. Failed capture and paste attempts restore the original clipboard while it is still owned. The paste lands
 	// in the app the selection came from.
 	ReplaceText(text string) (replaced bool, err error)
+	// Files returns paths selected in the captured app without changing focus or the clipboard.
 	Files() ([]string, error)
 }

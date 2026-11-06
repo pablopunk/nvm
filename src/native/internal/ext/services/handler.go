@@ -267,7 +267,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceDesktopWindows:
 		return h.serveDesktopWindows(ctx, call)
 	case protocol.ServiceDesktopSelection:
-		return h.serveDesktopSelection(call)
+		return h.serveDesktopSelection(ctx, call)
 	case protocol.ServiceDesktopKeyboard:
 		return h.serveDesktopKeyboard(call)
 	case protocol.ServiceDesktopPaste:

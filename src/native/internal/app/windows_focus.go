@@ -52,7 +52,7 @@ func (p *App) onPaletteShown() {
 // captureWindowFocus records the frontmost app before the palette appears. It runs only where the palette has no focus
 // port: there the palette's summon capture is missing, and the window commands need one.
 func (p *App) captureWindowFocus() int {
-	if p.menus == nil && (p.focusOption() != nil || !p.windowManagementEnabled()) {
+	if p.ports.Windows == nil || (p.menus == nil && p.focusOption() != nil) {
 		return 0
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), focusCaptureTimeout)

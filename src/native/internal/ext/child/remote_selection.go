@@ -37,7 +37,9 @@ func (s remoteSelection) Text() (string, bool, error) {
 }
 
 func (s remoteSelection) Files() ([]string, error) {
-	return nil, unsupported("ctx.desktop.selection.files")
+	var paths []string
+	err := s.link.Call(protocol.ServiceDesktopSelection, protocol.OpFiles, nil, &paths)
+	return paths, err
 }
 
 func (s remoteSelection) ReplaceText(text string) (bool, error) {

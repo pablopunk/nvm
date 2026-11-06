@@ -19,6 +19,9 @@ type Rule struct {
 var rules = []Rule{
 	{Path: []string{"Desktop", "Shell", "OpenExternal"}, Capability: api.CapabilityDesktopFiles},
 	{Path: []string{"Desktop", "Shell"}, Capability: api.CapabilitySystem},
+	{Path: []string{"Desktop", "Selection", "Files"}, Capability: api.CapabilityDesktopFiles},
+	{Path: []string{"Desktop", "Selection", "Text"}, Capability: api.CapabilityDesktopSelection},
+	{Path: []string{"Desktop", "Selection", "ReplaceText"}, Capability: api.CapabilityDesktopSelection},
 	{Path: []string{"Desktop", "Files"}, Capability: api.CapabilityDesktopFiles},
 	{Path: []string{"Desktop", "Apps"}, Capability: api.CapabilityDesktopApps},
 	{Path: []string{"Desktop", "Menus"}, Capability: api.CapabilityDesktopMenus},
