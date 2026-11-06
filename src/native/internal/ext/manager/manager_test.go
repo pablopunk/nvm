@@ -81,22 +81,27 @@ func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	return &harness{t: t, m: m, root: root, files: ports.FS, enabled: set}
 }
 
-func TestNewRetainsRunObserver(t *testing.T) {
-	observer := &testRunObserver{}
+func TestNewRunObserverObservesRun(t *testing.T) {
+	var outcomes []RunOutcome
+	observer := recordingRunObserver{record: func(outcome RunOutcome) { outcomes = append(outcomes, outcome) }}
 	h := newHarness(t, func(opts *Options) { opts.RunObserver = observer })
-	if h.m.runObserver != observer {
-		t.Fatal("New did not retain the supplied run observer")
+	if err := h.m.Install("acme.settings", fixtureContents(t, "acme.settings"), true); err != nil {
+		t.Fatalf("Install: %v", err)
 	}
-
-	if got := newHarness(t).m.runObserver; got != nil {
-		t.Fatalf("New default run observer = %v, want nil", got)
+	h.waitRunning("acme.settings")
+	_, failure, err := h.m.Run(context.Background(), "acme.settings", api.Invocation{Ref: api.ActionRef{ID: "open"}})
+	if err != nil || failure != nil {
+		t.Fatalf("Run: err %v failure %+v", err, failure)
+	}
+	if len(outcomes) != 1 || outcomes[0] != RunOutcomeSuccess {
+		t.Fatalf("observed outcomes = %v, want [success]", outcomes)
 	}
 }
 
-type testRunObserver struct{}
+type recordingRunObserver struct{ record func(RunOutcome) }
 
-func (*testRunObserver) BeginRun(ctx context.Context) (context.Context, func(RunOutcome)) {
-	return ctx, func(RunOutcome) {}
+func (o recordingRunObserver) BeginRun(ctx context.Context) (context.Context, func(RunOutcome)) {
+	return ctx, o.record
 }
 
 // fixtureContents reads a fixture folder from testdata, optionally with a different main.go.

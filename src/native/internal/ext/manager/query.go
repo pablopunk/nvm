@@ -169,6 +169,15 @@ const budgetSlack = 10 * time.Millisecond
 // Run executes one action on an enabled extension and returns its result. The invocation carries the action
 // reference and its arguments as data; nothing executable crosses the boundary.
 func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+	var finish func(RunOutcome)
+	observedCtx := ctx
+	if m.runObserver != nil {
+		observedCtx, finish = m.runObserver.BeginRun(ctx)
+	}
+	outcome := RunOutcomeFailed
+	if finish != nil {
+		defer func() { finish(outcome) }()
+	}
 	runtime, err := m.runtimeFor(id)
 	if err != nil {
 		return api.Result{}, nil, err
@@ -177,20 +186,49 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	if invocation.Background {
 		budget = backgroundRunBudget
 	}
-	callCtx, cancel := context.WithTimeout(ctx, budget.Hard+budgetSlack)
+	callCtx, cancel := context.WithTimeout(observedCtx, budget.Hard+budgetSlack)
 	defer cancel()
 	response, err := runtime.Call(callCtx, protocol.MethodRun, "", &invocation)
 	if err != nil {
+		outcome = runOutcomeForError(err)
 		return api.Result{}, failureOf(err), nil
 	}
 	if response.Failure != nil {
+		outcome = runOutcomeForFailure(response.Failure)
 		return api.Result{}, response.Failure, nil
 	}
 	var result api.Result
 	if err := json.Unmarshal(response.Data, &result); err != nil {
 		return api.Result{}, &api.Failure{Code: api.CodeInternal, Message: "run returned a result that is not valid"}, nil
 	}
+	outcome = RunOutcomeSuccess
 	return result, nil, nil
+}
+
+func runOutcomeForError(err error) RunOutcome {
+	var callErr *supervisor.CallError
+	if errors.As(err, &callErr) {
+		return runOutcomeForFailure(&callErr.Failure)
+	}
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return RunOutcomeTimedOut
+	case errors.Is(err, context.Canceled):
+		return RunOutcomeCancelled
+	default:
+		return RunOutcomeFailed
+	}
+}
+
+func runOutcomeForFailure(failure *api.Failure) RunOutcome {
+	switch failure.Code {
+	case api.CodeTimeout:
+		return RunOutcomeTimedOut
+	case api.CodeCancelled:
+		return RunOutcomeCancelled
+	default:
+		return RunOutcomeFailed
+	}
 }
 
 func (m *Manager) runtimeFor(id string) (runner, error) {
