@@ -328,7 +328,7 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if v.FooterControlVisible == nil || v.FooterControlVisible() {
 		data.Control = v.FooterControl
 	}
-	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
+	if it := p.actionableItem(); it != nil && len(it.Actions) > 0 {
 		if action, ok := it.DefaultAction(); ok {
 			data.Primary = &design.KeyHint{Title: action.Title, Key: KeyLabel("↵")}
 		}

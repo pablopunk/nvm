@@ -53,8 +53,8 @@ func (a *App) SummonPalette() error {
 	return err
 }
 
-// DismissWithEscape presses Escape and waits for the palette to hide. Escape at the root with an
-// empty query hides it; with a query it clears the query first, so callers clear the query first.
+// DismissWithEscape presses Escape and waits for the palette to hide. At the root Escape hides
+// with or without a query; on a pushed page it first returns to the parent.
 func (a *App) DismissWithEscape() error {
 	if err := a.Key("Escape"); err != nil {
 		return err

@@ -18,6 +18,9 @@ func (p *Palette) search() {
 	}
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
+	if p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
+		p.closeActionMenu()
+	}
 	if v.Providers == nil {
 		var rows []search.Item
 		if v.Search != nil {
@@ -28,6 +31,8 @@ func (p *Palette) search() {
 	}
 	if snap, ready := p.coordinator(v).Query(q, v.Providers()); ready {
 		p.showRows(v, q, snap.Items, snap.Settled, snap.Pending)
+	} else if p.shownView == v {
+		p.settled, p.pending = false, true
 	}
 }
 
@@ -63,6 +68,12 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil
+	}
+	// An empty partial answer is still loading, not evidence that the previous list is obsolete.
+	// Keep its query attribution so Enter and row shortcuts cannot act on it for the new query.
+	if p.shownView == v && len(p.results) > 0 && len(rows) == 0 && !settled {
+		p.settled, p.pending = false, true
+		return
 	}
 	newQuery := p.shownView != v || p.shownQuery != q
 	if newQuery {

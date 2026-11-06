@@ -147,7 +147,7 @@ func TestJourneyJ06ConcealedCopyNeverAppearsInHistory(t *testing.T) {
 		t.Fatal("the app log holds the concealed text")
 	}
 
-	must(t, app.Key("Escape"))
+	clearSearch(t, app)
 	_, err = app.WaitFor(nonce, clipWait)
 	must(t, err)
 	shoot(t, app, "j06-2-normal-copy-present")

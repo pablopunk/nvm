@@ -8,7 +8,7 @@ import (
 
 // actions returns the actions of the chosen row, or of the page on top when it is a Body page with a menu, or nil.
 func (p *Palette) actions() []search.Action {
-	if it := p.chosenItem(); it != nil {
+	if it := p.actionableItem(); it != nil {
 		return it.Actions
 	}
 	if v := p.cur(); v.Actions != nil {
@@ -33,7 +33,7 @@ func (p *Palette) menuActions() []search.Action {
 // shortcutActions are the actions whose keys run now: the chosen row's, then the page on top's own.
 func (p *Palette) shortcutActions() []search.Action {
 	var out []search.Action
-	if it := p.chosenItem(); it != nil {
+	if it := p.actionableItem(); it != nil {
 		out = append(out, it.Actions...)
 	}
 	if v := p.cur(); v.Actions != nil {
@@ -50,13 +50,18 @@ func (p *Palette) chosenItem() *search.Item {
 	return &p.results[p.chosen]
 }
 
+// actionableItem excludes retained rows belonging to a previous query or view.
+func (p *Palette) actionableItem() *search.Item {
+	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
+		return nil
+	}
+	return p.chosenItem()
+}
+
 // runDefault runs the first action of the chosen row: what Enter does. At the root the query is remembered
 // first, and the row's learn key is recorded with the query after its action has run.
 func (p *Palette) runDefault() {
-	if p.shownView != p.cur() || p.shownQuery != strings.TrimSpace(p.query) {
-		return
-	}
-	it := p.chosenItem()
+	it := p.actionableItem()
 	if it == nil {
 		return
 	}

@@ -81,8 +81,7 @@ func enableThroughReview(t *testing.T, app *App, query, title string) {
 	must(t, app.Key("Return"))
 }
 
-// hidePalette presses Escape until the palette is hidden. Escape clears a query first, then leaves a pushed view,
-// then hides the palette at the root.
+// hidePalette presses Escape until the palette is hidden, leaving pushed views before hiding the root.
 func hidePalette(t *testing.T, app *App) {
 	t.Helper()
 	for range escapePresses {
