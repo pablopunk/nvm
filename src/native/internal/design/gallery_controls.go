@@ -40,6 +40,10 @@ func galleryControls(c *ui.Context) {
 		})
 	})
 	Section(c, "Footer: with actions, and with a hint")
-	Footer(c, FooterData{Name: "Clipboard History", Primary: &KeyHint{Title: "Copy to Clipboard", Key: "↵"}, Secondary: &KeyHint{Title: "Actions", Key: "⌃K"}})
-	Footer(c, FooterData{Name: "Settings", Hint: "esc Back"})
+	ui.Column(c).Height(FooterClearance).Children(func() {
+		Footer(c, FooterData{Name: "Clipboard History", Primary: &KeyHint{Title: "Copy to Clipboard", Key: "↵"}, Secondary: &KeyHint{Title: "Actions", Key: "⌃K"}})
+	})
+	ui.Column(c).Height(FooterClearance).Children(func() {
+		Footer(c, FooterData{Name: "Settings", Hint: "esc Back"})
+	})
 }

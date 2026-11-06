@@ -32,7 +32,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 	v := p.cur()
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
-	design.Pane(c, func() {
+	design.PalettePane(c, func() {
 		if p.drawsWindowHeader() {
 			p.windowHeader(c, v)
 		}
@@ -46,7 +46,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 				}
 			})
 		})
-		design.Etched(c)
+		ui.Box(c).Height(design.FooterClearance)
 		p.footer(c, v)
 	})
 	if side := v.sideNow(); side.Focused() && side.shell != nil && side.shell.actionsOpen {
@@ -309,10 +309,12 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if v.Footer != nil {
 		name = v.Footer(p.chosenItem())
 	}
-	if len(p.stack) == 1 {
-		name = "Nevermind"
+	root := len(p.stack) == 1
+	if root {
+		name = ""
 	}
-	if p.loadingMore() {
+	loading := p.loadingMore()
+	if loading {
 		status := "Loading…"
 		if len(p.results) > 0 {
 			status = "Refreshing…"
@@ -322,7 +324,10 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 		}
 		name += status
 	}
-	data := design.FooterData{Name: name}
+	data := design.FooterData{Name: name, HideName: root && !loading, PrimaryAction: v.FooterPrimary}
+	if v.FooterControlVisible == nil || v.FooterControlVisible() {
+		data.Control = v.FooterControl
+	}
 	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 		if action, ok := it.DefaultAction(); ok {
 			data.Primary = &design.KeyHint{Title: action.Title, Key: KeyLabel("↵")}

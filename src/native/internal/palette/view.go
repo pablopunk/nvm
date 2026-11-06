@@ -100,6 +100,10 @@ type View struct {
 	// Primary is the page action kept in the footer: primary for a Body page, beside the selected row action for lists.
 	// Forms use it for submission while Enter continues to edit the selected field. Nil leaves the footer to Hint.
 	Primary func() *design.KeyHint
+	// FooterControl draws an optional control in the footer, and FooterPrimary runs its primary action on click.
+	FooterControl        func(*ui.Context)
+	FooterControlVisible func() bool
+	FooterPrimary        func()
 	// Side, when it returns a side, draws that page beside this one as a split: this page's body on one half, the side on
 	// the other (1.x's builder workspace). It is read on each frame, so a view shows a side only in some states, and the
 	// side takes the keys while it has the focus (side.go).

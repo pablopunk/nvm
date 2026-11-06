@@ -71,14 +71,17 @@ func (x *ExtensionChat) SpecFrom(fn func() ExtensionChatSpec) {
 // the spec has one, the side page beside it.
 func (x *ExtensionChat) View() *palette.View {
 	return &palette.View{
-		Title:        x.spec.Title,
-		Category:     analytics.PageViewAIChat,
-		Body:         x.body,
-		Input:        &x.input,
-		Actions:      x.actions,
-		Primary:      x.primaryKey,
-		Side:         x.sideFor,
-		SurvivesHide: true,
+		Title:                x.spec.Title,
+		Category:             analytics.PageViewAIChat,
+		Body:                 x.body,
+		Input:                &x.input,
+		Actions:              x.actions,
+		Primary:              x.primaryKey,
+		FooterControl:        x.tierPicker,
+		FooterControlVisible: x.hasTierPicker,
+		FooterPrimary:        x.footerPrimary,
+		Side:                 x.sideFor,
+		SurvivesHide:         true,
 	}
 }
 
@@ -99,8 +102,7 @@ func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 	})
 }
 
-// composer is the card under the transcript: the pictures the next message carries, the palette's text input, the
-// tier picker, the picture control and the send or stop control.
+// composer is the card under the transcript: pictures, the input, and its send and attachment controls.
 func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 	placeholder := x.spec.Placeholder
 	if placeholder == "" {
@@ -114,12 +116,11 @@ func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
 			OnTextKey(x.composerKey)
 		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
-			x.tierPicker(c)
 			if x.attaches() {
 				attachButton(c, x.spec.PickImages, x.addImages)
 			}
 			ui.Spacer(c)
-			x.sendOrStop(c, k)
+			x.sendButton(c, k)
 		})
 	})
 }
@@ -181,16 +182,9 @@ func (x *ExtensionChat) streaming() bool {
 	return x.presentation.busy
 }
 
-// sendOrStop is the control at the end of the composer: Stop while a reply streams, otherwise send.
-func (x *ExtensionChat) sendOrStop(c *ui.Context, k *design.TokenSet) {
-	if x.streaming() && x.spec.Stop != nil {
-		stop := ui.ButtonBase(c).Padding(4, 10).Radius(6).Background(k.Interactive)
-		stop.Children(func() {
-			ui.Text(c, "Stop").FontSize(12).FontWeight(600).TextColor(k.Danger)
-		})
-		if stop.Clicked() {
-			x.spec.Stop(x.host)
-		}
+// sendButton offers sending from the composer when no reply is streaming.
+func (x *ExtensionChat) sendButton(c *ui.Context, k *design.TokenSet) {
+	if x.streaming() {
 		return
 	}
 	empty := !x.canSend(x.draft)
@@ -202,6 +196,16 @@ func (x *ExtensionChat) sendOrStop(c *ui.Context, k *design.TokenSet) {
 		ui.Icon(c, design.Icon("corner-down-left")).FontSize(14).TextColor(k.AccentContrast)
 	})
 	if send.Clicked() {
+		x.send(x.draft)
+	}
+}
+
+func (x *ExtensionChat) hasTierPicker() bool { return x.spec.ChooseTier != nil }
+
+func (x *ExtensionChat) footerPrimary() {
+	if x.streaming() && x.spec.Stop != nil {
+		x.spec.Stop(x.host)
+	} else {
 		x.send(x.draft)
 	}
 }

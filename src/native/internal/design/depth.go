@@ -14,11 +14,9 @@ func mix(a, b ui.Color, t float32) ui.Color {
 func lighten(c ui.Color, t float32) ui.Color { return mix(c, ui.RGB(255, 255, 255), t) }
 func darken(c ui.Color, t float32) ui.Color  { return mix(c, ui.RGB(0, 0, 0), t) }
 
-// Etched draws a groove: a dark hairline with a light one under it, as a divider between two regions.
+// Etched leaves breathing room between regions on the continuous glass surface.
 func Etched(c *ui.Context) {
-	k := Tokens(c)
-	ui.Box(c).Height(1).Background(k.Lo)
-	ui.Box(c).Height(1).Background(k.Hi)
+	ui.Box(c).Height(4)
 }
 
 // Glossy fills a colored control with a vertical sheen, a lit top edge and a soft contact shadow.
