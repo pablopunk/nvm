@@ -22,10 +22,15 @@ func (o extensionRunObserver) BeginRun(ctx context.Context) (context.Context, fu
 		ctx = context.Background()
 	}
 	ctx, origin, marked := manager.ConsumeCommandOrigin(ctx)
-	if !marked {
+	ctx, viewOrigin, viewMarked := manager.ConsumeViewActionOrigin(ctx)
+	var completion *Completion
+	if marked {
+		ctx, completion = o.tracker.StartCommand(ctx, origin)
+	} else if viewMarked {
+		ctx, completion = o.tracker.StartViewAction(ctx, viewOrigin)
+	} else {
 		return ctx, nil
 	}
-	ctx, completion := o.tracker.StartCommand(ctx, origin)
 	return ctx, func(outcome manager.RunOutcome) {
 		mapped, ok := mapRunOutcome(outcome)
 		if ok {

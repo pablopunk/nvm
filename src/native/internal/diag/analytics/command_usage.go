@@ -16,10 +16,19 @@ type commandUsageState struct {
 
 // CommandUsed records one canonical command.run fact per journey.
 func (c *Client) CommandUsed(completion Completion, variant string) bool {
+	return c.featureUsed(completion, FeatureCommandRun, variant, validCommandVariant(variant))
+}
+
+// ViewActionUsed records one canonical view.action fact per journey.
+func (c *Client) ViewActionUsed(completion Completion, variant string) bool {
+	return c.featureUsed(completion, FeatureViewAction, variant, validViewActionVariant(variant))
+}
+
+func (c *Client) featureUsed(completion Completion, feature, variant string, validVariant bool) bool {
 	if c == nil || c.cfg.Endpoint == "" || !validOperationOutcome(completion.Outcome) ||
 		!diagnosticIDPattern.MatchString(completion.BootID) || !diagnosticIDPattern.MatchString(completion.JourneyID) ||
 		!diagnosticIDPattern.MatchString(completion.ActionID) ||
-		!validCommandVariant(variant) {
+		!validVariant {
 		return false
 	}
 	c.sessionMu.Lock()
@@ -27,7 +36,7 @@ func (c *Client) CommandUsed(completion Completion, variant string) bool {
 	if !c.consent.Load() || completion.Outcome == OutcomeCancelled {
 		return false
 	}
-	key := completion.JourneyID + ":" + FeatureCommandRun
+	key := completion.JourneyID + ":" + feature
 	if c.commandUsage.keys == nil {
 		c.commandUsage.keys = make(map[string]struct{})
 	}
@@ -40,7 +49,7 @@ func (c *Client) CommandUsed(completion Completion, variant string) bool {
 		delete(c.commandUsage.keys, c.commandUsage.order[0])
 		c.commandUsage.order = c.commandUsage.order[1:]
 	}
-	props := map[string]any{"feature": FeatureCommandRun, "outcome": string(completion.Outcome)}
+	props := map[string]any{"feature": feature, "outcome": string(completion.Outcome)}
 	if variant != "" {
 		props["variant"] = variant
 	}
@@ -85,6 +94,23 @@ func BuiltInCommandVariant(kind, extensionID, commandID string) (string, bool) {
 	variant := kind + ":" + extensionID
 	if commandID != "" {
 		variant += ":" + commandID
+	}
+	return variant, true
+}
+
+func validViewActionVariant(variant string) bool {
+	if variant == "" || variant == "user-extension" {
+		return true
+	}
+	id, ok := strings.CutPrefix(variant, "extension-action:")
+	return ok && commandVariantID.MatchString(id)
+}
+
+// BuiltInViewActionVariant formats a validated host-owned extension identifier.
+func BuiltInViewActionVariant(extensionID string) (string, bool) {
+	variant := "extension-action:" + extensionID
+	if !validViewActionVariant(variant) {
+		return "", false
 	}
 	return variant, true
 }

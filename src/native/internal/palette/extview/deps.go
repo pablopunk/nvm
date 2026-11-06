@@ -20,6 +20,8 @@ type Deps struct {
 	Invoke func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// InvokeCommand is used only by a root command's primary action. Views and secondary actions use Invoke.
 	InvokeCommand func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	// InvokeViewAction is used for user-initiated run actions in a view.
+	InvokeViewAction func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their
 	// provider runs off the UI thread and needs the answer to build its rows. Nil leaves those rows empty.
 	Answer    func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)

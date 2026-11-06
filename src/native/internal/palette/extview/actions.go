@@ -14,20 +14,25 @@ type handle string
 
 // route is what a handle stands for: the extension that answers and the action it declared.
 type route struct {
-	extID   string
-	action  api.Action
-	command bool
+	extID      string
+	action     api.Action
+	command    bool
+	viewIntent bool
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
 // root commands. Run actions go through the host, and declarative actions are host operations.
 func ActionFor(deps Deps, extID string, action api.Action) search.Action {
-	return NewSession(deps, extID, api.View{}).action(action, "")
+	s := NewSession(deps, extID, api.View{})
+	s.viewIntent = false
+	return s.action(action, "")
 }
 
 // CommandActionFor maps the primary action of a root command to an action that invokes through InvokeCommand.
 func CommandActionFor(deps Deps, extID string, action api.Action) search.Action {
-	return NewSession(deps, extID, api.View{}).commandAction(action)
+	s := NewSession(deps, extID, api.View{})
+	s.viewIntent = false
+	return s.commandAction(action)
 }
 
 func (s *Session) commandAction(action api.Action) search.Action {
@@ -73,7 +78,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		if action.Ref == nil {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 		}
-		token := s.issue(key, route{extID: s.extID, action: action})
+		token := s.issue(key, route{extID: s.extID, action: action, viewIntent: s.viewIntent})
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runHandle(h, token) }}
 	case api.ActionOpenURL:
 		url := action.URL
@@ -241,6 +246,8 @@ func (s *Session) invoke(h search.Host, r route) {
 	invoke := s.deps.Invoke
 	if r.command && s.deps.InvokeCommand != nil {
 		invoke = s.deps.InvokeCommand
+	} else if r.viewIntent && s.deps.InvokeViewAction != nil {
+		invoke = s.deps.InvokeViewAction
 	}
 	if invoke == nil {
 		h.Toast(unavailableMessage)
@@ -305,7 +312,7 @@ func (s *Session) confirmPage(r route) *palette.View {
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: "red", Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
-						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command})
+						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent})
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{
@@ -382,13 +389,4 @@ func toastIndicator(title string, toast api.Toast) api.IndicatorInput {
 		input.DurationMs = 4000
 	}
 	return input
-}
-
-// runDismissal says whether the palette stays open while an ActionRun handler works. An action that asks to be
-// dismissed after its run closes the palette as the run is dispatched, as the 1.x auto dismissal did.
-func runDismissal(action api.Action) search.Dismissal {
-	if action.DismissAfterRun {
-		return search.DismissAuto
-	}
-	return search.DismissNever
 }

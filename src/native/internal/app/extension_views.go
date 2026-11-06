@@ -55,6 +55,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		InvokeCommand: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(manager.WithCommandRunOrigin(context.Background(), m.ResolveCommandOrigin(extID, in.Ref.ID)), extID, in, done)
 		},
+		InvokeViewAction: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			invoke(manager.WithViewActionRunOrigin(context.Background(), m.ResolveViewActionOrigin(extID)), extID, in, done)
+		},
 		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
 			p.extCalls.Add(1)
 			go func() {

@@ -26,6 +26,7 @@ type Session struct {
 	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
 	chatSideSession *Session
 	chatSidePage    *palette.View
+	viewIntent      bool
 	extID           string
 	view            api.View
 	host            search.Host
@@ -61,7 +62,7 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 		deps.Cameras = NewMemoryCameras()
 	}
 	s := &Session{
-		deps: deps, extID: extID, view: view, loading: view.IsLoading,
+		deps: deps, extID: extID, view: view, loading: view.IsLoading, viewIntent: true,
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
 		images: map[string]*ui.Bitmap{}, requested: map[string]bool{},
 		handles: map[handle]route{}, markdown: &markdown.Options{},
@@ -297,4 +298,13 @@ func (s *Session) unsupportedPage() *palette.View {
 			drawNotice(c, "This view type is not available in this build yet.")
 		},
 	}
+}
+
+// runDismissal says whether the palette stays open while an ActionRun handler works. An action that asks to be
+// dismissed after its run closes the palette as the run is dispatched, as the 1.x auto dismissal did.
+func runDismissal(action api.Action) search.Dismissal {
+	if action.DismissAfterRun {
+		return search.DismissAuto
+	}
+	return search.DismissNever
 }

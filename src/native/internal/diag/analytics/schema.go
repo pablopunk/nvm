@@ -24,6 +24,9 @@ const (
 // FeatureCommandRun is the feature name of a palette command the person ran.
 const FeatureCommandRun = "command.run"
 
+// FeatureViewAction is the feature name of an extension view action.
+const FeatureViewAction = "view.action"
+
 // schema lists the property keys each event may carry. Capture drops every other key.
 var schema = map[string][]string{
 	EventAppLaunched:          {"release"},

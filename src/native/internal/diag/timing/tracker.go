@@ -37,6 +37,7 @@ type Completion struct {
 	started      time.Time
 	job          bool
 	session      analytics.SessionSnapshot
+	viewAction   bool
 	usage        bool
 	usageVariant string
 }
@@ -59,6 +60,18 @@ func (t *Tracker) StartCommand(parent context.Context, origin manager.CommandOri
 		if variant, ok := analytics.BuiltInCommandVariant("extension-command", origin.ExtensionID(), origin.CommandID()); ok {
 			completion.usageVariant = variant
 		}
+	}
+	return ctx, completion
+}
+
+// StartViewAction records an explicitly marked user view action.
+func (t *Tracker) StartViewAction(parent context.Context, origin manager.ViewActionOrigin) (context.Context, *Completion) {
+	ctx, completion := t.start(parent, false)
+	completion.viewAction = true
+	completion.usage = true
+	completion.usageVariant = "user-extension"
+	if variant, ok := analytics.BuiltInViewActionVariant(origin.ExtensionID()); ok {
+		completion.usageVariant = variant
 	}
 	return ctx, completion
 }
@@ -115,6 +128,19 @@ func (c *Completion) Finish(outcome analytics.OperationOutcome) {
 				JobCompleted(analytics.JobCompletion) bool
 			}); ok {
 				jobSink.JobCompleted(completion)
+			}
+		} else if c.viewAction {
+			if sink, ok := c.tracker.sink.(interface {
+				ViewActionCompleted(analytics.Completion) bool
+			}); ok {
+				sink.ViewActionCompleted(completion)
+			}
+			if c.usage && !c.ids.background {
+				if sink, ok := c.tracker.sink.(interface {
+					ViewActionUsed(analytics.Completion, string) bool
+				}); ok {
+					sink.ViewActionUsed(completion, c.usageVariant)
+				}
 			}
 		} else {
 			c.tracker.sink.CommandCompleted(completion)

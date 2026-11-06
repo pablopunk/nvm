@@ -53,6 +53,13 @@ func (c *Client) CommandCompleted(completion CommandCompletion) bool {
 	})
 }
 
+// ViewActionCompleted records a host-owned extension view action completion.
+func (c *Client) ViewActionCompleted(completion Completion) bool {
+	return c.withSessionCapture(completion.Session, func(sessionID string) bool {
+		return c.operationCompleted(completion, "view.action", "Extension view action", "invoke", false, sessionID)
+	})
+}
+
 // JobCompleted records a background job completion, omitting routine successes.
 func (c *Client) JobCompleted(completion JobCompletion) bool {
 	completion.Session = SessionSnapshot{}
