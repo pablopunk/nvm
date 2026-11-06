@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path/filepath"
+	"path"
 	"strconv"
 	"strings"
 	"time"
@@ -91,15 +91,17 @@ func (r selectedFilesReader) Paths(ctx context.Context, target platform.FocusTar
 		if answer.Paths == nil {
 			return nil, errors.New("selected files response missing paths")
 		}
-		for i, path := range answer.Paths {
+		for i, selectedPath := range answer.Paths {
 			// Finder may include a trailing slash for directories.
-			if path != "/" {
-				path = strings.TrimSuffix(path, "/")
+			if selectedPath != "/" {
+				selectedPath = strings.TrimSuffix(selectedPath, "/")
 			}
-			if !filepath.IsAbs(path) || filepath.Clean(path) != path || strings.ContainsRune(path, 0) {
+			// This helper always returns macOS POSIX paths, including when its
+			// contract is tested with a fake helper on another platform.
+			if !path.IsAbs(selectedPath) || path.Clean(selectedPath) != selectedPath || strings.ContainsRune(selectedPath, 0) {
 				return nil, errors.New("selected files response contains invalid path")
 			}
-			answer.Paths[i] = path
+			answer.Paths[i] = selectedPath
 		}
 		return answer.Paths, nil
 	default:

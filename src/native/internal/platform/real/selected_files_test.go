@@ -2,6 +2,7 @@ package real
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os/exec"
 	"reflect"
@@ -12,6 +13,11 @@ import (
 )
 
 func TestSelectedFilesContract(t *testing.T) {
+	framedPaths := []string{"/tmp/real\nnewline", "/tmp/quoted\"name", "/tmp/back\\slash", "/tmp/folder/", "/"}
+	framedJSON, err := json.Marshal(selectedFilesAnswer{Status: "ok", Paths: framedPaths})
+	if err != nil {
+		t.Fatal(err)
+	}
 	cases := []struct {
 		name    string
 		script  fake.HelperScript
@@ -19,6 +25,7 @@ func TestSelectedFilesContract(t *testing.T) {
 		wantErr error
 		fails   bool
 	}{
+		{name: "POSIX paths across test hosts", script: fake.HelperScript{Stdout: framedJSON}, want: []string{"/tmp/real\nnewline", "/tmp/quoted\"name", "/tmp/back\\slash", "/tmp/folder", "/"}},
 		{name: "finder paths preserve framing", script: fake.HelperScript{Stdout: []byte(`{"status":"ok","paths":["/tmp/a\nb","/tmp/quoted\"name"]}`)}, want: []string{"/tmp/a\nb", "/tmp/quoted\"name"}},
 		{name: "empty Finder", script: fake.HelperScript{Stdout: []byte(`{"status":"ok","paths":[]}`)}, want: []string{}},
 		{name: "other app", script: fake.HelperScript{Stdout: []byte(`{"status":"other"}`)}, want: []string{}},
