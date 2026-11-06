@@ -88,6 +88,10 @@ func (s *Session) Open(host search.Host) *palette.View {
 // on the next frame after the host refreshes it.
 func (s *Session) Palette() *palette.View {
 	page := s.pageOfKind()
+	page.ExtensionID = s.extID
+	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
+		page.OnDataChanged = s.refreshAfterMutation
+	}
 	page.Subtitle = s.view.Subtitle
 	if s.hasPageActions() {
 		page.Actions = s.pageActions

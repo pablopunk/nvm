@@ -120,6 +120,22 @@ func (p *Palette) RefreshTop(pred func(*View) bool) {
 	})
 }
 
+// NotifyTopDataChanged requests a declared refresh only on the visible extension page.
+func (p *Palette) NotifyTopDataChanged(extensionID string) {
+	if p.win == nil {
+		return
+	}
+	p.win.Update(func() {
+		if !p.win.IsVisible() || len(p.stack) == 0 {
+			return
+		}
+		v := p.cur()
+		if v.ExtensionID == extensionID && v.OnDataChanged != nil {
+			v.OnDataChanged()
+		}
+	})
+}
+
 // ReloadRows revalidates the visible rows from the UI thread after host data changes. Cached snapshots stay
 // available for instant navigation; every search revalidates its providers.
 func (p *Palette) ReloadRows() {

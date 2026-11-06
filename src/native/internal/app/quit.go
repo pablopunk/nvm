@@ -15,6 +15,12 @@ func (p *App) requestQuit() {
 // beginQuit runs when a quit starts, before any window closes. The flag tells the windows that their close is a quit.
 func (p *App) beginQuit(*mygo.QuitEvent) {
 	p.quitting = true
+	if p.menuCancel != nil {
+		p.menuCancel()
+	}
+	if p.menus != nil {
+		p.menus.Close()
+	}
 	p.stopUpdateChecks(nil)
 	if p.extWindows != nil {
 		p.extWindows.BeginQuit()

@@ -67,6 +67,8 @@ type View struct {
 	// HintReplacesActions keeps Hint as the footer's right text on a Body page that has actions, so the page names its own
 	// keys instead of the Actions key.
 	HintReplacesActions bool
+	ExtensionID         string
+	OnDataChanged       func()
 	OnLeave             func()
 	// OnReveal runs when a page above this one is popped and this page is the top again, after it has shown its rows.
 	OnReveal func()

@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"github.com/pablopunk/nvm/native/internal/ai/quota"
+	"github.com/pablopunk/nvm/native/internal/ext/menushost"
 	"log"
 	"runtime"
 	"sync"
@@ -142,6 +143,8 @@ type App struct {
 
 	windows     *windowmgmt.Service
 	windowFocus windowSummon
+	menus       *menushost.Adapter
+	menuCancel  context.CancelFunc
 	pasteLeases *leasedPaster
 	// paletteRuns counts the extension runs the palette started that have not returned. A window call made meanwhile acts
 	// on the window the palette was summoned from, as the palette's own commands did; the palette hides before the call.
@@ -220,6 +223,7 @@ func (p *App) ready() {
 	p.openDiagnostics(ports)
 	p.attachServices(ports, runtime.GOOS, dataDir(), nil)
 	p.recoverDictationMute()
+	p.attachMenus(ports.Helper)
 	p.attachWindows()
 	p.attachExtensionWindows()
 	p.attachDeepLinks()

@@ -97,8 +97,22 @@ func (s *Service) State() SnapshotState {
 // changed is a wake-up notification, not a refresh result. It may arrive after a
 // later source change; consumers read State when they handle the notification.
 func (s *Service) Refresh(ctx context.Context, budget time.Duration, changed func()) {
+	s.refresh(ctx, budget, changed, false)
+}
+
+// RequestRefresh coalesces automatic refresh requests while a read is in flight.
+// The caller reads State after changed; the notification carries no source data.
+func (s *Service) RequestRefresh(ctx context.Context, budget time.Duration, changed func()) {
+	s.refresh(ctx, budget, changed, true)
+}
+
+func (s *Service) refresh(ctx context.Context, budget time.Duration, changed func(), coalesce bool) {
 	s.mu.Lock()
 	if s.cancel != nil {
+		if coalesce {
+			s.mu.Unlock()
+			return
+		}
 		s.cancel()
 	}
 	s.generation++

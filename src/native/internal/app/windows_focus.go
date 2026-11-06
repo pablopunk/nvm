@@ -45,15 +45,15 @@ func (p *App) onPaletteShown() {
 	if p.pasteLeases != nil {
 		p.pasteLeases.revoke()
 	}
-	p.captureWindowFocus()
+	p.captureMenusOnShow()
 	p.showApps()
 }
 
 // captureWindowFocus records the frontmost app before the palette appears. It runs only where the palette has no focus
 // port: there the palette's summon capture is missing, and the window commands need one.
-func (p *App) captureWindowFocus() {
-	if p.focusOption() != nil || !p.windowManagementEnabled() {
-		return
+func (p *App) captureWindowFocus() int {
+	if p.menus == nil && (p.focusOption() != nil || !p.windowManagementEnabled()) {
+		return 0
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), focusCaptureTimeout)
 	defer cancel()
@@ -63,9 +63,10 @@ func (p *App) captureWindowFocus() {
 	}
 	if err != nil || !found {
 		p.windowFocus.store(summonRecord{})
-		return
+		return 0
 	}
 	p.windowFocus.store(summonRecord{target: windowmgmt.Target{PID: app.PID, BundleID: app.BundleID}, known: true})
+	return app.PID
 }
 
 // windowTarget returns the window a palette window command acts on: the window that had the keyboard when the palette

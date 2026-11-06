@@ -20,6 +20,7 @@ import (
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	filesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/files"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/gettingstarted"
+	menusbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/menus"
 	notesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/notes"
 	permissionsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/permissions"
 	placesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/places"
@@ -42,9 +43,10 @@ import (
 // its value until its own storage or setting holds one. Rates is the calculator's exchange-rate cache and Zone the zone
 // its calendar answers use.
 type builtInInputs struct {
-	Rates calc.RateCache
-	Zone  *time.Location
-	Clock platform.Clock
+	MenusAvailable bool
+	Rates          calc.RateCache
+	Zone           *time.Location
+	Clock          platform.Clock
 	// EmojiDecider answers the picker's meaning batch in place of the account's model; nil in the app.
 	EmojiDecider charsearch.Decider
 	// EmojiSkinTone is the skin tone the settings file held before the picker kept its own; it answers until the
@@ -67,7 +69,7 @@ func builtInExtensions(in builtInInputs) []api.Extension {
 		syspanes.Extension{}, systemcommands.Extension{}, appcommands.Extension{}, placesbuiltin.Extension{},
 		calculatorbuiltin.New(in.Rates, in.Zone), classifyimage.Extension{}, aicommands.New(), aichats.New(),
 		quicklinks.New(in.Quicklinks), snippetsbuiltin.New(in.Snippets), dictationbuiltin.New(in.Dictation), gettingstarted.New(in.GuideDone), websearch.New(in.SearchEngine),
-		timersbuiltin.New(), notesbuiltin.New(),
+		timersbuiltin.New(), notesbuiltin.New(), menusbuiltin.New(in.MenusAvailable),
 		appsbuiltin.New(), emojibuiltin.New(in.Clock, in.EmojiSkinTone).WithDecider(in.EmojiDecider), filesbuiltin.New(),
 		clipboardbuiltin.New(in.Clipboard), windowmanagementbuiltin.New(in.WindowSettings),
 		settingsbuiltin.New(), permissionsbuiltin.New(), updatesbuiltin.New(), diagnosticsbuiltin.New(), backgroundtasksbuiltin.New(), shortcutsbuiltin.New(),

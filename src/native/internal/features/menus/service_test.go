@@ -61,6 +61,26 @@ type blockingMenus struct {
 	release chan struct{}
 }
 
+func TestRequestRefreshCoalescesInFlightRead(t *testing.T) {
+	f := &fakeMenus{make(chan chan []platform.MenuEntry, 2), make(chan string, 1)}
+	s := New(f)
+	s.Capture(platform.MenuSource{PID: 1, Identity: "one"})
+	done := make(chan struct{})
+	s.RequestRefresh(context.Background(), time.Minute, func() { close(done) })
+	read := <-f.reads
+	s.RequestRefresh(context.Background(), time.Minute, nil)
+	select {
+	case <-f.reads:
+		t.Fatal("automatic refresh started another read")
+	default:
+	}
+	read <- []platform.MenuEntry{{Reference: "private", Title: "Open", Enabled: true}}
+	<-done
+	if got := s.Snapshot(); len(got) != 1 || got[0].Title != "Open" {
+		t.Fatalf("snapshot = %+v", got)
+	}
+}
+
 func (f *blockingMenus) Snapshot(context.Context, platform.MenuSource) ([]platform.MenuEntry, error) {
 	return []platform.MenuEntry{{Reference: "ref", Enabled: true}}, nil
 }

@@ -49,6 +49,7 @@ type Ports struct {
 	Windows      services.WindowEngine
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
+	Menus     services.MenuPort
 	// Notifier shows the notifications of the system service. Nil answers unavailable.
 	Notifier platform.Notifier
 	// Permissions reads and acts on the OS permissions of the system service. Nil lists none.
@@ -202,6 +203,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OS:              ports.OS,
 			Windows:         ports.Windows,
 			Frontmost:       ports.Frontmost,
+			Menus:           ports.Menus,
 			Notifier:        ports.Notifier,
 			Permissions:     ports.Permissions,
 			Updates:         ports.Updates,

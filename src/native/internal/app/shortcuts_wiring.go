@@ -63,6 +63,9 @@ func (p *App) startShortcuts() {
 
 // onPaletteHide closes the app's panels and gives back the shortcuts a recorder holds, so the palette key still works.
 func (p *App) onPaletteHide() {
+	if p.menus != nil {
+		p.menus.Dismiss()
+	}
 	p.hideApps()
 	p.resumeShortcutsIfSuspended()
 }
