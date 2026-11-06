@@ -58,7 +58,7 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 			ui.Text(c, d.Title).FontSize(21).TextColor(k.Strong).Grow(1).SingleLine()
 			return
 		}
-		in := ui.TextInputBase(c, d.Query).Bind(d.Input).Grow(1).FontSize(21).TextColor(k.Strong).
+		in := ui.TextInputBase(c.Key("search-input"), d.Query).Bind(d.Input).Grow(1).FontSize(21).TextColor(k.Strong).
 			Placeholder(d.Placeholder).PlaceholderColor(k.Faint).Label("Search")
 		if d.Concealed {
 			in = in.Password()
