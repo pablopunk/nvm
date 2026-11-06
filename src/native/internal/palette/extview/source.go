@@ -62,9 +62,11 @@ func (s *Session) reload() {
 		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
 		return
 	}
+	s.itemsRevision++
+	revision := s.itemsRevision
 	s.loading, s.failure = true, nil
 	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
-		if s.dismissed {
+		if s.dismissed || revision != s.itemsRevision {
 			return
 		}
 		s.loading = false
@@ -88,6 +90,18 @@ func (s *Session) afterFirstLoad() {
 	}
 }
 
+// refreshAfterMutation coalesces mutations behind an in-flight refresh.
+func (s *Session) refreshAfterMutation() {
+	if s.dismissed {
+		return
+	}
+	if s.refreshing {
+		s.refreshPending = true
+		return
+	}
+	s.refreshNow()
+}
+
 // refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result. A chat view
 // takes a whole new view instead, since its transcript, tier and side page change together while a reply streams.
 func (s *Session) refreshNow() {
@@ -98,6 +112,14 @@ func (s *Session) refreshNow() {
 	s.refreshing = true
 	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
+		if s.dismissed {
+			return
+		}
+		if s.refreshPending {
+			s.refreshPending = false
+			s.refreshNow()
+			return
+		}
 		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat && result.View.Chat != nil {
 			s.view = *result.View
 			s.refreshHost()
@@ -110,7 +132,12 @@ func (s *Session) refreshNow() {
 		if patch.Mode == "" {
 			patch.Mode = refresh.Mode
 		}
+		if patch.Mode == api.PatchReplace {
+			s.itemsRevision++
+			s.loading, s.failure = false, nil
+		}
 		s.Apply(patch)
+		s.cacheRefreshPatch(patch)
 		s.refreshHost()
 	})
 }
@@ -159,7 +186,11 @@ func (s *Session) loadMoreRow() search.Item {
 
 // loadMore appends the next page. An empty page, or one without a patch, is the end of the list.
 func (s *Session) loadMore(h search.Host, next api.ActionRef) {
+	revision := s.itemsRevision
 	s.invokeRaw(next, "", func(result api.Result, failure *api.Failure) {
+		if s.dismissed || revision != s.itemsRevision {
+			return
+		}
 		if failure != nil {
 			h.Toast(failure.Message)
 			return
@@ -253,6 +284,24 @@ func (s *Session) snapshotKey() string {
 func (s *Session) putSnapshot(items []api.Item) {
 	if key := s.snapshotKey(); key != "" {
 		s.deps.Cache.Put(key, CacheEntry{Items: items, At: s.deps.Clock.Now()})
+	}
+}
+
+// cacheRefreshPatch renews freshness only for a complete replacement. Partial patches update an existing snapshot
+// without making its unchanged rows fresh, and never create a snapshot before the source has produced one.
+func (s *Session) cacheRefreshPatch(patch api.ViewPatch) {
+	if patch.Mode == api.PatchReplace {
+		s.putSnapshot(s.items)
+		return
+	}
+	if len(patch.Items) == 0 && len(patch.RemoveItemIDs) == 0 {
+		return
+	}
+	if key := s.snapshotKey(); key != "" {
+		if entry, ok := s.deps.Cache.Get(key); ok {
+			entry.Items = applyPatch(entry.Items, patch)
+			s.deps.Cache.Put(key, entry)
+		}
 	}
 }
 

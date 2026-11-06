@@ -44,6 +44,8 @@ type Session struct {
 	immediate       bool
 	dismissed       bool
 	refreshing      bool
+	refreshPending  bool
+	itemsRevision   uint64
 	stopInterval    chan struct{}
 	form            *formState
 	media           *palette.View

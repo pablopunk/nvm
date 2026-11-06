@@ -117,7 +117,15 @@ func (s *Session) removeChat(title, id string) search.Action {
 			h.Toast(err.Error())
 			return
 		}
-		h.Refresh()
+		s.itemsRevision++
+		s.loading = false
+		if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
+			s.refreshAfterMutation()
+		} else if s.view.Source != nil {
+			s.reload()
+		} else {
+			h.Refresh()
+		}
 	}}
 }
 
