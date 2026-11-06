@@ -25,13 +25,21 @@ func (p *App) signInOrOutCommands() []command {
 			Subtitle: "Signed in as " + p.accountSource().Email, Run: p.signOutFromRoot, Complete: p.signOutFromRootWithCompletion}}
 	}
 	return []command{{ID: shortcuts.CommandSignInOut, Title: "Log in to Nevermind", Keywords: "login log in sign in account nevermind connect", Icon: "user",
-		Subtitle: "Connect this device to your Nevermind account", Dismiss: search.DismissNever, Run: p.signInFromRoot}}
+		Subtitle: "Connect this device to your Nevermind account", Dismiss: search.DismissNever, Run: p.signInFromRoot, Complete: p.signInFromRootWithCompletion}}
 }
 
 // signInFromRoot opens the account page on its sign-in flow, which shows the verification page and code.
 func (p *App) signInFromRoot(h search.Host) {
+	p.signInFromRootWithCompletion(context.Background(), h, func(analytics.OperationOutcome) {})
+}
+
+func (p *App) signInFromRootWithCompletion(ctx context.Context, h search.Host, complete func(analytics.OperationOutcome)) {
 	h.Push(p.accountView())
-	p.accountActions().StartSignIn(h)
+	if p.account == nil {
+		complete(analytics.OutcomeBlocked)
+		return
+	}
+	p.startCheckedSignInWithCompletion(ctx, h, p.account.StartSignIn, complete)
 }
 
 // signOutFromRoot signs the session out off the UI thread, then reports the result in the HUD, which outlives the

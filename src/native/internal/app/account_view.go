@@ -2,9 +2,11 @@ package app
 
 import (
 	"context"
+	"errors"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
+	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	palaccount "github.com/pablopunk/nvm/native/internal/palette/account"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -116,14 +118,30 @@ func reportIfFailed(h search.Host, err error) {
 // startCheckedSignIn checks that the backend accepts this client before the sign-in starts, as 1.x does. The check fetches the
 // manifest, so it runs off the UI thread, and the sign-in starts or the refusal shows when it answers.
 func (p *App) startCheckedSignIn(h search.Host, start func() error) {
-	go func() {
-		err := p.checkCompatibility(context.Background())
+	p.startCheckedSignInWithCompletion(context.Background(), h, start, func(analytics.OperationOutcome) {})
+}
+
+func (p *App) startCheckedSignInWithCompletion(ctx context.Context, h search.Host, start func() error, complete func(analytics.OperationOutcome)) {
+	safego.Go("account.signin.check", func(workerCtx context.Context) {
+		err := p.checkCompatibility(workerCtx)
 		p.onUI(func() {
-			if err == nil {
+			if ctx.Err() != nil {
+				err = ctx.Err()
+			} else if err == nil {
 				err = start()
 			}
+			outcome := analytics.OutcomeSuccess
+			if err != nil {
+				outcome = analytics.OutcomeFailed
+			}
+			if errors.Is(err, context.Canceled) {
+				outcome = analytics.OutcomeCancelled
+			} else if errors.Is(err, context.DeadlineExceeded) {
+				outcome = analytics.OutcomeTimedOut
+			}
+			complete(outcome)
 			reportIfFailed(h, err)
 			h.Refresh()
 		})
-	}()
+	}, safego.WithContext(ctx))
 }
