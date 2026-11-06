@@ -7,6 +7,7 @@ if (process.platform !== 'darwin') process.exit(0);
 const root = path.resolve(__dirname, '..');
 const sources = [
   'main.swift',
+  'menus.swift',
   'microphone.swift',
   'selected-text.swift',
   'window-manager.swift',
