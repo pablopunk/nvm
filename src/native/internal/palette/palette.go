@@ -102,6 +102,7 @@ type Palette struct {
 	chosen       int
 	choicePinned bool
 	list         ui.ListState
+	footerReveal footerRevealState
 	listChoice   ui.Selection[string]
 	input        ui.Handle
 	interact     interactionState // pointer and click state of rows and cells, see interact.go

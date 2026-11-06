@@ -40,3 +40,20 @@ func TestChatFooterStopCancelsTheReply(t *testing.T) {
 		t.Fatal("Stop did not cancel the reply")
 	}
 }
+
+func TestChatInputClearsFloatingFooterAfterResize(t *testing.T) {
+	x := NewExtensionChat(func(c *ui.Context, text string, _ bool) { ui.Text(c, text) }, func() time.Time { return goldenNow })
+	x.SetSpec(ExtensionChatSpec{Title: "Chat", Attach: true, PickImages: func(func([]chat.Image)) {}})
+	r := newRig(t, nil)
+	r.open(x.View())
+	tester := ui.NewTester(r.palette.View, goldenWidth, goldenHeight)
+	for _, height := range []int{goldenHeight, 250} {
+		tester.SetSize(goldenWidth, height)
+		tester.Frame()
+		input, ok := tester.Find("Attach images")
+		footer, footerOK := tester.Find("Send")
+		if !ok || !footerOK || input.Y+input.H > footer.Y {
+			t.Fatalf("composer control overlaps footer at height %d: input=%v found=%t footer=%v found=%t", height, input, ok, footer, footerOK)
+		}
+	}
+}

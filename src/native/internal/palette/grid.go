@@ -33,7 +33,8 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 		quiet.Background = ui.Transparent
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed = ui.Transparent, ui.Transparent, ui.Transparent
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			ui.List(c, &p.list, rows, func(r int) { p.gridRow(c, g, r, slots) }).Grow(1).FillHeight().Padding(6)
+			list := ui.List(c, &p.list, rows, func(r int) { p.gridRow(c, g, r, slots) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
+			p.prepareFooterReveal(c, list, p.cur())
 		})
 	})
 	if p.chosen < 0 && len(p.results) > 0 {
@@ -84,6 +85,9 @@ func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	k := design.Tokens(c)
 	it := p.results[i]
 	cell := ui.Row(c).Grow(1).Basis(0).MinWidth(0).Height(g.CellHeight).Radius(gridCellRadius).Clip().Padding(8).Center().Label(it.Title)
+	if i == p.chosen {
+		p.revealFooterRow(c, cell)
+	}
 	hovered := cell.Hovered()
 	switch {
 	case i == p.chosen:

@@ -46,7 +46,9 @@ func (p *Palette) viewThemed(c *ui.Context) {
 				}
 			})
 		})
-		ui.Box(c).Height(design.FooterClearance)
+		if v.Body != nil || v.sideNow() != nil {
+			ui.Box(c).Height(design.FooterClearance)
+		}
 		p.footer(c, v)
 	})
 	if side := v.sideNow(); side.Focused() && side.shell != nil && side.shell.actionsOpen {
@@ -165,7 +167,8 @@ func (p *Palette) listBody(c *ui.Context) {
 		previousChoice := p.chosen
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			list = ui.List(c, &p.list, listRowCount(p.results, p.pendingBatch()), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6)
+			list = ui.List(c, &p.list, listRowCount(p.results, p.pendingBatch()), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
+			p.prepareFooterReveal(c, list, v)
 		})
 		if p.chosen != previousChoice {
 			p.choicePinned = true
@@ -178,7 +181,7 @@ func (p *Palette) listBody(c *ui.Context) {
 			p.chosen = 0
 		}
 		if it != nil && it.Detail != nil {
-			detailColumn(c, v).FillHeight().Padding(8, 8, 8, 2).Children(func() {
+			detailColumn(c, v).FillHeight().Padding(8, 8, 8+p.footerOverlayClearance(), 2).Children(func() {
 				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.Wash).Border(1, k.Lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.Lo).Children(func() {
 					it.Detail(c, p)
 				})
@@ -284,7 +287,11 @@ func (p *Palette) row(c *ui.Context, i int) {
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
 	}
-	p.listRow(c, i, func() { design.Row(c, data) })
+	row := ui.Column(c)
+	row.Children(func() { p.listRow(c, i, func() { design.Row(c, data) }) })
+	if sel {
+		p.revealFooterRow(c, row)
+	}
 }
 
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon

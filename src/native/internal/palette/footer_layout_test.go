@@ -83,3 +83,55 @@ func TestRootFooterShowsPendingStatusWithoutIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestListViewportExtendsUnderFooterAndRevealsAfterViewSwitch(t *testing.T) {
+	names := make([]string, 24)
+	for i := range names {
+		names[i] = fmt.Sprintf("Choice %02d", i)
+	}
+	var ran []string
+	h := newHarness(t, twoActionView("Root", &ran, names...), true)
+	h.frame()
+	footer, ok := h.tt.Find("Primary")
+	if !ok {
+		t.Fatal("footer action is missing")
+	}
+	viewport := h.p.footerReveal.viewport
+	if viewport.H <= 0 || viewport.Y+viewport.H <= footer.Y {
+		t.Fatalf("list does not extend under footer: viewport=%v footer=%v", viewport, footer)
+	}
+	h.p.Push(twoActionView("Child", &ran, names...))
+	h.frame()
+	for range names[1:] {
+		h.key(0, ui.KeyDown)
+	}
+	h.frame()
+	row, ok := h.tt.Find(names[len(names)-1])
+	if !ok {
+		t.Fatal("last selected row is missing after view switch")
+	}
+	footer, ok = h.tt.Find("Primary")
+	if !ok || row.Y+row.H > footer.Y {
+		t.Fatalf("selected row overlaps footer after view switch: row=%v footer=%v", row, footer)
+	}
+}
+
+func TestSelectedListRowClearsFooterInShortViewport(t *testing.T) {
+	var ran []string
+	names := make([]string, 24)
+	for i := range names {
+		names[i] = fmt.Sprintf("Short item %02d", i)
+	}
+	h := newSizedHarness(t, twoActionView("Short", &ran, names...), true, DefaultWidth, 250)
+	for _, name := range names[1:] {
+		h.key(0, ui.KeyDown)
+		row, ok := h.tt.Find(name)
+		if !ok {
+			t.Fatalf("selected row %q is missing", name)
+		}
+		footer, ok := h.tt.Find("Primary")
+		if !ok || row.Y+row.H > footer.Y {
+			t.Fatalf("selected row %q overlaps footer: row=%v footer=%v", name, row, footer)
+		}
+	}
+}
