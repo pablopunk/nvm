@@ -74,7 +74,10 @@ type Client struct {
 	cfg     Config
 	common  map[string]any
 	consent atomic.Bool
-	kick    chan struct{}
+	// sessionMu serializes consent/session transitions and precedes mu when both are needed.
+	sessionMu sync.Mutex
+	session   sessionState
+	kick      chan struct{}
 
 	mu      sync.Mutex
 	queue   []queued
@@ -166,8 +169,11 @@ func (c *Client) SetConsent(on bool) {
 	if c == nil {
 		return
 	}
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
 	c.consent.Store(on)
 	if !on {
+		c.endSessionLocked()
 		c.discard()
 	}
 }
