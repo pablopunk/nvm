@@ -35,6 +35,10 @@ func (c *Client) TouchSession() (SessionSnapshot, bool) {
 	}
 	c.sessionMu.Lock()
 	defer c.sessionMu.Unlock()
+	return c.touchSessionLocked()
+}
+
+func (c *Client) touchSessionLocked() (SessionSnapshot, bool) {
 	if c.cfg.Endpoint == "" || !c.consent.Load() {
 		return SessionSnapshot{}, false
 	}
