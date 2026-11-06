@@ -44,6 +44,8 @@ type Options struct {
 	OnShow func()
 	// OnPresented runs after a newly shown window reveals its fresh content frame.
 	OnPresented func()
+	// OnNavigation reports the category of each newly presented stack destination.
+	OnNavigation NavigationCallback
 	// OnHide runs each time the palette is hidden, by any route; the host stops what only a visible palette needs.
 	// It may run more than once per show, so it must be idempotent.
 	OnHide func()
@@ -84,6 +86,7 @@ type Palette struct {
 	openingView    *View
 	actionQuery    string
 	opts           Options
+	navigation     navigationState
 	win            Window
 	// refresh holds the queries background sources asked the palette to search again.
 	refresh searchRefresher
@@ -164,7 +167,7 @@ type defaultEnterIntent struct {
 
 // New returns a palette whose stack holds only the root. Attach gives it its window before it is shown.
 func New(opts Options) *Palette {
-	return &Palette{opts: opts, stack: []*View{opts.Root}}
+	return &Palette{opts: opts, stack: []*View{opts.Root}, navigation: navigationState{generation: 1}}
 }
 
 // Attach gives the palette the window it draws into and shows.

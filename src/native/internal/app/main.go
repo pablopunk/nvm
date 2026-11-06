@@ -169,21 +169,22 @@ func (p *App) newPalette(clock platform.Clock, synchronous bool) {
 		p.history = palette.NewQueryHistory(nil, nil)
 	}
 	p.Palette = palette.New(palette.Options{
-		Root:        p.rootView(),
-		Clock:       clock,
-		Synchronous: synchronous,
-		Position:    p.placementOption(),
-		Focus:       p.focusOption(),
-		Icon:        p.fileIcon,
-		AskAI:       p.askAI,
-		OnShow:      p.onPaletteShown,
-		OnPresented: p.recordPalettePresentation,
-		OnHide:      p.onPaletteHide,
-		History:     p.history,
-		Learner:     p.learn,
-		DragRow:     p.dragRow,
-		Feedback:    p.showPaletteFeedback,
-		Resize:      p.resizePalette,
+		Root:         p.rootView(),
+		Clock:        clock,
+		Synchronous:  synchronous,
+		Position:     p.placementOption(),
+		Focus:        p.focusOption(),
+		Icon:         p.fileIcon,
+		AskAI:        p.askAI,
+		OnShow:       p.onPaletteShown,
+		OnPresented:  p.recordPalettePresentation,
+		OnNavigation: p.recordPaletteNavigation,
+		OnHide:       p.onPaletteHide,
+		History:      p.history,
+		Learner:      p.learn,
+		DragRow:      p.dragRow,
+		Feedback:     p.showPaletteFeedback,
+		Resize:       p.resizePalette,
 	})
 }
 

@@ -3,6 +3,7 @@ package palette
 // SetStack replaces the navigation stack without leaving the views on it. The host uses it to start from a
 // given state, and the goldens use it to render one.
 func (p *Palette) SetStack(views ...*View) {
+	p.navigation.advance()
 	p.cancelAction()
 	p.resetActionMenu()
 	p.stack = append([]*View(nil), views...)
@@ -21,6 +22,7 @@ func (p *Palette) Show() {
 }
 
 func (p *Palette) prepareShow() {
+	p.navigation.advance()
 	p.defaultEnter = nil
 	p.cancelAction()
 	if !p.win.IsVisible() || !p.win.IsFocused() {
@@ -135,6 +137,7 @@ func (p *Palette) Push(v any) {
 }
 
 func (p *Palette) push(v *View) {
+	p.navigation.advance()
 	if p.openingView == p.cur() {
 		p.leave(p.cur())
 		p.stack = p.stack[:len(p.stack)-1]
@@ -214,6 +217,7 @@ func (p *Palette) Pop() {
 // popOne removes a page without applying the independent-entry dismissal boundary. Root uses it to
 // unwind extension navigation internally while user initiated back remains confined to its entry.
 func (p *Palette) popOne() {
+	p.navigation.advance()
 	p.leave(p.cur())
 	p.stack = p.stack[:len(p.stack)-1]
 	p.query = ""

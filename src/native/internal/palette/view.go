@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -29,6 +30,9 @@ type View struct {
 	Subtitle     string
 	Placeholder  string
 	Presentation Presentation
+	// Category overrides the inferred navigation category when it is a canonical page-view value.
+	Category              analytics.PageView
+	navigationPlaceholder bool
 
 	Search    func(q string) []search.Item
 	Providers func() []search.Provider

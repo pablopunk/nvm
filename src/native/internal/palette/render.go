@@ -15,10 +15,17 @@ var rootPlaceholders = []string{"Watcha gonna do?", "I cannot do that... Oh, nev
 
 // View draws the palette in the window. It is the content of the window the host creates.
 func (p *Palette) View(c *ui.Context) {
+	frame := navigationFrame{}
+	if p.opts.OnNavigation != nil {
+		frame = p.captureNavigationFrame()
+	}
 	theme := design.WindowTheme(os.Getenv("NVM_THEME") == "dark" || c.Theme().Dark)
 	theme.Background = ui.Transparent
 	ui.Themed(c, theme).Fill().Children(func() { p.viewThemed(c) })
 	p.revealRenderedWindow()
+	if p.opts.OnNavigation != nil {
+		p.reportNavigationFrame(frame)
+	}
 }
 
 func (p *Palette) viewThemed(c *ui.Context) {

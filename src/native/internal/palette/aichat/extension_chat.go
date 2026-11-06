@@ -9,6 +9,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -71,6 +72,7 @@ func (x *ExtensionChat) SpecFrom(fn func() ExtensionChatSpec) {
 func (x *ExtensionChat) View() *palette.View {
 	return &palette.View{
 		Title:        x.spec.Title,
+		Category:     analytics.PageViewAIChat,
 		Body:         x.body,
 		Input:        &x.input,
 		Actions:      x.actions,
