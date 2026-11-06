@@ -75,9 +75,10 @@ type Client struct {
 	common  map[string]any
 	consent atomic.Bool
 	// sessionMu serializes consent/session transitions and precedes mu when both are needed.
-	sessionMu sync.Mutex
-	session   sessionState
-	kick      chan struct{}
+	sessionMu    sync.Mutex
+	session      sessionState
+	commandUsage commandUsageState
+	kick         chan struct{}
 
 	mu      sync.Mutex
 	queue   []queued
