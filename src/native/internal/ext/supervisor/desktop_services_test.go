@@ -139,3 +139,41 @@ func (fixedFrontmost) Frontmost(context.Context) (platform.WindowApp, bool, erro
 var _ services.FrontmostSource = fixedFrontmost{}
 var _ services.WindowEngine = listedWindows{}
 var _ services.ShortcutTable = fixedShortcuts{}
+
+type fixtureMenuPort struct {
+	snapshots int
+	handles   []string
+}
+
+func (p *fixtureMenuPort) Snapshot(context.Context) (api.MenuSnapshot, error) {
+	p.snapshots++
+	return api.MenuSnapshot{Items: []api.MenuItem{{Handle: "opaque", Title: "Copy", Path: []string{"Edit"}, Shortcut: "⌘C", Enabled: true, Checked: true}}, Loading: true}, nil
+}
+func (p *fixtureMenuPort) Invoke(_ context.Context, handle string) error {
+	p.handles = append(p.handles, handle)
+	return nil
+}
+func TestMenusThroughChild(t *testing.T) {
+	rig := newDesktopRig(t)
+	port := &fixtureMenuPort{}
+	rig.deps.Menus = port
+	r := servicedRuntime(t, "acme.desktop", rig.servicesRig, fixtureManifest("acme.desktop", api.CapabilityDesktopMenus))
+	if got := rowTitle(t, r, "menus"); got != "menus opaque Copy [Edit] ⌘C true true loading=true invoked=true" {
+		t.Fatalf("row: %q", got)
+	}
+	if port.snapshots != 1 || len(port.handles) != 1 || port.handles[0] != "opaque" {
+		t.Fatalf("calls: %+v", port)
+	}
+}
+func TestMenusThroughChildDenied(t *testing.T) {
+	rig := newDesktopRig(t)
+	port := &fixtureMenuPort{}
+	rig.deps.Menus = port
+	r := servicedRuntime(t, "acme.desktop", rig.servicesRig, fixtureManifest("acme.desktop"))
+	if got := rowTitle(t, r, "menus"); got != "menus refused" {
+		t.Fatalf("row: %q", got)
+	}
+	if port.snapshots != 0 || len(port.handles) != 0 {
+		t.Fatalf("denied calls: %+v", port)
+	}
+}

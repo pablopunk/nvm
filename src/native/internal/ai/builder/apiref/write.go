@@ -124,6 +124,9 @@ func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full 
 		}
 		for _, name := range field.Names {
 			line := fmt.Sprintf("- `%s` (%s)", jsonName(field.Tag, name.Name), typeText)
+			if index.terse {
+				line = fmt.Sprintf("- %s: %s", jsonName(field.Tag, name.Name), typeText)
+			}
 			if full && doc != "" && !index.terse {
 				line += ": " + firstSentence(doc)
 			}

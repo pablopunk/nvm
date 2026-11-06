@@ -56,6 +56,7 @@ type Capability string
 
 const (
 	CapabilityDesktopApps         Capability = "desktop.apps"
+	CapabilityDesktopMenus        Capability = "desktop.menus"
 	CapabilityDesktopFiles        Capability = "desktop.files"
 	CapabilityDesktopClipboard    Capability = "desktop.clipboard"
 	CapabilityDesktopSelection    Capability = "desktop.selection"
@@ -81,7 +82,7 @@ const (
 // KnownCapabilities lists every capability this host version can review.
 func KnownCapabilities() []Capability {
 	return []Capability{
-		CapabilityDesktopApps, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
+		CapabilityDesktopApps, CapabilityDesktopMenus, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
 		CapabilityDesktopSelection, CapabilityDesktopKeyboard,
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
 		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,

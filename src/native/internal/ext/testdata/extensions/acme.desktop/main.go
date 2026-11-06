@@ -20,6 +20,7 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 }
 
 var checks = map[string]func(api.Context) string{
+	"menus":     menusCheck,
 	"clipboard": clipboardCheck,
 	"windows":   windowsCheck,
 	"apps":      appsCheck,
@@ -124,4 +125,17 @@ func filesCheck(ctx api.Context) string {
 func linksCheck(ctx api.Context) string {
 	err := ctx.Desktop().Shell().OpenExternal("file:///etc/hostname")
 	return fmt.Sprintf("links refused=%t", err != nil)
+}
+
+func menusCheck(ctx api.Context) string {
+	snapshot, err := ctx.Desktop().Menus().Snapshot()
+	if err != nil {
+		return "menus refused"
+	}
+	if len(snapshot.Items) != 1 {
+		return "menus wrong count"
+	}
+	item := snapshot.Items[0]
+	err = ctx.Desktop().Menus().Invoke(item.Handle)
+	return fmt.Sprintf("menus %s %s %v %s %t %t loading=%t invoked=%t", item.Handle, item.Title, item.Path, item.Shortcut, item.Enabled, item.Checked, snapshot.Loading, err == nil)
 }

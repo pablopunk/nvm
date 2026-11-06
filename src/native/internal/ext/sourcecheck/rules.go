@@ -21,6 +21,7 @@ var rules = []Rule{
 	{Path: []string{"Desktop", "Shell"}, Capability: api.CapabilitySystem},
 	{Path: []string{"Desktop", "Files"}, Capability: api.CapabilityDesktopFiles},
 	{Path: []string{"Desktop", "Apps"}, Capability: api.CapabilityDesktopApps},
+	{Path: []string{"Desktop", "Menus"}, Capability: api.CapabilityDesktopMenus},
 	{Path: []string{"Desktop", "Clipboard"}, Capability: api.CapabilityDesktopClipboard},
 	{Path: []string{"Desktop", "WindowManagement"}, Capability: api.CapabilityWindowManagement},
 	{Path: []string{"Windows"}, Capability: api.CapabilityWindowManagement},

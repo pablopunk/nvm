@@ -5,6 +5,7 @@ package protocol
 const (
 	ServiceDesktopClipboard = "desktop.clipboard"
 	ServiceDesktopApps      = "desktop.apps"
+	ServiceDesktopMenus     = "desktop.menus"
 	ServiceDesktopFiles     = "desktop.files"
 	ServiceDesktopShell     = "desktop.shell"
 	ServiceDesktopWindows   = "desktop.windows"
@@ -23,6 +24,8 @@ const (
 
 // Operations of the desktop-side services. The names are the host's own; a child never sends a method name.
 const (
+	OpSnapshot           = "snapshot"
+	OpInvoke             = "invoke"
 	OpSignedIn           = "signed-in"
 	OpWriteText          = "write-text"
 	OpList               = "list"

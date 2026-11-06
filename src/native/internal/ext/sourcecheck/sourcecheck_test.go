@@ -80,6 +80,7 @@ func TestUsesOfFindsEachServiceByItsRule(t *testing.T) {
 		`ctx.Clipboard().List(api.ClipboardQuery{})`:                        api.CapabilityClipboardHistory,
 		`ctx.Desktop().Clipboard().ReadText()`:                              api.CapabilityDesktopClipboard,
 		`ctx.Desktop().Apps().List()`:                                       api.CapabilityDesktopApps,
+		`ctx.Desktop().Menus().Snapshot()`:                                  api.CapabilityDesktopMenus,
 		`ctx.Desktop().Files().Open("/tmp/x")`:                              api.CapabilityDesktopFiles,
 		`ctx.Desktop().WindowManagement().Windows(api.WindowQuery{})`:       api.CapabilityWindowManagement,
 		`ctx.OCR().Screen(api.OCROptions{})`:                                api.CapabilityOCR,

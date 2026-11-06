@@ -89,7 +89,8 @@ type Deps struct {
 	// Paste puts content on the clipboard, pastes it and types text into the app in front. Nil answers unavailable.
 	Paste PasteEngine
 	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil answers unavailable.
-	Apps AppLifecycle
+	Apps  AppLifecycle
+	Menus MenuPort
 	// FileIndex is the host's file index, which the files service reads. Nil answers the index calls with nothing.
 	FileIndex FileIndex
 	// OCR reads text from images and the screen. Nil answers unavailable.
@@ -255,6 +256,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveNotes(ctx, call)
 	case protocol.ServiceDesktopClipboard:
 		return h.serveDesktopClipboard(call)
+	case protocol.ServiceDesktopMenus:
+		return h.serveDesktopMenus(ctx, call)
 	case protocol.ServiceDesktopApps:
 		return h.serveDesktopApps(ctx, call)
 	case protocol.ServiceDesktopFiles:

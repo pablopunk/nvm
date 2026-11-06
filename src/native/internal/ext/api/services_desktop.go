@@ -1,12 +1,12 @@
 package api
 
-// Desktop groups the OS-facing services. Declaring the matching capability is review metadata;
-// the host does not gate these calls by declaration.
+// Desktop groups the OS-facing services. Calls require their matching declared capability.
 type Desktop interface {
 	Keyboard() Keyboard
 	Clipboard() SystemClipboard
 	Selection() Selection
 	Apps() Apps
+	Menus() Menus
 	// WindowManagement returns nil on hosts without window management. Check
 	// System().HasCapability("window-management") before calling it.
 	WindowManagement() WindowManagement

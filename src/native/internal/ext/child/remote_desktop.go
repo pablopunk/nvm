@@ -31,6 +31,10 @@ func (d remoteDesktop) Apps() api.Apps {
 	return remoteApps{link: d.link}
 }
 
+func (d remoteDesktop) Menus() api.Menus {
+	return remoteMenus{link: d.link}
+}
+
 func (d remoteDesktop) Files() api.Files {
 	return remoteFiles{link: d.link}
 }

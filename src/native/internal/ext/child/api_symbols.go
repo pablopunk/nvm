@@ -68,6 +68,7 @@ func init() {
 		"CapabilityDesktopClipboard":    reflect.ValueOf(api.CapabilityDesktopClipboard),
 		"CapabilityDesktopFiles":        reflect.ValueOf(api.CapabilityDesktopFiles),
 		"CapabilityDesktopKeyboard":     reflect.ValueOf(api.CapabilityDesktopKeyboard),
+		"CapabilityDesktopMenus":        reflect.ValueOf(api.CapabilityDesktopMenus),
 		"CapabilityDesktopSelection":    reflect.ValueOf(api.CapabilityDesktopSelection),
 		"CapabilityDictation":           reflect.ValueOf(api.CapabilityDictation),
 		"CapabilityExtensionsOwnership": reflect.ValueOf(api.CapabilityExtensionsOwnership),
@@ -490,8 +491,11 @@ func init() {
 		"MenuBar":                 reflect.ValueOf((*api.MenuBar)(nil)),
 		"MenuBarIcon":             reflect.ValueOf((*api.MenuBarIcon)(nil)),
 		"MenuBarProvider":         reflect.ValueOf((*api.MenuBarProvider)(nil)),
+		"MenuItem":                reflect.ValueOf((*api.MenuItem)(nil)),
 		"MenuRow":                 reflect.ValueOf((*api.MenuRow)(nil)),
 		"MenuSection":             reflect.ValueOf((*api.MenuSection)(nil)),
+		"MenuSnapshot":            reflect.ValueOf((*api.MenuSnapshot)(nil)),
+		"Menus":                   reflect.ValueOf((*api.Menus)(nil)),
 		"Metadata":                reflect.ValueOf((*api.Metadata)(nil)),
 		"MetadataKind":            reflect.ValueOf((*api.MetadataKind)(nil)),
 		"ModelTier":               reflect.ValueOf((*api.ModelTier)(nil)),
@@ -620,6 +624,7 @@ func init() {
 		"_Keyboard":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Keyboard)(nil)),
 		"_Logs":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Logs)(nil)),
 		"_MenuBarProvider":   reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider)(nil)),
+		"_Menus":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Menus)(nil)),
 		"_Navigation":        reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Navigation)(nil)),
 		"_Network":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Network)(nil)),
 		"_Notes":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Notes)(nil)),
@@ -1163,6 +1168,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Desktop struct {
 	WClipboard        func() api.SystemClipboard
 	WFiles            func() api.Files
 	WKeyboard         func() api.Keyboard
+	WMenus            func() api.Menus
 	WSelection        func() api.Selection
 	WShell            func() api.Shell
 	WWindowManagement func() api.WindowManagement
@@ -1179,6 +1185,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Files() api.F
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Keyboard() api.Keyboard {
 	return W.WKeyboard()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Menus() api.Menus {
+	return W.WMenus()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Desktop) Selection() api.Selection {
 	return W.WSelection()
@@ -1458,6 +1467,20 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider) MenuB
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_MenuBarProvider) MenuBars(ctx api.Context) ([]api.MenuBar, error) {
 	return W.WMenuBars(ctx)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Menus is an interface wrapper for Menus type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Menus struct {
+	IValue    interface{}
+	WInvoke   func(handle string) error
+	WSnapshot func() (api.MenuSnapshot, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Menus) Invoke(handle string) error {
+	return W.WInvoke(handle)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Menus) Snapshot() (api.MenuSnapshot, error) {
+	return W.WSnapshot()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Navigation is an interface wrapper for Navigation type
