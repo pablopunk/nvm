@@ -25,6 +25,8 @@ type Completion struct {
 	BootID    string
 	JourneyID string
 	ActionID  string
+	// Session is an opaque start-time attribution token. Jobs ignore it.
+	Session SessionSnapshot
 }
 
 // CommandCompletion preserves the command completion API.
@@ -46,15 +48,32 @@ func validOperationOutcome(outcome OperationOutcome) bool {
 
 // CommandCompleted records a safe, fixed-label completion for an extension command.
 func (c *Client) CommandCompleted(completion CommandCompletion) bool {
-	return c.operationCompleted(completion, "command.execute", "Extension command", "invoke", false)
+	return c.withSessionCapture(completion.Session, func(sessionID string) bool {
+		return c.operationCompleted(completion, "command.execute", "Extension command", "invoke", false, sessionID)
+	})
 }
 
 // JobCompleted records a background job completion, omitting routine successes.
 func (c *Client) JobCompleted(completion JobCompletion) bool {
-	return c.operationCompleted(completion, "job.run", "", "dispatch", true)
+	completion.Session = SessionSnapshot{}
+	return c.operationCompleted(completion, "job.run", "", "dispatch", true, "")
 }
 
-func (c *Client) operationCompleted(completion Completion, operation, label, stage string, suppressSuccess bool) bool {
+// withSessionCapture holds the session transition lock through validation and queue acceptance.
+// Lock order is sessionMu then queue mu, matching consent withdrawal and discard.
+func (c *Client) withSessionCapture(snapshot SessionSnapshot, capture func(string) bool) bool {
+	if c == nil {
+		return false
+	}
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
+	if snapshot.id == "" || snapshot.epoch != c.session.epoch || !c.consent.Load() {
+		return capture("")
+	}
+	return capture(snapshot.id)
+}
+
+func (c *Client) operationCompleted(completion Completion, operation, label, stage string, suppressSuccess bool, sessionID string) bool {
 	if c == nil || !validOperationOutcome(completion.Outcome) ||
 		!diagnosticIDPattern.MatchString(completion.BootID) ||
 		!diagnosticIDPattern.MatchString(completion.JourneyID) ||
@@ -79,6 +98,9 @@ func (c *Client) operationCompleted(completion Completion, operation, label, sta
 	}
 	if label != "" {
 		props["label"] = label
+	}
+	if sessionID != "" {
+		props["$session_id"] = sessionID
 	}
 	for key, value := range c.releaseProperties() {
 		props[key] = value

@@ -26,6 +26,7 @@ type contextKey struct{}
 
 type correlation struct {
 	boot, journey, action string
+	background            bool
 }
 
 type Completion struct {
@@ -34,6 +35,7 @@ type Completion struct {
 	ids     correlation
 	started time.Time
 	job     bool
+	session analytics.SessionSnapshot
 }
 
 func New(clock platform.Clock, sink Sink) *Tracker {
@@ -57,9 +59,17 @@ func (t *Tracker) start(parent context.Context, freshJourney bool) (context.Cont
 	if journey == "" {
 		journey = newID()
 	}
-	ids := correlation{boot: t.boot, journey: journey, action: newID()}
+	ids := correlation{boot: t.boot, journey: journey, action: newID(), background: prior.background || freshJourney}
 	ctx := context.WithValue(parent, contextKey{}, ids)
-	return ctx, &Completion{tracker: t, ids: ids, started: t.clock.Now()}
+	completion := &Completion{tracker: t, ids: ids, started: t.clock.Now()}
+	if !ids.background {
+		if source, ok := t.sink.(interface {
+			TouchSession() (analytics.SessionSnapshot, bool)
+		}); ok {
+			completion.session, _ = source.TouchSession()
+		}
+	}
+	return ctx, completion
 }
 
 // Finish records once, at the moment the caller knows the underlying operation completed.
@@ -74,6 +84,7 @@ func (c *Completion) Finish(outcome analytics.OperationOutcome) {
 		completion := analytics.Completion{
 			Outcome: outcome, Duration: c.tracker.clock.Now().Sub(c.started),
 			BootID: c.ids.boot, JourneyID: c.ids.journey, ActionID: c.ids.action,
+			Session: c.session,
 		}
 		if c.job {
 			if jobSink, ok := c.tracker.sink.(interface {
