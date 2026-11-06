@@ -13,9 +13,9 @@ func TestCommandCompletedQueuesClosedSchema(t *testing.T) {
 	client.cfg.Release = "release-1"
 	completion := CommandCompletion{
 		Outcome: OutcomeSuccess, Duration: 1499 * time.Microsecond,
-		BootID: "0123456789abcdef0123456789abcdef",
+		BootID:    "0123456789abcdef0123456789abcdef",
 		JourneyID: "abcdef0123456789abcdef0123456789",
-		ActionID: "fedcba9876543210fedcba9876543210",
+		ActionID:  "fedcba9876543210fedcba9876543210",
 	}
 	if !client.CommandCompleted(completion) {
 		t.Fatal("valid completion was not queued")
