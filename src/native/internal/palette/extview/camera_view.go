@@ -59,6 +59,10 @@ type cameraView struct {
 	config    cameraPageConfig
 	switcher  bool
 	active    bool
+	ready     bool
+	// Before the driver initializes, only the latest desired capture and configuration can still apply.
+	pendingCapture   *cameraCommand
+	pendingConfigure *cameraConfigureCommand
 }
 
 // openCamera makes the camera's page and its engine. A system without a web view leaves the page nil, and the view
@@ -140,15 +144,44 @@ func cameraAccessMessage(permissions platform.Permissions) string {
 }
 
 func (c *cameraView) send(command any) {
-	if c.page != nil {
-		c.page.Run(cameraCommandScript(command))
+	if c.page == nil {
+		return
 	}
+	if !c.ready {
+		switch command := command.(type) {
+		case cameraCommand:
+			c.pendingCapture = &command
+		case cameraConfigureCommand:
+			c.pendingConfigure = &command
+		}
+		return
+	}
+	c.page.Run(cameraCommandScript(command))
 }
 
 func (c *cameraView) handleTitle(title string) {
-	if event, ok := parseCameraTitle(title); ok {
+	if c.page == nil {
+		return
+	}
+	if event, ok := parseCameraTitle(title); ok && event.Event == "ready" {
+		c.driverReady()
+	} else if ok && c.ready {
 		c.engine.Handle(event)
 	}
+}
+
+func (c *cameraView) driverReady() {
+	if c.ready {
+		return
+	}
+	c.ready = true
+	if command := c.pendingConfigure; command != nil {
+		c.send(*command)
+	}
+	if command := c.pendingCapture; command != nil {
+		c.send(*command)
+	}
+	c.pendingConfigure, c.pendingCapture = nil, nil
 }
 
 // setActive starts the capture while the view is the active page of a shown palette, and stops it otherwise.
@@ -172,6 +205,7 @@ func (c *cameraView) close() {
 	c.engine.Stop()
 	c.page.Destroy()
 	c.page = nil
+	c.pendingConfigure, c.pendingCapture = nil, nil
 }
 
 // operate runs a camera action: switching devices, muting, or the controls.

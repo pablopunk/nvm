@@ -34,6 +34,14 @@ func newMediaRig(t *testing.T, view api.View) *mediaRig {
 
 // newMediaRigWithCameras is newMediaRig with the camera memory the view reads when it opens.
 func newMediaRigWithCameras(t *testing.T, view api.View, cameras CameraMemory) *mediaRig {
+	rig := newMediaRigBeforePageReady(t, view, cameras)
+	if rig.session.camera != nil && len(rig.pages.Pages()) > 0 {
+		rig.fakePage().SetTitle(report(`{"event":"ready"}`))
+	}
+	return rig
+}
+
+func newMediaRigBeforePageReady(t *testing.T, view api.View, cameras CameraMemory) *mediaRig {
 	t.Helper()
 	rig := &mediaRig{t: t, pages: fake.NewWebPages(), perms: fake.NewPermissions(), host: &fakeHost{}}
 	rig.session = NewSession(Deps{
@@ -214,6 +222,7 @@ func TestSavedCameraThatIsGoneFallsBackAndIsForgotten(t *testing.T) {
 	rig.session = NewSession(Deps{Pages: rig.pages, Cameras: memory}, mediaExtension, cameraFixtureView)
 	rig.page = rig.session.Open(rig.host)
 	page := rig.fakePage()
+	page.SetTitle(report(`{"event":"ready"}`))
 	rig.activate()
 	if want := `window.nvmCamera.command({"op":"start","id":1,"deviceId":"gone"})`; lastScript(page) != want {
 		t.Fatalf("started: last script %s", lastScript(page))
