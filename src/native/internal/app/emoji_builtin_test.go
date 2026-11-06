@@ -15,6 +15,7 @@ import (
 func openEmojiBuiltIn(t *testing.T, p *App) *queuedWindow {
 	t.Helper()
 	win := &queuedWindow{}
+	win.Show()
 	p.Attach(win)
 	p.uiQueue = win
 	goldenQuery(p, "emoji")

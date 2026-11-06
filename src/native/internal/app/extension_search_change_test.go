@@ -7,6 +7,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
@@ -37,6 +38,12 @@ type refreshingHost struct {
 
 // Refresh shows the rows of the view again for the palette's query.
 func (h refreshingHost) Refresh() { h.SetQuery(h.Query()) }
+
+func (h refreshingHost) RefreshTop(pred func(*palette.View) bool) {
+	if pred(h.Top()) {
+		h.Refresh()
+	}
+}
 
 // settleSearchChange runs the UI callback the rested search posted, as the palette's thread would.
 func settleSearchChange(t *testing.T, posted chan func()) {
