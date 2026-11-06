@@ -28,6 +28,7 @@ func (e *extension) answer(req protocol.Request) (response protocol.Response) {
 		failure := api.FailureOf(err)
 		failure.Message = truncate(failure.Message)
 		response.Failure = &failure
+		response.Data = data
 		return response
 	}
 	response.Data = data
@@ -88,9 +89,10 @@ func (e *extension) restoreWindow(invocation *api.Invocation) (json.RawMessage, 
 // the host validates wire data and never sees interpreter values.
 func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessage, error) {
 	out, err := e.invoke(method, args...)
-	if err != nil {
+	if err != nil && (method != protocol.MethodRun || len(out) == 0) {
 		return nil, err
 	}
+	callErr := err
 	if len(out) == 0 {
 		return json.RawMessage("null"), nil
 	}
@@ -98,7 +100,7 @@ func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessag
 	if err != nil {
 		return nil, fmt.Errorf("%s returned data that cannot be encoded: %w", method, err)
 	}
-	return data, nil
+	return data, callErr
 }
 
 // PanicFailure reports a recovered panic. The message names the panic and never the arguments; the reference

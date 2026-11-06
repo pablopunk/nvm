@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -87,6 +88,12 @@ func (s *Session) afterFirstLoad() {
 	if s.immediate {
 		s.immediate = false
 		s.refreshNow()
+	}
+}
+
+func (s *Session) revalidateMutation() {
+	for origin := s; origin != nil; origin = origin.parent {
+		origin.refreshAfterMutation()
 	}
 }
 
@@ -258,9 +265,17 @@ func (s *Session) toast(message string) {
 }
 
 func (s *Session) refreshHost() {
-	if s.host != nil {
-		s.host.Refresh()
+	if s.host == nil {
+		return
 	}
+	if host, ok := s.host.(interface {
+		RefreshTop(func(*palette.View) bool)
+	}); ok {
+		page := s.palettePage
+		host.RefreshTop(func(current *palette.View) bool { return current == page })
+		return
+	}
+	s.host.Refresh()
 }
 
 // onUI runs fn on the UI thread through the host's hook, or in place when there is none.

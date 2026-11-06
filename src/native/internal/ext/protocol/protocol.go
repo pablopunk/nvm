@@ -72,7 +72,7 @@ type Request struct {
 	Invocation *api.Invocation `json:"invocation,omitempty"`
 }
 
-// Response answers one Request. Data holds the method's JSON result when Failure is nil.
+// Response answers one Request. A run response may include Data with a Failure; only its mutation signal is applied.
 type Response struct {
 	ID      uint64          `json:"id"`
 	Data    json.RawMessage `json:"data,omitempty"`

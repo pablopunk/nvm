@@ -68,6 +68,7 @@ func listView(ctx api.Context, notes []api.Note, mode string) api.View {
 	view := api.ListView(listTitle, items...)
 	view.Placeholder = listPlaceholder
 	view.Actions = []api.Action{newNoteAction(mode)}
+	view.Refresh = &api.Refresh{Ref: &api.ActionRef{ID: refRefreshList, Args: map[string]string{argMode: mode}}, Mode: api.PatchReplace}
 	return view
 }
 

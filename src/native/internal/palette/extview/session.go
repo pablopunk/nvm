@@ -22,6 +22,7 @@ import (
 // Session is one open extension view. It is used on the UI thread only.
 type Session struct {
 	deps         Deps
+	parent       *Session
 	chatRenderer *aichat.ExtensionChat
 	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
 	chatSideSession *Session
@@ -30,6 +31,7 @@ type Session struct {
 	extID           string
 	view            api.View
 	host            search.Host
+	palettePage     *palette.View
 	items           []api.Item
 	sections        []api.ItemSection
 	loading         bool
@@ -100,6 +102,7 @@ func (s *Session) Palette() *palette.View {
 		page.Hint = footerHintsText(s.view.FooterHints, s.hyperKey())
 		page.HintReplacesActions = true
 	}
+	s.palettePage = page
 	return page
 }
 

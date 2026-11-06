@@ -119,10 +119,13 @@ type LaunchContext struct {
 
 // Result is what a handler returns to the palette. The zero value means "nothing to do".
 type Result struct {
-	View       *View          `json:"view,omitempty"`
-	Next       *Action        `json:"next,omitempty"`
-	Patch      *ViewPatch     `json:"patch,omitempty"`
-	Navigation NavigationMode `json:"navigation,omitempty"`
+	// DataChanged revalidates the surviving origin after a confirmed mutation, even if the handler returns an error.
+	// Autosave revalidates the editor’s surviving parent; closed views do not refresh.
+	DataChanged bool           `json:"dataChanged,omitempty"`
+	View        *View          `json:"view,omitempty"`
+	Next        *Action        `json:"next,omitempty"`
+	Patch       *ViewPatch     `json:"patch,omitempty"`
+	Navigation  NavigationMode `json:"navigation,omitempty"`
 	// Toast shows a short message as a passive indicator, titled with the action that produced the result.
 	Toast *Toast `json:"toast,omitempty"`
 	// Draft resolves an editor draft conflict; Migrate needs replacement content.

@@ -126,7 +126,7 @@ func (r *Runner) answer(ctx context.Context, method, query string, invocation *a
 	data, err := r.dispatch(ctx, method, query, invocation)
 	if err != nil {
 		failure := api.FailureOf(err)
-		return protocol.Response{Failure: &failure}
+		return protocol.Response{Data: data, Failure: &failure}
 	}
 	return protocol.Response{Data: data}
 }

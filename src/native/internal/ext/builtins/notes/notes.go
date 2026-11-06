@@ -44,6 +44,7 @@ const (
 	refDeleteFromList = "delete-note-from-list"
 	refDeleteShown    = "delete-shown-note"
 	refAllNotes       = "all-notes"
+	refRefreshList    = "refresh-notes-list"
 	refAutosave       = "autosave-note"
 	refConflict       = "note-conflict"
 	argID             = "id"
@@ -124,13 +125,20 @@ func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, er
 		return openInWindow(ctx, args[argID])
 	case refAllNotes:
 		return showList(ctx, args[argMode], args[argNav])
+	case refRefreshList:
+		notes, err := ctx.Notes().List()
+		if err != nil {
+			return api.Result{}, err
+		}
+		list := listView(ctx, notes, modeOf(args))
+		return api.Result{Patch: &api.ViewPatch{Mode: api.PatchReplace, Items: list.Items}}, nil
 	case refDeleteFromList:
 		return deleteFromList(ctx, args)
 	case refDeleteShown:
 		return deleteShown(ctx, args)
 	case refAutosave:
-		_, err := saveLatest(ctx, args[argID], in.EditorContent)
-		return api.Result{}, err
+		_, mutated, err := saveLatest(ctx, args[argID], in.EditorContent)
+		return api.Result{DataChanged: mutated}, err
 	case refConflict:
 		return conflictView(ctx, args, in.DraftConflict)
 	case api.NoteConflictRestoreRef:

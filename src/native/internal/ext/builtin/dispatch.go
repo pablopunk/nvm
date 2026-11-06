@@ -71,7 +71,11 @@ func (r *Runner) run(ctx context.Context, invocation *api.Invocation) (json.RawM
 		in = *invocation
 	}
 	out, err := handler.RunAction(r.context.For(ctx, in.Launch), in)
-	return encode(protocol.MethodRun, out, err)
+	data, marshalErr := encode(protocol.MethodRun, out, nil)
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+	return data, err
 }
 
 func (r *Runner) load(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {

@@ -195,7 +195,11 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	}
 	if response.Failure != nil {
 		outcome = runOutcomeForFailure(response.Failure)
-		return api.Result{}, response.Failure, nil
+		var partial api.Result
+		if len(response.Data) > 0 {
+			_ = json.Unmarshal(response.Data, &partial)
+		}
+		return api.Result{DataChanged: partial.DataChanged}, response.Failure, nil
 	}
 	var result api.Result
 	if err := json.Unmarshal(response.Data, &result); err != nil {

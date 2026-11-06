@@ -30,7 +30,9 @@ func newNote(ctx api.Context, args map[string]string) (api.Result, error) {
 		return api.Result{}, err
 	}
 	view := editorView(ctx, note, modeOf(args))
-	return show(modeOf(args), args[argNav], ctx, &view), nil
+	result := show(modeOf(args), args[argNav], ctx, &view)
+	result.DataChanged = true
+	return result, nil
 }
 
 // openNote shows a note's editor, in the mode and navigation the args name.
@@ -50,12 +52,13 @@ func deleteFromList(ctx api.Context, args map[string]string) (api.Result, error)
 	}
 	notes, err := ctx.Notes().List()
 	if err != nil {
-		return api.Result{}, err
+		return api.Result{DataChanged: true}, err
 	}
 	list := listView(ctx, notes, modeOf(args))
 	return api.Result{
-		Patch: &api.ViewPatch{Mode: api.PatchReplace, Items: list.Items},
-		Toast: &api.Toast{Message: "Note deleted", Tone: "success"},
+		DataChanged: true,
+		Patch:       &api.ViewPatch{Mode: api.PatchReplace, Items: list.Items},
+		Toast:       &api.Toast{Message: "Note deleted", Tone: "success"},
 	}, nil
 }
 
@@ -67,30 +70,31 @@ func deleteShown(ctx api.Context, args map[string]string) (api.Result, error) {
 	}
 	next, err := ctx.Notes().Recent()
 	if err != nil {
-		return api.Result{}, err
+		return api.Result{DataChanged: true}, err
 	}
 	view := editorView(ctx, next, modeOf(args))
 	result := show(modeOf(args), navReplace, ctx, &view)
+	result.DataChanged = true
 	result.Toast = &api.Toast{Message: "Note deleted", Tone: "success"}
 	return result, nil
 }
 
 // saveLatest writes markdown as the note's text. The write is against the note's current saved version, as 1.x's
 // autosave is, and the draft is committed at the version it produced, so the editor does not conflict with its own save.
-func saveLatest(ctx api.Context, id, markdown string) (api.Note, error) {
+func saveLatest(ctx api.Context, id, markdown string) (api.Note, bool, error) {
 	current, err := savedNote(ctx, id)
 	if err != nil {
-		return api.Note{}, err
+		return api.Note{}, false, err
 	}
 	saved, changed, err := ctx.Notes().Update(id, markdown, current.UpdatedAt)
 	if err != nil {
-		return api.Note{}, err
+		return api.Note{}, false, err
 	}
 	if changed {
-		return api.Note{}, errNoteChanged
+		return api.Note{}, false, errNoteChanged
 	}
 	_, err = ctx.Drafts().Commit(id, versionOf(saved))
-	return saved, err
+	return saved, true, err
 }
 
 // conflictView answers a stored draft whose version differs from the saved note: the unsaved text, the saved text and
@@ -109,11 +113,13 @@ func conflictView(ctx api.Context, args map[string]string, conflict *api.DraftCo
 
 // restoreUnsaved saves the unsaved text the conflict kept as the note's text, and shows the editor on it.
 func restoreUnsaved(ctx api.Context, args map[string]string) (api.Result, error) {
-	saved, err := saveLatest(ctx, args[argID], args[argText])
+	saved, mutated, err := saveLatest(ctx, args[argID], args[argText])
 	if err != nil {
-		return api.Result{}, err
+		return api.Result{DataChanged: mutated}, err
 	}
-	return draftResolution(ctx, args, saved, "restore-old", &api.Toast{Message: "Unsaved changes restored", Tone: "success"}), nil
+	result := draftResolution(ctx, args, saved, "restore-old", &api.Toast{Message: "Unsaved changes restored", Tone: "success"})
+	result.DataChanged = true
+	return result, nil
 }
 
 // keepSaved keeps the saved text and drops the unsaved one, then shows the editor on the saved note.

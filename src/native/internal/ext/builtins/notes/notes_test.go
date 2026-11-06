@@ -298,3 +298,19 @@ func TestMissingNoteIsReportedNotCreated(t *testing.T) {
 		t.Fatal("opening a missing note returned no error")
 	}
 }
+
+func TestCreateAndAutosaveDeclareDataChanges(t *testing.T) {
+	ctx := newContext()
+	created, err := New().RunAction(ctx, invocation(refNewNote, map[string]string{argMode: modePalette, argNav: navPush}))
+	if err != nil || !created.DataChanged || created.View == nil {
+		t.Fatalf("create = %+v, %v", created, err)
+	}
+	notes, err := ctx.Notes().List()
+	if err != nil || len(notes) != 1 {
+		t.Fatalf("created notes = %+v, %v", notes, err)
+	}
+	saved, err := New().RunAction(ctx, api.Invocation{Ref: api.ActionRef{ID: refAutosave, Args: map[string]string{argID: notes[0].ID}}, EditorContent: "new title"})
+	if err != nil || !saved.DataChanged {
+		t.Fatalf("autosave = %+v, %v", saved, err)
+	}
+}

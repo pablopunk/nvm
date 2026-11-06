@@ -178,3 +178,16 @@ func TestLifecycleIsAlwaysRunning(t *testing.T) {
 		t.Fatalf("state = %q, want running", state)
 	}
 }
+
+type partialAction struct{ sample }
+
+func (p *partialAction) RunAction(api.Context, api.Invocation) (api.Result, error) {
+	return api.Result{DataChanged: true, View: &api.View{Title: "must not apply"}}, errors.New("after write")
+}
+func TestActionFailureCarriesMutationResult(t *testing.T) {
+	response, err := newSample(t, &partialAction{}, nil).Call(context.Background(), protocol.MethodRun, "", nil)
+	var result api.Result
+	if err != nil || response.Failure == nil || json.Unmarshal(response.Data, &result) != nil || !result.DataChanged {
+		t.Fatalf("response=%+v err=%v", response, err)
+	}
+}

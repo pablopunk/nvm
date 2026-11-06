@@ -201,7 +201,10 @@ func (ed *editorState) autosave() {
 		return
 	}
 	in := api.Invocation{Ref: *track.options.Autosave.Ref, EditorContent: ed.text}
-	ed.sess.deps.Invoke(ed.sess.extID, in, func(_ api.Result, failure *api.Failure) {
+	ed.sess.deps.Invoke(ed.sess.extID, in, func(result api.Result, failure *api.Failure) {
+		if result.DataChanged && ed.sess.parent != nil {
+			ed.sess.parent.refreshAfterMutation()
+		}
 		if failure != nil {
 			ed.status = failure.Message
 		}

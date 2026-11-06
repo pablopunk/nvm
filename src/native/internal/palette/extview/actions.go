@@ -100,7 +100,9 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		view := *action.View
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			h.Push(NewSession(s.deps, s.extID, view).Open(h))
+			child := NewSession(s.deps, s.extID, view)
+			child.parent = s
+			h.Push(child.Open(h))
 		}}
 	case api.ActionPop:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Pop() }}
@@ -254,6 +256,9 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
+		if result.DataChanged {
+			s.revalidateMutation()
+		}
 		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
 			return
 		}
@@ -287,7 +292,8 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 		case api.NavReplace:
 			h.Pop()
 		}
-		h.Push(NewSession(s.deps, extID, *result.View).Open(h))
+		child := s.navigationChild(extID, *result.View, result.Navigation)
+		h.Push(child.Open(h))
 	case result.Navigation == api.NavPop:
 		h.Pop()
 	case result.Patch != nil:
@@ -296,6 +302,18 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 	default:
 		h.Hide()
 	}
+}
+
+func (s *Session) navigationChild(extID string, view api.View, navigation api.NavigationMode) *Session {
+	child := NewSession(s.deps, extID, view)
+	switch navigation {
+	case api.NavReplace:
+		child.parent = s.parent
+	case api.NavRoot:
+	default:
+		child.parent = s
+	}
+	return child
 }
 
 // confirmPage asks before a destructive action runs: its first row runs it, its second cancels. Cancel and Escape leave
@@ -336,6 +354,9 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 		return
 	}
 	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
+		if result.DataChanged {
+			s.revalidateMutation()
+		}
 		if afterRun != nil {
 			afterRun(failure != nil)
 		}
@@ -363,6 +384,9 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		return
 	}
 	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
+		if result.DataChanged {
+			s.revalidateMutation()
+		}
 		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})
 }

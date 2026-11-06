@@ -154,8 +154,11 @@ type Result struct {                   // zero value = nothing to do
     Patch      *ViewPatch
     Navigation NavigationMode          // root, push, replace, pop
     Draft      *DraftResolution
+    DataChanged bool                   // revalidate the originating view after a successful mutation
 }
 ```
+
+A result with `DataChanged` revalidates the originating view even if navigation has moved on, provided that view survives. Set it when a mutation succeeded even if a later step returns an error; the error is still reported. An editor autosave revalidates its surviving parent; replacing an editor retains that parent. Closed views do not revalidate. Background revalidation updates its own view without changing the visible page.
 
 Errors are Go `error` values at the author side. The host turns them into a `Failure{Code, Message, Reference}` (section 12).
 
