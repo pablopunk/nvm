@@ -12,6 +12,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -54,6 +55,7 @@ func (p *App) openDiagnostics(ports platform.Ports) {
 		Arch:      runtime.GOARCH,
 		Consent:   !p.diagnosticsOff(),
 	})
+	p.commandTiming = timing.New(ports.Clock, p.analytics)
 	p.failures = analytics.NewFailureReporter(diag.NewReporter(logx.Default(), p.recorder), p.analytics, p.recorder)
 	p.startAnalytics()
 }

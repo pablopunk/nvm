@@ -13,6 +13,7 @@ import (
 	"github.com/egoist/mygo"
 
 	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
@@ -117,9 +118,17 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		CommandsChange:  p.extensionCommandsChanged,
 		BuiltInSettings: p.builtInSettingsStore,
 		BuiltIns:        builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine, Clipboard: p.clipboardOptions, WindowSettings: p.legacyWindowSettings()}),
+		RunObserver:     extensionRunObserver(p.commandTiming),
 		AIQuota:         p.aiQuotas(),
 		LegacyStatePath: p.legacyStatePath(),
 	})
+}
+
+func extensionRunObserver(tracker *timing.Tracker) manager.RunObserver {
+	if tracker == nil {
+		return nil
+	}
+	return timing.ExtensionRunObserver(tracker)
 }
 
 // aiQuotas is the app's model-call counts, one per owner: each extension, and the picker under its built-in id.

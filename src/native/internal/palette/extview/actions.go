@@ -14,14 +14,32 @@ type handle string
 
 // route is what a handle stands for: the extension that answers and the action it declared.
 type route struct {
-	extID  string
-	action api.Action
+	extID   string
+	action  api.Action
+	command bool
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
 // root commands. Run actions go through the host, and declarative actions are host operations.
 func ActionFor(deps Deps, extID string, action api.Action) search.Action {
 	return NewSession(deps, extID, api.View{}).action(action, "")
+}
+
+// CommandActionFor maps the primary action of a root command to an action that invokes through InvokeCommand.
+func CommandActionFor(deps Deps, extID string, action api.Action) search.Action {
+	return NewSession(deps, extID, api.View{}).commandAction(action)
+}
+
+func (s *Session) commandAction(action api.Action) search.Action {
+	mapped := s.withShortcut(s.actionBody(action, ""), action.Shortcut)
+	mapped.MenuOnly = action.Preview
+	mapped.Subtitle = action.Subtitle
+	if action.Kind == api.ActionRun && action.Ref != nil {
+		mapped.Dismiss = runDismissal(action)
+		token := s.issue("", route{extID: s.extID, action: action, command: true})
+		mapped.Run = func(h search.Host) { s.runHandle(h, token) }
+	}
+	return mapped
 }
 
 // actionAt maps the index-th action of an item to a palette action, keyed by the item so handles stay stable across
@@ -211,7 +229,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		s.runDeclared(h, r.action)
 		return
 	}
-	if s.deps.Invoke == nil || r.action.Ref == nil {
+	if r.action.Ref == nil {
 		h.Toast(unavailableMessage)
 		return
 	}
@@ -220,7 +238,15 @@ func (s *Session) invoke(h search.Host, r route) {
 	if loading, ok := h.(search.ActionLoadingHost); ok {
 		current = loading.BeginAction()
 	}
-	s.deps.Invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
+	invoke := s.deps.Invoke
+	if r.command && s.deps.InvokeCommand != nil {
+		invoke = s.deps.InvokeCommand
+	}
+	if invoke == nil {
+		h.Toast(unavailableMessage)
+		return
+	}
+	invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
 		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
 			return
 		}
@@ -279,7 +305,7 @@ func (s *Session) confirmPage(r route) *palette.View {
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: "red", Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
-						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action)})
+						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command})
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{

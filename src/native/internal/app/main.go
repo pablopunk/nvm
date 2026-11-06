@@ -21,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
@@ -70,11 +71,12 @@ type App struct {
 	recorder     *diag.Recorder
 	// analytics sends technical diagnostics when the consent switch is on; failures reports each safego failure
 	// through the recorder and then to analytics.
-	analytics *analytics.Client
-	failures  *analytics.FailureReporter
-	updater   update.Updater
-	updates   *update.Service
-	appsvc    *appfeat.Services
+	analytics     *analytics.Client
+	commandTiming *timing.Tracker
+	failures      *analytics.FailureReporter
+	updater       update.Updater
+	updates       *update.Service
+	appsvc        *appfeat.Services
 	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
 	systemSvc     *systemfeat.Services
 	launchAtLogin settingsfeat.LaunchAtLogin

@@ -38,10 +38,11 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 func commandRow(p *App, m *manager.Manager, result manager.CommandResult, command api.Command, score int) search.Item {
 	primary := commandAction(command)
 	sections := extview.MenuSections(&primary, command.ActionPanel, command.Actions)
+	deps := p.extensionViewDeps(m)
 	row := search.Item{
 		Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
 		Tone: commandTone(command), Score: score,
-		Actions: extview.MenuActionsFor(p.extensionViewDeps(m), result.ExtensionID, sections),
+		Actions: commandMenuActions(deps, result.ExtensionID, sections),
 	}
 	row.ID = folderLearnKey(result.ExtensionID, "command:"+command.ID)
 	row.LearnKey = row.ID
@@ -49,6 +50,15 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 		row = builtInCommandRow(row, command)
 	}
 	return row
+}
+
+func commandMenuActions(deps extview.Deps, extID string, sections []extview.MenuSection) []search.Action {
+	actions := extview.MenuActionsFor(deps, extID, sections)
+	if len(actions) > 0 && len(sections) > 0 && len(sections[0].Actions) > 0 {
+		actions[0] = extview.CommandActionFor(deps, extID, sections[0].Actions[0])
+		actions[0].Section = sections[0].Title
+	}
+	return actions
 }
 
 // commandRowScore is the score of a command's row for q, and whether the command's row is listed at all. The empty root

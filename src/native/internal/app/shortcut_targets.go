@@ -220,14 +220,14 @@ func (p *App) openShortcutApp(path string) {
 // shortcutAction is the first action of the row actionID names.
 func (p *App) shortcutAction(actionID string) (search.Action, bool) {
 	if entry, ok := p.globalShortcuts.commands[actionID]; ok {
-		return extview.ActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command)), true
+		return extview.CommandActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command)), true
 	}
 	if extID, commandID, ok := splitExtensionCommandShortcutID(actionID); ok {
 		m := p.extensionManager()
 		if m == nil {
 			return search.Action{}, false
 		}
-		return extview.ActionFor(p.extensionViewDeps(m), extID, api.Run(commandID, "Run", nil)), true
+		return extview.CommandActionFor(p.extensionViewDeps(m), extID, api.Run(commandID, "Run", nil)), true
 	}
 	if cmd, ok := p.shortcutCommand(actionID); ok {
 		return search.Action{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}, true

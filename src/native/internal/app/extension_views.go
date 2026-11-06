@@ -33,21 +33,27 @@ func (p *App) settleExtensionCalls() {
 // result returns to the UI thread, where the palette applies it.
 func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	ports := p.ports
+	invoke := func(base context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+		p.beginPaletteRun()
+		p.extCalls.Add(1)
+		go func() {
+			defer p.extCalls.Done()
+			ctx, cancel := context.WithTimeout(base, runTimeoutOf(in))
+			defer cancel()
+			result, failure, err := m.Run(ctx, extID, in)
+			p.endPaletteRun()
+			if err != nil {
+				failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
+			}
+			p.onUI(func() { done(result, failure) })
+		}()
+	}
 	return extview.Deps{
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
-			p.beginPaletteRun()
-			p.extCalls.Add(1)
-			go func() {
-				defer p.extCalls.Done()
-				ctx, cancel := context.WithTimeout(context.Background(), runTimeoutOf(in))
-				defer cancel()
-				result, failure, err := m.Run(ctx, extID, in)
-				p.endPaletteRun()
-				if err != nil {
-					failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
-				}
-				p.onUI(func() { done(result, failure) })
-			}()
+			invoke(context.Background(), extID, in, done)
+		},
+		InvokeCommand: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			invoke(manager.WithCommandRun(context.Background()), extID, in, done)
 		},
 		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
 			p.extCalls.Add(1)
