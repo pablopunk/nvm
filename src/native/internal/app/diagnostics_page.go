@@ -15,6 +15,8 @@ func (p *App) diagnosticsPage() *palette.View {
 
 // reportProblem files a problem report through the Diagnostics built-in. The toast names the reference, and the page lists
 // the recent errors where it appears.
+//
+//lint:ignore U1000 Retained for direct callers that need a friendly failure message.
 func (p *App) reportProblem(h search.Host) {
 	result, ok := p.builtInRun(diagnosticsbuiltin.ID, diagnosticsbuiltin.ReportAction)
 	if !ok {

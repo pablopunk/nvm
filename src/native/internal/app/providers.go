@@ -77,7 +77,6 @@ func trailingCommands(p *App) []command {
 			h.Push(p.updatesPage())
 		}},
 		completedNavigation(command{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true}, func(h search.Host) { h.Push(p.diagnosticsPage()) }),
-		{ID: shortcuts.CommandReportProblem, Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		builtInSlot(appcommands.ID, 1),
 		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsPage()) }},
 	}

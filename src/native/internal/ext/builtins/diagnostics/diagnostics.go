@@ -17,7 +17,7 @@ const ID = "nevermind.diagnostics"
 // Refs of the page's actions. Open builds the page; Report files a problem report and shows the page with its toast.
 const (
 	OpenAction   = "open"
-	ReportAction = "report"
+	ReportAction = "report-problem"
 )
 
 // viewTitle, placeholder, hint and emptyTitle name the page, as the native page named it.
@@ -44,6 +44,11 @@ func (Extension) Manifest() api.Manifest {
 	}
 }
 
+// Commands declares the searchable report command and its portable shortcut target.
+func (Extension) Commands(api.Context) ([]api.Command, error) {
+	return []api.Command{{ID: ReportAction, Title: "Report a Problem", Subtitle: "Record a problem reference without screen content", Icon: "message-circle", Keywords: []string{"report", "problem", "bug", "issue", "support", "feedback"}, Placement: []api.Placement{api.PlacementSearch}, Customizable: true}}, nil
+}
+
 // RunAction opens the page, or files a problem report and shows the page with its reference.
 func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
@@ -51,20 +56,21 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 		view := recentErrorsView(ctx)
 		return api.Result{View: &view}, nil
 	case ReportAction:
-		return reportResult(ctx), nil
+		return reportResult(ctx)
 	}
 	return api.Result{}, fmt.Errorf("the Diagnostics built-in has no action %q: %w", in.Ref.ID, api.ErrInvalidInput)
 }
 
 // reportResult files a problem report. The page lists the recent errors, where the new reference appears, and a toast
 // names it. A host that cannot record a report says so instead.
-func reportResult(ctx api.Context) api.Result {
+func reportResult(ctx api.Context) (api.Result, error) {
 	ref := ctx.Diagnostics().ReportProblem()
 	if ref == "" {
-		return api.Result{Toast: &api.Toast{Message: "The problem report could not be recorded", Tone: "error"}}
+		//lint:ignore ST1005 This message is displayed directly to the user.
+		return api.Result{}, fmt.Errorf("The problem report could not be recorded: %w", api.ErrNotAvailable)
 	}
 	view := recentErrorsView(ctx)
-	return api.Result{View: &view, Toast: &api.Toast{Message: "Problem report " + ref + " recorded"}}
+	return api.Result{View: &view, Toast: &api.Toast{Message: "Problem report " + ref + " recorded"}}, nil
 }
 
 // recentErrorsView is the page as it stands now: one row per recorded error, newest first.

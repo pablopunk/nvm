@@ -7,6 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	clipboardbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/clipboard"
+	diagnosticsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/diagnostics"
 	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	emojibuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/emoji"
 	notesbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/notes"
@@ -41,6 +42,7 @@ func (s *shortcutTitles) titleOr(actionID, fallback string) string {
 // movedCommandShortcutActions are the commands that moved from the native list to a built-in. Their bindings keep the
 // native keys, so the setup lists them under those keys as the native list did.
 var movedCommandShortcutActions = []shortcuts.Action{
+	{ID: shortcuts.CommandReportProblem, Title: "Report a Problem"},
 	{ID: shortcuts.CommandClipboardHistory, Title: "Clipboard History"},
 }
 
@@ -53,15 +55,16 @@ func commandShortcutID(cmd command) string {
 // movedCommandShortcutIDs are the shortcut keys of the built-in commands that were native commands before. Their
 // bindings keep the keys the user set, so these commands are keyed by the native IDs in place of their extension IDs.
 var movedCommandShortcutIDs = map[string]string{
-	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                    shortcuts.CommandForceQuitApps,
-	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                      shortcuts.CommandQuitAllApps,
-	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID:   shortcuts.CommandSnippets,
-	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.ListCommandID:         shortcuts.CommandQuickNotes,
-	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.NewWindowCommandID:    shortcuts.CommandNewFloatingNote,
-	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:             shortcuts.CommandEmojiSymbols,
-	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:        shortcuts.CommandDictate,
-	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:        shortcuts.CommandDictationHistory,
-	extensionShortcutPrefix + clipboardbuiltin.ID + ":" + clipboardbuiltin.ListCommandID: shortcuts.CommandClipboardHistory,
+	extensionShortcutPrefix + diagnosticsbuiltin.ID + ":" + diagnosticsbuiltin.ReportAction: shortcuts.CommandReportProblem,
+	extensionShortcutPrefix + apps.ID + ":" + apps.ForceQuitCommandID:                       shortcuts.CommandForceQuitApps,
+	extensionShortcutPrefix + apps.ID + ":" + apps.QuitAllCommandID:                         shortcuts.CommandQuitAllApps,
+	extensionShortcutPrefix + snippetsbuiltin.ID + ":" + snippetsbuiltin.ListCommandID:      shortcuts.CommandSnippets,
+	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.ListCommandID:            shortcuts.CommandQuickNotes,
+	extensionShortcutPrefix + notesbuiltin.ID + ":" + notesbuiltin.NewWindowCommandID:       shortcuts.CommandNewFloatingNote,
+	extensionShortcutPrefix + emojibuiltin.ID + ":" + emojibuiltin.CommandID:                shortcuts.CommandEmojiSymbols,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.DictateCommandID:           shortcuts.CommandDictate,
+	extensionShortcutPrefix + dictbuiltin.ID + ":" + dictbuiltin.HistoryCommandID:           shortcuts.CommandDictationHistory,
+	extensionShortcutPrefix + clipboardbuiltin.ID + ":" + clipboardbuiltin.ListCommandID:    shortcuts.CommandClipboardHistory,
 }
 
 // commandShortcutKey is the shortcut key of an extension command: the ActionID the command names, else its default key.
@@ -193,7 +196,7 @@ func (p *App) runShortcutCommand(actionID string) {
 		p.openShortcutApp(path)
 		return
 	}
-	if entry, ok := p.globalShortcuts.commands[actionID]; ok && runsWithoutPalette(entry.command) {
+	if entry, ok := p.extensionShortcutCommand(actionID); ok && runsWithoutPalette(entry.command) {
 		p.runExtensionCommandInPlace(entry)
 		return
 	}
@@ -219,15 +222,11 @@ func (p *App) openShortcutApp(path string) {
 
 // shortcutAction is the first action of the row actionID names.
 func (p *App) shortcutAction(actionID string) (search.Action, bool) {
-	if entry, ok := p.globalShortcuts.commands[actionID]; ok {
+	if entry, ok := p.extensionShortcutCommand(actionID); ok {
 		return extview.CommandActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command)), true
 	}
-	if extID, commandID, ok := splitExtensionCommandShortcutID(actionID); ok {
-		m := p.extensionManager()
-		if m == nil {
-			return search.Action{}, false
-		}
-		return extview.CommandActionFor(p.extensionViewDeps(m), extID, api.Run(commandID, "Run", nil)), true
+	if _, _, ok := splitExtensionCommandShortcutID(actionID); ok {
+		return search.Action{}, false
 	}
 	if cmd, ok := p.shortcutCommand(actionID); ok {
 		return search.Action{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}, true

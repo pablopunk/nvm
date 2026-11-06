@@ -23,6 +23,35 @@ type globalShortcutTable struct {
 	commands map[string]extensionCommandEntry
 }
 
+func (p *App) extensionShortcutCommand(actionID string) (extensionCommandEntry, bool) {
+	if entry, ok := p.globalShortcuts.commands[actionID]; ok {
+		return entry, true
+	}
+	m := p.extensionManager()
+	if m == nil {
+		return extensionCommandEntry{}, false
+	}
+	results := m.CachedCommands()
+	if entry, ok := globalShortcutTableOf(results).commands[actionID]; ok {
+		return entry, true
+	}
+	extID, commandID, parsed := splitExtensionCommandShortcutID(actionID)
+	if !parsed {
+		return extensionCommandEntry{}, false
+	}
+	for _, result := range results {
+		if result.ExtensionID != extID || result.Failure != nil {
+			continue
+		}
+		for _, command := range result.Commands {
+			if command.ID == commandID {
+				return extensionCommandEntry{extID: result.ExtensionID, command: command}, true
+			}
+		}
+	}
+	return extensionCommandEntry{}, false
+}
+
 // globalShortcutTableOf builds the table from the commands the running extensions list. A failed extension lists none.
 func globalShortcutTableOf(results []manager.CommandResult) globalShortcutTable {
 	table := globalShortcutTable{commands: map[string]extensionCommandEntry{}}

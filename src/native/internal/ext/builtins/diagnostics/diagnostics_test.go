@@ -142,10 +142,10 @@ func TestReportFilesAReferenceAndShowsItWithAToast(t *testing.T) {
 
 func TestReportWithoutAReferenceSaysSoAndShowsNoPage(t *testing.T) {
 	result, err := New().RunAction(fakeContext{diagnostics: fixtureDiagnostics(api.DiagnosticsStored)}, api.Invocation{Ref: api.ActionRef{ID: ReportAction}})
-	if err != nil {
-		t.Fatalf("report: %v", err)
+	if !errors.Is(err, api.ErrNotAvailable) {
+		t.Fatalf("report: %v, want ErrNotAvailable", err)
 	}
-	if result.View != nil || result.Toast == nil || result.Toast.Tone != "error" {
+	if result.View != nil || result.Toast != nil {
 		t.Fatalf("result = %+v", result)
 	}
 }
@@ -154,5 +154,15 @@ func TestUnknownActionIsRefused(t *testing.T) {
 	_, err := New().RunAction(fakeContext{diagnostics: fixtureDiagnostics(api.DiagnosticsStored)}, api.Invocation{Ref: api.ActionRef{ID: "clear"}})
 	if !errors.Is(err, api.ErrInvalidInput) {
 		t.Fatalf("err = %v, want ErrInvalidInput", err)
+	}
+}
+
+func TestReportCommandIsSearchableAndTargetsReportAction(t *testing.T) {
+	commands, err := New().Commands(fakeContext{diagnostics: fixtureDiagnostics(api.DiagnosticsStored)})
+	if err != nil || len(commands) != 1 {
+		t.Fatalf("commands = %+v, err = %v", commands, err)
+	}
+	if commands[0].ID != ReportAction || len(commands[0].Placement) != 1 || commands[0].Placement[0] != api.PlacementSearch {
+		t.Fatalf("command = %+v", commands[0])
 	}
 }
