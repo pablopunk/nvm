@@ -81,15 +81,23 @@ func (s *Service) Channel() Channel {
 // at once; Check returns without waiting for the download. A check that cannot run because another check or a
 // download is in progress returns the current state.
 func (s *Service) Check(ctx context.Context) State {
+	state, _ := s.CheckOwned(ctx)
+	return state
+}
+
+// CheckOwned reports whether this caller started and completed the feed check. The state is still
+// returned for callers that need the legacy snapshot behavior of Check.
+func (s *Service) CheckOwned(ctx context.Context) (State, bool) {
 	if !s.engine.Enabled() {
-		return s.publish(unsupportedState(s.currentVersion()))
+		return s.publish(unsupportedState(s.currentVersion())), true
 	}
 	epoch, started := s.beginCheck()
 	if !started {
-		return s.State()
+		return s.State(), false
 	}
 	offer, found, err := s.engine.Check(ctx)
-	return s.finishCheck(ctx, epoch, offer, found, err)
+	state, completed := s.finishCheck(ctx, epoch, offer, found, err)
+	return state, completed
 }
 
 // RestartToUpdate restarts the app into the downloaded update. It refuses when no update is downloaded.
@@ -182,12 +190,12 @@ func (s *Service) busyLocked() bool {
 }
 
 // finishCheck turns the engine's answer into the state. An answer that arrives after a channel switch is dropped.
-func (s *Service) finishCheck(ctx context.Context, epoch int, offer Offer, found bool, err error) State {
+func (s *Service) finishCheck(ctx context.Context, epoch int, offer Offer, found bool, err error) (State, bool) {
 	s.mu.Lock()
 	s.checking = false
 	if epoch != s.epoch {
 		s.mu.Unlock()
-		return s.State()
+		return s.State(), false
 	}
 	state, download := s.answerLocked(offer, found, err)
 	if download {
@@ -196,7 +204,7 @@ func (s *Service) finishCheck(ctx context.Context, epoch int, offer Offer, found
 	s.state = state
 	s.mu.Unlock()
 	s.notify(state)
-	return state
+	return state, true
 }
 
 // answerLocked is the state a check answer leads to: a failed check, up to date, or an available newer version. A

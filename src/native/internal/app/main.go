@@ -2,6 +2,7 @@
 package app
 
 import (
+	"context"
 	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"log"
 	"runtime"
@@ -76,6 +77,8 @@ type App struct {
 	failures      *analytics.FailureReporter
 	updater       update.Updater
 	updates       *update.Service
+	updatesCtx    context.Context
+	stopUpdates   context.CancelFunc
 	appsvc        *appfeat.Services
 	// systemSvc runs the OS commands and reads the places, panes and permissions; launchAtLogin is the sign-in start.
 	systemSvc     *systemfeat.Services
