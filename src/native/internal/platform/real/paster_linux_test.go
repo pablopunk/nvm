@@ -109,12 +109,13 @@ func TestX11PasteSendsCtrlVToTheFocusedWindow(t *testing.T) {
 func TestX11PasteChecksTheFocusedWindowWhenAnAppIsNamed(t *testing.T) {
 	installFakeXdotool(t)
 	helper := fake.NewHelper()
-	helper.Script(xdotoolBinary, fake.HelperScript{Stdout: []byte("Terminal\n")})
+	helper.Script(xdotoolBinary, fake.HelperScript{Stdout: []byte("4194305\n")})
+	helper.Script("xprop", fake.HelperScript{Stdout: []byte(`WM_CLASS(STRING) = "terminal", "Terminal"` + "\n")})
 	if err := pasteGesture(context.Background(), helper, "Firefox"); !errors.Is(err, platform.ErrConflict) {
 		t.Fatalf("pasteGesture = %v, want ErrConflict", err)
 	}
-	if calls := helper.Calls(); len(calls) != 1 {
-		t.Fatalf("a conflicting paste sent keys: %d calls", len(calls))
+	if calls := helper.Calls(); len(calls) != 2 || calls[1].Binary != "xprop" {
+		t.Fatalf("a conflicting paste sent keys or skipped class lookup: %+v", calls)
 	}
 }
 
