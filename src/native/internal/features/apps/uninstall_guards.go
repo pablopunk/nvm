@@ -187,14 +187,13 @@ func (u *Uninstaller) isNevermind(p, bundleID string) bool {
 	return u.deps.NevermindBundleID != "" && strings.EqualFold(bundleID, u.deps.NevermindBundleID)
 }
 
-// parentWritable reports whether the user owns the folder an app sits in and may write to it. Moving an item to the
-// Trash renames it out of that folder, so a read-only parent makes the move impossible.
+// parentWritable checks effective access to the directory after verifying its identity and type.
 func (u *Uninstaller) parentWritable(parent string) bool {
 	entry, err := u.deps.Files.Lstat(parent)
 	if err != nil || entry.Symlink || !entry.Dir {
 		return false
 	}
-	return entry.Identity.UID == u.deps.UID && entry.Mode.Perm()&0o200 != 0
+	return u.deps.DirectoryAccess != nil && u.deps.DirectoryAccess.CanWrite(parent)
 }
 
 // isRunning asks the platform whether the app runs. Any failure counts as running: a move is never attempted on

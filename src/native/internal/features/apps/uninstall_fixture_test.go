@@ -173,3 +173,11 @@ func (m *memTree) trash(p string) error {
 	m.remove(p)
 	return nil
 }
+
+// fakeDirectoryAccess models an OS access decision independently of ownership.
+type fakeDirectoryAccess struct{ tree *memTree }
+
+func (f fakeDirectoryAccess) CanWrite(p string) bool {
+	entry, err := f.tree.Lstat(p)
+	return err == nil && entry.Dir && entry.Mode.Perm()&0o300 == 0o300
+}

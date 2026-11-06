@@ -47,4 +47,6 @@ type Ports struct {
 	OutputMute OutputMuter
 	// FileDrag carries files out of the palette to other applications as a native drag.
 	FileDrag FileDrag
+	// DirectoryAccess reports whether the current process can write directory entries there, including group and ACL grants.
+	DirectoryAccess DirectoryAccess
 }

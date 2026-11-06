@@ -36,12 +36,13 @@ func newLinuxFixture(t *testing.T, mutate func(tree *memTree)) *linuxFixture {
 	}
 	f := &linuxFixture{tree: tree}
 	f.u = NewUninstaller(UninstallDeps{
-		Platform:  "linux",
-		Home:      linuxHome,
-		UID:       linuxUID,
-		Files:     tree,
-		Trash:     tree.trash,
-		IsRunning: func(string) (bool, error) { return f.running, nil },
+		Platform:        "linux",
+		Home:            linuxHome,
+		UID:             linuxUID,
+		Files:           tree,
+		DirectoryAccess: fakeDirectoryAccess{tree: tree},
+		Trash:           tree.trash,
+		IsRunning:       func(string) (bool, error) { return f.running, nil },
 		RequestQuit: func(p string) error {
 			f.quitCalls = append(f.quitCalls, p)
 			f.running = false

@@ -129,6 +129,7 @@ func (s *Services) uninstallDeps(o ServicesOptions) UninstallDeps {
 		Home:              s.home,
 		UID:               o.UID,
 		Files:             files,
+		DirectoryAccess:   s.ports.DirectoryAccess,
 		Clock:             s.ports.Clock,
 		Trash:             s.ports.Shell.Trash,
 		NevermindAppPath:  o.NevermindAppPath,
