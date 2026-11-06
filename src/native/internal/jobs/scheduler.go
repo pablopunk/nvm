@@ -26,6 +26,8 @@ type Config struct {
 	Clock platform.Clock
 	// Reporter receives every failure of a run and of the scheduler's own goroutines. Nil uses safego's default.
 	Reporter safego.Reporter
+	// RunObserver observes actual job executions. Nil keeps the scheduler's legacy behavior.
+	RunObserver RunObserver
 	// State persists the job state; see StateDocument.
 	State *store.Collection[State]
 	// Log receives warnings about halted jobs and failed saves. Nil uses logx.Default.
@@ -38,14 +40,15 @@ type Config struct {
 // Scheduler owns every job of the process. It is safe for concurrent use. Runs never hold its lock, so a slow job
 // never delays a Snapshot, a control or another job.
 type Scheduler struct {
-	clock     platform.Clock
-	reporter  safego.Reporter
-	doc       *store.Collection[State]
-	log       *logx.Logger
-	heartbeat time.Duration
-	sleepGap  time.Duration
-	ctx       context.Context
-	cancel    context.CancelFunc
+	clock       platform.Clock
+	reporter    safego.Reporter
+	runObserver RunObserver
+	doc         *store.Collection[State]
+	log         *logx.Logger
+	heartbeat   time.Duration
+	sleepGap    time.Duration
+	ctx         context.Context
+	cancel      context.CancelFunc
 
 	mu      sync.Mutex
 	closed  bool
@@ -64,17 +67,18 @@ func New(cfg Config) (*Scheduler, error) {
 	heartbeat := cfg.Clock.NewTicker(positiveOr(cfg.Heartbeat, DefaultHeartbeat))
 	last := cfg.Clock.Now()
 	s := &Scheduler{
-		clock:     cfg.Clock,
-		reporter:  cfg.Reporter,
-		doc:       cfg.State,
-		log:       cfg.Log,
-		heartbeat: positiveOr(cfg.Heartbeat, DefaultHeartbeat),
-		sleepGap:  positiveOr(cfg.SleepGap, DefaultSleepGap),
-		ctx:       ctx,
-		cancel:    cancel,
-		jobs:      map[string]*record{},
-		state:     loadState(cfg.State),
-		subs:      map[int]chan struct{}{},
+		clock:       cfg.Clock,
+		reporter:    cfg.Reporter,
+		runObserver: cfg.RunObserver,
+		doc:         cfg.State,
+		log:         cfg.Log,
+		heartbeat:   positiveOr(cfg.Heartbeat, DefaultHeartbeat),
+		sleepGap:    positiveOr(cfg.SleepGap, DefaultSleepGap),
+		ctx:         ctx,
+		cancel:      cancel,
+		jobs:        map[string]*record{},
+		state:       loadState(cfg.State),
+		subs:        map[int]chan struct{}{},
 	}
 	if s.log == nil {
 		s.log = logx.Default()

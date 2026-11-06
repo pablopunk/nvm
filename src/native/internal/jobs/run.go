@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -84,10 +85,35 @@ func (s *Scheduler) beginLocked(r *record, reason string, payload Payload, now t
 
 // execute calls the job's function under safego with its budget and reports the outcome to finish.
 func (s *Scheduler) execute(def Definition, run Run) {
+	ctx := s.ctx
+	finishObservation := func(RunOutcome) {}
+	if s.runObserver != nil {
+		observedCtx, done := s.runObserver.BeginRun(ctx)
+		if observedCtx != nil {
+			ctx = observedCtx
+		}
+		if done != nil {
+			finishObservation = done
+		}
+	}
 	err := safego.Run("jobs."+def.ID, func(ctx context.Context) error {
 		return def.Run(ctx, run)
-	}, s.safegoOptions(safego.WithClock(s.clock), safego.WithTimeout(def.Budget.timeout()))...)
+	}, s.safegoOptions(safego.WithContext(ctx), safego.WithClock(s.clock), safego.WithTimeout(def.Budget.timeout()))...)
+	finishObservation(observedOutcome(err))
 	s.finish(def.ID, run, err)
+}
+
+func observedOutcome(err error) RunOutcome {
+	if err == nil {
+		return RunSucceeded
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return RunTimedOut
+	}
+	if errors.Is(err, context.Canceled) {
+		return RunCancelled
+	}
+	return RunFailed
 }
 
 // finish records the outcome of a run, halts the job when its policy says so, and starts the run queued behind it.

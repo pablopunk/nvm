@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	backgroundtasksbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/backgroundtasks"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/jobs"
@@ -22,10 +23,7 @@ import (
 // in step with the running extensions. Its state is saved in the user store when this instance holds the store, and
 // kept in memory otherwise. Quitting stops every trigger.
 func (p *App) startJobs() {
-	cfg := jobs.Config{Clock: p.ports.Clock, Log: logx.Default()}
-	if p.userStore != nil && !p.userReadOnly {
-		cfg.State = jobs.StateDocument(p.userStore)
-	}
+	cfg := p.jobConfig()
 	sched, err := jobs.New(cfg)
 	if err != nil {
 		log.Println("jobs:", err)
@@ -51,6 +49,14 @@ func (p *App) startJobs() {
 		triggers.Close()
 		_ = sched.Close()
 	})
+}
+
+func (p *App) jobConfig() jobs.Config {
+	cfg := jobs.Config{Clock: p.ports.Clock, Log: logx.Default(), RunObserver: timing.JobRunObserver(p.commandTiming)}
+	if p.userStore != nil && !p.userReadOnly {
+		cfg.State = jobs.StateDocument(p.userStore)
+	}
+	return cfg
 }
 
 // registerHostJob adds one host job and logs a definition the scheduler refuses, which is a programming error.

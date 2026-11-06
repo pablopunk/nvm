@@ -33,6 +33,7 @@ type Completion struct {
 	tracker *Tracker
 	ids     correlation
 	started time.Time
+	job     bool
 }
 
 func New(clock platform.Clock, sink Sink) *Tracker {
@@ -41,11 +42,18 @@ func New(clock platform.Clock, sink Sink) *Tracker {
 
 // Start creates a correlated child operation. Its journey inherits from the parent context.
 func (t *Tracker) Start(parent context.Context) (context.Context, *Completion) {
+	return t.start(parent, false)
+}
+
+func (t *Tracker) start(parent context.Context, freshJourney bool) (context.Context, *Completion) {
 	if parent == nil {
 		parent = context.Background()
 	}
 	prior, _ := parent.Value(contextKey{}).(correlation)
 	journey := prior.journey
+	if freshJourney {
+		journey = ""
+	}
 	if journey == "" {
 		journey = newID()
 	}
@@ -63,10 +71,19 @@ func (c *Completion) Finish(outcome analytics.OperationOutcome) {
 		if c.tracker.sink == nil {
 			return
 		}
-		c.tracker.sink.CommandCompleted(analytics.CommandCompletion{
+		completion := analytics.Completion{
 			Outcome: outcome, Duration: c.tracker.clock.Now().Sub(c.started),
 			BootID: c.ids.boot, JourneyID: c.ids.journey, ActionID: c.ids.action,
-		})
+		}
+		if c.job {
+			if jobSink, ok := c.tracker.sink.(interface {
+				JobCompleted(analytics.JobCompletion) bool
+			}); ok {
+				jobSink.JobCompleted(completion)
+			}
+		} else {
+			c.tracker.sink.CommandCompleted(completion)
+		}
 	})
 }
 
