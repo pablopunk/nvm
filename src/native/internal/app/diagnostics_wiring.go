@@ -126,6 +126,21 @@ func (p *App) installFailureReporting(flushOnPanic func()) {
 // that set is counted without an id.
 func (p *App) trackedRun(cmd command) func(h search.Host) {
 	return func(h search.Host) {
+		if cmd.Complete != nil {
+			variant, ok := analytics.CommandVariant(cmd.Title)
+			if ok {
+				trackedNativeRun(p.commandTiming, variant, func(_ context.Context, complete func(analytics.OperationOutcome)) {
+					cmd.Complete(h, func(success bool) {
+						if success {
+							complete(analytics.OutcomeSuccess)
+						} else {
+							complete(analytics.OutcomeFailed)
+						}
+					})
+				})(context.Background())
+				return
+			}
+		}
 		id, _ := analytics.CommandVariant(cmd.Title)
 		p.analytics.FeatureUsed(analytics.FeatureCommandRun, id)
 		cmd.Run(h)

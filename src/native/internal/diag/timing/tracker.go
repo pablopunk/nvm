@@ -63,6 +63,14 @@ func (t *Tracker) StartCommand(parent context.Context, origin manager.CommandOri
 	return ctx, completion
 }
 
+// StartNativeCommand opts a native command into fixed-label usage reporting.
+func (t *Tracker) StartNativeCommand(parent context.Context, variant string) (context.Context, *Completion) {
+	ctx, completion := t.start(parent, false)
+	completion.usage = true
+	completion.usageVariant = variant
+	return ctx, completion
+}
+
 func (t *Tracker) start(parent context.Context, freshJourney bool) (context.Context, *Completion) {
 	if parent == nil {
 		parent = context.Background()
