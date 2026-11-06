@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"testing"
+	"testing/synctest"
 
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -12,7 +13,6 @@ import (
 type blockingUpdateEngine struct {
 	entered chan struct{}
 	release chan struct{}
-	answer  update.State
 	check   func(context.Context) (update.Offer, bool, error)
 }
 
@@ -78,27 +78,29 @@ func TestUpdateCheckCompletionWaitsForCheck(t *testing.T) {
 }
 
 func TestUpdateCheckCompletionIgnoresBusyCheck(t *testing.T) {
-	p := goldenPalette(t)
-	p.updatesCtx, p.stopUpdates = context.WithCancel(context.Background())
-	t.Cleanup(p.stopUpdates)
-	queue := make(completionUIQueue, 1)
-	p.uiQueue = queue
-	engine := &blockingUpdateEngine{entered: make(chan struct{}), release: make(chan struct{})}
-	p.updates = newCompletionUpdater(t, engine)
-	completions := make(chan analytics.OperationOutcome, 2)
-	p.checkForUpdatesWithCompletion(context.Background(), func(string) {}, func(outcome analytics.OperationOutcome) { completions <- outcome })
-	<-engine.entered
-	busyCompletion := make(chan analytics.OperationOutcome, 1)
-	p.checkForUpdatesWithCompletion(context.Background(), func(string) {}, func(outcome analytics.OperationOutcome) { busyCompletion <- outcome })
-	select {
-	case got := <-busyCompletion:
-		t.Fatalf("busy check completed command: %s", got)
-	default:
-	}
-	close(engine.release)
-	if got := <-completions; got != analytics.OutcomeSuccess {
-		t.Fatalf("owned check completion = %q", got)
-	}
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		p := &App{updatesCtx: ctx, stopUpdates: cancel, uiQueue: make(completionUIQueue, 1)}
+		engine := &blockingUpdateEngine{entered: make(chan struct{}), release: make(chan struct{})}
+		p.updates = newCompletionUpdater(t, engine)
+		completions := make(chan analytics.OperationOutcome, 2)
+		p.checkForUpdatesWithCompletion(context.Background(), func(string) {}, func(outcome analytics.OperationOutcome) { completions <- outcome })
+		<-engine.entered
+		busyCompletion := make(chan analytics.OperationOutcome, 1)
+		p.checkForUpdatesWithCompletion(context.Background(), func(string) {}, func(outcome analytics.OperationOutcome) { busyCompletion <- outcome })
+		synctest.Wait()
+		select {
+		case got := <-busyCompletion:
+			t.Fatalf("busy check completed command: %s", got)
+		default:
+		}
+		close(engine.release)
+		if got := <-completions; got != analytics.OutcomeSuccess {
+			t.Fatalf("owned check completion = %q", got)
+		}
+		synctest.Wait()
+	})
 }
 
 func TestUpdateCheckCompletionCancelsOnQuit(t *testing.T) {
