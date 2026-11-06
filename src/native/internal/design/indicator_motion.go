@@ -36,8 +36,8 @@ func IndicatorActivity(c *ui.Context, activity string, reducedMotion bool) float
 	if reducedMotion || activity == "" {
 		return 0
 	}
-	return ui.Row(c).Key(activity).Keyframes("ambient-activity", []ui.Keyframe{
+	return ui.Box(c).Key(activity).Absolute().Size(0, 0).Keyframes("ambient-activity", []ui.Keyframe{
 		{Value: 0},
-		{At: 900 * time.Millisecond, Value: 1, Ease: ui.EaseInOut},
-	}, ui.KeyframeOptions{Repeat: ui.RepeatForever, Alternate: true})
+		{At: 1600 * time.Millisecond, Value: 1, Ease: ui.Linear},
+	}, ui.KeyframeOptions{Repeat: ui.RepeatForever})
 }

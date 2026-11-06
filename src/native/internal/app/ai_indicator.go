@@ -13,7 +13,6 @@ import (
 // The AI command indicator is a panel at the bottom of the display the cursor is on, like the dictation indicator. It
 // never takes the keyboard, so the app the selection is in keeps focus.
 const (
-	aiPanelWidth     = 300
 	aiPanelBottomGap = 96
 )
 
@@ -22,6 +21,7 @@ type aiIndicator struct {
 	app    *App
 	window *mygo.Window
 	status commands.Status
+	width  int
 	height int
 	entry  uint64
 }
@@ -44,10 +44,10 @@ func (i *aiIndicator) show(status commands.Status) {
 		}
 		i.status = status
 	})
-	if height := aicommands.Height(status); height != i.height {
-		i.height = height
-		x, y := aiPanelOrigin(i.app.cursorWorkArea(), height)
-		w.SetSize(aiPanelWidth, height)
+	if width, height := aicommands.Width(status), aicommands.Height(status); width != i.width || height != i.height {
+		i.width, i.height = width, height
+		x, y := aiPanelOrigin(i.app.cursorWorkArea(), width, height)
+		w.SetSize(width, height)
 		w.SetPosition(x, y)
 	}
 	if !w.IsVisible() {
@@ -68,16 +68,18 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 		return i.window
 	}
 	i.height = aicommands.BaseHeight
-	x, y := aiPanelOrigin(i.app.cursorWorkArea(), i.height)
+	i.width = aicommands.BaseWidth
+	x, y := aiPanelOrigin(i.app.cursorWorkArea(), i.width, i.height)
 	i.window = mygo.NewWindow(mygo.WindowOptions{
 		Title:             "AI Command",
-		Width:             aiPanelWidth,
+		Width:             i.width,
 		Height:            i.height,
 		X:                 x,
 		Y:                 y,
 		Hidden:            true,
 		Frameless:         true,
 		Transparent:       true,
+		CornerRadius:      design.IndicatorRadius,
 		AlwaysOnTop:       true,
 		SkipTaskbar:       true,
 		Panel:             true,
@@ -96,6 +98,6 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 }
 
 // aiPanelOrigin places a panel of height at the bottom centre of area.
-func aiPanelOrigin(area platform.Rect, height int) (int, int) {
-	return area.X + (area.Width-aiPanelWidth)/2, area.Y + area.Height - height - aiPanelBottomGap
+func aiPanelOrigin(area platform.Rect, width, height int) (int, int) {
+	return area.X + (area.Width-width)/2, area.Y + area.Height - height - aiPanelBottomGap
 }

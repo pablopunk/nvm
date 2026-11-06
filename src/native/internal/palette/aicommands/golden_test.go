@@ -9,13 +9,6 @@ import (
 	"github.com/pablopunk/nvm/native/internal/design/golden"
 )
 
-// goldenWidth is the indicator panel's width; each golden takes the height Height gives its status.
-const (
-	goldenWidth  = 300
-	paletteWidth = 720
-	paletteHigh  = 470
-)
-
 // indicatorStatuses lists every status the indicator renders, in the order the goldens are written.
 var indicatorStatuses = []struct {
 	name   string
@@ -25,6 +18,9 @@ var indicatorStatuses = []struct {
 	{"indicator-fixing", commands.Status{Title: fixTitle, Subtitle: "Fixing Text", Tone: commands.ToneLoading}},
 	{"indicator-dictation-recording", commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}},
 	{"indicator-dictation-transcribing", commands.Status{Title: "Dictate", Subtitle: "Transcribing", Tone: commands.ToneLoading, Activity: commands.ActivityTranscribing}},
+	{"indicator-dictation-waiting", commands.Status{Title: "Dictate", Subtitle: "Waiting for microphone", Tone: commands.ToneLoading, Activity: commands.ActivityLoading}},
+	{"indicator-dictation-no-speech", commands.Status{Title: "Dictate", Subtitle: "No speech detected", Tone: commands.ToneLoading}},
+	{"indicator-dictation-permission", commands.Status{Title: "Dictate", Subtitle: "Dictation unavailable: Allow microphone access in System Settings, then try again.", Tone: commands.ToneError}},
 	{"indicator-no-changes", commands.Status{Title: fixTitle, Subtitle: "No changes needed", Tone: commands.ToneSuccess}},
 	{"indicator-triage", commands.Status{Title: triageTitle, Subtitle: "bug report · urgency 4/5 · needs reply", Tone: commands.ToneSuccess}},
 	{"indicator-failed-short", commands.Status{Title: fixTitle, Subtitle: "Sign in to use AI commands.", Tone: commands.ToneError}},
@@ -36,7 +32,7 @@ func TestIndicatorGoldens(t *testing.T) {
 	for _, entry := range indicatorStatuses {
 		t.Run(entry.name, func(t *testing.T) {
 			status := entry.status
-			options := golden.Options{Group: "aicommands", Width: goldenWidth, Height: Height(status)}
+			options := golden.Options{Group: "aicommands", Width: Width(status), Height: Height(status)}
 			golden.AssertMatrix(t, entry.name, func(c *ui.Context) { Indicator(c, status) }, options)
 		})
 	}
