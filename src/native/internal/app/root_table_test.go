@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -77,7 +78,14 @@ func rootTableFixture(t *testing.T) *App {
 	surfaces := paletteSurfaces(p)
 	surfaces.index = fileIndexPort{p: p}
 	surfaces.extras = p.testExtensionPorts()
-	p.exts.mgr.Store(newManagerWithFakes(t, surfaces, builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips, Clipboard: p.clipboardOptions}), nil, nil, p.appsvc))
+	builtins := builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips, Clipboard: p.clipboardOptions})
+	for i, extension := range builtins {
+		if web, ok := extension.(websearch.Extension); ok {
+			builtins[i] = newObservedWebSearch(t, web)
+			break
+		}
+	}
+	p.exts.mgr.Store(newManagerWithFakes(t, surfaces, builtins, nil, nil, p.appsvc))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),
