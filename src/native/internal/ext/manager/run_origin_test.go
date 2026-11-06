@@ -40,10 +40,12 @@ func TestConsumeCommandRunShadowsWithoutMutatingSource(t *testing.T) {
 }
 
 func TestCommandRunMarkerNilSafe(t *testing.T) {
+	//lint:ignore SA1012 Deliberately exercise the nil-context fallback.
 	marked := WithCommandRun(nil)
 	if _, ok := ConsumeCommandRun(marked); !ok {
 		t.Fatal("nil input could not be marked")
 	}
+	//lint:ignore SA1012 Deliberately exercise the nil-context fallback.
 	ctx, ok := ConsumeCommandRun(nil)
 	if ok || ctx == nil {
 		t.Fatal("nil input should yield an unmarked usable context")
