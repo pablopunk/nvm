@@ -56,6 +56,7 @@ func chooseExtensionRow(t *testing.T, app *App, query, title string) {
 	must(t, err)
 	must(t, app.Key("Down"))
 	must(t, app.Key("Down"))
+	waitForSelectedRow(t, app, title, elementWait)
 }
 
 // clearSearch deletes the palette's whole query, one BackSpace per character, and waits until the field is empty.
@@ -78,7 +79,37 @@ func enableThroughReview(t *testing.T, app *App, query, title string) {
 	must(t, app.Key("Return"))
 	_, err := app.WaitFor("Review "+title, elementWait)
 	must(t, err)
+	waitForSelectedRow(t, app, "Enable", elementWait)
 	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Search Extensions", elementWait)
+	must(t, err)
+}
+
+// waitForSelectedRow waits for the actionable row, rather than a title or footer
+// hint that may already be present while navigation is still being rendered.
+func waitForSelectedRow(t *testing.T, app *App, label string, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	var selected []string
+	for {
+		tree, err := app.Tree()
+		must(t, err)
+		selected = selected[:0]
+		for _, node := range tree.Nodes {
+			for _, state := range node.States {
+				if state == "selected" {
+					selected = append(selected, node.Label)
+					if node.Label == label {
+						return
+					}
+				}
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("row %q was not selected within %s; selected labels: %q", label, timeout, selected)
+		}
+		time.Sleep(pollInterval)
+	}
 }
 
 // hidePalette presses Escape until the palette is hidden, leaving pushed views before hiding the root.
