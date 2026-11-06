@@ -53,18 +53,18 @@ func (p *App) commandSlots() []command {
 // leadingCommands are the commands listed before the built-in system commands.
 func leadingCommands(p *App) []command {
 	return []command{
-		{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions", Run: func(h search.Host) { h.Push(p.extensionsView()) }},
+		completedNavigation(command{ID: shortcuts.CommandExtensions, Title: "Extensions", Keywords: "extensions manage plugins create builder", Icon: "puzzle", Subtitle: "Manage and create extensions"}, func(h search.Host) { h.Push(p.extensionsView()) }),
 	}
 }
 
 // trailingCommands are the commands listed after the built-in system commands.
 func trailingCommands(p *App) []command {
 	cmds := []command{
-		{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts", Run: func(h search.Host) { h.Push(p.keyboardShortcutsPage()) }},
-		{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work", Run: func(h search.Host) { h.Push(p.backgroundTasksPage()) }},
+		completedNavigation(command{ID: shortcuts.CommandKeyboardShortcuts, Title: "Keyboard Shortcuts", Keywords: "keyboard shortcuts hotkey keybindings keys", Icon: "keyboard", Subtitle: "View, change, or remove shortcuts"}, func(h search.Host) { h.Push(p.keyboardShortcutsPage()) }),
+		completedNavigation(command{ID: shortcuts.CommandBackgroundTasks, Title: "Background Tasks", Keywords: "background tasks jobs scheduled triggers history failures run", Icon: "activity", Subtitle: "Run, pause, and inspect background work"}, func(h search.Host) { h.Push(p.backgroundTasksPage()) }),
 		{ID: shortcuts.CommandSettings, Title: "Settings", Keywords: "settings preferences config hotkey", Icon: "settings", Subtitle: "Hotkey, search engine, clipboard", Run: func(h search.Host) { h.Push(p.settingsPage()) }, Complete: func(h search.Host, finish func(bool)) { h.Push(p.settingsPage()); finish(true) }},
 		{ID: shortcuts.CommandCheckForUpdates, Title: checkForUpdatesTitle, Keywords: "update upgrade version release new", Icon: "rotate-ccw", Subtitle: "Current version: " + mygo.App.Version(), Dismiss: search.DismissNever, Run: func(h search.Host) { p.checkForUpdates(func(string) {}); h.Push(p.updatesPage()) }},
-		{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true, Run: func(h search.Host) { h.Push(p.diagnosticsPage()) }},
+		completedNavigation(command{ID: shortcuts.CommandShowRecentErrors, Title: "Show Recent Errors", Keywords: "errors diagnostics logs crash failure reference support", Icon: "circle-alert", Subtitle: "Find and copy safe error references", Hidden: true}, func(h search.Host) { h.Push(p.diagnosticsPage()) }),
 		{ID: shortcuts.CommandReportProblem, Title: "Report a Problem", Keywords: "report problem bug issue support feedback", Icon: "message-circle", Subtitle: "Record a problem reference without screen content", Hidden: true, Run: p.reportProblem},
 		builtInSlot(appcommands.ID, 1),
 		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsPage()) }},
@@ -73,6 +73,16 @@ func trailingCommands(p *App) []command {
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.classifyImageSlot()...)
 	return cmds
+}
+
+// completedNavigation marks a synchronous command complete after its destination is pushed.
+func completedNavigation(cmd command, navigate func(search.Host)) command {
+	cmd.Run = navigate
+	cmd.Complete = func(h search.Host, finish func(bool)) {
+		navigate(h)
+		finish(true)
+	}
+	return cmd
 }
 
 // builtInSlot is the placeholder of a built-in's rows in the command list. width is how many Order places they take.
