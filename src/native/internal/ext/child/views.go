@@ -6,14 +6,13 @@ import (
 )
 
 // remoteViews is Views backed by the host. RefreshMenuBar asks the host to re-render this extension's menu bar items
-// in the background and returns at once. Refresh and Invalidate are palette view operations: menu bar providers have
-// no visible view, so they do nothing here.
+// in the background and returns at once. Refresh returns a host-owned palette action. Invalidate is not routed to palette views yet.
 type remoteViews struct {
 	link *hostLink
 }
 
 func (v remoteViews) Refresh() api.Action {
-	return api.Action{}
+	return api.Action{Kind: api.ActionRefreshView, Title: "Refresh"}
 }
 
 func (v remoteViews) Invalidate() {}

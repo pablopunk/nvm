@@ -27,7 +27,7 @@ type SearchProvider interface {
 	SearchItems(ctx Context, query string) ([]Item, error)
 }
 
-// ActionHandler runs actions with immediate host loading feedback. Return Source-backed views before slow I/O;
+// ActionHandler runs actions. Return Source-backed views before slow I/O;
 // DataLoader fills them after paint. Dispatch uses Invocation.Ref.ID for commands, forms, saves and refreshes.
 type ActionHandler interface {
 	RunAction(ctx Context, in Invocation) (Result, error)
@@ -132,7 +132,7 @@ type Context interface {
 
 // Views refreshes or invalidates the view that is currently visible.
 type Views interface {
-	// Refresh returns an action that re-runs the visible view's Refresh handler.
+	// Refresh returns an action for lists or grids without Search: reload the source or run the Refresh handler. Other views report refresh unavailable.
 	Refresh() Action
 	// Invalidate drops the visible view's data source snapshot so the next open is fresh.
 	Invalidate()

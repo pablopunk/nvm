@@ -27,6 +27,7 @@ const (
 	ActionReplaceView   ActionKind = "replace-view"
 	ActionRootView      ActionKind = "root-view"
 	ActionPop           ActionKind = "pop"
+	ActionRefreshView   ActionKind = "refresh-view"
 	ActionShellExec     ActionKind = "shell-exec"
 	ActionToggleSetting ActionKind = "toggle-setting"
 	ActionWindow        ActionKind = "window"
@@ -247,7 +248,7 @@ func (a Action) validateDeclarative() error {
 		if a.View == nil {
 			return errors.New("view is required")
 		}
-	case ActionPop, ActionOpenPalette, ActionSetQuery, ActionRecordPaletteShortcut, ActionUnavailable:
+	case ActionPop, ActionRefreshView, ActionOpenPalette, ActionSetQuery, ActionRecordPaletteShortcut, ActionUnavailable:
 		return nil
 	case ActionShellExec:
 		return validateShell(a.Shell)

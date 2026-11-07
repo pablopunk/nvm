@@ -40,6 +40,7 @@ func init() {
 		"ActionPushView":                reflect.ValueOf(api.ActionPushView),
 		"ActionQuickLook":               reflect.ValueOf(api.ActionQuickLook),
 		"ActionRecordPaletteShortcut":   reflect.ValueOf(api.ActionRecordPaletteShortcut),
+		"ActionRefreshView":             reflect.ValueOf(api.ActionRefreshView),
 		"ActionReplaceView":             reflect.ValueOf(api.ActionReplaceView),
 		"ActionRevealPath":              reflect.ValueOf(api.ActionRevealPath),
 		"ActionRootView":                reflect.ValueOf(api.ActionRootView),

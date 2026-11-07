@@ -25,36 +25,37 @@ type Session struct {
 	parent       *Session
 	chatRenderer *aichat.ExtensionChat
 	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
-	chatSideSession *Session
-	chatSidePage    *palette.View
-	viewIntent      bool
-	extID           string
-	view            api.View
-	host            search.Host
-	palettePage     *palette.View
-	items           []api.Item
-	sections        []api.ItemSection
-	loading         bool
-	failure         *api.Failure
-	hasMore         bool
-	selectID        string
-	images          map[string]*ui.Bitmap
-	requested       map[string]bool
-	handles         map[handle]route
-	markdown        *markdown.Options
-	started         bool
-	immediate       bool
-	dismissed       bool
-	refreshing      bool
-	refreshPending  bool
-	itemsRevision   uint64
-	stopInterval    chan struct{}
-	form            *formState
-	media           *palette.View
-	page            platform.WebPage
-	camera          *cameraView
-	searchChange    searchChange
-	accessory       *palette.Accessory
+	chatSideSession   *Session
+	chatSidePage      *palette.View
+	viewIntent        bool
+	extID             string
+	view              api.View
+	host              search.Host
+	palettePage       *palette.View
+	items             []api.Item
+	sections          []api.ItemSection
+	loading           bool
+	failure           *api.Failure
+	hasMore           bool
+	selectID          string
+	images            map[string]*ui.Bitmap
+	requested         map[string]bool
+	handles           map[handle]route
+	markdown          *markdown.Options
+	started           bool
+	immediate         bool
+	dismissed         bool
+	refreshing        bool
+	refreshPending    bool
+	manualRefreshHost search.Host
+	itemsRevision     uint64
+	stopInterval      chan struct{}
+	form              *formState
+	media             *palette.View
+	page              platform.WebPage
+	camera            *cameraView
+	searchChange      searchChange
+	accessory         *palette.Accessory
 	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
 	guard        sync.Mutex
 	filePreviews map[string]filePreviewText

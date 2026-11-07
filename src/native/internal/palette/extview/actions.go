@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"strings"
 	"strconv"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -104,6 +105,27 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			child.parent = s
 			h.Push(child.Open(h))
 		}}
+	case api.ActionRefreshView:
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
+			if s.dismissed {
+				return
+			}
+			if (s.view.Kind != api.ViewList && s.view.Kind != api.ViewGrid) || s.view.Search != nil {
+				h.Toast(unavailableMessage)
+				return
+			}
+			if s.view.Source != nil && s.view.Refresh == nil {
+				s.reload()
+				s.refreshHost()
+				return
+			}
+			if s.view.Source != nil || s.view.Refresh == nil || s.view.Refresh.Ref == nil || strings.TrimSpace(s.view.Refresh.Ref.ID) == "" {
+				h.Toast(unavailableMessage)
+				return
+			}
+			s.manualRefreshHost = h
+			s.refreshNow()
+		}}
 	case api.ActionPop:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Pop() }}
 	case api.ActionCamera:
@@ -182,24 +204,6 @@ func (s *Session) hostOperation(action api.Action, title string) search.Action {
 }
 
 const unavailableMessage = "This action is not available yet"
-
-func defaultTitle(kind api.ActionKind) string {
-	switch kind {
-	case api.ActionPaste, api.ActionPasteText:
-		return "Paste"
-	case api.ActionTypeText:
-		return "Type"
-	case api.ActionOpenURL:
-		return "Open"
-	case api.ActionCopyText:
-		return "Copy"
-	case api.ActionPushView:
-		return "Open"
-	case api.ActionPop:
-		return "Back"
-	}
-	return "Run"
-}
 
 func (s *Session) issue(key string, r route) handle {
 	s.guard.Lock()
