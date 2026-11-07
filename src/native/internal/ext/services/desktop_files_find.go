@@ -25,7 +25,7 @@ import (
 // thumbnailEdge is the edge in pixels of the pictures extensions receive from Thumbnail. dimensionPrefixBytes bounds
 // how much of an image is read to learn its size.
 const (
-	thumbnailEdge        = 256
+	thumbnailEdge        = thumbs.Edge
 	dimensionPrefixBytes = 256 << 10
 )
 

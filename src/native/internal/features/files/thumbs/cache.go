@@ -2,8 +2,11 @@ package thumbs
 
 import (
 	"container/list"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -124,58 +127,58 @@ func (c *Cache) Total() int64 {
 // read returns the stored bytes for key and marks it used. A stored file that cannot be read is forgotten.
 func (c *Cache) read(key string) ([]byte, bool) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	el, ok := c.entries[key]
-	if ok {
-		c.lru.MoveToFront(el)
-	}
-	c.mu.Unlock()
 	if !ok {
 		return nil, false
 	}
 	data, err := c.fsys.ReadFile(c.pathOf(key))
 	if err != nil {
-		c.forget(key)
+		c.total -= el.Value.(*cached).size
+		c.lru.Remove(el)
+		delete(c.entries, key)
 		return nil, false
 	}
+	c.lru.MoveToFront(el)
 	return data, true
 }
 
 // write stores data under key atomically and then enforces the bound.
 func (c *Cache) write(key string, data []byte) error {
 	target := c.pathOf(key)
-	tmp := target + ".tmp"
-	if err := c.fsys.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+	var tmp string
+	for range 10 {
+		var suffix [16]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			return err
+		}
+		tmp = target + "." + hex.EncodeToString(suffix[:]) + ".tmp"
+		err := c.fsys.CreateExclusive(tmp, data, 0o600)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		defer c.fsys.Remove(tmp)
+		if err := c.fsys.Sync(tmp); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if err := c.fsys.Rename(tmp, target); err != nil {
+			return err
+		}
+		if el, ok := c.entries[key]; ok {
+			c.total -= el.Value.(*cached).size
+			c.lru.Remove(el)
+			delete(c.entries, key)
+		}
+		c.pushFrontLocked(key, int64(len(data)))
+		c.evictLocked()
+		return nil
 	}
-	if err := c.fsys.Sync(tmp); err != nil {
-		return err
-	}
-	if err := c.fsys.Rename(tmp, target); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if el, ok := c.entries[key]; ok {
-		c.total -= el.Value.(*cached).size
-		c.lru.Remove(el)
-		delete(c.entries, key)
-	}
-	c.pushFrontLocked(key, int64(len(data)))
-	c.evictLocked()
-	return nil
-}
-
-// forget drops key from the index and removes its file.
-func (c *Cache) forget(key string) {
-	c.mu.Lock()
-	el, ok := c.entries[key]
-	if ok {
-		c.total -= el.Value.(*cached).size
-		c.lru.Remove(el)
-		delete(c.entries, key)
-	}
-	c.mu.Unlock()
-	_ = c.fsys.Remove(c.pathOf(key))
+	return fs.ErrExist
 }
 
 // pushFrontLocked records key as the most recently used entry. The caller holds mu.

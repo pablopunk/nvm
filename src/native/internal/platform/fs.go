@@ -78,3 +78,9 @@ type Event struct {
 	OldPath string
 	IsDir   bool
 }
+
+// Errors returned by bounded no-follow reads.
+var (
+	ErrFileSymlink  = errors.New("symbolic link")
+	ErrFileTooLarge = errors.New("file exceeds limit")
+)

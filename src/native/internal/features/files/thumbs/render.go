@@ -13,7 +13,6 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io/fs"
 
 	_ "image/gif"  // registers the GIF decoder with image.Decode
 	_ "image/jpeg" // registers the JPEG decoder with image.Decode
@@ -40,20 +39,19 @@ var (
 // Render decodes the image at path, scales it to fit an edge-by-edge square and returns it as PNG. It reads the path
 // without following a final symbolic link, and it never reads more than MaxSourceBytes.
 func Render(fsys platform.FS, path string, edge int) ([]byte, error) {
-	info, err := fsys.Lstat(path)
-	if err != nil {
-		return nil, err
-	}
-	if info.Mode()&fs.ModeSymlink != 0 {
-		return nil, ErrSymlink
-	}
-	if !info.Mode().IsRegular() {
+	reader, ok := fsys.(interface {
+		ReadFileNoFollow(string, int64) ([]byte, error)
+	})
+	if !ok {
 		return nil, ErrUnsupported
 	}
-	if info.Size() > MaxSourceBytes {
+	data, err := reader.ReadFileNoFollow(path, MaxSourceBytes)
+	if errors.Is(err, platform.ErrFileSymlink) {
+		return nil, ErrSymlink
+	}
+	if errors.Is(err, platform.ErrFileTooLarge) {
 		return nil, ErrTooLarge
 	}
-	data, err := fsys.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
