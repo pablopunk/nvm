@@ -17,9 +17,13 @@ import (
 // host owns the timeouts and the processes. A nil Clock or Cache disables snapshots, and a nil OnUI runs callbacks in
 // place (tests).
 type Deps struct {
-	Invoke func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	CommandSnapshots        *CommandSnapshots
+	CommandSnapshotIdentity func(extID string) any
+	InvokeRefresh           func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	Invoke                  func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// InvokeCommand is used only by a root command's primary action. Views and secondary actions use Invoke.
-	InvokeCommand func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	InvokeCommand        func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	InvokeCommandContext func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// InvokeViewAction is used for user-initiated run actions in a view.
 	InvokeViewAction func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their

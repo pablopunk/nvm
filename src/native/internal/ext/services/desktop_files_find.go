@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
+	"io/fs"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -25,7 +27,7 @@ import (
 // thumbnailEdge is the edge in pixels of the pictures extensions receive from Thumbnail. dimensionPrefixBytes bounds
 // how much of an image is read to learn its size.
 const (
-	thumbnailEdge        = thumbs.Edge
+	thumbnailEdge        = 160
 	dimensionPrefixBytes = 256 << 10
 )
 
@@ -147,6 +149,9 @@ func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, 
 	}
 	picture, err := thumbs.Render(h.deps.Files, path, thumbnailEdge)
 	if err != nil {
+		if errors.Is(err, fs.ErrPermission) {
+			return protocol.ThumbnailResult{}, snapshotPermissionDenied{}
+		}
 		return protocol.ThumbnailResult{}, nil
 	}
 	return protocol.ThumbnailResult{URL: pngDataURLPrefix + base64.StdEncoding.EncodeToString(picture), Found: true}, nil

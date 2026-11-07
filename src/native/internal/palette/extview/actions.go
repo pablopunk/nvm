@@ -1,8 +1,8 @@
 package extview
 
 import (
-	"strings"
 	"strconv"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -231,43 +231,6 @@ func (s *Session) runRoute(h search.Host, r route) {
 		return
 	}
 	s.invoke(h, r)
-}
-
-// invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
-// A declarative action is performed by the host instead, with no extension call.
-func (s *Session) invoke(h search.Host, r route) {
-	if r.action.Kind != api.ActionRun {
-		s.runDeclared(h, r.action)
-		return
-	}
-	if r.action.Ref == nil {
-		h.Toast(unavailableMessage)
-		return
-	}
-	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
-	current := func() bool { return r.action.DismissAfterRun || !s.dismissed }
-	if loading, ok := h.(search.ActionLoadingHost); ok {
-		current = loading.BeginAction()
-	}
-	invoke := s.deps.Invoke
-	if r.command && s.deps.InvokeCommand != nil {
-		invoke = s.deps.InvokeCommand
-	} else if r.viewIntent && s.deps.InvokeViewAction != nil {
-		invoke = s.deps.InvokeViewAction
-	}
-	if invoke == nil {
-		h.Toast(unavailableMessage)
-		return
-	}
-	invoke(r.extID, in, func(result api.Result, failure *api.Failure) {
-		if result.DataChanged {
-			s.revalidateMutation()
-		}
-		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
-			return
-		}
-		s.finish(h, r.extID, r.action.Title, result, failure)
-	})
 }
 
 // maxFollowUps bounds the chain of follow-up actions one run may start, so a handler that answers with itself stops.

@@ -50,8 +50,13 @@ const defaultGridColumns = 4
 
 // gridColumns is the view's column count, or the default when it names none or names a count the palette cannot fit.
 func (s *Session) gridColumns() int {
-	if s.view.Grid != nil && s.view.Grid.Columns > 0 {
-		return s.view.Grid.Columns
+	if s.view.Grid != nil {
+		if s.view.Grid.Columns > 0 {
+			return s.view.Grid.Columns
+		}
+		if s.view.Grid.Layout == "wide" {
+			return 3
+		}
 	}
 	return defaultGridColumns
 }

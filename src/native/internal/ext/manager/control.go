@@ -125,6 +125,7 @@ func (m *Manager) Disable(id string) error {
 	if err := m.enabled.SetEnabled(id, false); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
+	e.snapshotIdentity = nil
 	m.commands.forget(id)
 	stopEntry(e)
 	return nil

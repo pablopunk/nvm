@@ -74,7 +74,10 @@ func (c Command) Validate() error {
 // Invocation is the input to an ActionRun handler. The host fills only the fields that apply to
 // the action that ran; everything else is zero.
 type Invocation struct {
-	Ref ActionRef `json:"ref"`
+	// ProtectSnapshot is host-only: a denied service invalidates a displayed cached view.
+	ProtectSnapshot  bool                  `json:"-"`
+	OnSnapshotDenied func(*SnapshotDenial) `json:"-"`
+	Ref              ActionRef             `json:"ref"`
 	// SelectedItemID is the focused item for item actions and onSelectionChange.
 	SelectedItemID string `json:"selectedItemId,omitempty"`
 	// Form holds submitted field values for a form's submit action.
@@ -119,6 +122,8 @@ type LaunchContext struct {
 
 // Result is what a handler returns to the palette. The zero value means "nothing to do".
 type Result struct {
+	// SnapshotEvidence is populated only by the host and never sent by an extension.
+	SnapshotEvidence *SnapshotEvidence `json:"-"`
 	// DataChanged revalidates the surviving origin after a confirmed mutation, even if the handler returns an error.
 	// Autosave revalidates the editor’s surviving parent; closed views do not refresh.
 	DataChanged bool           `json:"dataChanged,omitempty"`
@@ -130,6 +135,23 @@ type Result struct {
 	Toast *Toast `json:"toast,omitempty"`
 	// Draft resolves an editor draft conflict; Migrate needs replacement content.
 	Draft *DraftResolution `json:"draft,omitempty"`
+}
+
+// SnapshotEvidence describes host-observed desktop.files thumbnail authority for one invocation.
+type SnapshotEvidence struct {
+	ThumbnailHashes      map[[32]byte]bool
+	ThumbnailPaths       map[[32]byte][]string
+	ThumbnailSamples     int
+	Overflow             bool
+	DeniedPaths          []string
+	FilesAuthorityDenied bool
+}
+
+// SnapshotDenial describes the specific files authority denied by the host.
+type SnapshotDenial struct {
+	Failure         *Failure
+	Path            string
+	AuthorityDenied bool
 }
 
 // DraftResolution answers a draft conflict. Migrate requires Content.

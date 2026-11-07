@@ -62,7 +62,7 @@ func readLines(proc platform.WorkerProcess, done <-chan struct{}) <-chan lineRes
 
 // exchange writes one request to the running child and waits for its response, within the method's budget.
 // Any host-side failure kills the child and is recorded, so the next call starts from a clean state.
-func (r *Runtime) exchange(req protocol.Request) (protocol.Response, error) {
+func (r *Runtime) exchange(req protocol.Request, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
 	child, budget, err := r.runningChild(req.Method)
 	if err != nil {
 		return protocol.Response{}, err
@@ -74,7 +74,7 @@ func (r *Runtime) exchange(req protocol.Request) (protocol.Response, error) {
 	if err := child.proc.WriteLine(line); err != nil {
 		return protocol.Response{}, r.failChild(child, api.CodeInternal, "cannot send a request: "+err.Error())
 	}
-	return r.awaitResponse(child, req, budget)
+	return r.awaitResponse(child, req, budget, onDenied)
 }
 
 // runningChild returns the child a request should go to, with the budget of its method.
@@ -100,18 +100,44 @@ func notRunningReason(state State, reason string) string {
 // spends answering a service call is added back to both the soft and the hard deadline, because an extension that
 // waits for a shell command, a network reply or a palette confirmation is not busy. The soft budget only records a
 // diagnostic; the hard budget kills the child.
-func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budget Budget) (protocol.Response, error) {
+func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budget Budget, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
 	clock := r.cfg.Clock
 	started := clock.Now()
 	var blocked time.Duration
 	soft := r.softTimer(budget)
 	hard := clock.After(budget.Hard)
+	var chunks []byte
+	sequence := 0
+	var permissionFailure *api.Failure
+	evidence := &api.SnapshotEvidence{}
+	deniedAuthorityNotified := false
+	deniedPathsNotified := make(map[string]bool)
 	for {
 		select {
 		case line, open := <-child.lines:
 			if call, ok := serviceCallFrom(line, open); ok {
+				if sequence != 0 {
+					return protocol.Response{}, r.failChild(child, api.CodeInvalid, "service call interrupted response chunks")
+				}
 				callStart := clock.Now()
-				_, err := r.answerService(child, call, budget, req.Method)
+				reply, err := r.answerService(child, call, budget, req.Method)
+				denial := observeSnapshotService(evidence, call, reply)
+				if denial != nil {
+					if permissionFailure == nil {
+						permissionFailure = denial.Failure
+					}
+					notify := !denial.AuthorityDenied && !deniedPathsNotified[denial.Path] || denial.AuthorityDenied && !deniedAuthorityNotified
+					if denial.AuthorityDenied {
+						deniedAuthorityNotified = true
+					} else if len(deniedPathsNotified) < 200 {
+						deniedPathsNotified[denial.Path] = true
+					} else {
+						notify = false
+					}
+					if onDenied != nil && notify {
+						onDenied(denial)
+					}
+				}
 				blocked += clock.Now().Sub(callStart)
 				if err != nil {
 					return protocol.Response{}, err
@@ -123,7 +149,32 @@ func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budge
 				}
 				continue
 			}
-			return r.handleLine(child, req, line, open)
+			if open && line.err == nil {
+				var probe struct {
+					Chunk *json.RawMessage `json:"chunk"`
+				}
+				if json.Unmarshal(line.data, &probe) == nil && probe.Chunk != nil {
+					if req.Method != protocol.MethodRun {
+						return protocol.Response{}, r.failChild(child, api.CodeInvalid, "response chunks are not allowed for this method")
+					}
+					var part protocol.ResponseChunk
+					if json.Unmarshal(line.data, &part) != nil || part.ID != req.ID || part.Sequence != sequence || len(part.Chunk) == 0 || len(part.Chunk) > 256<<10 || len(chunks)+len(part.Chunk) > protocol.MaxResponseBytes {
+						return protocol.Response{}, r.failChild(child, api.CodeInvalid, "invalid response chunk")
+					}
+					chunks = append(chunks, part.Chunk...)
+					sequence++
+					if !part.Last {
+						continue
+					}
+					line.data = chunks
+				} else if sequence != 0 {
+					return protocol.Response{}, r.failChild(child, api.CodeInvalid, "incomplete response chunks")
+				}
+			}
+			response, err := r.handleLine(child, req, line, open)
+			response.PermissionFailure = permissionFailure
+			response.SnapshotEvidence = evidence
+			return response, err
 		case <-soft:
 			soft = nil
 			r.recordSlow(req.Method, budget)

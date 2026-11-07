@@ -20,6 +20,9 @@ import (
 // extensionRunTimeout bounds one action an extension runs from the palette. Actions run off the UI thread.
 const extensionRunTimeout = 10 * time.Second
 
+// Refreshes run behind a visible snapshot and may need to validate many local files.
+const extensionRefreshTimeout = 30 * time.Second
+
 // backgroundRunTimeout bounds an action declared background, as the manager's background run budget does, plus slack.
 const backgroundRunTimeout = 2*time.Minute + 10*time.Second
 
@@ -49,11 +52,19 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		}()
 	}
 	return extview.Deps{
+		CommandSnapshots:        &p.commandSnapshots,
+		CommandSnapshotIdentity: m.SnapshotIdentity,
+		InvokeRefresh: func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			invoke(ctx, extID, in, done)
+		},
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(context.Background(), extID, in, done)
 		},
 		InvokeCommand: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(manager.WithCommandRunOrigin(context.Background(), m.ResolveCommandOrigin(extID, in.Ref.ID)), extID, in, done)
+		},
+		InvokeCommandContext: func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			invoke(manager.WithCommandRunOrigin(ctx, m.ResolveCommandOrigin(extID, in.Ref.ID)), extID, in, done)
 		},
 		InvokeViewAction: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(manager.WithViewActionRunOrigin(context.Background(), m.ResolveViewActionOrigin(extID)), extID, in, done)
@@ -163,6 +174,9 @@ func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string
 func runTimeoutOf(in api.Invocation) time.Duration {
 	if in.Background {
 		return backgroundRunTimeout
+	}
+	if in.Launch.Refresh {
+		return extensionRefreshTimeout
 	}
 	return extensionRunTimeout
 }

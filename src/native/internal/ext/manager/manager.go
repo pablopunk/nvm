@@ -148,9 +148,10 @@ type Manager struct {
 // entry is one extension folder: the version on disk, the runtime that runs it when it can run, and the host
 // services that runtime calls.
 type entry struct {
-	bundle  bundle.Bundle
-	runtime runner
-	host    *services.Handler
+	snapshotIdentity *byte
+	bundle           bundle.Bundle
+	runtime          runner
+	host             *services.Handler
 	// builtin marks an entry compiled into the app: it has no folder, no review and no enabled state.
 	builtin bool
 }

@@ -48,7 +48,7 @@ func (s *Session) requestImage(ref string) {
 		ctx = context.Background()
 	}
 	s.deps.LoadImage(ctx, ref, func(bm *ui.Bitmap) {
-		if s.dismissed {
+		if s.dismissed || ctx.Err() != nil {
 			return
 		}
 		s.images[ref] = bm

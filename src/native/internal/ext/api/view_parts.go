@@ -51,6 +51,7 @@ type SearchAccessoryOption struct {
 
 // Refresh asks the host to re-run a handler while the view is visible. Immediate paints the
 // cached snapshot first and refreshes after paint. The host owns the timer and the cancellation.
+// A refreshed list or grid may return a patch or a matching view; its rows update in place.
 type Refresh struct {
 	IntervalMs int64      `json:"intervalMs,omitempty"`
 	Mode       PatchMode  `json:"mode,omitempty"`

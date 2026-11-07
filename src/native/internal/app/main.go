@@ -35,6 +35,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/menubar"
 	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/palette/extwindow"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -56,6 +57,7 @@ const (
 // App is the whole app: the palette shell, the one window it draws in, and the feature state its views and
 // providers read. The shell's methods are promoted, so features call Hide, Push and the rest on the App.
 type App struct {
+	commandSnapshots extview.CommandSnapshots
 	*palette.Palette
 	panel   *mygo.Window
 	uiQueue interface{ Update(fn func()) }

@@ -221,19 +221,6 @@ func (h *Handler) Serve(ctx context.Context, call protocol.ServiceCall) protocol
 	return reply
 }
 
-func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
-	result, err := h.dispatch(ctx, call)
-	if err != nil {
-		failure := failureOf(err)
-		return protocol.ServiceReply{Failure: &failure}
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInternal, Message: "the service result cannot be encoded"}}
-	}
-	return protocol.ServiceReply{Data: data}
-}
-
 func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Service {
 	case protocol.ServiceStorage:

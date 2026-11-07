@@ -117,12 +117,22 @@ func (s *Session) refreshNow() {
 		return
 	}
 	s.refreshing = true
-	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
+	var snapshotVersion uint64
+	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+		snapshotVersion = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
+	}
+	s.invokeRefresh(*refresh.Ref, func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
+		if failure != nil && s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+			s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
+		}
 		if s.dismissed {
 			return
 		}
-		if s.refreshPending {
+		if s.snapshotRef != nil && s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
+			return
+		}
+		if s.refreshPending && failure == nil {
 			s.refreshPending = false
 			s.refreshNow()
 			return
@@ -137,7 +147,33 @@ func (s *Session) refreshNow() {
 			s.refreshHost()
 			return
 		}
-		if failure != nil || result.Patch == nil {
+		if failure != nil {
+			s.refreshPending = false
+			if failure.Code == api.CodePermission && snapshotEvidenceDeniesPaths(result.SnapshotEvidence, s.snapshotSourcePaths) {
+				s.clearPrivateSnapshot(failure)
+			}
+			return
+		}
+		if len(s.snapshotSourcePaths) > 0 {
+			filterSnapshotDenied(&result, s.snapshotStaleHashes)
+		}
+		s.snapshotStaleHashes = nil
+		s.restoreSnapshotPresentation(result)
+		if result.View != nil {
+			s.snapshotSourcePaths = verifiedSnapshotPaths(result.View.Items, result.SnapshotEvidence)
+		}
+		if result.Patch == nil && result.View != nil && result.View.Kind == s.view.Kind && len(s.sections) == 0 && len(result.View.Sections) == 0 && (s.view.Kind == api.ViewGrid || s.view.Kind == api.ViewList) {
+			v := result.View
+			mode := refresh.Mode
+			if mode == "" {
+				mode = api.PatchReplace
+			}
+			result.Patch = &api.ViewPatch{Mode: mode, Items: v.Items, IsLoading: &v.IsLoading, EmptyView: v.EmptyView, Status: v.Status}
+		}
+		if result.Patch == nil {
+			if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+				s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
+			}
 			return
 		}
 		patch := *result.Patch
@@ -149,6 +185,9 @@ func (s *Session) refreshNow() {
 			s.loading, s.failure = false, nil
 		}
 		s.Apply(patch)
+		if s.snapshotRef != nil && s.deps.CommandSnapshots != nil && s.deps.CommandSnapshotIdentity != nil && sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
+			s.deps.CommandSnapshots.PutVerified(s.snapshotIdentity, *s.snapshotRef, s.view, s.items, result.SnapshotEvidence)
+		}
 		s.cacheRefreshPatch(patch)
 		s.refreshHost()
 	})
@@ -184,6 +223,9 @@ func (s *Session) close() {
 	s.dismissed = true
 	if s.cancelImages != nil {
 		s.cancelImages()
+	}
+	if s.cancelWork != nil {
+		s.cancelWork()
 	}
 	if s.stopInterval != nil {
 		close(s.stopInterval)

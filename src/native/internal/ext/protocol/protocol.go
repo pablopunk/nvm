@@ -54,6 +54,17 @@ const ChildFlag = "--nvm-ext-child"
 // partial read: the host kills the child.
 const MaxLineBytes = 1 << 20
 
+// MaxResponseBytes bounds the reassembled response independently of the line limit.
+const MaxResponseBytes = 16 << 20
+
+// ResponseChunk carries a consecutive part of a large response. Data is base64 encoded by JSON.
+type ResponseChunk struct {
+	ID       uint64 `json:"id"`
+	Sequence int    `json:"sequence"`
+	Last     bool   `json:"last,omitempty"`
+	Chunk    []byte `json:"chunk"`
+}
+
 // Ready is the child's first line. It reports whether the extension source loaded. A child that sends Ready
 // with OK false exits right after. The manifest is never read from the child: the host reviews extension.json.
 type Ready struct {
@@ -74,9 +85,11 @@ type Request struct {
 
 // Response answers one Request. A run response may include Data with a Failure; only its mutation signal is applied.
 type Response struct {
-	ID      uint64          `json:"id"`
-	Data    json.RawMessage `json:"data,omitempty"`
-	Failure *api.Failure    `json:"failure,omitempty"`
+	PermissionFailure *api.Failure          `json:"-"`
+	SnapshotEvidence  *api.SnapshotEvidence `json:"-"`
+	ID                uint64                `json:"id"`
+	Data              json.RawMessage       `json:"data,omitempty"`
+	Failure           *api.Failure          `json:"failure,omitempty"`
 }
 
 // ServiceCall is one call from the child to a host service. A child line is a ServiceCall when Service is set;
@@ -91,9 +104,10 @@ type ServiceCall struct {
 // ServiceReply answers one ServiceCall. Data holds the JSON result when Failure is nil. The host writes it on the
 // child's stdin, so a host line is a ServiceReply when ReplyTo is set and a Request otherwise.
 type ServiceReply struct {
-	ReplyTo uint64          `json:"replyTo"`
-	Data    json.RawMessage `json:"data,omitempty"`
-	Failure *api.Failure    `json:"failure,omitempty"`
+	SnapshotPermissionFailure *api.Failure    `json:"-"`
+	ReplyTo                   uint64          `json:"replyTo"`
+	Data                      json.RawMessage `json:"data,omitempty"`
+	Failure                   *api.Failure    `json:"failure,omitempty"`
 	// WaitedForUser is set by the host and never sent: the call waited for a palette answer, so the request budget
 	// restarts after it.
 	WaitedForUser bool `json:"-"`
