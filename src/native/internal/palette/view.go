@@ -125,7 +125,9 @@ type Grid struct {
 	// Compact omits title placeholders for glyph-only grids.
 	Compact    bool
 	CellHeight float32
-	Cell       func(c *ui.Context, it search.Item)
+	// ImageAspectRatio sizes media cells from the measured grid width.
+	ImageAspectRatio float32
+	Cell             func(c *ui.Context, it search.Item)
 }
 
 // Accessory is a search field's option picker: a native popup menu of the options, with a check mark on the current one.

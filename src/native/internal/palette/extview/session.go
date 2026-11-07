@@ -7,6 +7,7 @@
 package extview
 
 import (
+	"context"
 	"sync"
 
 	"github.com/egoist/mygo/ui"
@@ -40,6 +41,8 @@ type Session struct {
 	selectID          string
 	images            map[string]*ui.Bitmap
 	requested         map[string]bool
+	imageContext      context.Context
+	cancelImages      context.CancelFunc
 	handles           map[handle]route
 	markdown          *markdown.Options
 	started           bool
@@ -66,7 +69,9 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 	if deps.Cameras == nil {
 		deps.Cameras = NewMemoryCameras()
 	}
+	imageContext, cancelImages := context.WithCancel(context.Background())
 	s := &Session{
+		imageContext: imageContext, cancelImages: cancelImages,
 		deps: deps, extID: extID, view: view, loading: view.IsLoading, viewIntent: true,
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
 		images: map[string]*ui.Bitmap{}, requested: map[string]bool{},

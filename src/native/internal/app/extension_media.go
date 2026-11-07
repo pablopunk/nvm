@@ -1,26 +1,50 @@
 package app
 
 import (
+	"bytes"
+	"context"
 	"encoding/base64"
+	"errors"
+	"image"
+	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// Bounds of an extension image. A data URL longer than maxImageDataURLBytes, or a file larger than maxImageFileBytes,
-// is not decoded: the view shows its fallback instead.
-const (
-	maxImageDataURLBytes = 4 << 20
-	maxImageFileBytes    = 8 << 20
-)
+// A data URL longer than this is not decoded.
+const maxImageDataURLBytes = 4 << 20
 
-// loadExtensionBitmap decodes an image an extension names: a base64 data URL or a local file, read in a bounded way.
+var extensionImagePermits = make(chan struct{}, 2)
+
+// loadExtensionBitmap decodes an extension image from a data URL, local file, or public web URL.
 // It runs off the UI thread. A nil result means the image is not shown.
-func loadExtensionBitmap(files platform.FS, ref string) *ui.Bitmap {
-	data, ok := imageBytes(files, ref)
+func loadExtensionBitmap(files platform.FS, ref string, publicHTTP ...platform.HTTP) *ui.Bitmap {
+	return loadExtensionBitmapContext(context.Background(), files, ref, publicHTTP...)
+}
+
+func loadExtensionBitmapContext(ctx context.Context, files platform.FS, ref string, publicHTTP ...platform.HTTP) *ui.Bitmap {
+	select {
+	case extensionImagePermits <- struct{}{}:
+	case <-ctx.Done():
+		return nil
+	}
+	defer func() { <-extensionImagePermits }()
+	var data []byte
+	var ok bool
+	parsed, parseErr := url.Parse(ref)
+	if parseErr == nil && (strings.EqualFold(parsed.Scheme, "https") || strings.EqualFold(parsed.Scheme, "http")) {
+		if len(publicHTTP) > 0 && publicHTTP[0] != nil {
+			data, ok = remoteImageBytesContext(ctx, publicHTTP[0], ref)
+		}
+	} else {
+		data, ok = imageBytes(files, ref)
+	}
 	if !ok {
 		return nil
 	}
@@ -38,13 +62,20 @@ func imageBytes(files platform.FS, ref string) ([]byte, bool) {
 			return nil, false
 		}
 		data, err := base64.StdEncoding.DecodeString(payload)
-		return data, err == nil
+		if err != nil {
+			return nil, false
+		}
+		config, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > thumbs.MaxSourcePixels/config.Height {
+			return nil, false
+		}
+		return data, true
 	}
 	if files == nil {
 		return nil, false
 	}
-	data, size, err := files.ReadFilePrefix(localImagePath(ref), maxImageFileBytes)
-	if err != nil || size > maxImageFileBytes {
+	data, err := thumbs.Render(files, localImagePath(ref), thumbs.ReferenceEdge(ref))
+	if err != nil {
 		return nil, false
 	}
 	return data, true
@@ -56,5 +87,30 @@ func localImagePath(ref string) string {
 	if err != nil || parsed.Scheme != "file" {
 		return ref
 	}
-	return parsed.Path
+	return platform.FileURLPath(parsed)
+}
+
+// remoteImageBytes uses the public-only transport and bounds both network and decoder work.
+func remoteImageBytes(client platform.HTTP, ref string) ([]byte, bool) {
+	return remoteImageBytesContext(context.Background(), client, ref)
+}
+
+func remoteImageBytesContext(parent context.Context, client platform.HTTP, ref string) ([]byte, bool) {
+	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
+	defer cancel()
+	result, err := platform.FetchExchange(ctx, client, platform.Exchange{Method: http.MethodGet, URL: ref, MaxBytes: maxImageDataURLBytes, MaxRedirects: 3, Check: func(target *url.URL) error {
+		if (!strings.EqualFold(target.Scheme, "http") && !strings.EqualFold(target.Scheme, "https")) || target.Host == "" || target.User != nil {
+			return errors.New("invalid image URL")
+		}
+		target.Scheme = strings.ToLower(target.Scheme)
+		return nil
+	}})
+	if err != nil || result.Status != http.StatusOK {
+		return nil, false
+	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(result.Body))
+	if err != nil || config.Width <= 0 || config.Height <= 0 || config.Width > thumbs.MaxSourcePixels/config.Height {
+		return nil, false
+	}
+	return result.Body, true
 }

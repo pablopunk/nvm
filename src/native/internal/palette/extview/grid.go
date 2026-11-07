@@ -2,6 +2,8 @@ package extview
 
 import (
 	"github.com/egoist/mygo/ui"
+	"strconv"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -15,6 +17,10 @@ const compactCellHeight = 48
 func (s *Session) gridSpecOf() *palette.Grid {
 	if s.view.Grid != nil && s.view.Grid.Layout == "compact" {
 		return &palette.Grid{Columns: s.gridColumns(), Compact: true, CellHeight: compactCellHeight, Cell: drawCompactCell}
+	}
+	if s.view.Grid != nil && s.view.Grid.Layout == "wide" {
+		ratio := gridAspectRatio(s.view.Grid.AspectRatio)
+		return &palette.Grid{Columns: s.gridColumns(), CellHeight: 180, ImageAspectRatio: ratio, Cell: func(c *ui.Context, it search.Item) { drawWideGridCell(c, it, ratio) }}
 	}
 	return &palette.Grid{Columns: s.gridColumns(), CellHeight: gridCellHeight, Cell: drawGridCell}
 }
@@ -64,4 +70,32 @@ func drawGridCell(c *ui.Context, it search.Item) {
 			ui.Text(c, it.Subtitle).FontSize(11).TextColor(k.Secondary).FillWidth().SingleLine()
 		}
 	})
+}
+
+// drawWideGridCell gives media images the space to be recognized at a glance.
+func drawWideGridCell(c *ui.Context, it search.Item, ratio float32) {
+	k := design.Tokens(c)
+	ui.Column(c).FillWidth().MinWidth(0).Gap(6).Children(func() {
+		if it.Image != nil {
+			ui.Image(c, it.Image).FillWidth().AspectRatio(ratio).Fit(ui.Cover).Radius(8).Clip()
+		} else {
+			ui.Row(c).FillWidth().AspectRatio(ratio).Center().Children(func() { design.Tile(c, design.TileData{Icon: it.Icon, Tone: it.Tone, Title: it.Title}) })
+		}
+		ui.Text(c, it.Title).FontSize(13).TextColor(k.Strong).FillWidth().SingleLine()
+		if it.Subtitle != "" {
+			ui.Text(c, it.Subtitle).FontSize(11).TextColor(k.Secondary).FillWidth().SingleLine()
+		}
+	})
+}
+
+func gridAspectRatio(value string) float32 {
+	parts := strings.Split(value, "/")
+	if len(parts) == 2 {
+		width, errWidth := strconv.ParseFloat(strings.TrimSpace(parts[0]), 32)
+		height, errHeight := strconv.ParseFloat(strings.TrimSpace(parts[1]), 32)
+		if errWidth == nil && errHeight == nil && width > 0 && height > 0 && width/height >= 0.25 && width/height <= 4 {
+			return float32(width / height)
+		}
+	}
+	return 16.0 / 9
 }

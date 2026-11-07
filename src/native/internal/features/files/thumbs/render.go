@@ -29,6 +29,9 @@ const (
 // MaxSourceBytes is the largest image rendered. A larger file reports ErrTooLarge and gets no picture.
 const MaxSourceBytes = 25 << 20
 
+// MaxSourcePixels bounds allocations during decoding.
+const MaxSourcePixels = 32_000_000
+
 // Errors a render reports. A caller treats each as "no picture" and says nothing to the user.
 var (
 	ErrUnsupported = errors.New("thumbs: the file is not an image this build decodes")
@@ -55,12 +58,19 @@ func Render(fsys platform.FS, path string, edge int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width <= 0 || config.Height <= 0 {
+		return nil, ErrUnsupported
+	}
+	if config.Width > MaxSourcePixels/config.Height {
+		return nil, ErrTooLarge
+	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, ErrUnsupported
 	}
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, fitInside(src, edge)); err != nil {
+	if err := png.Encode(&buf, orientThumbnail(fitInside(src, edge), jpegOrientation(data))); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

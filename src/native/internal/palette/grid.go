@@ -28,7 +28,22 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 	cols := max(g.Columns, 1)
 	slots := p.gridSlots(p.pendingBatch())
 	rows := (slots + cols - 1) / cols
-	ui.Row(c).Grow(1).MinHeight(0).Children(func() {
+	container := ui.Row(c).Grow(1).MinHeight(0)
+	container.Children(func() {
+		measured := *g
+		width := container.Bounds().W
+		windowWidth, _ := c.Size()
+		if windowWidth != p.gridWindowWidth || width != p.gridPaneWidth {
+			p.gridWindowWidth, p.gridPaneWidth = windowWidth, width
+			c.Invalidate()
+		}
+		if width <= 0 {
+			width = c.Root().Bounds().W
+		}
+		if g.ImageAspectRatio > 0 && width > 0 {
+			measured.CellHeight = mediaGridCellHeight(width, cols, g.ImageAspectRatio)
+		}
+		g = &measured
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed = ui.Transparent, ui.Transparent, ui.Transparent
@@ -127,4 +142,12 @@ func (p *Palette) moveGridChoice(c *ui.Context, g *Grid) {
 	case c.Shortcut(0, ui.KeyEnd):
 		p.choose(len(p.results) - 1)
 	}
+}
+
+// mediaGridCellHeight reserves the image and both text lines using the measured grid pane width.
+func mediaGridCellHeight(width float32, columns int, ratio float32) float32 {
+	cols := max(columns, 1)
+	// List and row horizontal padding, column gaps, and cell padding.
+	imageWidth := max((width-28-float32(cols-1)*8)/float32(cols)-16, 1)
+	return imageWidth/ratio + 58
 }

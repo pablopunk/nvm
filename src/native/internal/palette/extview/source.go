@@ -182,6 +182,9 @@ func (s *Session) close() {
 		return
 	}
 	s.dismissed = true
+	if s.cancelImages != nil {
+		s.cancelImages()
+	}
 	if s.stopInterval != nil {
 		close(s.stopInterval)
 	}

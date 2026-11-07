@@ -78,9 +78,9 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			}
 			return result, failure
 		},
-		LoadImage: func(ref string, done func(*ui.Bitmap)) {
+		LoadImage: func(ctx context.Context, ref string, done func(*ui.Bitmap)) {
 			go func() {
-				bitmap := loadExtensionBitmap(ports.FS, ref)
+				bitmap := loadExtensionBitmapContext(ctx, ports.FS, ref, ports.PublicHTTP)
 				p.onUI(func() { done(bitmap) })
 			}()
 		},
