@@ -14,11 +14,9 @@ func mix(a, b ui.Color, t float32) ui.Color {
 func lighten(c ui.Color, t float32) ui.Color { return mix(c, ui.RGB(255, 255, 255), t) }
 func darken(c ui.Color, t float32) ui.Color  { return mix(c, ui.RGB(0, 0, 0), t) }
 
-// Etched draws a groove: a dark hairline with a light one under it, as a divider between two regions.
+// Etched leaves breathing room between regions on the continuous glass surface.
 func Etched(c *ui.Context) {
-	k := Tokens(c)
-	ui.Box(c).Height(1).Background(k.Lo)
-	ui.Box(c).Height(1).Background(k.Hi)
+	ui.Box(c).Height(4)
 }
 
 // Glossy fills a colored control with a vertical sheen, a lit top edge and a soft contact shadow.
@@ -29,12 +27,25 @@ func Glossy(e ui.Element, col ui.Color, radius float32, shadow float32) ui.Eleme
 		Shadow(0, 1, 2+shadow, 0, ui.RGBA(0, 0, 0, 0.14))
 }
 
-// SelectedFill is the highlighted row: a lit warm plate with a faint gold edge, stronger when prominent.
+// selectionEdgeWidth is the width of a selection plate's edge.
+const selectionEdgeWidth = 1
+
+// PlatePadding is the padding of a selectable row. A selected row draws its edge as a border, which takes layout
+// space, so it gives that space up from its padding: the content sits where it sits unselected.
+func PlatePadding(e ui.Element, selected bool, vertical, horizontal float32) ui.Element {
+	if selected {
+		return e.Padding(vertical-selectionEdgeWidth, horizontal-selectionEdgeWidth)
+	}
+	return e.Padding(vertical, horizontal)
+}
+
+// SelectedFill is the highlighted row: a lit warm plate with a faint gold edge, stronger when prominent. Its row is
+// padded by PlatePadding.
 func SelectedFill(e ui.Element, k *TokenSet, prominent bool) ui.Element {
 	if prominent {
 		return e.Background(k.AccentMuted).
-			Border(1, k.AccentEmphasis).InsetShadow(0, 1, 0, 0, k.Hi).Shadow(0, 1, 3, 0, k.Lo)
+			Border(selectionEdgeWidth, k.AccentEmphasis).InsetShadow(0, 1, 0, 0, k.Hi).Shadow(0, 1, 3, 0, k.Lo)
 	}
-	return e.Background(k.Selected).Border(1, k.EdgeSubtle).
+	return e.Background(k.Selected).Border(selectionEdgeWidth, k.EdgeSubtle).
 		InsetShadow(0, 1, 0, 0, k.Hi).Shadow(0, 1, 3, 0, k.Lo)
 }

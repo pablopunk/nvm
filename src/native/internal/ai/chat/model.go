@@ -27,6 +27,12 @@ const (
 	KindProofread    Kind = "proofread"
 )
 
+// Listed reports whether a chat of kind appears in the AI Chats list and the root's continue rows. A proofread is the
+// work of one command, so the desktop app never lists it either.
+func Listed(kind Kind) bool {
+	return kind == KindConversation || kind == KindBuilder
+}
+
 // Author says who wrote a message. Notices are in the transcript so that a refusal stays visible after a restart, and a
 // tool entry is one call the assistant made, shown as an activity row.
 type Author string
@@ -74,7 +80,10 @@ type Message struct {
 	Notice *Notice            `json:"notice,omitempty"`
 	Calls  []backend.ToolCall `json:"calls,omitempty"`
 	Tool   *ToolRun           `json:"tool,omitempty"`
-	At     time.Time          `json:"at"`
+	Images []Image            `json:"images,omitempty"`
+	// Reasoning is the model's reasoning for this reply, kept up to MaxReasoningBytes. The palette shows it collapsed.
+	Reasoning string    `json:"reasoning,omitempty"`
+	At        time.Time `json:"at"`
 }
 
 // Chat is one conversation: its kind and tier, its transcript and when it was last changed. A builder chat names the
@@ -89,6 +98,9 @@ type Chat struct {
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// MaxReasoningBytes bounds the reasoning a reply keeps. The rest of a longer reasoning is dropped, never shown.
+const MaxReasoningBytes = 64 << 10
 
 // titleRunes bounds a title, the first line of the first message.
 const titleRunes = 60
@@ -125,7 +137,12 @@ func Busy(chat Chat) bool {
 
 // AwaitingAnswer reports whether a tool call of the chat waits for the user's answer, as the transcript shows it.
 func AwaitingAnswer(chat Chat) bool {
-	for _, message := range chat.Messages {
+	return MessagesAwaitAnswer(chat.Messages)
+}
+
+// MessagesAwaitAnswer reports whether a tool call among messages waits for the user's answer.
+func MessagesAwaitAnswer(messages []Message) bool {
+	for _, message := range messages {
 		if message.Author == AuthorTool && message.Status == StatusAwaiting {
 			return true
 		}

@@ -223,7 +223,7 @@ func TestStartReportsTheMicrophoneFailureAndStaysIdle(t *testing.T) {
 	for _, want := range []error{platform.ErrNotFound, platform.ErrDenied, platform.ErrUnsupported} {
 		h := newHarness(t)
 		h.mic.FailNext(fake.OpMicrophoneOpen, want)
-		if err := h.service.Start("gone"); !errors.Is(err, want) {
+		if err := h.service.Start(""); !errors.Is(err, want) {
 			t.Fatalf("Start error = %v, want %v", err, want)
 		}
 		if got := h.service.Snapshot().Phase; got != PhaseIdle {

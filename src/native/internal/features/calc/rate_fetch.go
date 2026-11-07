@@ -8,49 +8,42 @@ import (
 	"net/url"
 	"strconv"
 	"time"
-
-	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // The exchange-rate source: one request per pair, the same provider and wire format the Electron calculator uses.
 const (
-	rateEndpoint       = "https://api.frankfurter.dev"
-	rateProvider       = "Frankfurter"
-	rateRequestTimeout = 5 * time.Second
-	rateBodyLimit      = 64 << 10
+	rateEndpoint = "https://api.frankfurter.dev"
+	rateProvider = "Frankfurter"
+
+	// RateRequestTimeout bounds one rate request, and RateBodyLimit one response body. A host that serves
+	// RateFetcher applies both.
+	RateRequestTimeout = 5 * time.Second
+	RateBodyLimit      = 64 << 10
 )
 
-// fetchQuote asks the rate source for one pair. The request is bounded by the service timeout, which runs on the
-// clock port so tests can fire it.
-func (s *RateService) fetchQuote(parent context.Context, pair currencyPair) (Quote, error) {
-	ctx, cancel := withClockDeadline(parent, s.clock, s.timeout)
-	defer cancel()
-	address := s.endpoint + "/v2/rate/" + url.PathEscape(pair.source) + "/" + url.PathEscape(pair.target)
-	status, body, err := platform.Fetch(ctx, s.http, address, rateBodyLimit)
+// RateFetcher asks the rate source for one address and returns the status and the body. The calculator never opens a
+// connection itself: the host serves the request, so its public-address policy and time limits apply.
+type RateFetcher func(ctx context.Context, address string) (status int, body []byte, err error)
+
+// RateAddress is the address of the quote for one pair.
+func RateAddress(source, target string) string {
+	return rateEndpoint + "/v2/rate/" + url.PathEscape(source) + "/" + url.PathEscape(target)
+}
+
+// fetchQuote asks the rate source for one pair and reads its quote.
+func (s *RateService) fetchQuote(ctx context.Context, fetch RateFetcher, clock Clock, pair currencyPair) (Quote, error) {
+	status, body, err := fetch(ctx, RateAddress(pair.source, pair.target))
 	if err != nil {
 		return Quote{}, err
 	}
 	if status < 200 || status > 299 {
 		return Quote{}, fmt.Errorf("HTTP %d", status)
 	}
-	rate, updated, err := parseRateBody(body, s.clock.Now())
+	rate, updated, err := parseRateBody(body, clock.Now())
 	if err != nil {
 		return Quote{}, err
 	}
-	return Quote{Rate: rate, Provider: rateProvider, UpdatedAt: updated, FetchedAt: s.clock.Now()}, nil
-}
-
-// withClockDeadline returns a context that is cancelled when the parent is or when d passes on the clock.
-func withClockDeadline(parent context.Context, clock platform.Clock, d time.Duration) (context.Context, context.CancelFunc) {
-	ctx, cancel := context.WithCancel(parent)
-	go func() {
-		select {
-		case <-clock.After(d):
-			cancel()
-		case <-ctx.Done():
-		}
-	}()
-	return ctx, cancel
+	return Quote{Rate: rate, Provider: rateProvider, UpdatedAt: updated, FetchedAt: clock.Now()}, nil
 }
 
 // rateBody is the part of the rate response the calculator reads. Rate may be a number or a numeric string.

@@ -3,15 +3,22 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 	"log"
 	"os"
 	"path/filepath"
 	"sync/atomic"
 
+	"github.com/egoist/mygo"
+
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
@@ -41,6 +48,7 @@ func (p *App) startExtensions() {
 		return
 	}
 	p.exts.mgr.Store(m)
+	p.restoreExtensionWindows(m)
 	log.Printf("extensions: %d installed", len(m.List()))
 }
 
@@ -52,12 +60,16 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	if err != nil {
 		return nil, err
 	}
-	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(configDir(), "extension-state"))
+	state, err := store.Open(ports.FS, ports.Clock, filepath.Join(dataDir(), "extension-state"))
 	if err != nil {
 		return nil, err
 	}
+	mygo.App.OnQuit(closeStoreOnQuit(state))
+	textReader := ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()})
+	selections := p.extensionSelection()
 	return manager.New(manager.Ports{
 		Files:     ports.FS,
+		FileIndex: fileIndexPort{p: p},
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,
@@ -66,22 +78,79 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Clipboard: ports.Clipboard,
 		Logs:      logx.Default(),
 
-		Shell:         ports.Shell,
-		Capabilities:  ports.Capabilities,
-		OS:            p.goos,
-		Windows:       p.extensionWindows(),
-		Shortcuts:     p.extensionShortcuts(),
-		OCR:           ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()}),
-		History:       p.extensionHistory,
-		Confirm:       p.askExtensionConfirmation,
-		SettingsPanes: p.systemSettingsPanes,
-		Places:        p.systemPlaces,
+		Shell:           ports.Shell,
+		Commands:        ports.Commands,
+		Capabilities:    ports.Capabilities,
+		OS:              p.goos,
+		Windows:         p.extensionWindows(),
+		Frontmost:       ports.Windows,
+		Menus:           p.menuPort(),
+		Notifier:        ports.Notifier,
+		Shortcuts:       p.extensionShortcuts(),
+		Permissions:     permissionSurface{p: p},
+		Updates:         updatesSurface{p: p},
+		Diagnostics:     diagnosticsSurface{p: p},
+		Jobs:            jobsSurface{p: p},
+		Account:         extensionAccount{p: p},
+		OCR:             textReader,
+		AI:              p.extensionAI(textReader),
+		Chats:           extensionChats{p: p},
+		Builder:         extensionBuilder{p: p},
+		History:         p.extensionHistory,
+		ClipboardImages: p.extensionClipboardImages(),
+		Confirm:         p.askExtensionConfirmation,
+		Notify:          p.notifyExtensionFailure,
+		SettingsPanes:   p.systemSettingsPanes,
+		Places:          p.systemPlaces,
+		Indicators:      p.extensionIndicators(),
+		Selection:       selections,
+		Paste:           selections,
+		Apps:            p.appsvc,
+		Dictation:       p.dictationEngine(),
+		Notes:           p.extensionNotes,
 	}, extensionsDir(), enablement.Open(state), manager.Options{
-		Executable:     exe,
-		DataRoot:       filepath.Join(configDir(), "extension-data"),
-		MenuBarRefresh: p.refreshMenuBar,
-		OnChange:       p.extensionsStateChanged,
-		BuiltIns:       builtInExtensions(),
+		Executable:      exe,
+		DataRoot:        filepath.Join(dataDir(), "extension-data"),
+		Home:            userHomeDir(),
+		MenuBarRefresh:  p.refreshMenuBar,
+		RootRefresh:     p.refreshRootRows,
+		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
+		OnChange:        p.extensionsStateChanged,
+		CommandsChange:  p.extensionCommandsChanged,
+		BuiltInSettings: p.builtInSettingsStore,
+		BuiltIns:        builtInExtensions(builtInInputs{MenusAvailable: p.menuPort() != nil, Rates: p.rateCache, Zone: p.zone, Clock: p.ports.Clock, EmojiSkinTone: p.S.EmojiSkinTone, Quicklinks: p.S.Quicklinks, Snippets: p.legacySnips, Dictation: p.legacyDictation, GuideDone: p.S.GuideDone, SearchEngine: p.S.Engine, Clipboard: p.clipboardOptions, WindowSettings: p.legacyWindowSettings()}),
+		RunObserver:     extensionRunObserver(p.commandTiming),
+		AIQuota:         p.aiQuotas(),
+		LegacyStatePath: p.legacyStatePath(),
+	})
+}
+
+func extensionRunObserver(tracker *timing.Tracker) manager.RunObserver {
+	if tracker == nil {
+		return nil
+	}
+	return timing.ExtensionRunObserver(tracker)
+}
+
+// aiQuotas is the app's model-call counts, one per owner: each extension, and the picker under its built-in id.
+func (p *App) aiQuotas() *quota.Registry {
+	if p.quotas == nil {
+		p.quotas = quota.NewRegistry(p.ports.Clock, quota.CallsPerMinute)
+	}
+	return p.quotas
+}
+
+// extensionAI is the model call service extensions use. It shares the app's account and OCR, so a call made while
+// signed out is refused the same way the palette's AI features refuse it.
+func (p *App) extensionAI(textReader *ocr.Service) *extai.Service {
+	return extai.New(extai.Deps{
+		Client:    p.backendClient,
+		Connected: p.signedIn,
+		Clock:     p.ports.Clock,
+		Clipboard: p.ports.Clipboard,
+		Files:     p.ports.FS,
+		OCR:       textReader,
+		Home:      userHomeDir(),
 	})
 }
 
@@ -90,15 +159,20 @@ func (p *App) extensionWindows() services.WindowEngine {
 	if p.windows == nil {
 		return nil
 	}
-	return windowmgmt.NewExtension(p.windows)
+	return windowmgmt.NewExtension(p.windows, p.extensionWindowInvocation)
 }
 
 // extensionShortcuts is the shortcut table as extensions read it; the manager exists before extensions start.
 func (p *App) extensionShortcuts() services.ShortcutTable {
-	return shortcuts.NewExtensionTable(p.shortcutsManager())
+	return shortcuts.NewExtensionTable(p.shortcutsManager(), p.labeler, p.aliasStore())
 }
 
 // extensionHistory returns the clipboard history, or nil while the clipboard engine is not open.
+// extensionNotes is the notes store the notes service answers from, or nil before the user's data is open.
+func (p *App) extensionNotes() *notes.Store {
+	return p.notes
+}
+
 func (p *App) extensionHistory() *clipboard.History {
 	if p.clip == nil {
 		return nil
@@ -108,8 +182,22 @@ func (p *App) extensionHistory() *clipboard.History {
 
 // extensionsStateChanged redraws the views that show extension state when they are on top: the Extensions list, so a
 // child that finishes starting shows as Running, and the root, so its rows appear without a new query. It also asks
-// the menu bar to reconcile its items with the new state. It runs on the goroutine that changed the state.
+// the menu bar to reconcile its items with the new state. Starting every child makes a burst of changes, so the redraw
+// runs once for the burst; it runs on the UI thread, and it reads the state as it is then.
 func (p *App) extensionsStateChanged() {
+	p.extensionStateRefresh.request(p.onUI, p.redrawExtensionState)
+}
+
+func (p *App) extensionCommandsChanged() {
+	p.extensionCommandRefresh.request(p.onUI, func() {
+		p.refreshGlobalShortcuts()
+		p.RefreshTop(isExtensionStateView)
+	})
+}
+
+func (p *App) redrawExtensionState() {
+	p.rootRows.reset()
+	p.refreshGlobalShortcuts()
 	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
 }
@@ -117,6 +205,22 @@ func (p *App) extensionsStateChanged() {
 // isExtensionStateView is true for the root and the Extensions list, the two views whose rows come from extension state.
 func isExtensionStateView(v *palette.View) bool {
 	return v.Title == extensionsViewTitle || v.Title == rootViewTitle
+}
+
+// refreshRootRows runs the root's rows again when the root is on top and shown, and asks only the extension that called.
+// An extension's InvalidateRoot call arrives on the child's exchange goroutine, and RefreshTop is safe from any
+// goroutine, so the call does not wait.
+func (p *App) refreshRootRows(extensionID string) {
+	if m := p.extensionManager(); m != nil {
+		m.InvalidateCommands(extensionID)
+	}
+	p.rootRows.markPending(extensionID)
+	p.RefreshTop(isRootView)
+}
+
+// isRootView is true for the palette's first level.
+func isRootView(v *palette.View) bool {
+	return v.Title == rootViewTitle
 }
 
 // questionPresenter is the part of the palette a host question needs: it shows the palette when it is hidden, puts
@@ -169,9 +273,17 @@ func awaitQuestion(ctx context.Context, onUI func(func()), pal questionPresenter
 	}
 }
 
-// extensionsDir is the folder of installed extensions: one folder per extension, named after its id.
+// userHomeDir is the folder a leading "~" in extension shell arguments stands for. Empty when the system has none.
+func userHomeDir() string {
+	home, _ := os.UserHomeDir()
+	return home
+}
+
+// extensionsDir is the shared folder of extensions: one folder per Go extension, named after its id, beside the
+// Electron app's TypeScript files. It is the folder the Electron app uses on every platform, so the two apps read
+// the same extensions. docs/extension-api.md section 24 states the layout.
 func extensionsDir() string {
-	d := filepath.Join(configDir(), "extensions")
+	d := filepath.Join(sharedDir(), folders.ExtensionsName)
 	_ = os.MkdirAll(d, 0o755)
 	return d
 }

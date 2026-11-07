@@ -8,7 +8,7 @@ import (
 
 // Query selects entries for display. Text is matched case-insensitively as a substring of the entry's
 // text, kind and paths, after trimming; Kinds, when set, keeps only those kinds; Limit caps the rows
-// (DefaultLimit when zero). Pinned entries come first, then the rest, each in copy order.
+// (DefaultLimit when zero). Entries come newest first.
 type Query struct {
 	Text  string
 	Kinds []Kind
@@ -33,21 +33,16 @@ func (h *History) Find(q Query) []Entry {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	out := make([]Entry, 0, min(limit, len(h.order)))
-	for _, pinnedPass := range []bool{true, false} {
-		for _, r := range h.order {
-			if r.entry.Pinned != pinnedPass {
-				continue
-			}
-			if len(kinds) > 0 && !kinds[r.entry.Kind] {
-				continue
-			}
-			if needle != "" && !strings.Contains(r.haystack, needle) {
-				continue
-			}
-			out = append(out, r.entry)
-			if len(out) == limit {
-				return out
-			}
+	for _, r := range h.order {
+		if len(kinds) > 0 && !kinds[r.entry.Kind] {
+			continue
+		}
+		if needle != "" && !strings.Contains(r.haystack, needle) {
+			continue
+		}
+		out = append(out, r.entry)
+		if len(out) == limit {
+			return out
 		}
 	}
 	return out

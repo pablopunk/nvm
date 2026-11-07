@@ -40,7 +40,7 @@ func (m *Manager) registerBuiltIns(exts []api.Extension) {
 			logBuiltInProblem(m.ports.Logs, manifest.ID, err)
 			continue
 		}
-		host := services.New(m.serviceDeps, manifest)
+		host := m.builtInServices(manifest)
 		serve := func(call protocol.ServiceCall) protocol.ServiceReply {
 			return host.Serve(context.Background(), call)
 		}
@@ -51,6 +51,16 @@ func (m *Manager) registerBuiltIns(exts []api.Extension) {
 			builtin: true,
 		}
 	}
+}
+
+// builtInServices returns the services of a built-in, with its settings in the host's store when the app names one.
+func (m *Manager) builtInServices(manifest api.Manifest) *services.Handler {
+	if m.builtInSettings != nil {
+		if settings := m.builtInSettings(manifest.ID); settings != nil {
+			return services.NewBuiltIn(m.serviceDeps, manifest, settings)
+		}
+	}
+	return services.New(m.serviceDeps, manifest)
 }
 
 // isRunnable reports whether an entry's runtime may answer calls: built-ins always, folder extensions when enabled.

@@ -171,8 +171,8 @@ func TestEscapeRestoresTheTypedTextAndStaysOpen(t *testing.T) {
 		t.Fatalf("Escape during a walk: query %q, navigating %v, visible %v; want x, false, true", got, history.Navigating(), h.win.visible)
 	}
 	h.key(0, ui.KeyEscape)
-	if h.p.Query() != "" {
-		t.Fatalf("a second Escape should clear the query as before, got %q", h.p.Query())
+	if h.win.visible {
+		t.Fatal("a second Escape at the root should hide the palette, with or without text")
 	}
 }
 
@@ -267,3 +267,5 @@ func TestShowEndsAWalkLeftOpen(t *testing.T) {
 		t.Fatalf("summoning the palette should end a walk: navigating %v, query %q", history.Navigating(), h.p.Query())
 	}
 }
+
+func (l *recordingLearner) LastUsed(string) int64 { return 0 }

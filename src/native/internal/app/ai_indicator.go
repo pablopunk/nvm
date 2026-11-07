@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
+	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/palette/aicommands"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -12,7 +13,6 @@ import (
 // The AI command indicator is a panel at the bottom of the display the cursor is on, like the dictation indicator. It
 // never takes the keyboard, so the app the selection is in keeps focus.
 const (
-	aiPanelWidth     = 300
 	aiPanelBottomGap = 96
 )
 
@@ -21,7 +21,9 @@ type aiIndicator struct {
 	app    *App
 	window *mygo.Window
 	status commands.Status
+	width  int
 	height int
+	entry  uint64
 }
 
 // aiPanelFor returns the app's AI indicator, created on first use.
@@ -35,11 +37,17 @@ func (p *App) aiPanelFor() *aiIndicator {
 // show sets the panel to status, sizes it to fit and shows it without taking focus.
 func (i *aiIndicator) show(status commands.Status) {
 	w := i.windowFor()
-	w.Update(func() { i.status = status })
-	if height := aicommands.Height(status); height != i.height {
-		i.height = height
-		x, y := aiPanelOrigin(i.app.cursorWorkArea(), height)
-		w.SetSize(aiPanelWidth, height)
+	entering := !w.IsVisible()
+	w.Update(func() {
+		if entering {
+			i.entry++
+		}
+		i.status = status
+	})
+	if width, height := aicommands.Width(status), aicommands.Height(status); width != i.width || height != i.height {
+		i.width, i.height = width, height
+		x, y := aiPanelOrigin(i.app.cursorWorkArea(), width, height)
+		w.SetSize(width, height)
 		w.SetPosition(x, y)
 	}
 	if !w.IsVisible() {
@@ -60,16 +68,18 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 		return i.window
 	}
 	i.height = aicommands.BaseHeight
-	x, y := aiPanelOrigin(i.app.cursorWorkArea(), i.height)
+	i.width = aicommands.BaseWidth
+	x, y := aiPanelOrigin(i.app.cursorWorkArea(), i.width, i.height)
 	i.window = mygo.NewWindow(mygo.WindowOptions{
 		Title:             "AI Command",
-		Width:             aiPanelWidth,
+		Width:             i.width,
 		Height:            i.height,
 		X:                 x,
 		Y:                 y,
 		Hidden:            true,
 		Frameless:         true,
 		Transparent:       true,
+		CornerRadius:      design.IndicatorRadius,
 		AlwaysOnTop:       true,
 		SkipTaskbar:       true,
 		Panel:             true,
@@ -78,13 +88,16 @@ func (i *aiIndicator) windowFor() *mygo.Window {
 		DisableMinimize:   true,
 		DisableMaximize:   true,
 		DisableFullScreen: true,
-		Content:           ui.View(func(c *ui.Context) { aicommands.Indicator(c, i.status) }),
+		Content: ui.View(func(c *ui.Context) {
+			design.IndicatorEntrance(c, i.entry, func() { aicommands.Indicator(c, i.status) })
+		}),
 	})
+	applyIndicatorAppearance(i.window)
 	i.window.OnClosed(func() { i.window = nil })
 	return i.window
 }
 
 // aiPanelOrigin places a panel of height at the bottom centre of area.
-func aiPanelOrigin(area platform.Rect, height int) (int, int) {
-	return area.X + (area.Width-aiPanelWidth)/2, area.Y + area.Height - height - aiPanelBottomGap
+func aiPanelOrigin(area platform.Rect, width, height int) (int, int) {
+	return area.X + (area.Width-width)/2, area.Y + area.Height - height - aiPanelBottomGap
 }

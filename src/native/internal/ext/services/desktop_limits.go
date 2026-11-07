@@ -11,8 +11,10 @@ import (
 // bucket; OCR and screen reads have their own, because one screen read holds a worker for seconds.
 const (
 	desktopActionsPerMinute = 120
+	processRunsPerMinute    = 60
 	ocrReadsPerMinute       = 20
 	screenReadsPerMinute    = 6
+	notificationsPerMinute  = 10
 )
 
 // requireRun refuses a destructive call that does not run under a palette action. A search or a root listing has

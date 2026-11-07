@@ -23,3 +23,17 @@ func TestEmptyQueryListsNothing(t *testing.T) {
 		t.Fatalf("items = %+v, want none for the empty root", items)
 	}
 }
+
+// TestRootListsQuitNevermindInRedAtItsOneXScore pins the one app command the empty root shows.
+func TestRootListsQuitNevermindInRedAtItsOneXScore(t *testing.T) {
+	items, err := Extension{}.RootItems(nil)
+	if err != nil {
+		t.Fatalf("RootItems: %v", err)
+	}
+	if len(items) != 1 || items[0].Title != "Quit Nevermind" || items[0].Score != rootQuitScore {
+		t.Fatalf("root = %+v, want Quit Nevermind at %d", items, rootQuitScore)
+	}
+	if items[0].Appearance == nil || items[0].Appearance.Foreground != api.ColorRed {
+		t.Fatalf("Quit Nevermind appearance = %+v, want red", items[0].Appearance)
+	}
+}

@@ -1,22 +1,17 @@
 package app
 
 import (
-	"context"
 	"log"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/features/calc"
-	"github.com/pablopunk/nvm/native/internal/features/emoji"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	settingsfeat "github.com/pablopunk/nvm/native/internal/features/settings"
 	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"github.com/pablopunk/nvm/native/internal/platform"
-	"github.com/pablopunk/nvm/native/internal/safego"
+	"github.com/pablopunk/nvm/native/internal/portable"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
-
-// emojiCatalog is the built-in character catalog. It holds no state, so every view shares one value.
-var emojiCatalog = emoji.NewCatalog()
 
 // rateDocument is rates.json: the exchange-rate quotes the calculator has fetched, keyed "BASE/QUOTE".
 type rateDocument struct {
@@ -53,14 +48,15 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 	p.systemSvc = newSystemServices(ports, goos)
 	p.launchAtLogin = settingsfeat.NewLaunchAtLogin(ports.Autostart, ports.Capabilities.Supported(platform.CapabilityAutostart))
 	var cache calc.RateCache
-	// One store serves every persisted document of the app (rates, emoji recents, notes, snippets, learning, clipboard history).
+	p.zone = zone
+	// One store serves every persisted document of the app (rates, notes, snippets, learning, clipboard history).
 	// The lease is taken once, here: a second instance reads the notes and snippets and persists nothing else.
 	lease, err := store.AcquireLease(ports.FS, ports.Clock, dir, store.WithProcesses(ports.Processes))
 	p.userReadOnly = err != nil
 	if p.userReadOnly {
 		log.Println("store: not persisting, the directory is held elsewhere:", err)
 	}
-	st, err := store.Open(ports.FS, ports.Clock, dir, store.WithDebounce(notes.DraftDelay), store.WithLease(lease))
+	st, err := store.Open(ports.FS, ports.Clock, dir, store.WithDebounce(notes.WriteDelay), store.WithLease(lease))
 	if err != nil {
 		log.Println("store: open failed, not persisting:", err)
 		if lease != nil {
@@ -70,17 +66,15 @@ func (p *App) attachServices(ports platform.Ports, goos, dir string, zone *time.
 		p.userStore = st
 		if !p.userReadOnly {
 			p.store = st
-			p.recents = store.Doc(st, "emoji-recents.json", 1, func() emojiRecents { return emojiRecents{} })
 			p.rates = store.Doc(st, "rates.json", 1, defaultRateDocument)
+			p.restoreCompatibility(st)
+			p.restoreMenuBarVisibility(st)
 			cache = rateCache{doc: p.rates}
 		}
 	}
+	p.sharedConfig = portable.Open(ports.FS, sharedConfigPath())
 	p.attachAccount(ports, st)
-	rates, err := calc.NewRateService(ports.HTTP, ports.Clock, cache)
-	if err != nil {
-		log.Println("calculator rates:", err)
-	}
-	p.calc = calc.New(ports.Clock, zone, rates)
+	p.rateCache = cache
 }
 
 // newSystemServices builds the OS capability services over the ports for goos. The settings label is the one goos uses.
@@ -90,13 +84,4 @@ func newSystemServices(ports platform.Ports, goos string) *systemfeat.Services {
 		Platform:      goos,
 		SettingsTitle: platform.ShellLabelsFor(goos).SettingsCommand,
 	})
-}
-
-// closeStoreOnQuit is kept for the call order in ready; the store is closed once, by openUserData, after the
-// note windows have closed.
-func (p *App) closeStoreOnQuit() {}
-
-// prepareCatalog builds the emoji search indexes off the UI path, so the first keystroke does not pay for them.
-func prepareCatalog() {
-	safego.Go("emoji.prepare", func(context.Context) { emojiCatalog.Prepare() })
 }

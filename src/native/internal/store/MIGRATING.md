@@ -12,10 +12,9 @@ treatment of every prototype file so the moves do not disagree.
   releases that lease.
 - One `store.Doc` per file. Schema version starts at `1` for every new document. Do not reuse the prototype's
   struct shape as the version: the prototype wrote no version at all.
-- Document names are the file names below, under the store directory. PLAN section 0 keeps that directory at
-  `~/.config/nvm-native` until WP5.5 names it, which is also the prototype's directory. The first Go build
-  therefore finds the prototype files there; the store quarantines them (see "Prototype files") and never
-  reads them as data.
+- Document names are the file names below, under the store directory: the machine-local folder, the OS user-data
+  folder from `platform/folders` (`Local`). Portable settings and shortcuts are not documents here: they live in
+  `config.json`, shared with 1.x (see `internal/portable`).
 - Secret fields are never in a document. Mark a field `store:"secret"` only as a backstop; the real home is the
   Keychain port.
 - Notices (`store.Notices()`) go to the palette as non-blocking banners. Do not log document content.
@@ -24,7 +23,8 @@ treatment of every prototype file so the moves do not disagree.
 
 | Prototype (`app/`) | New document | Schema v1 fields | Notes |
 | --- | --- | --- | --- |
-| `Settings` in `settings.json` (`store.go`) | `settings.json` | `Hotkey`, `Engine`, `ClipOff`, `ClipLimit`, `Usage`, `Quicklinks`, `Disabled`, `LoginAtOpen` | Defaults in `loadSettings` (`Alt+Shift+Space`, `google`, limit 200) become the `defaults` func. Keep `Usage` as a map; the defaults func must return non-nil maps. |
+| `Settings` in `settings.json` (`store.go`) | `settings.json` (plain JSON, not a store document) | `Engine`, `ClipOff`, `ClipLimit`, `ClipNoLinks`, `Quicklinks`, `Disabled`, `LoginAtOpen`, `EmojiSkinTone`, `FileRoots`, `FileIgnore`, `GuideDone` | The palette `Hotkey`, `DiagnosticsOff` and the update channel are in `config.json` (1.x's keys), not here. Defaults in `loadSettings` (`google`, limit 200). |
+| `shortcuts.json` (`internal/shortcuts`, prototype and early 2.0) | none | none | Moved to `config.json`: the palette in `settings.paletteHotkey`, actions under 1.x keys in `shortcuts`. No `shortcuts.json` is created and none is imported. |
 | `ClipStore` in `clipboard.json` (`clipboard.go`) | `clipboard.json` | `Entries []ClipEntry` (ID, Kind, Text, Image, W, H, At, Pinned) | Image bytes live in `clipboard-images/`, which stays a separate folder. Retention deletes only through the explicit user action rules in PLAN section 4. |
 | `ChatStore` in `chats.json` (`ai.go`) | `chats.json` | `Chats []*Chat` (ID, Title, Messages, Updated, Builder) | Chat messages can be large; keep the 5 MB budget in mind (the fake test covers 5 MB saves). |
 | `SnippetStore` in `snippets.json` (`forms.go`) | `snippets.json` | `Items []Snippet` (ID, Name, Keyword, Text) | |
@@ -56,10 +56,10 @@ data in `<name>.json` plus the backups.
 
 ## Prototype files
 
-The prototype files in `~/.config/nvm-native` have no envelope. The store treats them as corrupt: it moves each
-one to `<name>.json.corrupt-<unix>` and starts from defaults, which keeps the bytes. The prototype is
-pre-release and holds no user data worth importing, so no importer is planned. If one becomes necessary, a
-migration WP reads the file itself with `os.ReadFile` before the store opens it, never through the store.
+The earlier prototype wrote to `~/.config/nvm-native`. That folder is no longer read or written, so no prototype
+file reaches the store, and the store never quarantines one. The prototype was pre-release and holds no user data
+worth importing, so no importer is planned. If one becomes necessary, a migration WP reads the file itself with
+`os.ReadFile` before the store opens it, never through the store.
 
 ## Corruption and what the user sees
 

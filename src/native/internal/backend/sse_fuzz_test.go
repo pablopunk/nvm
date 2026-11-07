@@ -26,6 +26,7 @@ func FuzzSSE(f *testing.F) {
 	f.Add([]byte{})
 	f.Fuzz(func(t *testing.T, body []byte) {
 		stream := &Stream{
+			client: newClientOver(t, readerHTTP{}),
 			caller: context.Background(),
 			ex:     exchange{status: 200, body: io.NopCloser(strings.NewReader(string(body))), release: func() {}},
 			frames: newFrameReader(strings.NewReader(string(body))),

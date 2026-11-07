@@ -8,23 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type downloads struct{}
-
-var (
-	_ api.Extension       = downloads{}
-	_ api.CommandProvider = downloads{}
-	_ api.ActionHandler   = downloads{}
-)
-
-func (downloads) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.downloads", Title: "Downloads"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:             "recent-downloads",
 		Title:          "Recent Downloads",
@@ -35,7 +19,7 @@ func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (downloads) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "recent-downloads":
 		return recentDownloadsView(ctx)

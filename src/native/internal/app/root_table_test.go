@@ -3,11 +3,16 @@ package app
 import (
 	"encoding/json"
 	"flag"
-	"github.com/pablopunk/nvm/native/internal/search"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
+	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // updateRootTable rewrites testdata/queries-expected.json from the current root search. The file was
@@ -69,7 +74,18 @@ func rootTableFixture(t *testing.T) *App {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p.S.Quicklinks = []Quicklink{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
+	hackerNews := []quicklinks.Link{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
+	surfaces := paletteSurfaces(p)
+	surfaces.index = fileIndexPort{p: p}
+	surfaces.extras = p.testExtensionPorts()
+	builtins := builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips, Clipboard: p.clipboardOptions})
+	for i, extension := range builtins {
+		if web, ok := extension.(websearch.Extension); ok {
+			builtins[i] = newObservedWebSearch(t, web)
+			break
+		}
+	}
+	p.exts.mgr.Store(newManagerWithFakes(t, surfaces, builtins, nil, nil, p.appsvc))
 	p.files = newTestFiles(t, home, []string{
 		filepath.Join(home, "Documents", "meeting-notes.md"),
 		filepath.Join(home, "Documents", "release-plan.txt"),
@@ -93,6 +109,11 @@ func homeRelativeSlashes(text, home string) string {
 	return strings.ReplaceAll(filepath.ToSlash(text), filepath.ToSlash(home), "$HOME")
 }
 
+// canonicalShortcutLabel undoes palette.KeyLabel, so the recorded tables hold the Control symbol on every platform.
+func canonicalShortcutLabel(label string) string {
+	return strings.ReplaceAll(label, palette.KeyLabel("⌃"), "⌃")
+}
+
 // rootTableRows runs the root search for q and reduces each row to its comparable part. Home-relative
 // paths are rewritten to $HOME with forward slashes, since the fixture home is a temporary directory and
 // Windows joins paths with backslashes.
@@ -103,6 +124,9 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 		t.Fatal(err)
 	}
 	items := rootResultsForTable(p, q)
+	if !p.Settled() {
+		t.Fatalf("root query %q returned an unfinished synchronous snapshot: %v", q, rowTitles(p))
+	}
 	rows := make([]rootRow, 0, len(items))
 	for _, it := range items {
 		row := rootRow{
@@ -111,7 +135,7 @@ func rootTableRows(t *testing.T, p *App, q string) []rootRow {
 			IconPath: homeRelativeSlashes(it.IconPath, home),
 		}
 		for _, a := range it.Actions {
-			row.Actions = append(row.Actions, rootAction{Title: a.Title, Label: a.Label})
+			row.Actions = append(row.Actions, rootAction{Title: a.Title, Label: canonicalShortcutLabel(a.Label)})
 		}
 		rows = append(rows, row)
 	}
@@ -143,7 +167,29 @@ func TestRootResultsMatchRecordedTable(t *testing.T) {
 		t.Fatalf("read %s: %v (run with -update-root-table to record it)", rootTableFile, err)
 	}
 	if string(want) != string(encoded) {
+		logRootTableDifferences(t, want, got)
 		t.Fatalf("root results differ from %s; first difference:\n%s", rootTableFile, firstDifference(string(want), string(encoded)))
+	}
+}
+
+func logRootTableDifferences(t *testing.T, recorded []byte, current map[string][]rootRow) {
+	t.Helper()
+	var entries []tableEntry
+	if err := json.Unmarshal(recorded, &entries); err != nil {
+		t.Fatalf("decode recorded root table: %v", err)
+	}
+	for _, entry := range entries {
+		want, err := json.MarshalIndent(entry.Rows, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := json.MarshalIndent(current[entry.Query], "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(want) != string(got) {
+			t.Logf("root query %q (synchronous snapshot settled):\nrecorded rows:\n%s\ncurrent rows:\n%s", entry.Query, want, got)
+		}
 	}
 }
 
@@ -177,7 +223,7 @@ func firstDifference(want, got string) string {
 			g = gotLines[i]
 		}
 		if w != g {
-			return "line " + itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
+			return "line " + strconv.Itoa(i+1) + "\n  recorded: " + w + "\n  current:  " + g
 		}
 	}
 	return "no line differs"

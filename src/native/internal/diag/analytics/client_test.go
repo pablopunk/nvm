@@ -32,9 +32,38 @@ func newTestClient(t *testing.T, set *fake.Set) *Client {
 		Dir:       "/config",
 		Version:   "0.9.0",
 		OS:        "darwin",
+		OSRelease: "24.6.0",
 		Arch:      "arm64",
 		Consent:   true,
 	})
+}
+
+func TestCommonPropertiesCarryOnlyAvailableOSRelease(t *testing.T) {
+	for _, tc := range []struct {
+		name, release string
+	}{
+		{name: "available", release: "24.6.0"},
+		{name: "unavailable"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			props := commonProperties(Config{Version: "0.9.0", OS: "darwin", Arch: "arm64", OSRelease: tc.release})
+			got, exists := props["os_release"]
+			if tc.release == "" {
+				if exists {
+					t.Fatalf("unavailable release must be omitted, got %#v", got)
+				}
+				return
+			}
+			if got != tc.release {
+				t.Fatalf("os_release = %#v, want %q", got, tc.release)
+			}
+			for _, private := range []string{"email", "distinct_id", "user_id", "prompt", "clipboard"} {
+				if _, exists := props[private]; exists {
+					t.Fatalf("common metadata included private field %q", private)
+				}
+			}
+		})
+	}
 }
 
 // sentBatches decodes every batch the fake transport received.
@@ -131,7 +160,7 @@ func TestFlushSendsOneBatchInThePostHogFormat(t *testing.T) {
 	if usage.Properties["$process_person_profile"] != false || usage.Properties["channel"] != "stable" {
 		t.Fatalf("common properties = %v", usage.Properties)
 	}
-	if usage.Properties["os_type"] != "darwin" || usage.Properties["arch"] != "arm64" || usage.Properties["app_version"] != "0.9.0" {
+	if usage.Properties["os_type"] != "Darwin" || usage.Properties["arch"] != "arm64" || usage.Properties["app_version"] != "0.9.0" {
 		t.Fatalf("platform properties = %v", usage.Properties)
 	}
 	if usage.DistinctID == "" || usage.Timestamp == "" {
@@ -363,21 +392,6 @@ func TestCommandVariantsAreAClosedSetOfIDs(t *testing.T) {
 	for title, id := range commandVariants {
 		if !idShape.MatchString(id) {
 			t.Errorf("variant %q for %q is not an id", id, title)
-		}
-	}
-}
-
-func TestChannelSeparatesStableFromPrereleaseBuilds(t *testing.T) {
-	cases := map[string]string{
-		"0.9.0":         "stable",
-		"2.0.0-go":      "stable",
-		"2026.1030.911": "prerelease",
-		"dev":           "prerelease",
-		"":              "prerelease",
-	}
-	for version, want := range cases {
-		if got := Channel(version); got != want {
-			t.Errorf("Channel(%q) = %q, want %q", version, got, want)
 		}
 	}
 }

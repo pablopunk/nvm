@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
 // shortcutKeys are the keys an extension shortcut may name. Letters and digits are spelled by palette.KeyName.
@@ -53,8 +54,24 @@ func parseShortcut(accelerator string) (mods ui.Modifiers, key ui.Key, ok bool) 
 	return 0, 0, false
 }
 
-// shortcutLabel spells an accelerator the way the palette shows keys: ⌘ or ⌃, ⇧, ⌥, then the key.
-func shortcutLabel(accelerator string) string {
+// hyperKey is the Hyper key the palette labels shortcuts with; nil Deps.HyperKey means none.
+func (s *Session) hyperKey() string {
+	if s.deps.HyperKey == nil {
+		return ""
+	}
+	return s.deps.HyperKey()
+}
+
+// shortcutLabel spells an accelerator the way the palette shows keys: ⌘ or ⌃, ⇧, ⌥, then the key. A shortcut that
+// starts with the Hyper key shows ✦ in place of those keys.
+func shortcutLabel(accelerator, hyper string) string {
+	if rest, ok := shortcuts.StripHyper(accelerator, hyper); ok {
+		return shortcuts.HyperSymbol + paletteKeyLabel(rest)
+	}
+	return paletteKeyLabel(accelerator)
+}
+
+func paletteKeyLabel(accelerator string) string {
 	mods, key, ok := parseShortcut(accelerator)
 	if !ok {
 		return ""
@@ -64,7 +81,7 @@ func shortcutLabel(accelerator string) string {
 		label += palette.KeyLabel("⌃")
 	}
 	if mods&ui.Cmd != 0 && palette.Mod != ui.Cmd {
-		label += "⌘"
+		label += palette.KeyLabel("⌃")
 	}
 	if mods&ui.Ctrl != 0 && palette.Mod != ui.Ctrl {
 		label += "⌃"

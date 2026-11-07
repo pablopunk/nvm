@@ -29,7 +29,7 @@ struct WindowResponse {
   var message: String? = nil
 }
 
-let windowUsage = "Usage: macos-selected-text window <permissions|displays|apps|all|list <pid>|focused <pid>|raise <pid> <windowKey>|set-frame <pid> <windowKey> <x> <y> [<width> <height>] [--position-only]|set-fullscreen <pid> <windowKey> <true|false>>"
+let windowUsage = "Usage: macos-selected-text window <permissions|request-access|displays|apps|all|list <pid>|focused <pid>|raise <pid> <windowKey>|set-frame <pid> <windowKey> <x> <y> [<width> <height>] [--position-only]|set-fullscreen <pid> <windowKey> <true|false>>"
 
 let accessDeniedResponse = WindowResponse(
   code: .denied,
@@ -46,10 +46,22 @@ let targetLostResponse = WindowResponse(
 )
 
 func runWindowCommand(_ arguments: [String]) -> Never {
+  if arguments.first == accessRequestSubcommand {
+    emitWindowResponse(accessRequestResponse())
+  }
   guard AXIsProcessTrusted() else {
     emitWindowResponse(accessDeniedResponse)
   }
   emitWindowResponse(windowCommandResponse(arguments))
+}
+
+let accessRequestSubcommand = "request-access"
+
+// accessRequestResponse shows the system's Accessibility prompt, which lists the app in Privacy & Security, and reports
+// the trust at this moment. Refused is a denied answer, not an error: the user grants access in System Settings.
+func accessRequestResponse() -> WindowResponse {
+  let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+  return AXIsProcessTrustedWithOptions(options) ? WindowResponse(code: .ok) : accessDeniedResponse
 }
 
 func windowCommandResponse(_ arguments: [String]) -> WindowResponse {

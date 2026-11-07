@@ -96,6 +96,7 @@ func TestGoldenCameraStatesAndUnavailableViews(t *testing.T) {
 	goldenQuery(p, "")
 	golden.AssertMatrix(t, "camera-requesting", p.View, mediaGoldens)
 
+	fakePage.SetTitle(cameraReport(`{"event":"ready"}`))
 	fakePage.SetTitle(cameraReport(`{"seq":1,"event":"live","id":1,"deviceId":"front","label":"FaceTime HD Camera"}`))
 	fakePage.SetTitle(cameraReport(`{"seq":2,"event":"playing","id":1}`))
 	goldenQuery(p, "")
@@ -112,6 +113,7 @@ func TestGoldenCameraSwitchButtonWithTwoCameras(t *testing.T) {
 	p := goldenPalette(t)
 	page, fakePage := mediaSession(t, p, m, "camera", fake.NewWebPages(), fake.NewPermissions())
 	page.OnActive(true)
+	fakePage.SetTitle(cameraReport(`{"event":"ready"}`))
 	fakePage.SetTitle(cameraReport(`{"seq":1,"event":"devices","devices":[{"deviceId":"a","label":"FaceTime HD Camera"},{"deviceId":"b","label":"USB Camera"}]}`))
 	fakePage.SetTitle(cameraReport(`{"seq":2,"event":"live","id":1,"deviceId":"a","label":"FaceTime HD Camera"}`))
 	fakePage.SetTitle(cameraReport(`{"seq":3,"event":"playing","id":1}`))
@@ -131,4 +133,13 @@ func TestGoldenWebviewPlateAndNotice(t *testing.T) {
 	unavailable.Available = false
 	mediaSession(t, p, m, "webview", unavailable, fake.NewPermissions())
 	golden.AssertMatrix(t, "webview-unavailable", p.View, mediaGoldens)
+}
+
+func TestLocalImagePathReadsFileURLsAndPlainPaths(t *testing.T) {
+	if got := localImagePath("file:///Users/me/my%20pic.png"); got != "/Users/me/my pic.png" {
+		t.Fatalf("file URL path %q", got)
+	}
+	if got := localImagePath("/Users/me/pic.png"); got != "/Users/me/pic.png" {
+		t.Fatalf("plain path %q", got)
+	}
 }

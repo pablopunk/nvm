@@ -41,6 +41,28 @@ func (s remoteSystem) Places() []api.Place {
 	return places
 }
 
+// Notify asks the host to show a notification. The host refuses it when the extension did not declare system.
+func (s remoteSystem) Notify(title, body string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpNotify, protocol.NotifyArgs{Title: title, Body: body}, nil)
+}
+
+// Permissions reads the OS permissions the platform lists. A failed exchange reads as none.
+func (s remoteSystem) Permissions() []api.PermissionStatus {
+	var permissions []api.PermissionStatus
+	_ = s.link.Call(protocol.ServiceSystem, protocol.OpPermissions, nil, &permissions)
+	return permissions
+}
+
+// RequestPermission asks the host to show the OS prompt for a permission kind.
+func (s remoteSystem) RequestPermission(kind string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpRequestPermission, protocol.PermissionArgs{Kind: kind}, nil)
+}
+
+// OpenPermissionPane asks the host to open the settings pane of a permission kind.
+func (s remoteSystem) OpenPermissionPane(kind string) error {
+	return s.link.Call(protocol.ServiceSystem, protocol.OpOpenPermissionPane, protocol.PermissionArgs{Kind: kind}, nil)
+}
+
 // remoteShortcuts reads the shortcut table. A failed exchange reads as an empty table.
 type remoteShortcuts struct {
 	link *hostLink
@@ -56,4 +78,22 @@ func (s remoteShortcuts) Palette() api.ShortcutRecord {
 	var record api.ShortcutRecord
 	_ = s.link.Call(protocol.ServiceShortcuts, protocol.OpPalette, nil, &record)
 	return record
+}
+
+// Aliases reads the aliases of the actions under prefix. A failed exchange reads as none.
+func (s remoteShortcuts) Aliases(prefix string) map[string][]string {
+	var aliases map[string][]string
+	_ = s.link.Call(protocol.ServiceShortcuts, protocol.OpAliases, protocol.PrefixArgs{Prefix: prefix}, &aliases)
+	return aliases
+}
+
+// remoteAccount reads whether the palette is signed in. A failed exchange reads as signed out.
+type remoteAccount struct {
+	link *hostLink
+}
+
+func (a remoteAccount) SignedIn() bool {
+	var signedIn bool
+	_ = a.link.Call(protocol.ServiceAccount, protocol.OpSignedIn, nil, &signedIn)
+	return signedIn
 }

@@ -31,12 +31,10 @@ func benchService(b *testing.B) (*Service, []string) {
 	}
 	ids := make([]string, 0, benchChats)
 	for i := 0; i < benchChats; i++ {
-		chat, err := docs.Create(KindConversation, TierFast)
-		if err != nil {
-			b.Fatalf("Create: %v", err)
-		}
-		if err := docs.Mutate(chat.ID, clock.Now().Add(time.Duration(i)*time.Second), func(c *Chat) { c.Messages = messages }); err != nil {
-			b.Fatalf("Mutate: %v", err)
+		at := clock.Now().Add(time.Duration(i) * time.Second)
+		chat := Chat{ID: fmt.Sprintf("chat-bench-%d", i), Kind: KindConversation, Tier: TierFast, CreatedAt: at, UpdatedAt: at, Messages: messages}
+		if err := docs.Insert(chat); err != nil {
+			b.Fatalf("Insert: %v", err)
 		}
 		ids = append(ids, chat.ID)
 	}

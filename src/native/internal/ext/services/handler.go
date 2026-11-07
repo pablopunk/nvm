@@ -3,7 +3,7 @@
 // with that extension's namespace, its declared capabilities and its quotas. Nothing here takes an extension id
 // from the call, so one extension cannot name another's data.
 //
-// Layer: ext. The package imports api, protocol, store, logx, features/calc, platform and the standard library.
+// Layer: ext. The package imports api, protocol, store, logx, features/calc, ai/extai, ai/quota, platform and the standard library.
 package services
 
 import (
@@ -11,12 +11,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ext/bundled"
 	"path/filepath"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	aiquota "github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -52,19 +56,77 @@ type Deps struct {
 	Capabilities platform.Capabilities
 	// Shell opens paths and links, lists and launches apps and reads app icons. Nil answers unavailable.
 	Shell platform.Shell
+	// Commands runs the programs and scripts of the shell service. Nil answers unavailable.
+	Commands platform.Commands
+	// Home is the user's home folder, which a leading "~" in a shell argument stands for. Empty leaves "~" as it is.
+	Home string
 	// Windows lists and places windows through the window engine. Nil answers unavailable.
 	Windows WindowEngine
+	// Frontmost names the app in front. Nil answers unavailable.
+	Frontmost FrontmostSource
+	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.
+	Permissions PermissionSurface
+	// Updates reads the state of the app's updater. Nil answers unavailable.
+	Updates UpdateSurface
+	// Diagnostics reads the support records and files problem reports. Nil keeps none and answers unavailable.
+	Diagnostics DiagnosticsSurface
+	// Displays holds the display text the built-ins publish for their settings. Nil answers unavailable.
+	Displays *SharedDisplays
+	// Jobs lists the background jobs and runs or changes them. Nil answers unavailable.
+	Jobs JobsSurface
+	// Notifier shows operating-system notifications. Nil answers unavailable.
+	Notifier platform.Notifier
 	// Shortcuts reads the shortcut table. Nil answers unavailable.
 	Shortcuts ShortcutTable
+	// Account reads the signed-in state of the palette's account. Nil answers unavailable.
+	Account AccountState
+	// Indicators draws the passive indicators. Nil answers unavailable.
+	Indicators IndicatorSurface
+	// RunScheduled runs the handler of a one-shot run the extension scheduled, when it is due. Nil drops the run.
+	RunScheduled func(extID string, inv api.Invocation)
+	// Selection reads, replaces and undoes the selected text of the summoned app. Nil answers unavailable.
+	Selection SelectionEngine
+	// Paste puts content on the clipboard, pastes it and types text into the app in front. Nil answers unavailable.
+	Paste PasteEngine
+	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil answers unavailable.
+	Apps  AppLifecycle
+	Menus MenuPort
+	// FileIndex is the host's file index, which the files service reads. Nil answers the index calls with nothing.
+	FileIndex FileIndex
 	// OCR reads text from images and the screen. Nil answers unavailable.
 	OCR *ocr.Service
+	// Dictation records speech and returns the hosted transcript. Nil answers unavailable.
+	Dictation DictationEngine
 	// History returns the clipboard history, or nil while it is still starting.
 	History func() *clipboard.History
+	// Bundles reads the datasets the app ships. Nil answers unavailable.
+	Bundles *bundled.Store
+	// ClipboardImages makes files and thumbnails of clipboard pictures. Nil leaves image handles out of the results.
+	ClipboardImages ClipboardImages
+	// Notes returns the notes store, or nil while it is not open. The notes service answers unavailable until then.
+	Notes func() *notes.Store
 	// Confirm asks the user before a destructive call runs. Nil refuses destructive calls.
 	Confirm ConfirmFunc
+	// AI makes the model calls of ctx.AI. Nil answers unavailable.
+	AI *extai.Service
+	// Chats reads the host's chats for ctx.AI().Chats(). Nil answers unavailable.
+	Chats ChatReader
+	// Builder serves ctx.AIBuilder and ctx.Ownership to built-in extensions. Nil answers unavailable.
+	Builder BuilderPort
+	// Notify shows a failure the user must see, such as a refused AppleScript. Nil leaves it to the log.
+	Notify NotifyFunc
+	// AIQuota shares each extension's model-call count with the app's other callers of the same owner. Nil counts
+	// each extension alone.
+	AIQuota *aiquota.Registry
 	// MenuBarRefresh asks the host to re-render the menu bar items of one extension. It must not block: the call
 	// returns before the items change. Nil makes the request a no-op.
 	MenuBarRefresh func(extensionID string)
+	// RootRefresh asks the host to run the root's rows again. It must not block, as MenuBarRefresh. Nil makes the
+	// request a no-op.
+	RootRefresh func(extensionID string)
+	// SearchRefresh asks the palette to search again for a query, for one extension's background data. It must not
+	// block. Nil makes the request a no-op.
+	SearchRefresh func(extensionID, query string)
 }
 
 // documents are the extension's files: one store folder holds all of them.
@@ -79,20 +141,30 @@ type documents struct {
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
 type Handler struct {
-	deps         Deps
-	manifest     api.Manifest
-	capabilities map[api.Capability]bool
-	logger       *logx.Logger
-	fetches      *rateLimiter
-	logWrites    *rateLimiter
-	actions      *rateLimiter
-	ocrReads     *rateLimiter
-	screenReads  *rateLimiter
-	openOnce     sync.Once
-	openErr      error
-	closeOnce    sync.Once
-	docs         *documents
-	secretsMu    sync.Mutex
+	deps             Deps
+	manifest         api.Manifest
+	capabilities     map[api.Capability]bool
+	logger           *logx.Logger
+	fetches          *rateLimiter
+	logWrites        *rateLimiter
+	actions          *rateLimiter
+	notifications    *rateLimiter
+	processes        *rateLimiter
+	indicatorUpdates *rateLimiter
+	schedules        *scheduleBook
+	ocrReads         *rateLimiter
+	screenReads      *rateLimiter
+	rootRefreshes    *rateLimiter
+	aiCalls          *aiquota.Window
+	ai               *aiState
+	reviews          *uninstallReviews
+	openOnce         sync.Once
+	openErr          error
+	closeOnce        sync.Once
+	docs             *documents
+	secretsMu        sync.Mutex
+	// hostSettings keeps the settings of a built-in in the host's store. Nil means the extension's settings file.
+	hostSettings SettingsHost
 }
 
 // New returns the services of one extension. Nothing is opened until the extension makes its first call.
@@ -106,21 +178,31 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 		capabilities[capability] = true
 	}
 	return &Handler{
-		deps:         deps,
-		manifest:     manifest,
-		capabilities: capabilities,
-		logger:       logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
-		fetches:      newRateLimiter(deps.Clock, fetchesPerMinute),
-		logWrites:    newRateLimiter(deps.Clock, logWritesPerMinute),
-		actions:      newRateLimiter(deps.Clock, desktopActionsPerMinute),
-		ocrReads:     newRateLimiter(deps.Clock, ocrReadsPerMinute),
-		screenReads:  newRateLimiter(deps.Clock, screenReadsPerMinute),
+		deps:             deps,
+		manifest:         manifest,
+		capabilities:     capabilities,
+		logger:           logs.With(logx.F{"source": "extension", "extension": manifest.ID}),
+		fetches:          newRateLimiter(deps.Clock, fetchesPerMinute),
+		logWrites:        newRateLimiter(deps.Clock, logWritesPerMinute),
+		actions:          newRateLimiter(deps.Clock, desktopActionsPerMinute),
+		notifications:    newRateLimiter(deps.Clock, notificationsPerMinute),
+		processes:        newRateLimiter(deps.Clock, processRunsPerMinute),
+		indicatorUpdates: newRateLimiter(deps.Clock, indicatorUpdatesPerMinute),
+		ocrReads:         newRateLimiter(deps.Clock, ocrReadsPerMinute),
+		screenReads:      newRateLimiter(deps.Clock, screenReadsPerMinute),
+		rootRefreshes:    newBurstRateLimiter(deps.Clock, rootRefreshBurst, rootRefreshesPerMinute),
+		aiCalls:          aiCallWindow(deps, quotaOwner(manifest)),
+		ai:               newAIState(),
+		schedules:        newScheduleBook(deps.Clock, scheduledFire(deps, manifest.ID)),
+		reviews:          newUninstallReviews(),
 	}
 }
 
 // Close flushes and closes the extension's store. A handler closed before its first call never opens the store,
 // and every later call answers unavailable. Close is safe to call more than once.
 func (h *Handler) Close() error {
+	h.ai.close()
+	h.schedules.close()
 	h.openOnce.Do(func() { h.openErr = errHandlerClosed })
 	var closeErr error
 	h.closeOnce.Do(func() {
@@ -139,19 +221,6 @@ func (h *Handler) Serve(ctx context.Context, call protocol.ServiceCall) protocol
 	return reply
 }
 
-func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
-	result, err := h.dispatch(ctx, call)
-	if err != nil {
-		failure := failureOf(err)
-		return protocol.ServiceReply{Failure: &failure}
-	}
-	data, err := json.Marshal(result)
-	if err != nil {
-		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInternal, Message: "the service result cannot be encoded"}}
-	}
-	return protocol.ServiceReply{Data: data}
-}
-
 func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Service {
 	case protocol.ServiceStorage:
@@ -164,20 +233,32 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveLogs(call)
 	case protocol.ServiceText:
 		return h.serveText(call)
+	case protocol.ServiceBundle:
+		return h.serveBundle(call)
 	case protocol.ServiceNetwork:
 		return h.serveNetwork(ctx, call)
 	case protocol.ServiceDrafts:
 		return h.serveDrafts(call)
+	case protocol.ServiceNotes:
+		return h.serveNotes(ctx, call)
 	case protocol.ServiceDesktopClipboard:
 		return h.serveDesktopClipboard(call)
+	case protocol.ServiceDesktopMenus:
+		return h.serveDesktopMenus(ctx, call)
 	case protocol.ServiceDesktopApps:
-		return h.serveDesktopApps(call)
+		return h.serveDesktopApps(ctx, call)
 	case protocol.ServiceDesktopFiles:
-		return h.serveDesktopFiles(call)
+		return h.serveDesktopFiles(ctx, call)
 	case protocol.ServiceDesktopShell:
-		return h.serveDesktopShell(call)
+		return h.serveDesktopShell(ctx, call)
 	case protocol.ServiceDesktopWindows:
 		return h.serveDesktopWindows(ctx, call)
+	case protocol.ServiceDesktopSelection:
+		return h.serveDesktopSelection(ctx, call)
+	case protocol.ServiceDesktopKeyboard:
+		return h.serveDesktopKeyboard(call)
+	case protocol.ServiceDesktopPaste:
+		return h.servePaste(call)
 	case protocol.ServiceClipboardHistory:
 		return h.serveClipboardHistory(ctx, call)
 	case protocol.ServiceOCR:
@@ -186,8 +267,26 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveSystem(call)
 	case protocol.ServiceShortcuts:
 		return h.serveShortcuts(call)
+	case protocol.ServiceAccount:
+		return h.serveAccount(call)
+	case protocol.ServiceUpdates:
+		return h.serveUpdates(call)
+	case protocol.ServiceDiagnostics:
+		return h.serveDiagnostics(call)
+	case protocol.ServiceJobs:
+		return h.serveJobs(call)
 	case protocol.ServiceViews:
 		return h.serveViews(call)
+	case protocol.ServiceIndicators:
+		return h.serveIndicators(call)
+	case protocol.ServiceScheduler:
+		return h.serveScheduler(call)
+	case protocol.ServiceAI:
+		return h.serveAI(ctx, call)
+	case protocol.ServiceBuilder:
+		return h.serveBuilder(call)
+	case protocol.ServiceDictation:
+		return h.serveDictation(ctx, call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
 }
@@ -273,4 +372,13 @@ func decodeArgs(raw json.RawMessage, into any) error {
 		return invalid("the arguments do not fit the operation")
 	}
 	return nil
+}
+
+// scheduledFire hands a due run to the host, which runs it through the extension's manager.
+func scheduledFire(deps Deps, extID string) func(api.Invocation) {
+	return func(inv api.Invocation) {
+		if deps.RunScheduled != nil {
+			deps.RunScheduled(extID, inv)
+		}
+	}
 }

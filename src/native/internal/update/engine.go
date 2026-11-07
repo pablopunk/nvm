@@ -17,5 +17,8 @@ type Engine = platform.SelfUpdater
 // replaced the app's files, so the switch waits until the new version runs.
 var ErrUpdateReady = errors.New("restart to finish the update before switching channels")
 
+// ErrChannelUnavailable refuses a channel switch in a build that cannot update itself, and says why.
+var ErrChannelUnavailable = errors.New("update channels are not available in this build yet")
+
 // ErrNotReady refuses a restart when no update is downloaded.
 var ErrNotReady = errors.New("no update is ready to install")

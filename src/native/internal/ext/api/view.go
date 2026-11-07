@@ -21,6 +21,7 @@ const (
 	ViewCamera      ViewKind = "camera"
 	ViewWebview     ViewKind = "webview"
 	ViewChat        ViewKind = "chat"
+	ViewSettings    ViewKind = "settings"
 )
 
 // ViewSize is the named dimension preset for independent windows and the palette.
@@ -57,6 +58,8 @@ type View struct {
 	ContentSizing string `json:"contentSizing,omitempty"`
 	// Placeholder is the search input placeholder.
 	Placeholder string `json:"placeholder,omitempty"`
+	// Status replaces the footer's title, such as counts. Refresh it with ViewPatch.Status.
+	Status string `json:"status,omitempty"`
 	// WindowCompact renders the result as a compact overlay in independent windows.
 	WindowCompact bool `json:"windowCompact,omitempty"`
 
@@ -75,10 +78,22 @@ type View struct {
 	SelectedItemID    string           `json:"selectedItemId,omitempty"`
 	MaxVisibleItems   int              `json:"maxVisibleItems,omitempty"`
 	OnSelectionChange *ActionRef       `json:"onSelectionChange,omitempty"`
+	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch may replace the items, and
+	// its SearchResultIds are a second batch of those ids, shown after the local matches. Only list and grid views carry it.
+	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
+	// Search answers every typed query with the rows of the search, in the order the handler gives them. The host does not
+	// filter or sort them, and shows the rows of the latest answer while the next one runs. The handler gets the trimmed
+	// text as Invocation.Value, and the value of SearchAccessory as Ref.Args under the accessory's id. It runs off the
+	// UI thread under the search budget, so it must answer quickly. Only list and grid views carry it.
+	Search *ActionRef `json:"search,omitempty"`
+	// Hint is the right footer text of a list or grid view, such as the keys it answers. Empty shows the host's default.
+	Hint string `json:"hint,omitempty"`
 
 	Actions               []Action        `json:"actions,omitempty"`
 	ActionPanel           *ActionPanel    `json:"actionPanel,omitempty"`
 	ActionPanelVisibility PanelVisibility `json:"actionPanelVisibility,omitempty"`
+	// FooterHints, when set, replace the footer's Actions entry with the keys the view names.
+	FooterHints []FooterHint `json:"footerHints,omitempty"`
 
 	// Kind-specific specs. Exactly the one matching Kind may be set.
 	Grid       *GridSpec       `json:"grid,omitempty"`
@@ -91,6 +106,13 @@ type View struct {
 	Camera     *CameraSpec     `json:"camera,omitempty"`
 	Webview    *WebviewSpec    `json:"webview,omitempty"`
 	Chat       *ChatSpec       `json:"chat,omitempty"`
+	Settings   *SettingsSpec   `json:"settings,omitempty"`
+}
+
+// FooterHint is one footer key: an accelerator such as "Command+N" or "Escape", and what it does.
+type FooterHint struct {
+	Key   string `json:"key"`
+	Title string `json:"title"`
 }
 
 // specKinds maps each spec field to the single kind it belongs to.
@@ -106,6 +128,7 @@ func (v View) specKinds() map[ViewKind]bool {
 		ViewCamera:      v.Camera != nil,
 		ViewWebview:     v.Webview != nil,
 		ViewChat:        v.Chat != nil,
+		ViewSettings:    v.Settings != nil,
 	}
 }
 
@@ -113,11 +136,17 @@ func (v View) specKinds() map[ViewKind]bool {
 // nested action and item is valid. Item ids must be unique within the view.
 func (v View) Validate() error {
 	if !oneOf(v.Kind, ViewList, ViewGrid, ViewCollection, ViewPreview, ViewFilePreview, ViewProgress,
-		ViewForm, ViewEditor, ViewCamera, ViewWebview, ViewChat) {
+		ViewForm, ViewEditor, ViewCamera, ViewWebview, ViewChat, ViewSettings) {
 		return fmt.Errorf("unknown view kind %q", v.Kind)
 	}
 	if v.Title == "" {
 		return errors.New("view title is required")
+	}
+	if v.Search != nil && v.Kind != ViewList && v.Kind != ViewGrid {
+		return fmt.Errorf("view %q: search needs a list or grid view, not %q", v.Title, v.Kind)
+	}
+	if v.OnSearchChange != nil && v.Kind != ViewList && v.Kind != ViewGrid {
+		return fmt.Errorf("view %q: onSearchChange needs a list or grid view, not %q", v.Title, v.Kind)
 	}
 	for kind, present := range v.specKinds() {
 		if present != (kind == v.Kind) {
@@ -137,15 +166,20 @@ func (v View) Validate() error {
 			return err
 		}
 	}
+	if v.Settings != nil {
+		if err := v.Settings.Validate(); err != nil {
+			return err
+		}
+	}
 	for _, action := range v.Actions {
 		if err := action.Validate(); err != nil {
 			return fmt.Errorf("view %q: %w", v.Title, err)
 		}
 	}
-	return validateItemIDs(v.Items)
+	return validateItems(v.Items)
 }
 
-func validateItemIDs(items []Item) error {
+func validateItems(items []Item) error {
 	seen := make(map[string]bool, len(items))
 	for _, item := range items {
 		if item.ID == "" {
@@ -155,6 +189,9 @@ func validateItemIDs(items []Item) error {
 			return fmt.Errorf("duplicate item id %q", item.ID)
 		}
 		seen[item.ID] = true
+		if err := item.validateDragImage(); err != nil {
+			return fmt.Errorf("item %q: %w", item.ID, err)
+		}
 	}
 	return nil
 }

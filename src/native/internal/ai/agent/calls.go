@@ -18,6 +18,12 @@ func newCallAssembler() *callAssembler {
 	return &callAssembler{byIndex: map[int]*backend.ToolCall{}}
 }
 
+// named reports whether the call at index already has its tool name.
+func (a *callAssembler) named(index int) bool {
+	call, ok := a.byIndex[index]
+	return ok && call.Function.Name != ""
+}
+
 func (a *callAssembler) add(delta backend.ToolCallDelta) {
 	call, ok := a.byIndex[delta.Index]
 	if !ok {

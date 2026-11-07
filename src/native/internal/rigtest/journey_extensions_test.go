@@ -14,8 +14,8 @@ import (
 
 const (
 	extensionFixtureRoot = "../ext/testdata/extensions"
-	// extensionsFolder is the folder under the launch's HOME where the app keeps its extensions (configDir/extensions).
-	extensionsFolder = ".config/nvm-native/extensions"
+	// extensionsFolder is the folder under the launch's HOME where the app keeps its extensions: the shared folder 1.x uses.
+	extensionsFolder = ".config/nevermind/extensions"
 	escapePresses    = 4
 )
 
@@ -56,6 +56,7 @@ func chooseExtensionRow(t *testing.T, app *App, query, title string) {
 	must(t, err)
 	must(t, app.Key("Down"))
 	must(t, app.Key("Down"))
+	waitForRow(t, app, title, elementWait)
 }
 
 // clearSearch deletes the palette's whole query, one BackSpace per character, and waits until the field is empty.
@@ -78,11 +79,13 @@ func enableThroughReview(t *testing.T, app *App, query, title string) {
 	must(t, app.Key("Return"))
 	_, err := app.WaitFor("Review "+title, elementWait)
 	must(t, err)
+	waitForRow(t, app, "Enable", elementWait)
 	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Search Extensions", elementWait)
+	must(t, err)
 }
 
-// hidePalette presses Escape until the palette is hidden. Escape clears a query first, then leaves a pushed view,
-// then hides the palette at the root.
+// hidePalette presses Escape until the palette is hidden, leaving pushed views before hiding the root.
 func hidePalette(t *testing.T, app *App) {
 	t.Helper()
 	for range escapePresses {

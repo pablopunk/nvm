@@ -14,9 +14,9 @@ type ShellLabels struct {
 func ShellLabelsFor(goos string) ShellLabels {
 	switch goos {
 	case "darwin":
-		return ShellLabels{RevealInFileManager: "Reveal in Finder", PreviewFile: "Quick Look", OpenSystemSettings: "Open System Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "Open System Settings"}
+		return ShellLabels{RevealInFileManager: "Show in Finder", PreviewFile: "Quick Look", OpenSystemSettings: "Open System Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "System Settings"}
 	case "windows":
-		return ShellLabels{RevealInFileManager: "Show in Explorer", PreviewFile: "Preview", OpenSystemSettings: "Open Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "Open Settings"}
+		return ShellLabels{RevealInFileManager: "Show in File Explorer", PreviewFile: "Preview File", OpenSystemSettings: "Open Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "Open Settings"}
 	}
-	return ShellLabels{RevealInFileManager: "Show in Files", PreviewFile: "Preview", OpenSystemSettings: "Open System Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "Open Settings"}
+	return ShellLabels{RevealInFileManager: "Show in File Manager", PreviewFile: "Preview File", OpenSystemSettings: "Open System Settings", KeyboardSettings: "Keyboard Settings", SettingsCommand: "Open Settings"}
 }

@@ -90,8 +90,7 @@ func Open(persist Persistence, clock platform.Clock, policy Retention) (*History
 	return h, nil
 }
 
-// Remember stores e as the newest entry. An entry with the same ID moves to the top, keeping its pinned
-// state. The change is saved before Remember returns; a failed save leaves the entry in memory and returns
+// Remember stores e as the newest entry. An entry with the same ID moves to the top. The change is saved before Remember returns; a failed save leaves the entry in memory and returns
 // the error.
 func (h *History) Remember(e Entry) error {
 	if e.Concealed {
@@ -105,7 +104,6 @@ func (h *History) Remember(e Entry) error {
 			e.CreatedAt = now
 		}
 		if old, ok := h.byID[e.ID]; ok {
-			e.Pinned = e.Pinned || old.entry.Pinned
 			if e.LinkPreview == nil {
 				e.LinkPreview = old.entry.LinkPreview
 			}
@@ -115,28 +113,6 @@ func (h *History) Remember(e Entry) error {
 		h.enforceLocked(now)
 		return true
 	})
-}
-
-// SetPinned pins or unpins the entry with id. Unpinning applies retention again, since the entry is no longer
-// protected. It reports whether the entry exists.
-func (h *History) SetPinned(id string, pinned bool) (bool, error) {
-	found := false
-	err := h.mutate(func(now time.Time) bool {
-		r, ok := h.byID[id]
-		if !ok {
-			return false
-		}
-		found = true
-		if r.entry.Pinned == pinned {
-			return false
-		}
-		r.entry.Pinned = pinned
-		if !pinned {
-			h.enforceLocked(now)
-		}
-		return true
-	})
-	return found, err
 }
 
 // Delete removes the entry with id. It reports whether the entry existed.
@@ -154,15 +130,13 @@ func (h *History) Delete(id string) (bool, error) {
 	return removed, err
 }
 
-// ClearUnpinned removes every unpinned entry and returns how many went.
-func (h *History) ClearUnpinned() (int, error) {
+// Clear removes every entry and returns how many went.
+func (h *History) Clear() (int, error) {
 	removed := 0
 	err := h.mutate(func(time.Time) bool {
 		drop := map[*record]bool{}
 		for _, r := range h.order {
-			if !r.entry.Pinned {
-				drop[r] = true
-			}
+			drop[r] = true
 		}
 		removed = h.dropLocked(drop)
 		return removed > 0
@@ -170,8 +144,7 @@ func (h *History) ClearUnpinned() (int, error) {
 	return removed, err
 }
 
-// Remove deletes the entries a range selects and returns how many went. Explicit removal applies to pinned
-// entries too: the user asked for it.
+// Remove deletes the entries a range selects and returns how many went.
 func (h *History) Remove(q RangeQuery) (int, error) {
 	removed := 0
 	err := h.mutate(func(now time.Time) bool {

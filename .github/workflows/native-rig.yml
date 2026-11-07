@@ -87,7 +87,7 @@ jobs:
           nohup "$RUNNER_TEMP/nvm-rig" >"$RIG_ARTIFACTS/app.log" 2>&1 </dev/null &
           echo "$!" >"$RUNNER_TEMP/nvm-rig.pid"
           for _ in $(seq 1 60); do
-            if grep -q ' ready$' "$RIG_ARTIFACTS/app.log"; then
+            if grep -q '"msg":"ready"' "$RIG_ARTIFACTS/app.log"; then
               exit 0
             fi
             sleep 1
@@ -157,7 +157,7 @@ jobs:
             -RedirectStandardError "$env:RIG_ARTIFACTS\app.err.log"
           $app.Id | Out-File -FilePath "$env:RUNNER_TEMP\nvm-rig.pid"
           for ($i = 0; $i -lt 60; $i++) {
-            if (Select-String -Path "$env:RIG_ARTIFACTS\app.err.log", "$env:RIG_ARTIFACTS\app.log" -Pattern ' ready$' -Quiet) {
+            if (Select-String -Path "$env:RIG_ARTIFACTS\app.err.log", "$env:RIG_ARTIFACTS\app.log" -Pattern '"msg":"ready"' -Quiet) {
               exit 0
             }
             Start-Sleep -Seconds 1

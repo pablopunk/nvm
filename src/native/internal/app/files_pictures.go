@@ -2,8 +2,6 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
-
-	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 )
 
 // rowPicture returns the bitmap a row draws for path. For an image it is the thumbnail, and while that is being made
@@ -57,15 +55,3 @@ func (s *fileService) systemIcon(path string) *ui.Bitmap {
 	}
 	return bm
 }
-
-// thumbnailBitmap decodes a PNG the thumbnail pipeline made. It is shared by the preview pane.
-func thumbnailBitmap(data []byte) *ui.Bitmap {
-	bm, err := ui.DecodeBitmap(data)
-	if err != nil {
-		return nil
-	}
-	return bm
-}
-
-// previewEdge is the largest edge of a preview picture, the size the preview decodes to.
-const previewEdge = thumbs.PreviewEdge

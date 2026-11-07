@@ -18,7 +18,7 @@ const (
 	accountSettingsRow = "Account"
 	startSignInRow     = "Log in to Nevermind"
 	signInPollWait     = 15 * time.Second // the app polls the fake once a second; a sign-in ends within a few polls
-	signedInTemplate   = "Logged in as "
+	signedInTemplate   = "Signed in as "
 )
 
 // openAccountPage summons the palette, opens Settings from the root and then the Account row in it.

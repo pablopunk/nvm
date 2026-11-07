@@ -6,6 +6,7 @@ require (
 	github.com/ebitengine/purego v0.11.1
 	github.com/egoist/mygo v0.7.4
 	github.com/traefik/yaegi v0.16.1
+	golang.org/x/sys v0.49.0
 )
 
 require (
@@ -16,3 +17,5 @@ require (
 )
 
 tool github.com/egoist/mygo/cmd/mygo
+
+replace github.com/egoist/mygo => github.com/pablopunk/mygo v0.0.0-20261105203408-609d20b52cc4

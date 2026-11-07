@@ -74,20 +74,48 @@ func submitFormFixture(t *testing.T, app *App) {
 	must(t, err)
 
 	must(t, app.Key("Return")) // edit Name, the first row
-	must(t, app.Type("Ada Lovelace"))
+	must(t, app.Type("Ada"))
 	_, err = app.WaitFor("Set Name", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // set Name
 	_, err = app.WaitFor("Name", elementWait)
 	must(t, err)
 
-	for range 7 { // Name, Bio, API token, Email, Website, Seats, Due date, then Accept the terms
+	must(t, app.Key("Return")) // edit Name again: its value is in the search field, and the caret is after it
+	must(t, app.Type(" Lovelace"))
+	_, err = app.WaitFor("Ada Lovelace", elementWait) // the Set Name row shows what the field will hold
+	must(t, err)
+	must(t, app.Key("Return")) // set Name
+
+	for range 3 { // Name, Bio, API token, then Email
+		must(t, app.Key("Down"))
+	}
+	must(t, app.Key("Return")) // edit Email
+	must(t, app.Type("not-an-email"))
+	must(t, app.Key("Return")) // set Email
+	must(t, app.Key("ctrl+Return"))
+	_, err = app.WaitFor("Enter an email address", elementWait) // refused, and the Email row is selected again
+	must(t, err)
+	// Send both events in one xdotool process with no delay or UI synchronization between them.
+	// This exercises the frame boundary where the rejected value is first copied into the search input.
+	must(t, app.xdo("key", "--clearmodifiers", "--delay", "0", "Return", "BackSpace"))
+	for range len("not-an-email") - 1 {
+		must(t, app.Key("BackSpace"))
+	}
+	must(t, app.Type("ada@example.test"))
+	_, err = app.WaitFor("ada@example.test", elementWait)
+	must(t, err)
+	must(t, app.Key("Return")) // set Email
+
+	for range 4 { // Website, Seats, Due date, then Accept the terms
 		must(t, app.Key("Down"))
 	}
 	must(t, app.Key("Return")) // check the terms
 	must(t, app.Key("ctrl+Return"))
 	// The terms row is below the visible rows; reaching the child at all proves the required checkbox passed the host.
 	_, err = app.WaitFor("name: Ada Lovelace", elementWait)
+	must(t, err)
+	_, err = app.WaitFor("email: ada@example.test", elementWait)
 	must(t, err)
 }
 

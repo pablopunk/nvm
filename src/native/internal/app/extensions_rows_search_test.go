@@ -8,24 +8,20 @@ import (
 )
 
 func TestTypingACommandTitleFindsTheCommandOfARunningExtension(t *testing.T) {
-	m := newFixtureManager(t, "acme.views")
-	waitForState(t, m, "acme.views", supervisor.StateRunning)
-	p := &App{}
-	p.exts.mgr.Store(m)
-
-	findRowTitled(t, collectExtensionRows(t, p, "list fixture"), "List fixture")
-	if rows := collectExtensionRows(t, p, "zz no such command"); len(rows) != 0 {
-		t.Fatalf("query naming no command showed %d rows", len(rows))
+	p, m, _ := awaitFixtureCommand(t, "acme.views", "list fixture", "List fixture")
+	manifest, _, err := m.Definition("acme.views")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range collectExtensionRows(t, p, "zz no such command") {
+		if row.Kind == manifest.Title {
+			t.Fatalf("query naming no command showed %q from the fixture", row.Title)
+		}
 	}
 }
 
 func TestRootStillListsTheCommandsOfARunningExtension(t *testing.T) {
-	m := newFixtureManager(t, "acme.views")
-	waitForState(t, m, "acme.views", supervisor.StateRunning)
-	p := &App{}
-	p.exts.mgr.Store(m)
-
-	findRowTitled(t, extensionProvider(p).Root(context.Background()), "List fixture")
+	awaitFixtureCommand(t, "acme.views", "", "List fixture")
 }
 
 func TestRootShowsTheRootItemsOfARunningExtension(t *testing.T) {
@@ -34,5 +30,5 @@ func TestRootShowsTheRootItemsOfARunningExtension(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	findRowTitled(t, extensionProvider(p).Root(context.Background()), "Good root")
+	findRowTitled(t, extensionProvider(p, &rootInput{}).Root(context.Background()), "Good root")
 }

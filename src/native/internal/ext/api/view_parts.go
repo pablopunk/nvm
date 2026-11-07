@@ -31,13 +31,16 @@ type Pagination struct {
 }
 
 // SearchAccessory is a small filter control at the end of the search bar, such as a category
-// picker. Its selection arrives as Invocation.Value through OnChange.
+// picker. The host shows it as a native popup menu of Options, with a check mark on Value, as a
+// native select does; a chosen option becomes Value and arrives as Invocation.Value through OnChange.
 type SearchAccessory struct {
 	ID       string                  `json:"id,omitempty"`
 	Tooltip  string                  `json:"tooltip,omitempty"`
 	Value    string                  `json:"value,omitempty"`
 	Options  []SearchAccessoryOption `json:"options"`
 	OnChange *ActionRef              `json:"onChange,omitempty"`
+	// CycleOnTab makes Tab choose the next option, wrapping, and run OnChange.
+	CycleOnTab bool `json:"cycleOnTab,omitempty"`
 }
 
 // SearchAccessoryOption is one value of a SearchAccessory.
@@ -48,6 +51,7 @@ type SearchAccessoryOption struct {
 
 // Refresh asks the host to re-run a handler while the view is visible. Immediate paints the
 // cached snapshot first and refreshes after paint. The host owns the timer and the cancellation.
+// A refreshed list or grid may return a patch or a matching view; its rows update in place.
 type Refresh struct {
 	IntervalMs int64      `json:"intervalMs,omitempty"`
 	Mode       PatchMode  `json:"mode,omitempty"`

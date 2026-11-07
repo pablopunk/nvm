@@ -3,20 +3,9 @@ package app
 import (
 	"strings"
 
-	"github.com/pablopunk/nvm/native/internal/menubar"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/palette/updates"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/update"
 )
-
-// updateSnapshot is what the Updates page and the Settings rows show. Without an updater it is unsupported on stable.
-func (p *App) updateSnapshot() updates.Snapshot {
-	if p.updates == nil {
-		return updates.Snapshot{State: update.NoUpdates{}.State(), Channel: update.ChannelStable}
-	}
-	return updates.Snapshot{State: p.updates.State(), Channel: p.updates.Channel()}
-}
 
 // updateAccessory is the short status the Settings row shows at its right edge.
 func updateAccessory(state update.State) string {
@@ -31,41 +20,22 @@ func updateAccessory(state update.State) string {
 		return "Failed"
 	case update.StatusUnsupported:
 		return "Unavailable"
+	case update.StatusCurrent:
+		return "Up to date"
 	}
-	return "Up to date"
+	return "Not checked"
 }
 
-// toggleUpdateChannel switches between stable and nightly and checks the new channel at once. A switch is refused
+// toggleUpdateChannel switches to the next channel (Stable, Nightly, Dev) and checks the new channel at once. A switch is refused
 // while a downloaded update waits for its restart.
 func (p *App) toggleUpdateChannel() error {
 	if p.updates == nil {
-		return nil
+		return update.ErrChannelUnavailable
 	}
-	if err := p.updates.SetChannel(p.updates.Channel().Other()); err != nil {
+	if err := p.updates.SetChannel(p.updates.Channel().Next()); err != nil {
 		return err
 	}
 	p.checkForUpdates(func(string) {})
-	return nil
-}
-
-// updatesView is the Updates page, pushed from Settings and the root.
-func (p *App) updatesView() *palette.View {
-	return updates.View(p.updateSnapshot, updates.Actions{
-		Check:         func() { p.checkForUpdates(func(string) {}) },
-		Restart:       p.restartToUpdate,
-		ToggleChannel: p.toggleUpdateChannel,
-	})
-}
-
-// menubarUpdateRow is the menu's update row while an update is found, downloading or ready.
-func (p *App) menubarUpdateRow() *menubar.UpdateRow {
-	state := p.updateSnapshot().State
-	switch state.Status {
-	case update.StatusAvailable, update.StatusDownloading:
-		return &menubar.UpdateRow{Label: update.Message(state)}
-	case update.StatusDownloaded:
-		return &menubar.UpdateRow{Label: "Restart to Update to " + state.LatestVersion, Action: func() { _ = p.restartToUpdate() }}
-	}
 	return nil
 }
 
@@ -74,15 +44,18 @@ func (p *App) menubarUpdateRow() *menubar.UpdateRow {
 // an offline laptop would show it at every launch. The rows stay out of the way of queries that do not name updates.
 func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	state := p.updateSnapshot().State
-	if !rootShowsUpdate(state) {
+	if !queryNamesUpdates(q) {
 		return nil
 	}
-	if lq := strings.ToLower(strings.TrimSpace(q)); lq != "" && !strings.HasPrefix("update", lq) && !strings.Contains("nevermind update", lq) {
+	if p.compat.rejectsClient() {
+		return []search.Item{p.compatibilityRootItem(state)}
+	}
+	if !rootShowsUpdate(state) {
 		return nil
 	}
 	item := search.Item{Kind: search.KindCommands, Title: update.Message(state), Subtitle: "Nevermind updates", Icon: "rotate-ccw",
 		Score: rootUpdateScore, LearnKey: "updates", Prominent: state.Status == update.StatusDownloaded,
-		Actions: []search.Action{{Title: "Open Updates", Run: func(h search.Host) { h.Push(p.updatesView()) }}}}
+		Actions: []search.Action{{Title: "Open Updates", Run: func(h search.Host) { h.Push(p.updatesPage()) }}}}
 	if state.Status == update.StatusDownloaded {
 		item.Actions = []search.Action{{Title: "Restart to Update", Run: func(h search.Host) {
 			if err := p.restartToUpdate(); err != nil {
@@ -93,8 +66,14 @@ func updateRootRows(p *App, _ *rootInput, q string) []search.Item {
 	return []search.Item{item}
 }
 
-// rootUpdateScore ranks an update row above every command, so it is the first row of the root.
-const rootUpdateScore = 95
+// queryNamesUpdates reports whether an empty query, or one that starts the word update, keeps the update rows on the root.
+func queryNamesUpdates(q string) bool {
+	lq := strings.ToLower(strings.TrimSpace(q))
+	return lq == "" || strings.HasPrefix("update", lq) || strings.Contains("nevermind update", lq)
+}
+
+// rootUpdateScore is the update prompt's score, as 1.x's update prompt has it: above every other root row.
+const rootUpdateScore = 1000
 
 func rootShowsUpdate(state update.State) bool {
 	switch state.Status {

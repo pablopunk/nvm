@@ -11,12 +11,22 @@ func (s *Service) settle(id string, r *run, outcome Outcome) {
 	if s.runs[id] == r {
 		delete(s.runs, id)
 	}
+	s.endReasoning(r)
+	s.ClearStep(id)
+	s.logTurnEnd(r, outcome)
+	if s.doomed[id] {
+		_ = s.remove(id)
+		return
+	}
 	if outcome.Ending == EndFinished && s.lastReplyEmpty(id) {
 		outcome = failed(ErrEmptyReply)
 	}
 	_ = s.mutate(id, func(c *Chat) {
 		finishTurn(c, outcome, s.opts.Clock.Now())
 	})
+	if chat, ok := s.Chat(id); ok {
+		s.logFailedTurn(chat, outcome)
+	}
 	if outcome.Err != nil && s.opts.NoteError != nil {
 		s.opts.NoteError(outcome.Err)
 	}

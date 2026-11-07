@@ -1,15 +1,17 @@
 package aichat
 
 import (
+	"bytes"
+	"image"
+	"image/color"
+	"image/png"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/egoist/mygo/ui"
-	"github.com/egoist/mygo/ui/markdown"
-
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/design/golden"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -22,9 +24,6 @@ const (
 	goldenHeight = 470
 )
 
-// watchdog bounds a wait for queued work. Waits end as soon as the work arrives.
-const watchdog = 10 * time.Second
-
 // goldenNow is the fixed time the goldens and tests read; every message and chat is dated against it.
 var goldenNow = time.Date(2026, time.March, 2, 12, 0, 0, 0, time.UTC)
 
@@ -35,20 +34,23 @@ func (testWindow) Update(fn func())     { fn() }
 func (testWindow) Show()                {}
 func (testWindow) Hide()                {}
 func (testWindow) IsVisible() bool      { return true }
+func (testWindow) IsFocused() bool      { return true }
+func (testWindow) Focus()               {}
 func (testWindow) Size() (int, int)     { return goldenWidth, goldenHeight }
 func (testWindow) SetPosition(x, y int) {}
 
-// rig is a palette over a chat service on a fake store and clock. The service's dispatched work waits in a queue
-// that the test runs with settle, so every change happens on the test goroutine, as on the UI thread.
+// rig is a palette over a chat service on a fake store and clock. The service's dispatched work waits in a queue,
+// so every change happens on the test goroutine, as on the UI thread.
 type rig struct {
-	t       *testing.T
-	clock   *fake.Clock
-	store   *chat.Store
-	service *chat.Service
-	palette *palette.Palette
-	root    *palette.View
-	copied  []string
-	signed  bool
+	// feedback is what the actions said to the HUD, in order.
+	feedback []palette.Feedback
+	t        *testing.T
+	clock    *fake.Clock
+	store    *chat.Store
+	service  *chat.Service
+	palette  *palette.Palette
+	root     *palette.View
+	signed   bool
 
 	mu     sync.Mutex
 	queued []func()
@@ -81,7 +83,7 @@ func newRigWithTools(t *testing.T, client *backend.Client, tools chat.Toolset) *
 		Tools:     tools,
 	})
 	r.root = &palette.View{Title: "Nevermind", Search: func(string) []search.Item { return nil }}
-	r.palette = palette.New(palette.Options{Root: r.root, Clock: clock, Synchronous: true})
+	r.palette = palette.New(palette.Options{Root: r.root, Clock: clock, Synchronous: true, Feedback: func(f palette.Feedback) { r.feedback = append(r.feedback, f) }})
 	r.palette.Attach(testWindow{})
 	return r
 }
@@ -97,100 +99,36 @@ func (r *rig) dispatch(fn func()) {
 	}
 }
 
-// settle runs the queued work, in order, until none is left.
-func (r *rig) settle() {
-	for {
-		r.mu.Lock()
-		if len(r.queued) == 0 {
-			r.mu.Unlock()
-			return
-		}
-		fn := r.queued[0]
-		r.queued = r.queued[1:]
-		r.mu.Unlock()
-		fn()
-	}
-}
-
-// awaitIdle settles the chat's turn, failing the test if it never ends.
-func (r *rig) awaitIdle(id string) {
-	r.t.Helper()
-	deadline := time.After(watchdog)
-	for {
-		r.settle()
-		if !r.service.Busy(id) {
-			return
-		}
-		select {
-		case <-r.notify:
-		case <-deadline:
-			r.t.Fatal("the turn never settled")
-		}
-	}
-}
-
-// deps is the page dependencies over the rig.
-func (r *rig) deps() Deps {
-	return Deps{
-		Service:  r.service,
-		Reply:    drawReply,
-		Copy:     func(text string) { r.copied = append(r.copied, text) },
-		SignedIn: func() bool { return r.signed },
-		Now:      func() time.Time { return goldenNow },
-	}
-}
-
-// chatWith creates a conversation with a transcript, dated against goldenNow.
-func (r *rig) chatWith(title string, tier chat.Tier, messages ...chat.Message) chat.Chat {
-	r.t.Helper()
-	record, err := r.service.NewChat(chat.KindConversation, tier)
-	if err != nil {
-		r.t.Fatalf("NewChat: %v", err)
-	}
-	if err := r.store.Mutate(record.ID, goldenNow, func(c *chat.Chat) {
-		c.Title = title
-		c.Messages = messages
-	}); err != nil {
-		r.t.Fatalf("seed chat: %v", err)
-	}
-	r.service.Reload()
-	record, _ = r.service.Chat(record.ID)
-	return record
-}
-
-// open shows view above the root with an empty query, as a push does.
+// open shows view above the root with an empty query, as a push does: the palette gives the keyboard to the page.
 func (r *rig) open(view *palette.View) {
-	r.palette.SetStack(r.root, view)
-	r.palette.SetQuery("")
+	r.palette.SetStack(r.root)
+	r.palette.Push(view)
 }
 
-// user, assistant, streaming, stopped and notice build transcript entries for the goldens and tests.
+// user builds a transcript entry for the goldens and tests.
 func user(text string) chat.Message {
 	return chat.Message{Author: chat.AuthorUser, Text: text, Status: chat.StatusComplete, At: goldenNow}
 }
 
-func assistant(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusComplete, At: goldenNow}
-}
+// pageGoldens renders a chat page at the palette's size. Each golden is compared in light and dark, at 1x and 2x.
+var pageGoldens = golden.Options{Group: "aichat", Width: goldenWidth, Height: goldenHeight}
 
-func streaming(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusStreaming, At: goldenNow}
-}
-
-func stopped(text string) chat.Message {
-	return chat.Message{Author: chat.AuthorAssistant, Text: text, Status: chat.StatusStopped, At: goldenNow}
-}
-
-func notice(n chat.Notice) chat.Message {
-	return chat.Message{Author: chat.AuthorNotice, Text: n.Message, Status: chat.StatusComplete, Notice: &n, At: goldenNow}
-}
-
-// drawReply is the reply renderer the tests use: the same Markdown the app draws.
-func drawReply(c *ui.Context, src string, streaming bool) {
-	options := &markdown.Options{}
-	if streaming {
-		markdown.Stream(c, src, options)
-		return
+// testPicture is a PNG of the given size and shade, read as a picture the composer attaches.
+func testPicture(t *testing.T, name string, w, h int, shade uint8) chat.Image {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, w, h))
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			img.Set(x, y, color.RGBA{R: shade, G: uint8(x * 255 / w), B: uint8(y * 255 / h), A: 255})
+		}
 	}
-	markdown.View(c, src, options)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("encode png: %v", err)
+	}
+	picture, err := chat.NewImage(name, buf.Bytes())
+	if err != nil {
+		t.Fatalf("NewImage: %v", err)
+	}
+	return picture
 }

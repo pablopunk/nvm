@@ -9,9 +9,11 @@ import (
 	"time"
 )
 
-// TestJourneyJ19ShortcutAppliesLayoutOnX11 binds Left Half to Control+Alt+Left in the Keyboard Shortcuts list, then
-// presses it with the probe focused: the probe reaches the left half, and the palette's focus return leaves the probe in
-// front. Not covered: the recorder's conflict messages, macOS, and any layout other than Left Half.
+// TestJourneyJ19ShortcutAppliesLayoutOnX11 binds Left Half to Control+Shift+Left from its Command-K menu, as 1.x binds a
+// window command: the Keyboard Shortcuts list shows a command once it has a shortcut, so the list is checked after the
+// binding. Then it presses the shortcut with the probe focused: the probe reaches the left half, and the palette's focus
+// return leaves the probe in front. Not covered: the recorder's conflict messages, macOS, and any layout other than Left
+// Half.
 func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 	const accelerator = "Control+Shift+Left"
 	probeID := startProbe(t)
@@ -19,15 +21,14 @@ func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 
 	app := Launch(t, Options{})
 	must(t, app.SummonPalette())
-	must(t, app.Type("keyboard shortcuts"))
-	_, err := app.WaitFor("Keyboard Shortcuts", elementWait)
-	must(t, err)
-	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Keyboard Shortcuts", elementWait)
-	must(t, err)
 	must(t, app.Type("left half"))
-	_, err = app.WaitFor("Left Half", elementWait)
+	_, err := app.WaitFor("Left Half", elementWait)
 	must(t, err)
+	must(t, app.Key(actionMenuKey))
+	_, err = app.WaitFor("Set keyboard shortcut", elementWait)
+	must(t, err)
+	must(t, app.Key("Down")) // the menu lists the run action, then the settings, then Set keyboard shortcut
+	must(t, app.Key("Down"))
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Press a keyboard shortcut", elementWait)
 	must(t, err)
@@ -36,17 +37,41 @@ func TestJourneyJ19ShortcutAppliesLayoutOnX11(t *testing.T) {
 	_, err = app.WaitFor("Save shortcut for “Left Half”", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Shortcut set: "+accelerator, elementWait)
+	dismissPalette(t, app)
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("keyboard shortcuts"))
+	_, err = app.WaitFor("Keyboard Shortcuts", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Search Keyboard Shortcuts", elementWait)
+	must(t, err)
+	must(t, app.Type("left half"))
+	_, err = app.WaitFor("Left Half", elementWait)
 	must(t, err)
 	shoot(t, app, "j19s-1-bound")
-
-	must(t, app.Key("Escape"))
-	must(t, app.DismissWithEscape())
+	dismissPalette(t, app)
 	waitActiveWindow(t, probeID)
 
 	must(t, app.PressHotkey(accelerator))
 	waitProbeFrame(t, probeID, leftHalfOfWorkArea(t))
 	shoot(t, app, "j19s-2-applied")
+}
+
+// dismissPalette presses Escape while the palette is shown, until it hides. A press after it hides goes to the window
+// that got the keyboard back, the probe, so the journey does not send one.
+func dismissPalette(t *testing.T, app *App) {
+	t.Helper()
+	for range 4 {
+		visible, err := app.PaletteVisible()
+		must(t, err)
+		if !visible {
+			return
+		}
+		must(t, app.Key("Escape"))
+		time.Sleep(pollInterval)
+	}
+	t.Fatal("the palette did not hide after four Escape presses")
 }
 
 // waitActiveWindow waits until the X11 active window is id, which the palette's focus return must leave in place.

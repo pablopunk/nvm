@@ -1,11 +1,13 @@
 package app
 
 import (
+	snippetsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/snippets"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design/golden"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 )
 
 // paletteGoldens is the group of the palette goldens under testdata/golden/palette. They are the state of the
@@ -31,41 +33,43 @@ func TestPaletteRootFallbackAutomate(t *testing.T) {
 
 func TestPaletteClipboardPreviewSelection(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.clipboardView())
-	p.Choose(1)
+	goldenOpen(p, clipboardBuiltInView(t, p.clip))
+	p.Choose(0)
 	golden.AssertMatrix(t, "clipboard-preview", p.View, paletteGoldens)
 }
 
 func TestPaletteClipboardActionMenu(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.clipboardView())
-	p.Choose(1)
-	p.OpenActionMenu(1)
+	goldenOpen(p, clipboardBuiltInView(t, p.clip))
+	p.Choose(0)
+	p.OpenActionMenu(0)
 	golden.AssertMatrix(t, "clipboard-actions", p.View, paletteGoldens)
 }
 
 func TestPaletteClipboardEmptyState(t *testing.T) {
 	p := goldenPalette(t)
 	p.clip = emptyClipboard(t)
-	goldenOpen(p, p.clipboardView())
+	goldenOpen(p, clipboardBuiltInView(t, p.clip))
 	golden.AssertMatrix(t, "clipboard-empty", p.View, paletteGoldens)
 }
 
 func TestPaletteSnippetForm(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.snippetForm(nil))
+	goldenOpen(p, snippetsBuiltInPage(t, goldenLegacySnippets(t), snippetsbuiltin.CreateCommandID, nil))
 	golden.AssertMatrix(t, "snippet-form", p.View, paletteGoldens)
 }
 
 func TestPaletteQuicklinkForm(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.quicklinkForm())
+	goldenQuery(p, "create quicklink")
+	itemTitled(t, p, quicklinks.CreateTitle).Actions[0].Run(p)
+	p.settleExtensionCalls()
 	golden.AssertMatrix(t, "quicklink-form", p.View, paletteGoldens)
 }
 
 func TestPaletteEmojiGridSelection(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.emojiView())
+	openEmojiBuiltIn(t, p)
 	goldenQuery(p, "smile")
 	p.Choose(3)
 	golden.AssertMatrix(t, "emoji-grid", p.View, paletteGoldens)
@@ -73,18 +77,17 @@ func TestPaletteEmojiGridSelection(t *testing.T) {
 
 func TestPaletteEmojiNoResults(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.emojiView())
+	openEmojiBuiltIn(t, p)
 	goldenQuery(p, "zzqx")
 	golden.AssertMatrix(t, "emoji-no-results", p.View, paletteGoldens)
 }
 
 func TestPaletteEmojiSkinTonePicker(t *testing.T) {
 	p := goldenPalette(t)
-	entry, ok := emojiCatalog.Lookup("emoji:U+1F44B")
-	if !ok {
-		t.Fatal("the catalog has no waving hand")
-	}
-	goldenOpen(p, p.skinToneView(entry))
+	win := openEmojiBuiltIn(t, p)
+	goldenQuery(p, "waving hand")
+	actionTitled(t, itemTitled(t, p, "Waving Hand"), "Skin Tone…").Run(p)
+	awaitRows(t, p, win, 6)
 	golden.AssertMatrix(t, "emoji-skin-tone", p.View, paletteGoldens)
 }
 
@@ -96,13 +99,13 @@ func TestPaletteCalculatorResult(t *testing.T) {
 
 func TestPaletteSettingsList(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.settingsView())
+	goldenOpen(p, p.settingsPage())
 	golden.AssertMatrix(t, "settings", p.View, paletteGoldens)
 }
 
 func TestPaletteSearchNoResults(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.settingsView())
+	goldenOpen(p, p.settingsPage())
 	goldenQuery(p, "zzqx")
 	golden.AssertMatrix(t, "no-results", p.View, paletteGoldens)
 }

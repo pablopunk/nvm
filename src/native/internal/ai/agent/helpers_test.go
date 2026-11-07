@@ -98,10 +98,14 @@ func drain(t *testing.T, turn *Turn) []Event {
 	}
 }
 
-// kinds names the events of a turn in order, for sequence assertions.
+// kinds names the events of a turn in order, for sequence assertions. The drafting hints are left out: they are shown
+// while a call streams and are checked on their own.
 func kinds(events []Event) string {
 	names := make([]string, 0, len(events))
 	for _, event := range events {
+		if event.Kind == EventCallDrafting {
+			continue
+		}
 		names = append(names, string(event.Kind))
 	}
 	return strings.Join(names, " ")

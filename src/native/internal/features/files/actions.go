@@ -26,6 +26,14 @@ func Reveal(shell platform.Shell, path string) error {
 	return shell.Reveal(path)
 }
 
+// QuickLook shows path in the system's quick preview. Only absolute paths are accepted.
+func QuickLook(shell platform.Shell, path string) error {
+	if !filepath.IsAbs(path) {
+		return errNotAbsolute
+	}
+	return shell.QuickLook(path)
+}
+
 // OpenPath opens path with its default application. Only absolute paths are accepted.
 func OpenPath(shell platform.Shell, path string) error {
 	if !filepath.IsAbs(path) {

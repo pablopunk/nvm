@@ -3,13 +3,9 @@ package app
 import (
 	"runtime"
 
-	"github.com/pablopunk/nvm/native/internal/palette/windows"
-	"github.com/pablopunk/nvm/native/internal/search"
+	windowmanagementbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/windowmanagement"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
-	"github.com/pablopunk/nvm/native/internal/store"
 )
-
-const shortcutsFile = "shortcuts.json"
 
 // shortcutsManager returns the app's shortcut manager, creating it on first use.
 func (p *App) shortcutsManager() *shortcuts.Manager {
@@ -26,53 +22,37 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
+		Resolve:   p.resolveShortcutTitle,
+		Declared:  p.declaredGlobalShortcuts,
 		Run:       p.runShortcutCommand,
 		OnPalette: func() { p.Toggle() },
 		OnSummon:  p.notifySummon,
 	}
 }
 
-// shortcutsDocument stores the choices in shortcuts.json. The palette key of a fresh install is the one the settings
-// hold, so a Hotkey already chosen in settings.json carries over.
+// shortcutsDocument keeps the shortcuts in config.json, under the keys 1.x uses. Without a config store it keeps them
+// for the process.
 func (p *App) shortcutsDocument() shortcuts.Persistence {
-	legacyPalette := p.S.Hotkey
-	defaults := func() shortcuts.Document { return shortcuts.DefaultDocument(legacyPalette) }
-	if p.userStore == nil || p.userReadOnly {
-		return shortcuts.NewMemoryDocument(defaults())
+	if p.sharedConfig == nil {
+		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(""))
 	}
-	return store.Doc(p.userStore, shortcutsFile, 1, defaults)
+	return shortcuts.NewPortableDocument(p.sharedConfig)
 }
 
 // shortcutCommands lists the commands that take a shortcut: the root commands that are visible.
 func (p *App) shortcutCommands() []shortcuts.Action {
 	var actions []shortcuts.Action
-	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden {
-			actions = append(actions, shortcuts.Action{ID: shortcutCommandID(cmd.Title), Title: cmd.Title})
+	for _, cmd := range p.commands() {
+		if !cmd.Hidden && cmd.ID != "" {
+			actions = append(actions, shortcuts.Action{ID: cmd.ID, Title: cmd.Title})
 		}
 	}
 	if p.windowManagementEnabled() {
-		actions = append(actions, windows.ShortcutActions()...)
-	}
-	return actions
-}
-
-func shortcutCommandID(title string) string {
-	return "command:" + title
-}
-
-// runShortcutCommand opens the palette and runs the command a shortcut names, as choosing it from the root does.
-func (p *App) runShortcutCommand(actionID string) {
-	if windows.RunShortcut(p.windowDeps(), actionID) {
-		return
-	}
-	for _, cmd := range p.commands(false) {
-		if !cmd.Hidden && shortcutCommandID(cmd.Title) == actionID {
-			p.Show()
-			p.trackedRun(cmd)(search.Host(p))
-			return
+		for _, command := range windowmanagementbuiltin.ShortcutCommands() {
+			actions = append(actions, shortcuts.Action{ID: command.ActionID, Title: command.Title})
 		}
 	}
+	return append(actions, movedCommandShortcutActions...)
 }
 
 // startShortcuts binds the palette shortcut and the actions. It runs once the palette exists. Summon retries a shortcut
@@ -83,6 +63,9 @@ func (p *App) startShortcuts() {
 
 // onPaletteHide closes the app's panels and gives back the shortcuts a recorder holds, so the palette key still works.
 func (p *App) onPaletteHide() {
+	if p.menus != nil {
+		p.menus.Dismiss()
+	}
 	p.hideApps()
 	p.resumeShortcutsIfSuspended()
 }

@@ -9,6 +9,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -30,17 +31,28 @@ var (
 	ErrNotRecording = errors.New("dictation is not recording")
 	ErrCancelled    = errors.New("dictation was cancelled")
 	ErrCodec        = errors.New("dictation needs the Opus codec")
+	ErrNoRecordings = errors.New("dictation has no recording store")
+	ErrNotReady     = errors.New("dictation microphone did not become ready")
 )
+
+// defaultReadyTimeout bounds the wait for a Bluetooth microphone to start picking up sound.
+const defaultReadyTimeout = 7 * time.Second
 
 // Config holds the ports a Service runs on. OnLevel receives the meter level about every 100 ms while recording,
 // from the capture goroutine, so it must only hand the value to the UI. Background runs the backend calls that
-// nobody waits for (preparation and its cancellation); nil runs them on a supervised goroutine.
+// nobody waits for (preparation and its cancellation); nil runs them on a supervised goroutine. Warn logs a
+// recovery the user does not see, such as the default microphone standing in for a chosen one that failed.
 type Config struct {
 	Microphone  platform.Microphone
 	Codec       platform.OpusCodec
 	Transcriber Transcriber
 	OnLevel     func(level float64)
 	Background  func(name string, fn func())
+	Warn        func(event string, fields map[string]any)
+	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
+	Recorder Recorder
+	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
+	ReadyTimeout time.Duration
 }
 
 // Snapshot is what the indicator draws: the phase and the level of the last captured frames.
@@ -53,11 +65,12 @@ type Snapshot struct {
 // returns the transcript, Cancel drops it. It is safe for concurrent use; Stop blocks on the backend, so callers run
 // it off the UI thread.
 type Service struct {
-	cfg   Config
-	mu    sync.Mutex
-	phase Phase
-	cur   *operation
-	level atomic.Uint64
+	cfg      Config
+	mu       sync.Mutex
+	phase    Phase
+	cur      *operation
+	starting *operation
+	level    atomic.Uint64
 }
 
 // NewService returns an idle service.
@@ -81,7 +94,9 @@ func (s *Service) Snapshot() Snapshot {
 }
 
 // Start prepares the backend, opens deviceID (or the default device when it is "") and starts capturing. It returns
-// once the stream is open, so a missing or refused microphone is reported here and not later.
+// once the stream is open, so a missing or refused microphone is reported here and not later. A Bluetooth microphone
+// also has to start delivering sound first (ErrNotReady when it does not), so its first words are not lost. A Cancel
+// while the microphone is still opening ends the start with ErrCancelled, and the stream that opened late is closed.
 func (s *Service) Start(deviceID string) error {
 	s.mu.Lock()
 	if s.phase != PhaseIdle {
@@ -89,39 +104,76 @@ func (s *Service) Start(deviceID string) error {
 		return ErrBusy
 	}
 	s.phase = PhaseRecording
+	op := newOperation()
+	op.onLevel = s.publishLevel
+	s.starting = op
 	s.mu.Unlock()
 
-	op, err := s.open(deviceID)
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err != nil {
-		s.phase = PhaseIdle
-		return err
+	if s.needsReadiness(deviceID) {
+		op.ready = make(chan struct{})
+		op.tracker = &readinessTracker{}
 	}
-	s.cur = op
-	return nil
-}
-
-// open prepares the backend, then starts the stream, the encoder and the capture goroutine for one dictation. A
-// failure after the preparation releases it, as the desktop app does.
-func (s *Service) open(deviceID string) (*operation, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	op := &operation{id: newOperationID(), ctx: ctx, cancel: cancel, done: make(chan struct{}), onLevel: s.publishLevel}
 	s.prepare(op)
-	stream, err := s.cfg.Microphone.Open(ctx, deviceID, Format())
+	stream, encoder, err := s.openCapture(op.ctx, deviceID)
+
+	s.mu.Lock()
+	if s.starting != op {
+		s.mu.Unlock()
+		if err == nil {
+			_ = stream.Close()
+			_ = encoder.Close()
+		}
+		return ErrCancelled
+	}
+	s.starting = nil
 	if err != nil {
 		s.releasePreparation(op, false)
-		return nil, err
+		s.phase = PhaseIdle
+		s.mu.Unlock()
+		return err
+	}
+	op.stream, op.encoder = stream, encoder
+	s.cur = op
+	safego.Go("dictation.capture", func(context.Context) { op.capture() })
+	s.mu.Unlock()
+	if op.ready == nil {
+		return nil
+	}
+	return s.awaitReady(op)
+}
+
+// openCapture opens the microphone and the encoder for one dictation. Either failure closes what was opened.
+func (s *Service) openCapture(ctx context.Context, deviceID string) (platform.MicrophoneStream, platform.OpusEncoder, error) {
+	stream, err := s.openMicrophone(ctx, deviceID)
+	if err != nil {
+		return nil, nil, err
 	}
 	encoder, err := s.cfg.Codec.NewEncoder(Format())
 	if err != nil {
 		_ = stream.Close()
-		s.releasePreparation(op, false)
-		return nil, fmt.Errorf("%w: %w", ErrCodec, err)
+		return nil, nil, fmt.Errorf("%w: %w", ErrCodec, err)
 	}
-	op.stream, op.encoder = stream, encoder
-	safego.Go("dictation.capture", func(context.Context) { op.capture() })
-	return op, nil
+	return stream, encoder, nil
+}
+
+// openMicrophone opens deviceID. When a chosen device fails for a reason other than a refusal, the default device
+// stands in, as the desktop app does; if that fails too, the chosen device's error is returned.
+func (s *Service) openMicrophone(ctx context.Context, deviceID string) (platform.MicrophoneStream, error) {
+	stream, err := s.cfg.Microphone.Open(ctx, deviceID, Format())
+	if err == nil || deviceID == "" || errors.Is(err, platform.ErrDenied) {
+		return stream, err
+	}
+	s.warn("dictation.device-fallback", err)
+	if fallback, fallbackErr := s.cfg.Microphone.Open(ctx, "", Format()); fallbackErr == nil {
+		return fallback, nil
+	}
+	return nil, err
+}
+
+func (s *Service) warn(event string, err error) {
+	if s.cfg.Warn != nil {
+		s.cfg.Warn(event, map[string]any{"error": err.Error()})
+	}
 }
 
 // prepare warms the backend's admission while the user speaks. The transcription waits for it to finish, so the
@@ -199,11 +251,75 @@ func (s *Service) finish(op *operation) (string, error) {
 	case <-op.ctx.Done():
 		return "", ErrCancelled
 	}
-	text, err := transcribeSegments(op.ctx, s.cfg.Transcriber, op)
+	files := segmentFiles(op)
+	saved := s.keepRecording(op.id, files)
+	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, op.id, op.preparedOK, files)
 	if op.ctx.Err() != nil {
+		s.discardRecording(op.id, saved)
 		return "", ErrCancelled
 	}
-	return text, err
+	if err != nil {
+		if saved {
+			return "", &SavedError{Err: err}
+		}
+		return "", err
+	}
+	s.discardRecording(op.id, saved)
+	return text, nil
+}
+
+// keepRecording saves the audio of dictation id before it is sent. A save that fails is logged; the dictation goes on
+// without a recording to retry.
+func (s *Service) keepRecording(id string, files [][]byte) bool {
+	if s.cfg.Recorder == nil {
+		return false
+	}
+	if err := s.cfg.Recorder.Save(id, files); err != nil {
+		s.warn("dictation.recording-save-failed", err)
+		return false
+	}
+	return true
+}
+
+// discardRecording drops the saved audio of dictation id once its text is confirmed, or when it was cancelled.
+func (s *Service) discardRecording(id string, saved bool) {
+	if !saved {
+		return
+	}
+	if err := s.cfg.Recorder.Remove(id); err != nil {
+		s.warn("dictation.recording-remove-failed", err)
+	}
+}
+
+// Retry transcribes a saved dictation again. The request is new and billable, so every segment gets a fresh operation
+// ID, as the desktop app does. It runs only while the service is idle, and holds the service until it returns, so a
+// dictation cannot start over it. The caller decides what to do with the text; the recording is left as it is.
+func (s *Service) Retry(ctx context.Context, id string) (string, error) {
+	if s.cfg.Recorder == nil || s.cfg.Transcriber == nil {
+		return "", ErrNoRecordings
+	}
+	s.mu.Lock()
+	if s.phase != PhaseIdle {
+		s.mu.Unlock()
+		return "", ErrBusy
+	}
+	s.phase = PhaseTranscribing
+	s.mu.Unlock()
+	defer s.endRetry()
+	files, err := s.cfg.Recorder.Load(id)
+	if err != nil {
+		return "", err
+	}
+	return transcribeFiles(ctx, s.cfg.Transcriber, newRetryOperationID(), false, files)
+}
+
+// endRetry returns the service to idle after a retry, unless a dictation has taken it over meanwhile.
+func (s *Service) endRetry() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.phase == PhaseTranscribing && s.cur == nil && s.starting == nil {
+		s.phase = PhaseIdle
+	}
 }
 
 // release returns the service to idle when op is still the current operation. A cancel may already have done so.
@@ -216,26 +332,49 @@ func (s *Service) release(op *operation) {
 	}
 }
 
-// Cancel drops the current dictation: the microphone closes, nothing more is sent, the backend's preparation is
-// released as a user cancel, and a Stop that is waiting on the backend returns ErrCancelled. Cancel on an idle
-// service does nothing.
+// Cancel drops the current dictation, or the one still opening: the microphone closes, nothing more is sent, the
+// backend's preparation is released as a user cancel, and a Stop that is waiting on the backend returns ErrCancelled.
+// Cancel on an idle service does nothing.
 func (s *Service) Cancel() {
 	s.mu.Lock()
-	op := s.cur
-	s.cur = nil
+	op, stream := s.cur, platform.MicrophoneStream(nil)
+	if op != nil {
+		stream = op.stream
+	} else {
+		op = s.starting
+	}
+	s.cur, s.starting = nil, nil
 	s.phase = PhaseIdle
 	s.mu.Unlock()
 	if op == nil {
 		return
 	}
 	s.releasePreparation(op, true)
-	_ = op.stream.Close()
+	if stream != nil {
+		_ = stream.Close()
+	}
 	s.publishLevel(0)
+}
+
+// newOperation returns a dictation that has not opened its microphone yet.
+func newOperation() *operation {
+	ctx, cancel := context.WithCancel(context.Background())
+	return &operation{id: newOperationID(), ctx: ctx, cancel: cancel, done: make(chan struct{})}
 }
 
 // newOperationID returns a random key for one dictation, short enough for the backend's idempotency header.
 func newOperationID() string {
+	return "dictation-" + randomHex()
+}
+
+// newRetryOperationID returns a key for one retry of a saved dictation. It never reuses the failed attempt's key, which
+// the backend has already settled.
+func newRetryOperationID() string {
+	return "dictation-retry-" + randomHex()
+}
+
+func randomHex() string {
 	var raw [16]byte
 	_, _ = rand.Read(raw[:])
-	return "dictation-" + hex.EncodeToString(raw[:])
+	return hex.EncodeToString(raw[:])
 }

@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -108,35 +109,57 @@ func TestRunningNormalizesDetectedPaths(t *testing.T) {
 
 // Ported: "dedupes in-flight refreshes and caps renderer requested paths".
 func TestRunningDedupesInFlightRefreshesAndCapsRequests(t *testing.T) {
-	var detections atomic.Int32
-	running := NewRunning(RunningOptions{
-		Candidates: func() []App { return []App{{Name: "app", Path: "/usr/bin/app"}} },
-		Clock:      fake.NewClock(),
-		Platform:   "linux",
-		Detect: func([]App) (map[string]bool, error) {
-			detections.Add(1)
-			return map[string]bool{"/usr/bin/app": true}, nil
-		},
-		Changed: func() {},
-	})
+	synctest.Test(t, func(t *testing.T) {
+		var detections atomic.Int32
+		gate := make(chan struct{})
+		running := NewRunning(RunningOptions{
+			Candidates: func() []App { return []App{{Name: "app", Path: "/usr/bin/app"}} },
+			Clock:      fake.NewClock(),
+			Platform:   "linux",
+			Detect: func([]App) (map[string]bool, error) {
+				detections.Add(1)
+				<-gate
+				return map[string]bool{"/usr/bin/app": true}, nil
+			},
+			Changed: func() {},
+		})
 
-	running.ScheduleRefresh("one")
-	running.ScheduleRefresh("two")
-	if _, err := running.Refresh("three"); err != nil {
-		t.Fatal(err)
-	}
-	running.WaitIdle()
-	if detections.Load() != 1 {
-		t.Fatalf("detections = %d, want 1", detections.Load())
-	}
-	requested := make([]string, 35)
-	for i := range requested {
-		requested[i] = "/tmp/" + string(rune('a'+i%26)) + string(rune('a'+i/26))
-	}
-	requested[0] = "/usr/bin/app"
-	if got := running.Snapshot(requested); !reflect.DeepEqual(got, []string{"/usr/bin/app"}) {
-		t.Fatalf("Snapshot = %v, want [/usr/bin/app]", got)
-	}
+		first := make(chan error, 1)
+		go func() { _, err := running.Refresh("one"); first <- err }()
+		synctest.Wait()
+		running.ScheduleRefresh("scheduled-one")
+		running.ScheduleRefresh("scheduled-two")
+		joined := make(chan error, 1)
+		go func() { _, err := running.Refresh("two"); joined <- err }()
+		synctest.Wait()
+		if detections.Load() != 1 {
+			t.Fatalf("detections before release = %d, want 1", detections.Load())
+		}
+		close(gate)
+		if err := <-first; err != nil {
+			t.Fatal(err)
+		}
+		if err := <-joined; err != nil {
+			t.Fatal(err)
+		}
+		if detections.Load() != 1 {
+			t.Fatalf("detections = %d, want 1", detections.Load())
+		}
+		requested := make([]string, 35)
+		for i := range requested {
+			requested[i] = "/tmp/" + string(rune('a'+i%26)) + string(rune('a'+i/26))
+		}
+		requested[0] = "/usr/bin/app"
+		if got := running.Snapshot(requested); !reflect.DeepEqual(got, []string{"/usr/bin/app"}) {
+			t.Fatalf("Snapshot = %v, want [/usr/bin/app]", got)
+		}
+		if _, err := running.Refresh("forced-after-completion"); err != nil {
+			t.Fatal(err)
+		}
+		if detections.Load() != 2 {
+			t.Fatalf("detections after forced refresh = %d, want 2", detections.Load())
+		}
+	})
 }
 
 // Hostile input beyond 1.x: a request past the cap is not answered even when its app is running. Only the first 30

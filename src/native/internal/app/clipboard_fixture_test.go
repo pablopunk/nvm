@@ -1,10 +1,7 @@
 package app
 
 import (
-	"bytes"
-	"image"
 	"image/color"
-	"image/png"
 	"strings"
 	"testing"
 	"time"
@@ -16,7 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// clipFixtureDir is the config folder of a fixture engine. Nothing is written outside the fake file system.
+// clipFixtureDir is the local data folder of a fixture engine. Nothing is written outside the fake file system.
 const clipFixtureDir = "/config/nvm-native"
 
 // clipFixture is a clipboard engine over fake ports: the scripted clipboard, file system, clock, HTTP and resolver
@@ -79,17 +76,6 @@ func trySend[T any](ch chan T, value T) {
 	}
 }
 
-// awaitUpdate runs the next request the engine made of the UI thread, failing the test when none comes.
-func (f *clipFixture) awaitUpdate(tb testing.TB) {
-	tb.Helper()
-	select {
-	case fn := <-f.updates:
-		fn()
-	case <-time.After(watchdog):
-		tb.Fatal("the engine never asked the UI thread for an update")
-	}
-}
-
 // awaitNotice returns the next notice the store reported, failing the test when none comes.
 func (f *clipFixture) awaitNotice(tb testing.TB) store.Notice {
 	tb.Helper()
@@ -105,7 +91,7 @@ func (f *clipFixture) awaitNotice(tb testing.TB) store.Notice {
 // watchdog bounds a wait for an event in the fixtures. It never stands in for one: waits end at the event.
 const watchdog = 10 * time.Second
 
-// goldenClipboard is the clipboard history the goldens show: a pinned note, a copied command, a picture and a
+// goldenClipboard is the clipboard history the goldens show: a note, a copied command, a picture and a
 // web address with its saved preview. Nothing is read from disk; the picture is seeded into the cache.
 func goldenClipboard(t *testing.T) *clipEngine {
 	t.Helper()
@@ -124,7 +110,7 @@ const goldenClipboardLink = "https://nevermind.app/docs/palette"
 func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 	t.Helper()
 	h := f.engine.history
-	shot := goldenBitmap(t, 640, 360, goldenPictureFill)
+	shot := goldenPictureBytes(t, 640, 360, goldenPictureFill)
 	must := func(err error) {
 		t.Helper()
 		if err != nil {
@@ -138,40 +124,13 @@ func seedGoldenClipboard(t *testing.T, f *clipFixture) {
 	}))
 	must(h.Remember(clipboard.Entry{ID: "e-shot", Kind: clipboard.KindImage, ImageRef: goldenClipboardImageName, Width: 640, Height: 360, Bytes: 1, CreatedAt: goldenNow.Add(-40 * time.Minute)}))
 	must(h.Remember(clipboard.Entry{ID: "e-notes", Kind: clipboard.KindText, Text: "Meeting notes: ship the design package by Friday and review the goldens with Ana", CreatedAt: goldenNow.Add(-2 * time.Hour)}))
-	_, err := h.SetPinned("e-notes", true)
-	must(err)
 	must(h.Remember(clipboard.Entry{ID: "e-rebase", Kind: clipboard.KindText, Text: "git rebase -i HEAD~3", CreatedAt: goldenNow.Add(-3 * time.Minute)}))
-	f.engine.pics.seed(goldenClipboardImageName, shot)
+	_, err := f.engine.images.Save(strings.Repeat("c", clipboard.HashLength), shot)
+	must(err)
 }
 
 // goldenPictureFill is the colour of the golden picture.
 var goldenPictureFill = color.NRGBA{R: 96, G: 128, B: 160, A: 255}
-
-// watchdogTimer returns a channel that fires when the watchdog runs out.
-func watchdogTimer() <-chan time.Time {
-	return time.After(watchdog)
-}
-
-// fakeResponse is a scripted answer of the fake public HTTP client with the given status and a short body.
-func fakeResponse(status int) fake.Response {
-	return fake.Response{Status: status, Body: []byte("gone")}
-}
-
-// pngBytes encodes a w by h picture as PNG, for tests that store pictures.
-func pngBytes(t testing.TB, w, h int) []byte {
-	t.Helper()
-	img := image.NewNRGBA(image.Rect(0, 0, w, h))
-	for y := range h {
-		for x := range w {
-			img.Set(x, y, color.NRGBA{R: uint8(x), G: uint8(y), B: 40, A: 255})
-		}
-	}
-	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatal(err)
-	}
-	return buf.Bytes()
-}
 
 // benchClipboard returns an engine whose history holds entries, which are given newest first and all fit.
 func benchClipboard(tb testing.TB, entries []clipboard.Entry) *clipEngine {
@@ -183,12 +142,6 @@ func benchClipboard(tb testing.TB, entries []clipboard.Entry) *clipEngine {
 		}
 	}
 	return f.engine
-}
-
-// clipEngineOver is an engine with an empty history over the given ports. A test that pastes through the palette
-// uses it, so the copy and the paste land on the same fake clipboard and paster as the palette's other actions.
-func clipEngineOver(ports platform.Ports) *clipEngine {
-	return newClipEngine(clipDeps{ports: ports, dir: clipFixtureDir, limit: clipDefaultLimit, redraw: func(func()) {}, log: logx.Default()})
 }
 
 // emptyClipboard is an engine with an empty history, for the empty state.

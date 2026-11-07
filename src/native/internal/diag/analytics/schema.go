@@ -3,21 +3,39 @@ package analytics
 // The event names. The ingest route accepts only these names from an install and drops every other, so a new event
 // needs a row here and a matching rule on the route.
 const (
-	EventAppLaunched   = "app.launched"
-	EventFeatureUsed   = "feature.used"
-	EventException     = "$exception"
-	EventSupportReport = "support_report"
+	EventAppLaunched          = "app.launched"
+	EventFeatureUsed          = "feature.used"
+	EventException            = "$exception"
+	EventSupportReport        = "support_report"
+	EventInstallOwnerObserved = "install.owner_observed"
+	EventOperationCompleted   = "operation_completed"
+	EventPageview             = "$pageview"
+)
+
+// PageView is a host-defined view category accepted by first-party ingest.
+type PageView string
+
+const (
+	PageViewPalette   PageView = "palette"
+	PageViewExtension PageView = "extension"
+	PageViewAIChat    PageView = "ai-chat"
 )
 
 // FeatureCommandRun is the feature name of a palette command the person ran.
 const FeatureCommandRun = "command.run"
 
+// FeatureViewAction is the feature name of an extension view action.
+const FeatureViewAction = "view.action"
+
 // schema lists the property keys each event may carry. Capture drops every other key.
 var schema = map[string][]string{
-	EventAppLaunched:   nil,
-	EventFeatureUsed:   {"feature", "variant"},
-	EventException:     {"support_ref", "component", "message", "frames", "attributes"},
-	EventSupportReport: {"support_ref"},
+	EventAppLaunched:          {"release"},
+	EventFeatureUsed:          {"feature", "variant", "outcome", "release", "$session_id"},
+	EventException:            {"support_ref", "component", "message", "frames", "attributes", "release"},
+	EventSupportReport:        {"support_ref"},
+	EventInstallOwnerObserved: {"owner_source", "owner_id"},
+	EventOperationCompleted:   {"operation", "label", "outcome", "stage", "duration_ms", "boot_id", "journey_id", "action_id", "$session_id", "release"},
+	EventPageview:             {"view", "$session_id"},
 }
 
 // commandVariants maps the palette's built-in command titles to their ids. A command outside this closed set is
@@ -27,7 +45,7 @@ var commandVariants = map[string]string{
 	"AI Chats":           "ai-chats",
 	"Emoji & Symbols":    "emoji-symbols",
 	"Search Files":       "search-files",
-	"Quick Notes":        "quick-notes",
+	"Floating Notes":     "quick-notes",
 	"Snippets":           "snippets",
 	"Extensions":         "extensions",
 	"Force Quit Apps":    "force-quit-apps",

@@ -37,22 +37,18 @@ func OpenStore(st *store.Store, clock platform.Clock) *Store {
 	}
 }
 
-// All returns every chat, most recently changed first.
+// All returns every chat that has a message, most recently changed first. A chat saved with no message, which an older
+// build could write, is ignored here and removed by Expire.
 func (s *Store) All() ([]Chat, error) {
 	loaded, err := s.doc.Load()
-	chats := slices.Clone(loaded.Chats)
+	chats := slices.DeleteFunc(slices.Clone(loaded.Chats), isEmpty)
 	slices.SortStableFunc(chats, func(a, b Chat) int { return b.UpdatedAt.Compare(a.UpdatedAt) })
 	return chats, err
 }
 
-// Create adds an empty chat of kind and tier and returns it.
-func (s *Store) Create(kind Kind, tier Tier) (Chat, error) {
-	now := s.clock.Now()
-	chat := Chat{ID: newChatID(), Kind: kind, Tier: tier, CreatedAt: now, UpdatedAt: now}
-	if err := s.doc.Update(func(d *document) { d.Chats = append(d.Chats, chat) }); err != nil {
-		return Chat{}, err
-	}
-	return chat, nil
+// Insert records chat as it is. The service records a chat when its first message is written, never before.
+func (s *Store) Insert(chat Chat) error {
+	return s.doc.Update(func(d *document) { d.Chats = append(d.Chats, chat) })
 }
 
 // Mutate applies change to the chat with id and stamps it as changed at now.
@@ -85,12 +81,12 @@ func (s *Store) Remove(id string) error {
 	})
 }
 
-// Expire deletes the conversations that have been idle past the retention window, except those keep reports
-// as in use. It returns the ids it deleted. Builder chats are not expired.
+// Expire deletes the chats retention removes, except those keep reports as in use: every chat with no message, and the
+// conversations idle past the retention window. It returns the ids it deleted.
 func (s *Store) Expire(now time.Time, keep func(id string) bool) ([]string, error) {
 	var removed []string
 	err := s.doc.Update(func(d *document) {
-		expired := expiredIDs(d.Chats, now)
+		expired := removableIDs(d.Chats, now)
 		d.Chats = slices.DeleteFunc(d.Chats, func(chat Chat) bool {
 			if !slices.Contains(expired, chat.ID) || keep(chat.ID) {
 				return false
@@ -100,6 +96,11 @@ func (s *Store) Expire(now time.Time, keep func(id string) bool) ([]string, erro
 		})
 	})
 	return removed, err
+}
+
+// isEmpty reports whether chat has no message yet.
+func isEmpty(chat Chat) bool {
+	return len(chat.Messages) == 0
 }
 
 // newChatID returns a random chat identifier.

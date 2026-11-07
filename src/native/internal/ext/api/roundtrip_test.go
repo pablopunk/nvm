@@ -117,7 +117,7 @@ func wireSamples() []namedSample {
 		{"shell-result", ShellResult{Stdout: "up 3 days", ExitCode: 0}},
 		{"ocr-result", OCRResult{Text: "Invoice 42", Confidence: 0.93, Blocks: []OCRBlock{{Text: "Invoice", Box: &Rect{Width: 10, Height: 4}}}}},
 		{"ai-options", AIOptions{Model: ModelFast, System: "Be brief.", Attachments: []Attachment{{Kind: "text", Text: "ctx", Title: "Selection"}}}},
-		{"decision-request", DecisionRequest{Input: json.RawMessage(`"hello"`), Questions: []DecisionQuestion{{ID: "q1", Type: DecisionScore, Question: "Urgency?", Min: 1, Max: 5}}}},
+		{"decision-request", DecisionRequest{Input: json.RawMessage(`"hello"`), Questions: []DecisionQuestion{{ID: "q1", Type: DecisionScore, Question: "Urgency?", Min: intPtr(1), Max: intPtr(5)}}}},
 		{"decision-result", DecisionResult{ID: "d1", Model: "route", Answers: map[string]DecisionAnswer{"q1": {Type: DecisionPredicate, Flag: true, Probability: 0.8}}}},
 		{"chat-summary", ChatSummary{ID: "c1", Title: "Build clock", ExtensionFiles: []string{"clock.go"}}},
 	}

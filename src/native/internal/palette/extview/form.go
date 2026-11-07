@@ -45,8 +45,9 @@ func newFormState(s *Session) *formState {
 	}
 	f.page = &palette.View{
 		Title: s.view.Title, Placeholder: formPlaceholder, Hint: "↵ Edit   " + saveHint(),
-		Search: f.rows,
-		OnKey:  f.key,
+		Search:  f.rows,
+		OnKey:   f.key,
+		Primary: f.submitHint,
 	}
 	return f
 }
@@ -106,8 +107,9 @@ func rowID(fieldID string) string {
 
 func (f *formState) saveRow() search.Item {
 	return search.Item{
-		ID: "form:save", Title: f.saveTitle(), Icon: "check",
-		Actions: []search.Action{{Title: f.saveTitle(), Dismiss: search.DismissNever, Run: f.save}},
+		ID: "form:save", Title: f.saveTitle(), Icon: "check", Prominent: true, Tone: "yellow",
+		Accessory: palette.KeyLabel("⌃↵"),
+		Actions:   []search.Action{{Title: f.saveTitle(), Dismiss: search.DismissNever, Run: f.save}},
 	}
 }
 
@@ -124,6 +126,7 @@ func (f *formState) key(c *ui.Context, h search.Host) bool {
 	case f.editing != "" && c.Shortcut(0, ui.KeyEscape):
 		f.stopEditing(h)
 	case c.Shortcut(palette.Mod, ui.KeyEnter):
+		f.applyDraft(h)
 		f.save(h)
 	default:
 		return false
@@ -300,7 +303,11 @@ func (f *formState) save(h search.Host) {
 	}
 	if first != "" {
 		f.selectID = rowID(first)
-		h.Refresh()
+		if h.Query() != "" {
+			h.SetQuery("")
+		} else {
+			h.Refresh()
+		}
 		return
 	}
 	if f.spec.Submit == nil || f.spec.Submit.Ref == nil {

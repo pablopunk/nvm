@@ -20,9 +20,12 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 }
 
 var checks = map[string]func(api.Context) string{
+	"menus":     menusCheck,
 	"clipboard": clipboardCheck,
 	"windows":   windowsCheck,
 	"apps":      appsCheck,
+	"frontmost": frontmostCheck,
+	"notify":    notifyCheck,
 	"history":   historyCheck,
 	"shortcuts": shortcutsCheck,
 	"system":    systemCheck,
@@ -76,6 +79,20 @@ func appsCheck(ctx api.Context) string {
 	return fmt.Sprintf("apps listed=%t", len(apps) > 0)
 }
 
+func frontmostCheck(ctx api.Context) string {
+	app, err := ctx.Desktop().Apps().Frontmost()
+	if err != nil {
+		return "frontmost failed: " + err.Error()
+	}
+	return fmt.Sprintf("frontmost named=%t", app.Name != "")
+}
+
+// notifyCheck shows one notification. The host shows it only when the extension declares system.
+func notifyCheck(ctx api.Context) string {
+	err := ctx.System().Notify("Nevermind fixture", "Shown by the desktop fixture")
+	return fmt.Sprintf("notify shown=%t", err == nil)
+}
+
 func historyCheck(ctx api.Context) string {
 	entries, err := ctx.Clipboard().List(api.ClipboardQuery{Limit: 10})
 	if err != nil {
@@ -108,4 +125,17 @@ func filesCheck(ctx api.Context) string {
 func linksCheck(ctx api.Context) string {
 	err := ctx.Desktop().Shell().OpenExternal("file:///etc/hostname")
 	return fmt.Sprintf("links refused=%t", err != nil)
+}
+
+func menusCheck(ctx api.Context) string {
+	snapshot, err := ctx.Desktop().Menus().Snapshot()
+	if err != nil {
+		return "menus refused"
+	}
+	if len(snapshot.Items) != 1 {
+		return "menus wrong count"
+	}
+	item := snapshot.Items[0]
+	err = ctx.Desktop().Menus().Invoke(item.Handle)
+	return fmt.Sprintf("menus %s %s %v %s %t %t loading=%t invoked=%t", item.Handle, item.Title, item.Path, item.Shortcut, item.Enabled, item.Checked, snapshot.Loading, err == nil)
 }

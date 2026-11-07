@@ -14,18 +14,30 @@ const (
 	logWritesPerMinute = 300
 )
 
+// rootRefreshBurst and rootRefreshesPerMinute are 1.x's refresh rule: five refreshes in any two seconds.
+const (
+	rootRefreshBurst       = 5
+	rootRefreshesPerMinute = 150
+)
+
 // rateLimiter is a token bucket that reads time only through its clock, so tests advance it without sleeping.
 type rateLimiter struct {
 	mu         sync.Mutex
 	clock      platform.Clock
 	capacity   float64
+	refillRate float64
 	tokens     float64
 	refilledAt time.Time
 	started    bool
 }
 
 func newRateLimiter(clock platform.Clock, perMinute int) *rateLimiter {
-	return &rateLimiter{clock: clock, capacity: float64(perMinute)}
+	return newBurstRateLimiter(clock, perMinute, perMinute)
+}
+
+// newBurstRateLimiter allows burst calls at once, then refills at perMinute.
+func newBurstRateLimiter(clock platform.Clock, burst, perMinute int) *rateLimiter {
+	return &rateLimiter{clock: clock, capacity: float64(burst), refillRate: float64(perMinute)}
 }
 
 // allow takes one token and reports whether the call may run.
@@ -40,7 +52,7 @@ func (r *rateLimiter) allow() bool {
 	}
 	elapsed := now.Sub(r.refilledAt).Minutes()
 	if elapsed > 0 {
-		r.tokens = min(r.capacity, r.tokens+elapsed*r.capacity)
+		r.tokens = min(r.capacity, r.tokens+elapsed*r.refillRate)
 		r.refilledAt = now
 	}
 	if r.tokens < 1 {

@@ -10,21 +10,33 @@ import (
 	"time"
 )
 
-// J21 (PLAN.md 3.1): Fix Selected Text with AI runs from the palette over the app the selection is in. The rig has no
-// third-party text editor, so the source is a floating note: its text is selected, the palette's command copies the
-// selection with the real X11 focus and xdotool path, the proofread streams through the fake backend, the result page
-// offers the correction, and Enter replaces the selection in the note and restores the clipboard. Not covered: a
-// third-party source app, the triage and classify commands, the indicator's frames, and the failure copy.
+// J21 (PLAN.md 3.1): Fix Selected Text with AI runs from the palette over the app the selection is in. The source is a
+// floating note: its text is selected, the palette's command copies the selection with the real X11 focus and xdotool
+// path, the correction goes through the fake backend, and the selection is replaced in the note with the clipboard
+// restored. The fix needs no confirmation. Not covered: a third-party source app (see the editor journey), the triage
+// and classify commands, the indicator's frames, and the failure copy.
 
 const (
 	j21Input     = "this are selected text"
 	j21Corrected = "This is selected text."
 	j21Clipboard = "rig clipboard kept by the fix"
 	j21AIWait    = 15 * time.Second
+	// j21FloatingTitle is the title of the floating window Toggle Floating Notes opens.
+	j21FloatingTitle = "Floating Notes"
 )
 
 // TestJourneyJ21FixSelectedTextReplacesTheSelection is the J21 smoke described above.
 func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
+	for _, rich := range []bool{false, true} {
+		name := "plain clipboard"
+		if rich {
+			name = "rich clipboard"
+		}
+		t.Run(name, func(t *testing.T) { runSelectedTextReplacement(t, rich) })
+	}
+}
+
+func runSelectedTextReplacement(t *testing.T, rich bool) {
 	fake := StartFakeBackend(t)
 	fake.SetReply(j21Corrected)
 	app := Launch(t, Options{Backend: fake.URL})
@@ -34,35 +46,34 @@ func TestJourneyJ21FixSelectedTextReplacesTheSelection(t *testing.T) {
 
 	createNoteWith(t, app, j21Input)
 	display := os.Getenv("DISPLAY")
-	note := waitForWindowID(t, display, j21Input)
+	note := waitForWindowID(t, display, j21FloatingTitle)
 	must(t, activateWindow(display, note))
 	must(t, app.Key("ctrl+a"))
+	if rich {
+		must(t, app.clipboardServe("<b>"+j21Clipboard+"</b>", "-t", "text/html", "-i"))
+	}
 
 	must(t, app.SummonPalette())
 	must(t, app.Type("Fix Selected Text"))
 	_, err := app.WaitFor("Fix Selected Text with AI", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor(j21Corrected, j21AIWait)
-	must(t, err)
-	shoot(t, app, "j21-1-result")
-
-	must(t, app.Key("Return"))
 	waitNoteOnDisk(t, app, j21Corrected)
-	waitClipboardEquals(t, app, j21Clipboard)
+	if rich {
+		waitHTMLClipboard(t, app, "<b>"+j21Clipboard+"</b>")
+	} else {
+		waitClipboardEquals(t, app, j21Clipboard)
+	}
 	shoot(t, app, "j21-2-replaced")
 }
 
-// createNoteWith types text into a new Quick Note, then leaves the editor for the list, where the newest note is the row
-// after New Note. ctrl+f opens that note in its floating window.
+// createNoteWith types text into a new Floating Notes note in the palette, closes the palette, and shows the most recent
+// note in the floating window with Toggle Floating Notes, as the user does.
 func createNoteWith(t *testing.T, app *App, text string) {
 	t.Helper()
 	must(t, app.SummonPalette())
-	must(t, app.Type("Quick Notes"))
-	_, err := app.WaitFor("Quick Notes", elementWait)
-	must(t, err)
-	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Quick Notes", elementWait)
+	must(t, app.Type("New Note"))
+	_, err := app.WaitFor("New Note", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Untitled note", elementWait)
@@ -71,9 +82,13 @@ func createNoteWith(t *testing.T, app *App, text string) {
 	_, err = app.WaitFor(text, elementWait)
 	must(t, err)
 	time.Sleep(autosaveSettle)
-	must(t, app.Key("Escape"))
-	must(t, app.Key("Down"))
-	must(t, app.Key("ctrl+f"))
+	hidePalette(t, app)
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("Toggle Floating Notes"))
+	_, err = app.WaitFor("Toggle Floating Notes", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
 }
 
 // activateWindow gives the keyboard to window id on display.
@@ -113,4 +128,19 @@ func noteFileHolds(home, text string) bool {
 		return nil
 	})
 	return found
+}
+
+func waitHTMLClipboard(t *testing.T, app *App, want string) {
+	t.Helper()
+	deadline := time.Now().Add(j21AIWait)
+	for {
+		got, err := app.output("xclip", "-selection", "clipboard", "-t", "text/html", "-o")
+		if err == nil && got == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("rich clipboard was not restored: got=%q err=%v", got, err)
+		}
+		time.Sleep(pollInterval)
+	}
 }

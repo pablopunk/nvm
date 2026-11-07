@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"log"
+	"sync"
 
 	"github.com/egoist/mygo"
 
-	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/diag/analytics"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/update"
@@ -16,6 +18,7 @@ import (
 // stamped for reports unsupported and never contacts a feed. Every change of state refreshes the menu bar and the
 // palette on the UI thread.
 func (p *App) attachUpdater() {
+	p.updatesCtx, p.stopUpdates = context.WithCancel(context.Background())
 	p.updates = update.NewService(update.Options{
 		Engine:   real.NewSelfUpdater(),
 		Clock:    p.ports.Clock,
@@ -39,10 +42,52 @@ func (p *App) checkForUpdates(report func(msg string)) {
 	})
 }
 
-// notifyUpdate shows a check's answer as a desktop notification, for checks started from the menu bar while the
-// palette is hidden.
-func (p *App) notifyUpdate(msg string) {
-	p.notifySystem("Nevermind", msg)
+// checkForUpdatesWithCompletion reports the updater result on the UI thread and completes the command after Check returns.
+func (p *App) checkForUpdatesWithCompletion(ctx context.Context, report func(string), complete func(analytics.OperationOutcome)) {
+	var once sync.Once
+	finish := func(outcome analytics.OperationOutcome) { once.Do(func() { complete(outcome) }) }
+	safego.Go("updates.check", func(taskCtx context.Context) {
+		ctx, cancel := context.WithCancel(ctx)
+		stopTask := context.AfterFunc(taskCtx, cancel)
+		stopApp := context.AfterFunc(p.updatesCtx, cancel)
+		defer func() { stopTask(); stopApp(); cancel() }()
+		var outcome analytics.OperationOutcome
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				finish(analytics.OutcomeFailed)
+				panic(recovered)
+			}
+			if outcome != "" {
+				finish(outcome)
+			}
+		}()
+		state, owned := p.updates.CheckOwned(ctx)
+		if !owned {
+			return
+		}
+		outcome = updateCheckOutcome(ctx.Err(), state)
+		p.onUI(func() { report(update.Message(state)) })
+	})
+}
+
+// stopUpdateChecks cancels app-owned check workers when the application begins quitting.
+func (p *App) stopUpdateChecks(_ *mygo.QuitEvent) {
+	if p.stopUpdates != nil {
+		p.stopUpdates()
+	}
+}
+
+func updateCheckOutcome(ctxErr error, state update.State) analytics.OperationOutcome {
+	switch {
+	case errors.Is(ctxErr, context.DeadlineExceeded):
+		return analytics.OutcomeTimedOut
+	case errors.Is(ctxErr, context.Canceled):
+		return analytics.OutcomeCancelled
+	case state.Status == update.StatusFailed && state.Stage == update.StageCheck:
+		return analytics.OutcomeFailed
+	default:
+		return analytics.OutcomeSuccess
+	}
 }
 
 // restartToUpdate restarts the app into the downloaded update, or says why it cannot.
@@ -55,8 +100,6 @@ func (p *App) restartToUpdate() error {
 
 // refreshUpdateSurfaces redraws what shows the update: the menu bar's update row and the open palette.
 func (p *App) refreshUpdateSurfaces() {
-	if p.menubar != nil {
-		p.menubar.SetMenu(menubar.RowsWithUpdate(p.menubarActions(), p.onUI, p.menubarUpdateRow()))
-	}
+	p.refreshMenubarMenu()
 	p.Refresh()
 }

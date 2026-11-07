@@ -16,6 +16,7 @@ const (
 	OpSystemLogOut       = "LogOut"
 	OpSystemEmptyTrash   = "EmptyTrash"
 	OpSystemOpenSettings = "OpenSettings"
+	OpSystemQuit         = "Quit"
 )
 
 // SystemCall is one recorded call on the system port. Arg is the settings pane and anchor of OpenSettings, joined
@@ -76,6 +77,9 @@ func (s *System) Calls() []SystemCall {
 	defer s.mu.Unlock()
 	return slices.Clone(s.calls)
 }
+
+// Quit records the call. Quit returns nothing, so a fault queued for it has no effect.
+func (s *System) Quit() { _ = s.record(OpSystemQuit, "") }
 
 // LockScreen records the call.
 func (s *System) LockScreen() error { return s.record(OpSystemLock, "") }

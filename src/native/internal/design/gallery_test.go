@@ -72,3 +72,16 @@ func TestGalleryRowsAtDoubleZoom(t *testing.T) {
 	zoomed.Interact = doubleZoomInteraction
 	golden.AssertMatrix(t, "rows-zoom-200", galleryPage(galleryRows), zoomed)
 }
+
+// hoverMenuInteraction moves the pointer onto the menu row titled "Pin", so that the row shows the hover wash.
+func hoverMenuInteraction(tt *ui.Tester) {
+	if rect, ok := tt.Find("Pin"); ok {
+		tt.Move(rect.X+rect.W/2, rect.Y+rect.H/2)
+	}
+}
+
+func TestGalleryControlsMenuHovered(t *testing.T) {
+	hovered := galleryGoldens
+	hovered.Interact = hoverMenuInteraction
+	golden.AssertMatrix(t, "controls-menu-hover", galleryPage(galleryControls), hovered)
+}

@@ -16,13 +16,20 @@ func reviewRowsFor(ctl extensionController, l manager.Listing) []search.Item {
 	return (&App{}).extensionReviewView(ctl, l).Search("")
 }
 
-func TestReviewStartsWithEnableThenCancel(t *testing.T) {
+func TestReviewStartsWithTheDescriptionThenEnableThenCancel(t *testing.T) {
 	rows := reviewRowsFor(&fakeExtensions{}, reviewListing())
-	if len(rows) < 2 || rows[0].Title != "Enable" || rows[1].Title != "Cancel" {
-		t.Fatalf("review rows = %v, want Enable then Cancel first", rowTitlesOf(rows))
+	if len(rows) < 3 || rows[1].Title != "Enable" || rows[2].Title != "Cancel" {
+		t.Fatalf("review rows = %v, want the description, then Enable and Cancel", rowTitlesOf(rows))
 	}
-	if rows[0].Section != "acme.review" {
-		t.Fatalf("enable section = %q, want the extension id", rows[0].Section)
+	if rows[0].Section != "Capability fixture" {
+		t.Fatalf("description section = %q, want the extension's display name", rows[0].Section)
+	}
+}
+
+func TestReviewNamesAMissingDescriptionNeutrally(t *testing.T) {
+	rows := reviewRowsFor(&fakeExtensions{}, spinListing())
+	if rows[0].Title != "No description" || !rows[0].Disabled {
+		t.Fatalf("description row = %+v, want the neutral line as context", rows[0])
 	}
 }
 
@@ -55,7 +62,7 @@ func TestReviewWithoutCapabilitiesSaysSo(t *testing.T) {
 func TestReviewEnableCallsTheManagerAndReturns(t *testing.T) {
 	ctl := &fakeExtensions{}
 	h := &viewHost{}
-	actionTitled(t, reviewRowsFor(ctl, reviewListing())[0], "Enable").Run(h)
+	actionTitled(t, reviewRowsFor(ctl, reviewListing())[1], "Enable").Run(h)
 
 	if want := []string{"enable acme.review"}; !reflect.DeepEqual(ctl.calls, want) {
 		t.Fatalf("manager calls = %v, want %v", ctl.calls, want)
@@ -68,7 +75,7 @@ func TestReviewEnableCallsTheManagerAndReturns(t *testing.T) {
 func TestReviewEnableFailureReturnsAndReportsIt(t *testing.T) {
 	ctl := &fakeExtensions{err: errors.New("extension acme.review does not load: broken")}
 	h := &viewHost{}
-	actionTitled(t, reviewRowsFor(ctl, reviewListing())[0], "Enable").Run(h)
+	actionTitled(t, reviewRowsFor(ctl, reviewListing())[1], "Enable").Run(h)
 
 	if h.pops != 1 {
 		t.Fatalf("pops = %d, want the review to return to the list", h.pops)
@@ -81,7 +88,7 @@ func TestReviewEnableFailureReturnsAndReportsIt(t *testing.T) {
 func TestReviewCancelReturnsWithoutEnabling(t *testing.T) {
 	ctl := &fakeExtensions{}
 	h := &viewHost{}
-	actionTitled(t, reviewRowsFor(ctl, reviewListing())[1], "Cancel").Run(h)
+	actionTitled(t, reviewRowsFor(ctl, reviewListing())[2], "Cancel").Run(h)
 
 	if len(ctl.calls) != 0 {
 		t.Fatalf("manager calls = %v, want none", ctl.calls)

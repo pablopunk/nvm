@@ -23,10 +23,11 @@ type UninstallDeps struct {
 	Platform string
 	// Home is the user's home folder, the root of every per-user location.
 	Home string
-	// UID is the current user. Items owned by another user are never offered.
-	UID   int
-	Files Files
-	Clock platform.Clock
+	// UID is the current user. Associated data owned by another user is never offered.
+	UID             int
+	Files           Files
+	DirectoryAccess platform.DirectoryAccess
+	Clock           platform.Clock
 	// Trash moves one item to the Trash (the Shell port). It never deletes permanently.
 	Trash func(path string) error
 	// ReadBundleID returns an app's bundle identifier (macOS plist) or desktop identifier (Linux file name).

@@ -3,43 +3,62 @@
 package rigtest
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/pablopunk/nvm/native/internal/fixtures"
 )
 
-// J14 (PLAN.md 3.1): Automate writes an extension, checks it, and installs it off. The fake backend first answers with a
-// source that does not compile; the host sends the compile error back, the model's second reply compiles, and the
-// chat says the extension is installed but off. The user presses Control+E, turns it on in the review, and the
-// extension's root row shows on the root. Editing is TestJourneyJ14EditChangesAnExtensionAndShowsTheNewRow; the
-// failure path after the retries is not covered.
+// J14 (PLAN.md 3.1): Automate writes an extension with write_extension, which checks it, installs it, and enables it, as
+// 1.x does. The fake backend first calls write_extension with a source that does not compile; the tool's error goes back
+// to the model in the same turn, the model calls write_extension again with a source that compiles, and the chat answers.
+// The new row shows on the root without a review. Editing is TestJourneyJ14EditChangesAnExtensionAndShowsTheNewRow; the
+// failure after the model gives up is not covered.
 
 const (
-	builderRequest     = "make a clock"
-	builderRow         = `Automate "make a clock"`
-	builderNotice      = "installed but off"
-	builderRetryNotice = "Asking the model to fix it"
-	builderReviewTitle = "Review Clock journey"
-	builderRootRow     = "Clock journey row"
-	builderWait        = 60 * time.Second
+	builderRequest  = "make a clock"
+	builderRow      = `Automate "make a clock"`
+	builderRootRow  = "Clock journey row"
+	builderDoneText = "The clock is installed and on the root."
+	builderWait     = 60 * time.Second
+	// builderCompileError names api.Itme, which the API does not have: the check must refuse it and say why.
+	builderCompileError = "Itme"
+	clockManifest       = `{"apiVersion":"1.0","id":"user.clock-journey","title":"Clock journey"}`
 )
 
-// badSourceReply names api.Itme, which the API does not have: the compile check must refuse it.
-var badSourceReply = "I will write a clock.\n\n```json\n" +
-	`{"apiVersion":"1.0","id":"user.clock-journey","title":"Clock journey"}` + "\n```\n\n```go\n" +
-	"package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
-	"func RootItems(ctx api.Context) ([]api.Itme, error) { return nil, nil }\n```\n"
+// badClockSource names api.Itme, which the API does not have.
+const badClockSource = "package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
+	"func RootItems(ctx api.Context) ([]api.Itme, error) { return nil, nil }\n"
 
-// goodSourceReply is the fixed extension: one root row.
-var goodSourceReply = "The compile error was an unknown name. Here is the fixed extension.\n\n```json\n" +
-	`{"apiVersion":"1.0","id":"user.clock-journey","title":"Clock journey"}` + "\n```\n\n```go\n" +
-	"package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
-	"func RootItems(ctx api.Context) ([]api.Item, error) {\n" +
-	"\treturn []api.Item{{ID: \"clock-row\", Title: \"" + builderRootRow + "\", Subtitle: \"Built by the builder\"}}, nil\n}\n```\n"
+// clockSource provides one suggestion at the empty root and the same item when its title is searched.
+func clockSource(row string) string {
+	return "package main\n\nimport (\n\"strings\"\n\"github.com/pablopunk/nvm/native/internal/ext/api\"\n)\n\n" +
+		"func RootItems(ctx api.Context) ([]api.Item, error) {\n" +
+		"\treturn []api.Item{{ID: \"clock-row\", Title: \"" + row + "\", Subtitle: \"Built by the builder\"}}, nil\n}\n" +
+		"func SearchItems(ctx api.Context, query string) ([]api.Item, error) {\n" +
+		"\tif strings.Contains(strings.ToLower(\"" + row + "\"), strings.ToLower(query)) { return RootItems(ctx) }\n" +
+		"\treturn nil, nil\n}\n"
+}
 
-// TestJourneyJ14AutomateBuildsReviewsEnablesAndRunsAnExtension drives the whole builder path on the rig.
-func TestJourneyJ14AutomateBuildsReviewsEnablesAndRunsAnExtension(t *testing.T) {
+// writeCall is a write_extension call with the manifest and source given, as the model sends them.
+func writeCall(t *testing.T, id, manifest, source string) fixtures.ToolCall {
+	t.Helper()
+	args, err := json.Marshal(map[string]string{"manifest": manifest, "source": source})
+	must(t, err)
+	return fixtures.ToolCall{ID: id, Name: "write_extension", Arguments: []string{string(args)}}
+}
+
+// TestJourneyJ14AutomateBuildsAndRunsAnExtension drives the builder path on the rig: the first write fails to compile,
+// the model fixes it in the same turn, and the enabled extension's row shows on the root.
+func TestJourneyJ14AutomateBuildsAndRunsAnExtension(t *testing.T) {
 	fake := StartFakeBackend(t)
-	fake.QueueReplies(badSourceReply, goodSourceReply)
+	fake.SetScript(
+		fixtures.ToolCallReply("", writeCall(t, "call_bad", clockManifest, badClockSource)),
+		fixtures.ToolCallReply("", writeCall(t, "call_good", clockManifest, clockSource(builderRootRow))),
+		fixtures.TextReply(builderDoneText),
+	)
 	app := Launch(t, Options{Backend: fake.URL})
 	signInThroughAccount(t, app, fake)
 	hidePalette(t, app)
@@ -50,25 +69,18 @@ func TestJourneyJ14AutomateBuildsReviewsEnablesAndRunsAnExtension(t *testing.T) 
 	waitForRow(t, app, builderRow, elementWait)
 	must(t, app.Key("Return"))
 
-	_, err := app.WaitFor(builderRetryNotice, builderWait)
+	_, err := app.WaitFor(builderDoneText, builderWait)
 	must(t, err)
-	shoot(t, app, "j14-1-retry")
-
-	_, err = app.WaitFor(builderNotice, builderWait)
-	must(t, err)
-	shoot(t, app, "j14-2-installed-off")
-	assertNoRow(t, app, builderRootRow)
-
-	must(t, app.Key("ctrl+e"))
-	_, err = app.WaitFor(builderReviewTitle, elementWait)
-	must(t, err)
-	shoot(t, app, "j14-3-review")
-	must(t, app.Key("Return"))
-
-	if !waitUntilPaletteLacks(t, app, builderReviewTitle, elementWait) {
-		t.Fatal("Return on Enable did not leave the review")
+	shoot(t, app, "j14-1-chat-done")
+	// Request 0 asks and is answered with the bad write; request 1 carries that write's error and is answered with the
+	// good write; request 2 carries the good write's result and is answered with the text.
+	if bodies := chatRequestBodies(fake); len(bodies) != 3 || !strings.Contains(bodies[1], builderCompileError) {
+		t.Fatalf("the model did not get the compile error back in the same turn (%d chat requests)", len(bodies))
 	}
-	must(t, app.Key("Escape"))
+
+	hidePalette(t, app)
+	must(t, app.SummonPalette())
+	must(t, app.Type(builderListQuery))
 	waitForRow(t, app, builderRootRow, builderWait)
-	shoot(t, app, "j14-4-row-on-root")
+	shoot(t, app, "j14-2-row-on-root")
 }

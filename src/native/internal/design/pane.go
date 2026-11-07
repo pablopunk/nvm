@@ -10,10 +10,19 @@ const PaneRadius = 18
 // material (VibrancyGlass) the pane has no fill and the material shows through; without one the pane is the
 // theme's paper or ink, slightly see-through where the compositor allows.
 func Pane(c *ui.Context, body func()) {
+	pane(c, 0.96, body)
+}
+
+// PalettePane is the translucent surface for the full palette window.
+func PalettePane(c *ui.Context, body func()) {
+	pane(c, 0.75, body)
+}
+
+func pane(c *ui.Context, opacity float32, body func()) {
 	k := Tokens(c)
 	pane := ui.Column(c).Fill().Radius(PaneRadius).Clip().Border(1, k.EdgeStrong).InsetShadow(0, 1, 0, 0, k.Hi)
 	if !c.Vibrancy() {
-		pane.Background(k.Bg.Alpha(0.96))
+		pane.Background(k.Bg.Alpha(opacity))
 	}
 	pane.Children(body)
 }

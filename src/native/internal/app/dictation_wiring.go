@@ -2,15 +2,21 @@ package app
 
 import (
 	"context"
-	"time"
+	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	dict "github.com/pablopunk/nvm/native/internal/dictation"
+	"github.com/pablopunk/nvm/native/internal/dictation/recordings"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	dictbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
+	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/safego"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// dictationTranscriber is the service's backend port. It sends through the account session's client.
+// dictationTranscriber is the engine's backend port. It sends through the account session's client.
 type dictationTranscriber struct {
 	session *auth.Session
 }
@@ -35,7 +41,7 @@ func (t dictationTranscriber) CancelPreparation(ctx context.Context, operationID
 	return t.session.Client().CancelTranscriptionPreparation(ctx, operationID, userCancelled)
 }
 
-// appDictationAccount adapts the app's account session to the flow's account port.
+// appDictationAccount adapts the app's account session to the engine's account port.
 type appDictationAccount struct {
 	app *App
 }
@@ -57,41 +63,100 @@ func (a appDictationAccount) NoteError(err error) {
 	}
 }
 
-// dictationFlowFor returns the app's dictation flow, created on first use from the platform ports. It runs on the UI
-// thread, so the lazy creation needs no lock.
-func (p *App) dictationFlowFor() *dictationFlow {
+// extensionDictation is the dictation engine the extensions reach. It is created on the first call, when the account
+// session exists, and every call goes to that one engine.
+type extensionDictation struct {
+	app    *App
+	once   sync.Once
+	engine *dict.Engine
+}
+
+// engineFor returns the app's dictation engine, created once.
+func (d *extensionDictation) engineFor() *dict.Engine {
+	d.once.Do(func() { d.engine = d.app.newDictationEngine() })
+	return d.engine
+}
+
+// newDictationEngine wires the engine to the platform ports, the account and the app's data folder.
+func (p *App) newDictationEngine() *dict.Engine {
+	return dict.NewEngine(dict.EngineConfig{
+		Microphone: p.ports.Microphone,
+		Codec:      p.ports.Opus,
+		Account:    appDictationAccount{app: p},
+		Recordings: p.dictationRecordingStore(),
+		Muter:      p.dictationMuter(),
+		Background: supervisedDictation,
+		Warn: func(event string, fields map[string]any) {
+			logx.Default().Warn(event, logx.F(fields))
+		},
+	})
+}
+
+// dictationEngine returns the app's dictation for the extensions and the startup recovery, created on first use.
+func (p *App) dictationEngine() *extensionDictation {
 	if p.dictation == nil {
-		p.dictation = newDictationFlow(p.dictationDeps())
+		p.dictation = &extensionDictation{app: p}
 	}
 	return p.dictation
 }
 
-// dictationDeps wires the flow to the app: UI work goes through the palette's redraw, background work to supervised
-// goroutines, and timers fire back on the UI thread.
-func (p *App) dictationDeps() dictationDeps {
-	return dictationDeps{
-		Microphone:    p.ports.Microphone,
-		Codec:         p.ports.Opus,
-		Clipboard:     p.ports.Clipboard,
-		Paster:        p.ports.Paster,
-		Account:       appDictationAccount{app: p},
-		Settings:      p.dictationSettings,
-		Panel:         &dictationWindow{app: p},
-		Dispatch:      p.redraw,
-		Background:    supervisedDictation,
-		After:         p.dictationAfter,
-		PaletteHidden: p.notePaletteHidden,
-		Toast:         p.toastFromBackground,
-		RestoreDelay:  dictationRestoreDelay,
-		OnDevices:     p.Refresh,
+// recoverDictationMute gives the output back its state when the last run stopped in the middle of a dictation.
+func (p *App) recoverDictationMute() {
+	if err := p.dictationEngine().engineFor().RecoverMute(); err != nil {
+		logx.Default().Warn("dictation.unmute-recovery-failed", logx.F{"error": err.Error()})
 	}
+}
+
+func (d *extensionDictation) Status() api.DictationStatus {
+	return d.engineFor().Status()
+}
+
+func (d *extensionDictation) APIAvailable() bool {
+	return d.engineFor().APIAvailable()
+}
+
+func (d *extensionDictation) Devices() ([]api.DictationDevice, error) {
+	return d.engineFor().Devices()
+}
+
+func (d *extensionDictation) Start(options api.DictationStartOptions) error {
+	return d.engineFor().Start(options)
+}
+
+func (d *extensionDictation) Stop() (string, error) {
+	return d.engineFor().Stop()
+}
+
+func (d *extensionDictation) Cancel() error {
+	return d.engineFor().Cancel()
+}
+
+func (d *extensionDictation) Recordings() ([]api.SavedDictation, error) {
+	return d.engineFor().Recordings()
+}
+
+func (d *extensionDictation) Retry(ctx context.Context, id string) (string, error) {
+	return d.engineFor().Retry(ctx, id)
+}
+
+func (d *extensionDictation) DeleteRecording(id string) error {
+	return d.engineFor().DeleteRecording(id)
 }
 
 func supervisedDictation(name string, fn func()) {
 	safego.Go(name, func(context.Context) { fn() })
 }
 
-// dictationAfter runs fn on the UI thread after d.
-func (p *App) dictationAfter(d time.Duration, fn func()) {
-	time.AfterFunc(d, func() { p.redraw(fn) })
+// dictationRecordingStore returns the store of unfinished dictations, or nil when the data folder is read only.
+func (p *App) dictationRecordingStore() *recordings.Store {
+	if p.userReadOnly {
+		return nil
+	}
+	return recordings.New(p.ports.FS, dictationRecordingsDir(), p.ports.Clock.Now)
+}
+
+// dictationSettingsAction opens the Dictation Settings form of the dictation built-in, as the Dictate row's menu does.
+func (p *App) dictationSettingsAction() search.Action {
+	open := api.Action{Kind: api.ActionRun, Title: "Open", Ref: &api.ActionRef{ID: dictbuiltin.RefOpenSettings}}
+	return extview.ActionFor(p.extensionViewDeps(p.extensionManager()), dictbuiltin.ID, open)
 }

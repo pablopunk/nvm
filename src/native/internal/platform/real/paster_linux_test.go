@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -27,6 +28,65 @@ func installFakeXdotool(t *testing.T) {
 	t.Setenv("DISPLAY", ":99")
 	t.Setenv("XDG_SESSION_TYPE", "x11")
 	t.Setenv("WAYLAND_DISPLAY", "")
+}
+
+type blockingPasteHelper struct{ entered chan struct{} }
+
+func (h blockingPasteHelper) Run(ctx context.Context, _ string, _ []string, _ []byte) (platform.HelperResult, error) {
+	close(h.entered)
+	<-ctx.Done()
+	return platform.HelperResult{}, ctx.Err()
+}
+
+func TestContextPasteCancellationPreventsWaitAndGesture(t *testing.T) {
+	installFakeXdotool(t)
+	helper := fake.NewHelper()
+	called := false
+	p := NewPaster(helper, func(context.Context) error { called = true; return nil }).(platform.ContextPaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := p.PasteIntoFrontmostContext(ctx, "Editor"); !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	if called || len(helper.Calls()) != 0 {
+		t.Fatalf("wait called %v, helper calls %d", called, len(helper.Calls()))
+	}
+}
+
+func TestContextPasteCancellationDuringWaitPreventsGesture(t *testing.T) {
+	installFakeXdotool(t)
+	helper := fake.NewHelper()
+	entered := make(chan struct{})
+	p := NewPaster(helper, func(ctx context.Context) error { close(entered); <-ctx.Done(); return ctx.Err() }).(platform.ContextPaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- p.PasteIntoFrontmostContext(ctx, "Editor") }()
+	<-entered
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
+	if len(helper.Calls()) != 0 {
+		t.Fatalf("helper calls = %d", len(helper.Calls()))
+	}
+}
+
+func TestContextPasteCancellationInterruptsHelper(t *testing.T) {
+	installFakeXdotool(t)
+	entered := make(chan struct{})
+	p := NewPaster(blockingPasteHelper{entered: entered}, nil).(platform.ContextPaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- p.PasteIntoFrontmostContext(ctx, "") }()
+	select {
+	case <-entered:
+	case <-time.After(time.Second):
+		t.Fatal("helper was not invoked")
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("error = %v", err)
+	}
 }
 
 // TestX11PasteSendsCtrlVToTheFocusedWindow: with xdotool present, the gesture is one key event with Ctrl+V and
@@ -49,12 +109,13 @@ func TestX11PasteSendsCtrlVToTheFocusedWindow(t *testing.T) {
 func TestX11PasteChecksTheFocusedWindowWhenAnAppIsNamed(t *testing.T) {
 	installFakeXdotool(t)
 	helper := fake.NewHelper()
-	helper.Script(xdotoolBinary, fake.HelperScript{Stdout: []byte("Terminal\n")})
+	helper.Script(xdotoolBinary, fake.HelperScript{Stdout: []byte("4194305\n")})
+	helper.Script("xprop", fake.HelperScript{Stdout: []byte(`WM_CLASS(STRING) = "terminal", "Terminal"` + "\n")})
 	if err := pasteGesture(context.Background(), helper, "Firefox"); !errors.Is(err, platform.ErrConflict) {
 		t.Fatalf("pasteGesture = %v, want ErrConflict", err)
 	}
-	if calls := helper.Calls(); len(calls) != 1 {
-		t.Fatalf("a conflicting paste sent keys: %d calls", len(calls))
+	if calls := helper.Calls(); len(calls) != 2 || calls[1].Binary != "xprop" {
+		t.Fatalf("a conflicting paste sent keys or skipped class lookup: %+v", calls)
 	}
 }
 

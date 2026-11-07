@@ -113,7 +113,7 @@ func routeInboundLine(line []byte, link *hostLink, requests chan<- protocol.Requ
 // answerRequests runs the queued requests in order and writes one response per request.
 func answerRequests(ext *extension, requests <-chan protocol.Request, link *hostLink) int {
 	for req := range requests {
-		link.send(ext.answer(req))
+		link.sendResponse(ext.answer(req), req.Method)
 	}
 	return 0
 }

@@ -255,3 +255,10 @@ func cloneItems(items map[string]item) map[string]item {
 }
 
 var _ search.Learner = (*Learner)(nil)
+
+// LastUsed returns the Unix milliseconds of row id's last recorded use, or zero when it was never used.
+func (l *Learner) LastUsed(id string) int64 {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.items[id].LastUsed
+}

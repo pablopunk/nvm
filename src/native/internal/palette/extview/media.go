@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"context"
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -27,6 +28,8 @@ func (s *Session) bitmap(image *api.Image) *ui.Bitmap {
 	if ref == "" {
 		return nil
 	}
+	s.guard.Lock()
+	defer s.guard.Unlock()
 	if bm, ok := s.images[ref]; ok {
 		return bm
 	}
@@ -40,8 +43,12 @@ func (s *Session) requestImage(ref string) {
 		return
 	}
 	s.requested[ref] = true
-	s.deps.LoadImage(ref, func(bm *ui.Bitmap) {
-		if s.dismissed {
+	ctx := s.imageContext
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	s.deps.LoadImage(ctx, ref, func(bm *ui.Bitmap) {
+		if s.dismissed || ctx.Err() != nil {
 			return
 		}
 		s.images[ref] = bm

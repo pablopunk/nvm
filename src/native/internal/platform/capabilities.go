@@ -13,6 +13,7 @@ const (
 	CapabilityClipboardChanged Capability = "clipboard.changed"
 	CapabilityClipboardPaste   Capability = "clipboard.paste"
 	CapabilityShellReveal      Capability = "shell.reveal"
+	CapabilityShellQuickLook   Capability = "shell.quickLook"
 	CapabilityShellTrash       Capability = "shell.trash"
 	CapabilityShellApps        Capability = "shell.installedApps"
 	CapabilityShellAppIcons    Capability = "shell.appIcons"
@@ -37,26 +38,33 @@ const (
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
 	CapabilityFocusReturn      Capability = "focus.return"
+	CapabilityFrontmostApp     Capability = "apps.frontmost"
 	CapabilityMicrophone       Capability = "microphone.capture"
 	CapabilityTextRecognize    Capability = "text.recognize"
 	CapabilityScreenCapture    Capability = "screen.capture"
 	CapabilitySelectionCopy    Capability = "selection.copy"
 	CapabilityWebView          Capability = "webview.embedded"
 	CapabilityCameraPreview    Capability = "camera.preview"
+	CapabilityKeyboardTypeText Capability = "keyboard.type-text"
+	CapabilityAppRunning       Capability = "apps.running"
+	CapabilityAppQuit          Capability = "apps.quit"
+	CapabilityAppHide          Capability = "apps.hide"
+	CapabilityAppUninstall     Capability = "apps.uninstall"
 )
 
 // AllCapabilities lists every capability, sorted by name.
 func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
-		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
+		CapabilityFileWatch, CapabilityFocusReturn, CapabilityFrontmostApp, CapabilityGlobalHotkeys, CapabilityHelperRun,
 		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
 		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
-		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
+		CapabilityShellBeep, CapabilityShellQuickLook, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
-		CapabilityWebView, CapabilityCameraPreview,
+		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
+		CapabilityAppUninstall,
 	}
 	slices.Sort(list)
 	return list

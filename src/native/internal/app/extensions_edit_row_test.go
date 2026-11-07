@@ -4,15 +4,20 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// bindBuilderChat records that a builder chat wrote extension id, as the workshop does after an install.
+// bindBuilderChat records that a builder chat wrote extension id, as the workshop does after an install. The chat has
+// a notice of the install, so it is recorded.
 func bindBuilderChat(t *testing.T, chats *chat.Service, id string) {
 	t.Helper()
 	record, err := chats.NewChat(chat.KindBuilder, chat.TierSmart)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := chats.Note(record.ID, chat.Notice{Kind: chat.NoticeNote, Title: "Extension", Message: "Installed."}); err != nil {
 		t.Fatal(err)
 	}
 	if err := chats.Bind(record.ID, id); err != nil {
@@ -50,8 +55,8 @@ func TestEditWithAIIsOfferedOnlyForAnExtensionABuilderWrote(t *testing.T) {
 	}
 }
 
-// TestEditWithAIStartsAChatBoundToTheExtension: the action opens a builder chat that the extension is bound to,
-// so the next reply changes that extension.
+// TestEditWithAIStartsAChatBoundToTheExtension: the action opens a builder chat that the extension is bound to, so the
+// next reply changes that extension. The opened chat is recorded with its first message, not before.
 func TestEditWithAIStartsAChatBoundToTheExtension(t *testing.T) {
 	chats := goldenChatService(t, fake.NewSet())
 	bindBuilderChat(t, chats, "acme.good")
@@ -63,7 +68,27 @@ func TestEditWithAIStartsAChatBoundToTheExtension(t *testing.T) {
 	if len(h.pushed) != 1 {
 		t.Fatalf("pushed %d views; want the chat view", len(h.pushed))
 	}
-	if owners := chats.Owners("acme.good"); len(owners) != 2 {
-		t.Fatalf("owners of acme.good = %d chats; want the original and the edit", len(owners))
+	if owners := chats.Owners("acme.good"); len(owners) != 1 {
+		t.Fatalf("owners of acme.good = %d chats; want only the recorded original, since an opened edit has no message yet", len(owners))
+	}
+}
+
+// TestEditWithAINamesTheChatTweakOfTheExtension: the chat an edit opens is titled Tweak and the extension's title, as
+// 1.x titles its tweak chats, before any message is sent.
+func TestEditWithAINamesTheChatTweakOfTheExtension(t *testing.T) {
+	chats := goldenChatService(t, fake.NewSet())
+	bindBuilderChat(t, chats, "acme.good")
+	m := newFixtureManager(t, "acme.good")
+	waitForState(t, m, "acme.good", supervisor.StateRunning)
+	p := &App{chats: chats}
+	p.exts.mgr.Store(m)
+
+	id, err := extensionChatPages{p: p}.Start("builder", "", "acme.good")
+	if err != nil {
+		t.Fatal(err)
+	}
+	record, ok := chats.Chat(id)
+	if !ok || record.Title != "Tweak Good fixture" {
+		t.Fatalf("the edit chat is titled %q (found %v); want Tweak Good fixture", record.Title, ok)
 	}
 }

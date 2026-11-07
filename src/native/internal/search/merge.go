@@ -8,22 +8,21 @@ import (
 // DefaultLimit is how many rows a merged result keeps: the first rows by score, as the prototype kept.
 const DefaultLimit = 40
 
-// merge combines the rows of several providers into one result: rows with an ID are de-duplicated by ID
-// and Kind (the first provider wins), the rows are sorted by score, highest first, with ties in provider
-// order, the result is cut to limit, and the rows are sectioned. searching tells sectioning whether the
-// query is typed, which changes the top hit and the grouping of commands.
-func merge(batches [][]Item, limit int, searching bool) []Item {
-	var all []Item
-	for _, items := range batches {
-		all = append(all, items...)
+// withoutQueryFallbacks drops the query fallbacks an answer makes unnecessary. An answer is a row that marks
+// AnswersQuery; the answer may come from any provider, so the ranked and appended rows are checked together. While a
+// provider is still running, every fallback is dropped too: a fallback shown early would vanish when the answer it
+// loses to arrives a moment later.
+func withoutQueryFallbacks(ranked, appended []Item, settled bool) ([]Item, []Item) {
+	answered := slices.ContainsFunc(ranked, isAnswer) || slices.ContainsFunc(appended, isAnswer)
+	if answered || !settled {
+		return slices.DeleteFunc(ranked, isQueryFallback), slices.DeleteFunc(appended, isQueryFallback)
 	}
-	all = dedupe(all)
-	slices.SortStableFunc(all, func(a, b Item) int { return cmp.Compare(b.Score, a.Score) })
-	if limit > 0 && len(all) > limit {
-		all = all[:limit]
-	}
-	return sectioned(all, searching)
+	return ranked, appended
 }
+
+func isAnswer(it Item) bool { return it.Answers }
+
+func isQueryFallback(it Item) bool { return it.QueryFallback }
 
 // dedupeKey identifies a row for de-duplication.
 type dedupeKey struct{ id, kind string }

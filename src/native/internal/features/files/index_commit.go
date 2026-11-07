@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io/fs"
+	"slices"
 
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/safego"
@@ -13,6 +14,7 @@ import (
 // read keep their previously indexed files, so a permission error does not empty part of the index.
 func (ix *Index) commitScan(out scanOutcome) {
 	old := ix.Snapshot()
+	previousUnreadable := ix.Status().UnreadableRoots
 	d := newDelta()
 	for _, root := range ix.roots {
 		d.dropSubtree(root)
@@ -26,13 +28,28 @@ func (ix *Index) commitScan(out scanOutcome) {
 		st.UnreadableRoots = append([]string(nil), out.result.unreadable...)
 		st.Truncated = out.result.truncated
 	})
-	if len(out.result.unreadable) > 0 {
-		ix.log.Warn("files.scan.unreadable", logx.F{"count": len(out.result.unreadable)})
-	}
+	ix.logUnreadableChange(previousUnreadable, out.result.unreadable)
 	if out.result.truncated {
 		ix.log.Warn("files.scan.truncated", logx.F{"maxEntries": ix.cfg.MaxEntries})
 	}
 	ix.publish(next, false)
+}
+
+// unreadableLogLimit caps how many unreadable folders one log line names.
+const unreadableLogLimit = 5
+
+// logUnreadableChange logs, at info, a set of unreadable folders when it differs from the last scan's. A folder the OS
+// keeps refusing is named once rather than on every scan; the index keeps the files it had under it.
+func (ix *Index) logUnreadableChange(previous, current []string) {
+	if slices.Equal(previous, current) || len(current) == 0 {
+		return
+	}
+	named := current[:min(len(current), unreadableLogLimit)]
+	displayed := make([]string, 0, len(named))
+	for _, folder := range named {
+		displayed = append(displayed, DisplayPath(ix.cfg.Home, folder))
+	}
+	ix.log.Info("files.scan.unreadable", logx.F{"count": len(current), "folders": displayed})
 }
 
 // publish makes next the snapshot readers see, updates the status, saves it on schedule and notifies the owner.

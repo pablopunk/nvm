@@ -20,15 +20,15 @@ type callResult struct {
 // after the cancelled one are then reported as cancelled, so every call ends with one tool_end event.
 func (r *turnRun) runCalls(calls []backend.ToolCall) bool {
 	for index, call := range calls {
-		if r.ctx.Err() != nil {
+		if r.pastDeadline() || r.ctx.Err() != nil {
 			r.abandon(calls[index:])
-			r.finish(Event{Kind: EventAborted})
+			r.finish(r.endEvent())
 			return false
 		}
 		outcome := r.runCall(call)
 		if outcome.status == CallCancelled {
 			r.abandon(calls[index+1:])
-			r.finish(Event{Kind: EventAborted})
+			r.finish(r.endEvent())
 			return false
 		}
 		r.messages = append(r.messages, toolMessage(call.ID, outcome.result))
@@ -73,7 +73,9 @@ func (r *turnRun) decideAndRun(call backend.ToolCall, tool Tool, known bool, inf
 		return callResult{status: CallRefused, result: "tool call refused: " + decision.Reason, outcome: "Refused: " + decision.Reason}
 	}
 	if tool.Confirm {
+		asked := r.setup.Clock.Now()
 		allowed, cancelled := r.await(call.ID, info)
+		r.waited += r.setup.Clock.Now().Sub(asked)
 		switch {
 		case cancelled:
 			return callResult{status: CallCancelled, result: abandonedResult, outcome: "Stopped before it ran"}

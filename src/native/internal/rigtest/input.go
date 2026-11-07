@@ -65,9 +65,10 @@ func (a *App) Key(name string) error {
 	return a.xdo("key", "--clearmodifiers", name)
 }
 
-// Click moves the pointer to (x, y) on the display and clicks the left button there.
+// Click moves the pointer to (x, y) on the display and clicks the left button there. It does not wait for the pointer
+// to move (--sync): a pointer already at (x, y), as after an earlier click there, sends no motion, so the wait never ends.
 func (a *App) Click(x, y int) error {
-	return a.xdo("mousemove", "--sync", fmt.Sprint(x), fmt.Sprint(y), "click", "1")
+	return a.xdo("mousemove", fmt.Sprint(x), fmt.Sprint(y), "click", "1")
 }
 
 // Screenshot saves the whole display as a PNG in the test's artifacts and returns its path.

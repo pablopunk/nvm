@@ -72,6 +72,7 @@ type fixture struct {
 	tools     Toolset
 	noted     []error
 	settled   []Outcome
+	logger    *logx.Logger
 }
 
 // newScriptedFixture serves a recorded backend, and offers tools to conversations.
@@ -100,6 +101,7 @@ func (f *fixture) build(transport platform.HTTP) {
 		f.t.Fatalf("logx: %v", err)
 	}
 	f.t.Cleanup(func() { _ = logger.Close() })
+	f.logger = logger
 	env, err := backend.NewEnvironment(backend.EnvironmentProduction, "", false)
 	if err != nil {
 		f.t.Fatalf("environment: %v", err)
@@ -127,6 +129,7 @@ func (f *fixture) build(transport platform.HTTP) {
 		NoteError: func(err error) { f.noted = append(f.noted, err) },
 		OnSettled: func(_ string, outcome Outcome) { f.settled = append(f.settled, outcome) },
 		Tools:     f.tools,
+		Logger:    logger,
 	})
 }
 

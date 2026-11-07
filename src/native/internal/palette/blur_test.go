@@ -6,6 +6,7 @@ import (
 
 // blurOnce simulates the window losing focus: the host's blur handler calls DismissOnBlur.
 func blurOnce(h *harness) {
+	h.win.takeKeyboard()
 	h.p.DismissOnBlur()
 	h.clock.AwaitTimers(1)
 }

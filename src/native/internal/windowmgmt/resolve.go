@@ -44,10 +44,14 @@ func (s *Service) resolveWritable(ctx context.Context, target Target, windowKey 
 	return writable{record: record, window: window, display: display, displays: converted}, nil
 }
 
-// accessFailure is a denied failure unless the window system reports access.
+// accessFailure is a denied failure unless the window system reports access. A window system that cannot answer is a
+// failed helper, whose cause is kept for the log.
 func (s *Service) accessFailure(ctx context.Context) *Failure {
 	access, err := s.windows.Access(ctx)
-	if err != nil || access != platform.WindowAccessAllowed {
+	if err != nil {
+		return failureOf(err)
+	}
+	if access != platform.WindowAccessAllowed {
 		return newFailure(ReasonDenied, "")
 	}
 	return nil

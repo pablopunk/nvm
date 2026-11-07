@@ -2,6 +2,7 @@ package extitems
 
 import (
 	"context"
+	"runtime"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -29,9 +30,20 @@ type Hooks struct {
 	OpenURL        func(url string)
 	CopyText       func(text string)
 	ShowExtensions func(extensionID string)
+	// Popover shows the popovers of the items. Nil shows none, and an item with a popover keeps its menu.
+	Popover PopoverHost
 }
 
-// Options wire the service. OnUI runs a function on the UI thread; Scheduler runs the renders.
+// PopoverHost opens an item's popover on the UI thread, under the platform item tray. Toggle runs on a click and
+// closes it when it is open; Refresh runs after every render and redraws it only while it is open, as 1.x redraws an
+// open popover.
+type PopoverHost interface {
+	Toggle(extensionID, barID string, tray platform.Tray, popover api.Popover)
+	Refresh(extensionID, barID string, tray platform.Tray, popover api.Popover)
+}
+
+// Options wire the service. OnUI runs a function on the UI thread; Scheduler runs the renders. GOOS is the platform the
+// items are drawn for; empty means this one.
 type Options struct {
 	Host      platform.TrayHost
 	Scheduler *menubar.Scheduler
@@ -39,6 +51,7 @@ type Options struct {
 	Source    Source
 	Hooks     Hooks
 	Logs      *logx.Logger
+	GOOS      string
 }
 
 const (
@@ -66,8 +79,8 @@ type extension struct {
 	items    map[string]*barItem
 }
 
-// barItem is one platform item and the icon and tooltip it was created with. Those are fixed at creation, so a change
-// makes a new item.
+// barItem is one platform item, the icon it was created with, and the hover text it shows now. The icon is fixed at
+// creation, so a change makes a new item; the hover text is set in place.
 type barItem struct {
 	item    *menubar.Item
 	icon    api.MenuBarIcon
@@ -94,6 +107,14 @@ func (s *Service) Sync() {
 // returns at once. An unknown id does nothing.
 func (s *Service) Refresh(id string) {
 	s.opts.Scheduler.Now(jobName(id))
+}
+
+// CloseAll closes the items of every extension and stops their render jobs, for the app's quit. It runs on the UI
+// thread, where the extension map is authoritative.
+func (s *Service) CloseAll() {
+	for _, ext := range s.exts {
+		s.drop(ext)
+	}
 }
 
 func jobName(id string) string {
@@ -232,38 +253,82 @@ func (s *Service) redraw(ext *extension) {
 			delete(ext.items, id)
 		}
 	}
+	s.refreshPopovers(ext, bars)
+}
+
+// refreshPopovers redraws the open popovers of an extension after its items changed.
+func (s *Service) refreshPopovers(ext *extension, bars []api.MenuBar) {
+	if s.opts.Hooks.Popover == nil {
+		return
+	}
+	for _, bar := range bars {
+		item := ext.items[bar.ID]
+		if bar.Popover != nil && item != nil {
+			s.opts.Hooks.Popover.Refresh(ext.id, bar.ID, item.item.Tray(), *bar.Popover)
+		}
+	}
 }
 
 // showBar creates or updates the platform item of one declared bar.
 func (s *Service) showBar(ext *extension, bar api.MenuBar) {
+	title, tooltip := menubar.StatusText(s.goos(), bar.Title, bar.Tooltip)
 	current := ext.items[bar.ID]
-	if current != nil && (current.icon != bar.Icon || current.tooltip != bar.Tooltip) {
+	if current != nil && current.icon != bar.Icon {
 		current.item.Close()
 		delete(ext.items, bar.ID)
 		current = nil
 	}
 	if current == nil {
-		item, err := menubar.NewItem(s.opts.Host, platform.TrayOptions{
-			ID: "ext:" + ext.id + ":" + bar.ID, Title: bar.Title, ToolTip: bar.Tooltip, Icon: menubar.Icon(),
-		})
+		item, err := menubar.NewGlyphItem(s.opts.Host, platform.TrayOptions{
+			ID: "ext:" + ext.id + ":" + bar.ID, Title: bar.Title, ToolTip: bar.Tooltip,
+		}, string(bar.Icon), s.goos())
 		if err != nil {
 			s.logs().Warn("menu bar item unavailable", fieldsOf(ext.id, err.Error()))
 			return
 		}
-		current = &barItem{item: item, icon: bar.Icon, tooltip: bar.Tooltip}
+		current = &barItem{item: item, icon: bar.Icon, tooltip: tooltip}
 		ext.items[bar.ID] = current
 	}
-	current.item.SetTitle(bar.Title)
-	current.item.SetMenu(s.menu(ext, bar))
+	current.item.SetTitle(title)
+	if current.tooltip != tooltip {
+		current.item.SetToolTip(tooltip)
+		current.tooltip = tooltip
+	}
+	current.item.SetMenu(s.menu(ext, bar, current.item.Tray()))
+	current.item.SetPrimaryAction(s.popoverClick(ext.id, bar, current.item.Tray()))
+}
+
+// popoverClick is the primary click of an item with a popover. 1.x shows no popover on Linux, whose tray reports no
+// clicks, so the Linux menu opens it from its first row instead. Other items keep the menu on the click.
+func (s *Service) popoverClick(extensionID string, bar api.MenuBar, tray platform.Tray) func() {
+	if bar.Popover == nil || s.goos() == "linux" || s.opts.Hooks.Popover == nil {
+		return nil
+	}
+	popover := *bar.Popover
+	return func() {
+		s.opts.OnUI(func() { s.opts.Hooks.Popover.Toggle(extensionID, bar.ID, tray, popover) })
+	}
+}
+
+// goos is the platform the items are drawn for.
+func (s *Service) goos() string {
+	if s.opts.GOOS != "" {
+		return s.opts.GOOS
+	}
+	return runtime.GOOS
 }
 
 // menu is the menu of one bar: its sections, under a not-responding head while the extension is failing.
-func (s *Service) menu(ext *extension, bar api.MenuBar) []platform.MenuItem {
+func (s *Service) menu(ext *extension, bar api.MenuBar, tray platform.Tray) []platform.MenuItem {
 	builder := rowBuilder{
 		invoke: func(action api.Action) func() { return s.invoke(ext.id, action) },
 		onUI:   s.opts.OnUI,
+		goos:   s.goos(),
 	}
 	rows := builder.sectionRows(bar.Sections)
+	if bar.Popover != nil && s.goos() == "linux" && s.opts.Hooks.Popover != nil {
+		rows = append(linuxPopoverRows(ext.id, bar, tray, s), rows...)
+	}
 	if ext.failure != nil {
 		showExtensions := func() { s.opts.Hooks.showExtensions(ext.id) }
 		head := builder.failureRows(boundedText(ext.failure.Message, maxRowText), showExtensions)
@@ -299,4 +364,11 @@ func (h Hooks) showExtensions(id string) {
 	if h.ShowExtensions != nil {
 		h.ShowExtensions(id)
 	}
+}
+
+// linuxPopoverRows is the Linux menu's head for an item with a popover: "Open" and a divider, as 1.x lays it out.
+func linuxPopoverRows(extensionID string, bar api.MenuBar, tray platform.Tray, s *Service) []platform.MenuItem {
+	open := menubar.UIAction(func() { s.opts.Hooks.Popover.Toggle(extensionID, bar.ID, tray, *bar.Popover) }, s.opts.OnUI)
+	rows := []platform.MenuItem{{ID: "popover-open", Label: "Open " + bar.Tooltip, Action: open}}
+	return append(rows, platform.MenuItem{Separator: true})
 }

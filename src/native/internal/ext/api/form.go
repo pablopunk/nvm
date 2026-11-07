@@ -117,7 +117,7 @@ type FormValues map[string]FormValue
 type FormSpec struct {
 	Fields []Field `json:"fields"`
 	Submit *Action `json:"submit,omitempty"`
-	// SubmitTitle labels the save row. Empty means "Save".
+	// SubmitTitle labels the prominent submit row and persistent Command-Enter footer action. Empty means "Save".
 	SubmitTitle string `json:"submitTitle,omitempty"`
 }
 

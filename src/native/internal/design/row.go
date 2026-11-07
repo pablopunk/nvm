@@ -9,7 +9,9 @@ type RowData struct {
 	Title     string
 	Subtitle  string
 	Accessory string
-	Tile      TileData
+	// Key, when set, draws its key cap at the end of the row, in place of Accessory.
+	Key  string
+	Tile TileData
 	// Tone colors the tile, and the title when TintTitle or Prominent is set.
 	Tone      string
 	TintTitle bool
@@ -47,7 +49,7 @@ func Row(c *ui.Context, d RowData) {
 				title = col
 			}
 		}
-		rowEl := ui.Row(c).Padding(5, 8).Gap(10).AlignItems(ui.Center).Radius(12)
+		rowEl := PlatePadding(ui.Row(c).Gap(10).AlignItems(ui.Center).Radius(12), d.Selected, 5, 8)
 		hovered := rowEl.Hovered()
 		switch {
 		case d.Disabled:
@@ -71,6 +73,9 @@ func Row(c *ui.Context, d RowData) {
 			})
 			if d.Accessory != "" {
 				ui.Text(c, d.Accessory).FontSize(12).TextColor(k.Muted).SingleLine()
+			}
+			if d.Key != "" {
+				Keycap(c, d.Key)
 			}
 			if d.ShowEnter {
 				ui.Icon(c, Icon("corner-down-left")).FontSize(13).TextColor(k.Muted)

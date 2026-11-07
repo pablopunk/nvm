@@ -163,9 +163,14 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	}
 	req.ID = r.newRequestID()
 	result := make(chan callResult, 1)
+	onDenied := func(failure *api.SnapshotDenial) {
+		if req.Invocation != nil && req.Invocation.ProtectSnapshot && req.Invocation.OnSnapshotDenied != nil {
+			req.Invocation.OnSnapshotDenied(failure)
+		}
+	}
 	go func() {
 		defer func() { <-r.slots }()
-		response, err := r.exchange(req)
+		response, err := r.exchange(req, onDenied)
 		result <- callResult{response: response, err: err}
 	}()
 	select {

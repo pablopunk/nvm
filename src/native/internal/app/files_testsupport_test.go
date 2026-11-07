@@ -8,6 +8,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/features/files"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -32,10 +33,10 @@ func newTestFiles(tb testing.TB, home string, paths []string) *fileService {
 		clipboard: fake.NewClipboard(),
 		copyFiles: func(...string) error { return nil },
 		home:      home,
+		labels:    platform.ShellLabelsFor("linux"),
 		thumbDir:  "/cache/files-thumbs",
 		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, func() {}),
 		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, func() {}),
-		previews:  newAsyncCache[*filePreview](ctx, fileWorkers, fileQueue, filePreviewEntries, func() {}),
 		redraw:    func() {},
 		ctx:       ctx,
 		log:       logx.Default(),

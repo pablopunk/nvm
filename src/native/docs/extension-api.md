@@ -70,10 +70,14 @@ type Manifest struct {
     Identity                                          // id, title (flattened in JSON)
     Subtitle     string       `json:"subtitle,omitempty"`
     Capabilities []Capability `json:"capabilities,omitempty"`
+    CommandTitles map[string]string `json:"commandTitles,omitempty"` // command id -> title; overrides the title the code declares
+    ConvertedFrom string `json:"convertedFrom,omitempty"` // 1.x source file this folder came from; host metadata only
 }
 ```
 
 - `id` is lowercase, dot-separated (`acme.world-clock`), at most 128 characters. The prefix `nevermind.` is reserved for built-ins. The id is permanent: enablement, storage, secrets, global shortcuts and restore keys are keyed by it.
+- `commandTitles` renames commands by id. A command shows the manifest's title when one is set, and the title its code declares otherwise. Rename on a command row writes here, so renaming never edits the code. Only titles are renamed.
+- `convertedFrom` names the 1.x source file a folder was converted from, such as `toggle-system-theme-257c802c.ts`. It is a plain file name ending in `.ts`. On its first scan the folder takes that file's enabled state from 1.x's state file, so a converted extension that was on stays on and one that was off waits for review. The state is taken once: a later change made in 2.0 is kept.
 - `Manifest()` must be pure. The host reads it before enabling anything, so review never depends on runtime state.
 
 Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one too high):
@@ -100,7 +104,8 @@ Capabilities (the TypeScript declares 14 values; the brief's count of 15 was one
 Review semantics:
 
 - Declared means "intends to use". Most capabilities stay review metadata: the host does not block a call that was not declared, and does not yet diagnose it (section 16, question 2).
-- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), and the desktop capabilities (section 21). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
+- Enforced capabilities: `network`, `secrets` and `settings.write` (from WP3.7, section 18), the desktop capabilities (section 21), `system` (process and AppleScript calls), `shortcuts`, `clipboard.history`, `ocr` and `ai` (section 25). A call without its declaration fails with a permission failure that names the capability, and the refusal is logged.
+- The AI builder reads the source before it installs anything: a reply whose source calls a service its manifest does not declare is sent back to the model with the capability it needs, and nothing is installed. The check is static, so a call hidden behind a variable is not seen; the run-time refusal still applies.
 - OS permissions (camera, microphone, screen recording, accessibility) remain real boundaries. The OS asks, and the answer is the enforcement.
 - An enabled extension has the full Context whether or not it declares anything. This matches the trust model.
 
@@ -138,7 +143,7 @@ type Invocation struct {
     SelectedItemID string              // focused item, for item actions and selection changes
     Form           FormValues          // form submit values
     EditorContent  string              // editor submit or autosave
-    Value          string              // search accessory selection
+    Value          string              // search accessory selection, or the trimmed text for onSearchChange
     DraftConflict  *DraftConflict      // only for a draft's conflict handler
     Launch         LaunchContext       // why the handler runs (trigger, files, refresh)
 }
@@ -149,8 +154,11 @@ type Result struct {                   // zero value = nothing to do
     Patch      *ViewPatch
     Navigation NavigationMode          // root, push, replace, pop
     Draft      *DraftResolution
+    DataChanged bool                   // revalidate the originating view after a successful mutation
 }
 ```
+
+A result with `DataChanged` revalidates the originating view even if navigation has moved on, provided that view survives. Set it when a mutation succeeded even if a later step returns an error; the error is still reported. An editor autosave revalidates its surviving parent; replacing an editor retains that parent. Closed views do not revalidate. Background revalidation updates its own view without changing the visible page.
 
 Errors are Go `error` values at the author side. The host turns them into a `Failure{Code, Message, Reference}` (section 12).
 
@@ -193,7 +201,8 @@ type Item struct {
     Icon, Glyph         string            // Lucide name; one character for grid tiles
     Image               *Image
     Video               string
-    File                *FileRef
+    File                *FileRef         // the file a row or grid cell drags out (see below)
+    DragImage           *FileRef         // optional picture the drag shows instead of File
     Accessories         []Accessory
     Primary             *Action
     Actions             []Action
@@ -203,7 +212,8 @@ type Item struct {
     Disabled, Contextual bool             // Contextual wraps full-contrast guidance text
     Detail              *Detail           // side or bottom inspector, and the inline preview (Cmd+Y)
     Shortcut            string            // local, shown while selected
-    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"
+    QueryFallback       bool              // search-only: echoes the query, e.g. "Search the web"; fallback band, Score ignored (section 26); left out while an AnswersQuery row shows
+    AnswersQuery        bool              // search-only: answers the query outright (a calculation); drops the QueryFallback rows
     Score               float64
     LastUsedMs          int64
 }
@@ -213,10 +223,20 @@ Shapes used inside items:
 
 - `Image`: `Src`, or `Light` and `Dark`, plus `Fallback`, `Alt`, `Fit`, `Shape`, `Tint`, `Mask`. One shape only; the TypeScript accepted a string or an object.
 - `Accessory`: `Text`, `Icon`, `Tone`, `Tooltip`. Tones: default, muted, accent, success, warning, danger.
-- `Detail`: title, subtitle, text, markdown, metadata rows, image, video, link card, actions.
+- `Detail`: title, subtitle, text, markdown, facts (label over large value, section 26), metadata rows, image, video, link card, actions.
 - `Metadata.Kind`: text, link, tag, separator. Only the fields the kind reads are validated.
 - `LinkCard`: host-filled from Open Graph; status loading, ready or unavailable.
 - `FileRef`: path, name, display path, URLs, kind, extension, MIME, size, dimensions and timestamps in epoch milliseconds (one encoding).
+
+### Dragging files out
+
+A row or grid cell drags files out to other applications, as 1.x does, when it names an absolute path:
+
+- `File` is the file the drag carries. Without a path in `File`, the first action with an absolute `Path` (`Primary`, then `Actions`, then the action panel) is used, so an open-path row such as a folder drags its folder.
+- `DragImage` is an optional image file the drag shows. Without it, the drag shows the file itself when it is an image, else a generic file icon. `DragImage` needs a `File` and an absolute path; the API rejects it otherwise.
+- A press that moves past the drag threshold starts the drag and is neither a click nor a run. A click still chooses the row, and a double click runs it.
+- Built-in rows use the same rule: a file row drags its file, an application row its `.app` bundle, a clipboard image its stored picture.
+- The host carries the files as file URLs in the operating system's drag (macOS pasteboard, GTK URI list, Windows CF_HDROP). MyGo never moves or deletes a file.
 
 ## 7. Views
 
@@ -241,12 +261,20 @@ Shared view parts:
 - `Source` (`DataSource`): replaces items with a loader (`DataLoader`), optional persistent stale-while-revalidate cache (`CacheKey`, `TTLMs`, `StaleTTLMs`). `EmptyView` is then required.
 - `Refresh`: interval, patch mode, `Immediate` (paint the cache first, refresh after paint), and a handler reference.
 - `Pagination`: `HasMore`, `PageSize`, `Next` reference.
-- `SearchAccessory`: a filter control with options; its selection arrives as `Invocation.Value`.
+- `SearchAccessory`: a filter control with options. It opens a native popup menu of the options, with a check mark on the current one; the chosen option arrives as `Invocation.Value`.
+- `OnSearchChange` (list and grid views): runs for the trimmed search text once typing rests for 350 ms; the text arrives as `Invocation.Value`. Local filtering stays instant and owns the first rows. The handler's patch `SearchResultIds` names existing item ids that follow those rows, best first, without repeating them and without being filtered by the query. The second batch takes its room from `MaxVisibleItems` first. A result for text the user has since changed is dropped, and a failure adds nothing and shows no toast. An empty text never runs the handler.
+  While the call runs the second batch is loading, and the host shows it without any declaration from the view: a placeholder cell after the rows in a grid (up to three, in the next slots, so the rows never move), or a skeleton row at the end of a list. The placeholders are not rows: the choice, Enter and the arrows never reach them, and typing is never blocked. The batch replaces them in place. A failure or an empty answer removes them quietly, and typing another text clears them at once, so the next call starts after its own pause. `isLoading` still means a view with no rows yet; the second batch needs no field.
 - `Detail` (`DetailPane`): side or bottom, visible or not.
 - `EmptyView`: shown for an active empty list only. Reserve it for active result lists.
 - `OnSelectionChange`, `SelectedItemID`, `MaxVisibleItems`, `WindowCompact`.
 
 Presentation: `root`, `stacked`, `preview`, `side-preview`. A view-producing command invoked while another view is open is stacked below it, and dismissing it restores the parent without reopening it.
+
+`side-preview` puts the selected row's detail on the right half of the palette, beside the rows, and sizes the window for it (960 by 640, as 1.x does). `preview` takes the preview size (1080 by 760). `root` and `stacked` keep the default size (720 by 470). The palette maps these in `internal/palette/extview` (`palettePresentation`), and `presentation_test.go` checks each mapping with a side-preview fixture.
+
+A palette page can also draw a second page beside its own as a split: `palette.View.Side` returns a `palette.Side` (`internal/palette/side.go`), a palette of its own with its pages, search or title, rows and action menu. The split is equal halves, and the split page is sized 1080 by 760. While the side has the focus it takes the keys: arrows and typing reach its rows, Escape pops its pages and then gives the focus back, and `Side.Focus`, `Side.Blur`, `Side.SetRoot` and `Side.Refresh` move the focus, replace its page and search it again.
+
+The AI builder uses the split: a builder chat bound to an extension shows the extension's root rows and commands beside its transcript. The preview opens once the chat is bound, Hide Preview (⌃⇧P) and Show Preview toggle it, and Focus Preview in the Command-K menu gives the keyboard to it. The preview is an extview session of the extension's own list, and it is read again after each write, so it shows the extension as it is now (`internal/app/ai_builder_preview.go`).
 
 Item ids must be unique within a view (`Validate` checks). Collection record ids must not start with `__nvm:`, which the host reserves for its own rows.
 
@@ -288,7 +316,7 @@ The palette-first rule stands: prefer `Input().Prompt` for two or three short va
 
 Background mode per command: `view` (default), `noView`, `background`. The host owns scheduling, enablement, no-overlap, backoff and diagnostics. A background command never shows the palette.
 
-`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`), and `StartedAtMs`.
+`Launch` (`LaunchContext`) says why the handler ran: the trigger, the event name, bounded files, reason (`manual`, `startup`, `interval`, `event:*`, `refresh`, `once` for a scheduled run, section 32), and `StartedAtMs`.
 
 ## 10. Menu bar
 
@@ -297,8 +325,9 @@ Background mode per command: `view` (default), `noView`, `background`. The host 
 Rules:
 
 - Put per-second values in `Title`. Changing rows rebuilds the native menu.
+- `Checked` is a tri-state: `api.Checkbox(true)` draws a ticked checkbox, `api.Checkbox(false)` an empty one, and nil a plain row.
 - A render failure keeps the last good menu. Returning no menus shows nothing.
-- The host always adds a root `Show/Hide in Menu Bar` action; extensions do not write it.
+- The host adds a `Show in Menu Bar` or `Hide in Menu Bar` action to each enabled extension that declares menu bar items; extensions do not write it. The choice is kept per extension, as 1.x keeps it.
 
 ## 11. Context services
 
@@ -321,18 +350,18 @@ Rules:
 | `ClipboardHistory` | `List`, `Get`, `Remove`, `Clear` | Needs `clipboard.history`. |
 | `Desktop` | `Keyboard`, `Clipboard`, `Selection`, `Apps`, `WindowManagement`, `Files`, `Shell` | `WindowManagement()` is nil where unsupported. |
 | `OCR` | `Image`, `Screen`, `Region` | Needs `ocr`; screen needs OS permission. |
-| `Dictation` | `Status`, `APIAvailable`, `Devices`, `Start`, `Stop`, `Cancel` | Audio never reaches extension code. |
+| `Dictation` | `Status`, `APIAvailable`, `Devices`, `Start`, `Stop`, `Cancel`, `Recordings`, `Retry`, `DeleteRecording` | Audio never reaches extension code. Served, section 33. |
 | `Shortcuts` | `List`, `Palette` | Reads only; registration goes through `Command.GlobalShortcut`. |
 | `Indicators` | `Show`, `Update`, `Hide` | Passive, never takes focus. Added in this revision. |
-| `System` | `OS`, `HasCapability`, `Labels` | Use `HasCapability` to omit rows, not to duplicate platform checks. |
+| `System` | `OS`, `HasCapability`, `Labels`, `SettingsPanes`, `Places`, `Notify` | Use `HasCapability` to omit rows, not to duplicate platform checks. `Notify` needs `system`. |
 | `Updates` | `State` | Actions do the work. |
-| `AI` | `IsAvailable`, `Decide`, `Ask`, `Stream`, `Prepare`, `Attachments`, `Session` | Tiers `smart` and `fast`; no model ids. Stream delivers events on a channel. |
+| `AI` | `IsAvailable`, `Decide`, `Ask`, `Stream`, `Prepare`, `Attachments`, `Session` | Tiers `smart` and `fast`; no model ids. Stream delivers events on a channel. Served, section 25. |
 | `AIBuilder` | chat and tweak helpers | Host-only (built-in `nevermind.*`). |
 | `Ownership` | `OwnerOf`, `FilesForChat`, `CanWrite` | Host-only. |
 | `Windows` | `Create`, `Show`, `Hide`, `Toggle`, `Close` | Each returns an `Action`. |
 | `Navigation` | `Root`, `Push`, `Replace`, `Pop`, `Run` | Return `Result` values. Interfaces so tests can fake a Context. |
 | `Input` | `Prompt` | Returns an `Action` that collects fields one at a time. |
-| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar` | The visible view and the menu bar. |
+| `Views` | `Refresh`, `Invalidate`, `RefreshMenuBar`, `InvalidateRoot`, `RefreshSearch(query)` | The visible view, the menu bar, the root's rows (section 26) and the palette's search for a query (section 27). |
 
 Go-specific decisions behind the table:
 
@@ -359,13 +388,17 @@ Go-specific decisions behind the table:
 
 ## 14. Author examples
 
-Each example is a compiled file in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, and `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper. Interpreter runs are not part of these tests.
+Runtime rule: the interpreter cannot call methods on interpreted struct values, so an extension file declares its entry points as top-level functions named `Commands`, `RootItems`, `SearchItems`, `RunAction`, `LoadItems`, `MenuBars` and `MenuBarTriggers` (`internal/ext/child/interpret.go`). Each example below is a complete extension source in that form: no receiver types, no `Manifest` method (the manifest is `extension.json` beside `main.go`), and no interface assertions. The interpreter has no `max` builtin, so the examples write the comparison out.
+
+Each example is a complete extension source in `testdata/examples/`. `TestExampleExtensionsTypecheckAgainstTheAPI` type-checks them with `go/types` against this package, `TestExampleTypecheckRejectsBrokenExtensions` shows the checker fails on a wrong signature and on a missing helper, and `TestAuthorExamplesLoadAsInterpretedExtensions` (in `internal/ext/child`) evaluates each one in the interpreter and checks that it declares an entry point with the protocol signature.
 
 ### 14.1 Search provider (rows for a query, no commands)
 
 `testdata/examples/search_provider.go`
 
 ```go
+// Example: a search provider. Rows appear only for queries it recognises, and Enter copies the
+// converted value. It needs no commands because nothing here is durable or shortcut-able.
 package main
 
 import (
@@ -376,21 +409,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type temperature struct{}
-
-var (
-	_ api.Extension      = temperature{}
-	_ api.SearchProvider = temperature{}
-)
-
-func (temperature) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.temperature", Title: "Temperature"},
-	}
-}
-
-func (temperature) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	value, unit, ok := parseTemperature(query)
 	if !ok {
 		return nil, nil
@@ -436,6 +455,8 @@ func convertTemperature(value float64, unit string) (float64, string) {
 `testdata/examples/list_command.go`
 
 ```go
+// Example: a command that opens a list view of recent downloads. The command is durable (aliases,
+// a global shortcut); the rows are produced per open and are never registered as commands.
 package main
 
 import (
@@ -444,23 +465,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type downloads struct{}
-
-var (
-	_ api.Extension       = downloads{}
-	_ api.CommandProvider = downloads{}
-	_ api.ActionHandler   = downloads{}
-)
-
-func (downloads) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.downloads", Title: "Downloads"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:             "recent-downloads",
 		Title:          "Recent Downloads",
@@ -471,7 +476,7 @@ func (downloads) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (downloads) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "recent-downloads":
 		return recentDownloadsView(ctx)
@@ -516,6 +521,8 @@ func recentDownloadsView(ctx api.Context) (api.Result, error) {
 `testdata/examples/form_command.go`
 
 ```go
+// Example: a command that opens a structured form. Values are validated with the same rules the
+// host applies, and the submit handler saves through Settings and closes the form.
 package main
 
 import (
@@ -524,23 +531,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type quickNote struct{}
-
-var (
-	_ api.Extension       = quickNote{}
-	_ api.CommandProvider = quickNote{}
-	_ api.ActionHandler   = quickNote{}
-)
-
-func (quickNote) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.quick-note", Title: "Quick Note"},
-		Capabilities: []api.Capability{api.CapabilitySettingsWrite},
-	}
-}
-
-func (quickNote) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{ID: "settings", Title: "Quick Note Settings", Icon: "sticky-note", Aliases: []string{"qn"}}}, nil
 }
 
@@ -561,7 +552,7 @@ func noteFields() []api.Field {
 	return []api.Field{name, folder, format, tags, notify}
 }
 
-func (quickNote) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case "settings":
 		submit := api.Run("save", "Save", nil)
@@ -591,6 +582,8 @@ func saveSettings(ctx api.Context, in api.Invocation) (api.Result, error) {
 `testdata/examples/menubar.go`
 
 ```go
+// Example: a menu bar status item for a pomodoro timer. The title changes every second, which is
+// why it lives in the title and not in the rows: changing rows rebuilds the native menu.
 package main
 
 import (
@@ -600,31 +593,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-type pomodoro struct{}
-
 type timerState struct {
 	RunningSinceMs int64 `json:"runningSinceMs"`
 	RemainingMs    int64 `json:"remainingMs"`
 }
 
-var (
-	_ api.Extension       = pomodoro{}
-	_ api.MenuBarProvider = pomodoro{}
-	_ api.ActionHandler   = pomodoro{}
-)
-
-func (pomodoro) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion: "1.0",
-		Identity:   api.Identity{ID: "acme.pomodoro", Title: "Pomodoro"},
-	}
-}
-
-func (pomodoro) MenuBarTriggers() []api.Trigger {
+func MenuBarTriggers() []api.Trigger {
 	return []api.Trigger{{Type: api.TriggerInterval, Every: "1s"}}
 }
 
-func (pomodoro) MenuBars(ctx api.Context) ([]api.MenuBar, error) {
+func MenuBars(ctx api.Context) ([]api.MenuBar, error) {
 	state, err := loadTimer(ctx)
 	if err != nil {
 		return nil, err
@@ -650,7 +628,10 @@ func (state timerState) remaining(now time.Time) time.Duration {
 	if state.RunningSinceMs != 0 {
 		left -= now.Sub(time.UnixMilli(state.RunningSinceMs))
 	}
-	return max(left, 0)
+	if left < 0 {
+		return 0
+	}
+	return left
 }
 
 func formatRemaining(d time.Duration) string {
@@ -665,7 +646,7 @@ func loadTimer(ctx api.Context) (timerState, error) {
 	return state, nil
 }
 
-func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "toggle" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -693,6 +674,9 @@ func (pomodoro) RunAction(ctx api.Context, in api.Invocation) (api.Result, error
 `testdata/examples/background_job.go`
 
 ```go
+// Example: a trigger-driven background job. The host runs it when new screenshots land on the
+// Desktop (debounced, no overlap, bounded file list in LaunchContext) and it keeps a bounded
+// index in storage. It has no view, so it never shows the palette.
 package main
 
 import (
@@ -704,23 +688,7 @@ import (
 
 const maxIndexedScreenshots = 500
 
-type screenshotIndex struct{}
-
-var (
-	_ api.Extension       = screenshotIndex{}
-	_ api.CommandProvider = screenshotIndex{}
-	_ api.ActionHandler   = screenshotIndex{}
-)
-
-func (screenshotIndex) Manifest() api.Manifest {
-	return api.Manifest{
-		APIVersion:   "1.0",
-		Identity:     api.Identity{ID: "acme.screenshot-index", Title: "Screenshot Index"},
-		Capabilities: []api.Capability{api.CapabilityDesktopFiles},
-	}
-}
-
-func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
+func Commands(ctx api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID:    "index-new-screenshots",
 		Title: "Index New Screenshots",
@@ -735,7 +703,7 @@ func (screenshotIndex) Commands(ctx api.Context) ([]api.Command, error) {
 	}}, nil
 }
 
-func (screenshotIndex) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	if in.Ref.ID != "index-new-screenshots" {
 		return api.Result{}, fmt.Errorf("unknown action %q", in.Ref.ID)
 	}
@@ -863,7 +831,7 @@ What the examples show:
 | `ExtensionSettings` | `Settings`, `SettingDefinition` | `Value` is `json.RawMessage`. |
 | `ExtensionDictationDevice` | `DictationDevice` | |
 | `ExtensionDictationStatus` | `DictationStatus` | |
-| `ExtensionDictation` | `Dictation`, `DictationStartOptions` | Recovery helpers (`recordings`, `retry`, `deleteRecording`) are built-in only and omitted. |
+| `ExtensionDictation` | `Dictation`, `DictationStartOptions`, `SavedDictation` | Recovery helpers are served as `Recordings`, `Retry` and `DeleteRecording` (section 37). |
 | `ExtensionShortcutRecord` | `ShortcutRecord` | |
 | `ExtensionPaletteShortcut` | `ShortcutRecord` | Scope is `palette`. |
 | `ExtensionLogs` | `Logs` | |
@@ -951,7 +919,7 @@ What the examples show:
 ## 16. Open questions for review
 
 1. **Runtime.** The runtime was decided in `docs/extension-runtime-spike.md` and is built as section 17 describes. Revisit it only if the child-process model misses the call budget (B8) on a measured run.
-2. **Undeclared-capability diagnostics.** Proposed, not implemented. Needs owner agreement because it adds noise to review.
+2. **Undeclared-capability diagnostics for folder extensions.** The builder refuses an undeclared call before install (section 15). Folder extensions the user writes by hand are not checked; the run-time refusal is their only diagnostic.
 3. **Partial item patches.** Deferred until a measured need.
 4. **File move and rename.** Not in the TypeScript API and not in v1. A background job that organises files will need it; it should be a dedicated, confirmed action rather than a general file primitive.
 5. **Author-experience test (PLAN WP3.1 UX).** No measured study has run: no agent has yet written extensions from this document alone under observation. The result is the input to the next revision of this document.
@@ -977,7 +945,7 @@ Code: `internal/ext/services` (host side, one `Handler` per extension), `interna
 - **Enforced capabilities.** `network`, `secrets` and `settings.write` are checked by the host before the service runs. A refusal is `permission`, names the capability, and is logged as a warning. Storage, memo, cache, logs, text and data need no declaration: they are namespaced, not privileged.
 - **Storage.** `Get`, `Set`, `Delete`, `Clear`. `Memo` and `MemoStale` run in the child on top of storage (entries live under the `memo/` prefix). The load function runs in the child; `MemoStale` refreshes on one background goroutine per key, so a load must not depend on state the main path changes.
 - **Secrets.** The OS keychain only. Without one the call is `unavailable` and nothing is written to a file. The value crosses the exchange and nowhere else; a test asserts it never reaches the data folder.
-- **Settings.** Declared in `Manifest.Settings` (id, type `boolean`, `string`, `number`, or empty for any JSON, and a default). `Set` and `Toggle` are saved before the call returns. Values are type-checked. The settings view is not built yet (WP3.3, WP3.4).
+- **Settings.** Declared in `Manifest.Settings` (id, type `boolean`, `string`, `number`, or empty for any JSON, and a default). `Set` and `Toggle` are saved before the call returns. Values are type-checked. The settings view is a settings page of rows (section 33).
 - **Logs.** The host stamps each record with `source: extension` and the extension id. `Recent` returns only the caller's records; a query cannot name another extension.
 - **Text.** `{name}` and `{{ name }}` read values; `{argument:name}` reads the same values; `{calculator:expr}` is evaluated offline (currency needs rates and is not offered); `{cursor}` marks the cursor. Standard variables: `date`, `time`, `datetime` (local), `uuid`, `clipboard` (only with `clipboard.history` and unless `IncludeClipboard` is false) and `selectedText` (empty until WP3.8). `TemplateResult.Cursor` is a UTF-8 byte offset into `Text`. Names with no value are listed in `Missing`, sorted and unique.
 - **Network.** Only the public-address port. Loopback, private and link-local destinations are refused at connect time. Redirects are followed by the host one hop at a time; each hop must be http or https with no user name, and a cross-host redirect drops `Authorization`. Methods: GET, HEAD, POST, PUT, PATCH, DELETE. `Host`, `Content-Length`, `Connection` and other hop-by-hop headers cannot be set. A body that is not UTF-8 comes back in `BodyBase64`.
@@ -996,7 +964,7 @@ Quotas (per extension; a refusal is `quota` and leaves the data unchanged):
 
 Versioning: the additions (two capabilities, `Manifest.Settings`, `Network`, `DataLoader.LoadItems`, `Memo`, `MemoStale`) are additive. The API is unreleased, so the version stays `1.0`; this is a decision for review.
 
-Not wired in this build (still an internal failure when called, with a reference): `Dictation`, `Indicators`, `Updates`, `AI`, `AIBuilder`, `Ownership`, `Navigation`, `Views` except `RefreshMenuBar` (section 19), and the desktop surfaces section 21 does not list. The settings view has no goldens yet.
+Not wired in this build (still an internal failure when called, with a reference): `Updates`, `AI`, `AIBuilder`, `Ownership`, `Navigation`, `Views` except `RefreshMenuBar` (section 19), and the desktop surfaces section 21 does not list. The settings view has no goldens yet.
 
 ## 19. Menu bar as built (WP3.5)
 
@@ -1007,7 +975,7 @@ Menu bar items are the host's status items, made through `platform.TrayHost` by 
 - **Failure.** A render that fails keeps the last good rows and puts a disabled "Not responding: <reason>" row and a "Show in Extensions" row above them. The next good render removes the head. With no good render the item shows only the head.
 - **Limits.** Titles are shortened to 24 characters; sections to eight, rows to 40 per section, submenus one level deep; text to 120 characters. An invalid action drops only its row. Normalization issues are logged, not shown.
 - **Rows.** Titled sections show a disabled header and are split by dividers. A row with an action runs it; `OpenURL` and `CopyText` are host operations; a row with no runnable action is disabled. Run actions run off the UI thread and their results are logged: a menu cannot host a view, so an action that returns one is reported.
-- **Not rendered yet.** Popovers (the host logs that the menu is used instead), row subtitles, checkmarks, row shortcuts, and per-row icons. Icons are the app's placeholder disc until the icon set ships (WP5.1). A tooltip or icon change makes a new item.
+- **Not rendered yet.** Popovers (the host logs that the menu is used instead), row subtitles, checkmarks, row shortcuts, and per-row icons. Icons are the app's default glyph for now; the extension icon names are not mapped yet (WP3.5). A tooltip or icon change makes a new item.
 - **Triggers not served yet.** `files.changed`, `clipboard.changed`, `app.frontmost.changed`, `wake` and `login` on a menu bar item are disabled with a logged diagnostic: the trigger host (section 22) runs commands, not menu bar items, yet. The startup delay is ignored: the first render is immediate.
 - **No menu-open refresh.** The platform port has no open event, so a render is never triggered by a click on the item.
 - **Views.** `Views().RefreshMenuBar()` is served. `Views().Refresh()` and `Views().Invalidate()` are palette operations: in a menu bar render they return an empty action and do nothing.
@@ -1036,27 +1004,60 @@ Code: `internal/ext/services` (`desktop_*.go`, `clipboard_history.go`, `ocr.go`,
 | Service | Surface served | Declaration |
 | --- | --- | --- |
 | `desktop.clipboard` | `readText`, `writeText` (concealed on request) | `desktop.clipboard` (new) |
-| `desktop.apps` | `list`, `search`, `launch`, `icon` | `desktop.apps` |
-| `desktop.files` | `open`, `reveal` (absolute paths only) | `desktop.files` |
+| `desktop.apps` | `list`, `search`, `launch`, `icon`, `frontmost`, `running`, `quit`, `force quit`, `hide` (section 28.2), `quit all` (also needs `system`) | `desktop.apps` |
+| `desktop.files` | `open`, `reveal`, `find` (existing folders; missing and relative ones are skipped), `metadata`, `thumbnail` (a PNG data URL for pictures), `fileUrl` (a `file:` URL), `openWithApps` (bundles ranked by their document types through `mdls` and `plutil`, else every bundle by name), `writeBytes` (512 KiB per call; refuses an existing file unless `overwrite`, never creates folders). Absolute paths only. | `desktop.files` |
 | `desktop.shell` | `openExternal` (http and https links only) | `desktop.files` |
-| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` (fraction layouts only) | `desktop.window-management` |
+| `desktop.windows` | `displays`, `windows`, `focus`, `applyTo` and `apply` (every layout kind and option, as the 1.x API declares them; `apply` acts on the window the palette was summoned from, or the app in front for a shortcut), `focusNeighbor` (left, right, up, down; `wrap`), and `waitForWindow` (polls `windows` every 150 ms; default 5 s, at most 30 s). A layout the host cannot read is a result with `invalid-spec`; a malformed kind is an invalid-input error. A partial placement is `ok: true` with outcome `partial` and a reason. `switchDesktop` moves to the next or previous desktop (macOS; it sends the Mission Control arrow keys and needs Automation access to System Events; elsewhere it is `unavailable`). | `desktop.window-management` |
 | `clipboard.history` | `list`, `get`, `remove`, `clear` | `clipboard.history` |
 | `ocr` | `image`, `screen`, `region` | `ocr` |
 | `shortcuts` | `list`, `palette` (read only) | `shortcuts` |
-| `system` | `os`, `hasCapability`, `labels` | none: read-only metadata, as storage needs none |
+| `system` | `os`, `hasCapability`, `labels`, `settingsPanes`, `places` (read only), `notify` | none for the read calls; `notify` needs `system` |
 
 Decisions behind the table:
 
 - **Declarations are enforced.** Electron does not gate these namespaces by declaration. This host does, as WP3.7 does for `network`, `secrets` and `settings.write`; a refusal is `permission`, names the capability and is logged.
 - **Concealed writes never land unmarked.** A clipboard that cannot mark content as concealed refuses the write. Clipboard history never stores concealed copies, so no read returns them.
 - **Launch and icon read the app index only.** An extension cannot start a binary by naming its path; the path must be an app the index lists.
+- **Frontmost names the app in front.** `id` is the bundle id (the window class on X11) and `name` the indexed name, or the id when the index lists no such app. `path` is set only for indexed apps, so `icon(path)` works on the result. macOS reads it through Launch Services (`lsappinfo`); X11 through the active window. Windows has no port in this build, so the `apps.frontmost` capability is omitted there and the call answers unavailable. The read shares the desktop rate limit.
 - **Destructive calls ask the user.** `remove` and `clear` run only under a palette run, and only after the host shows a palette question ("Confirm" or "Cancel") that names the extension and the action. The extension cannot skip it. Cancel, Escape, leaving the question or hiding the palette refuses the call at once. A hidden palette is shown for the question and hidden again after the answer. The wait ends with the extension's lifetime, so stopping the extension refuses it too, and after 60 seconds without an answer the call is refused. The time the user takes to answer does not count against the request's hard budget.
-- **History images stay on the host.** An image entry carries its type only; no bytes or paths leave the host.
-- **Rates.** Opens, launches, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
-- **Window placement reuses the engine.** `windowmgmt.Extension` converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents.
+- **History images stay on the host.** An image entry carries its stored file path, valid while the entry stays in history, and a thumbnail URL that the palette decodes in the background. No image bytes travel in a listing; a Get carries a preview-size PNG data URL.
+- **Rates.** Opens, launches, frontmost reads, window moves and clipboard writes share 120 a minute per extension. OCR reads share 20 a minute; screen reads have 6 a minute as well. Clipboard text is capped at 1 MiB, history listings at 500 entries and removals at 200 ids.
+- **Window placement reuses the engine.** `windowmgmt.Extension` (the built-in's layouts reach it through `desktop.windows`) converts the api types and reports runtime failures as results with `OK false`. Denied access lists no windows, as the API documents. `waitForWindow` runs in the child over the listing, so it needs no host call of its own.
+- **Notifications have a title and a body, and no click action.** The Electron extension API had none, so there is nothing to match. `notify` needs the `system` declaration, the host's `notifications.show` capability and a rate limit of 10 a minute. A title of 1 to 120 characters and a body of up to 500 are accepted. A refusal by the user or the OS is `permission`; a system without notifications answers unavailable.
 - **Shortcut reads never touch UI state.** `shortcuts.ExtensionTable` reads the stored document and the command list only.
+- **Global shortcuts on commands (`Command.GlobalShortcut`).** Declared shortcuts bind with the ones the user sets in the Keyboard Shortcuts list. A command in mode `noView` or `background` runs without opening the palette and never takes focus; its failure or toast is a notification. A `view` command opens the palette. `Command.ActionID` names the key a shortcut binds to, so a built-in keeps the 1.x key. The commands are listed again whenever the extensions change.
 
-Not built yet: keyboard typing, selection, clipboard formats other than text, the frontmost app, process execution (`exec`, `script`, `AppleScript`, `which`), file operations beyond open and reveal, placing the frontmost window and neighbor focus, declared global shortcuts (`Command.GlobalShortcut`), extension windows, dictation, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+Not built yet: selected files, previews and the file index, indicators and updates. Notifications are not in the Electron extension API, so there was nothing to port.
+
+### 21.1 Selection, replacement and undo as built (WP2.5)
+
+Code: `internal/features/selection` (the engine), `internal/ext/services/desktop_selection.go` (the served operations), `internal/ext/child/remote_selection.go` (the child side), `internal/ext/builtins/aicommands` (the first user).
+
+- **Source window.** Selection and replacement act on the window the palette was summoned from. The host returns the keyboard there before any copy or paste gesture, so an extension never needs to name a window.
+- **Read.** `Selection().Text()` sends the copy gesture, reads the clipboard the gesture filled, and puts the clipboard back. The host snapshots every advertised clipboard representation and restores it while its temporary write is still owned. A newer user copy is kept. A backend without full snapshot support refuses rich content before changing it. `found` is false when nothing was copied.
+- **Replace.** `Selection().ReplaceText(text)` puts the text on the clipboard concealed, sends the paste gesture, and restores the displaced clipboard after half a second, unless the user copied something since.
+- **Undo.** `Keyboard().Undo()` sends the undo gesture to the source window. It needs a replacement pending in that same window and is refused for any other window, and each replacement is undone at most once.
+- **Capabilities.** `desktop.selection` gates the selection calls and `desktop.keyboard` gates undo. Both are enforced by the host, not only declared for review.
+- **Not served.** `Selection().Files()` answers unsupported. Typing is in section 28.
+
+### 21.2 Extension windows as built (WP3.8)
+
+`ctx.windows` (`Create`, `Show`, `Hide`, `Toggle`, `Close`) builds a window action; the host's windows manager (`internal/palette/extwindow`) performs it. Code: `internal/palette/extwindow` (the rules, with a fake window port in its tests), `internal/app/extension_window_host.go` (the MyGo window), `extview` (`runWindow`), `ext/manager/restore_window.go` and the `restore-window` protocol method.
+
+- **Identity.** A window is known by its extension and its id: the option `id`, else the view's `id`, else a hash of the view. Two extensions may use the same id. `Create` with an open id updates that window: it shows the new view and options and brings it forward.
+- **Page.** The window shows a palette page built from the view, with the palette's search, actions and Escape. Loads and refreshes of the view run against the window's palette.
+- **Show and hide.** `Show` and `Hide` keep the page. `Toggle` hides a visible window and shows a hidden one; it creates the window when a view is given and the window is not open. A window hidden by `hideOnBlur` stays hidden for 300 ms, so the click that took the focus does not reopen it. `Close` ends the window and forgets it; an operation on a window that is not open says so.
+- **Level and size.** `alwaysOnTop` defaults to true. Sizes are the default 560 by 420 or the large 900 by 680, an explicit width or height wins, and each is clamped to 320 to 1600 by 240 to 1200. Zero means the preset, because a window cannot ask for zero points.
+- **Placement.** `position` `center` (the default), `top-center` and `bottom-center` place the window on the display under the pointer, 48 points from the top or bottom edge. `menu-bar` places it as `center`: the menu bar anchor is not served yet.
+- **Chrome.** `titleBar: hidden` hides the title bar and keeps the window controls; `chrome: none` makes the window frameless. `visibleOnAllSpaces` is applied.
+- **Frame memory.** `remembersFrame` stores the window's frame when it moves or resizes, keyed by extension and by restore key (or id). The next open uses the frame, moved and shrunk onto the displays connected now.
+- **Persistence.** A window with `persistent` and a `restoreKey` is saved in the host document `extension-windows.json`. At launch the host calls the owning extension's `RestoreWindow` with the key, off the UI thread, and opens the window it returns. A nil answer, an error or a missing extension drops the saved window, as 1.x does. Quitting keeps saved windows; closing one by hand drops it.
+- **Failures.** A window action from a palette row hides the palette first, then runs. A failure, such as an unknown window, shows as a toast on the app. Success is silent: the window itself shows.
+- **Not served.** `focusable`, `showInactive` and `ignoreMouseEvents` are accepted and ignored, because the MyGo window port does not expose them. Capability diagnostics (`windows.*`) are not reported.
+
+### 21.3 Editor Markdown and autosave as built (P15)
+
+An editor view draws plain text unless it has `format: markdown` (the default matches 1.x and `EditorView`); with markdown it draws a Markdown editor (`design.MarkdownEditor`) instead of a plain text area; its text stays Markdown. A draft with `autosave` runs that action with the draft's text each time the draft is written, after the 400 ms debounce; a failure shows on the editor's status line. Conflicts resolve through `onConflict`, as before. Code: `internal/palette/extview/editor.go`, `editor_markdown.go`. Not yet: the editor's view-level action panel, and the Markdown editor's live preview.
 
 ## 22. Triggers and background jobs as built (WP3.6)
 
@@ -1085,9 +1086,358 @@ Code: `internal/ext/builtin` (the in-process runtime), `internal/ext/builtins/<n
 - **Runtime.** A built-in runs in the host process, not in a child. It answers the same protocol methods as a child (commands, root, search, run, load, menu bars) by calling its Go value's interfaces, and its services go through the same services handler a child's do. Calls run on their own goroutine under the caller's budget; a call that overruns is abandoned, not killed.
 - **Always on.** A built-in is enabled from the start. It has no folder, no review and no enabled state, so `Enable`, `Disable`, `Uninstall` and `Source` return `ErrBuiltIn`, and the Extensions list does not show it.
 - **Manifest.** Built-in ids use the reserved `nevermind.` prefix, checked by `Manifest.ValidateBuiltIn`. Folder extensions cannot use it.
-- **Host-only item fields.** `Item.Section` (the root section a row is listed under) and `Item.LearnKey` (the usage learner's key) are honoured for built-ins only. `Appearance.Foreground` sets the row tone for a built-in; a built-in row with no foreground has no tone.
+- **Host-only item fields.** `Item.Section` (the root section a row is listed under) is honoured for built-ins only. `Item.LearnKey` (the usage learner's key) is honoured for folder extensions too, namespaced as `ext:<id>:<key>` (section 33). `Item.TintTitle` (the title drawn in the row's color) is honoured for built-ins only. `Appearance.Foreground` sets the row tone for a built-in; a built-in row with no foreground has no tone.
 - **System services.** `System().SettingsPanes()` lists the OS settings panes. The `open-system-settings` system action opens one by id. `System().Places()` lists the standard folders of the home folder (Downloads, Documents, Desktop, Pictures), resolved through the platform's `Home()`; an `OpenPath` action opens one.
 
-Built-ins moved so far: System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). The rest of the WP3.10 list is not yet moved. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
+Built-ins moved so far: window management (`nevermind.window-management`: every layout, the focus moves, Next and Previous Desktop, Move and Resize Window, Switch Window, the settings and Custom Window Commands; its shortcuts keep the 1.x `extension-action:window-management:...` keys through `Command.ActionID`, and it calls only `ctx.Desktop().WindowManagement()`, `ctx.Settings()` and `ctx.Input()`). Clipboard History (`nevermind.clipboard`: the root copies, the list with Preview, Copy, Paste Text, removals and link cards; the watcher and store stay on the host behind `clipboard.history` and `desktop.clipboard`, which serve HTML, RTF read, file lists, image files and Read/Write by content type; `copy-image` copies a Nevermind picture file). AI commands (`nevermind.ai-commands`: Fix Selected Text with AI and Undo Fix, the first extension that edits the user's text; its shortcut keeps the 1.x key `extension:nevermind.ai-commands:fix-selected-text-with-ai`), the calculator (`nevermind.calculator`, section 26), System Settings panes (`nevermind.system-settings`), system commands (`nevermind.system-commands`: lock, sleep, log out, restart, shut down, empty trash, settings), Quit Nevermind (`nevermind.app-commands`) and the home folders (`nevermind.places`: Downloads, Documents, Desktop, Pictures). Classify Image with AI (`nevermind.classify-image`) is a built-in on the public API alone: its row sits in the command list with the AI commands, and its form takes one PNG, JPEG or WebP picture through the file field, asks `ctx.AI().Decide` with an image attachment, and lists the category with a copy action. Its refusals and limits are the native command's (2 MiB decoded, the same words). Emoji & Symbols is a built-in (section 33). The native views (Settings and others) stay native. A built-in whose rows stand among native commands is listed at their place in the root; its rows are not in the extensions source.
 
 Declarative host operations that the palette performs itself (a built-in or a folder extension alike): `set-query` (search again, palette open), `open-path` and `reveal-path` (palette hides, the path opens or is selected), and `system` ops (`lock-screen`, `sleep`, `restart`, `shut-down`, `log-out`, `empty-trash`, `quit`, `open-system-settings`). A `Confirmation` asks first. A system op runs off the UI thread; a failure shows as a toast.
+
+## 24. Folder layout and the Electron app's folder
+
+Go extensions live in the shared folder `~/.config/nevermind/extensions` on every platform, the folder the Electron app uses for its `.ts` extensions (`src/app/electron/extension-host/extension-paths.ts:13-15`). Each extension is one folder named after its id:
+
+```
+~/.config/nevermind/extensions/
+  acme.world-clock/        Go extension: extension.json (manifest) and main.go (source)
+  syncthing-browser.ts     Electron extension: ignored by this host
+  nevermind-extension-api.d.ts, package.json   Electron files: ignored by this host
+```
+
+- **Loaded.** A folder that holds `extension.json` or `main.go`. The folder name must equal the manifest id. A name ending in `.ts` is refused, because the Electron loader would try to import it.
+- **Ignored silently.** Files, hidden folders (`.staging-`, `.trash-`), and folders holding neither file. `bundle.Scan` (`internal/ext/bundle/bundle.go`) and `isExtensionFolder` do this.
+- **Electron compatibility (checked in `src/app`, no changes made).** The Electron loader reads the folder and keeps names that end in `.ts` but not `.d.ts` (`extension-loader.ts:140-144`, `extension-source-files.ts:1-6`). Subfolders and `.go` files never match, so they are skipped with no log line. The Electron proposals scan (`extension-proposals.ts:28-31`), the AI builder listing (`ai/ai-builder-read-tools.ts:252-255`) and the chat migration (`ai/ai-chat-migration.ts:25`, `isFile()`) filter the same way. The one hazard is a folder named `*.ts`, which the loader would import and log as `extension.load.failed` (`extension-loader.ts:162`); this host refuses such ids. Verdict: the Electron app coexists with Go extension folders without errors.
+- **Electron writes.** On each load the Electron app copies `nevermind-extension-api.d.ts` and writes `package.json` into the folder (`extension-loader.ts:80-101`). This host never writes those names.
+- **Names.** The folder name must equal the manifest id, so an id is also the folder. An Electron file keeps its name and is never renamed. To port `caffeinate.ts`, create `local.caffeinate/` with `extension.json` (`"id": "local.caffeinate"`) and `main.go`. The Electron file stays where it is. Ids use lowercase dot-separated segments, and the `nevermind.` prefix is reserved.
+- **Several files.** Every `.go` file of the folder except `_test.go` files belongs to the extension. The host merges them into one source (union of imports, one spec per path; `child/sources.go`), because the interpreter rejects a package imported twice across evaluations. The bundle hash covers every file, so an edit to any of them reloads the extension. The installer writes only `extension.json` and `main.go`; other files are added by hand or by a later installer.
+
+### Budgets
+
+A run has a 5 s hard budget and a load 10 s, both counting the extension's own time. The time the host spends answering a service call is added back, and each service keeps its own limit (three minutes for the supervisor, and each service's own limit inside it, such as 120 s for a shell command). A busy loop with no host call still hits the budget (`supervisor/supervisor_test.go`); a root that waits twenty seconds on a host shell call completes (`supervisor/host_wait_test.go`). The Electron host has no compute budget, because its extension code runs asynchronously. Its limits are the refresh burst (5 per 2 s) and 30 AI calls per minute (`extension-rate-limits.ts`), and this host keeps its own rate limits per service.
+
+### Toasts
+
+An action result may carry a toast. The palette shows it as an indicator titled with the action that produced it, errors for four seconds and other tones for 2.2 seconds, as the Electron host does (`action-feedback.ts:105-132`). A toast without a tone reads as success, which is a deviation. `ui.error(title, message)` is `api.ErrorView`: a list with one contextual row carrying the message.
+
+### Lists and subtitles
+
+A list does not show `View.Subtitle`. The Electron host shows it on grid views and editor headers only (`extension-view/extension-view.tsx:466,531`), so this matches.
+
+### Context services as built (WP3.x extension API gaps)
+
+- **Shell.** `ctx.desktop.shell.exec`, `script`, `appleScript` and `which` run under the `system` capability, which is refused when undeclared. A login PATH precedes the host PATH (as in the Electron app), `~` expands in command, arguments, working folder and script, the default timeout is 30 s clamped to 1 to 120 s, and a killed process reports exit -1. Output is capped at 200000 characters per stream and marked when cut. AppleScript runs only on macOS. Calls share a limit of 60 runs a minute. Code: `services/desktop_process.go`, `platform.Commands`.
+- **Indicators.** `ctx.indicators` show, update and hide draw one passive panel for every extension. The host keys each indicator by extension id. Updates are limited to 120 a minute. A later show replaces the shown indicator. A timed indicator clears only while it is still the one shown. Code: `services/indicators.go`, `internal/app/extension_indicators.go`. The panel is shared with the AI commands, so the latest writer wins.
+- **Navigation and windows.** `ctx.navigation` and `ctx.windows` build results and actions in the child. The host applies them; window actions are served as section 21.2 describes.
+- **Not served.** `ctx.dictation`, `ctx.aiBuilder` and `ctx.updates` answer with an error that wraps `api.ErrNotAvailable`, or with the empty answer their signature allows. `ctx.extensions.ownership` says no file is owned. Unserved desktop calls (selected files, extra file, clipboard and window-management operations) answer the same way. `ctx.updates.state` reports `supported: false`. No accessor panics; the reflection test in `child/unsupported_test.go` checks it.
+- **Builder placeholders.** The AI builder action builders return `unavailable` actions. They validate, and the palette shows "This action is not available yet" when one runs, so the view that carries one still loads.
+- **Open items from the converter reports.** `desktop.files` `readText`, `writeText`, `quickLook`, the file index and `displayPath` (which returns the path unchanged), and thumbnails of videos. Thumbnails of every find result are not rendered: call `thumbnail` for the ones a view shows. A network redirect policy is not added: 1.x exposes none (its extensions called Node's `fetch` directly), so 2.0 follows up to five redirects one hop at a time, and the converted paperless extension's `redirect: 'error'` check reads `FinalURL`; the only difference is the message for a refused redirect target. Loaders keep their id as the only argument: 1.x loaders are closures, so a loader's arguments travel in its id, as the converted extensions do. Commands take `keywords` as well as `aliases`, and the root search matches both.
+
+## 25. AI as built (extension model calls)
+
+Code: `internal/ai/extai` (the calls, attachments and decisions, no per-extension state), `internal/ai/extai/extaitest` (the test rig), `internal/ai/chat/route.go` (the one-shot tier route), `internal/ext/services/ai*.go` (the host side of `ctx.AI`), `internal/ext/child/remote_ai*.go` (the extension side), `internal/ext/protocol/ai_ops.go` (the operations).
+
+- **Served, with 1.x's contract.** `IsAvailable`, `Prepare`, `Ask`, `Stream`, `Decide`, `Session` (ask, stream, reset) and the attachment builders `text`, `image`, `file`, `clipboard` and `ocrImage`. Tiers `smart` (the default) and `fast`, resolved by the backend's active-model route. No model is ever named.
+- **Capabilities.** Every operation needs `ai`. An attachment that reads files needs `desktop.files`, one that reads the clipboard needs `desktop.clipboard`, and one that runs OCR needs `ocr`. A missing declaration is a permission failure that names it.
+- **Quota.** 30 calls a minute per extension (1.x's rate). Ask, stream, decide and session calls count once each; preparing, availability checks, stream pulls and attachment reads do not. Over the limit the call fails as `quota` with 1.x's message.
+- **Errors.** A signed-out account gets `unavailable` with a sign-in line. A backend refusal keeps the backend client's palette copy (credits, rate limit, paused free AI, and so on) and maps to `quota`, `invalid-input`, `timeout`, `cancelled` or `unavailable`. Refused input keeps 1.x's words (tier, absolute paths, the decision image rules). A call times out after 2 minutes (a stream after 5). Go failures carry no 1.x error code; the code is the category.
+- **Streams are pulled.** `Stream` opens the reply on the host and returns once the connection is up; the host then answers `stream-next` service calls with the events since the last pull. The pull is host time, so it does not count against the extension's budget. Events are buffered on the extension side (4096); `Result` never waits on a consumer. A stream is pumped while a request waits on it, so an extension that keeps a stream running after its request returns resumes pulling at its next request.
+- **Sessions** keep their last 40 messages in host memory (8 sessions per extension). `Reset` forgets them.
+- **Limits.** 4 open streams per extension. Attachments: at most 8 per call (a decision refuses more); text is cut at 80,000 characters; an image is at most 8 MiB for a prompt and 2 MiB decoded for a decision (PNG, JPEG or WebP).
+- **Not served yet.** `selectedText` and `selectedFiles` answer unavailable: the AI attachment builders do not read the source app's selection yet (extensions read it with `ctx.desktop.selection`, see section 21.1), and there is no Finder selection port.
+- **Tests.** L1: `internal/ai/extai` (ask, stream, tier header, not signed in, timeout, attachments, decisions) and `internal/ext/services/ai_test.go` (refusal, quota, sign-out, stream events and abort, sessions, timeout, attachment capabilities). L2: `internal/ext/supervisor/ai_test.go` runs the `acme.ai` fixture in a child process against the fake backend.
+
+## 26. Query fallbacks as built (dogfood batch 1)
+
+Code: `internal/app/extensions_rows.go` (`searchRow`, `scoreQueryFallback`).
+
+- **Query fallbacks (`Item.QueryFallback`, SearchItems only).** A fallback row is offered for every typed query, as 1.x did. It takes the fallback band (score 40): below rows whose words match the query (50 and up), above loose letter matches (20 and 10). Its declared `Score` is ignored. Learned ranking applies to folder extensions through `LearnKey` (section 31), so a fallback with a learning key climbs with use.
+- **Root.** RootItems ignore the flag. A fallback never shows at the empty root.
+- **Ties.** The root orders equal scores as 1.x does (`src/app/electron/search/action-ranking.ts:113-119`): builder chats after the rest, then the most recently used row first, then the title. Last use comes from the learner for rows with a `LearnKey`, from the extension's `lastUsedMs`, from a clipboard copy's time, from a chat's last change and from an app's first-seen time (1.x's sources in `clipboard-history.ts:418`, `ai-builder.ts:31` and `apps.ts:212`). Titles compare as localeCompare does for letters only; ICU's punctuation and accent weights are not reproduced.
+- **Root refresh (`Views().InvalidateRoot()`).** The caller is marked pending, and the palette runs the root again when the root is on top and shown. Only the pending extensions are asked again (`Manager.RootsOf`); the others' rows come from the last root. A state change resets the cache, so the next root asks every extension. While another view is on top the call does nothing, and the next root shown asks the pending extension. Calls are limited to five at once and 150 a minute per extension (1.x: five per 2 s, and 1.x clears only the caller's root cache entry). A call over the limit is ignored and logged as `extension.refresh.throttled`, with no error.
+- **Tests.** L1: `internal/ext/services/views_test.go` (the burst limit on the fake clock) and `internal/app/extensions_root_cache_test.go` (scope rules). L2: `internal/app/extensions_fallback_test.go` (band, order, root exclusion, against the golden palette), `internal/app/extensions_root_cache_test.go` (a refresh reruns the caller's root row), and `internal/ext/manager/root_refresh_test.go` (the `bump` action reaches the host hook; `RootsOf` asks only the marked extension).
+## 27. Calculator built-in, search refresh and query answers (WP3.10)
+
+Code: `internal/ext/builtins/calculator` (the built-in), `internal/features/calc` (the library: `RateService`, `RateFetcher`, `Calculator.WithClock`), `internal/search/merge.go` (`withoutQueryFallbacks`), `internal/palette/search_refresh.go` (`RefreshSearch`).
+
+- **Answers and fallbacks.** An item with `AnswersQuery` answers the query. While any answer is in the merged rows, every row with `QueryFallback` (web search, Automate) is left out, from any source. Until every provider has answered, fallback rows are held back, so an answer that arrives a moment later does not make a fallback flash. Both fields are honoured for folder extensions as well as built-ins.
+- **Search refresh.** `Views().RefreshSearch(query)` asks the palette to search again for `query` after a short debounce (30 ms). It returns at once. The search runs only when the palette is open and still shows that query; an empty query is the root. A background source calls it when its data arrives, for example a rate quote.
+- **Detail facts.** `Detail.Facts` draws labelled values, a small label over a large value, in a column. The calculator's detail lines are facts, so its pane matches the native one (golden `calc-result`). Detail panes now show on search and root rows of every extension, not only in views.
+- **Paste.** Paste and typing actions run through the paste family in section 28. `copy-text` shows a failed copy as a toast.
+- **Calculator rates.** The built-in fetches exchange rates through `Network()`, so the public-address policy and the request limits (5 s, 64 KiB) apply. Its quotes are kept in `rates.json` in the app's store, through a rate cache the composition root passes in. That port is host-only: a folder extension cannot reach `rates.json`, and it is the one host-only input a built-in takes besides its context. The built-in declares the `network` capability. Calendar answers are dated by the context's clock, and the zone database is shared across calls.
+- **Native parity.** The calculator row is ranked 1000 with the `Calculator` section, orange tone and the calculator icon. Its actions are Copy Result (primary), Continue Calculation and Swap Units (search again, palette open), Copy Unformatted Result (only when formatting changed the value) and Paste Result (`CommandOrControl+Enter`).
+
+
+## 28. Paste family and app lifecycle as built (dogfood batch 2)
+
+### 28.1 Paste, typing and frontmost
+
+- **Actions.** `api.Paste` (text, HTML, image or files), `api.PasteText` and `api.TypeText` are declarative. The palette hides first, then the extension's `desktop.paste` service performs the action off the UI thread, so the extension's own capabilities apply. The HUD says Pasted or Typed, or the reason the action did not run. Pastes keep the 1.x order: the keys reach the app the content came from.
+- **Capabilities.** A paste needs `desktop.clipboard` and `desktop.keyboard`. Typing needs `desktop.keyboard`, and the host also needs the `keyboard.type-text` system capability, which only macOS offers, as in 1.x. The child's `Keyboard().TypeText` takes the same route.
+- **Options.** `RestoreClipboard` puts back the clipboard the paste displaced, after `RestoreDelayMs` (clamped to 50 ms to 5 s, default 250 ms, as 1.x). It implies `Concealed`. A clipboard that holds HTML, RTF, files or an image is refused rather than lost, as the selection engine refuses it. `Concealed` keeps the write out of clipboard history; this build can conceal text only, so concealed HTML, images and files are refused. `ExpectedFrontmostID` pastes only while that app is in front. `PlainTextOnly` (default true) writes HTML only when it is false. `KeepPaletteOpen` is accepted and ignored, because a paste always hides the palette first, as 1.x did.
+- **Limits.** Typed text is capped at 64 KiB and the delay between characters at 1 s. Images are PNG, from a data URL or an absolute path, at most 16 MiB. Files must be absolute. RTF is not written, because the 1.x content kinds have none.
+- **Engine.** The paste and typing gestures run on the paste port (`platform.Paster`, with the optional `platform.Typist`). The selection engine's focus return and clipboard save and restore serve both, in `features/selection/paste.go`.
+- **Fixture.** `internal/ext/testdata/extensions/acme.paste` types through the keyboard service and returns a paste primary action.
+
+### 28.2 App lifecycle
+
+- **Calls.** `Apps()` gains `Running(paths)` (the paths whose app has a live process, in request order, at most 30 at a time), `Quit(path)`, `ForceQuit(path)`, `QuitAll()` and `Hide(path)`. `Launch` has been served since batch 1. Every path must be an app the index lists. A quit or hide answers `QuitResult`: `wasRunning`, `quit` (no live process remains after the request) and `killed`.
+- **Capabilities.** `Running` needs `apps.running`. `Quit` and `ForceQuit` need `apps.quit`. `Hide` needs `apps.hide`, which only macOS offers. `QuitAll` needs `apps.quit` and the `system` declaration, as the 1.x Quit All command did. The same names answer `ctx.system.capabilities.has` (`HasCapability`).
+- **macOS.** Quit asks the app itself through AppleScript, as 1.x did, and waits the grace period (5 s). The app may decline, for example to show a save sheet; then `quit` is false and nothing is forced. Force quit runs `killall -KILL` on the app's process name. Quit All asks every visible app but Nevermind and Finder, and returns the names it asked. Hide runs System Events and needs the Automation permission. Running status reads one `ps` listing for all candidates, because the process port does not list processes on macOS.
+- **Linux.** Running status and quit use the process listing and signals, as the Quit Apps command did before this batch. Quit All skips the desktop shell and the file manager's desktop, and Hide is unsupported.
+- **Failures.** A refused AppleScript shows its reason in the HUD under the extension's title and writes a warning to the log. The Automation hint is shown when macOS refused the grant. Any other failure is logged and shown with its message.
+- **Confirmation.** The service never asks. A built-in that quits or hides apps shows its own confirmation first, through the palette, as the macOS confirms do.
+- **Not in this batch.** Uninstall moved to the Apps built-in in section 30.
+- **Fixture.** `internal/ext/testdata/extensions/acme.lifecycle` probes each call, and `acme.paste` (section 28.1) probes the paste family.
+
+## 29. Dogfood batch 2: quicklinks, getting started and web search as built-ins (WP3.10)
+
+Code: `internal/ext/builtins/quicklinks` (Create Quicklink, keyword rows, six defaults), `internal/app/extensions_commands.go` (how the host lists a built-in's commands).
+
+- **Quicklinks (`nevermind.quicklinks`).** Keyword rows (`gh nevermind`) rank at the quicklink band (980) in the Quicklinks section. The links are kept in the extension's storage under `links`. Until the first save, the links the settings file held (2.0 `Quicklinks`) answer; the first save stores them with the new link. There is no list, edit or delete: 2.0 has none, and this batch did not add any.
+- **Command placement (`Command.Placement`).** Served now. No placement lists the row at the root and in search, as before. `root` does the same. `search` lists the row for a typed query only. `hidden` lists it nowhere, and it runs from a shortcut or alias.
+- **Built-in command presentation.** `Command.Section` and `Command.LearnKey` are honoured for built-ins, as they are on items. Every built-in command is found and ranked as a 1.x action: by its title, then by its keywords and aliases, and at the empty root by the score it names (0 when none). Built-in commands never take the extension band. `Appearance.Foreground` sets the row tone for every command. A built-in command's subtitle is its own, with no extension title.
+- **Customizable.** Built-in commands get the shortcut and alias actions only when `Customizable` is set. The AI commands set it. Folder extensions keep their shortcut and alias actions.
+- **Parity.** The root table (`testdata/queries-expected.json`, `queries-learned-expected.json`) is unchanged. The one golden that changed is `quicklink-form`: the form is now the palette's row form (Name, Keyword and URL rows, then Save), not the native stacked fields. The API has no stacked form, and the palette is row-first (CLAUDE.md), so the stacked look was not kept.
+- **Getting Started (`nevermind.getting-started`).** The Welcome row (score 90, Help at 14 once done) and its guide. The done flag is kept in the extension's storage under `done`, read from the settings file's flag until then. Dismissing the Welcome row stores the flag and calls `Views().InvalidateRoot()`, so the row turns into Help at once. The guide's shortcut row reads `Shortcuts().Palette()`, which now carries `Label`: the accelerator as the platform spells it, such as ⌘⌥K. "Set Shortcut" is the declarative `record-palette-shortcut` action, which opens the host's palette recorder; key capture stays host-only (HO7). `Color none` is the neutral foreground: a row with it draws its tile without the extension tint, as the native guide rows did. The guide is a list, so it filters its rows by the query; the native guide showed all rows.
+- **Web search (`nevermind.web`).** The search row is a query fallback with the learn key `web:search`, and the website row (score 150) opens an address the query names. The default engine is the declared setting `engine` (Google, DuckDuckGo, Bing, Brave Search), whose default is the engine the settings file held. The settings view reads and writes it through `Manager.ReadSetting` and `Manager.WriteSetting`, the same service calls an extension makes, so the setting needs the `settings.write` capability. Automate stays native (section 4, HO11) and offers a query fallback only when the query names no website.
+- **Tests.** L2: `internal/ext/builtins/quicklinks`, `internal/ext/builtins/gettingstarted` and `internal/ext/builtins/websearch` run each built-in's handlers on fake services; `internal/app/guide_shortcut_test.go` runs the guide through the palette. The root table and learned table are unchanged.
+- **Sign-in row (1.x parity).** The guide lists the optional account as 1.x does: "Sign in to Nevermind" while signed out, whose primary action is the new `account` action with op `sign-in` (`api.AccountSignIn`), which opens the host's sign-in flow as the Log in command does; "Nevermind account", disabled, once signed in. `Context.Account().SignedIn()` (new) reports the state. Credentials never reach the extension (HO2). The row's icon is `user`, the icon of the host's Log in command, because the palette's icon set has no `person`.
+
+## 30. Dogfood batch 3a: the applications built-in (rows, quit commands, uninstall)
+
+Code: `internal/ext/builtins/apps` (rows, Force Quit Apps, Quit All Apps, the uninstall review, the result view). The host's index, running state and quit services stay in `internal/features/apps`, which the services layer reads through `AppLifecycle`.
+
+- **Rows.** Every indexed app is a root row, newest first by when the host first saw it, then by name. A search matches the name, or an alias the user gave the app. Enter opens the app; Uninstall is in the row's menu when the platform has `apps.uninstall`. A row shows Running while the app has a live process, and its system icon loads in the background.
+- **Keys.** A row sets `CustomizeAs` to `app:<path>`, so its keyboard shortcut and alias keep the 1.x key `extension-root:nevermind.apps:app:<path>`. The learning key is `app:<bundle id>`, as before.
+- **Drag.** The row's `File` is the app bundle, so it drags out to other applications.
+- **Commands.** Force Quit Apps lists the running apps; each one asks `Force Quit?` before it is force quit, as 1.x does. Quit All Apps asks once, then asks each running app to quit except Nevermind and the desktop's own apps. Both keep their native shortcut keys (`command:force-quit-apps`, `command:quit-all-apps`) through the host's moved-command table, and their root scores are the native ones.
+- **Uninstall.** `Apps().UninstallReview` runs discovery and keeps the review under a token; `Apps().UninstallTrash` moves the reviewed items the IDs select, checking each one again first, with the same guards as before. The built-in keeps the selection; the review is dropped once it has run. The result view reveals the Trash folder the host reports.
+- **API added.** `Item.CustomizeAs`; `Shortcuts().Aliases(prefix)`; `Apps().List()` now lists the index with `FirstSeenMs`; `Apps().UninstallReview`, `Apps().UninstallTrash` and `UninstallResult.TrashFolder`; the `apps.uninstall` capability. A built-in command's `Score` is honoured at the empty root.
+- **Not on the row.** Show in Finder is not a row action: 1.x has none on app rows, and the root goldens do not list it.
+- **Not used.** Hide and Frontmost are served but the applications built-in does not call them; 1.x does not.
+- **Host-kept.** A global shortcut bound to an app still launches it through the host's shortcut dispatch, which reads the index and the platform launch port.
+- **Budgets.** The new surface grew the builder's reference by about 1 KB. Its size ratchets were raised to 50 KB and 34 KB; the terse reference is what the builder reads on every turn.
+- **Tests.** L2: `internal/ext/builtins/apps` runs each handler on fake services; `internal/ext/services` covers the uninstall and alias operations on fake lifecycles; `internal/app` runs the root goldens through the built-in with the palette's apps service. The root table, the learned table and the goldens are unchanged.
+
+## 31. Dogfood batch 3b: the snippets built-in
+
+Code: `internal/ext/builtins/snippets`. The app's native snippet views, rows, form and paste path are gone; the built-in is the only snippets code.
+
+- **Rows.** A keyword typed at the root finds the snippet whose keyword is the query (ranked above prefixes, 975 and 970, as before). Enter pastes the text through `PasteText` when the platform has `clipboard.paste` and copies it where it does not. Copy to Clipboard, Edit and Delete are the row's menu; ⌃C, ⌃E and ⌃⌫ keep their keys as `CommandOrControl` shortcuts. Delete asks first through `WithConfirmation`.
+- **Commands.** Snippets lists at the root with the native score and is customizable, so its shortcut keeps `command:snippets` through the host's moved-command table. Create Snippet is search only.
+- **Storage.** Snippets live in the extension's storage under `snippets`. The snippets document the app kept before this built-in is read once, and answers until the first save stores the list with it. A save keeps entries the list does not show, such as malformed ones, so nothing is dropped.
+- **Placeholders.** `{clipboard}` and `{date}` are filled when the snippet is pasted or copied, in one pass, as before.
+- **API added.** `ColorTeal`, the teal foreground the native snippet rows used; `System().HasCapability("clipboard.paste")`, the name the host answers for the paste gesture.
+- **Differences from the native views.** The form is the palette's row form, not a stacked form: each field is a row, and a refused save shows its message in the palette's feedback instead of under the fields. The list filters its rows by title, subtitle, keyword and alias, as every extension list does, so the Create Snippet row filters too. The detail pane shows the placeholders as a labelled row under the text rather than a footer.
+- **Tests.** Unit: `internal/ext/builtins/snippets` covers the rows, paste, copy, validation, keyword uniqueness, storage and legacy answers. Goldens: `snippets-list`, `snippet-form` and `material-snippet-form` now render through the built-in; the three were regenerated for the row form and the detail row. The root and learned tables are unchanged.
+
+## 32. One-shot runs and the timers built-in (dogfood batch 3b)
+
+Code: `Context().Scheduler()` (`internal/ext/api/scheduler.go`), served by `internal/ext/services/schedule.go` and run by the manager's `runScheduled`; the built-in is `internal/ext/builtins/timers`.
+
+- **Primitive.** `Scheduler().Once(key, at, ref)` runs the extension's own action `ref` at the time `at`, under `key`. A second `Once` under the same key replaces the pending run, so a timer restart replaces the one before. `Cancel(key)` drops it and reports whether one was pending; `Pending(key)` reports when it is due. A time already past runs at once. Keys are at most 64 bytes, and 16 runs may be pending per extension; scheduling is rate limited to 60 a minute. The run arrives as a normal action with `Launch.Reason` and `Launch.Event` both `once`.
+- **Lifetime.** A pending run lives in the app's memory, as the 2.0 timer was: it is not kept across a restart, and it is dropped when the extension is reloaded or disabled. Nothing waits for its result; a run that fails is logged.
+- **Why not a trigger.** `Trigger` declares fixed schedules on a command or a menu bar item. A timer's time is known only when the user starts it, so the primitive is a call. Interval and startup triggers are unchanged.
+- **Timers built-in.** `nevermind.timers` keeps no state of its own. Start Timer is a search-only command that sets the query to `timer 5m`; `timer 5m`, `countdown 90s` and the like at the root start one (a row with the native score and kind). Cancel Timer is listed only while a timer runs, because `Commands` is read on every search. The menu bar shows the time left as its own item, rendered each second while the item exists and removed when the time is up, and the finish shows the notification "Timer finished" with the duration.
+- **Diff from the native timer.** The countdown is an extension menu bar item, not the title of the app's own status item, so it sits beside that item. The app's own item no longer carries a title. Starting and cancelling a timer refresh the menu bar at once. A notification the system refuses does not fail the finish, as before.
+- **API added.** `Context.Scheduler()`, `Scheduler`, `MaxScheduledRuns`, `ScheduleKeyLimit`, `ValidateScheduleKey`, `Launch.Reason` `once`, and the `once`, `cancel` and `pending` operations of the scheduler service.
+- **Fixture.** `acme.schedule` (`internal/ext/testdata/extensions/acme.schedule`) arms, cancels and reports a run through the search box, through a child process. `internal/ext/manager/schedule_test.go` runs it: a due run calls the action, and a cancelled run never does.
+- **Tests.** `internal/ext/services/schedule_test.go` runs the book on the fake clock: due time, cancel, replacement, past times, the limits, the key rules, close and the rate limit. `internal/ext/builtins/timers` covers the duration parsing, the root row, the commands, the countdown, cancel and finish on a fake scheduler. The root and learned tables and the goldens are unchanged.
+## 33. Dogfood batch 4: bundled data, learned folder rows, grid categories and Emoji & Symbols (WP3.10)
+
+Code: `internal/ext/bundled` (the shipped datasets, decoded once), `internal/ext/services/bundle.go` (the `bundle` service), `internal/ext/child/data.go` (the bundle reader and its per-context cache), `internal/ext/builtins/emoji` (the built-in), `internal/palette/extview/search_rows.go` and `grid_categories.go` (the view search and the category keys).
+
+- **Bundled data (`Data().Bundled(name)`).** A `Bundle` is a read-only dataset the app ships, as a JSON file `datasets/<name>.json` embedded in the binary. `Records()` returns its `BundleRecord`s (id, title, subtitle, keywords, string fields). The host decodes each dataset once; the extension's context keeps the records, so later calls do not cross the host again. An unknown name, or a name with a path in it, fails as unavailable. Folder extensions cannot ship datasets yet: only the app's datasets are served.
+- **Learned folder rows (P12).** A folder extension's `Item.LearnKey` is ranked by the usage learner under `ext:<id>:<key>`, so a folder row climbs with use and never shares a key with a built-in or another extension. Sections stay built-in only.
+- **Grid categories (P28).** `GridSpec.CategoryKeys` makes Tab and Shift+Tab step the view's `SearchAccessory` through its options (wrapping) and run its `OnChange` with the new value, as a pick does. The accessory stays drawn, as the 1.x picker shows its category control, and shows the chosen option. `GridSpec.SelectionFooter` draws the chosen row's title and subtitle, then the category's title. `GridSpec.Layout: "compact"` draws glyph tiles without titles, 46 points high.
+- **View search.** `View.Search` answers each typed query with the rows of its handler, in the order given. The host neither filters nor sorts them, and the handler gets the search accessory's value under its id in `Ref.Args`. `ViewPatch.SearchItems` is the second batch of an `onSearchChange` answer: rows, not ids, shown after the local rows while the handler runs. `View.Hint` sets the right footer text.
+- **Manifest.AIQuotaKey.** A built-in names the owner its model calls count under. The Emoji & Symbols built-in uses `emoji-symbols`, which the 1.x picker used, so both share one window. A folder manifest that sets it is refused.
+- **Emoji & Symbols (`nevermind.emoji-symbols`).** The command keeps the 1.x id `emoji-symbols`, so its shortcut binding keeps working. The grid reads the shipped dataset; the 1.x matcher and ordering are the catalog library's (`internal/features/emoji`), the 160 row cap is the view's `MaxVisibleItems`, and the meaning batch runs the library's funnel (`internal/ai/charsearch`) through `AI().Decide`. Enter pastes when `clipboard.paste` is available, else copies. The actions are Copy (Ctrl+Enter), Skin Tone… and Copy Unicode. The skin tone is kept in the built-in's storage. There is no recents list. The native picker (`internal/app/emoji_*.go`) and the charsearch search provider are removed.
+- **Not carried over.** The skin tone 1.x or the earlier 2.0 build saved in the settings file is not migrated; the built-in starts at Default until the user picks a tone again.
+- **Dataset.** `internal/ext/bundled/datasets/emoji-symbols.json` is generated from the catalog library by `go test ./internal/ext/builtins/emoji -args -update-dataset`. `TestShippedDatasetMatchesTheCatalog` fails when the catalog and the file differ.
+- **Tests.** L1: `internal/ext/services/bundle_test.go` (decoded once, unknown names), `internal/ext/child/bundle_test.go` (one host answer for three reads), `internal/palette/extview/grid_categories_test.go` (Tab and Shift+Tab wrap, change handler values). L2: `internal/app/extensions_learning_test.go` (a folder row climbs with its key; a bare key does not boost it, `acme.learn`), `internal/app/emoji_builtin_test.go` and `emoji_meaning_builtin_test.go` (the ported picker tests and the goldens emoji-grid, emoji-no-results, emoji-skin-tone, emoji-meaning and emoji-loading, unchanged).
+
+
+## 34. Files as built (dogfood batch 4: the files built-in)
+
+Every `ctx.desktop.files` method of the 1.x API is served by the host, through the same services handler as a folder
+extension's calls (`internal/ext/services/desktop_files*.go`, child side `internal/ext/child/remote_files*.go`):
+
+| 1.x method | Go (`api.Files`) | Host |
+|---|---|---|
+| `find` | `Find` | index-free walk of existing roots; relative and missing roots skipped |
+| `findImages`, `findVideos`, `findMedia` | `FindImages`, `FindVideos`, `FindMedia` | `Find` with the kind fixed |
+| `openWithApps` | `OpenWithApps` | the installed bundles, ranked by their document types |
+| `open` | `Open` | the shell's default app |
+| `reveal` | `Reveal` | the file manager |
+| `preview` (Quick Look) | `QuickLook` | `Shell.QuickLook`; `ErrUnsupported` answers "Quick Look is not available on this system" |
+| `readText` | `ReadText` | the whole file, at most 256 KiB; a larger file is refused, never cut |
+| `writeText` | `WriteText` | atomic replace; fails when the file exists unless `overwrite`; never creates folders |
+| `displayPath` | `DisplayPath` | the home folder shown as `~` |
+| `toFileUrl` | `FileURL` | `file:` URL of an absolute path |
+| `thumbnail` | `Thumbnail` | PNG data URL of a picture, `found` false otherwise |
+| `metadata` | `Metadata` | size, times, kind, picture dimensions |
+| `indexedRoots` | `IndexedRoots` | the index's roots, `~` expanded |
+| `indexSnapshot` | `IndexSnapshot` | filtered and sorted from memory, never rescanned |
+| `reindex` | `Reindex` | starts a rescan and returns the count now; the scan finishes later |
+| `recent` | `Recent` | newest first from the index |
+| `searchIndex` | `SearchIndex` | name matches from the index |
+| `indexStatus` | `IndexStatus` | whether the index holds a snapshot and whether it is scanning; read from memory |
+
+Actions: `openPath`, `revealPath`, `quickLook`, `openWith(path, app)` and `trash(paths)` are declarative
+(`api.OpenPath`, `api.RevealPath`, `api.QuickLook`, `api.OpenWith`, `api.Trash`). The palette runs them itself; trash
+asks first when the action carries a confirmation. `openWith` needs `Shell.OpenWith`, which is served on macOS through
+`open -a` and refused elsewhere. `ui.previewFile(file)` is `api.PreviewFile(title, file)` (a file-preview view) and
+`api.PreviewFileView(file)` for a view that wants the preview itself.
+
+Deliberate differences from the 1.x declarations:
+
+- `mtime`, `birthtime` and `dateAdded` are epoch milliseconds only (`mtimeMs`, `birthtimeMs`, `dateAddedMs`). There are no ISO duplicates.
+- `readText` refuses files over 256 KiB instead of returning them whole; the protocol line cap is 1 MiB.
+- `thumbnail` renders synchronously; the built-in gives at most 48 rows of a list a picture.
+- The file index's status (indexing or the file count) is not exposed to extensions, so an empty view says "No files found." while the index is still loading.
+
+The files built-in (`internal/ext/builtins/files`, id `nevermind.files`) uses only this surface. It serves the six
+recent files at the root (scores 6 to 1), the typed root search (two characters, scores from 75), the Search Files
+command and view, and Find Files by Meaning (signed in only). Its rows carry the 1.x menu: Open (Enter), Preview or
+Preview Contents (`CommandOrControl+Y`), Quick Look where the system has it, and Show in Finder (`CommandOrControl+Enter`).
+Find Files by Meaning asks `ctx.AI().Decide` about the sixteen most recent names, only after the user asks for the
+query, with the decision's predicate and match probability of 0.5 as the native feature had them.
+
+Changes to the native behavior, each from moving the feature onto the API:
+
+- The Search Files kind filter is a search accessory (a popup on the search bar) instead of the Tab key: the API has no key-driven filter. The footer status line is gone for the same reason.
+- Find Files by Meaning lists its matches through the view's search change, so the ask row and the decision rows update in place.
+- Search Files and Find Files by Meaning are listed by the extension source, so they sit after the native commands at the root rather than at their native place.
+
+
+## 35. Dictation as built (dogfood batch 4)
+
+Code: `internal/ext/services/dictation.go` (the service and its `DictationEngine` port), `internal/dictation/engine.go` (the host engine: one dictation, the output mute, saved recordings), `internal/ext/child/remote_dictation.go` (the extension side), `internal/ext/builtins/dictation` (the built-in, with `cleanup` and `history` subpackages), `internal/app/dictation_wiring.go` and `dictation_legacy.go` (the wiring and the 1.x documents). Fixtures: `testdata/extensions/acme.dictation`; L2 in `internal/ext/supervisor/dictation_test.go`; L1 in `internal/ext/services`, `internal/dictation` and the built-in.
+
+- **Surface.** `Dictation` has `Status`, `APIAvailable`, `Devices`, `Start(DictationStartOptions)`, `Stop`, `Cancel` and, new in this batch, `Recordings` (`SavedDictation`: id, `CreatedAtMs`, `SegmentCount`), `Retry(id)` and `DeleteRecording(id)`. The 1.x recovery helpers are no longer built-in only: any extension that declares `dictation` can list, retry and delete the saved audio of a dictation whose transcript did not complete.
+- **Capability.** Every call needs `dictation`; a refusal is `permission` and names it. Audio stays in the host.
+- **Mute.** `Start` with `MuteSystemAudioWhileRecord` mutes the output until the dictation stops, is cancelled or fails to start. A crash leaves a journal the next start restores.
+- **Devices.** `""` and `"default"` both name the system microphone. A failed start that is not a refusal falls back to the default device, as before.
+- **Failures.** Errors carry the words the user reads as their message, and a cause that classifies them (`unavailable`, `permission`, `not-found`). A cancelled dictation has an empty message: the built-in closes its indicator without saying anything.
+- **Background.** `Stop` waits for the hosted transcript, and `Start` for the microphone, so a run that calls them is declared `Background` on its action. Such a run has a two-minute budget (the background job's), not the five seconds of an ordinary action. This is a host primitive: `Invocation.Background` is set from the action, and `Manager.Run` picks the budget.
+- **Built-in.** `nevermind.dictation` declares `dictation`, `ai`, `ocr` and `desktop.apps`. Dictate is a background command that starts or stops a dictation; the paste goes to the app that had focus at the start (`PasteOptions.ExpectedFrontmostID`), concealed from clipboard history unless the settings keep the text. Dictation History lists unfinished dictations first (Retry, Delete) and transcripts (View, Copy, Delete), with Clear History behind a confirmation. The settings form has the six 1.x fields and opens from the Settings page's Dictation row; a command's action panel is not drawn by the palette yet, so Dictate's own Settings action is not shown. Cleaning uses `ctx.AI` on the fast tier with the 6-second deadline and falls back to the raw transcript; screen words come from `ctx.OCR().Screen` with a 2-second timeout.
+- **Indicator.** The dictation indicator is the extension indicator surface (`ctx.Indicators`) with the 1.x states: Listening, Waiting for microphone (shown after one second, then the device's name), Transcribing, Cleaning, No speech detected (2.2 s) and a failure with its words (4 s).
+- **Shortcuts.** Dictate and Dictation History are customizable commands, keyed `extension:nevermind.dictation:dictate` and `...:dictation-history`. The host maps them to the 1.x keys `extension-root:nevermind.dictation:dictation` and `...:dictation-history` (the moved-command table), so a shortcut the user set in 1.x works unchanged. Search finds the commands by their title, aliases and keywords.
+- **Legacy.** The settings (`dictation.json`) and transcripts (`dictation-history.json`) of the native app answer until the built-in saves its own. Recordings stay in `dictation-recordings` in the data folder.
+- **Not carried over.** The native indicator's Cancel and Open Microphone Settings buttons and its level meter: 1.x's indicator had neither, and the extension indicator surface draws title, subtitle and status only. The native "Dictionary" view is the settings form's Custom dictionary field, as in 1.x. The Settings page's Dictation row shows the chosen microphone again, through the shared display (section 37).
+- **Tests.** L1: `internal/ext/services/dictation_test.go` (each operation, the refusal, the missing engine, an unknown operation), `internal/dictation/engine_test.go` (each engine method on fakes) and `internal/ext/builtins/dictation/dictation_test.go` (the flows, cleanup, screen words, history, retry, settings, legacy state and the root rows). L2: the `acme.dictation` fixture runs in a child process against a fake engine.
+
+
+## 36. Settings rows (dogfood batch 4)
+
+Code: `api.ViewSettings`, `api.SettingsView`, `api.SettingRow` (`internal/ext/api/settings_rows.go`); rendered by `internal/palette/extview/settings_page.go`; read and written through the manager's `SettingValue` and `WriteSetting`.
+
+- **Shape.** A settings view is a view of kind `settings` with one spec, `Settings.Rows`. Each row has an `ID` unique in the view, a `Title`, optional `Subtitle` and `Icon`, and a kind. `toggle` flips a boolean setting; `choice` steps a string setting through its `Choices` in order, wrapping to the first; `recorder` opens the host's shortcut recorder for a setting holding an accelerator; `text` pushes an editor where the typed text is the value and Enter saves it; `action` runs its declared `Action` and stores nothing.
+- **Edge text.** The host draws the stored value: On or Off for a toggle, the title of the current choice for a choice, the typed value for a text row. A recorder or action row shows nothing from the setting. For any row the host has its own text for (such as a shortcut that the OS refused, or a microphone name), the host text replaces the default. The row's `Accessory` is the fixed text when neither applies.
+- **Extra actions.** `Also` adds actions to a row, shown in its action panel. An extra action has its own kind and `ActionTitle`. The row's primary action is `ActionTitle`, or the kind's default (Toggle, Next, Change…, Edit).
+- **Persistence.** Every change goes through the setting's service, so the value is saved before the next frame and the host refreshes the palette. A change that fails shows its reason as a toast. The setting must be declared in `Manifest.Settings`, and writes need `settings.write`, as they do for the extension's own `Settings().Set`. An undeclared key shows no value and refuses the write.
+- **Search.** The host filters rows by title, case-insensitively, as the native settings view did. Values are never searched.
+- **Built-ins.** A built-in whose settings the host keeps (`services.NewBuiltIn` with a `SettingsHost`) reads and writes them through that store, not its own file. The store is where config.json-backed values live, and it runs any side effect of a change.
+- **Validation.** `SettingsSpec.Validate` checks every row kind, its setting id, its choices (at least two, unique values), its action, and that row ids are unique, at most 200 rows and actions per view. Setting ids are checked against the manifest by the host when it renders.
+- **Fixture.** `acme.settings` (`internal/ext/testdata/extensions/acme.settings`) opens a settings view with one row of each kind. `internal/ext/manager/settings_rows_test.go` runs it through a child process, validates the view it returns, and reads and writes its declared settings through the manager.
+- **Tests.** `internal/ext/api/settings_rows_test.go` (shapes and refusals), `internal/palette/extview/settings_page_test.go` (edge text, toggles, choices, extra actions, the recorder call, the editor, failed saves, the action row), `internal/ext/services/settings_host_test.go` (the host store, and a failed save as unavailable).
+
+## 37. The Settings built-in (dogfood batch 4, step 2)
+
+Code: `internal/ext/builtins/settings` (the rows and the declared settings), `internal/app/settings_store.go` (the host store), `internal/app/settings_rows_host.go` (the host text and host operations of the rows), `internal/app/settings_page.go` (the page the root and the menu bar open).
+
+- **Page.** `nevermind.settings` answers its `open` action with a settings view (section 33). Its rows are the native page's rows, in the native order, with the menu bar icon style row after the update channel. Launch at Login is listed only where the OS reports `autostart.signIn`, which is now a public capability name.
+- **Storage.** The built-in declares its settings. The host store (`settingsStore`, given to the manager through `BuiltInSettings`) maps each id to the value the app already keeps: the clipboard flags and size in settings.json, diagnostics, the update channel and the menu bar style in config.json, launch at login in the OS, and the search engine in the web built-in's own setting. A save runs the change the app makes, such as the clipboard switch and the menu bar icon.
+- **Host text.** Rows whose text only the host knows take it from `RowAccessory`: the palette shortcut's status, the dictation device, the updates status, the account summary and the config folder path. Shortcut recorders open the host's recorders through `RecordSetting`.
+- **Host operations.** `ActionHost` runs one of a closed list of host operations (`config-folder`, `dictation-settings`, `updates`, `account-page`). Only built-ins may name them. The Dictation row no longer reads the device from the host: it shows the shared display of the Dictation built-in (see the shared-display note below).
+- **Shared display.** A built-in lists a declared setting in `Manifest.Publishes` and sets its display text with `Settings().PublishDisplay(id, text)`, for example when it loads its commands. Another built-in lists the setting in `Manifest.Reads` (`api.SettingRef{Extension, Setting}`), and a settings row names it in `Shows`; the row's accessory is the published text, or the row's own accessory until one is published. The host keeps the texts in one store (`services.SharedDisplays`); `Manager.SharedDisplay` answers only a reader that declares the setting. Folder extensions cannot publish or read. Code: `internal/ext/api/shared_display.go`, `internal/ext/services/settings_display.go`, `internal/ext/manager/shared_display.go`. The Dictation built-in publishes its microphone's title (`nevermind.dictation`, setting `device`), with the 1.x names (the system microphone's title is "System Default").
+- **Root and menu bar.** The root Settings command and the menu bar's Settings item push `settingsPage()`. The command's row is still the host's, so the root table is unchanged.
+- **Tests.** `internal/ext/builtins/settings/settings_test.go` (page validity, order and options), `internal/app/settings_store.go` through the clipboard and root tests, and the settings golden, which is unchanged.
+
+## 38. The OS Permissions built-in (dogfood batch 4, step 3)
+
+Code: `internal/ext/api/permissions.go` (the kinds, the states and `PermissionStatus`), `internal/ext/builtins/permissions` (the page and its row actions), `internal/app/system_permissions.go` (the host's surface: the rows of the system service, the request and the pane), `internal/app/builtin_page.go` (the page a built-in's open action draws, shared with the Settings page).
+
+- **Status read.** `System().Permissions()` lists the permissions the platform has, the ones that need attention first, with the state the OS reports. A state the OS does not report is `unknown`, which is never allowed. `Prompt` is true where Enter asks the OS (a permission that can be asked for and is not asked yet, or accessibility the user denied).
+- **Request and pane.** `System().RequestPermission(kind)` shows the OS prompt. Where the OS has none, it fails with the sentence to show ("Allow microphone in System Settings. Nevermind cannot show that prompt here."). `System().OpenPermissionPane(kind)` opens the System Settings pane. Both need the `system` declaration and an unlisted kind is `invalid-input`.
+- **Page.** The root's OS Permissions command, which stays the host's row, opens the built-in's `open` action. The built-in's rows run `request` or `open-pane` with the kind in `kind`. A request replaces the page with a fresh list; a refused request also shows the sentence as an error toast. The pane action closes the palette first.
+- **Parity.** The subtitles, the order, the rows and the prompt rule are the native page's. The success path has no toast, as before. The refusal toast is titled with the action's name, because a result's toast is an indicator, not a plain message.
+- **Tests.** `internal/ext/services/system_permissions_test.go` (reads without the declaration, the declaration and the unlisted kinds, the surface's sentence, the missing surface), `internal/ext/builtins/permissions/permissions_test.go` (the page, the rows and their actions, the refusals and failures), `internal/app/system_permissions_access_test.go` and `internal/app/system_test.go` (the prompt rule, through the status conversion).
+
+## 39. The Updates built-in (dogfood batch 4, step 4)
+
+Code: `internal/ext/api/services_core.go` (`UpdateState`, the status, channel and op values, the `Updates` accessor), `internal/ext/builtins/updates` (the page and its rows), `internal/app/updates_surface.go` (the updater's state in the API's shape), `internal/app/updates_page.go` (the page's open and the operations the palette runs), `internal/app/updates_rows.go` (the root's update row and the Settings accessory, which stay the host's).
+
+- **State.** `ctx.Updates().State()` reads the updater: the status, the channel, the available and downloaded versions, the failure cause and `message`, the line the menu bar and the root show for the same state. Reading needs no declaration. The built-in declares `updates` for review.
+- **Actions.** The rows run `ActionUpdate` ops the palette performs. `check` looks for a newer version. `download` accepts a download that is under way or finished, because the updater starts one as soon as a check finds a newer version, so none waits to start. `install` restarts into a downloaded update. `channel` moves to the next channel and checks it. A refused operation shows its reason as a toast. A built-in cannot call the updater itself.
+- **Page.** The open action builds the page: the status line, a restart row that is primary only while an update is downloaded, the check row and the channel row. The page refreshes every second while it is open, so a check or a download shows as it moves.
+- **Root and menu.** The root's update row, the Settings accessory and the menu bar's update row stay the host's and read the same state. The root's Check for Updates command runs a check and opens the page, as 1.x's `checkForUpdatesView` does. The menu bar's Check for Updates row still only checks.
+- **Parity.** Titles, subtitles, icons and the channel copy are the native page's. The page's footer hint is gone, because 1.x's Updates page has none. `Appearance.prominence` of `primary` now elevates a palette row; before, the mapping was missing, so the apps uninstall review row, the only other row that sets it, is now elevated too. The dev channel is native-only and stays.
+- **Tests.** `internal/ext/builtins/updates/updates_test.go` (page validity and refresh, rows per status, status and channel copy, restart, unknown action), `internal/ext/services/updates_test.go` (state read without a declaration, unavailable without a surface, one operation only), `internal/palette/extview/update_action_test.go` (run, refusal toast, unavailable), and the `updates-*` goldens through `internal/app/golden_updates_test.go`.
+
+## 40. The Diagnostics built-in (dogfood batch 5, step 5a)
+
+Code: `internal/ext/api/diagnostics.go` (the record, the reporting states, the `Diagnostics` namespace), `internal/ext/services/diagnostics.go` and `internal/ext/child/remote_diagnostics.go` (the service and its child side), `internal/app/diagnostics_surface.go` (the host's records, in the API's shape), `internal/app/diagnostics_page.go` (the root commands), `internal/ext/builtins/diagnostics` (the page, its rows and the report).
+
+- **Records.** `ctx.Diagnostics().Recent()` lists the errors the host recorded, newest first, with the same schema the host keeps: a reference, a component, the time, redacted text, a few frames and allow-listed attributes. `Export(ref)` is the plain text a support request copies; an unknown reference is an error. Reads need no declaration.
+- **Report.** `ReportProblem()` files a problem report with no screen content and returns its reference. The built-in's `report` action shows the page with a toast that names the reference. A host that cannot record says so as an error toast.
+- **Reporting.** `Reporting()` is `stored`, `off` or `requested`. Each row's accessory says which, as the native page did.
+- **Page.** The rows are the native page's: the component or "Problem report" as the title, the reference and the UTC time as the subtitle, Enter copies the reference, and the action menu copies the safe diagnostics too. The footer is "Technical details only", which a list now shows through `View.Hint`.
+- **Root.** Show Recent Errors and Report a Problem stay hidden host commands, as before. Show Recent Errors opens the built-in's `open` action; Report a Problem runs its `report` action and pushes the page it returns.
+- **Consent.** "Send Technical Diagnostics" is the Settings built-in's row, as 1.x's Settings has it; this step adds nothing to it.
+- **Tests.** `internal/ext/builtins/diagnostics/diagnostics_test.go` (rows, copy actions, reporting labels, empty page, report and its refusal, unknown action), `internal/ext/services/diagnostics_test.go` (reads without a declaration, export of known and unknown references, report, reporting, unavailable, unlisted op) and `internal/app/golden_diagnostics_test.go` (the four diagnostics goldens render the built-in).
+
+## 41. The Background Tasks built-in (dogfood batch 5, step 5b)
+
+Code: `internal/ext/api/jobs.go` (the job, its triggers and runs, the owner, status, trigger and outcome values, the `Jobs` namespace), `internal/ext/api/manifest.go` (the `jobs` capability), `internal/ext/services/jobs.go` and `internal/ext/child/remote_jobs.go` (the service and its child side), `internal/app/jobs_surface.go` (the scheduler's snapshots in the API's shape), `internal/app/jobs_wiring.go` (the root command's page), `internal/ext/builtins/backgroundtasks` (the page, its rows, the details and the actions).
+
+- **Jobs.** `ctx.Jobs().List()` returns every job the scheduler holds, the host's own and the extensions', each with its owner, status, triggers, counts, last run, next run, back-off and recent runs. Reads need no declaration. `Run(id)`, `SetEnabled(id, enabled)` and `ClearError(id)` change the host's work, so they need the `jobs` capability, which the built-in declares for review. Each returns the reason the scheduler refused.
+- **Page.** One row per job. The subtitle is the status, the triggers and the last finish, as the 1.x page words them: `Failed: <error>`, `Backing off until <time>`, `Halted: <reason>` for a halted job, and the raw status otherwise. Triggers read `Manual`, `Startup`, `Every <n>s` or `On <event>`. The icon is the palette's mark for the status: an alert for a failure, a clock for a back-off, activity while a run is under way, a check when it succeeded and a power mark when it is off. The accessory is the owner.
+- **Details.** Enter, and the first action, opens the job's details as a preview: its identity, its state and last run, its last error and its recent runs. The native page's run history sub-list is gone, because 1.x shows the runs in this preview.
+- **Actions.** Show Details, Run Now, Enable Job or Disable Job (a halted job reads as off, so it offers Enable), and Clear Error while the job has one. Run Now and the switch replace the page with the jobs as they stand, with a toast. A run that fails shows its reason as a preview titled `<job> Failed`, as 1.x does. A refused switch or clear is an error toast.
+- **Refresh.** The open page re-reads the jobs once a second, so a run that finishes shows as it ends. The native page subscribed to scheduler changes; the built-in polls, as the Updates page does.
+- **Root.** The root's Background Tasks command stays the host's and opens the built-in's `open` action.
+- **Tests.** `internal/ext/builtins/backgroundtasks/backgroundtasks_test.go` (rows and subtitles, icons and accessories, details and actions, run, failure, switch, clear, refusals, unknown job and action, trigger spelling), `internal/ext/services/jobs_test.go` (reads without a declaration, the declaration for changes, the reasons a refusal carries, ids, unlisted operations, unavailable) and `internal/app/golden_background_test.go` (the list, the details and the action menu render the built-in).
+
+## 42. The Keyboard Shortcuts built-in (dogfood batch 5, step 6)
+
+Code: `internal/ext/api/action.go` (the `shortcut` action kind, its `Target` and its validation), `internal/ext/api/services_core.go` (the `record` and `remove` operations), `internal/palette/extview` (the `ShortcutAction` host hook), `internal/app/shortcuts_view.go` (the root's page and the operation the palette runs), `internal/ext/builtins/shortcuts` (the list, its rows and its actions).
+
+- **List.** `ctx.Shortcuts().List()` returns the bound shortcuts, the user's choices and the declared ones, each with its label as this platform spells it. A Hyper key reads as `✦` followed by the key, as 1.x labels it. The list needs the `shortcuts` capability, which the built-in declares.
+- **Change.** Enter, and the `Change shortcut` action, is an `ActionShortcut` with the `record` operation and the action's ID in `Target`. The host pushes its recorder for that action. Key capture stays with the host, as the palette hotkey's recorder does.
+- **Remove.** `Remove shortcut` is the `remove` operation on the user's own choices only, as 1.x offers it. It drops the choice, toasts that it was removed and refreshes the page.
+- **Not in this step.** `GlobalShortcut`, the extension's own global shortcut, belongs to the Windows branch.
+- **Parity.** 1.x lists the bound shortcuts only, so a command without a shortcut no longer has a row on this page. The `Not active` subtitle is gone, because 1.x shows none; an OS refusal shows only its label. Titles are 1.x's (`Change shortcut`, `Remove shortcut`), and the label is the row's accessory, where 1.x draws a keycap.
+- **Tests.** `internal/ext/builtins/shortcuts/shortcuts_test.go` (labels, primary and actions, user-only removal, empty state, unknown action) and `internal/app/shortcuts_view_test.go` and `hyper_key_test.go` (the built-in's rows, the search, the hyper label), with the `shortcuts-list` golden through the built-in.
+
+## 43. Notes service and the conflict view (dogfood batch 4)
+
+Code: `api.Notes` (`internal/ext/api/services_notes.go`), served by `internal/ext/services/notes.go` over `internal/features/notes`, which is the store the Notes built-in shows.
+
+- **Access.** `Context().Notes()` needs the `notes` capability in the manifest. It is the user's own notes, so an extension without the capability gets a permission failure.
+- **Operations.** `List`, `Get`, `Create`, `Recent` (the most recent note, or a new one when there is none), `Update` and `Delete`. `Delete` runs only from a palette action and asks the user first; a refused question removes nothing.
+- **Conflicts.** `Update(id, markdown, updatedAt)` takes the saved version the text was typed on and returns the note with a conflict flag. A newer saved version refuses the write: nothing is written, the saved note comes back with `true`, and the unsaved text stays with the extension. A note carries `id`, `markdown` and `updatedAt` only.
+- **Conflict view.** `api.NoteConflictView(saved, unsaved, compareMarkdown)` lists "Restore unsaved changes" (runs `NoteConflictRestoreRef`), "Keep saved version" (runs `NoteConflictKeepRef`) and "Compare", which pushes a preview of the two texts. The extension decides what each resolution writes; the Markdown diff comes from `features/notes`.
+- **Storage.** The service reads and writes the same `notes.json` as the native notes store. The 1.x floating-notes storage key `notes` is not read here.
+- **Tests.** `internal/ext/services/notes_test.go` covers create, list, get, an in-place update, the conflict refusal, the capability and the delete confirmation. `internal/ext/api/services_notes_test.go` covers the conflict view. The palette's golden `extension-window/note-conflict` draws the view in a window.
+
+## 44. Extension window chrome (dogfood batch 4)
+
+Code: `internal/palette/window_chrome.go`, `internal/app/extension_window_host.go`.
+
+- **Header.** Every extension window draws its view's title over the view's subtitle at the top of its page. The launcher panel draws neither.
+- **Companion.** A window whose `titleBar` is `hidden` uses the companion layout: a 36 px strip above the header drags the window, under the traffic lights at 12, 12. A native title bar draws no strip.
+- **Footer and menu.** The footer shows the action menu's key (⌘K) when the row has actions. The menu draws over the footer, as before.
+- **Tests.** `internal/palette/extview/window_chrome_test.go` draws a companion window and a launcher page on the fake window; the golden `extension-window/companion-ticker` is the floating ticker fixture, light and dark.
+
+## 45. Dogfood batch 5: the AI Chats built-in's API gaps
+
+Code: `internal/ext/api/view_specs.go` (`NewChatView`), `internal/ext/api/item.go` (`TiePriority`), `internal/ext/api/services_ai.go` (`ChatSummary.ExtensionID`, `AIBuilder.ExtensionPreview`), `internal/ext/api/contract.go` (`RowActionProvider`, `ExtensionRow`), `internal/ext/manager/row_actions.go` (the fan-out to built-ins).
+
+- **New Chat.** `api.NewChatView(title, tier, submit)` is a draft transcript with no chat record and no tier picker. Its submit runs with the typed text in `Form["message"]`; the built-in starts the chat with `AIChats.New`, and the host opens it. Pictures are not offered on a draft.
+- **Side preview.** A builder chat's transcript carries `ChatSpec.Side`, the extension's own preview from `AIBuilder.ExtensionPreview(id)`: its root rows and commands, with `Presentation: side-preview`. It is false for an extension that is not installed. `ChatSummary.ExtensionID` names the extension a builder chat is bound to.
+- **Root order.** `Item.TiePriority` orders rows of equal score and last use, higher first (1.x gives builder chats -1). A built-in sets `LastUsedMs` to its chat's last change, or its creation, as 1.x does. The host applies `TiePriority` to built-in rows only.
+- **Row actions.** A built-in that implements `RowActionProvider` adds actions to the menu of every installed extension's row, after the actions the host lists for it. The built-in AI Chats adds Tweak with AI this way. The host asks built-ins only, through the `row-actions` protocol method; a folder extension cannot add row actions.
+- **Host views.** The host opens every chat and builder page by running the built-in's own action (`OpenChatRef`, `HistoryRef`), asynchronously, so a view never waits on the UI thread. Tab, Create, Duplicate and Edit with AI open `LoadingChatView`, which refreshes on a tick until the built-in's transcript is ready. A system row carries its `ChatMessage.Title`, such as a refusal's "Credits needed".
+- **Tests.** L1: `internal/ext/builtins/aichats/aichats_test.go` (row actions, tie priority and last use of builder and conversation rows). Rig L4: J13 and J28 pass on the dogaichat box slot with the built-in views (`TestJourney(J13|J28)`).

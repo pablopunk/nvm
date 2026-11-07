@@ -147,7 +147,7 @@ func byoRow(s auth.Snapshot, a Actions) search.Item {
 	}
 	return search.Item{
 		Title:    "Clear BYO provider key",
-		Subtitle: "Using own key for " + s.BYO.Provider + " (" + s.BYO.ModelID + ")",
+		Subtitle: "Using own key for " + s.BYO.Provider,
 		Icon:     "key",
 		Actions:  actionIf(a.ClearBYOKey),
 	}

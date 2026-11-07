@@ -20,12 +20,28 @@ const settingsPaneSubtitle = "System Settings"
 // settingsPaneIcon is the tile of every pane row.
 const settingsPaneIcon = "settings"
 
+// paneAliases are the other names a pane answers to from the root, as the Electron app lists them: "iCloud" finds
+// Apple Account and "Wireless" finds Wi-Fi.
+var paneAliases = map[string][]string{
+	"com.apple.systempreferences.AppleIDSettings":    {"Apple ID", "iCloud"},
+	"com.apple.wifi-settings-extension":              {"WiFi", "Wireless"},
+	"com.apple.Siri-Settings.extension":              {"Siri"},
+	"com.apple.settings.PrivacySecurity.extension":   {"Privacy", "Security"},
+	"com.apple.Desktop-Settings.extension":           {"Desktop", "Dock"},
+	"com.apple.Touch-ID-Settings.extension":          {"Touch ID", "Password"},
+	"com.apple.Users-Groups-Settings.extension":      {"Users", "Groups"},
+	"com.apple.Internet-Accounts-Settings.extension": {"Accounts"},
+	"com.apple.CD-DVD-Settings.extension":            {"CD", "DVD"},
+	"com.apple.Print-Scan-Settings.extension":        {"Printers", "Scanners"},
+}
+
 // Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
 func (Extension) Manifest() api.Manifest {
 	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: "nevermind.system-settings", Title: "System Settings"}}
 }
 
-// SearchItems lists the panes whose titles match the query. Panes show only for a query, never at the empty root.
+// SearchItems lists the panes whose titles or aliases match the query. Panes show only for a query, never at the
+// empty root.
 func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	lq := strings.ToLower(query)
 	if lq == "" {
@@ -33,13 +49,22 @@ func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) 
 	}
 	var out []api.Item
 	for _, pane := range ctx.System().SettingsPanes() {
-		score := search.Score(pane.Title, lq)
+		score := paneSearchScore(pane, lq)
 		if score == 0 {
 			continue
 		}
 		out = append(out, paneItem(pane, score))
 	}
 	return out, nil
+}
+
+// paneSearchScore is the best score of the query against the pane's title and its aliases; 0 means no match.
+func paneSearchScore(pane api.SettingsPane, lq string) int {
+	best := search.Score(pane.Title, lq)
+	for _, alias := range paneAliases[pane.ID] {
+		best = max(best, search.Score(alias, lq))
+	}
+	return best
 }
 
 // paneItem is the row of one pane: its title, the System Settings subtitle, and an Open action that opens it.

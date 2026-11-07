@@ -42,7 +42,7 @@ scripts/boxgo.sh wp03 'RIG_DISPLAY=:95 RIG_ARTIFACTS=/root/wp/wp03-logs NVM_RIG_
 | --- | --- |
 | `Launch(t, Options)` | Starts `$NVM_RIG_BIN` detached (own session) on `$DISPLAY` with an isolated `HOME`, `XDG_RUNTIME_DIR` (which keys MyGo's single-instance socket) and automation socket. Waits for the `ready` log line and for the socket. `Options.Hotkey` writes an isolated `settings.json`. `Options.Backend` names the fake backend the app talks to (see below). |
 | `StartFakeBackend(t)`, `FakeBackend` | The recorded fake backend (`internal/fixtures`) served on a loopback listener for one test: `SetMode`, `SetReply`, `SetChunkDelay`, `SetActiveModel`, `Requests`, `WaitForDeviceCode`, `ApproveDeviceCode`. |
-| `signInThroughAccount(t, app, fake)` | Runs the device flow from the Account page, approves the code on the fake and waits for `Logged in as fixture@example.test`. |
+| `signInThroughAccount(t, app, fake)` | Runs the device flow from the Account page, approves the code on the fake and waits for `Signed in as fixture@example.test`. |
 | `Stop`, `KillHard` | SIGTERM then SIGKILL for the launched pid only; `KillHard` is SIGKILL for crash tests. |
 | `SummonPalette`, `DismissWithEscape`, `ClickAway` | Hotkey summon that waits for visible and focused; Escape and desktop click that wait for hidden. |
 | `PressHotkey`, `Type`, `Key`, `Click` | xdotool input on the app's display. `PressHotkey` converts `Alt+Shift+Space` to xdotool keys and rejects unknown names. |
@@ -80,7 +80,7 @@ scripts/boxgo.sh rigbe 'mkdir -p /root/wp/rigbe-home; export HOME=/root/wp/rigbe
 
 The `HOME` override is for the test process; each launch still gets its own isolated `HOME`. `MISE_DATA_DIR` and `MISE_CACHE_DIR` keep the box's installed Go toolchain in use when `HOME` changes, and `GOMODCACHE` and `GOCACHE` keep the module and build caches in place. The box disk fills up often because all agents share it: a run that fails with `No space left on device` needs the caches cleared, not a code change.
 
-- **J12** signs in from the Account page: the pending code appears, the fake approves it, the page shows `Logged in as fixture@example.test`, and the app log does not hold the token. Not covered: sign-out, the repeat offline, and the denied and expired states.
+- **J12** signs in from the Account page: the pending code appears, the fake approves it, the page shows `Signed in as fixture@example.test`, and the app log does not hold the token. Not covered: sign-out, the repeat offline, and the denied and expired states.
 - **J13** asks with Tab, sees the reply stream, presses Escape while frames are still due, and checks three things: the fake backend counts the chat stream as abandoned, not completed (the stop is proven on the backend side), the palette stays open, and the question stays in the transcript. The last word never appears. Not covered: continuing the conversation after a restart and the first-token progress.
 - **J31** enables `acme.views` through its review: the Extensions list shows Running without being reopened, and typing a command's title at the root finds it.
 - **J32** scripts a `read_clipboard` call (it asks for approval; `list_folder` does not): Enter allows it and the clipboard text reaches the model, Ctrl+D refuses the next one and the refusal reaches the model.

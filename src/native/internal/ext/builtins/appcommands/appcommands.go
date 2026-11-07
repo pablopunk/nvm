@@ -18,9 +18,12 @@ const ID = "nevermind.app-commands"
 // QuitOp is the system operation that quits the app; the host runs it.
 const QuitOp = "quit"
 
+// QuitTitle is the title of the native command that quits the app, as 1.x titles it.
+const QuitTitle = "Quit Nevermind"
+
 // quitTitle and quitKeywords are the native command's, unchanged, so the root finds it as it always did.
 const (
-	quitTitle    = "Quit Nevermind"
+	quitTitle    = QuitTitle
 	quitKeywords = "quit exit nevermind"
 )
 
@@ -30,6 +33,14 @@ type Extension struct{}
 // Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
 func (Extension) Manifest() api.Manifest {
 	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "App Commands"}}
+}
+
+// rootQuitScore is the 1.x score of Quit Nevermind at the empty root.
+const rootQuitScore = 15
+
+// RootItems lists Quit Nevermind at the empty root, in red as 1.x shows it.
+func (Extension) RootItems(_ api.Context) ([]api.Item, error) {
+	return []api.Item{quitItem(rootQuitScore)}, nil
 }
 
 // SearchItems lists Quit Nevermind when the query matches it. The empty root shows nothing.
@@ -42,9 +53,15 @@ func (Extension) SearchItems(_ api.Context, query string) ([]api.Item, error) {
 	if score == 0 {
 		return nil, nil
 	}
-	return []api.Item{{
+	return []api.Item{quitItem(score)}, nil
+}
+
+// quitItem is the row of Quit Nevermind at score.
+func quitItem(score int) api.Item {
+	return api.Item{
 		ID: QuitOp, Title: quitTitle, Icon: "x", Score: float64(score),
 		Section: search.KindCommands, LearnKey: "cmd:" + quitTitle,
-		Primary: &api.Action{Kind: api.ActionSystem, Op: QuitOp, Title: "Open"},
-	}}, nil
+		Appearance: &api.Appearance{Foreground: api.ColorRed},
+		Primary:    &api.Action{Kind: api.ActionSystem, Op: QuitOp, Title: "Open"},
+	}
 }

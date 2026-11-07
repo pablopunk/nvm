@@ -11,18 +11,23 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 )
 
-var clipboardEntry = shortcuts.Entry{ActionID: shortcutCommandID("Clipboard History"), Title: "Clipboard History"}
+var clipboardEntry = shortcuts.Entry{ActionID: shortcuts.CommandClipboardHistory, Title: "Clipboard History"}
 
-// goldenShortcutsList is the Keyboard Shortcuts list over the root: Clipboard History has a shortcut, and Quick Notes
+// goldenShortcutsList is the Keyboard Shortcuts list over the root: Clipboard History has a shortcut, and Floating Notes
 // asked for one the OS refused.
 func goldenShortcutsList(t *testing.T) *App {
 	t.Helper()
 	p := goldenPalette(t)
 	manager := p.shortcutsManager()
-	mustSetShortcut(t, manager, shortcutCommandID("Clipboard History"), "Command+Alt+V")
+	if _, err := manager.SetPalette("Alt+Shift+Space"); err != nil {
+		t.Fatal(err)
+	}
+	mustSetShortcut(t, manager, shortcuts.CommandClipboardHistory, "Command+Alt+V")
 	p.ports.Hotkeys.(*fake.Hotkeys).FailNext(fake.OpHotkeysRegister, platform.ErrConflict)
-	mustSetShortcut(t, manager, shortcutCommandID("Quick Notes"), "Command+Alt+N")
-	goldenOpen(p, p.keyboardShortcutsView())
+	mustSetShortcut(t, manager, shortcuts.CommandQuickNotes, "Command+Alt+N")
+	// The root lists the extension commands before the shortcuts view opens, which is where their titles come from.
+	rootResultsForTable(p, "")
+	goldenOpen(p, p.keyboardShortcutsPage())
 	return p
 }
 
@@ -44,24 +49,25 @@ func entryOf(t *testing.T, p *App, actionID string) shortcuts.Entry {
 	return shortcuts.Entry{}
 }
 
-// TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal searches the list and reads the rows it draws.
-func TestKeyboardShortcutsListShowsEachShortcutAndItsRefusal(t *testing.T) {
+// TestKeyboardShortcutsListShowsTheBoundShortcutsAsTheOneXListDoes searches the built-in's list and reads the rows it draws.
+// 1.x lists the bound shortcuts only, each with its label, so the palette hotkey and an OS refusal show no subtitle.
+func TestKeyboardShortcutsListShowsTheBoundShortcutsAsTheOneXListDoes(t *testing.T) {
 	p := goldenShortcutsList(t)
-	rows := p.shortcutRows("")
+	rows := p.keyboardShortcutsPage().Search("")
 	byTitle := map[string]string{}
 	for _, row := range rows {
 		byTitle[row.Title] = row.Accessory + "|" + row.Subtitle
 	}
-	if got := byTitle["Palette Hotkey"]; got != shortcutLabelOf("Alt+Shift+Space")+"|" {
-		t.Fatalf("palette row = %q", got)
+	if _, listed := byTitle[shortcuts.PaletteTitle]; listed {
+		t.Fatal("the palette hotkey is a row of the list; 1.x changes it in Settings only")
 	}
-	if got := byTitle["Clipboard History"]; got != shortcutLabelOf("Command+Alt+V")+"|" {
+	if got := byTitle["Clipboard History"]; got != p.shortcutLabelOf("Command+Alt+V")+"|" {
 		t.Fatalf("clipboard row = %q", got)
 	}
-	if got := byTitle["Quick Notes"]; got != shortcutLabelOf("Command+Alt+N")+"|Not active: Command+Alt+N is in use by another app" {
+	if got := byTitle["Floating Notes"]; got != p.shortcutLabelOf("Command+Alt+N")+"|" {
 		t.Fatalf("notes row = %q", got)
 	}
-	if got := len(p.shortcutRows("clip")); got != 1 {
+	if got := len(p.keyboardShortcutsPage().Search("clip")); got != 1 {
 		t.Fatalf("search for clip found %d rows, want 1", got)
 	}
 }

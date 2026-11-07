@@ -3,6 +3,7 @@ package windowmgmt
 import (
 	"context"
 
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt/geometry"
 )
@@ -17,6 +18,8 @@ type Deps struct {
 	SelfPID int
 	// NewHandleID makes window handles; nil uses random hex.
 	NewHandleID func() string
+	// Log receives failed commands with their cause. Nil uses the process logger.
+	Log *logx.Logger
 }
 
 // Service runs window commands. Each command returns a Result when the window reached its frame (exact
@@ -29,6 +32,7 @@ type Service struct {
 	queue   *pidQueue
 	history *historyStore
 	handles *handleRegistry
+	log     *logx.Logger
 }
 
 // Result is a command that changed a window. Outcome is geometry.Applied when the window reached the
@@ -49,6 +53,7 @@ func NewService(deps Deps) *Service {
 		queue:   newPIDQueue(),
 		history: newHistoryStore(),
 		handles: newHandleRegistry(deps.Clock, deps.NewHandleID),
+		log:     deps.Log,
 	}
 }
 
@@ -59,6 +64,12 @@ func (s *Service) Available() bool {
 
 // Apply runs a layout on the focused window of the invocation's target app.
 func (s *Service) Apply(ctx context.Context, layout geometry.Layout, options geometry.Options, invocation Invocation) (Result, error) {
+	result, err := s.applyInvocation(ctx, layout, options, invocation)
+	s.reportFailure("apply", err)
+	return result, err
+}
+
+func (s *Service) applyInvocation(ctx context.Context, layout geometry.Layout, options geometry.Options, invocation Invocation) (Result, error) {
 	if failed := validateRequest(layout, options); failed != nil {
 		return Result{}, failed
 	}

@@ -48,7 +48,6 @@ type Entry struct {
 	// UsedAt is the last time the entry was copied or pasted from history. It informs ranking later and does
 	// not change the list order.
 	UsedAt    time.Time `json:"usedAt"`
-	Pinned    bool      `json:"pinned,omitempty"`
 	SourceApp string    `json:"sourceApp,omitempty"`
 	// LinkPreview is set once a page's metadata is known. Candidacy is decided from Text by SingleWebURL.
 	LinkPreview *LinkPreview `json:"linkPreview,omitempty"`

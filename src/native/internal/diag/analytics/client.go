@@ -39,10 +39,12 @@ type Config struct {
 	FS        platform.FS
 	Clock     platform.Clock
 	// Dir holds the install identifier file.
-	Dir     string
-	Version string
-	OS      string
-	Arch    string
+	Dir       string
+	Version   string
+	Release   string
+	OS        string
+	OSRelease string
+	Arch      string
 	// Consent is the starting state of "Send Technical Diagnostics". SetConsent changes it later.
 	Consent bool
 	Log     *logx.Logger
@@ -72,44 +74,94 @@ type Client struct {
 	cfg     Config
 	common  map[string]any
 	consent atomic.Bool
-	kick    chan struct{}
+	// sessionMu serializes consent/session transitions and precedes mu when both are needed.
+	sessionMu    sync.Mutex
+	session      sessionState
+	commandUsage commandUsageState
+	kick         chan struct{}
 
 	mu      sync.Mutex
 	queue   []queued
 	dropped int
 
 	// sendMu serializes flushes, and guards the identifier and the attempt count, which only flushes touch.
-	sendMu    sync.Mutex
-	installID string
-	attempts  int
+	sendMu         sync.Mutex
+	installID      string
+	ownerMu        sync.Mutex
+	observedOwners map[string]struct{}
+	attempts       int
 }
 
 // New returns a client with its consent set to cfg.Consent. It sends nothing until Start or Flush runs.
 func New(cfg Config) *Client {
-	c := &Client{cfg: cfg, common: commonProperties(cfg), kick: make(chan struct{}, 1)}
+	c := &Client{cfg: cfg, common: commonProperties(cfg), kick: make(chan struct{}, 1), observedOwners: make(map[string]struct{})}
 	c.consent.Store(cfg.Consent)
 	return c
 }
 
-// Channel names the release channel of a version: "stable" for 0.x releases; "prerelease" for CalVer dev and nightly
-// builds, and for any version it cannot read, so an unknown build never counts as a stable user.
+// Channel names semantic releases stable, except explicit Go/Next prereleases. CalVer 2000+ and malformed versions
+// are prerelease so unknown builds never count as stable users.
 func Channel(version string) string {
-	major, _, _ := strings.Cut(version, ".")
-	if n, err := strconv.Atoi(major); err == nil && n < 2000 {
-		return "stable"
+	if strings.Contains(version, "-") {
+		return "prerelease"
 	}
-	return "prerelease"
+	core, _, _ := strings.Cut(version, "+")
+	parts := strings.Split(core, ".")
+	if len(parts) != 3 {
+		return "prerelease"
+	}
+	for _, part := range parts {
+		if part == "" {
+			return "prerelease"
+		}
+		if _, err := strconv.Atoi(part); err != nil {
+			return "prerelease"
+		}
+	}
+	n, _ := strconv.Atoi(parts[0])
+	if n >= 2000 {
+		return "prerelease"
+	}
+	return "stable"
 }
 
 // commonProperties are the fields every event carries. Callers cannot set them.
 func commonProperties(cfg Config) map[string]any {
-	return map[string]any{
+	osType, arch := platformValues(cfg.OS, cfg.Arch)
+	properties := map[string]any{
 		"$process_person_profile": false,
 		"app_version":             cfg.Version,
-		"os_type":                 cfg.OS,
-		"arch":                    cfg.Arch,
+		"os_type":                 osType,
+		"arch":                    arch,
 		"channel":                 Channel(cfg.Version),
 	}
+	if cfg.OSRelease != "" {
+		properties["os_release"] = cfg.OSRelease
+	}
+	return properties
+}
+
+// platformValues maps Go runtime identifiers to the platform and architecture tokens used by the 1.x collector.
+// Unknown OS values are preserved so analytics never invents a platform identity; unlisted architectures already
+// use the collector's spelling and are preserved as well.
+func platformValues(goOS, goArch string) (string, string) {
+	osType := goOS
+	switch goOS {
+	case "darwin":
+		osType = "Darwin"
+	case "linux":
+		osType = "Linux"
+	case "windows":
+		osType = "Windows_NT"
+	}
+	arch := goArch
+	switch goArch {
+	case "amd64":
+		arch = "x64"
+	case "386":
+		arch = "ia32"
+	}
+	return osType, arch
 }
 
 // SetConsent turns sending on or off. Turning it off drops what is queued at once, so a batch that was waiting
@@ -118,8 +170,11 @@ func (c *Client) SetConsent(on bool) {
 	if c == nil {
 		return
 	}
+	c.sessionMu.Lock()
+	defer c.sessionMu.Unlock()
 	c.consent.Store(on)
 	if !on {
+		c.endSessionLocked()
 		c.discard()
 	}
 }
@@ -143,7 +198,14 @@ func (c *Client) Reporting() Reporting {
 
 // AppLaunched records that the app started.
 func (c *Client) AppLaunched() bool {
-	return c.capture(EventAppLaunched, nil)
+	return c.capture(EventAppLaunched, c.releaseProperties())
+}
+
+func (c *Client) releaseProperties() map[string]any {
+	if c == nil || c.cfg.Release == "" {
+		return nil
+	}
+	return map[string]any{"release": c.cfg.Release}
 }
 
 // FeatureUsed records that the person used a feature. variant is a closed-set id, or empty when there is none.
@@ -162,13 +224,17 @@ func (c *Client) Exception(r diag.Record) bool {
 	if attributes == nil {
 		attributes = map[string]string{}
 	}
-	return c.capture(EventException, map[string]any{
+	props := map[string]any{
 		"support_ref": r.Ref,
 		"component":   r.Component,
 		"message":     clip(r.Message, maxMessage),
 		"frames":      clipFrames(r.Frames),
 		"attributes":  attributes,
-	})
+	}
+	for key, value := range c.releaseProperties() {
+		props[key] = value
+	}
+	return c.capture(EventException, props)
 }
 
 // SupportReport sends a problem report that carries only its support reference.
@@ -176,6 +242,7 @@ func (c *Client) SupportReport(ref string) bool {
 	return c.capture(EventSupportReport, map[string]any{"support_ref": ref})
 }
 
+// ObserveInstallOwner records the signed-in account as a one-way hash once per owner per run.
 // capture queues one event. It returns false when the event was not kept: sending is off, the event is unknown, or the
 // queue is full. It never waits on the network.
 func (c *Client) capture(event string, props map[string]any) bool {

@@ -6,8 +6,10 @@ import (
 	"runtime"
 	"strings"
 
+	appsbuiltin "github.com/pablopunk/nvm/native/internal/ext/builtins/apps"
 	"github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
@@ -47,13 +49,16 @@ func (p *App) startAppServices() {
 	})
 }
 
-// onAppsChanged asks the UI thread to rebuild the rows that show apps. Safe from any goroutine; a no-op before the
-// window exists.
+// onAppsChanged asks the UI thread to rebuild the rows that show apps: the applications built-in runs again, and the
+// visible rows are searched again. Safe from any goroutine; a no-op before the window exists.
 func (p *App) onAppsChanged() {
 	if p.panel == nil {
 		return
 	}
-	p.panel.Update(func() { p.ReloadRows() })
+	p.panel.Update(func() {
+		p.rootRows.markPending(appsbuiltin.ID)
+		p.ReloadRows()
+	})
 }
 
 // showApps runs when the palette is shown: the index refreshes (debounced), the running state refreshes, and the
@@ -100,4 +105,9 @@ func nevermindAppBundle() string {
 		return exe
 	}
 	return ""
+}
+
+// shellApp is the platform's description of an app, for the Shell port.
+func shellApp(a apps.App) platform.App {
+	return platform.App{Name: a.Name, ID: a.ID, Path: a.Path}
 }

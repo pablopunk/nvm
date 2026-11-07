@@ -27,16 +27,18 @@ func systemRow(t *testing.T, p *App, title string) search.Item {
 	return findRowTitled(t, commandRows(p, &rootInput{}, strings.ToLower(title)), title)
 }
 
-// TestRestartAsksBeforeItRestarts pushes a confirmation for a destructive command and runs nothing until the user
-// confirms.
-func TestRestartAsksBeforeItRestarts(t *testing.T) {
+// TestRestartComputerRunsAtOnceAsIn1x: Restart Computer has no confirmation, as 1.x: Enter restarts the computer.
+func TestRestartComputerRunsAtOnceAsIn1x(t *testing.T) {
 	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
-	if title := p.Top().Title; title != "Confirm" {
-		t.Fatalf("top view = %q, want the confirmation", title)
+	p.Attach(&testWindow{})
+	system := fakeSystem(t, p)
+	row := systemRow(t, p, "Restart Computer")
+	if row.Subtitle != "Restart this computer" {
+		t.Fatalf("subtitle = %q", row.Subtitle)
 	}
-	if calls := fakeSystem(t, p).Calls(); len(calls) != 0 {
-		t.Fatalf("Restart ran before confirmation: %+v", calls)
+	row.Actions[0].Run(p)
+	if call := awaitValue(t, system.Events(), "the restart call"); call.Op != fake.OpSystemRestart {
+		t.Fatalf("call = %+v, want Restart", call)
 	}
 }
 
@@ -68,16 +70,15 @@ func TestPermissionPromptsOnlyWhereTheOSCanAsk(t *testing.T) {
 	states := permissionFake(t, p)
 	states.SetState(platform.PermissionMicrophone, platform.PermissionNotDetermined)
 	states.SetState(platform.PermissionCamera, platform.PermissionAllowed)
-	for _, row := range p.systemSvc.PermissionRows() {
-		item := p.permissionItem(row)
-		switch row.Kind {
-		case platform.PermissionMicrophone:
-			if len(item.Actions) != 2 || !strings.HasPrefix(item.Actions[0].Title, "Allow ") {
-				t.Fatalf("microphone actions = %+v, want an Allow prompt then Open Settings", item.Actions)
+	for _, status := range (permissionSurface{p: p}).Statuses() {
+		switch status.Kind {
+		case string(platform.PermissionMicrophone):
+			if !status.Prompt {
+				t.Fatalf("microphone status = %+v, want Enter to ask the OS", status)
 			}
-		case platform.PermissionCamera:
-			if len(item.Actions) != 1 || !strings.HasPrefix(item.Actions[0].Title, "Open ") {
-				t.Fatalf("camera actions = %+v, want only Open Settings", item.Actions)
+		case string(platform.PermissionCamera):
+			if status.Prompt {
+				t.Fatalf("camera status = %+v, want Enter to open Settings", status)
 			}
 		}
 	}
@@ -109,18 +110,12 @@ func TestPaletteOSPermissions(t *testing.T) {
 	states := permissionFake(t, p)
 	states.SetState(platform.PermissionMicrophone, platform.PermissionNotDetermined)
 	states.SetState(platform.PermissionCamera, platform.PermissionAllowed)
-	goldenOpen(p, p.permissionsView())
+	goldenOpen(p, p.permissionsPage())
 	golden.AssertMatrix(t, "os-permissions", p.View, systemGoldens)
-}
-
-func TestPaletteRestartConfirmation(t *testing.T) {
-	p := goldenPalette(t)
-	systemRow(t, p, "Restart").Actions[0].Run(p)
-	golden.AssertMatrix(t, "system-confirm", p.View, systemGoldens)
 }
 
 func TestPaletteGettingStartedGuide(t *testing.T) {
 	p := goldenPalette(t)
-	goldenOpen(p, p.guideView())
+	openGuide(t, p)
 	golden.AssertMatrix(t, "getting-started", p.View, systemGoldens)
 }

@@ -19,6 +19,7 @@ type hostContext struct {
 	link     *hostLink
 	cache    *processCache
 	flights  *flightGroup
+	bundles  *bundleCache
 }
 
 var _ api.Context = hostContext{}
@@ -31,6 +32,7 @@ func newHostContext(identity api.Identity, clock platform.Clock, link *hostLink)
 		link:     link,
 		cache:    newProcessCache(clock),
 		flights:  newFlightGroup(),
+		bundles:  newBundleCache(),
 	}
 }
 
@@ -78,12 +80,16 @@ func (c hostContext) Drafts() api.Drafts {
 	return remoteDrafts{link: c.link}
 }
 
+func (c hostContext) Notes() api.Notes {
+	return remoteNotes{link: c.link}
+}
+
 func (c hostContext) Input() api.Input {
 	return api.NewInput()
 }
 
 func (c hostContext) Data() api.Data {
-	return dataSources{}
+	return dataSources{link: c.link, bundles: c.bundles}
 }
 
 func (c hostContext) Network() api.Network {
@@ -95,7 +101,7 @@ func (c hostContext) Clipboard() api.ClipboardHistory {
 }
 
 func (c hostContext) Desktop() api.Desktop {
-	return remoteDesktop{link: c.link}
+	return remoteDesktop{link: c.link, clock: c.clock}
 }
 
 func (c hostContext) OCR() api.OCR {
@@ -108,6 +114,55 @@ func (c hostContext) System() api.System {
 
 func (c hostContext) Shortcuts() api.Shortcuts {
 	return remoteShortcuts{link: c.link}
+}
+
+func (c hostContext) Account() api.Account {
+	return remoteAccount{link: c.link}
+}
+
+func (c hostContext) Indicators() api.Indicators {
+	return remoteIndicators{link: c.link}
+}
+
+// Scheduler schedules one-shot runs of this extension in the host.
+func (c hostContext) Scheduler() api.Scheduler {
+	return remoteScheduler{link: c.link}
+}
+
+func (c hostContext) AI() api.AI {
+	return remoteAI{link: c.link}
+}
+
+func (c hostContext) AIBuilder() api.AIBuilder {
+	return remoteBuilder{link: c.link}
+}
+
+func (c hostContext) Ownership() api.Ownership {
+	return remoteOwnership{link: c.link}
+}
+
+func (c hostContext) Dictation() api.Dictation {
+	return remoteDictation{link: c.link}
+}
+
+func (c hostContext) Updates() api.Updates {
+	return remoteUpdates{link: c.link}
+}
+
+func (c hostContext) Diagnostics() api.Diagnostics {
+	return remoteDiagnostics{link: c.link}
+}
+
+func (c hostContext) Jobs() api.Jobs {
+	return remoteJobs{link: c.link}
+}
+
+func (c hostContext) Windows() api.Windows {
+	return childWindows{}
+}
+
+func (c hostContext) Navigation() api.Navigation {
+	return childNavigation{}
 }
 
 func (c hostContext) Views() api.Views {

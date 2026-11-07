@@ -1,8 +1,9 @@
 name: Native packages
 
-# Builds the Go app (src/native) into installable packages on each OS. Signing and notarization run only when the
-# existing Apple and Windows secrets exist; without them the packages are unsigned and the run says so. A pull request
-# never notarizes; a workflow_dispatch run with secrets does. Release flags (releaseBuild) need release=true.
+# Builds the Go app (src/native) into installable packages on each OS. Signing runs when the existing Apple or Windows
+# certificate secrets exist, and macOS notarization runs whenever the Apple notary secrets exist too, pull requests
+# included. Without them the packages are unsigned and the run says so. Release flags (releaseBuild) need
+# workflow_dispatch with release=true.
 
 on:
   pull_request:
@@ -32,7 +33,8 @@ jobs:
   macos:
     name: macOS ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 60
+    # The build plus notarytool --wait, which MyGo runs without a timeout of its own.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -63,7 +65,7 @@ jobs:
           sign=false
           notarize=false
           if [ "$HAS_CERTIFICATE" = true ]; then sign=true; fi
-          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then notarize=true; fi
+          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ]; then notarize=true; fi
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
           echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
 
@@ -122,12 +124,25 @@ jobs:
           echo "NOTARY_PROFILE=nvm-notary" >> "$GITHUB_ENV"
           echo "NOTARY_KEYCHAIN=$SIGNING_KEYCHAIN" >> "$GITHUB_ENV"
 
+      # Keep stapler on HTTPS/TCP on the affected ephemeral Intel runners.
+      # https://github.com/actions/runner-images/issues/14924#issuecomment-6188826956
+      - name: Route Intel stapler traffic over HTTPS
+        if: matrix.arch == 'amd64' && steps.decide.outputs.notarize == 'true'
+        run: |
+          echo "block return out quick proto udp from any to any port 443" | sudo pfctl -f -
+          sudo pfctl -E
+
       - name: Stamp the package settings
         working-directory: src/native
         run: |
           set -euo pipefail
-          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           bash scripts/packaging/stamp-mygo-config.sh
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
+          retry_bin="$RUNNER_TEMP/stapler-retry-bin"
+          mkdir -p "$retry_bin"
+          cp scripts/packaging/xcrun-with-stapler-retry.sh "$retry_bin/xcrun"
+          chmod +x "$retry_bin/xcrun"
+          echo "$retry_bin" >> "$GITHUB_PATH"
 
       - name: Build and package
         working-directory: src/native
@@ -146,10 +161,33 @@ jobs:
           fi
           if [ "${{ steps.decide.outputs.notarize }}" = true ]; then
             xcrun stapler validate "dist/darwin-${{ matrix.arch }}/nevermind-next-"*.dmg
+            spctl --assess --verbose=4 --type open --context context:primary-signature "dist/darwin-${{ matrix.arch }}/nevermind-next-"*.dmg
           fi
           if [ "$RELEASE" = true ] && [ -n "$UPDATE_PUBLIC_KEY" ]; then
             bash scripts/packaging/verify-updates.sh "dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/MacOS/Nevermind Next" "$UPDATE_PUBLIC_KEY"
           fi
+
+      - name: Check the window helper is bundled for this architecture
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          helper="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/macos-selected-text"
+          want=arm64
+          if [ "${{ matrix.arch }}" = amd64 ]; then want=x86_64; fi
+          test -x "$helper" || { echo "The window helper is missing from the app bundle: $helper" >&2; exit 1; }
+          lipo -archs "$helper" | grep -qx "$want" || { echo "The window helper is not a $want binary." >&2; exit 1; }
+
+      - name: Check libopus is bundled for dictation
+        working-directory: src/native
+        run: |
+          set -euo pipefail
+          opus="dist/darwin-${{ matrix.arch }}/Nevermind Next.app/Contents/Resources/lib/libopus.dylib"
+          want=arm64
+          if [ "${{ matrix.arch }}" = amd64 ]; then want=x86_64; fi
+          test -f "$opus" || { echo "libopus is missing from the app bundle, so dictation cannot encode: $opus" >&2; exit 1; }
+          lipo -archs "$opus" | grep -qx "$want" || { echo "libopus is not a $want binary." >&2; exit 1; }
+          symbols="$(nm -gU "$opus")"
+          grep -q 'opus_encoder_create$' <<<"$symbols" || { echo "libopus lacks opus_encoder_create." >&2; exit 1; }
 
       - name: Note the update feed
         env:
@@ -168,7 +206,7 @@ jobs:
       - name: Note the signing state
         run: |
           if [ "${{ steps.decide.outputs.sign }}" = true ]; then
-            echo "macOS ${{ matrix.arch }}: signed${{ steps.decide.outputs.notarize == 'true' && ' and notarized' || ', not notarized (pull request or no notary secrets)' }}." >> "$GITHUB_STEP_SUMMARY"
+            echo "macOS ${{ matrix.arch }}: signed${{ steps.decide.outputs.notarize == 'true' && ' and notarized, DMG stapled' || ', not notarized (no notary secrets)' }}." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "macOS ${{ matrix.arch }}: UNSIGNED. Ad hoc signed; Gatekeeper blocks it on other Macs. Add the MACOS_CERT_* and APPLE_* secrets to sign it." >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -218,8 +256,8 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           bash scripts/packaging/stamp-mygo-config.sh
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
 
       - name: Build and package
         working-directory: src/native
@@ -307,8 +345,8 @@ jobs:
         working-directory: src/native
         run: |
           set -euo pipefail
-          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
           bash scripts/packaging/stamp-mygo-config.sh
+          echo "MYGO_LDFLAGS=$(bash scripts/packaging/release-ldflags.sh)" >> "$GITHUB_ENV"
 
       - name: Build and package
         working-directory: src/native

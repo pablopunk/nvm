@@ -33,6 +33,22 @@ type Manifest struct {
 	// Settings are the user-visible settings the extension declares. Values are stored per extension, and
 	// the declaration is the only way a setting exists: Settings.Set on an undeclared id is refused.
 	Settings []SettingDefinition `json:"settings,omitempty"`
+	// CommandTitles renames commands by their ID. A command shows the title here when one is set, and the title its code
+	// declares otherwise. The palette's Rename writes here, so renaming a command never edits the code. Only titles are
+	// renamed: a subtitle stays as the code declares it.
+	CommandTitles map[string]string `json:"commandTitles,omitempty"`
+	// ConvertedFrom names the 1.x source file this folder was converted from, such as toggle-system-theme-257c802c.ts.
+	// On its first scan the folder takes that file's enabled state from 1.x, so a converted extension that was on stays
+	// on. It is host metadata: extension code never reads it.
+	ConvertedFrom string `json:"convertedFrom,omitempty"`
+	// AIQuotaKey is the owner the extension's model calls count under, so they share a limit with the 1.x extension of
+	// that name. Only a built-in may set it: a folder extension cannot borrow another owner's window.
+	AIQuotaKey string `json:"aiQuotaKey,omitempty"`
+	// Publishes lists the declared settings whose display text the built-in publishes for other built-ins to show, such
+	// as the microphone a dictation uses. Reads lists the shared settings the built-in's settings rows show. Both are for
+	// built-ins only.
+	Publishes []string     `json:"publishes,omitempty"`
+	Reads     []SettingRef `json:"reads,omitempty"`
 }
 
 // Capability names an area of intended behaviour shown in the extension review screen.
@@ -40,8 +56,11 @@ type Capability string
 
 const (
 	CapabilityDesktopApps         Capability = "desktop.apps"
+	CapabilityDesktopMenus        Capability = "desktop.menus"
 	CapabilityDesktopFiles        Capability = "desktop.files"
 	CapabilityDesktopClipboard    Capability = "desktop.clipboard"
+	CapabilityDesktopSelection    Capability = "desktop.selection"
+	CapabilityDesktopKeyboard     Capability = "desktop.keyboard"
 	CapabilityWindowManagement    Capability = "desktop.window-management"
 	CapabilityClipboardHistory    Capability = "clipboard.history"
 	CapabilityAI                  Capability = "ai"
@@ -56,16 +75,19 @@ const (
 	CapabilityOCR                 Capability = "ocr"
 	CapabilityNetwork             Capability = "network"
 	CapabilitySecrets             Capability = "secrets"
+	CapabilityJobs                Capability = "jobs"
+	CapabilityNotes               Capability = "notes"
 )
 
 // KnownCapabilities lists every capability this host version can review.
 func KnownCapabilities() []Capability {
 	return []Capability{
-		CapabilityDesktopApps, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
+		CapabilityDesktopApps, CapabilityDesktopMenus, CapabilityDesktopFiles, CapabilityDesktopClipboard, CapabilityWindowManagement,
+		CapabilityDesktopSelection, CapabilityDesktopKeyboard,
 		CapabilityClipboardHistory, CapabilityAI, CapabilityExtensionsOwnership,
 		CapabilityShortcuts, CapabilitySystem, CapabilityPlaces, CapabilityUpdates,
 		CapabilitySettingsWrite, CapabilityDictation, CapabilityCamera, CapabilityOCR,
-		CapabilityNetwork, CapabilitySecrets,
+		CapabilityNetwork, CapabilitySecrets, CapabilityJobs, CapabilityNotes,
 	}
 }
 
@@ -91,11 +113,22 @@ func (m Manifest) Validate() error {
 	if strings.HasPrefix(m.ID, reservedIDPrefix) {
 		return fmt.Errorf("extension id %q uses the reserved %q prefix", m.ID, reservedIDPrefix)
 	}
+	if m.AIQuotaKey != "" {
+		return fmt.Errorf("extension %q cannot set an AI quota key", m.ID)
+	}
+	if len(m.Publishes) > 0 || len(m.Reads) > 0 {
+		return fmt.Errorf("extension %q cannot publish or read shared settings", m.ID)
+	}
 	return m.validateShape()
 }
 
 // ValidateBuiltIn checks a manifest compiled into Nevermind. It is Validate without the reserved prefix rule,
 // which exists to keep folder extensions out of the built-in namespace.
+// IsBuiltIn reports whether the id is in the namespace reserved for built-in extensions.
+func (m Manifest) IsBuiltIn() bool {
+	return IsBuiltInID(m.ID)
+}
+
 func (m Manifest) ValidateBuiltIn() error {
 	if !strings.HasPrefix(m.ID, reservedIDPrefix) {
 		return fmt.Errorf("built-in extension id %q must use the %q prefix", m.ID, reservedIDPrefix)
@@ -113,5 +146,35 @@ func (m Manifest) validateShape() error {
 	if err := validateSettingDefinitions(m.Settings); err != nil {
 		return err
 	}
+	if err := m.validateSharedDisplays(); err != nil {
+		return err
+	}
+	for id, title := range m.CommandTitles {
+		if strings.TrimSpace(id) == "" {
+			return errors.New("commandTitles has an empty command id")
+		}
+		if strings.TrimSpace(title) == "" {
+			return fmt.Errorf("commandTitles.%s must not be empty", id)
+		}
+	}
+	if err := validateConvertedFrom(m.ConvertedFrom); err != nil {
+		return err
+	}
 	return CheckCompatibility(m.APIVersion, Current)
+}
+
+// validateConvertedFrom accepts "" or the plain name of a 1.x extension source file: it ends in .ts and names no folder.
+func validateConvertedFrom(name string) error {
+	if name == "" {
+		return nil
+	}
+	if !strings.HasSuffix(name, ".ts") || strings.ContainsAny(name, `/\`) || strings.HasPrefix(name, ".") {
+		return fmt.Errorf("convertedFrom %q must be the file name of a 1.x extension, such as toggle-system-theme.ts", name)
+	}
+	return nil
+}
+
+// IsBuiltInID reports whether an extension id is in the namespace reserved for built-in extensions.
+func IsBuiltInID(id string) bool {
+	return strings.HasPrefix(id, reservedIDPrefix)
 }

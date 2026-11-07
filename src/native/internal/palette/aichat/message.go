@@ -1,40 +1,50 @@
 package aichat
 
 import (
+	"strings"
+
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/design"
 )
 
-// renderMessage draws one transcript entry: the user's line as a bubble, a notice as a card, and a reply as
-// Markdown. last says whether the entry is the newest, which is the one a reply may still be arriving in.
-func renderMessage(c *ui.Context, deps Deps, m chat.Message, last bool) {
+// renderMessage draws one transcript entry: the user's line as a bubble, a notice as a card, and a reply as Markdown.
+// index is the entry's place in the transcript and last says whether it is the newest, which is the one a reply may
+// still be arriving in.
+func renderMessage(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 	switch m.Author {
 	case chat.AuthorUser:
-		design.UserBubble(c, m.Text)
+		if len(m.Images) > 0 {
+			messagePictures(c, m.Images)
+		}
+		if m.Text != "" {
+			design.UserBubble(c, m.Text)
+		}
 	case chat.AuthorNotice:
 		noticeCard(c, *m.Notice)
 	case chat.AuthorTool:
-		if m.Tool != nil {
-			toolRow(c, m)
-		}
+		return
 	default:
-		reply(c, deps, m, last)
+		reply(c, p, index, m, last)
 	}
 }
 
-// reply draws an assistant entry. A reply that has not arrived yet shows a spinner; a reply that stopped says so.
-func reply(c *ui.Context, deps Deps, m chat.Message, last bool) {
+// reply draws an assistant entry: its reasoning as a block that opens on request, then its text. A reply with no text
+// yet shows the progress of the turn, and a reply that stopped says so.
+func reply(c *ui.Context, p *page, index int, m chat.Message, last bool) {
 	k := design.Tokens(c)
 	streaming := m.Status == chat.StatusStreaming
-	if m.Text == "" {
-		if streaming {
-			ui.Spinner(c)
+	if m.Reasoning != "" {
+		reasoningBlock(c, p, index, m.Reasoning)
+	}
+	if strings.TrimSpace(m.Text) == "" {
+		if m.Status == chat.StatusStopped {
+			ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 		}
 		return
 	}
-	deps.Reply(c, m.Text, streaming && last)
+	p.deps.Reply(c, m.Text, streaming && last)
 	if m.Status == chat.StatusStopped {
 		ui.Text(c, "Stopped").FontSize(11).TextColor(k.Tertiary)
 	}
