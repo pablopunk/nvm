@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 )
 
 // PutVerified only retains thumbnails actually returned by the host files service in this run.
@@ -329,6 +330,12 @@ func verifiedSnapshotPaths(items []api.Item, evidence *api.SnapshotEvidence) map
 	return paths
 }
 
+// snapshotImageSource reports whether a cached snapshot may keep an image: an embedded PNG, or the host's own thumbnail
+// reference, which is inert until the palette draws it and draws nothing once the file can no longer be read.
+func snapshotImageSource(src string) bool {
+	return strings.HasPrefix(src, "data:image/png;base64,") || thumbs.ReferenceEdge(src) == thumbs.GridEdge
+}
+
 // Put stores only inert presentation, never actions, paths, or external image references.
 func (c *CommandSnapshots) Put(identity any, ref api.ActionRef, view api.View, items []api.Item) {
 	key, ok := snapshotKey(identity, ref)
@@ -347,7 +354,7 @@ func (c *CommandSnapshots) Put(identity any, ref api.ActionRef, view api.View, i
 	clean := api.View{ID: view.ID, Kind: view.Kind, Title: view.Title, Subtitle: view.Subtitle, Size: view.Size, Presentation: view.Presentation, ContentSizing: view.ContentSizing, WindowCompact: view.WindowCompact, Placeholder: view.Placeholder, Status: view.Status, Grid: view.Grid, Refresh: view.Refresh, MaxVisibleItems: view.MaxVisibleItems, SelectedItemID: view.SelectedItemID, Hint: view.Hint}
 	for _, item := range items {
 		row := api.Item{ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Icon: item.Icon, Glyph: item.Glyph, Accessories: item.Accessories}
-		if item.Image != nil && strings.HasPrefix(item.Image.Src, "data:image/png;base64,") {
+		if item.Image != nil && snapshotImageSource(item.Image.Src) {
 			image := *item.Image
 			image.Light, image.Dark, image.Fallback = "", "", ""
 			row.Image = &image
