@@ -124,13 +124,15 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(err) })
 			}()
 		},
-		ReadSetting:   func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
+		ReadSettingBound: func(extID, key string, identity any) (json.RawMessage, error) {
+			return m.SettingValueForIdentity(extID, key, identity)
+		},
 		RowAccessory:  p.settingRowAccessory,
 		ReadDisplay:   m.SharedDisplay,
 		HostOperation: p.settingsHostOperation,
 		RecordSetting: p.settingRecorder,
-		WriteSetting: func(extID, key string, value json.RawMessage) error {
-			return m.WriteSetting(extID, key, value)
+		WriteSettingBound: func(extID, key string, value json.RawMessage, identity any) error {
+			return m.WriteSettingForIdentity(extID, key, value, identity)
 		},
 		RunUpdate:      p.runUpdateOp,
 		ShortcutAction: p.runShortcutAction,

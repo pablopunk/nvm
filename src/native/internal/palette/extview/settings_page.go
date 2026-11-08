@@ -173,6 +173,9 @@ func (s *Session) settingTextPage(row api.SettingRow) *palette.View {
 
 // readSetting is the stored value of the row's setting, or an error when the host cannot read it.
 func (s *Session) readSetting(row api.SettingRow) (json.RawMessage, error) {
+	if s.deps.ReadSettingBound != nil {
+		return s.deps.ReadSettingBound(s.extID, row.Setting, s.installationIdentity)
+	}
 	if s.deps.ReadSetting == nil {
 		return nil, errSettingsUnavailable
 	}
@@ -180,6 +183,9 @@ func (s *Session) readSetting(row api.SettingRow) (json.RawMessage, error) {
 }
 
 func (s *Session) writeSetting(row api.SettingRow, value json.RawMessage) error {
+	if s.deps.WriteSettingBound != nil {
+		return s.deps.WriteSettingBound(s.extID, row.Setting, value, s.installationIdentity)
+	}
 	if s.deps.WriteSetting == nil {
 		return errSettingsUnavailable
 	}

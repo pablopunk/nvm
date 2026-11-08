@@ -13,22 +13,11 @@ import (
 
 // ToggleSettingAction operates on the enabled installation that produced the action, never a replacement with the same ID.
 func (m *Manager) ToggleSettingAction(id, key string, identity any) error {
-	m.mu.Lock()
-	e, err := m.findLocked(id)
-	var revision *byte
-	if identity != nil {
-		revision, _ = identity.(*byte)
+	host, revoked, err := m.settingServiceForIdentity(id, identity)
+	if err != nil {
+		return err
 	}
-	if err != nil || !m.isRunnable(e) || e.host == nil || (!e.builtin && (revision == nil || revision != e.snapshotIdentity)) {
-		m.mu.Unlock()
-		return errors.New("this extension action has expired; reopen its view")
-	}
-	host := e.host
-	if e.revoked == nil {
-		e.revoked = &atomic.Bool{}
-	}
-	revoked := e.revoked
-	m.mu.Unlock()
+
 	raw, err := json.Marshal(protocol.KeyArgs{Key: key})
 	if err != nil {
 		return api.ErrInvalidInput
@@ -41,4 +30,22 @@ func (m *Manager) ToggleSettingAction(id, key string, identity any) error {
 		return errors.New(reply.Failure.Message)
 	}
 	return nil
+}
+
+// settingServiceForIdentity selects the original host and revocation token under the manager lock.
+func (m *Manager) settingServiceForIdentity(id string, identity any) (*services.Handler, *atomic.Bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	var revision *byte
+	if identity != nil {
+		revision, _ = identity.(*byte)
+	}
+	if err != nil || !m.isRunnable(e) || e.host == nil || (e.builtin && identity != nil) || (!e.builtin && (revision == nil || revision != e.snapshotIdentity)) {
+		return nil, nil, errors.New("this extension action has expired; reopen its view")
+	}
+	if e.revoked == nil {
+		e.revoked = &atomic.Bool{}
+	}
+	return e.host, e.revoked, nil
 }

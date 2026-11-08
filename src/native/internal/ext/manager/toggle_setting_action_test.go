@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -97,5 +98,27 @@ func TestToggleSettingRejectsReinstalledOrigin(t *testing.T) {
 	}
 	if err := h.m.ToggleSettingAction(id, "compact", first); err == nil {
 		t.Fatal("old installation toggled replacement")
+	}
+}
+
+func TestSettingWriteRejectsReinstalledOrigin(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.settings"
+	contents := fixtureContents(t, id)
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	first := h.m.SnapshotIdentity(id)
+	if err := h.m.Uninstall(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.WriteSettingForIdentity(id, "compact", json.RawMessage("true"), first); err == nil {
+		t.Fatal("old installation wrote replacement settings")
+	}
+	if _, err := h.m.SettingValueForIdentity(id, "compact", first); err == nil {
+		t.Fatal("old installation read replacement settings")
 	}
 }

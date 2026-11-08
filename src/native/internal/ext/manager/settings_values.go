@@ -1,11 +1,14 @@
 package manager
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
 )
 
 // settingCallBudget bounds one host-side read or write of a setting. The settings file is local, so the bound is generous.
@@ -39,6 +42,58 @@ func (m *Manager) WriteSetting(id, key string, value any) error {
 func (m *Manager) SettingValue(id, key string) (json.RawMessage, error) {
 	var result protocol.GetResult
 	if err := m.callService(id, protocol.ServiceSettings, protocol.OpGet, protocol.KeyArgs{Key: key}, &result, settingCallBudget); err != nil {
+		return nil, err
+	}
+	if !result.Found {
+		return nil, api.ErrNotFound
+	}
+	return result.Value, nil
+}
+
+// WriteSettingForIdentity binds a settings view write to its originating installation.
+func (m *Manager) WriteSettingForIdentity(id, key string, value json.RawMessage, identity any) error {
+	host, revoked, err := m.settingServiceForIdentity(id, identity)
+	if err != nil {
+		return err
+	}
+	raw, err := json.Marshal(protocol.KeyValueArgs{Key: key, Value: value})
+	if err != nil {
+		return api.ErrInvalidInput
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), settingCallBudget)
+	defer cancel()
+	ctx = services.WithActionAdmission(ctx, func() bool { return !revoked.Load() })
+	reply := host.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSettings, Op: protocol.OpSet, Args: raw})
+	if reply.Failure != nil {
+		return errors.New(reply.Failure.Message)
+	}
+	return nil
+}
+
+// SettingValueForIdentity reads only the settings of the captured installation.
+func (m *Manager) SettingValueForIdentity(id, key string, identity any) (json.RawMessage, error) {
+	host, revoked, err := m.settingServiceForIdentity(id, identity)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(protocol.KeyArgs{Key: key})
+	if err != nil {
+		return nil, api.ErrInvalidInput
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), settingCallBudget)
+	defer cancel()
+	if revoked.Load() {
+		return nil, ErrChangedInstallation
+	}
+	reply := host.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSettings, Op: protocol.OpGet, Args: raw})
+	if revoked.Load() {
+		return nil, ErrChangedInstallation
+	}
+	if reply.Failure != nil {
+		return nil, errors.New(reply.Failure.Message)
+	}
+	var result protocol.GetResult
+	if err := json.Unmarshal(reply.Data, &result); err != nil {
 		return nil, err
 	}
 	if !result.Found {
