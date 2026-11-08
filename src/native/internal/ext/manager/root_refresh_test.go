@@ -83,3 +83,52 @@ func TestInvalidateViewCarriesOriginFromSupervisedInvocation(t *testing.T) {
 		t.Fatalf("got id=%q identity=%v want=%v", gotID, gotIdentity, identity)
 	}
 }
+
+func TestSupervisedHeldInvalidationRetainsInvocationOrigin(t *testing.T) {
+	entered := make(chan any, 1)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	unblock := func() { releaseOnce.Do(func() { close(release) }) }
+	defer unblock()
+	h := newHarness(t, func(o *Options) {
+		o.ViewInvalidate = func(_ string, identity any) {
+			entered <- identity
+			<-release
+		}
+	})
+	const id = "acme.fallback"
+	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	identity := h.m.SnapshotIdentity(id)
+	type outcome struct {
+		result  api.Result
+		failure *api.Failure
+		err     error
+	}
+	results := make(chan outcome, 1)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	go func() {
+		result, failure, err := h.m.Run(ctx, id, api.Invocation{Ref: api.ActionRef{ID: "held-invalidation"}, RequireIdentity: true, ExpectedIdentity: identity})
+		results <- outcome{result, failure, err}
+	}()
+	select {
+	case got := <-entered:
+		if got != identity {
+			t.Fatalf("service origin=%v", got)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	unblock()
+	select {
+	case got := <-results:
+		if got.err != nil || got.failure != nil || !got.result.DataChanged || !got.result.OriginBound || got.result.OriginIdentity != identity {
+			t.Fatalf("result=%+v failure=%v err=%v", got.result, got.failure, got.err)
+		}
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+}

@@ -38,6 +38,10 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 		action := api.Run("bump", "Continue", nil)
 		return api.Result{Next: &action}, nil
 	}
+	if in.Ref.ID == "held-invalidation" {
+		ctx.Views().Invalidate()
+		return api.Result{DataChanged: true}, nil
+	}
 	if in.Ref.ID == "invalidate-view" {
 		ctx.Views().Invalidate()
 		return api.Result{}, nil
