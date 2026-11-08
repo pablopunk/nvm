@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
 )
 
 // ToggleSettingAction operates on the enabled installation that produced the action, never a replacement with the same ID.
@@ -22,6 +24,10 @@ func (m *Manager) ToggleSettingAction(id, key string, identity any) error {
 		return errors.New("this extension action has expired; reopen its view")
 	}
 	host := e.host
+	if e.revoked == nil {
+		e.revoked = &atomic.Bool{}
+	}
+	revoked := e.revoked
 	m.mu.Unlock()
 	raw, err := json.Marshal(protocol.KeyArgs{Key: key})
 	if err != nil {
@@ -29,6 +35,7 @@ func (m *Manager) ToggleSettingAction(id, key string, identity any) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), settingCallBudget)
 	defer cancel()
+	ctx = services.WithActionAdmission(ctx, func() bool { return !revoked.Load() })
 	reply := host.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSettings, Op: protocol.OpToggle, Args: raw})
 	if reply.Failure != nil {
 		return errors.New(reply.Failure.Message)

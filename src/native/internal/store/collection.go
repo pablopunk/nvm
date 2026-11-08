@@ -106,6 +106,11 @@ func (c *Collection[T]) ReadOnly() bool {
 // event. It returns ErrClosed, ErrReadOnly or ErrLeaseLost when the document cannot take changes, and then
 // change is not called.
 func (c *Collection[T]) Update(change func(*T)) error {
+	return c.UpdateIf(nil, change)
+}
+
+// UpdateIf checks admission under the document lock immediately before applying a change.
+func (c *Collection[T]) UpdateIf(admit func() error, change func(*T)) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.loaded {
@@ -113,6 +118,11 @@ func (c *Collection[T]) Update(change func(*T)) error {
 	}
 	if err := c.writableLocked(); err != nil {
 		return err
+	}
+	if admit != nil {
+		if err := admit(); err != nil {
+			return err
+		}
 	}
 	change(&c.value)
 	c.dirty = true

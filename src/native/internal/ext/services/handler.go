@@ -235,7 +235,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceSecrets:
 		return h.serveSecrets(call)
 	case protocol.ServiceSettings:
-		return h.serveSettings(call)
+		return h.serveSettings(ctx, call)
 	case protocol.ServiceLogs:
 		return h.serveLogs(call)
 	case protocol.ServiceText:

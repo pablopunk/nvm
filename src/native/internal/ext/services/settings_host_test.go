@@ -1,8 +1,10 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -68,4 +70,43 @@ func TestBuiltInSaveFailureIsReportedAsUnavailable(t *testing.T) {
 	store := &memoryHostSettings{values: map[string]json.RawMessage{}, fail: errors.New("disk full")}
 	h := builtInHandlerFor(t, newRig(t), settingsManifest("nevermind.settings", api.CapabilitySettingsWrite), store)
 	requireCode(t, serve(t, h, protocol.ServiceSettings, protocol.OpSet, protocol.KeyValueArgs{Key: "units", Value: []byte(`"imperial"`)}), api.CodeUnavailable, "cannot be saved")
+}
+
+type heldHostSettings struct {
+	entered chan struct{}
+	release chan struct{}
+	saved   bool
+}
+
+func (s *heldHostSettings) Load(string) (json.RawMessage, bool) {
+	close(s.entered)
+	<-s.release
+	return json.RawMessage("true"), true
+}
+
+func (s *heldHostSettings) Save(string, json.RawMessage) error {
+	s.saved = true
+	return nil
+}
+
+func TestToggleRechecksAdmissionAfterHeldRead(t *testing.T) {
+	store := &heldHostSettings{entered: make(chan struct{}), release: make(chan struct{})}
+	h := builtInHandlerFor(t, newRig(t), settingsManifest("nevermind.settings", api.CapabilitySettingsWrite), store)
+	var revoked atomic.Bool
+	ctx := WithActionAdmission(context.Background(), func() bool { return !revoked.Load() })
+	args, err := json.Marshal(protocol.KeyArgs{Key: "compact"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan protocol.ServiceReply, 1)
+	go func() {
+		done <- h.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSettings, Op: protocol.OpToggle, Args: args})
+	}()
+	<-store.entered
+	revoked.Store(true)
+	close(store.release)
+	reply := <-done
+	if reply.Failure == nil || store.saved {
+		t.Fatalf("failure=%v saved=%t", reply.Failure, store.saved)
+	}
 }

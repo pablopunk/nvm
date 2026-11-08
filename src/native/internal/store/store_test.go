@@ -242,3 +242,23 @@ func mustSave(t *testing.T, doc *Collection[settingsDoc]) {
 		t.Fatalf("Save: %v", err)
 	}
 }
+
+func TestUpdateIfRefusesBeforeMutationOrNotification(t *testing.T) {
+	s, _, _ := newFixture(t)
+	doc := settingsDocument(s)
+	events := doc.Subscribe()
+	denied := errors.New("revoked")
+	changed := false
+	if err := doc.UpdateIf(func() error { return denied }, func(value *settingsDoc) { changed = true; value.Title = "unsafe" }); !errors.Is(err, denied) {
+		t.Fatalf("admission error=%v", err)
+	}
+	value, err := doc.Load()
+	if err != nil || changed || value.Title != "default" {
+		t.Fatalf("changed=%t value=%+v err=%v", changed, value, err)
+	}
+	select {
+	case <-events:
+		t.Fatal("rejected update notified")
+	default:
+	}
+}

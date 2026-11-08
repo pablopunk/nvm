@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -19,16 +20,16 @@ func newSettingValues() settingValuesDoc {
 	return settingValuesDoc{Values: map[string]json.RawMessage{}}
 }
 
-func (h *Handler) serveSettings(call protocol.ServiceCall) (any, error) {
+func (h *Handler) serveSettings(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Op {
 	case protocol.OpDefinitions:
 		return h.settingDefinitions()
 	case protocol.OpGet:
 		return h.settingGet(call.Args)
 	case protocol.OpSet:
-		return h.settingSet(call.Args)
+		return h.settingSet(ctx, call.Args)
 	case protocol.OpToggle:
-		return h.settingToggle(call.Args)
+		return h.settingToggle(ctx, call.Args)
 	case protocol.OpPublishDisplay:
 		return nil, h.publishDisplay(call.Args)
 	}
@@ -67,7 +68,7 @@ func (h *Handler) settingGet(args json.RawMessage) (protocol.GetResult, error) {
 
 // settingSet stores a value after the capability check and the type check. It is saved before it returns, so
 // the caller sees the value persisted.
-func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
+func (h *Handler) settingSet(ctx context.Context, args json.RawMessage) (json.RawMessage, error) {
 	h.settingsMu.Lock()
 	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
@@ -84,11 +85,11 @@ func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
 	if err := checkSettingType(definition, request.Value); err != nil {
 		return nil, err
 	}
-	return request.Value, h.saveSetting(request.Key, request.Value)
+	return request.Value, h.saveSetting(ctx, request.Key, request.Value)
 }
 
 // settingToggle flips a boolean setting and returns the new value.
-func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
+func (h *Handler) settingToggle(ctx context.Context, args json.RawMessage) (json.RawMessage, error) {
 	h.settingsMu.Lock()
 	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
@@ -114,7 +115,7 @@ func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
 		return nil, invalid("setting %q does not hold a boolean", request.Key)
 	}
 	next, _ := json.Marshal(!current)
-	return next, h.saveSetting(request.Key, next)
+	return next, h.saveSetting(ctx, request.Key, next)
 }
 
 // currentSetting is the stored value of a declared setting, or its default. A built-in whose settings the host keeps
@@ -139,8 +140,11 @@ func (h *Handler) currentSetting(definition api.SettingDefinition) (json.RawMess
 
 // saveSetting stores a value where the extension's settings live: in the host's store for a built-in that has one,
 // else in the extension's settings file.
-func (h *Handler) saveSetting(id string, value json.RawMessage) error {
+func (h *Handler) saveSetting(ctx context.Context, id string, value json.RawMessage) error {
 	if h.hostSettings != nil {
+		if err := admitAction(ctx); err != nil {
+			return err
+		}
 		if err := h.hostSettings.Save(id, value); err != nil {
 			return unavailable("the setting cannot be saved: %v", err)
 		}
@@ -150,7 +154,7 @@ func (h *Handler) saveSetting(id string, value json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	if err := docs.settings.Update(func(doc *settingValuesDoc) {
+	if err := docs.settings.UpdateIf(func() error { return admitAction(ctx) }, func(doc *settingValuesDoc) {
 		doc.Values[id] = value
 	}); err != nil {
 		return unavailable("the setting cannot be saved: %v", err)
