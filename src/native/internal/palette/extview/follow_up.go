@@ -20,7 +20,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 		return
 	}
 	if action.Confirm != nil {
-		r := route{extID: extID, action: action, viewIntent: true, identity: identity, identityBound: identityBound}
+		r := route{extID: extID, action: action, viewIntent: true, identity: identity, identityBound: identityBound, depth: depth}
 		if action.Kind == api.ActionToggleSetting && extID == s.extID {
 			r.identity = s.installationIdentity
 		}
@@ -28,7 +28,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 		return
 	}
 	if action.Kind != api.ActionRun {
-		s.action(action, "").Run(h)
+		s.runRoutedDeclared(h, route{extID: extID, action: action, identity: identity, identityBound: identityBound, depth: depth})
 		return
 	}
 	if action.Ref == nil || s.deps.Invoke == nil {

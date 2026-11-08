@@ -22,6 +22,7 @@ type route struct {
 	initialView   *api.View
 	identity      any
 	identityBound bool
+	depth         int
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
@@ -99,10 +100,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		path := action.Path
-		var identity any
-		if s.deps.CommandSnapshotIdentity != nil {
-			identity = s.deps.CommandSnapshotIdentity(s.extID)
-		}
+		identity := s.installationIdentity
 		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, s.extID, path, identity) }}
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
 		return s.pasteOperation(action, title)
@@ -335,7 +333,9 @@ func (s *Session) confirmPage(r route) *palette.View {
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: tone, Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
-						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity, identityBound: r.identityBound})
+						confirmed := r
+						confirmed.action = withoutConfirmation(r.action)
+						s.invoke(h, confirmed)
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{

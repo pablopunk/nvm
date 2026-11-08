@@ -13,7 +13,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	if r.action.Kind != api.ActionRun {
-		s.runDeclared(h, r.action)
+		s.runRoutedDeclared(h, r)
 		return
 	}
 	if r.action.Ref == nil {
@@ -126,7 +126,7 @@ func (s *Session) invoke(h search.Host, r route) {
 			h.Push(child.Open(h))
 			return
 		}
-		s.finish(h, r.extID, r.action.Title, result, failure)
+		s.finishAt(h, r.extID, r.action.Title, result, failure, r.depth)
 	}
 	if pending != nil && s.deps.InvokeCommandContext != nil {
 		s.deps.InvokeCommandContext(pending.workContext, r.extID, in, done)
