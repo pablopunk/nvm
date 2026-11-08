@@ -71,13 +71,13 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		InvokeViewAction: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(manager.WithViewActionRunOrigin(context.Background(), m.ResolveViewActionOrigin(extID)), extID, in, done)
 		},
-		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
+		LoadContext: func(base context.Context, extID, loader string, identity any, done func([]api.Item, *api.Failure)) {
 			p.extCalls.Add(1)
 			go func() {
 				defer p.extCalls.Done()
-				ctx, cancel := context.WithTimeout(context.Background(), extensionRunTimeout)
+				ctx, cancel := context.WithTimeout(base, extensionRunTimeout)
 				defer cancel()
-				items, failure, err := m.Load(ctx, extID, loader)
+				items, failure, err := m.LoadForIdentity(ctx, extID, loader, identity)
 				if err != nil {
 					failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
 				}

@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"context"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
@@ -68,5 +69,24 @@ func TestSnapshotRevisionRequiresCurrentFilesAuthority(t *testing.T) {
 	}
 	if _, ok := h.m.SnapshotRevision("acme.good", identity); ok {
 		t.Fatal("old identity survived re-enablement")
+	}
+}
+
+func TestLoaderRejectsReplacedInstallation(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.menubar"
+	contents := fixtureContents(t, id)
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	first := h.m.SnapshotIdentity(id)
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := h.m.LoadForIdentity(context.Background(), id, "unused", first); err == nil {
+		t.Fatal("loader accepted an obsolete installation identity")
 	}
 }

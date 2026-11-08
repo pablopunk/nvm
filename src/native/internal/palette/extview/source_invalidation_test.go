@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"context"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -214,5 +215,28 @@ func TestEvictedLoadAfterDismissalDoesNotReacquire(t *testing.T) {
 	load([]api.Item{{ID: "late"}}, nil)
 	if session.sourceScope != oldScope || cache.Generation(oldScope) != 0 {
 		t.Fatal("dismissed session reacquired an evicted scope")
+	}
+}
+
+func TestSourceLoadContextCancelledOnDismissal(t *testing.T) {
+	var loadContext context.Context
+	identity := new(int)
+	deps := Deps{
+		CommandSnapshotIdentity: func(string) any { return identity },
+		LoadContext: func(ctx context.Context, id, loader string, got any, done func([]api.Item, *api.Failure)) {
+			if id != "test" || loader != "load" || got != identity {
+				t.Fatalf("load id=%s loader=%s identity=%v", id, loader, got)
+			}
+			loadContext = ctx
+		},
+	}
+	session := NewSession(deps, "test", api.View{Kind: api.ViewList, Source: &api.DataSource{Loader: "load"}})
+	page := session.Open(&removalHost{})
+	if loadContext == nil || loadContext.Err() != nil {
+		t.Fatal("loader context unavailable")
+	}
+	page.OnLeave()
+	if loadContext.Err() != context.Canceled {
+		t.Fatalf("loader context error=%v", loadContext.Err())
 	}
 }

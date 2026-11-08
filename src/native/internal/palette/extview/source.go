@@ -59,7 +59,7 @@ func (s *Session) loadSource() {
 // reload runs the data source's loader off the UI thread. Items it returns replace the view's items and its snapshot;
 // a failure keeps the items that were showing and says why.
 func (s *Session) reload() {
-	if s.deps.Load == nil {
+	if s.deps.Load == nil && s.deps.LoadContext == nil {
 		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
 		return
 	}
@@ -71,7 +71,7 @@ func (s *Session) reload() {
 		generation = s.deps.Cache.Generation(s.cacheScope())
 	}
 	s.loading, s.failure = true, nil
-	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
+	done := func(items []api.Item, failure *api.Failure) {
 		if s.dismissed || !s.currentInstallation() || revision != s.itemsRevision {
 			return
 		}
@@ -94,7 +94,12 @@ func (s *Session) reload() {
 		s.items = items
 		s.refreshHost()
 		s.afterFirstLoad()
-	})
+	}
+	if s.deps.LoadContext != nil {
+		s.deps.LoadContext(s.workContext, s.extID, s.view.Source.Loader, s.installationIdentity, done)
+	} else {
+		s.deps.Load(s.extID, s.view.Source.Loader, done)
+	}
 }
 
 // afterFirstLoad runs the immediate refresh once the first items are on screen, so the refresh patches what is shown.
