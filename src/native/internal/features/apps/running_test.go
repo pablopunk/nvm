@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"testing/synctest"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -23,6 +24,7 @@ func TestRunningReturnsCachedPathsWhileRefreshingStaleSnapshot(t *testing.T) {
 	clock := fake.NewClock()
 	var detections atomic.Int32
 	var changes atomic.Int32
+	notified := make(chan struct{}, 2)
 	var mu sync.Mutex
 	answers := []map[string]bool{
 		{"/applications/notes.app": true},
@@ -38,7 +40,7 @@ func TestRunningReturnsCachedPathsWhileRefreshingStaleSnapshot(t *testing.T) {
 			i := int(detections.Add(1)) - 1
 			return answers[i], nil
 		},
-		Changed: func() { changes.Add(1) },
+		Changed: func() { changes.Add(1); notified <- struct{}{} },
 	})
 
 	if _, err := running.Refresh("initial"); err != nil {
@@ -50,6 +52,13 @@ func TestRunningReturnsCachedPathsWhileRefreshingStaleSnapshot(t *testing.T) {
 		t.Fatalf("Snapshot = %v, want the cached Notes", got)
 	}
 	running.WaitIdle()
+	for range 2 {
+		select {
+		case <-notified:
+		case <-time.After(time.Second):
+			t.Fatal("refresh notification did not arrive")
+		}
+	}
 	if detections.Load() != 2 {
 		t.Fatalf("detections = %d, want 2", detections.Load())
 	}

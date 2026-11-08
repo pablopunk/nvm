@@ -6,6 +6,14 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
+func TestRefreshTopBeforeWindowAttached(t *testing.T) {
+	var p Palette
+	p.RefreshTop(func(*View) bool {
+		t.Fatal("predicate called without a window")
+		return true
+	})
+}
+
 // TestSummonAfterHideShowsTheRootOnly checks that pages pushed above the root do not survive a hide: the next summon
 // starts on the root, as Electron's onShown clears the stack of a palette whose AI chat was not open.
 func TestSummonAfterHideShowsTheRootOnly(t *testing.T) {

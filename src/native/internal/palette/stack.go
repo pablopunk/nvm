@@ -112,6 +112,9 @@ func (p *Palette) Refresh() {
 // RefreshTop runs the search again when the top view satisfies pred and the palette is shown. It is safe from any
 // goroutine, so state that changes in the background redraws an open view without the user reopening it.
 func (p *Palette) RefreshTop(pred func(*View) bool) {
+	if p.win == nil {
+		return
+	}
 	p.win.Update(func() {
 		if !p.win.IsVisible() || !pred(p.cur()) {
 			return
