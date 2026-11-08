@@ -142,7 +142,7 @@ func TestConcurrentAtomicImageReplacement(t *testing.T) {
 				done <- err
 				return
 			}
-			if err := os.Rename(tmp, path); err != nil {
+			if err := os.Rename(tmp, path); err != nil && !replacementBlockedByReader(err) {
 				done <- err
 				return
 			}
@@ -163,5 +163,22 @@ func TestConcurrentAtomicImageReplacement(t *testing.T) {
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)
+	}
+	// Once the reader is finished, replacement must succeed even if Windows
+	// rejected a concurrent replacement of the open destination.
+	tmp := filepath.Join(dir, "final-replacement")
+	if err := os.WriteFile(tmp, b, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		t.Fatal(err)
+	}
+	data, err := Render(fsys, path, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil || img.Bounds().Dx() != 64 {
+		t.Fatalf("final replacement: %v", err)
 	}
 }
