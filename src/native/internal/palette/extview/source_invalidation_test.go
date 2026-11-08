@@ -42,6 +42,7 @@ func TestMutationInvalidatesScopedSnapshotsAndFencesLoads(t *testing.T) {
 func TestInvalidationRejectsLateWritesAndCancellation(t *testing.T) {
 	clock := fake.NewClock()
 	cache := NewMemoryCache()
+	cache.Scope("test", nil)
 	cache.Put("test/key", CacheEntry{Items: []api.Item{{ID: "old"}}, At: clock.Now()})
 	generation := cache.Generation("test")
 	cache.InvalidateExtension("test")
