@@ -170,5 +170,5 @@ func (s *Session) operationOrigin(origins []route) route {
 	if len(origins) > 0 {
 		return origins[0]
 	}
-	return route{extID: s.extID, identity: s.installationIdentity, identityBound: true}
+	return route{extID: s.extID, identity: s.installationIdentity, identityBound: true, viewIntent: true}
 }

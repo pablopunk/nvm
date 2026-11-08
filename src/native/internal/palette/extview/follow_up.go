@@ -28,14 +28,14 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 		return
 	}
 	if action.Kind != api.ActionRun {
-		s.runRoutedDeclared(h, route{extID: extID, action: action, identity: identity, identityBound: identityBound, depth: depth})
+		s.runRoutedDeclared(h, route{extID: extID, action: action, viewIntent: true, identity: identity, identityBound: identityBound, depth: depth})
 		return
 	}
 	if action.Ref == nil || s.deps.Invoke == nil {
 		h.Toast(unavailableMessage)
 		return
 	}
-	execution := s.beginExecution(h, route{extID: extID, identity: identity, identityBound: identityBound, depth: depth})
+	execution := s.beginExecution(h, route{extID: extID, identity: identity, identityBound: identityBound, viewIntent: true, depth: depth})
 	in := api.Invocation{Ref: *action.Ref, RequireIdentity: true, ExpectedIdentity: identity}
 	s.deps.Invoke(extID, in, func(result api.Result, failure *api.Failure) {
 		if !result.OriginBound {

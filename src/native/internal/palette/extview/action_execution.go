@@ -18,7 +18,7 @@ func (s *Session) beginExecution(h search.Host, origin route) *actionExecution {
 }
 
 func (e *actionExecution) mayPresent() bool {
-	if !e.current() || e.owner.dismissed || !e.owner.currentInstallation() {
+	if !e.current() || (e.owner.dismissed && !e.origin.action.DismissAfterRun) || (e.origin.viewIntent && !e.owner.currentInstallation()) {
 		return false
 	}
 	if e.origin.identityBound && e.owner.deps.CommandSnapshotIdentity != nil {

@@ -74,3 +74,29 @@ func TestDismissedCommandCompletesWindowEffectWithoutClosingANewerPalette(t *tes
 		})
 	}
 }
+
+func TestInitialActionLateMutationSurvivesDismissal(t *testing.T) {
+	identity := new(int)
+	cache := NewMemoryCache()
+	lease := cache.acquire("test", identity)
+	before := lease.version()
+	var done func(api.Result, *api.Failure)
+	deps := Deps{
+		Cache:                   cache,
+		CommandSnapshotIdentity: func(string) any { return identity },
+		InvokeViewAction:        func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+	}
+	session := NewSession(deps, "test", api.View{})
+	host := &fakeHost{}
+	session.action(api.Run("write", "Write", nil), "row").Run(host)
+	if done == nil {
+		t.Fatal("action was not dispatched")
+	}
+	session.close()
+	view := api.ListView("late")
+	done(api.Result{DataChanged: true, View: &view, OriginIdentity: identity, OriginBound: true}, nil)
+	if len(host.pushed) != 0 || lease.version() == before {
+		t.Fatal("dismissal lost mutation or presented stale view")
+	}
+	lease.release()
+}

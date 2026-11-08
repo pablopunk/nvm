@@ -70,10 +70,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		h.Push(pending.Open(h))
 	}
 	in.AwaitInitialView = pending != nil
-	current := func() bool { return r.action.DismissAfterRun || !s.dismissed }
-	if loading, ok := h.(search.ActionLoadingHost); ok {
-		current = loading.BeginAction()
-	}
+	execution := s.beginExecution(h, r)
 	invoke := s.deps.Invoke
 	if r.command && s.deps.InvokeCommand != nil {
 		invoke = s.deps.InvokeCommand
@@ -97,7 +94,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		if result.DataChanged {
 			s.revalidateMutation(r.extID, result.OriginIdentity)
 		}
-		if (r.viewIntent && !s.currentInstallation()) || !current() || (s.dismissed && !r.action.DismissAfterRun) {
+		if !execution.mayPresent() {
 			return
 		}
 		if pending != nil {
