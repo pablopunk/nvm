@@ -62,3 +62,17 @@ func TestUnboundCrossExtensionFollowUpCannotReachHost(t *testing.T) {
 		t.Fatalf("opened=%d toasts=%v", opened, host.toasts)
 	}
 }
+
+func TestNavigationRechecksAuthorityBeforePush(t *testing.T) {
+	checks := 0
+	deps := Deps{AdmitAction: func(string, any) (func() bool, error) {
+		return func() bool { checks++; return checks < 3 }, nil
+	}}
+	session := NewSession(deps, "test", api.View{})
+	host := &fakeHost{}
+	view := api.ListView("fixture")
+	session.action(api.Action{Kind: api.ActionPushView, View: &view}, "").Run(host)
+	if len(host.pushed) != 0 || len(host.toasts) == 0 {
+		t.Fatalf("pages=%d toasts=%v", len(host.pushed), host.toasts)
+	}
+}

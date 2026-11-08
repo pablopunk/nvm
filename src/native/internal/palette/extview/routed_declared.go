@@ -40,6 +40,10 @@ func (s *Session) runRoutedDeclared(h search.Host, r route) {
 		if r.action.Kind == api.ActionRootView {
 			nav = api.NavRoot
 		}
+		if !valid() {
+			h.Toast(unavailableMessage)
+			return
+		}
 		s.finishAt(h, r.extID, r.action.Title, api.Result{View: r.action.View, Navigation: nav, OriginIdentity: r.identity, OriginBound: r.identityBound}, nil, r.depth)
 	case api.ActionToggleSetting:
 		s.toggleDeclaredSetting(h, r)

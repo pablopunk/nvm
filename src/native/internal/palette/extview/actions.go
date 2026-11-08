@@ -110,17 +110,7 @@ func (s *Session) actionBodyFor(r route, key string) search.Action {
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
 		return s.pasteOperationFor(r, title)
 	case api.ActionPushView:
-		if action.View == nil {
-			break
-		}
-		view := *action.View
-		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			child := s.navigationChild(r.extID, view, api.NavPush)
-			if r.identityBound {
-				child.installationIdentity = r.identity
-			}
-			h.Push(child.Open(h))
-		}}
+		return s.hostOperationFor(r, title)
 	case api.ActionToggleSetting:
 		if s.deps.ToggleSetting == nil || strings.TrimSpace(action.Setting) == "" {
 			break
@@ -156,9 +146,6 @@ func (s *Session) actionBodyFor(r route, key string) search.Action {
 		op := action.Op
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.operateCamera(h, op) }}
 	case api.ActionSystem:
-		if pane := action.Setting; action.Op == "open-system-settings" && s.deps.OpenSettingsPane != nil {
-			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
-		}
 		return s.hostOperationFor(r, title)
 	case api.ActionUpdate:
 		if s.deps.RunUpdate == nil {
