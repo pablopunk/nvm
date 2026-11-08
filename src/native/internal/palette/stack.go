@@ -233,6 +233,16 @@ func (p *Palette) Pop() {
 	p.popOne()
 }
 
+// PopPage removes the top page like Pop, but never dismisses the palette at an independent entry. A host that pushed a
+// loading page and now swaps it for the result calls it, since that is not the user going back.
+func (p *Palette) PopPage() {
+	p.cancelAction()
+	if len(p.stack) < 2 {
+		return
+	}
+	p.popOne()
+}
+
 // popOne removes a page without applying the independent-entry dismissal boundary. Root uses it to
 // unwind extension navigation internally while user initiated back remains confined to its entry.
 func (p *Palette) popOne() {

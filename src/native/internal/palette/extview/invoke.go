@@ -103,7 +103,7 @@ func (s *Session) invoke(h search.Host, r route) {
 			if s.deps.CommandSnapshots != nil {
 				s.deps.CommandSnapshots.RemoveVersion(identity, in.Ref, snapshotVersion)
 			}
-			h.Pop()
+			popPendingPage(h)
 		}
 		if identity != nil && failure == nil && result.View != nil && result.View.Kind == api.ViewGrid && (result.Navigation == "" || result.Navigation == api.NavPush) && result.Next == nil && result.Toast == nil {
 			child := s.navigationChild(r.extID, *result.View, result.Navigation)
@@ -124,4 +124,14 @@ func (s *Session) invoke(h search.Host, r route) {
 // validInitialView rejects extension-provided initial content before it can start any host operations.
 func validInitialView(view *api.View) bool {
 	return view != nil && (api.Command{ID: "initial", Title: "initial", InitialView: view}).Validate() == nil
+}
+
+// popPendingPage removes the loading page a command pushed before its result replaces it. A palette a shortcut opened
+// would hide on a plain Pop, because that page is its entry view; swapping it for the result is not the user going back.
+func popPendingPage(h search.Host) {
+	if quiet, ok := h.(interface{ PopPage() }); ok {
+		quiet.PopPage()
+		return
+	}
+	h.Pop()
 }
