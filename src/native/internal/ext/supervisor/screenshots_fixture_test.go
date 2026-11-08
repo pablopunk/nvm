@@ -116,6 +116,14 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 		t.Fatal("cancelled refresh did not return")
 	}
 	close(blocker.release)
+	// Ordinary canceled calls keep the exchange until it finishes. Wait for that
+	// ownership to end before measuring the next cached call's own deadline.
+	select {
+	case r.slots <- struct{}{}:
+		<-r.slots
+	case <-time.After(waitTimeout):
+		t.Fatal("cancelled exchange did not finish after its service was released")
+	}
 	phase = "cached-after-cancellation"
 	cached := run(false)
 	var again api.Result
