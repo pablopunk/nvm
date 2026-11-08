@@ -122,3 +122,17 @@ func TestSettingWriteRejectsReinstalledOrigin(t *testing.T) {
 		t.Fatal("old installation read replacement settings")
 	}
 }
+
+func TestBoundSettingWriteStillRequiresCapability(t *testing.T) {
+	h := newHarness(t)
+	contents := fixtureContents(t, "acme.settings")
+	contents[bundle.ManifestFile] = []byte(`{"apiVersion":"1.0","id":"acme.settings","title":"Settings","settings":[{"id":"compact","type":"boolean","value":false}]}`)
+	if err := h.m.Install("acme.settings", contents, true); err != nil {
+		t.Fatal(err)
+	}
+	identity := h.m.SnapshotIdentity("acme.settings")
+	err := h.m.WriteSettingForIdentity("acme.settings", "compact", json.RawMessage("true"), identity)
+	if err == nil || !strings.Contains(err.Error(), "settings.write") {
+		t.Fatalf("missing capability: %v", err)
+	}
+}
