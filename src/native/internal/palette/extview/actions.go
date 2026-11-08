@@ -350,7 +350,7 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 	}
 	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
-			s.revalidateMutation()
+			s.revalidateMutation(s.extID)
 		}
 		if afterRun != nil {
 			afterRun(failure != nil)
@@ -384,7 +384,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 	}
 	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
-			s.revalidateMutation()
+			s.revalidateMutation(extID)
 		}
 		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})

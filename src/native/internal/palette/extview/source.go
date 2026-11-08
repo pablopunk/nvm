@@ -65,9 +65,17 @@ func (s *Session) reload() {
 	}
 	s.itemsRevision++
 	revision := s.itemsRevision
+	var generation uint64
+	if s.deps.Cache != nil {
+		generation = s.deps.Cache.Generation(s.cacheScope())
+	}
 	s.loading, s.failure = true, nil
 	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
-		if s.dismissed || revision != s.itemsRevision {
+		if s.dismissed || !s.currentInstallation() || revision != s.itemsRevision {
+			return
+		}
+		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
+			s.reload()
 			return
 		}
 		s.loading = false
@@ -76,8 +84,13 @@ func (s *Session) reload() {
 			s.refreshHost()
 			return
 		}
+		if key := s.snapshotKey(); key != "" {
+			if !s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, CacheEntry{Items: items, At: s.deps.Clock.Now()}) {
+				s.reload()
+				return
+			}
+		}
 		s.items = items
-		s.putSnapshot(items)
 		s.refreshHost()
 		s.afterFirstLoad()
 	})
@@ -91,24 +104,6 @@ func (s *Session) afterFirstLoad() {
 	}
 }
 
-func (s *Session) revalidateMutation() {
-	for origin := s; origin != nil; origin = origin.parent {
-		origin.refreshAfterMutation()
-	}
-}
-
-// refreshAfterMutation coalesces mutations behind an in-flight refresh.
-func (s *Session) refreshAfterMutation() {
-	if s.dismissed {
-		return
-	}
-	if s.refreshing {
-		s.refreshPending = true
-		return
-	}
-	s.refreshNow()
-}
-
 // refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result. A chat view
 // takes a whole new view instead, since its transcript, tier and side page change together while a reply streams.
 func (s *Session) refreshNow() {
@@ -117,6 +112,10 @@ func (s *Session) refreshNow() {
 		return
 	}
 	s.refreshing = true
+	var generation uint64
+	if s.deps.Cache != nil {
+		generation = s.deps.Cache.Generation(s.cacheScope())
+	}
 	var snapshotVersion uint64
 	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 		snapshotVersion = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
@@ -126,7 +125,14 @@ func (s *Session) refreshNow() {
 		if failure != nil && s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 			s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
 		}
-		if s.dismissed {
+		if s.dismissed || !s.currentInstallation() {
+			return
+		}
+		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
+			if s.refreshPending {
+				s.refreshPending = false
+				s.refreshNow()
+			}
 			return
 		}
 		if s.snapshotRef != nil && s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
@@ -186,7 +192,7 @@ func (s *Session) refreshNow() {
 		}
 		s.Apply(patch)
 		s.rememberVerifiedSnapshot(result.SnapshotEvidence)
-		s.cacheRefreshPatch(patch)
+		s.cacheRefreshPatch(patch, generation)
 		s.refreshHost()
 	})
 }
@@ -344,31 +350,7 @@ func (s *Session) snapshotKey() string {
 	if source == nil || source.CacheKey == "" || s.deps.Cache == nil || s.deps.Clock == nil {
 		return ""
 	}
-	return s.extID + "/" + source.CacheKey
-}
-
-func (s *Session) putSnapshot(items []api.Item) {
-	if key := s.snapshotKey(); key != "" {
-		s.deps.Cache.Put(key, CacheEntry{Items: items, At: s.deps.Clock.Now()})
-	}
-}
-
-// cacheRefreshPatch renews freshness only for a complete replacement. Partial patches update an existing snapshot
-// without making its unchanged rows fresh, and never create a snapshot before the source has produced one.
-func (s *Session) cacheRefreshPatch(patch api.ViewPatch) {
-	if patch.Mode == api.PatchReplace {
-		s.putSnapshot(s.items)
-		return
-	}
-	if len(patch.Items) == 0 && len(patch.RemoveItemIDs) == 0 {
-		return
-	}
-	if key := s.snapshotKey(); key != "" {
-		if entry, ok := s.deps.Cache.Get(key); ok {
-			entry.Items = applyPatch(entry.Items, patch)
-			s.deps.Cache.Put(key, entry)
-		}
-	}
+	return s.cacheScope() + "/" + source.CacheKey
 }
 
 func durationMs(ms, fallback int64) time.Duration {

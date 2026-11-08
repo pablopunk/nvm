@@ -116,6 +116,15 @@ func (c *recordingSnapshotCache) Put(key string, entry CacheEntry) {
 	c.Cache.Put(key, entry)
 }
 
+func (c *recordingSnapshotCache) PutGeneration(extID, key string, generation uint64, entry CacheEntry) bool {
+	if !c.Cache.PutGeneration(extID, key, generation, entry) {
+		return false
+	}
+	entry.Items = append([]api.Item(nil), entry.Items...)
+	c.puts = append(c.puts, entry)
+	return true
+}
+
 func TestChatRemovalDuringHistoryRefresh(t *testing.T) {
 	chats := &removalChats{rows: []api.ChatSummary{{ID: "one", Kind: "conversation", Title: "One"}, {ID: "two", Kind: "builder", Title: "Two"}}}
 	ctx := removalContext{chats: chats}
