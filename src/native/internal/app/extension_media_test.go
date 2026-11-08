@@ -1,6 +1,7 @@
 package app
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -136,10 +137,18 @@ func TestGoldenWebviewPlateAndNotice(t *testing.T) {
 }
 
 func TestLocalImagePathReadsFileURLsAndPlainPaths(t *testing.T) {
-	if got := localImagePath("file:///Users/me/my%20pic.png"); got != "/Users/me/my pic.png" {
+	if got := localImagePath("file:///Users/me/my%20pic.png"); got != filepath.FromSlash("/Users/me/my pic.png") {
 		t.Fatalf("file URL path %q", got)
 	}
 	if got := localImagePath("/Users/me/pic.png"); got != "/Users/me/pic.png" {
 		t.Fatalf("plain path %q", got)
+	}
+	if filepath.Separator == '\\' {
+		if got := localImagePath("file:///C:/Users/me/my%20pic.png"); got != `C:\Users\me\my pic.png` {
+			t.Fatalf("Windows file URL path %q", got)
+		}
+		if got := localImagePath(`C:\Users\me\pic.png`); got != `C:\Users\me\pic.png` {
+			t.Fatalf("Windows plain path %q", got)
+		}
 	}
 }
