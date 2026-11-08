@@ -330,8 +330,7 @@ func verifiedSnapshotPaths(items []api.Item, evidence *api.SnapshotEvidence) map
 	return paths
 }
 
-// snapshotImageSource reports whether a cached snapshot may keep an image: an embedded PNG, or the host's own thumbnail
-// reference, which is inert until the palette draws it and draws nothing once the file can no longer be read.
+// snapshotImageSource keeps an embedded PNG or the host's thumbnail reference, which is inert until drawn.
 func snapshotImageSource(src string) bool {
 	return strings.HasPrefix(src, "data:image/png;base64,") || thumbs.ReferenceEdge(src) == thumbs.GridEdge
 }
