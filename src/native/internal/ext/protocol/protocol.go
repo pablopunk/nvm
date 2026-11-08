@@ -111,6 +111,9 @@ type ServiceReply struct {
 	// WaitedForUser is set by the host and never sent: the call waited for a palette answer, so the request budget
 	// restarts after it.
 	WaitedForUser bool `json:"-"`
+	// PictureDigest is set by the host and never sent: the hash of the picture a Thumbnail reply stands for, so the
+	// snapshot evidence can compare pictures while the extension only holds a short reference to them.
+	PictureDigest [32]byte `json:"-"`
 }
 
 // ParseServiceCall reports whether a child line is a service call and returns it.

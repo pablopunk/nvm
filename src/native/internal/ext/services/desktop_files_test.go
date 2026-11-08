@@ -13,6 +13,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -102,7 +103,7 @@ func TestMetadataDescribesAFileAndItsPictureSize(t *testing.T) {
 	requireCode(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpMetadata, protocol.PathArgs{Path: filepath.Join(root, "gone.png")}), api.CodeNotFound, "gone.png")
 }
 
-func TestThumbnailIsAPNGDataURLOnlyForPictures(t *testing.T) {
+func TestThumbnailIsAHostReferenceOnlyForPictures(t *testing.T) {
 	root := t.TempDir()
 	picture := writePNG(t, filepath.Join(root, "big.png"), 800, 400)
 	text := filepath.Join(root, "notes.txt")
@@ -115,8 +116,8 @@ func TestThumbnailIsAPNGDataURLOnlyForPictures(t *testing.T) {
 	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpThumbnail, protocol.PathArgs{Path: picture})), &thumb); err != nil {
 		t.Fatal(err)
 	}
-	if !thumb.Found || !strings.HasPrefix(thumb.URL, pngDataURLPrefix) {
-		t.Fatalf("thumbnail %+v; want a PNG data URL", thumb)
+	if want := thumbs.GridReference(fileURLFor(picture)); !thumb.Found || thumb.URL != want {
+		t.Fatalf("thumbnail %+v; want the grid reference %s", thumb, want)
 	}
 	var none protocol.ThumbnailResult
 	if err := json.Unmarshal(mustOK(t, serve(t, handler, protocol.ServiceDesktopFiles, protocol.OpThumbnail, protocol.PathArgs{Path: text})), &none); err != nil {

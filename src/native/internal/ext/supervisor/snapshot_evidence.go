@@ -46,7 +46,10 @@ func observeSnapshotService(e *api.SnapshotEvidence, call protocol.ServiceCall, 
 		}
 		var result protocol.ThumbnailResult
 		if json.Unmarshal(reply.Data, &result) == nil && result.Found && result.URL != "" {
-			hash := sha256.Sum256([]byte(result.URL))
+			hash := reply.PictureDigest
+			if hash == ([32]byte{}) {
+				hash = sha256.Sum256([]byte(result.URL))
+			}
 			path := filepath.Clean(args.Path)
 			for _, previous := range e.ThumbnailPaths[hash] {
 				if previous == path {

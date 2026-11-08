@@ -7,7 +7,7 @@
 # To copy a file produced in the box back (e.g. after `gofmt -w` or `-update` goldens):
 #   scripts/boxgo.sh --get <slot> <relative/path> [local/path]
 set -euo pipefail
-BOX=9101
+BOX=${BOXGO_BOX:-9101}
 root=$(git rev-parse --show-toplevel)
 # box_retry reruns a box call that lost the race on the box CLI's own jump-host file, which concurrent agents rewrite
 # (`mv: rename .../jump.sh.new`); any other failure is the command's own and is returned as is.

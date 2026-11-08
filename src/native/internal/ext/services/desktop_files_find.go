@@ -3,7 +3,7 @@ package services
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -24,12 +24,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 )
 
-// thumbnailEdge is the edge in pixels of the pictures extensions receive from Thumbnail. dimensionPrefixBytes bounds
-// how much of an image is read to learn its size.
-const (
-	thumbnailEdge        = 160
-	dimensionPrefixBytes = 256 << 10
-)
+// dimensionPrefixBytes bounds how much of an image is read to learn its size.
+const dimensionPrefixBytes = 256 << 10
 
 // findFiles walks the requested folders and returns the best files the options select. Missing and relative folders
 // are skipped, as the index skips them.
@@ -138,23 +134,35 @@ func (h *Handler) fileMetadata(raw json.RawMessage) (api.FileRef, error) {
 	return ref, nil
 }
 
-// fileThumbnail returns a PNG picture of an image file, or Found false when the file has no picture.
-func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, error) {
+// thumbnailAnswer is a Thumbnail result with the hash of the picture it stands for. The hash stays on the host.
+type thumbnailAnswer struct {
+	protocol.ThumbnailResult
+	digest [32]byte
+}
+
+// fileThumbnail checks that an image file has a picture and returns a host-owned reference to it, or Found false when
+// it has none. The host renders the picture once to prove it exists and to hash it for the snapshot evidence; the
+// palette renders it again lazily when a row is shown, so the extension never carries picture bytes through its own
+// process or its response.
+func (h *Handler) fileThumbnail(raw json.RawMessage) (any, error) {
 	path, err := absolutePathArg(raw)
 	if err != nil {
-		return protocol.ThumbnailResult{}, err
+		return nil, err
 	}
 	if h.deps.Files == nil {
-		return protocol.ThumbnailResult{}, unavailable("files are not available in this build")
+		return nil, unavailable("files are not available in this build")
 	}
-	picture, err := thumbs.Render(h.deps.Files, path, thumbnailEdge)
+	picture, err := thumbs.Render(h.deps.Files, path, thumbs.GridEdge)
 	if err != nil {
 		if errors.Is(err, fs.ErrPermission) {
 			return protocol.ThumbnailResult{}, snapshotPermissionDenied{}
 		}
 		return protocol.ThumbnailResult{}, nil
 	}
-	return protocol.ThumbnailResult{URL: pngDataURLPrefix + base64.StdEncoding.EncodeToString(picture), Found: true}, nil
+	return thumbnailAnswer{
+		ThumbnailResult: protocol.ThumbnailResult{URL: thumbs.GridReference(fileURLFor(path)), Found: true},
+		digest:          sha256.Sum256(picture),
+	}, nil
 }
 
 // fileURLOf returns the file: URL of an absolute path.
