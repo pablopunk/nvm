@@ -80,3 +80,22 @@ func TestToggleSettingActionCannotBorrowAnotherExtensionIdentity(t *testing.T) {
 		t.Fatalf("other extension changed: %s %v", value, err)
 	}
 }
+
+func TestToggleSettingRejectsReinstalledOrigin(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.settings"
+	contents := fixtureContents(t, id)
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	first := h.m.SnapshotIdentity(id)
+	if err := h.m.Uninstall(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.ToggleSettingAction(id, "compact", first); err == nil {
+		t.Fatal("old installation toggled replacement")
+	}
+}

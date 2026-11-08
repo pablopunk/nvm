@@ -7,13 +7,26 @@ import (
 
 // runRoutedDeclared keeps a result's installation provenance on host-owned actions.
 func (s *Session) runRoutedDeclared(h search.Host, r route) {
-	if r.identityBound && s.deps.CommandSnapshotIdentity != nil {
+	valid := func() bool { return true }
+	if r.identityBound && s.deps.AdmitAction != nil {
+		var err error
+		valid, err = s.deps.AdmitAction(r.extID, r.identity)
+		if err != nil || valid == nil {
+			h.Toast(unavailableMessage)
+			return
+		}
+	} else if r.identityBound && s.deps.CommandSnapshotIdentity != nil {
 		current := s.deps.CommandSnapshotIdentity(r.extID)
 		if (r.identity != nil || current != nil) && !sameSnapshotIdentity(r.identity, current) {
 			h.Toast(unavailableMessage)
 			return
 		}
 	}
+	if !valid() {
+		h.Toast(unavailableMessage)
+		return
+	}
+
 	switch r.action.Kind {
 	case api.ActionPushView, api.ActionReplaceView, api.ActionRootView:
 		if r.action.View == nil || r.action.View.Validate() != nil {
@@ -42,15 +55,8 @@ func (s *Session) runRoutedDeclared(h search.Host, r route) {
 		}
 		h.Hide()
 		s.deps.Window(r.extID, r.action)
-	case api.ActionSystem:
-		if r.action.Op == "open-system-settings" && r.action.Setting != "" && s.deps.OpenSettingsPane != nil {
-			h.Hide()
-			s.deps.OpenSettingsPane(r.action.Setting)
-		} else {
-			s.runDeclared(h, r.action)
-		}
-	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash:
-		s.runDeclared(h, r.action)
+	case api.ActionSystem, api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionOpenURL, api.ActionCopyText, api.ActionCopyImage:
+		s.runAdmittedHostAction(h, r, valid)
 	case api.ActionRefreshView, api.ActionCamera:
 		s.action(r.action, "").Run(h)
 	default:

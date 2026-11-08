@@ -68,6 +68,17 @@ func (s *Session) action(action api.Action, key string) search.Action {
 	mapped := s.withShortcut(s.actionBody(action, key), action.Shortcut)
 	mapped.MenuOnly = action.Preview
 	mapped.Subtitle = action.Subtitle
+	if action.Kind != api.ActionRun && s.deps.AdmitAction != nil {
+		run := mapped.Run
+		mapped.Run = func(h search.Host) {
+			valid, err := s.deps.AdmitAction(s.extID, s.installationIdentity)
+			if err != nil || valid == nil || !valid() {
+				h.Toast(unavailableMessage)
+				return
+			}
+			run(h)
+		}
+	}
 	return mapped
 }
 
@@ -94,19 +105,8 @@ func (s *Session) actionBodyFor(r route, key string) search.Action {
 		}
 		token := s.issue(key, r)
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runHandle(h, token) }}
-	case api.ActionOpenURL:
-		url := action.URL
-		return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenURL(url) }}
-	case api.ActionCopyText:
-		text := action.Text
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyText(h, text) }}
-	case api.ActionCopyImage:
-		if s.deps.CopyImage == nil || action.Path == "" {
-			break
-		}
-		path := action.Path
-		identity := r.identity
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, r.extID, path, identity) }}
+	case api.ActionOpenURL, api.ActionCopyText, api.ActionCopyImage:
+		return s.hostOperationFor(r, title)
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
 		return s.pasteOperationFor(r, title)
 	case api.ActionPushView:

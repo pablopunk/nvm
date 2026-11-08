@@ -15,7 +15,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 	if !identityBound && extID == s.extID {
 		identity, identityBound = s.installationIdentity, true
 	}
-	if action.Kind == api.ActionRun && !identityBound {
+	if !identityBound {
 		h.Toast(unavailableMessage)
 		return
 	}

@@ -56,6 +56,13 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		CommandSnapshots:        &p.commandSnapshots,
 		CommandSnapshotIdentity: m.SnapshotIdentity,
 		DurableGrids:            p.exts.grids.Load(),
+		AdmitAction: func(id string, identity any) (func() bool, error) {
+			authority, err := m.WindowAuthorityFor(id, identity)
+			if err != nil {
+				return nil, err
+			}
+			return authority.Valid, nil
+		},
 		InvokeRefresh: func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(ctx, extID, in, done)
 		},

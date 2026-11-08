@@ -21,6 +21,8 @@ type Deps struct {
 	CommandSnapshotIdentity func(extID string) any
 	// DurableGrids saves grid snapshots across launches. Nil keeps them in memory only.
 	DurableGrids  *DurableGrids
+	// AdmitAction selects a revocable authority for a host-owned action.
+	AdmitAction   func(extID string, identity any) (func() bool, error)
 	InvokeRefresh func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	Invoke        func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// InvokeCommand is used only by a root command's primary action. Views and secondary actions use Invoke.
