@@ -29,3 +29,13 @@ func (s *Session) accessoryActions() []search.Action {
 		{Title: "Previous " + name, Mods: palette.Mod, Key: ui.KeyBracketLeft, Label: palette.KeyLabel("⌃["), Run: step(-1), Section: viewGroupTitle, MenuOnly: true},
 	}
 }
+
+// withAccessoryActions adds the accessory's actions to a menu that already has some. A row without actions stays
+// without, so a list of plain rows does not grow an Actions footer only for its filter; the keys still step the picker
+// through the view's key handler when it has one.
+func (s *Session) withAccessoryActions(out []search.Action) []search.Action {
+	if len(out) == 0 {
+		return out
+	}
+	return append(out, s.accessoryActions()...)
+}

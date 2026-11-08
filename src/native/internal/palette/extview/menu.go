@@ -120,7 +120,7 @@ func (s *Session) sectionActions(itemID string, first int, sections []MenuSectio
 // pageActions is the view's own menu, listed while no row is chosen, such as on an empty list.
 func (s *Session) pageActions() []search.Action {
 	out := s.sectionActions("", 0, MenuSections(nil, s.view.ActionPanel, s.view.Actions))
-	out = append(out, s.accessoryActions()...)
+	out = s.withAccessoryActions(out)
 	if s.viewHidesMenu() {
 		return HideFromMenu(out)
 	}

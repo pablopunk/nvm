@@ -87,7 +87,7 @@ func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
 	log := &invokeLog{results: map[string]api.Result{"filter": {View: &replacement, Navigation: api.NavReplace}}}
 	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
 	page := session.listPage()
-	actions := session.pageActions()
+	actions := session.accessoryActions()
 	if len(actions) != 2 || actions[0].Key != ui.KeyBracketRight || actions[1].Key != ui.KeyBracketLeft {
 		t.Fatalf("page actions = %+v, want Next on ] and Previous on [", actions)
 	}

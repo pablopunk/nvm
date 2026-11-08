@@ -77,7 +77,7 @@ func (s *Session) itemActions(item api.Item) []search.Action {
 		mapped.MenuHidden, mapped.MenuOnly = s.viewHidesMenu(), true
 		out = append(out, mapped)
 	}
-	out = append(out, s.accessoryActions()...)
+	out = s.withAccessoryActions(out)
 	if item.ActionPanelVisibility == api.PanelHidden {
 		return HideFromMenu(out)
 	}
