@@ -130,8 +130,15 @@ func TestConcurrentAtomicImageReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	fsys := real.NewPorts().FS
-	done := make(chan error, 1)
+	type replacementResult struct {
+		completed int
+		err       error
+	}
+	done := make(chan replacementResult, 1)
+	start := make(chan struct{})
 	go func() {
+		<-start
+		completed := 0
 		for i := 0; i < 200; i++ {
 			data := a
 			if i%2 == 0 {
@@ -139,16 +146,21 @@ func TestConcurrentAtomicImageReplacement(t *testing.T) {
 			}
 			tmp := filepath.Join(dir, "replacement")
 			if err := os.WriteFile(tmp, data, 0600); err != nil {
-				done <- err
+				done <- replacementResult{completed, err}
 				return
 			}
-			if err := os.Rename(tmp, path); err != nil && !replacementBlockedByReader(err) {
-				done <- err
-				return
+			if err := os.Rename(tmp, path); err != nil {
+				if !replacementBlockedByReader(err) {
+					done <- replacementResult{completed, err}
+					return
+				}
+			} else {
+				completed++
 			}
 		}
-		done <- nil
+		done <- replacementResult{completed, nil}
 	}()
+	close(start)
 	for i := 0; i < 200; i++ {
 		data, err := Render(fsys, path, 64)
 		if err != nil {
@@ -161,8 +173,12 @@ func TestConcurrentAtomicImageReplacement(t *testing.T) {
 			break
 		}
 	}
-	if err := <-done; err != nil {
-		t.Fatal(err)
+	result := <-done
+	if result.err != nil {
+		t.Fatal(result.err)
+	}
+	if result.completed == 0 {
+		t.Fatal("no replacements succeeded during the concurrent phase")
 	}
 	// Once the reader is finished, replacement must succeed even if Windows
 	// rejected a concurrent replacement of the open destination.
