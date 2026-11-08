@@ -100,3 +100,26 @@ func TestInitialActionLateMutationSurvivesDismissal(t *testing.T) {
 	}
 	lease.release()
 }
+
+func TestDetachedBackgroundFeedbackDoesNotNavigateNewPage(t *testing.T) {
+	var done func(api.Result, *api.Failure)
+	var indications []api.IndicatorInput
+	deps := Deps{
+		Invoke:   func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+		Indicate: func(_ string, input api.IndicatorInput) { indications = append(indications, input) },
+	}
+	session := NewSession(deps, "test", api.View{})
+	host := &cancelledActionHost{}
+	action := api.Run("work", "Background", nil)
+	action.Background, action.DismissAfterRun = true, true
+	session.invoke(host, route{extID: "test", action: action})
+	if done == nil {
+		t.Fatal("action was not dispatched")
+	}
+	session.close()
+	view := api.ListView("late")
+	done(api.Result{View: &view, Toast: &api.Toast{Message: "Finished"}}, nil)
+	if len(host.pushed) != 0 || len(indications) != 1 || indications[0].Subtitle != "Finished" {
+		t.Fatalf("pages=%d indications=%v", len(host.pushed), indications)
+	}
+}

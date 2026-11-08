@@ -95,6 +95,7 @@ func (s *Session) invoke(h search.Host, r route) {
 			s.revalidateMutation(r.extID, result.OriginIdentity)
 		}
 		if !execution.mayPresent() {
+			execution.backgroundFeedback(result, failure)
 			return
 		}
 		if pending != nil {

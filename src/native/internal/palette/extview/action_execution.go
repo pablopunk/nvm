@@ -1,6 +1,9 @@
 package extview
 
-import "github.com/pablopunk/nvm/native/internal/search"
+import (
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/search"
+)
 
 // actionExecution ties an asynchronous action to the actual page that started it.
 type actionExecution struct {
@@ -28,4 +31,18 @@ func (e *actionExecution) mayPresent() bool {
 		}
 	}
 	return true
+}
+
+// backgroundFeedback survives page dismissal but never navigates or changes a newer palette.
+func (e *actionExecution) backgroundFeedback(result api.Result, failure *api.Failure) {
+	if !e.origin.action.Background || !e.origin.action.DismissAfterRun || e.owner.deps.Indicate == nil {
+		return
+	}
+	if failure != nil {
+		e.owner.deps.Indicate(e.origin.extID, toastIndicator(e.origin.action.Title, api.Toast{Message: failure.Message, Tone: "error"}))
+		return
+	}
+	if result.Toast != nil && result.Toast.Message != "" {
+		e.owner.deps.Indicate(e.origin.extID, toastIndicator(e.origin.action.Title, *result.Toast))
+	}
 }
