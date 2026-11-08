@@ -32,7 +32,10 @@ type Session struct {
 	snapshotRef          *api.ActionRef
 	snapshotIdentity     any
 	installationIdentity any
-	sourceScope          string
+	sourceLease          *sourceLease
+	sourceEpoch          uint64
+	sourceLoading        bool
+	sourcePending        bool
 	snapshotPending      bool
 	snapshotStaleHashes  map[[32]byte]bool
 	snapshotSourcePaths  map[[32]byte]bool
@@ -90,9 +93,6 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 	}
 	if deps.CommandSnapshotIdentity != nil {
 		s.installationIdentity = deps.CommandSnapshotIdentity(extID)
-	}
-	if deps.Cache != nil && view.Source != nil {
-		s.sourceScope = deps.Cache.Scope(extID, s.installationIdentity)
 	}
 	s.hasMore = view.Pagination != nil && view.Pagination.HasMore && view.Pagination.Next != nil
 	return s
@@ -194,8 +194,8 @@ func (s *Session) listPage() *palette.View {
 	page.EmptyTitle, page.EmptySub = s.emptyTitle(), s.emptySubtitle()
 	page.EmptyFn = s.emptyState
 	page.OnLeave = s.close
-	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
-		page.OnReveal = s.refreshNow
+	if s.view.Source != nil || (s.view.Refresh != nil && s.view.Refresh.Ref != nil) {
+		page.OnReveal = s.revealSource
 	}
 	page.Accessory = s.searchAccessory()
 	page.Actions = s.pageActions

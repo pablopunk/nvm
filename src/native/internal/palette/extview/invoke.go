@@ -85,7 +85,7 @@ func (s *Session) invoke(h search.Host, r route) {
 			filterSnapshotDenied(&result, staleHashes)
 		}
 		if result.DataChanged {
-			s.revalidateMutation(r.extID)
+			s.revalidateMutation(r.extID, result.OriginIdentity)
 		}
 		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
 			return

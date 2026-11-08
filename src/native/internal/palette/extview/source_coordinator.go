@@ -35,6 +35,7 @@ type sourceLease struct {
 	owner    *sourceCoordinator
 	record   *sourceRecord
 	released bool
+	onPut    func(CacheEntry)
 }
 
 func newSourceCoordinator(maxEntries, maxBytes int) *sourceCoordinator {
@@ -187,6 +188,9 @@ func (l *sourceLease) put(key string, epoch uint64, entry CacheEntry) sourceAdmi
 	l.record.snapshots[key] = sourceSnapshot{entry: CacheEntry{Items: items, At: entry.At}, bytes: size}
 	c.entries++
 	c.bytes += size
+	if l.onPut != nil {
+		l.onPut(entry)
+	}
 	return sourceCached
 }
 

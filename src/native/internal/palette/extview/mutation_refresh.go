@@ -2,26 +2,19 @@ package extview
 
 import "github.com/pablopunk/nvm/native/internal/ext/api"
 
-func (s *Session) revalidateMutation(extID string) {
-	if s.deps.Cache != nil {
-		scope := s.sourceScope
-		if scope == "" && extID == s.extID {
-			scope = s.deps.Cache.Scope(extID, s.installationIdentity)
-		}
-		if extID != s.extID {
-			var identity any
-			if s.deps.CommandSnapshotIdentity != nil {
-				identity = s.deps.CommandSnapshotIdentity(extID)
-			}
-			scope = s.deps.Cache.Scope(extID, identity)
-		}
-		s.deps.Cache.InvalidateExtension(scope)
+func (s *Session) revalidateMutation(extID string, identity any) {
+	if identity == nil && extID == s.extID {
+		identity = s.installationIdentity
 	}
+	if s.deps.Cache != nil {
+		s.deps.Cache.invalidate(extID, identity)
+	}
+
 	for origin := s; origin != nil; origin = origin.parent {
 		if !origin.currentInstallation() {
 			continue
 		}
-		if origin.extID == extID && origin.view.Source != nil && !origin.dismissed {
+		if origin.extID == extID && origin.view.Source != nil && (origin.view.Source.Loader != "" || origin.view.Refresh == nil) && !origin.dismissed && (identity == nil && origin.installationIdentity == nil || sameSnapshotIdentity(identity, origin.installationIdentity)) {
 			origin.reload()
 		} else {
 			origin.refreshAfterMutation()
@@ -41,11 +34,6 @@ func (s *Session) refreshAfterMutation() {
 	s.refreshNow()
 }
 
-// cacheScope binds snapshots to the installation that opened this session.
-func (s *Session) cacheScope() string {
-	return s.sourceScope
-}
-
 // currentInstallation rejects work belonging to a replaced installation.
 func (s *Session) currentInstallation() bool {
 	if s.deps.CommandSnapshotIdentity == nil || s.installationIdentity == nil {
@@ -61,15 +49,15 @@ func (s *Session) cacheRefreshPatch(patch api.ViewPatch, generation uint64) {
 		return
 	}
 	if patch.Mode == api.PatchReplace {
-		s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, CacheEntry{Items: s.items, At: s.deps.Clock.Now()})
+		s.sourceLease.put(key, generation, CacheEntry{Items: s.items, At: s.deps.Clock.Now()})
 		return
 	}
 	if len(patch.Items) == 0 && len(patch.RemoveItemIDs) == 0 {
 		return
 	}
-	if entry, ok := s.deps.Cache.Get(key); ok {
+	if entry, _, ok := s.sourceLease.get(key); ok {
 		entry.Items = applyPatch(entry.Items, patch)
-		s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, entry)
+		s.sourceLease.put(key, generation, entry)
 	}
 }
 
@@ -86,9 +74,12 @@ func (s *Session) sourceInvalidated(identity any) {
 	s.reload()
 }
 
-// reacquireSourceScope restores caching after the previous namespace was evicted.
-func (s *Session) reacquireSourceScope() {
-	if s.deps.Cache != nil && s.deps.Cache.Generation(s.sourceScope) == 0 {
-		s.sourceScope = s.deps.Cache.Scope(s.extID, s.installationIdentity)
+// revealSource revalidates covered rows if their installation epoch changed.
+func (s *Session) revealSource() {
+	if s.view.Source != nil && s.sourceLease != nil && s.sourceEpoch != s.sourceLease.version() {
+		s.reload()
+	}
+	if s.view.Refresh != nil {
+		s.refreshNow()
 	}
 }

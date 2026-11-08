@@ -25,6 +25,9 @@ func (s *Session) start() {
 		return
 	}
 	s.started = true
+	if s.deps.Cache != nil && s.view.Source != nil {
+		s.sourceLease = s.deps.Cache.acquire(s.extID, s.installationIdentity)
+	}
 	s.immediate = s.view.Refresh != nil && s.view.Refresh.Immediate
 	s.startInterval()
 	if s.view.Source != nil {
@@ -39,7 +42,8 @@ func (s *Session) start() {
 func (s *Session) loadSource() {
 	source := s.view.Source
 	if key := s.snapshotKey(); key != "" {
-		if entry, ok := s.deps.Cache.Get(key); ok {
+		if entry, epoch, ok := s.sourceLease.get(key); ok {
+			s.sourceEpoch = epoch
 			s.items = entry.Items
 			age := s.deps.Clock.Now().Sub(entry.At)
 			if age < durationMs(source.TTLMs, defaultFreshMs) {
@@ -63,19 +67,25 @@ func (s *Session) reload() {
 		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
 		return
 	}
-	s.reacquireSourceScope()
+	if s.sourceLoading {
+		s.sourcePending = true
+		return
+	}
+	s.sourceLoading = true
 	s.itemsRevision++
 	revision := s.itemsRevision
 	var generation uint64
-	if s.deps.Cache != nil {
-		generation = s.deps.Cache.Generation(s.cacheScope())
+	if s.sourceLease != nil {
+		generation = s.sourceLease.version()
 	}
 	s.loading, s.failure = true, nil
 	done := func(items []api.Item, failure *api.Failure) {
+		s.sourceLoading = false
 		if s.dismissed || !s.currentInstallation() || revision != s.itemsRevision {
 			return
 		}
-		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
+		if s.sourcePending || (s.sourceLease != nil && s.sourceLease.version() != generation) {
+			s.sourcePending = false
 			s.reload()
 			return
 		}
@@ -86,12 +96,13 @@ func (s *Session) reload() {
 			return
 		}
 		if key := s.snapshotKey(); key != "" && generation != 0 {
-			if !s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, CacheEntry{Items: items, At: s.deps.Clock.Now()}) {
+			if s.sourceLease.put(key, generation, CacheEntry{Items: items, At: s.deps.Clock.Now()}) == sourceStale {
 				s.reload()
 				return
 			}
 		}
 		s.items = items
+		s.sourceEpoch = generation
 		s.refreshHost()
 		s.afterFirstLoad()
 	}
@@ -117,13 +128,10 @@ func (s *Session) refreshNow() {
 	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
 		return
 	}
-	if s.view.Source != nil {
-		s.reacquireSourceScope()
-	}
 	s.refreshing = true
 	var generation uint64
-	if s.deps.Cache != nil {
-		generation = s.deps.Cache.Generation(s.cacheScope())
+	if s.sourceLease != nil {
+		generation = s.sourceLease.version()
 	}
 	var snapshotVersion uint64
 	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
@@ -137,7 +145,7 @@ func (s *Session) refreshNow() {
 		if s.dismissed || !s.currentInstallation() {
 			return
 		}
-		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
+		if s.sourceLease != nil && s.sourceLease.version() != generation {
 			if s.refreshPending {
 				s.refreshPending = false
 				s.refreshNow()
@@ -234,6 +242,9 @@ func (s *Session) close() {
 		return
 	}
 	s.dismissed = true
+	if s.sourceLease != nil {
+		s.sourceLease.release()
+	}
 	if s.cancelImages != nil {
 		s.cancelImages()
 	}
@@ -356,10 +367,10 @@ func (s *Session) onUI(fn func()) {
 // snapshotKey names the view's snapshot in the cache, or "" when the view keeps none.
 func (s *Session) snapshotKey() string {
 	source := s.view.Source
-	if source == nil || source.CacheKey == "" || s.deps.Cache == nil || s.deps.Clock == nil {
+	if source == nil || source.CacheKey == "" || s.sourceLease == nil || s.deps.Clock == nil {
 		return ""
 	}
-	return s.cacheScope() + "/" + source.CacheKey
+	return source.CacheKey
 }
 
 func durationMs(ms, fallback int64) time.Duration {

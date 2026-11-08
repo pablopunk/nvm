@@ -110,19 +110,15 @@ type recordingSnapshotCache struct {
 	puts []CacheEntry
 }
 
-func (c *recordingSnapshotCache) Put(key string, entry CacheEntry) {
-	entry.Items = append([]api.Item(nil), entry.Items...)
-	c.puts = append(c.puts, entry)
-	c.Cache.Put(key, entry)
-}
-
-func (c *recordingSnapshotCache) PutGeneration(extID, key string, generation uint64, entry CacheEntry) bool {
-	if !c.Cache.PutGeneration(extID, key, generation, entry) {
-		return false
+func (c *recordingSnapshotCache) Put(key string, entry CacheEntry)  { testCachePut(c, key, entry) }
+func (c *recordingSnapshotCache) Get(key string) (CacheEntry, bool) { return testCacheGet(c, key) }
+func (c *recordingSnapshotCache) acquire(id string, identity any) *sourceLease {
+	lease := c.Cache.acquire(id, identity)
+	lease.onPut = func(entry CacheEntry) {
+		entry.Items = append([]api.Item(nil), entry.Items...)
+		c.puts = append(c.puts, entry)
 	}
-	entry.Items = append([]api.Item(nil), entry.Items...)
-	c.puts = append(c.puts, entry)
-	return true
+	return lease
 }
 
 func TestChatRemovalDuringHistoryRefresh(t *testing.T) {
@@ -256,8 +252,12 @@ func TestRemovalInvalidatesHeldSource(t *testing.T) {
 			old := append([]api.Item(nil), initial.View.Items...)
 			s.actionBody(s.items[1].Actions[1], "").Run(host)
 			if !declared {
-				if len(loads) != 2 {
+				if len(loads) != 1 {
 					t.Fatalf("loads=%d", len(loads))
+				}
+				loads[0](old, nil)
+				if len(loads) != 2 {
+					t.Fatalf("coalesced loads=%d", len(loads))
 				}
 				fresh, err := ext.RunAction(ctx, api.Invocation{Ref: aichats.HistoryRef()})
 				if err != nil {
@@ -269,7 +269,9 @@ func TestRemovalInvalidatesHeldSource(t *testing.T) {
 			if before == 0 {
 				t.Fatal("fresh result was not cached")
 			}
-			loads[0](old, nil)
+			if declared {
+				loads[0](old, nil)
+			}
 			if len(cache.puts) != before || len(s.items) != 2 || s.items[1].ID != "two" {
 				t.Fatalf("stale source applied: items=%v puts=%v", s.items, cache.puts)
 			}
@@ -283,8 +285,8 @@ func TestSourceLatestAndDismissed(t *testing.T) {
 	s := NewSession(Deps{Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}, "test", api.View{Source: &api.DataSource{CacheKey: "key"}})
 	s.Open(&removalHost{})
 	s.reload()
-	loads[1]([]api.Item{{ID: "new"}}, nil)
 	loads[0]([]api.Item{{ID: "old"}}, nil)
+	loads[1]([]api.Item{{ID: "new"}}, nil)
 	if len(cache.puts) != 1 || len(s.items) != 1 || s.items[0].ID != "new" {
 		t.Fatalf("latest load lost: %v %v", s.items, cache.puts)
 	}

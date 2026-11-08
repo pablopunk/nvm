@@ -296,9 +296,6 @@ func (s *Session) navigationChild(extID string, view api.View, navigation api.Na
 	child := NewSession(s.deps, extID, view)
 	if extID == s.extID {
 		child.installationIdentity = s.installationIdentity
-		if s.sourceScope != "" {
-			child.sourceScope = s.sourceScope
-		}
 	}
 	switch navigation {
 	case api.NavReplace:
@@ -353,7 +350,7 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 	}
 	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
-			s.revalidateMutation(s.extID)
+			s.revalidateMutation(s.extID, result.OriginIdentity)
 		}
 		if afterRun != nil {
 			afterRun(failure != nil)
@@ -387,7 +384,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 	}
 	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
-			s.revalidateMutation(extID)
+			s.revalidateMutation(extID, result.OriginIdentity)
 		}
 		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})

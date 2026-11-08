@@ -208,13 +208,14 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 		if len(response.Data) > 0 {
 			_ = json.Unmarshal(response.Data, &partial)
 		}
-		return api.Result{DataChanged: partial.DataChanged, SnapshotEvidence: response.SnapshotEvidence}, response.Failure, nil
+		return api.Result{DataChanged: partial.DataChanged, SnapshotEvidence: response.SnapshotEvidence, OriginIdentity: identity}, response.Failure, nil
 	}
 	var result api.Result
 	if err := json.Unmarshal(response.Data, &result); err != nil {
 		return api.Result{}, &api.Failure{Code: api.CodeInternal, Message: "run returned a result that is not valid"}, nil
 	}
 	result.SnapshotEvidence = response.SnapshotEvidence
+	result.OriginIdentity = identity
 	outcome = RunOutcomeSuccess
 	return result, nil, nil
 }

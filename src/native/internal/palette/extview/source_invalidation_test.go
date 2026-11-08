@@ -21,11 +21,14 @@ func TestMutationInvalidatesScopedSnapshotsAndFencesLoads(t *testing.T) {
 	s.Open(h)
 	s.submit(h, api.Invocation{}, nil)
 	mutation(api.Result{DataChanged: true}, nil)
-	if len(loads) != 2 {
+	if len(loads) != 1 {
 		t.Fatalf("loads = %d", len(loads))
 	}
-	loads[1]([]api.Item{{ID: "fresh"}}, nil)
 	loads[0]([]api.Item{{ID: "stale"}}, nil)
+	if len(loads) != 2 {
+		t.Fatalf("coalesced loads = %d", len(loads))
+	}
+	loads[1]([]api.Item{{ID: "fresh"}}, nil)
 	entry, ok := cache.Get("test/key")
 	if !ok || entry.Items[0].ID != "fresh" || s.items[0].ID != "fresh" {
 		t.Fatalf("entry=%v items=%v", entry, s.items)
@@ -43,11 +46,11 @@ func TestMutationInvalidatesScopedSnapshotsAndFencesLoads(t *testing.T) {
 func TestInvalidationRejectsLateWritesAndCancellation(t *testing.T) {
 	clock := fake.NewClock()
 	cache := NewMemoryCache()
-	cache.Scope("test", nil)
+	lease := cache.acquire("test", nil)
 	cache.Put("test/key", CacheEntry{Items: []api.Item{{ID: "old"}}, At: clock.Now()})
-	generation := cache.Generation("test")
-	cache.InvalidateExtension("test")
-	if cache.PutGeneration("test", "test/key", generation, CacheEntry{}) {
+	generation := lease.version()
+	cache.invalidate("test", nil)
+	if lease.put("key", generation, CacheEntry{}) != sourceStale {
 		t.Fatal("accepted stale write")
 	}
 	var load func([]api.Item, *api.Failure)
@@ -103,40 +106,14 @@ func TestReplacementInstallationKeepsItsOwnSnapshot(t *testing.T) {
 	replacement := NewSession(deps, "test", view)
 	replacement.Open(&removalHost{})
 	loads[1]([]api.Item{{ID: "replacement"}}, nil)
-	old.revalidateMutation("test")
+	old.revalidateMutation("test", first)
 	// A late service call carries the old invocation identity.
-	cache.InvalidateExtension(cache.Scope("test", first))
+	cache.invalidate("test", first)
 	loads[0]([]api.Item{{ID: "old"}}, nil)
 	reopened := NewSession(deps, "test", view)
 	reopened.Open(&removalHost{})
 	if len(loads) != 2 || len(reopened.items) != 1 || reopened.items[0].ID != "replacement" {
 		t.Fatalf("loads=%d replacement items=%v", len(loads), reopened.items)
-	}
-}
-
-func TestScopeEvictionRejectsOldWritesAndBoundsState(t *testing.T) {
-	cache := NewMemoryCache()
-	oldIdentity := new(int)
-	old := cache.Scope("test", oldIdentity)
-	oldGeneration := cache.Generation(old)
-	cache.PutGeneration(old, old+"/key", oldGeneration, CacheEntry{})
-	for i := 0; i < maxSourceScopes*3; i++ {
-		identity := new(int)
-		scope := cache.Scope("test", identity)
-		cache.PutGeneration(scope, scope+"/key", cache.Generation(scope), CacheEntry{})
-	}
-	if len(cache.scopes) > maxSourceScopes || len(cache.generations) > maxSourceScopes || len(cache.entries) > maxSourceEntries {
-		t.Fatalf("unbounded scopes=%d generations=%d entries=%d", len(cache.scopes), len(cache.generations), len(cache.entries))
-	}
-	replacement := cache.Scope("test", oldIdentity)
-	if replacement == old {
-		t.Fatal("evicted identity reused its scope")
-	}
-	if cache.PutGeneration(old, old+"/key", oldGeneration, CacheEntry{}) {
-		t.Fatal("evicted write accepted")
-	}
-	if _, ok := cache.Get(replacement + "/key"); ok {
-		t.Fatal("replacement inherited old snapshot")
 	}
 }
 
@@ -151,7 +128,7 @@ func TestExplicitInvalidationRefreshesVisibleMatchingInstallation(t *testing.T) 
 	session := NewSession(deps, "test", view)
 	page := session.Open(&removalHost{})
 	loads[0]([]api.Item{{ID: "before"}}, nil)
-	cache.InvalidateExtension(cache.Scope("test", identity))
+	cache.invalidate("test", identity)
 	page.OnSourceInvalidated(replacement)
 	if len(loads) != 1 {
 		t.Fatal("other installation refreshed view")
@@ -168,53 +145,6 @@ func TestExplicitInvalidationRefreshesVisibleMatchingInstallation(t *testing.T) 
 	page.OnSourceInvalidated(identity)
 	if len(loads) != 2 {
 		t.Fatal("dismissed view reloaded")
-	}
-}
-
-func TestEvictedScopeReacquiresAndFencesInFlightLoad(t *testing.T) {
-	clock := fake.NewClock()
-	cache := NewMemoryCache()
-	identity := new(int)
-	var loads []func([]api.Item, *api.Failure)
-	deps := Deps{Clock: clock, Cache: cache, CommandSnapshotIdentity: func(string) any { return identity }, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
-	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
-	session := NewSession(deps, "test", view)
-	session.Open(&removalHost{})
-	oldScope := session.sourceScope
-	for i := 0; i < maxSourceScopes; i++ {
-		cache.Scope("other", new(int))
-	}
-	loads[0]([]api.Item{{ID: "stale"}}, nil)
-	if len(loads) != 2 || session.sourceScope == oldScope {
-		t.Fatalf("loads=%d scope=%s", len(loads), session.sourceScope)
-	}
-	loads[1]([]api.Item{{ID: "fresh"}}, nil)
-	entry, ok := cache.Get(session.snapshotKey())
-	if !ok || entry.Items[0].ID != "fresh" || session.loading {
-		t.Fatalf("entry=%v loading=%v", entry, session.loading)
-	}
-	reopened := NewSession(deps, "test", view)
-	reopened.Open(&removalHost{})
-	if len(loads) != 2 || reopened.items[0].ID != "fresh" {
-		t.Fatalf("loads=%d items=%v", len(loads), reopened.items)
-	}
-}
-
-func TestEvictedLoadAfterDismissalDoesNotReacquire(t *testing.T) {
-	cache := NewMemoryCache()
-	var load func([]api.Item, *api.Failure)
-	identity := new(int)
-	deps := Deps{Clock: fake.NewClock(), Cache: cache, CommandSnapshotIdentity: func(string) any { return identity }, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { load = done }}
-	session := NewSession(deps, "test", api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}})
-	page := session.Open(&removalHost{})
-	oldScope := session.sourceScope
-	for i := 0; i < maxSourceScopes; i++ {
-		cache.Scope("other", new(int))
-	}
-	page.OnLeave()
-	load([]api.Item{{ID: "late"}}, nil)
-	if session.sourceScope != oldScope || cache.Generation(oldScope) != 0 {
-		t.Fatal("dismissed session reacquired an evicted scope")
 	}
 }
 
@@ -239,4 +169,76 @@ func TestSourceLoadContextCancelledOnDismissal(t *testing.T) {
 	if loadContext.Err() != context.Canceled {
 		t.Fatalf("loader context error=%v", loadContext.Err())
 	}
+}
+
+func TestCoveredSourceRevalidatesOnReveal(t *testing.T) {
+	cache := NewMemoryCache()
+	clock := fake.NewClock()
+	var loads []func([]api.Item, *api.Failure)
+	deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
+	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
+	session := NewSession(deps, "test", view)
+	page := session.Open(&removalHost{})
+	loads[0]([]api.Item{{ID: "old"}}, nil)
+	cache.invalidate("test", nil)
+	if page.OnReveal == nil {
+		t.Fatal("source page has no reveal callback")
+	}
+	page.OnReveal()
+	if len(loads) != 2 || session.items[0].ID != "old" {
+		t.Fatalf("loads=%d items=%v", len(loads), session.items)
+	}
+	loads[1]([]api.Item{{ID: "new"}}, nil)
+	if session.items[0].ID != "new" {
+		t.Fatalf("items=%v", session.items)
+	}
+	page.OnLeave()
+}
+
+func TestUncacheableSourceStillPresentsItems(t *testing.T) {
+	cache := NewMemoryCache()
+	cache.maxBytes = 1
+	var loads []func([]api.Item, *api.Failure)
+	deps := Deps{Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
+	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
+	session := NewSession(deps, "test", view)
+	page := session.Open(&removalHost{})
+	loads[0]([]api.Item{{ID: "oversized"}}, nil)
+	if len(loads) != 1 || session.loading || len(session.items) != 1 || session.items[0].ID != "oversized" {
+		t.Fatalf("loads=%d loading=%v items=%v", len(loads), session.loading, session.items)
+	}
+	page.OnLeave()
+	reopened := NewSession(deps, "test", view)
+	reopened.Open(&removalHost{})
+	if len(loads) != 2 {
+		t.Fatalf("uncacheable snapshot reused: loads=%d", len(loads))
+	}
+}
+
+func TestLiveEpochSurvivesEvictionAndMutation(t *testing.T) {
+	cache := NewMemoryCache()
+	cache.maxEntries = 1
+	clock := fake.NewClock()
+	var loads []func([]api.Item, *api.Failure)
+	deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
+	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
+	first := NewSession(deps, "test", view)
+	firstPage := first.Open(&removalHost{})
+	loads[0]([]api.Item{{ID: "old"}}, nil)
+	other := cache.acquire("other", nil)
+	other.put("key", other.version(), CacheEntry{Items: []api.Item{{ID: "other"}}})
+	other.release()
+	second := NewSession(deps, "test", view)
+	second.Open(&removalHost{})
+	loads[1]([]api.Item{{ID: "second"}}, nil)
+	before := first.sourceLease.version()
+	first.revalidateMutation("test", nil)
+	if first.sourceLease.version() == before || second.sourceLease.version() == before {
+		t.Fatal("live sessions did not share invalidation epoch")
+	}
+	if len(loads) != 3 {
+		t.Fatalf("loads=%d", len(loads))
+	}
+	loads[2]([]api.Item{{ID: "fresh"}}, nil)
+	firstPage.OnLeave()
 }

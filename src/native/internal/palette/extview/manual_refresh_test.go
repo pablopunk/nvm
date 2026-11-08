@@ -18,11 +18,14 @@ func TestManualRefreshPreservesRowsAndRejectsObsoleteLoads(t *testing.T) {
 	action := s.actionBody(api.Action{Kind: api.ActionRefreshView}, "refresh")
 	action.Run(host)
 	action.Run(host)
-	if len(loads) != 2 || len(s.items) != 1 || s.items[0].ID != "cached" {
+	if len(loads) != 1 || len(s.items) != 1 || s.items[0].ID != "cached" {
 		t.Fatalf("loads=%d items=%v", len(loads), s.items)
 	}
-	loads[1]([]api.Item{{ID: "new"}}, nil)
 	loads[0]([]api.Item{{ID: "old"}}, nil)
+	if len(loads) != 2 {
+		t.Fatalf("coalesced loads=%d", len(loads))
+	}
+	loads[1]([]api.Item{{ID: "new"}}, nil)
 	if s.items[0].ID != "new" {
 		t.Fatalf("obsolete load applied: %v", s.items)
 	}
