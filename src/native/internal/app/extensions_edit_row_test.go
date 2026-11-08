@@ -60,7 +60,10 @@ func TestEditWithAIIsOfferedOnlyForAnExtensionABuilderWrote(t *testing.T) {
 func TestEditWithAIStartsAChatBoundToTheExtension(t *testing.T) {
 	chats := goldenChatService(t, fake.NewSet())
 	bindBuilderChat(t, chats, "acme.good")
+	m := newFixtureManager(t, "acme.good")
+	waitForState(t, m, "acme.good", supervisor.StateRunning)
 	p := &App{chats: chats}
+	p.exts.mgr.Store(m)
 	row := extensionListRow(p, &fakeExtensions{}, goodListing())
 	h := &recordingHost{}
 	actionTitled(t, row, "Edit with AI").Run(h)
