@@ -12,6 +12,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -76,6 +77,14 @@ func rootTableFixture(t *testing.T) *App {
 	}
 	hackerNews := []quicklinks.Link{{Name: "Hacker News", Keyword: "hn", URL: "https://hn.algolia.com/?q={query}"}}
 	surfaces := paletteSurfaces(p)
+	var supported []platform.Capability
+	for _, capability := range platform.AllCapabilities() {
+		if capability != platform.CapabilityShellQuickLook {
+			supported = append(supported, capability)
+		}
+	}
+	capabilities := platform.NewCapabilities(supported...)
+	surfaces.capabilities = &capabilities
 	surfaces.index = fileIndexPort{p: p}
 	surfaces.extras = p.testExtensionPorts()
 	builtins := builtInExtensions(builtInInputs{Rates: p.rateCache, Zone: p.zone, Quicklinks: hackerNews, Snippets: p.legacySnips, Clipboard: p.clipboardOptions})

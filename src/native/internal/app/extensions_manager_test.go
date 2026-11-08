@@ -57,6 +57,7 @@ func newManagerWithApps(t testing.TB, builtins []api.Extension, clock platform.C
 // signed-in account, the clipboard ports and the palette's own surfaces. A nil field keeps the service absent, as the
 // app without it does.
 type managerFakes struct {
+	capabilities   *platform.Capabilities
 	onChange       func()
 	commandsChange func()
 	index          services.FileIndex
@@ -142,9 +143,13 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 	if clock == nil {
 		clock = ports.Clock
 	}
+	capabilities := platform.NewCapabilities(platform.AllCapabilities()...)
+	if fakes.capabilities != nil {
+		capabilities = *fakes.capabilities
+	}
 	m, err := manager.New(manager.Ports{
 		Files: ports.FS, FileIndex: fakes.index, AI: fakes.ai, Account: fakes.account, Clock: clock, Worker: real.NewWorker(), Processes: ports.Processes,
-		Capabilities:    platform.NewCapabilities(platform.AllCapabilities()...),
+		Capabilities:    capabilities,
 		Places:          fixturePlaces,
 		Network:         network,
 		Apps:            apps,
