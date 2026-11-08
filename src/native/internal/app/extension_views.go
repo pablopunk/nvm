@@ -57,7 +57,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		CommandSnapshotIdentity: m.SnapshotIdentity,
 		DurableGrids:            p.exts.grids.Load(),
 		AdmitAction: func(id string, identity any) (func() bool, error) {
-			authority, err := m.WindowAuthorityFor(id, identity)
+			authority, err := m.ActionAuthorityFor(id, identity)
 			if err != nil {
 				return nil, err
 			}

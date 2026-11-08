@@ -209,14 +209,14 @@ func TestPasteAdmissionRejectsReplacedInstallation(t *testing.T) {
 	}
 }
 
-func TestWindowAuthorityRevokedAcrossReplacement(t *testing.T) {
+func TestActionAuthorityRevokedAcrossReplacement(t *testing.T) {
 	h := newHarness(t)
 	const id = "acme.fallback"
 	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
 		t.Fatal(err)
 	}
 	identity := h.m.SnapshotIdentity(id)
-	authority, err := h.m.WindowAuthorityFor(id, identity)
+	authority, err := h.m.ActionAuthorityFor(id, identity)
 	if err != nil || !authority.Valid() || authority.Identity() != identity {
 		t.Fatalf("authority=%v err=%v", authority, err)
 	}
@@ -229,16 +229,16 @@ func TestWindowAuthorityRevokedAcrossReplacement(t *testing.T) {
 	if err := h.m.Enable(id); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := h.m.WindowAuthorityFor(id, identity); !errors.Is(err, ErrChangedInstallation) {
+	if _, err := h.m.ActionAuthorityFor(id, identity); !errors.Is(err, ErrChangedInstallation) {
 		t.Fatalf("old identity admitted: %v", err)
 	}
 	replacement := h.m.SnapshotIdentity(id)
-	if _, err := h.m.WindowAuthorityFor(id, replacement); err != nil {
+	if _, err := h.m.ActionAuthorityFor(id, replacement); err != nil {
 		t.Fatalf("replacement refused: %v", err)
 	}
 }
 
-func TestSupervisedRestoreKeepsCapturedWindowAuthority(t *testing.T) {
+func TestSupervisedRestoreKeepsCapturedActionAuthority(t *testing.T) {
 	h := newHarness(t)
 	const id = "acme.fallback"
 	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {

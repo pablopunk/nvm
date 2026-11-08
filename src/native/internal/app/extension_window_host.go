@@ -71,7 +71,7 @@ func (p *App) performExtensionWindow(extID string, action api.Action) {
 
 // performExtensionWindowBound admits the captured installation before any window effect.
 func (p *App) performExtensionWindowBound(m *manager.Manager, extID string, identity any, action api.Action) {
-	authority, err := m.WindowAuthorityFor(extID, identity)
+	authority, err := m.ActionAuthorityFor(extID, identity)
 	if err == nil {
 		err = p.extWindows.PerformBound(extID, authority, action)
 	}

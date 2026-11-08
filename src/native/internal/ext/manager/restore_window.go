@@ -25,7 +25,7 @@ func (m *Manager) RestoreWindow(ctx context.Context, id, restoreKey string) (*ap
 }
 
 // RestoreWindowBound returns a view and authority captured with the runtime that produced it.
-func (m *Manager) RestoreWindowBound(ctx context.Context, id, restoreKey string) (*api.WindowRestore, *WindowAuthority, error) {
+func (m *Manager) RestoreWindowBound(ctx context.Context, id, restoreKey string) (*api.WindowRestore, *ActionAuthority, error) {
 	m.mu.Lock()
 	e, err := m.findLocked(id)
 	if err != nil || e.runtime == nil || !m.isRunnable(e) {
@@ -43,7 +43,7 @@ func (m *Manager) RestoreWindowBound(ctx context.Context, id, restoreKey string)
 		e.revoked = &atomic.Bool{}
 	}
 	runtime := e.runtime
-	authority := &WindowAuthority{identity: identity, revoked: e.revoked}
+	authority := &ActionAuthority{identity: identity, revoked: e.revoked}
 	m.mu.Unlock()
 	budget := m.config.BudgetFor(protocol.MethodRestoreWindow)
 	callCtx, cancel := m.callContext(protocol.WithSnapshotOrigin(ctx, identity), id, budget)
