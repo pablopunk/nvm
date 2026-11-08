@@ -50,6 +50,8 @@ func (h *Handler) publicCapability(name string) bool {
 		return ocr.Availability(h.deps.Capabilities).Image
 	case "ocr.screen":
 		return ocr.Availability(h.deps.Capabilities).Screen
+	case "quick-look":
+		return h.deps.Capabilities.Supported(platform.CapabilityShellQuickLook)
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",
