@@ -59,13 +59,15 @@ func TestJourneyJ09SnippetCreateFindAndCopy(t *testing.T) {
 	_, err = app.WaitFor(name, elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // set Name
-	must(t, app.Key("Down"))   // Keyword
+	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.Key("Down")) // Keyword
 	must(t, app.Key("Return"))
 	must(t, app.Type(";rig"))
 	_, err = app.WaitFor(";rig", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // set Keyword
-	must(t, app.Key("Down"))   // Content opens the text editor
+	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.Key("Down")) // Content opens the text editor
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Save   esc Back", elementWait)
 	must(t, err)
