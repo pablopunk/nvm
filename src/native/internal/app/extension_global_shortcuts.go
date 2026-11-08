@@ -12,8 +12,10 @@ import (
 
 // extensionCommandEntry is an extension command a shortcut can run: the extension that answers it and the command.
 type extensionCommandEntry struct {
-	extID   string
-	command api.Command
+	extID       string
+	command     api.Command
+	identity    any
+	originBound bool
 }
 
 // globalShortcutTable is what the shortcut manager binds from the extensions: the global shortcuts the commands declare,
@@ -45,7 +47,7 @@ func (p *App) extensionShortcutCommand(actionID string) (extensionCommandEntry, 
 		}
 		for _, command := range result.Commands {
 			if command.ID == commandID {
-				return extensionCommandEntry{extID: result.ExtensionID, command: command}, true
+				return extensionCommandEntry{extID: result.ExtensionID, command: command, identity: result.OriginIdentity, originBound: result.OriginBound}, true
 			}
 		}
 	}
@@ -61,7 +63,7 @@ func globalShortcutTableOf(results []manager.CommandResult) globalShortcutTable 
 		}
 		for _, command := range result.Commands {
 			key := commandShortcutKey(result.ExtensionID, command)
-			table.commands[key] = extensionCommandEntry{extID: result.ExtensionID, command: command}
+			table.commands[key] = extensionCommandEntry{extID: result.ExtensionID, command: command, identity: result.OriginIdentity, originBound: result.OriginBound}
 			if command.GlobalShortcut != "" {
 				table.declared = append(table.declared, shortcuts.Declared{ActionID: key, Accelerator: command.GlobalShortcut, Title: command.Title})
 			}
@@ -129,7 +131,11 @@ type shortcutCommandRunner interface {
 }
 
 func runShortcutCommand(ctx context.Context, runner shortcutCommandRunner, entry extensionCommandEntry, beforePaste func() error) (api.Result, *api.Failure, error) {
+	if !entry.originBound {
+		return api.Result{}, nil, manager.ErrChangedInstallation
+	}
 	invocation := api.Invocation{
+		RequireIdentity: true, ExpectedIdentity: entry.identity,
 		Ref: api.ActionRef{ID: entry.command.ID}, Launch: api.LaunchContext{Reason: "manual"},
 		Background: entry.command.Mode == api.ModeBackground,
 	}
