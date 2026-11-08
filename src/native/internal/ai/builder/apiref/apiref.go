@@ -202,6 +202,9 @@ func (index *pkgIndex) referencedTypes(name string) []string {
 	}
 	var names []string
 	ast.Inspect(spec.Type, func(node ast.Node) bool {
+		if field, ok := node.(*ast.Field); ok && hiddenField(field) {
+			return false
+		}
 		if ident, ok := node.(*ast.Ident); ok && ast.IsExported(ident.Name) {
 			names = append(names, ident.Name)
 		}

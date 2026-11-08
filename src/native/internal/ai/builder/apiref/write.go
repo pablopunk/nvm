@@ -116,6 +116,9 @@ func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 
 func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full bool) {
 	for _, field := range st.Fields.List {
+		if hiddenField(field) {
+			continue
+		}
 		doc := commentText(firstNonNil(field.Doc, field.Comment))
 		typeText := index.exprText(field.Type)
 		if len(field.Names) == 0 {
@@ -170,6 +173,11 @@ func (index *pkgIndex) exprText(node ast.Node) string {
 	var buf bytes.Buffer
 	_ = printer.Fprint(&buf, index.fset, node)
 	return buf.String()
+}
+
+// hiddenField excludes host-only state from extension-facing references and reachability.
+func hiddenField(field *ast.Field) bool {
+	return field.Tag != nil && strings.Contains(field.Tag.Value, `json:"-"`)
 }
 
 // jsonName returns the wire name of a field: its json tag's name, or the Go name when the tag has none.

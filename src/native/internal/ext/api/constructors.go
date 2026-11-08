@@ -29,8 +29,8 @@ func CopyText(title, text string, concealed bool) Action {
 	return Action{Kind: ActionCopyText, Title: title, Text: text, Paste: &PasteOptions{Concealed: concealed}}
 }
 
-// CopyImage puts the PNG file at path on the clipboard and closes the palette. Only Nevermind's own pictures can be
-// copied: a clipboard history picture or a file the host wrote for an extension.
+// CopyImage copies an image file to the clipboard and closes the palette. File paths require the desktop.files
+// capability; supported formats and size limits follow the host image decoder.
 func CopyImage(title, path string) Action {
 	return Action{Kind: ActionCopyImage, Title: title, Path: path}
 }

@@ -92,7 +92,11 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		path := action.Path
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, path) }}
+		var identity any
+		if s.deps.CommandSnapshotIdentity != nil {
+			identity = s.deps.CommandSnapshotIdentity(s.extID)
+		}
+		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, s.extID, path, identity) }}
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
 		return s.pasteOperation(action, title)
 	case api.ActionPushView:

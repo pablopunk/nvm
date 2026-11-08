@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
@@ -138,22 +139,46 @@ func (x clipFilesProxy) Preview(ref string) string {
 	return ""
 }
 
-// copyImageFile puts a picture file on the clipboard, for copy-image. Only the pictures the app owns can be copied: a
-// stored history picture or a handle the app wrote, never an arbitrary file an extension names.
-func (p *App) copyImageFile(h search.Host, path string) {
-	if !p.isClipboardPicturePath(path) {
-		h.Toast("Copy failed: the picture is not in Nevermind.")
+// copyImageFile reads and converts a user-selected image away from the UI thread. The installation identity is
+// rechecked after the read so a disabled or replaced extension cannot complete a stale action.
+type imageCopyAuthority interface {
+	MayCopyImage(id string, identity any, clipboardPicture bool) bool
+}
+
+func (p *App) copyImageFile(h search.Host, m imageCopyAuthority, extID, path string, identity any) {
+	allowed := func() bool {
+		return m.MayCopyImage(extID, identity, p.isClipboardPicturePath(path))
+	}
+	if !allowed() || !filepath.IsAbs(path) {
+		h.Toast("Copy failed: this extension cannot read the picture.")
 		return
 	}
-	png, err := os.ReadFile(path)
-	if err == nil {
-		err = p.ports.Clipboard.WriteImagePNG(png)
+	current := func() bool { return true }
+	if loading, ok := h.(search.ActionLoadingHost); ok {
+		current = loading.BeginAction()
 	}
-	if err != nil {
-		h.Toast(copyFailureMessage(err))
-		return
-	}
-	h.Hide()
+	p.extCalls.Add(1)
+	go func() {
+		defer p.extCalls.Done()
+		png, err := thumbs.Render(p.ports.FS, path, thumbs.MaxSourcePixels)
+		p.onUI(func() {
+			if !current() {
+				return
+			}
+			if !allowed() {
+				h.Toast("Copy failed: this extension cannot read the picture.")
+				return
+			}
+			if err == nil {
+				err = p.ports.Clipboard.WriteImagePNG(png)
+			}
+			if err != nil {
+				h.Toast(copyFailureMessage(err))
+				return
+			}
+			h.Hide()
+		})
+	}()
 }
 
 // isClipboardPicturePath reports whether path is a PNG inside the history's picture folder or the handles folder.

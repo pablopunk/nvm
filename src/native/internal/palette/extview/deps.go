@@ -36,8 +36,8 @@ type Deps struct {
 	// the app in front, through the services of extension extID, and hides the palette first. Nil makes those actions
 	// report unavailable.
 	CopyText func(h search.Host, text string)
-	// CopyImage puts the PNG file at path on the clipboard and reports a failure as a toast on h. Nil makes copy-image report unavailable.
-	CopyImage func(h search.Host, path string)
+	// CopyImage copies a file for the originating installation, or reports failure as a toast.
+	CopyImage func(h search.Host, extID, path string, identity any)
 	// LinkCard returns the preview of a web address for a detail pane's link card: its status, and the title,
 	// description, site and picture the host read. It starts the read when there is none yet and never blocks. Nil draws
 	// no card.
