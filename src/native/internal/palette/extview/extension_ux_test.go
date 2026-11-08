@@ -41,7 +41,7 @@ func TestPreviewShowsItsImageAndText(t *testing.T) {
 	var finish func(*ui.Bitmap)
 	deps.LoadImage = func(_ context.Context, _ string, done func(*ui.Bitmap)) { finish = done }
 	session := NewSession(deps, "local.online-wallpapers", wallpaperPreview())
-	p := palette.New(palette.Options{Root: session.Open(nil), Clock: fake.NewClock(), Synchronous: true})
+	p := palette.New(palette.Options{Root: session.previewPage(), Clock: fake.NewClock(), Synchronous: true})
 	p.Attach(editWindow{})
 	p.Show()
 	tt := ui.NewTester(p.View, 900, 600)
