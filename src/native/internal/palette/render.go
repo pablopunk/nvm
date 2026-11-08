@@ -267,6 +267,12 @@ func (p *Palette) announceSelection(c *ui.Context, it *search.Item) {
 	c.Announce(it.Title)
 }
 
+// hasDefaultAction reports whether Enter does something on the row: menu-only actions never run on Enter.
+func hasDefaultAction(it search.Item) bool {
+	_, ok := it.DefaultAction()
+	return ok
+}
+
 // row draws result i. A section header goes above the first row of each run of one section.
 func (p *Palette) row(c *ui.Context, i int) {
 	it := p.results[i]
@@ -282,7 +288,7 @@ func (p *Palette) row(c *ui.Context, i int) {
 		Selected:   sel,
 		Disabled:   it.Disabled,
 		Contextual: it.Contextual,
-		ShowEnter:  sel && len(it.Actions) > 0 && !it.Disabled,
+		ShowEnter:  sel && hasDefaultAction(it) && !it.Disabled,
 	}
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
