@@ -58,3 +58,63 @@ func TestCanceledViewBoundsUninterruptibleHostCalls(t *testing.T) {
 	default:
 	}
 }
+
+func TestCancellationOwnsSerializedExchange(t *testing.T) {
+	for _, view := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ordinary", true: "initial-view"}[view], func(t *testing.T) {
+			rig := newServicesRig(t)
+			rig.deps.Home = t.TempDir()
+			r := servicedRuntime(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles))
+			blocker := &blockingScreenshotsService{ServiceHandler: r.services, entered: make(chan struct{}), release: make(chan struct{})}
+			r.services = blocker
+			released := false
+			defer func() {
+				if !released {
+					close(blocker.release)
+				}
+			}()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			done := make(chan error, 1)
+			go func() {
+				_, err := r.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: api.ActionRef{ID: "screenshots.grid"}, AwaitInitialView: view, Launch: api.LaunchContext{Refresh: true}})
+				done <- err
+			}()
+			select {
+			case <-blocker.entered:
+			case <-time.After(waitTimeout):
+				t.Fatal("service not entered")
+			}
+			holdStart := time.Now()
+			cancel()
+			select {
+			case err := <-done:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancel: %v", err)
+				}
+			case <-time.After(waitTimeout):
+				t.Fatal("caller did not return")
+			}
+			if !view && len(r.slots) != 1 {
+				t.Fatal("ordinary exchange released slot while service was held")
+			}
+			if view {
+				select {
+				case r.slots <- struct{}{}:
+					<-r.slots
+				case <-time.After(waitTimeout):
+					t.Fatal("view exchange retained slot")
+				}
+			}
+			close(blocker.release)
+			released = true
+			select {
+			case r.slots <- struct{}{}:
+				<-r.slots
+				t.Logf("slot available %s after cancellation", time.Since(holdStart))
+			case <-time.After(waitTimeout):
+				t.Fatal("exchange did not release slot")
+			}
+		})
+	}
+}

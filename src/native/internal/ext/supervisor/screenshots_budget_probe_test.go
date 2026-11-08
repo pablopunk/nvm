@@ -45,7 +45,9 @@ func TestScreenshotsNoisyBudgetProbe(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	child := servicedRuntime(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles))
+	worker, wire := newTimingWorker()
+	child := servicedRuntimeWithWorker(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles), worker)
+	defer wire.report(t)
 	timing := &screenshotTiming{ServiceHandler: child.services}
 	child.services = timing
 	start := time.Now()

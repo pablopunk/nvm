@@ -52,7 +52,9 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	r := servicedRuntime(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles))
+	worker, wire := newTimingWorker()
+	r := servicedRuntimeWithWorker(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles), worker)
+	defer wire.report(t)
 	timing := &screenshotTiming{ServiceHandler: r.services}
 	r.services = timing
 	phase := "initial"
