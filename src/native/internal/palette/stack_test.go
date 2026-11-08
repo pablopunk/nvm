@@ -165,3 +165,36 @@ func TestOrdinaryPopShowsRootAndShowClearsEntryBoundary(t *testing.T) {
 		t.Fatal("a normal Show should not inherit an entry boundary")
 	}
 }
+
+func TestSourceInvalidationReachesOnlyVisibleExtension(t *testing.T) {
+	var ran []string
+	root := rowsView("Nevermind", &ran, "Root")
+	h := newHarness(t, root, true)
+	identity := new(int)
+	calls := 0
+	page := rowsView("Extension", &ran, "Item")
+	page.ExtensionID = "example"
+	page.OnSourceInvalidated = func(got any) {
+		if got != identity {
+			t.Fatalf("identity=%v", got)
+		}
+		calls++
+	}
+	h.p.Push(page)
+	h.p.NotifyTopSourceInvalidated("other", identity)
+	h.frame()
+	if calls != 0 {
+		t.Fatalf("other extension notified page %d times", calls)
+	}
+	h.p.NotifyTopSourceInvalidated("example", identity)
+	h.frame()
+	if calls != 1 {
+		t.Fatalf("calls=%d", calls)
+	}
+	h.p.Push(rowsView("Other", &ran, "Item"))
+	h.p.NotifyTopSourceInvalidated("example", identity)
+	h.frame()
+	if calls != 1 {
+		t.Fatalf("hidden page notified: calls=%d", calls)
+	}
+}

@@ -69,6 +69,7 @@ type View struct {
 	HintReplacesActions bool
 	ExtensionID         string
 	OnDataChanged       func()
+	OnSourceInvalidated func(identity any)
 	OnLeave             func()
 	// OnReveal runs when a page above this one is popped and this page is the top again, after it has shown its rows.
 	OnReveal func()

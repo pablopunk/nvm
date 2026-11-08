@@ -115,6 +115,9 @@ func (s *Session) Palette() *palette.View {
 	page := s.pageOfKind()
 	page.Presentation = palettePresentation(s.view)
 	page.ExtensionID = s.extID
+	if s.view.Source != nil {
+		page.OnSourceInvalidated = s.sourceInvalidated
+	}
 	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
 		page.OnDataChanged = s.refreshAfterMutation
 	}

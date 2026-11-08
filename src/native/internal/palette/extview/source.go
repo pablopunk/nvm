@@ -63,6 +63,7 @@ func (s *Session) reload() {
 		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
 		return
 	}
+	s.reacquireSourceScope()
 	s.itemsRevision++
 	revision := s.itemsRevision
 	var generation uint64
@@ -75,10 +76,6 @@ func (s *Session) reload() {
 			return
 		}
 		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
-			if s.deps.Cache.Generation(s.cacheScope()) == 0 {
-				s.loading = false
-				return
-			}
 			s.reload()
 			return
 		}
@@ -114,6 +111,9 @@ func (s *Session) refreshNow() {
 	refresh := s.view.Refresh
 	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
 		return
+	}
+	if s.view.Source != nil {
+		s.reacquireSourceScope()
 	}
 	s.refreshing = true
 	var generation uint64

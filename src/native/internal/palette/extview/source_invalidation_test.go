@@ -138,3 +138,81 @@ func TestScopeEvictionRejectsOldWritesAndBoundsState(t *testing.T) {
 		t.Fatal("replacement inherited old snapshot")
 	}
 }
+
+func TestExplicitInvalidationRefreshesVisibleMatchingInstallation(t *testing.T) {
+	clock := fake.NewClock()
+	cache := NewMemoryCache()
+	identity, replacement := new(int), new(int)
+	current := any(identity)
+	var loads []func([]api.Item, *api.Failure)
+	deps := Deps{Clock: clock, Cache: cache, CommandSnapshotIdentity: func(string) any { return current }, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
+	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
+	session := NewSession(deps, "test", view)
+	page := session.Open(&removalHost{})
+	loads[0]([]api.Item{{ID: "before"}}, nil)
+	cache.InvalidateExtension(cache.Scope("test", identity))
+	page.OnSourceInvalidated(replacement)
+	if len(loads) != 1 {
+		t.Fatal("other installation refreshed view")
+	}
+	page.OnSourceInvalidated(identity)
+	if len(loads) != 2 {
+		t.Fatalf("loads=%d", len(loads))
+	}
+	loads[1]([]api.Item{{ID: "after"}}, nil)
+	if len(session.items) != 1 || session.items[0].ID != "after" {
+		t.Fatalf("items=%v", session.items)
+	}
+	page.OnLeave()
+	page.OnSourceInvalidated(identity)
+	if len(loads) != 2 {
+		t.Fatal("dismissed view reloaded")
+	}
+}
+
+func TestEvictedScopeReacquiresAndFencesInFlightLoad(t *testing.T) {
+	clock := fake.NewClock()
+	cache := NewMemoryCache()
+	identity := new(int)
+	var loads []func([]api.Item, *api.Failure)
+	deps := Deps{Clock: clock, Cache: cache, CommandSnapshotIdentity: func(string) any { return identity }, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}
+	view := api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}}
+	session := NewSession(deps, "test", view)
+	session.Open(&removalHost{})
+	oldScope := session.sourceScope
+	for i := 0; i < maxSourceScopes; i++ {
+		cache.Scope("other", new(int))
+	}
+	loads[0]([]api.Item{{ID: "stale"}}, nil)
+	if len(loads) != 2 || session.sourceScope == oldScope {
+		t.Fatalf("loads=%d scope=%s", len(loads), session.sourceScope)
+	}
+	loads[1]([]api.Item{{ID: "fresh"}}, nil)
+	entry, ok := cache.Get(session.snapshotKey())
+	if !ok || entry.Items[0].ID != "fresh" || session.loading {
+		t.Fatalf("entry=%v loading=%v", entry, session.loading)
+	}
+	reopened := NewSession(deps, "test", view)
+	reopened.Open(&removalHost{})
+	if len(loads) != 2 || reopened.items[0].ID != "fresh" {
+		t.Fatalf("loads=%d items=%v", len(loads), reopened.items)
+	}
+}
+
+func TestEvictedLoadAfterDismissalDoesNotReacquire(t *testing.T) {
+	cache := NewMemoryCache()
+	var load func([]api.Item, *api.Failure)
+	identity := new(int)
+	deps := Deps{Clock: fake.NewClock(), Cache: cache, CommandSnapshotIdentity: func(string) any { return identity }, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { load = done }}
+	session := NewSession(deps, "test", api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}})
+	page := session.Open(&removalHost{})
+	oldScope := session.sourceScope
+	for i := 0; i < maxSourceScopes; i++ {
+		cache.Scope("other", new(int))
+	}
+	page.OnLeave()
+	load([]api.Item{{ID: "late"}}, nil)
+	if session.sourceScope != oldScope || cache.Generation(oldScope) != 0 {
+		t.Fatal("dismissed session reacquired an evicted scope")
+	}
+}

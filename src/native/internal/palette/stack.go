@@ -139,6 +139,22 @@ func (p *Palette) NotifyTopDataChanged(extensionID string) {
 	})
 }
 
+// NotifyTopSourceInvalidated refreshes the matching visible extension view.
+func (p *Palette) NotifyTopSourceInvalidated(extensionID string, identity any) {
+	if p.win == nil {
+		return
+	}
+	p.win.Update(func() {
+		if !p.win.IsVisible() || len(p.stack) == 0 {
+			return
+		}
+		v := p.cur()
+		if v.ExtensionID == extensionID && v.OnSourceInvalidated != nil {
+			v.OnSourceInvalidated(identity)
+		}
+	})
+}
+
 // ReloadRows revalidates the visible rows from the UI thread after host data changes. Cached snapshots stay
 // available for instant navigation; every search revalidates its providers.
 func (p *Palette) ReloadRows() {

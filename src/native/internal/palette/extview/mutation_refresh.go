@@ -72,3 +72,23 @@ func (s *Session) cacheRefreshPatch(patch api.ViewPatch, generation uint64) {
 		s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, entry)
 	}
 }
+
+// sourceInvalidated runs on the UI thread for the visible matching installation.
+func (s *Session) sourceInvalidated(identity any) {
+	if s.dismissed || !s.currentInstallation() {
+		return
+	}
+	if identity != nil || s.installationIdentity != nil {
+		if !sameSnapshotIdentity(identity, s.installationIdentity) {
+			return
+		}
+	}
+	s.reload()
+}
+
+// reacquireSourceScope restores caching after the previous namespace was evicted.
+func (s *Session) reacquireSourceScope() {
+	if s.deps.Cache != nil && s.deps.Cache.Generation(s.sourceScope) == 0 {
+		s.sourceScope = s.deps.Cache.Scope(s.extID, s.installationIdentity)
+	}
+}
