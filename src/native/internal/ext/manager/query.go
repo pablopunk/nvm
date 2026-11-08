@@ -111,6 +111,7 @@ type runtimeTarget struct {
 	title         string
 	commandTitles map[string]string
 	runtime       runner
+	identity      any
 }
 
 // targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
@@ -123,7 +124,14 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
 		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
-			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime})
+			var identity any
+			if !e.builtin {
+				if e.snapshotIdentity == nil {
+					e.snapshotIdentity = new(byte)
+				}
+				identity = e.snapshotIdentity
+			}
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime, identity: identity})
 		}
 	}
 	return targets, m.config.BudgetFor(method)
@@ -141,7 +149,7 @@ func isAnswerable(state supervisor.State) bool {
 
 func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {
 	result := SearchResult{ExtensionID: target.id, Title: target.title}
-	callCtx, cancel := m.callContext(ctx, target.id, budget)
+	callCtx, cancel := m.callContext(protocol.WithSnapshotOrigin(ctx, target.identity), target.id, budget)
 	defer cancel()
 	response, err := target.runtime.Call(callCtx, method, query, nil)
 	if err != nil {

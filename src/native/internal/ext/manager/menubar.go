@@ -47,12 +47,12 @@ func (m *Manager) MenuBarTriggers(ctx context.Context, id string) ([]api.Trigger
 
 // callProvider runs one provider method of extension id within its budget and decodes the result into into.
 func (m *Manager) callProvider(ctx context.Context, id, method string, invocation *api.Invocation, into any) (*api.Failure, error) {
-	runtime, err := m.runtimeFor(id)
+	runtime, identity, err := m.runtimeForInvocation(id)
 	if err != nil {
 		return nil, err
 	}
 	budget := m.config.BudgetFor(method)
-	callCtx, cancel := m.callContext(ctx, id, budget)
+	callCtx, cancel := m.callContext(protocol.WithSnapshotOrigin(ctx, identity), id, budget)
 	defer cancel()
 	response, err := runtime.Call(callCtx, method, "", invocation)
 	if err != nil {

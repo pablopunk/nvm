@@ -115,3 +115,30 @@ func TestManagerCallContextKeepsCallerLifetime(t *testing.T) {
 		end()
 	}
 }
+
+// Provider calls retain the runtime identity selected before dispatch.
+func TestProviderContextCarriesCapturedInstallation(t *testing.T) {
+	probe := &callContextProbe{}
+	m, id, target := contextProbeManager(false, probe)
+	identity := new(byte)
+	target.identity = identity
+	budget := m.config.BudgetFor(protocol.MethodSearch)
+	if result := m.callOne(context.Background(), target, protocol.MethodSearch, "", budget); result.Failure != nil {
+		t.Fatal(result.Failure)
+	}
+	if got := protocol.SnapshotOrigin(probe.seen); got != identity {
+		t.Fatalf("search identity=%v", got)
+	}
+	if result := m.commandsOf(context.Background(), target, m.config.BudgetFor(protocol.MethodCommands)); result.Failure != nil {
+		t.Fatal(result.Failure)
+	}
+	if got := protocol.SnapshotOrigin(probe.seen); got != identity {
+		t.Fatalf("commands identity=%v", got)
+	}
+	if _, err := m.callProvider(context.Background(), id, protocol.MethodMenuBars, nil, &[]json.RawMessage{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := protocol.SnapshotOrigin(probe.seen); got == nil {
+		t.Fatal("menu invocation omitted its installation identity")
+	}
+}
