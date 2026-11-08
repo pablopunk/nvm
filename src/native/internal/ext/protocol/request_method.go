@@ -33,3 +33,13 @@ func LifetimeOf(ctx context.Context) context.Context {
 	}
 	return context.Background()
 }
+
+type snapshotOriginKey struct{}
+
+// WithSnapshotOrigin binds a service call to the installation that began its invocation.
+func WithSnapshotOrigin(ctx context.Context, identity any) context.Context {
+	return context.WithValue(ctx, snapshotOriginKey{}, identity)
+}
+
+// SnapshotOrigin returns the invocation's opaque installation identity.
+func SnapshotOrigin(ctx context.Context) any { return ctx.Value(snapshotOriginKey{}) }

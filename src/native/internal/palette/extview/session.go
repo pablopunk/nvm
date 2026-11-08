@@ -32,6 +32,7 @@ type Session struct {
 	snapshotRef          *api.ActionRef
 	snapshotIdentity     any
 	installationIdentity any
+	sourceScope          string
 	snapshotPending      bool
 	snapshotStaleHashes  map[[32]byte]bool
 	snapshotSourcePaths  map[[32]byte]bool
@@ -89,6 +90,9 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 	}
 	if deps.CommandSnapshotIdentity != nil {
 		s.installationIdentity = deps.CommandSnapshotIdentity(extID)
+	}
+	if deps.Cache != nil && view.Source != nil {
+		s.sourceScope = deps.Cache.Scope(extID, s.installationIdentity)
 	}
 	s.hasMore = view.Pagination != nil && view.Pagination.HasMore && view.Pagination.Next != nil
 	return s

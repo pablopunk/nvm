@@ -135,7 +135,8 @@ type Context interface {
 type Views interface {
 	// Refresh returns an action for lists or grids without Search: reload the source or run the Refresh handler. Other views report refresh unavailable.
 	Refresh() Action
-	// Invalidate drops the visible view's data source snapshot so the next open is fresh.
+	// Invalidate drops this installation's data source snapshots so their next open loads fresh data.
+	// Already running loads cannot restore invalidated snapshots.
 	Invalidate()
 	// RefreshMenuBar re-renders this extension's menu bar items.
 	RefreshMenuBar()

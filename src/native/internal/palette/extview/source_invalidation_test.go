@@ -102,10 +102,38 @@ func TestReplacementInstallationKeepsItsOwnSnapshot(t *testing.T) {
 	replacement.Open(&removalHost{})
 	loads[1]([]api.Item{{ID: "replacement"}}, nil)
 	old.revalidateMutation("test")
+	// A late service call carries the old invocation identity.
+	cache.InvalidateExtension(cache.Scope("test", first))
 	loads[0]([]api.Item{{ID: "old"}}, nil)
 	reopened := NewSession(deps, "test", view)
 	reopened.Open(&removalHost{})
 	if len(loads) != 2 || len(reopened.items) != 1 || reopened.items[0].ID != "replacement" {
 		t.Fatalf("loads=%d replacement items=%v", len(loads), reopened.items)
+	}
+}
+
+func TestScopeEvictionRejectsOldWritesAndBoundsState(t *testing.T) {
+	cache := NewMemoryCache()
+	oldIdentity := new(int)
+	old := cache.Scope("test", oldIdentity)
+	oldGeneration := cache.Generation(old)
+	cache.PutGeneration(old, old+"/key", oldGeneration, CacheEntry{})
+	for i := 0; i < maxSourceScopes*3; i++ {
+		identity := new(int)
+		scope := cache.Scope("test", identity)
+		cache.PutGeneration(scope, scope+"/key", cache.Generation(scope), CacheEntry{})
+	}
+	if len(cache.scopes) > maxSourceScopes || len(cache.generations) > maxSourceScopes || len(cache.entries) > maxSourceEntries {
+		t.Fatalf("unbounded scopes=%d generations=%d entries=%d", len(cache.scopes), len(cache.generations), len(cache.entries))
+	}
+	replacement := cache.Scope("test", oldIdentity)
+	if replacement == old {
+		t.Fatal("evicted identity reused its scope")
+	}
+	if cache.PutGeneration(old, old+"/key", oldGeneration, CacheEntry{}) {
+		t.Fatal("evicted write accepted")
+	}
+	if _, ok := cache.Get(replacement + "/key"); ok {
+		t.Fatal("replacement inherited old snapshot")
 	}
 }

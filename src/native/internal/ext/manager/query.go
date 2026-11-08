@@ -178,10 +178,11 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	if finish != nil {
 		defer func() { finish(outcome) }()
 	}
-	runtime, err := m.runtimeFor(id)
+	runtime, identity, err := m.runtimeForInvocation(id)
 	if err != nil {
 		return api.Result{}, nil, err
 	}
+	observedCtx = protocol.WithSnapshotOrigin(observedCtx, identity)
 	budget := m.config.BudgetFor(protocol.MethodRun)
 	if invocation.Background {
 		budget = backgroundRunBudget
@@ -274,4 +275,24 @@ func failureOf(err error) *api.Failure {
 	}
 	failure := api.FailureOf(err)
 	return &failure
+}
+
+// runtimeForInvocation captures the runtime and its installation identity together.
+func (m *Manager) runtimeForInvocation(id string) (runner, any, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if e.runtime == nil {
+		return nil, nil, ErrUnknownExtension
+	}
+	if e.builtin {
+		return e.runtime, nil, nil
+	}
+	if e.snapshotIdentity == nil {
+		e.snapshotIdentity = new(byte)
+	}
+	return e.runtime, e.snapshotIdentity, nil
 }

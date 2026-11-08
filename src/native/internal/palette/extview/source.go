@@ -75,6 +75,10 @@ func (s *Session) reload() {
 			return
 		}
 		if s.deps.Cache != nil && s.deps.Cache.Generation(s.cacheScope()) != generation {
+			if s.deps.Cache.Generation(s.cacheScope()) == 0 {
+				s.loading = false
+				return
+			}
 			s.reload()
 			return
 		}
@@ -84,7 +88,7 @@ func (s *Session) reload() {
 			s.refreshHost()
 			return
 		}
-		if key := s.snapshotKey(); key != "" {
+		if key := s.snapshotKey(); key != "" && generation != 0 {
 			if !s.deps.Cache.PutGeneration(s.cacheScope(), key, generation, CacheEntry{Items: items, At: s.deps.Clock.Now()}) {
 				s.reload()
 				return

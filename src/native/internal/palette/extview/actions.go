@@ -296,6 +296,9 @@ func (s *Session) navigationChild(extID string, view api.View, navigation api.Na
 	child := NewSession(s.deps, extID, view)
 	if extID == s.extID {
 		child.installationIdentity = s.installationIdentity
+		if s.sourceScope != "" {
+			child.sourceScope = s.sourceScope
+		}
 	}
 	switch navigation {
 	case api.NavReplace:

@@ -28,11 +28,13 @@ type Cache interface {
 
 // MemoryCache keeps snapshots for the life of the process. A restart starts empty.
 type MemoryCache struct {
-	mu          sync.Mutex
-	entries     map[string]CacheEntry
-	generations map[string]uint64
-	scopes      map[scopeIdentity]string
-	nextScope   uint64
+	mu             sync.Mutex
+	entries        map[string]CacheEntry
+	generations    map[string]uint64
+	scopes         map[scopeIdentity]string
+	nextScope      uint64
+	nextGeneration uint64
+	scopeOrder     []scopeIdentity
 }
 
 // NewMemoryCache returns an empty in-memory cache.
@@ -65,7 +67,7 @@ func (c *MemoryCache) InvalidateExtension(extensionID string) {
 func (c *MemoryCache) Put(key string, entry CacheEntry) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.entries[key] = entry
+	c.putLocked(key, entry)
 }
 
 // Generation identifies the current extension snapshot epoch.
@@ -79,10 +81,11 @@ func (c *MemoryCache) Generation(extID string) uint64 {
 func (c *MemoryCache) PutGeneration(extID, key string, generation uint64, entry CacheEntry) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.generations[extID] != generation {
+	current, ok := c.generations[extID]
+	if !ok || current != generation {
 		return false
 	}
-	c.entries[key] = entry
+	c.putLocked(key, entry)
 	return true
 }
 
@@ -90,7 +93,11 @@ func (c *MemoryCache) PutGeneration(extID, key string, generation uint64, entry 
 func (c *MemoryCache) InvalidateExtension(extID string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.generations[extID]++
+	if _, ok := c.generations[extID]; !ok {
+		return
+	}
+	c.nextGeneration++
+	c.generations[extID] = c.nextGeneration
 	for key := range c.entries {
 		if strings.HasPrefix(key, extID+"/") {
 			delete(c.entries, key)
@@ -104,18 +111,51 @@ type scopeIdentity struct {
 }
 
 // Scope gives each comparable installation identity a process-local namespace.
+
+const maxSourceScopes = 128
+const maxSourceEntries = 512
+
+// Scope creates a bounded namespace for an installation.
 func (c *MemoryCache) Scope(extID string, identity any) string {
-	if identity == nil || !reflect.TypeOf(identity).Comparable() {
-		return extID
+	if identity != nil && !reflect.TypeOf(identity).Comparable() {
+		return ""
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	key := scopeIdentity{extID, identity}
-	scope, ok := c.scopes[key]
-	if !ok {
-		c.nextScope++
-		scope = fmt.Sprintf("%s#%d", extID, c.nextScope)
-		c.scopes[key] = scope
+	if scope, ok := c.scopes[key]; ok {
+		return scope
 	}
+	if len(c.scopeOrder) >= maxSourceScopes {
+		oldest := c.scopeOrder[0]
+		c.scopeOrder = c.scopeOrder[1:]
+		scope := c.scopes[oldest]
+		delete(c.scopes, oldest)
+		delete(c.generations, scope)
+		for key := range c.entries {
+			if strings.HasPrefix(key, scope+"/") {
+				delete(c.entries, key)
+			}
+		}
+	}
+	c.nextScope++
+	scope := extID
+	if identity != nil {
+		scope = fmt.Sprintf("%s#%d", extID, c.nextScope)
+	}
+	c.nextGeneration++
+	c.generations[scope] = c.nextGeneration
+	c.scopes[key] = scope
+	c.scopeOrder = append(c.scopeOrder, key)
 	return scope
+}
+
+func (c *MemoryCache) putLocked(key string, entry CacheEntry) {
+	if _, exists := c.entries[key]; !exists && len(c.entries) >= maxSourceEntries {
+		for old := range c.entries {
+			delete(c.entries, old)
+			break
+		}
+	}
+	c.entries[key] = entry
 }

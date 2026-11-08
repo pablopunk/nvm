@@ -54,3 +54,32 @@ func TestRootsOfAsksOnlyTheMarkedExtensions(t *testing.T) {
 		t.Fatalf("RootsOf(acme.good) answered %+v; want only acme.good", results)
 	}
 }
+
+func TestInvalidateViewCarriesOriginFromSupervisedInvocation(t *testing.T) {
+	var mu sync.Mutex
+	var gotID string
+	var gotIdentity any
+	h := newHarness(t, func(o *Options) {
+		o.ViewsInvalidate = func(id string, identity any) {
+			mu.Lock()
+			defer mu.Unlock()
+			gotID, gotIdentity = id, identity
+		}
+	})
+	if err := h.m.Install("acme.fallback", fixtureContents(t, "acme.fallback"), true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning("acme.fallback")
+	identity := h.m.SnapshotIdentity("acme.fallback")
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	_, failure, err := h.m.Run(ctx, "acme.fallback", api.Invocation{Ref: api.ActionRef{ID: "invalidate-view"}})
+	if err != nil || failure != nil {
+		t.Fatalf("run: err=%v failure=%v", err, failure)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotID != "acme.fallback" || gotIdentity != identity {
+		t.Fatalf("got id=%q identity=%v want=%v", gotID, gotIdentity, identity)
+	}
+}

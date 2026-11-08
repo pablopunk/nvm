@@ -186,7 +186,7 @@ func (r *Runtime) awaitResponse(ctx, lifetime context.Context, child *childProce
 						return protocol.Response{}, err
 					}
 				} else {
-					reply, err = r.answerViewService(context.Background(), lifetime, child, call, req.Method)
+					reply, err = r.answerViewService(context.WithoutCancel(ctx), lifetime, child, call, req.Method)
 					if errors.Is(err, context.DeadlineExceeded) {
 						return protocol.Response{}, r.failChild(child, api.CodeTimeout, "service did not finish in time")
 					}

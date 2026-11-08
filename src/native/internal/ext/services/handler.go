@@ -124,9 +124,9 @@ type Deps struct {
 	// RootRefresh asks the host to run the root's rows again. It must not block, as MenuBarRefresh. Nil makes the
 	// request a no-op.
 	RootRefresh func(extensionID string)
-	// ViewsInvalidate drops the extension's data-source snapshots and refreshes its visible view. It must not block. Nil
-	// makes the call a no-op.
-	ViewsInvalidate func(extensionID string)
+	// ViewsInvalidate drops the extension's data-source snapshots and refreshes its visible view. identity names the
+	// installation that began the invocation, nil outside one. It must not block. Nil makes the call a no-op.
+	ViewsInvalidate func(extensionID string, identity any)
 	// SearchRefresh asks the palette to search again for a query, for one extension's background data. It must not
 	// block. Nil makes the request a no-op.
 	SearchRefresh func(extensionID, query string)
@@ -283,7 +283,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceJobs:
 		return h.serveJobs(call)
 	case protocol.ServiceViews:
-		return h.serveViews(call)
+		return h.serveViews(ctx, call)
 	case protocol.ServiceIndicators:
 		return h.serveIndicators(call)
 	case protocol.ServiceScheduler:
