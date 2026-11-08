@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	"github.com/pablopunk/nvm/native/internal/ai/quota"
@@ -154,6 +155,7 @@ type Manager struct {
 // services that runtime calls.
 type entry struct {
 	snapshotIdentity *byte
+	revoked          *atomic.Bool
 	bundle           bundle.Bundle
 	runtime          runner
 	host             *services.Handler
@@ -289,7 +291,7 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 		m.commands.forget(old.bundle.Manifest.ID)
 	}
 	m.commands.forget(loaded.Manifest.ID)
-	next := &entry{bundle: loaded}
+	next := &entry{bundle: loaded, revoked: &atomic.Bool{}}
 	if loaded.Runnable() {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
 		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
@@ -302,6 +304,9 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 
 // stopEntry stops the entry's child and then closes its services, which flushes the extension's data.
 func stopEntry(e *entry) {
+	if e.revoked != nil {
+		e.revoked.Store(true)
+	}
 	if e.runtime != nil {
 		e.runtime.Stop()
 	}

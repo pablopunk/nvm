@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"path/filepath"
 	"time"
@@ -36,14 +37,18 @@ var pngSignature = []byte("\x89PNG\r\n\x1a\n")
 // desktop.keyboard capabilities, and typing needs desktop.keyboard. A refusal or failure is logged and returned with
 // the palette-ready message the HUD shows.
 func (h *Handler) PerformPaste(action api.Action) error {
-	err := h.performPaste(action)
+	return h.performPasteLogged(context.Background(), action)
+}
+
+func (h *Handler) performPasteLogged(ctx context.Context, action api.Action) error {
+	err := h.performPaste(ctx, action)
 	if err != nil {
 		h.logger.Warn("the paste action failed", logx.F{"action": string(action.Kind), "reason": err.Error()})
 	}
 	return err
 }
 
-func (h *Handler) servePaste(call protocol.ServiceCall) (any, error) {
+func (h *Handler) servePaste(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	if call.Op != protocol.OpPerform {
 		return nil, invalid("desktop.paste has no operation %q", call.Op)
 	}
@@ -51,10 +56,10 @@ func (h *Handler) servePaste(call protocol.ServiceCall) (any, error) {
 	if err := decodeArgs(call.Args, &action); err != nil {
 		return nil, err
 	}
-	return nil, h.PerformPaste(action)
+	return nil, h.performPasteLogged(ctx, action)
 }
 
-func (h *Handler) performPaste(action api.Action) error {
+func (h *Handler) performPaste(ctx context.Context, action api.Action) error {
 	switch action.Kind {
 	case api.ActionPaste, api.ActionPasteText:
 		if err := h.requireAll(api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard); err != nil {
@@ -64,9 +69,15 @@ func (h *Handler) performPaste(action api.Action) error {
 		if err != nil {
 			return err
 		}
+		if err := admitPaste(ctx); err != nil {
+			return err
+		}
 		return h.paste(content, options)
 	case api.ActionTypeText:
 		if err := h.require(api.CapabilityDesktopKeyboard); err != nil {
+			return err
+		}
+		if err := admitPaste(ctx); err != nil {
 			return err
 		}
 		return h.typeText(action.Text, typingDelayMs(action.Typing))
@@ -257,4 +268,21 @@ func pasteFailure(err error) error {
 		return unavailable("%s", err.Error())
 	}
 	return err
+}
+
+type pasteAdmissionKey struct{}
+
+// WithPasteAdmission attaches a host-owned revocation check to a declarative paste.
+func WithPasteAdmission(ctx context.Context, valid func() bool) context.Context {
+	return context.WithValue(ctx, pasteAdmissionKey{}, valid)
+}
+
+func admitPaste(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if valid, ok := ctx.Value(pasteAdmissionKey{}).(func() bool); ok && !valid() {
+		return errors.New("this extension action has expired; reopen its view")
+	}
+	return nil
 }

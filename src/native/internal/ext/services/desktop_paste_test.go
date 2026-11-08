@@ -1,10 +1,12 @@
 package services
 
 import (
+	"context"
 	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -232,4 +234,34 @@ func hasWarning(logs *logx.Logger, message string) bool {
 		}
 	}
 	return false
+}
+
+func TestPasteRevokedBeforeIrreversibleAdmission(t *testing.T) {
+	for _, action := range []api.Action{
+		api.PasteText("Paste", "fixture"),
+		api.TypeText("Type", "fixture", api.TypeOptions{}),
+	} {
+		t.Run(string(action.Kind), func(t *testing.T) {
+			engine := &pasteRecorder{}
+			h, _ := pasteHandler(t, engine, pastingCapabilities...)
+			entered, release := make(chan struct{}), make(chan struct{})
+			var revoked atomic.Bool
+			ctx := WithPasteAdmission(context.Background(), func() bool {
+				close(entered)
+				<-release
+				return !revoked.Load()
+			})
+			done := make(chan error, 1)
+			go func() { done <- h.performPaste(ctx, action) }()
+			<-entered
+			revoked.Store(true)
+			close(release)
+			if err := <-done; err == nil {
+				t.Fatal("revoked operation succeeded")
+			}
+			if len(engine.pasted) != 0 || len(engine.typed) != 0 {
+				t.Fatal("revoked operation reached engine")
+			}
+		})
+	}
 }

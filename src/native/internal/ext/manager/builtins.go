@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtin"
@@ -49,6 +50,7 @@ func (m *Manager) registerBuiltIns(exts []api.Extension) {
 			runtime: builtin.New(ext, m.ports.Clock, serve),
 			host:    host,
 			builtin: true,
+			revoked: &atomic.Bool{},
 		}
 	}
 }

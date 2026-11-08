@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
 )
 
 // pasteCallBudget bounds one paste or typing action. Typing with a delay between characters runs for a while.
@@ -49,9 +51,14 @@ func (m *Manager) PerformPasteForIdentity(extID string, identity any, action api
 		return ErrChangedInstallation
 	}
 	host := e.host
+	if e.revoked == nil {
+		e.revoked = &atomic.Bool{}
+	}
+	revoked := e.revoked
 	m.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), pasteCallBudget)
 	defer cancel()
+	ctx = services.WithPasteAdmission(ctx, func() bool { return !revoked.Load() })
 	reply := host.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceDesktopPaste, Op: protocol.OpPerform, Args: raw})
 	if reply.Failure != nil {
 		return errors.New(reply.Failure.Message)
