@@ -57,7 +57,7 @@ func (s *Session) chatStep(title, id string, step func() error) search.Action {
 // refreshChat asks the built-in for the transcript of the chat with id as it is now, and shows it in place of the one
 // the palette holds, so the messages, the tier and the actions follow the store.
 func (s *Session) refreshChat(h search.Host, id string) {
-	s.deps.Invoke(aichats.ID, api.Invocation{Ref: aichats.RefreshChatRef(id)}, func(result api.Result, failure *api.Failure) {
+	s.deps.Invoke(aichats.ID, s.bindViewInvocation(aichats.ID, api.Invocation{Ref: aichats.RefreshChatRef(id)}), func(result api.Result, failure *api.Failure) {
 		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat {
 			s.view = *result.View
 		}
@@ -142,7 +142,7 @@ func (s *Session) runBuiltIn(h search.Host, ref api.ActionRef, replace bool) {
 		h.Toast(unavailableMessage)
 		return
 	}
-	s.deps.Invoke(aichats.ID, api.Invocation{Ref: ref}, func(result api.Result, failure *api.Failure) {
+	s.deps.Invoke(aichats.ID, s.bindViewInvocation(aichats.ID, api.Invocation{Ref: ref}), func(result api.Result, failure *api.Failure) {
 		if replace {
 			result.Navigation = api.NavReplace
 		}

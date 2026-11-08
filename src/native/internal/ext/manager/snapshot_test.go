@@ -2,6 +2,10 @@ package manager
 
 import (
 	"context"
+	"errors"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
@@ -15,6 +19,10 @@ func TestSnapshotIdentityChangesOnDisableAndReinstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	first := h.m.SnapshotIdentity(id)
+	firstRuntime, err := h.m.runtimeFor(id)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if first == nil {
 		t.Fatal("enabled extension has no identity")
 	}
@@ -28,6 +36,13 @@ func TestSnapshotIdentityChangesOnDisableAndReinstall(t *testing.T) {
 		t.Fatal(err)
 	}
 	second := h.m.SnapshotIdentity(id)
+	secondRuntime, err := h.m.runtimeFor(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRuntime == secondRuntime {
+		t.Fatal("enable reused disabled runtime")
+	}
 	if second == nil || second == first {
 		t.Fatal("enable reused disabled installation identity")
 	}
@@ -88,5 +103,59 @@ func TestLoaderRejectsReplacedInstallation(t *testing.T) {
 	}
 	if _, _, err := h.m.LoadForIdentity(context.Background(), id, "unused", first); err == nil {
 		t.Fatal("loader accepted an obsolete installation identity")
+	}
+}
+
+func TestViewActionRejectsReplacedInstallation(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	contents := fixtureContents(t, id)
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	first := h.m.SnapshotIdentity(id)
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	_, _, err := h.m.Run(context.Background(), id, api.Invocation{Ref: api.ActionRef{ID: "bump"}, RequireIdentity: true, ExpectedIdentity: first})
+	if !errors.Is(err, ErrChangedInstallation) {
+		t.Fatalf("old view action error=%v", err)
+	}
+}
+
+func TestCapturedRuntimeCannotReachReenabledChild(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	oldRuntime, oldIdentity, err := h.m.runtimeForInvocation(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	newRuntime, newIdentity, err := h.m.runtimeForInvocation(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if oldRuntime == newRuntime || oldIdentity == newIdentity {
+		t.Fatal("reenable reused runtime or identity")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	if _, err := oldRuntime.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: api.ActionRef{ID: "bump"}}); err == nil {
+		t.Fatal("captured old runtime dispatched after reenable")
 	}
 }

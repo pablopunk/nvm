@@ -315,7 +315,11 @@ func (s *Session) invokeRaw(ref api.ActionRef, value string, done func(api.Resul
 		done(api.Result{}, &api.Failure{Code: api.CodeUnavailable, Message: unavailableMessage})
 		return
 	}
-	s.deps.Invoke(s.extID, api.Invocation{Ref: ref, Value: value}, done)
+	s.deps.Invoke(s.extID, s.bindViewInvocation(s.extID, api.Invocation{Ref: ref, Value: value}), func(result api.Result, failure *api.Failure) {
+		if !s.dismissed && s.currentInstallation() {
+			done(result, failure)
+		}
+	})
 }
 
 // invokeInPlace runs a handler whose result changes the open view without closing the palette, such as a picker.

@@ -210,7 +210,10 @@ func (ed *editorState) autosave() {
 		return
 	}
 	in := api.Invocation{Ref: *track.options.Autosave.Ref, EditorContent: ed.text}
-	ed.sess.deps.Invoke(ed.sess.extID, in, func(result api.Result, failure *api.Failure) {
+	ed.sess.deps.Invoke(ed.sess.extID, ed.sess.bindViewInvocation(ed.sess.extID, in), func(result api.Result, failure *api.Failure) {
+		if !ed.sess.currentInstallation() {
+			return
+		}
 		if result.DataChanged && ed.sess.parent != nil {
 			ed.sess.parent.refreshAfterMutation()
 		}
@@ -256,7 +259,10 @@ func (ed *editorState) resolveConflict(stored protocol.DraftRecord) {
 		CurrentVersion: track.options.Version, CurrentContent: ed.text,
 	}
 	in := api.Invocation{Ref: *track.options.OnConflict, DraftConflict: &conflict}
-	ed.sess.deps.Invoke(ed.sess.extID, in, func(result api.Result, failure *api.Failure) {
+	ed.sess.deps.Invoke(ed.sess.extID, ed.sess.bindViewInvocation(ed.sess.extID, in), func(result api.Result, failure *api.Failure) {
+		if !ed.sess.currentInstallation() {
+			return
+		}
 		ed.applyConflict(result, failure, stored)
 	})
 }

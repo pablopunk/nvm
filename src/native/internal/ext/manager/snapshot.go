@@ -1,6 +1,10 @@
 package manager
 
-import "github.com/pablopunk/nvm/native/internal/ext/api"
+import (
+	"errors"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"reflect"
+)
 
 // SnapshotRevision binds a durable snapshot to the enabled installation that supplied the given in-memory identity.
 // A caller must still validate OS access to each file before exposing any persisted content.
@@ -59,4 +63,14 @@ func (m *Manager) MayCopyImage(id string, identity any, clipboardPicture bool) b
 		}
 	}
 	return false
+}
+
+// ErrChangedInstallation rejects an operation created by another installation.
+var ErrChangedInstallation = errors.New("extension installation changed")
+
+func sameInvocationIdentity(actual, expected any) bool {
+	if expected != nil && !reflect.TypeOf(expected).Comparable() {
+		return false
+	}
+	return actual == expected
 }

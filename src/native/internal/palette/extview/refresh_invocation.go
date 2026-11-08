@@ -8,6 +8,7 @@ func (s *Session) invokeRefresh(ref api.ActionRef, done func(api.Result, *api.Fa
 		return
 	}
 	in := api.Invocation{Ref: ref, AwaitInitialView: true, ProtectSnapshot: s.snapshotRef != nil, Launch: api.LaunchContext{Refresh: true, Reason: "refresh"}}
+	in = s.bindViewInvocation(s.extID, in)
 	if s.snapshotRef != nil {
 		var version uint64
 		paths := s.snapshotSourcePaths

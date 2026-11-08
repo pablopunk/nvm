@@ -23,8 +23,8 @@ func (s *Session) answerSearch(ctx context.Context, ref api.ActionRef, text stri
 	if s.deps.Answer == nil {
 		return nil, false
 	}
-	result, failure := s.deps.Answer(ctx, s.extID, api.Invocation{Ref: ref, Value: text})
-	if ctx.Err() != nil || failure != nil || result.Patch == nil {
+	result, failure := s.deps.Answer(ctx, s.extID, s.bindViewInvocation(s.extID, api.Invocation{Ref: ref, Value: text}))
+	if ctx.Err() != nil || !s.currentInstallation() || failure != nil || result.Patch == nil {
 		return nil, false
 	}
 	return result.Patch.Items, true

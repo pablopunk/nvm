@@ -190,6 +190,9 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	if err != nil {
 		return api.Result{}, nil, err
 	}
+	if invocation.RequireIdentity && !sameInvocationIdentity(identity, invocation.ExpectedIdentity) {
+		return api.Result{}, nil, ErrChangedInstallation
+	}
 	observedCtx = protocol.WithSnapshotOrigin(observedCtx, identity)
 	budget := m.config.BudgetFor(protocol.MethodRun)
 	if invocation.Background {

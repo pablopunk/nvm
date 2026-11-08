@@ -348,9 +348,12 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 		h.Toast(unavailableMessage)
 		return
 	}
-	s.deps.Invoke(s.extID, in, func(result api.Result, failure *api.Failure) {
+	s.deps.Invoke(s.extID, s.bindViewInvocation(s.extID, in), func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
 			s.revalidateMutation(s.extID, result.OriginIdentity)
+		}
+		if !s.currentInstallation() {
+			return
 		}
 		if afterRun != nil {
 			afterRun(failure != nil)
@@ -367,7 +370,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		return
 	}
 	if action.Confirm != nil {
-		r := route{extID: extID, action: action}
+		r := route{extID: extID, action: action, viewIntent: true}
 		if action.Kind == api.ActionToggleSetting && extID == s.extID {
 			r.identity = s.installationIdentity
 		}
@@ -382,9 +385,12 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		h.Toast(unavailableMessage)
 		return
 	}
-	s.deps.Invoke(extID, api.Invocation{Ref: *action.Ref}, func(result api.Result, failure *api.Failure) {
+	s.deps.Invoke(extID, s.bindViewInvocation(extID, api.Invocation{Ref: *action.Ref}), func(result api.Result, failure *api.Failure) {
 		if result.DataChanged {
 			s.revalidateMutation(extID, result.OriginIdentity)
+		}
+		if extID == s.extID && !s.currentInstallation() {
+			return
 		}
 		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})

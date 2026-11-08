@@ -100,11 +100,24 @@ func (m *Manager) Enable(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
+	wasEnabled, err := m.enabled.Enabled(id)
+	if err != nil {
+		return fmt.Errorf("read enabled state: %w", err)
+	}
 	if err := m.enabled.SetEnabled(id, true); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	if e.runtime == nil {
 		return fmt.Errorf("extension %s does not load: %s", id, joinProblems(e.bundle.Problems))
+	}
+	if !wasEnabled {
+		for key, current := range m.entries {
+			if current == e {
+				m.replaceLocked(key, e.bundle)
+				return nil
+			}
+		}
+		return ErrUnknownExtension
 	}
 	e.runtime.Reset()
 	e.runtime.Start()

@@ -83,3 +83,12 @@ func (s *Session) revealSource() {
 		s.refreshNow()
 	}
 }
+
+// bindViewInvocation carries the originating session's installation through asynchronous dispatch.
+func (s *Session) bindViewInvocation(extID string, in api.Invocation) api.Invocation {
+	in.RequireIdentity = true
+	if extID == s.extID {
+		in.ExpectedIdentity = s.installationIdentity
+	}
+	return in
+}

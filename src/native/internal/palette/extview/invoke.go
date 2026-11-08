@@ -21,6 +21,9 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
+	if r.viewIntent {
+		in = s.bindViewInvocation(r.extID, in)
+	}
 	var identity any
 	var pending *Session
 	var initialPending bool
@@ -87,7 +90,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		if result.DataChanged {
 			s.revalidateMutation(r.extID, result.OriginIdentity)
 		}
-		if !current() || (s.dismissed && !r.action.DismissAfterRun) {
+		if (r.viewIntent && !s.currentInstallation()) || !current() || (s.dismissed && !r.action.DismissAfterRun) {
 			return
 		}
 		if pending != nil {

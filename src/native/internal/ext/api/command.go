@@ -91,6 +91,9 @@ func (c Command) Validate() error {
 // Invocation is the input to an ActionRun handler. The host fills only the fields that apply to
 // the action that ran; everything else is zero.
 type Invocation struct {
+	// ExpectedIdentity and RequireIdentity are host-only view-dispatch authority.
+	ExpectedIdentity any  `json:"-"`
+	RequireIdentity  bool `json:"-"`
 	// ProtectSnapshot is host-only: a denied service invalidates a displayed cached view.
 	AwaitInitialView bool                  `json:"-"`
 	ProtectSnapshot  bool                  `json:"-"`
