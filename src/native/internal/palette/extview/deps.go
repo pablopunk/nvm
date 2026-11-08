@@ -52,8 +52,10 @@ type Deps struct {
 	// through the extension's settings service). RecordSetting pushes the host's recorder for a setting that holds an
 	// accelerator, and RowAccessory gives the host's edge text for a settings row, when it has one. Nil makes the
 	// settings rows report unavailable, or show their own text.
-	ReadSetting   func(extID, key string) (json.RawMessage, error)
-	WriteSetting  func(extID, key string, value json.RawMessage) error
+	ReadSetting  func(extID, key string) (json.RawMessage, error)
+	WriteSetting func(extID, key string, value json.RawMessage) error
+	// ToggleSetting runs the originating installation's checked setting service asynchronously.
+	ToggleSetting func(extID, key string, identity any, done func(error))
 	RecordSetting func(h search.Host, extID, key string)
 	RowAccessory  func(extID, rowID string) (accessory, subtitle string, ok bool)
 	// ReadDisplay returns the display text another built-in publishes for the shared setting a row shows, for the

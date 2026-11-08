@@ -26,46 +26,47 @@ type Session struct {
 	parent       *Session
 	chatRenderer *aichat.ExtensionChat
 	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
-	chatSideSession     *Session
-	chatSidePage        *palette.View
-	viewIntent          bool
-	snapshotRef         *api.ActionRef
-	snapshotIdentity    any
-	snapshotPending     bool
-	snapshotStaleHashes map[[32]byte]bool
-	snapshotSourcePaths map[[32]byte]bool
-	extID               string
-	view                api.View
-	host                search.Host
-	palettePage         *palette.View
-	items               []api.Item
-	sections            []api.ItemSection
-	loading             bool
-	failure             *api.Failure
-	hasMore             bool
-	selectID            string
-	images              map[string]*ui.Bitmap
-	requested           map[string]bool
-	imageContext        context.Context
-	cancelImages        context.CancelFunc
-	workContext         context.Context
-	cancelWork          context.CancelFunc
-	handles             map[handle]route
-	markdown            *markdown.Options
-	started             bool
-	immediate           bool
-	dismissed           bool
-	refreshing          bool
-	refreshPending      bool
-	manualRefreshHost   search.Host
-	itemsRevision       uint64
-	stopInterval        chan struct{}
-	form                *formState
-	media               *palette.View
-	page                platform.WebPage
-	camera              *cameraView
-	searchChange        searchChange
-	accessory           *palette.Accessory
+	chatSideSession      *Session
+	chatSidePage         *palette.View
+	viewIntent           bool
+	snapshotRef          *api.ActionRef
+	snapshotIdentity     any
+	installationIdentity any
+	snapshotPending      bool
+	snapshotStaleHashes  map[[32]byte]bool
+	snapshotSourcePaths  map[[32]byte]bool
+	extID                string
+	view                 api.View
+	host                 search.Host
+	palettePage          *palette.View
+	items                []api.Item
+	sections             []api.ItemSection
+	loading              bool
+	failure              *api.Failure
+	hasMore              bool
+	selectID             string
+	images               map[string]*ui.Bitmap
+	requested            map[string]bool
+	imageContext         context.Context
+	cancelImages         context.CancelFunc
+	workContext          context.Context
+	cancelWork           context.CancelFunc
+	handles              map[handle]route
+	markdown             *markdown.Options
+	started              bool
+	immediate            bool
+	dismissed            bool
+	refreshing           bool
+	refreshPending       bool
+	manualRefreshHost    search.Host
+	itemsRevision        uint64
+	stopInterval         chan struct{}
+	form                 *formState
+	media                *palette.View
+	page                 platform.WebPage
+	camera               *cameraView
+	searchChange         searchChange
+	accessory            *palette.Accessory
 	// guard covers the maps a row builds on a search goroutine: the run handles and the images.
 	guard        sync.Mutex
 	filePreviews map[string]filePreviewText
@@ -85,6 +86,9 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
 		images: map[string]*ui.Bitmap{}, requested: map[string]bool{},
 		handles: map[handle]route{}, markdown: &markdown.Options{},
+	}
+	if deps.CommandSnapshotIdentity != nil {
+		s.installationIdentity = deps.CommandSnapshotIdentity(extID)
 	}
 	s.hasMore = view.Pagination != nil && view.Pagination.HasMore && view.Pagination.Next != nil
 	return s

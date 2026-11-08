@@ -8,6 +8,10 @@ import (
 // invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
 // A declarative action is performed by the host instead, with no extension call.
 func (s *Session) invoke(h search.Host, r route) {
+	if r.action.Kind == api.ActionToggleSetting {
+		s.toggleDeclaredSetting(h, r)
+		return
+	}
 	if r.action.Kind != api.ActionRun {
 		s.runDeclared(h, r.action)
 		return

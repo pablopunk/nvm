@@ -103,11 +103,19 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
 		Window:                p.performExtensionWindow,
-		ReadSetting:           func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
-		RowAccessory:          p.settingRowAccessory,
-		ReadDisplay:           m.SharedDisplay,
-		HostOperation:         p.settingsHostOperation,
-		RecordSetting:         p.settingRecorder,
+		ToggleSetting: func(extID, key string, identity any, done func(error)) {
+			p.extCalls.Add(1)
+			go func() {
+				defer p.extCalls.Done()
+				err := m.ToggleSettingAction(extID, key, identity)
+				p.onUI(func() { done(err) })
+			}()
+		},
+		ReadSetting:   func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
+		RowAccessory:  p.settingRowAccessory,
+		ReadDisplay:   m.SharedDisplay,
+		HostOperation: p.settingsHostOperation,
+		RecordSetting: p.settingRecorder,
 		WriteSetting: func(extID, key string, value json.RawMessage) error {
 			return m.WriteSetting(extID, key, value)
 		},

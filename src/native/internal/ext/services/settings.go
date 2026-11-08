@@ -68,6 +68,8 @@ func (h *Handler) settingGet(args json.RawMessage) (protocol.GetResult, error) {
 // settingSet stores a value after the capability check and the type check. It is saved before it returns, so
 // the caller sees the value persisted.
 func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
+	h.settingsMu.Lock()
+	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
 		return nil, err
 	}
@@ -87,6 +89,8 @@ func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
 
 // settingToggle flips a boolean setting and returns the new value.
 func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
+	h.settingsMu.Lock()
+	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
 		return nil, err
 	}

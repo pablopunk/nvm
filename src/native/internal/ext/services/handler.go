@@ -163,6 +163,7 @@ type Handler struct {
 	closeOnce        sync.Once
 	docs             *documents
 	secretsMu        sync.Mutex
+	settingsMu       sync.Mutex
 	// hostSettings keeps the settings of a built-in in the host's store. Nil means the extension's settings file.
 	hostSettings SettingsHost
 }

@@ -20,6 +20,7 @@ type route struct {
 	command     bool
 	viewIntent  bool
 	initialView *api.View
+	identity    any
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
@@ -110,10 +111,15 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		view := *action.View
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			child := NewSession(s.deps, s.extID, view)
-			child.parent = s
+			child := s.navigationChild(s.extID, view, api.NavPush)
 			h.Push(child.Open(h))
 		}}
+	case api.ActionToggleSetting:
+		if s.deps.ToggleSetting == nil || strings.TrimSpace(action.Setting) == "" {
+			break
+		}
+		token := s.issue(key, route{extID: s.extID, action: action, identity: s.installationIdentity})
+		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.runHandle(h, token) }}
 	case api.ActionReplaceView, api.ActionRootView:
 		return s.hostOperation(action, title)
 	case api.ActionRefreshView:
@@ -284,6 +290,9 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 
 func (s *Session) navigationChild(extID string, view api.View, navigation api.NavigationMode) *Session {
 	child := NewSession(s.deps, extID, view)
+	if extID == s.extID {
+		child.installationIdentity = s.installationIdentity
+	}
 	switch navigation {
 	case api.NavReplace:
 		child.parent = s.parent
@@ -308,7 +317,7 @@ func (s *Session) confirmPage(r route) *palette.View {
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: "red", Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
-						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent})
+						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity})
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{
@@ -350,7 +359,11 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		return
 	}
 	if action.Confirm != nil {
-		h.Push(s.confirmPage(route{extID: extID, action: action}))
+		r := route{extID: extID, action: action}
+		if action.Kind == api.ActionToggleSetting && extID == s.extID {
+			r.identity = s.installationIdentity
+		}
+		h.Push(s.confirmPage(r))
 		return
 	}
 	if action.Kind != api.ActionRun {
