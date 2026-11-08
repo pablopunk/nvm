@@ -147,29 +147,37 @@ func (l *sourceLease) get(key string) (CacheEntry, uint64, bool) {
 	return CacheEntry{Items: items, At: snapshot.entry.At}, l.record.epoch, true
 }
 
-// put admits a result only while its lease and captured epoch remain current.
-func (l *sourceLease) put(key string, epoch uint64, entry CacheEntry) bool {
+type sourceAdmission uint8
+
+const (
+	sourceStale sourceAdmission = iota
+	sourceUncached
+	sourceCached
+)
+
+// put distinguishes an obsolete result from valid data that cannot be cached.
+func (l *sourceLease) put(key string, epoch uint64, entry CacheEntry) sourceAdmission {
 	if l == nil {
-		return false
+		return sourceStale
 	}
 	encoded, err := json.Marshal(entry.Items)
 	if err != nil {
-		return false
+		return l.admitUncached(key, epoch)
 	}
 	var items []api.Item
 	if err := json.Unmarshal(encoded, &items); err != nil {
-		return false
+		return l.admitUncached(key, epoch)
 	}
 	size := len(encoded) + len(key)
 	c := l.owner
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if l.released || l.record.epoch != epoch {
-		return false
+		return sourceStale
 	}
 	c.remove(l.record, key)
 	if size > c.maxBytes || c.maxEntries <= 0 {
-		return true
+		return sourceUncached
 	}
 	for c.entries >= c.maxEntries || c.bytes+size > c.maxBytes {
 		if !c.evictOne() {
@@ -179,7 +187,19 @@ func (l *sourceLease) put(key string, epoch uint64, entry CacheEntry) bool {
 	l.record.snapshots[key] = sourceSnapshot{entry: CacheEntry{Items: items, At: entry.At}, bytes: size}
 	c.entries++
 	c.bytes += size
-	return true
+	return sourceCached
+}
+
+// admitUncached checks freshness even when serialization cannot represent the items.
+func (l *sourceLease) admitUncached(key string, epoch uint64) sourceAdmission {
+	c := l.owner
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if l.released || l.record.epoch != epoch {
+		return sourceStale
+	}
+	c.remove(l.record, key)
+	return sourceUncached
 }
 
 func (c *sourceCoordinator) evictOne() bool {

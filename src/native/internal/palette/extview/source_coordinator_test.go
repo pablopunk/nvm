@@ -2,6 +2,7 @@ package extview
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -12,7 +13,7 @@ func TestCoordinatorEvictionPreservesLiveEpochAndRejectsStaleWrites(t *testing.T
 	id := new(int)
 	old := c.acquire("ext", id)
 	epoch := old.version()
-	if !old.put("source", epoch, CacheEntry{Items: []api.Item{{ID: "old"}}}) {
+	if old.put("source", epoch, CacheEntry{Items: []api.Item{{ID: "old"}}}) != sourceCached {
 		t.Fatal("initial write refused")
 	}
 	other := c.acquire("other", new(int))
@@ -21,7 +22,7 @@ func TestCoordinatorEvictionPreservesLiveEpochAndRejectsStaleWrites(t *testing.T
 		t.Fatal("snapshot eviction discarded live epoch")
 	}
 	c.invalidate("ext", id)
-	if old.put("source", epoch, CacheEntry{}) {
+	if old.put("source", epoch, CacheEntry{}) != sourceStale {
 		t.Fatal("accepted pre-invalidation write")
 	}
 	if _, _, ok := other.get("source"); !ok {
@@ -43,7 +44,7 @@ func TestCoordinatorReplacementsAndReleasedLeaseAreFenced(t *testing.T) {
 		t.Fatal("old invalidation removed replacement")
 	}
 	old.release()
-	if old.put("source", epoch, CacheEntry{}) {
+	if old.put("source", epoch, CacheEntry{}) != sourceStale {
 		t.Fatal("released lease wrote")
 	}
 	replacement.release()
@@ -59,4 +60,21 @@ func TestCoordinatorBoundsSnapshotsAcrossLifecycles(t *testing.T) {
 			t.Fatalf("entries=%d bytes=%d records=%d", c.entries, c.bytes, len(c.records))
 		}
 	}
+}
+
+func TestCoordinatorUncacheableResultIsNotStale(t *testing.T) {
+	c := newSourceCoordinator(1, 1)
+	lease := c.acquire("ext", nil)
+	epoch := lease.version()
+	if got := lease.put("source", epoch, CacheEntry{Items: []api.Item{{ID: "oversize"}}}); got != sourceUncached {
+		t.Fatalf("admission=%v", got)
+	}
+	if got := lease.put("source", epoch, CacheEntry{Items: []api.Item{{ID: "invalid", Score: math.NaN()}}}); got != sourceUncached {
+		t.Fatalf("serialization admission=%v", got)
+	}
+	c.invalidate("ext", nil)
+	if got := lease.put("source", epoch, CacheEntry{Items: []api.Item{{ID: "oversize"}}}); got != sourceStale {
+		t.Fatalf("stale admission=%v", got)
+	}
+	lease.release()
 }
