@@ -57,7 +57,7 @@ func (s *Session) drawPreviewImage(c *ui.Context, image *api.Image) {
 	s.guard.Unlock()
 	switch {
 	case bm != nil:
-		ui.Image(c, bm).FillWidth().Radius(8).Clip()
+		ui.Image(c, bm).Grow(1)
 	case loaded:
 		drawPlainText(c, "This image could not be loaded.")
 	default:
