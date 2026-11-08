@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 )
 
@@ -24,7 +25,10 @@ func (r *shortcutRunProbe) Run(_ context.Context, id string, invocation api.Invo
 	return r.result, r.failure, r.err
 }
 
-func (r *shortcutRunProbe) PerformPaste(id string, action api.Action) error {
+func (r *shortcutRunProbe) PerformPasteForIdentity(id string, identity any, action api.Action) error {
+	if identity != r.result.OriginIdentity {
+		return errors.New("paste lost captured origin")
+	}
 	if !r.hidden || id != r.extID {
 		return errors.New("paste lost its dismissal or extension identity")
 	}
@@ -35,7 +39,7 @@ func (r *shortcutRunProbe) PerformPaste(id string, action api.Action) error {
 func TestGlobalBackgroundShortcutExecutesItsDeclarativePaste(t *testing.T) {
 	for _, action := range []api.Action{api.PasteText("Paste Dictation", "transcript"), {Kind: api.ActionPaste}, {Kind: api.ActionTypeText, Text: "transcript"}} {
 		t.Run(string(action.Kind), func(t *testing.T) {
-			runner := &shortcutRunProbe{result: api.Result{Next: &action}}
+			runner := &shortcutRunProbe{result: api.Result{Next: &action, OriginBound: true}}
 			entry := extensionCommandEntry{extID: "nevermind.dictation", command: api.Command{ID: "dictate", Mode: api.ModeBackground}}
 			result, failure, err := runShortcutCommand(context.Background(), runner, entry, func() error { runner.hidden = true; return nil })
 			if err != nil || failure != nil || result.Next != nil || len(runner.actions) != 1 {
@@ -51,7 +55,7 @@ func TestGlobalBackgroundShortcutExecutesItsDeclarativePaste(t *testing.T) {
 func TestGlobalShortcutPreservesPasteFailuresAndSkipsFailedRuns(t *testing.T) {
 	action := api.PasteText("Paste", "transcript")
 	refused := errors.New("paste permission denied")
-	runner := &shortcutRunProbe{result: api.Result{Next: &action}, pasteErr: refused}
+	runner := &shortcutRunProbe{result: api.Result{Next: &action, OriginBound: true}, pasteErr: refused}
 	entry := extensionCommandEntry{extID: "acme.dictation", command: api.Command{ID: "dictate"}}
 	_, _, err := runShortcutCommand(context.Background(), runner, entry, func() error { runner.hidden = true; return nil })
 	if !errors.Is(err, refused) {
@@ -78,4 +82,14 @@ func TestBackgroundPasteFixtureDeclaresItsShortcut(t *testing.T) {
 		return
 	}
 	t.Fatal("background paste fixture did not advertise Commands")
+}
+
+func TestGlobalShortcutRejectsPasteWithoutCapturedOrigin(t *testing.T) {
+	action := api.PasteText("Paste", "fixture")
+	runner := &shortcutRunProbe{result: api.Result{Next: &action}}
+	entry := extensionCommandEntry{extID: "acme", command: api.Command{ID: "run"}}
+	_, _, err := runShortcutCommand(context.Background(), runner, entry, func() error { t.Fatal("unbound action hid palette"); return nil })
+	if !errors.Is(err, manager.ErrChangedInstallation) || len(runner.actions) != 0 {
+		t.Fatalf("err=%v actions=%v", err, runner.actions)
+	}
 }
