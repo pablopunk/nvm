@@ -304,6 +304,9 @@ func (s *Session) invokeInPlace(ref api.ActionRef, value string) {
 		if result.Patch != nil {
 			s.Apply(*result.Patch)
 		}
+		if view := result.View; view != nil && result.Navigation == api.NavReplace && view.Kind == s.view.Kind {
+			s.replaceInPlace(*view)
+		}
 		s.refreshHost()
 	})
 }

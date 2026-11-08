@@ -77,3 +77,25 @@ func TestSearchAccessoryClosedWithoutAChoiceChangesNothing(t *testing.T) {
 		t.Fatalf("value = %q, calls = %v after closing the menu; want all and no handler call", page.Accessory.Value, log.calls)
 	}
 }
+
+// TestAccessoryStepsFromTheKeyboardAndAnswersInPlace checks that a view with a search accessory lists Next and
+// Previous actions on Command+] and Command+[ without the extension asking for them, and that a handler answering with
+// a replacing view changes the open page's rows.
+func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
+	replacement := api.View{Kind: api.ViewList, Title: "Notes", Items: []api.Item{{ID: "n2", Title: "Release plan"}},
+		SearchAccessory: &api.SearchAccessory{Value: "done", Options: notesWithFilter.SearchAccessory.Options, OnChange: &api.ActionRef{ID: "filter"}}}
+	log := &invokeLog{results: map[string]api.Result{"filter": {View: &replacement, Navigation: api.NavReplace}}}
+	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
+	page := session.listPage()
+	actions := session.pageActions()
+	if len(actions) != 2 || actions[0].Key != ui.KeyBracketRight || actions[1].Key != ui.KeyBracketLeft {
+		t.Fatalf("page actions = %+v, want Next on ] and Previous on [", actions)
+	}
+	actions[0].Run(nil)
+	if page.Accessory.Value != "done" {
+		t.Fatalf("accessory value = %q, want done", page.Accessory.Value)
+	}
+	if len(session.items) != 1 || session.items[0].ID != "n2" {
+		t.Fatalf("items = %+v, want the replacement's rows", session.items)
+	}
+}
