@@ -5,7 +5,9 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -19,7 +21,9 @@ func TestCopyImageFileWritesPixelsAndRechecksAuthority(t *testing.T) {
 	for _, revoked := range []bool{false, true} {
 		t.Run(map[bool]string{false: "allowed", true: "revoked before completion"}[revoked], func(t *testing.T) {
 			fs := fake.NewFS()
-			if err := fs.MkdirAll("/Desktop", 0700); err != nil {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "shot.png")
+			if err := fs.MkdirAll(dir, 0700); err != nil {
 				t.Fatal(err)
 			}
 			img := image.NewNRGBA(image.Rect(0, 0, 2, 1))
@@ -28,7 +32,7 @@ func TestCopyImageFileWritesPixelsAndRechecksAuthority(t *testing.T) {
 			if err := png.Encode(&source, img); err != nil {
 				t.Fatal(err)
 			}
-			if err := fs.WriteFile("/Desktop/shot.png", source.Bytes(), 0600); err != nil {
+			if err := fs.WriteFile(path, source.Bytes(), 0600); err != nil {
 				t.Fatal(err)
 			}
 			clipboard := fake.NewClipboard()
@@ -36,8 +40,8 @@ func TestCopyImageFileWritesPixelsAndRechecksAuthority(t *testing.T) {
 			p := &App{ports: platform.Ports{FS: fs, Clipboard: clipboard}, uiQueue: queue}
 			host := &recordingHost{}
 			authority := &imageAuthority{allow: true}
-			p.copyImageFile(host, authority, "local.screenshots", "/Desktop/shot.png", new(byte))
-			complete := <-queue
+			p.copyImageFile(host, authority, "local.screenshots", path, new(byte))
+			complete := waitCopyCompletion(t, queue)
 			authority.allow = !revoked
 			complete()
 			got, err := clipboard.ReadImagePNG()
@@ -74,23 +78,36 @@ func (*obsoleteCopyHost) BeginAction() func() bool { return func() bool { return
 
 func TestCopyImageDoesNotCompleteAfterNavigation(t *testing.T) {
 	fs := fake.NewFS()
-	if err := fs.MkdirAll("/Desktop", 0700); err != nil {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "shot.png")
+	if err := fs.MkdirAll(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
 	var source bytes.Buffer
 	if err := png.Encode(&source, image.NewNRGBA(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatal(err)
 	}
-	if err := fs.WriteFile("/Desktop/shot.png", source.Bytes(), 0600); err != nil {
+	if err := fs.WriteFile(path, source.Bytes(), 0600); err != nil {
 		t.Fatal(err)
 	}
 	clipboard := fake.NewClipboard()
 	queue := make(completionUIQueue, 1)
 	p := &App{ports: platform.Ports{FS: fs, Clipboard: clipboard}, uiQueue: queue}
 	host := &obsoleteCopyHost{}
-	p.copyImageFile(host, &imageAuthority{allow: true}, "local.screenshots", "/Desktop/shot.png", new(byte))
-	(<-queue)()
+	p.copyImageFile(host, &imageAuthority{allow: true}, "local.screenshots", path, new(byte))
+	waitCopyCompletion(t, queue)()
 	if _, err := clipboard.ReadImagePNG(); err == nil || host.hidden || len(host.toasts) != 0 {
 		t.Fatalf("obsolete result: %v %+v", err, host)
+	}
+}
+
+func waitCopyCompletion(t *testing.T, queue completionUIQueue) func() {
+	t.Helper()
+	select {
+	case complete := <-queue:
+		return complete
+	case <-time.After(5 * time.Second):
+		t.Fatal("copy did not queue completion")
+		return nil
 	}
 }

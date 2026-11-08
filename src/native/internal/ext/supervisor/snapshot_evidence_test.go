@@ -3,19 +3,23 @@ package supervisor
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
+	"testing"
+
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
-	"testing"
 )
 
 func TestThumbnailEvidenceBoundsUniquePathsWithoutPromotingRepeatedDenial(t *testing.T) {
 	e := &api.SnapshotEvidence{}
-	args, _ := json.Marshal(protocol.PathArgs{Path: "/denied.png"})
+	dir := t.TempDir()
+	deniedPath := filepath.Join(dir, "denied.png")
+	args, _ := json.Marshal(protocol.PathArgs{Path: deniedPath})
 	call := protocol.ServiceCall{Service: protocol.ServiceDesktopFiles, Op: protocol.OpThumbnail, Args: args}
 	denied := protocol.ServiceReply{SnapshotPermissionFailure: &api.Failure{Code: api.CodePermission}}
 	for i := 0; i < 300; i++ {
 		d := observeSnapshotService(e, call, denied)
-		if d == nil || d.AuthorityDenied || d.Path != "/denied.png" {
+		if d == nil || d.AuthorityDenied || d.Path != deniedPath {
 			t.Fatal("one denied file became authority-wide")
 		}
 	}
@@ -30,7 +34,7 @@ func TestThumbnailEvidenceBoundsUniquePathsWithoutPromotingRepeatedDenial(t *tes
 		t.Fatal("duplicate successful thumbnail exhausted budget")
 	}
 	for i := 0; i < 201; i++ {
-		args, _ = json.Marshal(protocol.PathArgs{Path: fmt.Sprintf("/p%d.png", i)})
+		args, _ = json.Marshal(protocol.PathArgs{Path: filepath.Join(dir, fmt.Sprintf("p%d.png", i))})
 		call.Args = args
 		observeSnapshotService(e, call, protocol.ServiceReply{Data: success})
 	}
