@@ -34,6 +34,10 @@ func RootItems(ctx api.Context) ([]api.Item, error) {
 
 // RunAction handles bump: it asks the host to run the root's rows again.
 func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
+	if in.Ref.ID == "next" {
+		action := api.Run("bump", "Continue", nil)
+		return api.Result{Next: &action}, nil
+	}
 	if in.Ref.ID == "invalidate-view" {
 		ctx.Views().Invalidate()
 		return api.Result{}, nil

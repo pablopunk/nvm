@@ -15,12 +15,13 @@ type handle string
 
 // route is what a handle stands for: the extension that answers and the action it declared.
 type route struct {
-	extID       string
-	action      api.Action
-	command     bool
-	viewIntent  bool
-	initialView *api.View
-	identity    any
+	extID         string
+	action        api.Action
+	command       bool
+	viewIntent    bool
+	initialView   *api.View
+	identity      any
+	identityBound bool
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
@@ -272,7 +273,7 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 	case failure != nil:
 		h.Toast(failure.Message)
 	case result.Next != nil:
-		s.runFollowUp(h, extID, *result.Next, depth+1)
+		s.runFollowUp(h, extID, *result.Next, result.OriginIdentity, result.OriginBound, depth+1)
 	case result.View != nil:
 		switch result.Navigation {
 		case api.NavRoot:
@@ -280,7 +281,7 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 		case api.NavReplace:
 			h.Pop()
 		}
-		child := s.navigationChild(extID, *result.View, result.Navigation)
+		child := s.resultChild(extID, result)
 		h.Push(child.Open(h))
 	case result.Navigation == api.NavPop:
 		h.Pop()
@@ -307,6 +308,15 @@ func (s *Session) navigationChild(extID string, view api.View, navigation api.Na
 	return child
 }
 
+// resultChild binds a returned view to the runtime that produced it.
+func (s *Session) resultChild(extID string, result api.Result) *Session {
+	child := s.navigationChild(extID, *result.View, result.Navigation)
+	if result.OriginBound {
+		child.installationIdentity = result.OriginIdentity
+	}
+	return child
+}
+
 // confirmPage asks before a destructive action runs: its first row runs it, its second cancels. Cancel and Escape leave
 // the page without running anything, and a confirmed action replaces the confirmation with its own result.
 func (s *Session) confirmPage(r route) *palette.View {
@@ -325,7 +335,7 @@ func (s *Session) confirmPage(r route) *palette.View {
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: tone, Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
-						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity})
+						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity, identityBound: r.identityBound})
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{
@@ -359,39 +369,5 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 			afterRun(failure != nil)
 		}
 		s.finish(h, s.extID, "", result, failure)
-	})
-}
-
-// runFollowUp runs the action a result names: a confirmation first when it asks for one, a run action through the
-// extension (whose own result is applied the same way, up to maxFollowUps deep), or a declarative action on the host.
-func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, depth int) {
-	if depth > maxFollowUps {
-		h.Toast("This action asked for too many follow-up actions")
-		return
-	}
-	if action.Confirm != nil {
-		r := route{extID: extID, action: action, viewIntent: true}
-		if action.Kind == api.ActionToggleSetting && extID == s.extID {
-			r.identity = s.installationIdentity
-		}
-		h.Push(s.confirmPage(r))
-		return
-	}
-	if action.Kind != api.ActionRun {
-		s.action(action, "").Run(h)
-		return
-	}
-	if action.Ref == nil || s.deps.Invoke == nil {
-		h.Toast(unavailableMessage)
-		return
-	}
-	s.deps.Invoke(extID, s.bindViewInvocation(extID, api.Invocation{Ref: *action.Ref}), func(result api.Result, failure *api.Failure) {
-		if result.DataChanged {
-			s.revalidateMutation(extID, result.OriginIdentity)
-		}
-		if extID == s.extID && !s.currentInstallation() {
-			return
-		}
-		s.finishAt(h, extID, action.Title, result, failure, depth)
 	})
 }

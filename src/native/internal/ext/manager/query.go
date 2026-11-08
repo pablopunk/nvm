@@ -211,7 +211,7 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 		if len(response.Data) > 0 {
 			_ = json.Unmarshal(response.Data, &partial)
 		}
-		return api.Result{DataChanged: partial.DataChanged, SnapshotEvidence: response.SnapshotEvidence, OriginIdentity: identity}, response.Failure, nil
+		return api.Result{DataChanged: partial.DataChanged, SnapshotEvidence: response.SnapshotEvidence, OriginIdentity: identity, OriginBound: true}, response.Failure, nil
 	}
 	var result api.Result
 	if err := json.Unmarshal(response.Data, &result); err != nil {
@@ -219,6 +219,7 @@ func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation)
 	}
 	result.SnapshotEvidence = response.SnapshotEvidence
 	result.OriginIdentity = identity
+	result.OriginBound = true
 	outcome = RunOutcomeSuccess
 	return result, nil, nil
 }

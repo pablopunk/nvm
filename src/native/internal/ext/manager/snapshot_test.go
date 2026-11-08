@@ -159,3 +159,32 @@ func TestCapturedRuntimeCannotReachReenabledChild(t *testing.T) {
 		t.Fatal("captured old runtime dispatched after reenable")
 	}
 }
+
+func TestSupervisedFollowUpRetainsOriginAcrossReplacement(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	result, failure, err := h.m.Run(ctx, id, api.Invocation{Ref: api.ActionRef{ID: "next"}})
+	if err != nil || failure != nil || result.Next == nil || !result.OriginBound {
+		t.Fatalf("initial result=%+v failure=%v err=%v", result, failure, err)
+	}
+	follow := api.Invocation{Ref: *result.Next.Ref, RequireIdentity: true, ExpectedIdentity: result.OriginIdentity}
+	if _, failure, err := h.m.Run(ctx, id, follow); err != nil || failure != nil {
+		t.Fatalf("follow-up failure=%v err=%v", failure, err)
+	}
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	if _, _, err := h.m.Run(ctx, id, follow); !errors.Is(err, ErrChangedInstallation) {
+		t.Fatalf("stale follow-up error=%v", err)
+	}
+}

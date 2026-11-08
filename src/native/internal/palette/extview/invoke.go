@@ -22,7 +22,11 @@ func (s *Session) invoke(h search.Host, r route) {
 	}
 	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
 	if r.viewIntent {
-		in = s.bindViewInvocation(r.extID, in)
+		if r.identityBound {
+			in.RequireIdentity, in.ExpectedIdentity = true, r.identity
+		} else {
+			in = s.bindViewInvocation(r.extID, in)
+		}
 	}
 	var identity any
 	var pending *Session
@@ -84,6 +88,9 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	done := func(result api.Result, failure *api.Failure) {
+		if r.identityBound && !result.OriginBound {
+			result.OriginIdentity, result.OriginBound = r.identity, true
+		}
 		if in.ProtectSnapshot {
 			filterSnapshotDenied(&result, staleHashes)
 		}
@@ -110,6 +117,10 @@ func (s *Session) invoke(h search.Host, r route) {
 		}
 		if identity != nil && failure == nil && result.View != nil && result.View.Kind == api.ViewGrid && (result.Navigation == "" || result.Navigation == api.NavPush) && result.Next == nil && result.Toast == nil {
 			child := s.navigationChild(r.extID, *result.View, result.Navigation)
+			if result.OriginBound {
+				identity = result.OriginIdentity
+				child.installationIdentity = identity
+			}
 			child.snapshotRef, child.snapshotIdentity = &in.Ref, identity
 			child.snapshotSourcePaths = verifiedSnapshotPaths(result.View.Items, result.SnapshotEvidence)
 			h.Push(child.Open(h))

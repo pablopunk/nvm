@@ -144,7 +144,8 @@ type LaunchContext struct {
 // Result is what a handler returns to the palette. The zero value means "nothing to do".
 type Result struct {
 	// OriginIdentity is host-owned and identifies the runtime that produced this result.
-	OriginIdentity any `json:"-"`
+	OriginIdentity any  `json:"-"`
+	OriginBound    bool `json:"-"`
 	// SnapshotEvidence is populated only by the host and never sent by an extension.
 	SnapshotEvidence *SnapshotEvidence `json:"-"`
 	// DataChanged revalidates the surviving origin after a confirmed mutation, even if the handler returns an error.
