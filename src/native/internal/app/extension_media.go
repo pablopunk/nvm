@@ -20,6 +20,10 @@ import (
 // A data URL longer than this is not decoded.
 const maxImageDataURLBytes = 4 << 20
 
+// A downloaded image may be larger than an inline one: a full-resolution wallpaper preview is several megabytes. The
+// decoder bound on pixel count still applies.
+const maxRemoteImageBytes = 32 << 20
+
 var extensionImagePermits = make(chan struct{}, 2)
 
 // loadExtensionBitmap decodes an extension image from a data URL, local file, or public web URL.
@@ -98,7 +102,7 @@ func remoteImageBytes(client platform.HTTP, ref string) ([]byte, bool) {
 func remoteImageBytesContext(parent context.Context, client platform.HTTP, ref string) ([]byte, bool) {
 	ctx, cancel := context.WithTimeout(parent, 10*time.Second)
 	defer cancel()
-	result, err := platform.FetchExchange(ctx, client, platform.Exchange{Method: http.MethodGet, URL: ref, MaxBytes: maxImageDataURLBytes, MaxRedirects: 3, Check: func(target *url.URL) error {
+	result, err := platform.FetchExchange(ctx, client, platform.Exchange{Method: http.MethodGet, URL: ref, MaxBytes: maxRemoteImageBytes, MaxRedirects: 3, Check: func(target *url.URL) error {
 		if (!strings.EqualFold(target.Scheme, "http") && !strings.EqualFold(target.Scheme, "https")) || target.Host == "" || target.User != nil {
 			return errors.New("invalid image URL")
 		}

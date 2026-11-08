@@ -41,7 +41,7 @@ func TestRemoteImageRejectsRedirectAndLimits(t *testing.T) {
 	if len(client.Requests()) != 1 {
 		t.Fatal("invalid redirect was contacted")
 	}
-	client.Script(fake.Response{Status: 200, Body: make([]byte, maxImageDataURLBytes+1)})
+	client.Script(fake.Response{Status: 200, Body: make([]byte, maxRemoteImageBytes+1)})
 	if _, ok := remoteImageBytes(client, "https://images.example/large"); ok {
 		t.Fatal("oversized response accepted")
 	}
