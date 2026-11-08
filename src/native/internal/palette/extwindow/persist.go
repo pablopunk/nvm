@@ -17,6 +17,9 @@ func (m *Manager) persist(w *window) {
 	}
 	entry := SavedWindow{ExtensionID: w.extID, RestoreKey: w.options.RestoreKey, Options: w.options}
 	m.update(func(state *Saved) {
+		if w.authority != nil && !w.authority.Valid() {
+			return
+		}
 		state.Windows = append(withoutRestoreKey(state.Windows, w.extID, w.options.RestoreKey), entry)
 	})
 }
@@ -28,10 +31,23 @@ func (m *Manager) forget(extID, restoreKey string) {
 	})
 }
 
+// forgetWindow refuses stale callbacks from an old installation.
+func (m *Manager) forgetWindow(w *window) {
+	m.update(func(state *Saved) {
+		if w.authority != nil && !w.authority.Valid() {
+			return
+		}
+		state.Windows = withoutRestoreKey(state.Windows, w.extID, w.options.RestoreKey)
+	})
+}
+
 // rememberFrame stores where a window that remembers its frame is now.
 func (m *Manager) rememberFrame(w *window) {
 	frame := w.surface.Frame()
 	m.update(func(state *Saved) {
+		if w.authority != nil && !w.authority.Valid() {
+			return
+		}
 		if state.Frames == nil {
 			state.Frames = map[string]Frame{}
 		}

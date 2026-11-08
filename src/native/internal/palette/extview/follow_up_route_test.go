@@ -244,3 +244,25 @@ func TestHeldFollowUpNavigationGuardKeepsMutation(t *testing.T) {
 	}
 	lease.release()
 }
+
+func TestCrossExtensionWindowCarriesCapturedIdentity(t *testing.T) {
+	source, target := new(int), new(int)
+	var gotID string
+	var gotIdentity any
+	deps := Deps{
+		CommandSnapshotIdentity: func(id string) any {
+			if id == "source" {
+				return source
+			}
+			return target
+		},
+		WindowBound: func(id string, identity any, _ api.Action) { gotID, gotIdentity = id, identity },
+	}
+	session := NewSession(deps, "source", api.View{})
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionWindow}
+	session.finish(host, "target", "", api.Result{Next: &action, OriginIdentity: target, OriginBound: true}, nil)
+	if gotID != "target" || gotIdentity != target {
+		t.Fatalf("window id=%q identity=%v", gotID, gotIdentity)
+	}
+}

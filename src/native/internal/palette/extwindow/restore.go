@@ -43,3 +43,37 @@ func (m *Manager) persisted() []SavedWindow {
 	}
 	return state.Windows
 }
+
+// BoundRestorer returns the installation authority captured with the restoring runtime.
+type BoundRestorer func(extID, restoreKey string) (*api.WindowRestore, Authority, error)
+
+// RestorePersistedBound retains saved records when the owning installation is unavailable or replaced.
+func (m *Manager) RestorePersistedBound(restore BoundRestorer) {
+	for _, saved := range m.persisted() {
+		go func(saved SavedWindow) {
+			fresh, authority, err := restore(saved.ExtensionID, saved.RestoreKey)
+			m.onUI(func() { m.adoptRestoredBound(saved, fresh, authority, err) })
+		}(saved)
+	}
+}
+
+func (m *Manager) adoptRestoredBound(saved SavedWindow, fresh *api.WindowRestore, authority Authority, err error) {
+	if err != nil || authority == nil || !authority.Valid() {
+		return
+	}
+	if fresh == nil {
+		m.update(func(state *Saved) {
+			if authority.Valid() {
+				state.Windows = withoutRestoreKey(state.Windows, saved.ExtensionID, saved.RestoreKey)
+			}
+		})
+		return
+	}
+	options := api.WindowOptions{}
+	if fresh.Options != nil {
+		options = *fresh.Options
+	}
+	options.RestoreKey, options.Persistent = saved.RestoreKey, true
+	// A failed or revoked restore must not erase the stored window.
+	_ = m.createBound(saved.ExtensionID, authority, fresh.View, options)
+}

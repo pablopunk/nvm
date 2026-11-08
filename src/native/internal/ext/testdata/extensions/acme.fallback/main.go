@@ -49,3 +49,11 @@ func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	ctx.Views().InvalidateRoot()
 	return api.Result{}, nil
 }
+
+// RestoreWindow supplies a stable test view for the supervised restoration path.
+func RestoreWindow(ctx api.Context, restoreKey string) (*api.WindowRestore, error) {
+	if restoreKey != "fixture" {
+		return nil, nil
+	}
+	return &api.WindowRestore{View: api.ListView("Restored fixture")}, nil
+}

@@ -98,6 +98,13 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 	return s
 }
 
+// NewSessionForIdentity binds a host-owned child view to its captured installation.
+func NewSessionForIdentity(deps Deps, extID string, view api.View, identity any) *Session {
+	s := NewSession(deps, extID, view)
+	s.installationIdentity = identity
+	return s
+}
+
 // Open shows the session on host: it starts the view's loads and refreshes, and returns the page to push.
 func (s *Session) Open(host search.Host) *palette.View {
 	s.host = host

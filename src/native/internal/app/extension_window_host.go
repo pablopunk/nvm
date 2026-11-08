@@ -25,11 +25,12 @@ const extensionWindowRestoreTimeout = 10 * time.Second
 // attachExtensionWindows builds the manager of the windows extensions open. Building it opens no window.
 func (p *App) attachExtensionWindows() {
 	p.extWindows = extwindow.New(extwindow.Deps{
-		Open:  extWindowOpener{p: p},
-		Page:  p.extensionWindowPage,
-		Saved: p.extensionWindowState(),
-		Clock: p.ports.Clock,
-		OnUI:  p.onUI,
+		Open:      extWindowOpener{p: p},
+		Page:      p.extensionWindowPage,
+		PageBound: p.extensionWindowPageBound,
+		Saved:     p.extensionWindowState(),
+		Clock:     p.ports.Clock,
+		OnUI:      p.onUI,
 	})
 }
 
@@ -51,6 +52,15 @@ func (p *App) extensionWindowPage(extID string, view api.View, host search.Host)
 	return extview.NewSession(p.extensionViewDeps(m), extID, view).Open(host)
 }
 
+// extensionWindowPageBound keeps child actions on the installation that produced the view.
+func (p *App) extensionWindowPageBound(extID string, identity any, view api.View, host search.Host) *palette.View {
+	m := p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	return extview.NewSessionForIdentity(p.extensionViewDeps(m), extID, view, identity).Open(host)
+}
+
 // performExtensionWindow runs a window action an extension's view asked for. The palette has hidden already, so a
 // failure is shown as a toast on the app.
 func (p *App) performExtensionWindow(extID string, action api.Action) {
@@ -59,13 +69,24 @@ func (p *App) performExtensionWindow(extID string, action api.Action) {
 	}
 }
 
+// performExtensionWindowBound admits the captured installation before any window effect.
+func (p *App) performExtensionWindowBound(m *manager.Manager, extID string, identity any, action api.Action) {
+	authority, err := m.WindowAuthorityFor(extID, identity)
+	if err == nil {
+		err = p.extWindows.PerformBound(extID, authority, action)
+	}
+	if err != nil {
+		p.Toast(err.Error())
+	}
+}
+
 // restoreExtensionWindows reopens the persistent windows once the extension manager runs, asking each owning
 // extension for its fresh view.
 func (p *App) restoreExtensionWindows(m *manager.Manager) {
-	p.extWindows.RestorePersisted(func(extID, restoreKey string) (*api.WindowRestore, error) {
+	p.extWindows.RestorePersistedBound(func(extID, restoreKey string) (*api.WindowRestore, extwindow.Authority, error) {
 		ctx, cancel := context.WithTimeout(context.Background(), extensionWindowRestoreTimeout)
 		defer cancel()
-		return m.RestoreWindow(ctx, extID, restoreKey)
+		return m.RestoreWindowBound(ctx, extID, restoreKey)
 	})
 }
 

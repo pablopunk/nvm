@@ -24,11 +24,12 @@ const blurToggleGrace = 300 * time.Millisecond
 // windows and remembered frames, and nil keeps them for the session only; Clock times the blur grace; OnUI runs a
 // callback on the UI thread.
 type Deps struct {
-	Open  Opener
-	Page  func(extID string, view api.View, host search.Host) *palette.View
-	Saved Saver
-	Clock platform.Clock
-	OnUI  func(fn func())
+	Open      Opener
+	Page      func(extID string, view api.View, host search.Host) *palette.View
+	PageBound func(extID string, identity any, view api.View, host search.Host) *palette.View
+	Saved     Saver
+	Clock     platform.Clock
+	OnUI      func(fn func())
 }
 
 // Manager owns the windows of every extension. It runs on the UI thread; RestorePersisted hands its results back
@@ -42,6 +43,7 @@ type Manager struct {
 // window is one open window of an extension. view and options are what it shows now.
 type window struct {
 	extID          string
+	authority      Authority
 	id             string
 	view           api.View
 	options        api.WindowOptions
@@ -66,40 +68,78 @@ func (m *Manager) BeginQuit() {
 // Create opens a window of extension extID that shows view, or updates the window with the same id: it shows the new
 // view and options, and brings the window forward.
 func (m *Manager) Create(extID string, view api.View, options api.WindowOptions) error {
+	return m.createBound(extID, nil, view, options)
+}
+
+func (m *Manager) createBound(extID string, authority Authority, view api.View, options api.WindowOptions) error {
+	if authority != nil && !authority.Valid() {
+		return ErrExpired
+	}
 	if err := options.Validate(); err != nil {
 		return err
 	}
 	id := WindowID(view, options)
 	if existing := m.windows[recordKey(extID, id)]; existing != nil {
-		m.refresh(existing, view, options)
-		existing.surface.Show()
-		return nil
+		if !sameAuthority(existing.authority, authority) {
+			if existing.authority == nil || existing.authority.Valid() {
+				return ErrExpired
+			}
+			existing.surface.Close()
+		} else {
+			if authority != nil && !authority.Valid() {
+				return ErrExpired
+			}
+			m.refresh(existing, view, options)
+			if authority != nil && !authority.Valid() {
+				return ErrExpired
+			}
+			existing.surface.Show()
+			return nil
+		}
 	}
-	w := &window{extID: extID, id: id, view: view, options: options}
+	w := &window{extID: extID, id: id, view: view, options: options, authority: authority}
 	if err := m.open(w); err != nil {
 		return err
 	}
+	if authority != nil && !authority.Valid() {
+		w.surface.Close()
+		return ErrExpired
+	}
 	m.windows[w.key()] = w
 	m.persist(w)
+	if authority != nil && !authority.Valid() {
+		w.surface.Close()
+		return ErrExpired
+	}
 	w.surface.Show()
 	return nil
 }
 
 // refresh gives an open window its new view and options. A view that cannot be drawn leaves the page as it was.
 func (m *Manager) refresh(w *window, view api.View, options api.WindowOptions) {
+	if w.authority != nil && !w.authority.Valid() {
+		return
+	}
+	root := m.page(w, view, w.surface.Host())
+	if w.authority != nil && !w.authority.Valid() {
+		return
+	}
 	w.view, w.options = view, options
-	if root := m.page(w.extID, view, w.surface.Host()); root != nil {
+	if root != nil {
 		w.surface.SetRoot(root)
 	}
 	w.surface.Reconfigure(specFor(w.view, w.options))
 	m.persist(w)
 }
 
-func (m *Manager) page(extID string, view api.View, host search.Host) *palette.View {
+func (m *Manager) page(w *window, view api.View, host search.Host) *palette.View {
+	if w.authority != nil && m.deps.PageBound != nil {
+		return m.deps.PageBound(w.extID, w.authority.Identity(), view, host)
+	}
 	if m.deps.Page == nil {
 		return nil
 	}
-	return m.deps.Page(extID, view, host)
+	return m.deps.Page(w.extID, view, host)
 }
 
 // open makes the native window of w and gives it its page. Its callbacks keep the manager's records, the remembered
@@ -110,7 +150,7 @@ func (m *Manager) open(w *window) error {
 		spec.Saved = m.savedFrame(w)
 	}
 	surface := m.deps.Open.Open(spec)
-	root := m.page(w.extID, w.view, surface.Host())
+	root := m.page(w, w.view, surface.Host())
 	if root == nil {
 		surface.Close()
 		return ErrNoPage
@@ -136,8 +176,8 @@ func (m *Manager) closed(w *window) {
 	if m.windows[w.key()] == w {
 		delete(m.windows, w.key())
 	}
-	if !m.quitting && w.options.RestoreKey != "" {
-		m.forget(w.extID, w.options.RestoreKey)
+	if !m.quitting && w.options.RestoreKey != "" && (w.authority == nil || w.authority.Valid()) {
+		m.forgetWindow(w)
 	}
 }
 

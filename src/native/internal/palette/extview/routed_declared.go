@@ -31,6 +31,11 @@ func (s *Session) runRoutedDeclared(h search.Host, r route) {
 	case api.ActionToggleSetting:
 		s.toggleDeclaredSetting(h, r)
 	case api.ActionWindow:
+		if r.identityBound && s.deps.WindowBound != nil {
+			h.Hide()
+			s.deps.WindowBound(r.extID, r.identity, r.action)
+			return
+		}
 		if s.deps.Window == nil {
 			h.Toast(unavailableMessage)
 			return

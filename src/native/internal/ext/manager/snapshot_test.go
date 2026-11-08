@@ -208,3 +208,57 @@ func TestPasteAdmissionRejectsReplacedInstallation(t *testing.T) {
 		t.Fatalf("stale paste admission: %v", err)
 	}
 }
+
+func TestWindowAuthorityRevokedAcrossReplacement(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+		t.Fatal(err)
+	}
+	identity := h.m.SnapshotIdentity(id)
+	authority, err := h.m.WindowAuthorityFor(id, identity)
+	if err != nil || !authority.Valid() || authority.Identity() != identity {
+		t.Fatalf("authority=%v err=%v", authority, err)
+	}
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if authority.Valid() {
+		t.Fatal("disabled installation retained authority")
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := h.m.WindowAuthorityFor(id, identity); !errors.Is(err, ErrChangedInstallation) {
+		t.Fatalf("old identity admitted: %v", err)
+	}
+	replacement := h.m.SnapshotIdentity(id)
+	if _, err := h.m.WindowAuthorityFor(id, replacement); err != nil {
+		t.Fatalf("replacement refused: %v", err)
+	}
+}
+
+func TestSupervisedRestoreKeepsCapturedWindowAuthority(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	if err := h.m.Install(id, fixtureContents(t, id), true); err != nil {
+		t.Fatal(err)
+	}
+	h.waitRunning(id)
+	ctx, cancel := context.WithTimeout(context.Background(), waitTimeout)
+	defer cancel()
+	restored, authority, err := h.m.RestoreWindowBound(ctx, id, "fixture")
+	if err != nil || restored == nil || authority == nil || !authority.Valid() {
+		t.Fatalf("restored=%v authority=%v err=%v", restored, authority, err)
+	}
+	oldIdentity := authority.Identity()
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	if authority.Valid() || h.m.SnapshotIdentity(id) == oldIdentity {
+		t.Fatal("restore authority survived replacement")
+	}
+}
