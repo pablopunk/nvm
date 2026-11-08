@@ -17,11 +17,13 @@ type Command struct {
 	ID string `json:"id"`
 	// ActionID is the key shortcuts and aliases bind to, instead of the default "extension:<extension>:<ID>". It must end
 	// with ":" and the ID. A built-in that keeps the key 1.x stored its shortcut under sets it, as "extension-action:...".
-	ActionID string   `json:"actionId,omitempty"`
-	Title    string   `json:"title"`
-	Subtitle string   `json:"subtitle,omitempty"`
-	Aliases  []string `json:"aliases,omitempty"`
-	// Keywords are more words the root search matches the command by, like aliases, for commands whose title is short.
+	ActionID string `json:"actionId,omitempty"`
+	// InitialView opens a loading list or grid while the command runs.
+	InitialView *View    `json:"initialView,omitempty"`
+	Title       string   `json:"title"`
+	Subtitle    string   `json:"subtitle,omitempty"`
+	Aliases     []string `json:"aliases,omitempty"`
+	// Keywords add searchable terms.
 	Keywords []string `json:"keywords,omitempty"`
 	Icon     string   `json:"icon,omitempty"`
 	Score    float64  `json:"score,omitempty"`
@@ -35,7 +37,7 @@ type Command struct {
 	DismissAfterRun bool           `json:"dismissAfterRun,omitempty"`
 	// Customizable enables the shortcut and alias actions for a built-in.
 	Customizable bool `json:"customizable,omitempty"`
-	// Section and LearnKey are host-only presentation for built-ins, as on Item: the section and the usage-learner key.
+	// Section and LearnKey are built-in presentation metadata.
 	Section     string       `json:"section,omitempty"`
 	LearnKey    string       `json:"learnKey,omitempty"`
 	Actions     []Action     `json:"actions,omitempty"`
@@ -46,6 +48,21 @@ type Command struct {
 func (c Command) Validate() error {
 	if c.ID == "" || c.Title == "" {
 		return errors.New("command needs an id and a title")
+	}
+	if c.InitialView != nil {
+		v := c.InitialView
+		if c.Mode == ModeNoView || c.Mode == ModeBackground || c.DismissAfterRun {
+			return errors.New("a command with an initial view must stay visible")
+		}
+		if v.Kind != ViewList && v.Kind != ViewGrid {
+			return errors.New("an initial view must be a list or grid")
+		}
+		if len(v.Items) != 0 || len(v.Sections) != 0 || v.Source != nil || v.Refresh != nil || len(v.Actions) != 0 || v.ActionPanel != nil || v.Search != nil || v.OnSearchChange != nil || v.OnSelectionChange != nil || v.Pagination != nil {
+			return errors.New("an initial view must not contain content or actions")
+		}
+		if err := v.Validate(); err != nil {
+			return fmt.Errorf("initial view: %w", err)
+		}
 	}
 	if c.ActionID != "" && !strings.HasSuffix(c.ActionID, ":"+c.ID) {
 		return fmt.Errorf("command %q: actionId %q must end with its id", c.ID, c.ActionID)
@@ -75,6 +92,7 @@ func (c Command) Validate() error {
 // the action that ran; everything else is zero.
 type Invocation struct {
 	// ProtectSnapshot is host-only: a denied service invalidates a displayed cached view.
+	AwaitInitialView bool                  `json:"-"`
 	ProtectSnapshot  bool                  `json:"-"`
 	OnSnapshotDenied func(*SnapshotDenial) `json:"-"`
 	Ref              ActionRef             `json:"ref"`

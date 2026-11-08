@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -62,7 +63,7 @@ func readLines(proc platform.WorkerProcess, done <-chan struct{}) <-chan lineRes
 
 // exchange writes one request to the running child and waits for its response, within the method's budget.
 // Any host-side failure kills the child and is recorded, so the next call starts from a clean state.
-func (r *Runtime) exchange(req protocol.Request, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
+func (r *Runtime) exchange(ctx context.Context, req protocol.Request, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
 	child, budget, err := r.runningChild(req.Method)
 	if err != nil {
 		return protocol.Response{}, err
@@ -74,7 +75,7 @@ func (r *Runtime) exchange(req protocol.Request, onDenied func(*api.SnapshotDeni
 	if err := child.proc.WriteLine(line); err != nil {
 		return protocol.Response{}, r.failChild(child, api.CodeInternal, "cannot send a request: "+err.Error())
 	}
-	return r.awaitResponse(child, req, budget, onDenied)
+	return r.awaitResponse(ctx, child, req, budget, onDenied)
 }
 
 // runningChild returns the child a request should go to, with the budget of its method.
@@ -100,7 +101,7 @@ func notRunningReason(state State, reason string) string {
 // spends answering a service call is added back to both the soft and the hard deadline, because an extension that
 // waits for a shell command, a network reply or a palette confirmation is not busy. The soft budget only records a
 // diagnostic; the hard budget kills the child.
-func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budget Budget, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
+func (r *Runtime) awaitResponse(ctx context.Context, child *childProcess, req protocol.Request, budget Budget, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
 	clock := r.cfg.Clock
 	started := clock.Now()
 	var blocked time.Duration
@@ -114,13 +115,30 @@ func (r *Runtime) awaitResponse(child *childProcess, req protocol.Request, budge
 	deniedPathsNotified := make(map[string]bool)
 	for {
 		select {
+		case <-ctx.Done():
+			return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
 		case line, open := <-child.lines:
 			if call, ok := serviceCallFrom(line, open); ok {
 				if sequence != 0 {
 					return protocol.Response{}, r.failChild(child, api.CodeInvalid, "service call interrupted response chunks")
 				}
 				callStart := clock.Now()
-				reply, err := r.answerService(child, call, budget, req.Method)
+				var reply protocol.ServiceReply
+				var err error
+				if req.Invocation != nil && req.Invocation.AwaitInitialView {
+					reply, err = r.answerViewService(ctx, child, call, req.Method)
+					if ctx.Err() != nil {
+						return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
+					}
+					if errors.Is(err, context.DeadlineExceeded) {
+						return protocol.Response{}, r.failChild(child, api.CodeTimeout, "view service did not finish in time")
+					}
+					if err != nil {
+						return protocol.Response{}, err
+					}
+				} else {
+					reply, err = r.answerService(child, call, budget, req.Method)
+				}
 				denial := observeSnapshotService(evidence, call, reply)
 				if denial != nil {
 					if permissionFailure == nil {
@@ -267,4 +285,17 @@ func (r *Runtime) failChild(child *childProcess, code api.ErrorCode, reason stri
 	r.mu.Unlock()
 	_ = child.proc.Kill()
 	return &CallError{Failure: api.Failure{Code: code, Message: reason}}
+}
+
+// cancelViewChild abandons a canceled view request without counting it as an extension failure.
+func (r *Runtime) cancelViewChild(child *childProcess, err error) error {
+	r.mu.Lock()
+	if r.child == child {
+		r.detachChildLocked()
+		r.state = StateIdle
+		r.startLocked()
+	}
+	r.mu.Unlock()
+	_ = child.proc.Kill()
+	return err
 }

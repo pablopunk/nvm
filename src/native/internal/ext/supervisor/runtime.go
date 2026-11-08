@@ -15,21 +15,22 @@ import (
 // Runtime owns the child process of one extension. Calls are serialized: a child answers one request at a
 // time. Every method is safe for concurrent use; Call never blocks past its context.
 type Runtime struct {
-	cfg         Config
-	sourcePath  string
-	identity    api.Identity
-	services    ServiceHandler
-	slots       chan struct{}
-	mu          sync.Mutex
-	state       State
-	reason      string
-	generation  uint64
-	child       *childProcess
-	failures    []time.Time
-	retryAt     time.Time
-	diagnostics []string
-	nextRequest uint64
-	changed     chan struct{}
+	cfg          Config
+	sourcePath   string
+	identity     api.Identity
+	services     ServiceHandler
+	slots        chan struct{}
+	viewServices chan struct{}
+	mu           sync.Mutex
+	state        State
+	reason       string
+	generation   uint64
+	child        *childProcess
+	failures     []time.Time
+	retryAt      time.Time
+	diagnostics  []string
+	nextRequest  uint64
+	changed      chan struct{}
 	// lifetime ends when the extension stops; host waits on behalf of a call end with it.
 	lifetime       context.Context
 	cancelLifetime context.CancelFunc
@@ -39,13 +40,14 @@ type Runtime struct {
 // extension's service calls; nil refuses them.
 func New(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
 	r := &Runtime{
-		cfg:        cfg,
-		sourcePath: sourcePath,
-		identity:   identity,
-		services:   services,
-		slots:      make(chan struct{}, 1),
-		state:      StateIdle,
-		changed:    make(chan struct{}),
+		cfg:          cfg,
+		sourcePath:   sourcePath,
+		identity:     identity,
+		services:     services,
+		slots:        make(chan struct{}, 1),
+		viewServices: make(chan struct{}, 4),
+		state:        StateIdle,
+		changed:      make(chan struct{}),
 	}
 	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
 	return r
@@ -170,7 +172,11 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	}
 	go func() {
 		defer func() { <-r.slots }()
-		response, err := r.exchange(req, onDenied)
+		exchangeCtx := context.Background()
+		if req.Invocation != nil && req.Invocation.AwaitInitialView {
+			exchangeCtx = ctx
+		}
+		response, err := r.exchange(exchangeCtx, req, onDenied)
 		result <- callResult{response: response, err: err}
 	}()
 	select {

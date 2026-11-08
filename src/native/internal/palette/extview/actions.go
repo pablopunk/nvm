@@ -15,10 +15,11 @@ type handle string
 
 // route is what a handle stands for: the extension that answers and the action it declared.
 type route struct {
-	extID      string
-	action     api.Action
-	command    bool
-	viewIntent bool
+	extID       string
+	action      api.Action
+	command     bool
+	viewIntent  bool
+	initialView *api.View
 }
 
 // ActionFor returns the palette action of one wire action of extension extID, for rows outside a view such as the
@@ -30,19 +31,23 @@ func ActionFor(deps Deps, extID string, action api.Action) search.Action {
 }
 
 // CommandActionFor maps the primary action of a root command to an action that invokes through InvokeCommand.
-func CommandActionFor(deps Deps, extID string, action api.Action) search.Action {
+func CommandActionFor(deps Deps, extID string, action api.Action, initial ...*api.View) search.Action {
 	s := NewSession(deps, extID, api.View{})
 	s.viewIntent = false
-	return s.commandAction(action)
+	var view *api.View
+	if len(initial) != 0 {
+		view = initial[0]
+	}
+	return s.commandAction(action, view)
 }
 
-func (s *Session) commandAction(action api.Action) search.Action {
+func (s *Session) commandAction(action api.Action, initial *api.View) search.Action {
 	mapped := s.withShortcut(s.actionBody(action, ""), action.Shortcut)
 	mapped.MenuOnly = action.Preview
 	mapped.Subtitle = action.Subtitle
 	if action.Kind == api.ActionRun && action.Ref != nil {
 		mapped.Dismiss = runDismissal(action)
-		token := s.issue("", route{extID: s.extID, action: action, command: true})
+		token := s.issue("", route{extID: s.extID, action: action, command: true, initialView: initial})
 		mapped.Run = func(h search.Host) { s.runHandle(h, token) }
 	}
 	return mapped

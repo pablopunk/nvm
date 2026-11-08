@@ -223,7 +223,7 @@ func (p *App) openShortcutApp(path string) {
 // shortcutAction is the first action of the row actionID names.
 func (p *App) shortcutAction(actionID string) (search.Action, bool) {
 	if entry, ok := p.extensionShortcutCommand(actionID); ok {
-		return extview.CommandActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command)), true
+		return extview.CommandActionFor(p.extensionViewDeps(p.extensionManager()), entry.extID, commandAction(entry.command), commandInitialView(entry.command)), true
 	}
 	if _, _, ok := splitExtensionCommandShortcutID(actionID); ok {
 		return search.Action{}, false

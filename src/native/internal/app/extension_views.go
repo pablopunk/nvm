@@ -21,7 +21,7 @@ import (
 const extensionRunTimeout = 10 * time.Second
 
 // Refreshes run behind a visible snapshot and may need to validate many local files.
-const extensionRefreshTimeout = 30 * time.Second
+const extensionRefreshTimeout = 2 * time.Minute
 
 // backgroundRunTimeout bounds an action declared background, as the manager's background run budget does, plus slack.
 const backgroundRunTimeout = 2*time.Minute + 10*time.Second
@@ -174,6 +174,9 @@ func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string
 func runTimeoutOf(in api.Invocation) time.Duration {
 	if in.Background {
 		return backgroundRunTimeout
+	}
+	if in.AwaitInitialView {
+		return 2 * time.Minute
 	}
 	if in.Launch.Refresh {
 		return extensionRefreshTimeout

@@ -42,7 +42,7 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 	row := search.Item{
 		Kind: result.Title, Title: command.Title, Subtitle: commandSubtitle(command, result.Title), Icon: iconOr(command.Icon, "puzzle"),
 		Tone: commandTone(command), Score: score,
-		Actions: commandMenuActions(deps, result.ExtensionID, sections),
+		Actions: commandMenuActions(deps, result.ExtensionID, sections, commandInitialView(command)),
 	}
 	row.ID = folderLearnKey(result.ExtensionID, "command:"+command.ID)
 	row.LearnKey = row.ID
@@ -52,10 +52,10 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 	return row
 }
 
-func commandMenuActions(deps extview.Deps, extID string, sections []extview.MenuSection) []search.Action {
+func commandMenuActions(deps extview.Deps, extID string, sections []extview.MenuSection, initial ...*api.View) []search.Action {
 	actions := extview.MenuActionsFor(deps, extID, sections)
 	if len(actions) > 0 && len(sections) > 0 && len(sections[0].Actions) > 0 {
-		actions[0] = extview.CommandActionFor(deps, extID, sections[0].Actions[0])
+		actions[0] = extview.CommandActionFor(deps, extID, sections[0].Actions[0], initial...)
 		actions[0].Section = sections[0].Title
 	}
 	return actions
@@ -160,4 +160,12 @@ func commandSubtitle(command api.Command, extensionTitle string) string {
 		return command.Subtitle
 	}
 	return extensionTitle
+}
+
+// commandInitialView ignores an invalid hint without changing how a legacy command runs.
+func commandInitialView(command api.Command) *api.View {
+	if command.InitialView == nil || command.Validate() != nil {
+		return nil
+	}
+	return command.InitialView
 }

@@ -7,7 +7,7 @@ func (s *Session) invokeRefresh(ref api.ActionRef, done func(api.Result, *api.Fa
 	if s.dismissed {
 		return
 	}
-	in := api.Invocation{Ref: ref, ProtectSnapshot: s.snapshotRef != nil, Launch: api.LaunchContext{Refresh: true, Reason: "refresh"}}
+	in := api.Invocation{Ref: ref, AwaitInitialView: true, ProtectSnapshot: s.snapshotRef != nil, Launch: api.LaunchContext{Refresh: true, Reason: "refresh"}}
 	if s.snapshotRef != nil {
 		var version uint64
 		paths := s.snapshotSourcePaths

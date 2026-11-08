@@ -60,3 +60,32 @@ func (r *Runtime) lifetimeContext() context.Context {
 	defer r.mu.Unlock()
 	return r.lifetime
 }
+
+// answerViewService allows a canceled view to leave even when a filesystem call cannot be interrupted.
+// At most four such host calls can remain outstanding for one runtime.
+func (r *Runtime) answerViewService(parent context.Context, child *childProcess, call protocol.ServiceCall, method string) (protocol.ServiceReply, error) {
+	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(parent, method), r.lifetimeContext()), serviceCallTimeout)
+	defer cancel()
+	select {
+	case r.viewServices <- struct{}{}:
+	case <-ctx.Done():
+		return protocol.ServiceReply{}, ctx.Err()
+	}
+	result := make(chan protocol.ServiceReply, 1)
+	go func() { defer func() { <-r.viewServices }(); result <- r.serveCall(ctx, call) }()
+	var reply protocol.ServiceReply
+	select {
+	case reply = <-result:
+	case <-ctx.Done():
+		return protocol.ServiceReply{}, ctx.Err()
+	}
+	reply.ReplyTo = call.CallID
+	line, err := json.Marshal(reply)
+	if err != nil {
+		line = []byte(fmt.Sprintf(`{"replyTo":%d,"failure":{"code":"internal","message":"reply cannot be encoded"}}`, call.CallID))
+	}
+	if err := child.proc.WriteLine(line); err != nil {
+		return reply, r.failChild(child, api.CodeInternal, "cannot answer a service call: "+err.Error())
+	}
+	return reply, nil
+}

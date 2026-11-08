@@ -19,6 +19,7 @@ func (s *Session) invoke(h search.Host, r route) {
 	in := api.Invocation{Ref: *r.action.Ref, Background: r.action.Background}
 	var identity any
 	var pending *Session
+	var initialPending bool
 	var snapshotVersion uint64
 	var staleHashes map[[32]byte]bool
 	var snapshotPaths map[[32]byte]bool
@@ -49,6 +50,15 @@ func (s *Session) invoke(h search.Host, r route) {
 			}
 		}
 	}
+	if pending == nil && r.command && !in.Background && !r.action.DismissAfterRun && validInitialView(r.initialView) {
+		view := api.View{Kind: r.initialView.Kind, Title: r.initialView.Title, Size: r.initialView.Size, Grid: r.initialView.Grid}
+		view.IsLoading = true
+		pending = s.navigationChild(r.extID, view, "")
+		initialPending = true
+		pending.snapshotPending = true
+		h.Push(pending.Open(h))
+	}
+	in.AwaitInitialView = pending != nil
 	current := func() bool { return r.action.DismissAfterRun || !s.dismissed }
 	if loading, ok := h.(search.ActionLoadingHost); ok {
 		current = loading.BeginAction()
@@ -80,6 +90,12 @@ func (s *Session) invoke(h search.Host, r route) {
 			if pending.dismissed {
 				return
 			}
+			if initialPending && failure != nil {
+				pending.snapshotPending = false
+				pending.loading, pending.failure = false, failure
+				pending.refreshHost()
+				return
+			}
 			if s.deps.CommandSnapshots != nil {
 				s.deps.CommandSnapshots.RemoveVersion(identity, in.Ref, snapshotVersion)
 			}
@@ -99,4 +115,9 @@ func (s *Session) invoke(h search.Host, r route) {
 	} else {
 		invoke(r.extID, in, done)
 	}
+}
+
+// validInitialView rejects extension-provided initial content before it can start any host operations.
+func validInitialView(view *api.View) bool {
+	return view != nil && (api.Command{ID: "initial", Title: "initial", InitialView: view}).Validate() == nil
 }

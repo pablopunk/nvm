@@ -108,6 +108,9 @@ func (w *typeWalker) walkStruct(path string, typ reflect.Type) {
 	for i := range typ.NumField() {
 		field := typ.Field(i)
 		fieldPath := path + "." + field.Name
+		if field.Tag.Get("json") == "-" {
+			continue
+		}
 		if !field.IsExported() {
 			w.report("%s is unexported; it would be silently dropped on the wire", fieldPath)
 			continue
@@ -116,5 +119,16 @@ func (w *typeWalker) walkStruct(path string, typ reflect.Type) {
 			w.report("%s has no json tag; wire names must be explicit", fieldPath)
 		}
 		w.walk(fieldPath, field.Type)
+	}
+}
+
+func TestCloneWalkSkipsHostOnlyFields(t *testing.T) {
+	type hostOnly struct {
+		Callback func() `json:"-"`
+		Public   string `json:"public"`
+	}
+	violations, _ := cloneViolations([]reflect.Type{reflect.TypeFor[hostOnly]()})
+	if len(violations) != 0 {
+		t.Fatalf("host-only field reached wire walk: %v", violations)
 	}
 }

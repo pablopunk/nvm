@@ -13,3 +13,9 @@ func TestRefreshGetsBoundedTimeWithoutExtendingForegroundActions(t *testing.T) {
 		t.Fatalf("refresh timeout %v", got)
 	}
 }
+
+func TestInitialViewUsesLongBoundedTimeout(t *testing.T) {
+	if got := runTimeoutOf(api.Invocation{AwaitInitialView: true}); got <= extensionRunTimeout || got > backgroundRunTimeout {
+		t.Fatalf("initial view timeout: %s", got)
+	}
+}
