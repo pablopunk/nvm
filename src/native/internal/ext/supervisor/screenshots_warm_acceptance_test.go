@@ -57,6 +57,18 @@ func (f *heldScreenshotFS) ReadFileNoFollow(path string, max int64) ([]byte, err
 	}).ReadFileNoFollow(path, max)
 }
 
+// ReadFilePrefix is what the Thumbnail service reads, so a held or denied target applies to it as to a full read.
+func (f *heldScreenshotFS) ReadFilePrefix(path string, max int64) ([]byte, int64, error) {
+	if path == f.target && f.denied.Load() {
+		return nil, 0, fs.ErrPermission
+	}
+	if path == f.target && f.held.Load() {
+		close(f.entered)
+		<-f.release
+	}
+	return f.FS.ReadFilePrefix(path, max)
+}
+
 func TestScreenshotsWarmHostPaintsWhileIOHeld(t *testing.T) {
 	for _, kind := range []string{"read", "stat"} {
 		t.Run(kind, func(t *testing.T) { testScreenshotsWarmHostPaintsWhileIOHeld(t, kind) })

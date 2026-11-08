@@ -3,7 +3,6 @@ package services
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -134,35 +133,24 @@ func (h *Handler) fileMetadata(raw json.RawMessage) (api.FileRef, error) {
 	return ref, nil
 }
 
-// thumbnailAnswer is a Thumbnail result with the hash of the picture it stands for. The hash stays on the host.
-type thumbnailAnswer struct {
-	protocol.ThumbnailResult
-	digest [32]byte
-}
-
 // fileThumbnail checks that an image file has a picture and returns a host-owned reference to it, or Found false when
-// it has none. The host renders the picture once to prove it exists and to hash it for the snapshot evidence; the
-// palette renders it again lazily when a row is shown, so the extension never carries picture bytes through its own
-// process or its response.
-func (h *Handler) fileThumbnail(raw json.RawMessage) (any, error) {
+// it has none. The check reads only the image header; the palette decodes and scales the picture lazily when a tile is
+// shown, so neither the host nor the extension pays for a decode per file while a grid is being built.
+func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, error) {
 	path, err := absolutePathArg(raw)
 	if err != nil {
-		return nil, err
+		return protocol.ThumbnailResult{}, err
 	}
 	if h.deps.Files == nil {
-		return nil, unavailable("files are not available in this build")
+		return protocol.ThumbnailResult{}, unavailable("files are not available in this build")
 	}
-	picture, err := thumbs.Render(h.deps.Files, path, thumbs.GridEdge)
-	if err != nil {
+	if err := thumbs.Probe(h.deps.Files, path); err != nil {
 		if errors.Is(err, fs.ErrPermission) {
 			return protocol.ThumbnailResult{}, snapshotPermissionDenied{}
 		}
 		return protocol.ThumbnailResult{}, nil
 	}
-	return thumbnailAnswer{
-		ThumbnailResult: protocol.ThumbnailResult{URL: thumbs.GridReference(fileURLFor(path)), Found: true},
-		digest:          sha256.Sum256(picture),
-	}, nil
+	return protocol.ThumbnailResult{URL: thumbs.GridReference(fileURLFor(path)), Found: true}, nil
 }
 
 // fileURLOf returns the file: URL of an absolute path.

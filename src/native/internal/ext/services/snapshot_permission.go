@@ -26,9 +26,5 @@ func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) pr
 	if err != nil {
 		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInternal, Message: "the service result cannot be encoded"}}
 	}
-	reply := protocol.ServiceReply{Data: data}
-	if answer, ok := result.(thumbnailAnswer); ok {
-		reply.PictureDigest = answer.digest
-	}
-	return reply
+	return protocol.ServiceReply{Data: data}
 }
