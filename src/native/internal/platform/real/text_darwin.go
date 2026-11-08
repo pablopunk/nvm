@@ -6,6 +6,7 @@ import (
 	"context"
 	_ "embed"
 	"errors"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -90,6 +91,9 @@ func (s screenCaptureMac) Capture(ctx context.Context, dst string, region *platf
 		return err
 	}
 	if result.ExitCode != 0 {
+		if strings.Contains(string(result.Stderr), "could not create image from display") {
+			return fmt.Errorf("screen recording is not allowed: %w", platform.ErrDenied)
+		}
 		return errors.New(recognitionFailure(result.Stderr))
 	}
 	return nil
