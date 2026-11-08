@@ -53,11 +53,19 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 		}
 	}
 	r := servicedRuntime(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles))
+	timing := &screenshotTiming{ServiceHandler: r.services}
+	r.services = timing
+	phase := "initial"
+	started := time.Now()
+	defer func() { timing.report(t, r, started, phase) }()
 	run := func(refresh bool) protocol.Response {
 		t.Helper()
+		callStart := time.Now()
+		occupied := len(r.slots) != 0
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		response, err := r.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: api.ActionRef{ID: "screenshots.grid"}, Launch: api.LaunchContext{Refresh: refresh}})
+		t.Logf("screenshots call refresh=%t wall=%s slot_occupied_on_entry=%t slot_occupied_on_return=%t response_bytes=%d", refresh, time.Since(callStart), occupied, len(r.slots) != 0, len(response.Data))
 		if err != nil || response.Failure != nil {
 			t.Fatalf("run: %v %+v", err, response.Failure)
 		}
@@ -69,6 +77,7 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 		t.Fatalf("initial refresh: %s %v", first.Data, err)
 	}
 	start := time.Now()
+	phase = "refresh"
 	response := run(true)
 	elapsed := time.Since(start)
 	var result api.Result
@@ -79,6 +88,7 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 		t.Fatalf("serialized result %d bytes", len(response.Data))
 	}
 	t.Logf("80 items: %d serialized bytes in %s", len(response.Data), elapsed)
+	phase = "cancelled-refresh"
 	blocker := &blockingScreenshotsService{ServiceHandler: r.services, entered: make(chan struct{}), release: make(chan struct{})}
 	r.services = blocker
 	cancelled, cancel := context.WithCancel(context.Background())
@@ -104,6 +114,7 @@ func TestInstalledScreenshotsFixture(t *testing.T) {
 		t.Fatal("cancelled refresh did not return")
 	}
 	close(blocker.release)
+	phase = "cached-after-cancellation"
 	cached := run(false)
 	var again api.Result
 	if err := json.Unmarshal(cached.Data, &again); err != nil || again.View == nil || len(again.View.Items) != 80 {

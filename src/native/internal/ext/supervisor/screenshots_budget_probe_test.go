@@ -46,6 +46,10 @@ func TestScreenshotsNoisyBudgetProbe(t *testing.T) {
 		}
 	}
 	child := servicedRuntime(t, "local.screenshots", rig, fixtureManifest("local.screenshots", api.CapabilityDesktopFiles))
+	timing := &screenshotTiming{ServiceHandler: child.services}
+	child.services = timing
+	start := time.Now()
+	defer timing.report(t, child, start, "noisy-refresh")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	response, err := child.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: api.ActionRef{ID: "screenshots.grid"}, Launch: api.LaunchContext{Refresh: true}})
