@@ -35,6 +35,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 		h.Toast(unavailableMessage)
 		return
 	}
+	execution := s.beginExecution(h, route{extID: extID, identity: identity, identityBound: identityBound, depth: depth})
 	in := api.Invocation{Ref: *action.Ref, RequireIdentity: true, ExpectedIdentity: identity}
 	s.deps.Invoke(extID, in, func(result api.Result, failure *api.Failure) {
 		if !result.OriginBound {
@@ -43,7 +44,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, id
 		if result.DataChanged {
 			s.revalidateMutation(extID, result.OriginIdentity)
 		}
-		if extID == s.extID && !s.currentInstallation() {
+		if !execution.mayPresent() {
 			return
 		}
 		s.finishAt(h, extID, action.Title, result, failure, depth)

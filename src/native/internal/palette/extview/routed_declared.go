@@ -49,13 +49,6 @@ func (s *Session) runRoutedDeclared(h search.Host, r route) {
 	case api.ActionRefreshView, api.ActionCamera:
 		s.action(r.action, "").Run(h)
 	default:
-		if r.extID == s.extID {
-			s.action(r.action, "").Run(h)
-			return
-		}
-		origin := NewSession(s.deps, r.extID, api.View{})
-		origin.installationIdentity = r.identity
-		defer origin.close()
-		origin.action(r.action, "").Run(h)
+		s.actionBodyFor(r, "").Run(h)
 	}
 }

@@ -88,3 +88,111 @@ func TestCrossExtensionDeclarativeWindowUsesTarget(t *testing.T) {
 		t.Fatalf("window origin=%q", got)
 	}
 }
+
+func TestHeldFollowUpDoesNotNavigateAfterDismissalButInvalidates(t *testing.T) {
+	identity := new(int)
+	cache := NewMemoryCache()
+	lease := cache.acquire("target", identity)
+	before := lease.version()
+	var done func(api.Result, *api.Failure)
+	deps := Deps{
+		Cache:                   cache,
+		CommandSnapshotIdentity: func(string) any { return identity },
+		Invoke:                  func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+	}
+	session := NewSession(deps, "source", api.View{})
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionRun, Ref: &api.ActionRef{ID: "finish"}}
+	session.finish(host, "target", "", api.Result{Next: &action, OriginIdentity: identity, OriginBound: true}, nil)
+	if done == nil {
+		t.Fatal("follow-up was not started")
+	}
+	session.close()
+	view := api.ListView("late")
+	done(api.Result{DataChanged: true, View: &view, OriginIdentity: identity, OriginBound: true}, nil)
+	if len(host.pushed) != 0 || lease.version() == before {
+		t.Fatalf("pages=%d epoch=%d", len(host.pushed), lease.version())
+	}
+	lease.release()
+}
+
+func TestHeldFollowUpDropsResultAfterTargetReplacement(t *testing.T) {
+	identity, replacement := new(int), new(int)
+	current := any(identity)
+	var done func(api.Result, *api.Failure)
+	deps := Deps{
+		CommandSnapshotIdentity: func(id string) any {
+			if id == "source" {
+				return nil
+			}
+			return current
+		},
+		Invoke: func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+	}
+	session := NewSession(deps, "source", api.View{})
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionRun, Ref: &api.ActionRef{ID: "finish"}}
+	session.finish(host, "target", "", api.Result{Next: &action, OriginIdentity: identity, OriginBound: true}, nil)
+	current = replacement
+	view := api.ListView("late")
+	done(api.Result{View: &view, OriginIdentity: identity, OriginBound: true}, nil)
+	if len(host.pushed) != 0 {
+		t.Fatal("old installation navigated after replacement")
+	}
+}
+
+func TestCrossExtensionAsyncDeclarativeUsesRealPageLifetime(t *testing.T) {
+	for _, dismissed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "open", true: "dismissed"}[dismissed], func(t *testing.T) {
+			var done func(api.Result, *api.Failure)
+			deps := Deps{
+				Chats:  &recordingChats{},
+				Invoke: func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+			}
+			session := NewSession(deps, "source", api.View{})
+			host := &fakeHost{}
+			action := api.Action{Kind: api.ActionBuilder, Op: api.BuilderList, Builder: &api.BuilderAction{}}
+			session.finish(host, "nevermind.builder", "", api.Result{Next: &action, OriginBound: true}, nil)
+			if done == nil {
+				t.Fatal("declarative action did not start")
+			}
+			if dismissed {
+				session.close()
+			}
+			view := api.ListView("Completed")
+			done(api.Result{View: &view, OriginBound: true}, nil)
+			if (len(host.pushed) == 1) == dismissed {
+				t.Fatalf("dismissed=%t pages=%d", dismissed, len(host.pushed))
+			}
+		})
+	}
+}
+
+func TestCrossExtensionAsyncDeclarativeRejectsReplacement(t *testing.T) {
+	first, replacement := new(int), new(int)
+	current := any(first)
+	var done func(api.Result, *api.Failure)
+	deps := Deps{
+		Chats: &recordingChats{},
+		CommandSnapshotIdentity: func(id string) any {
+			if id == "source" {
+				return nil
+			}
+			return current
+		},
+		Invoke: func(_ string, _ api.Invocation, cb func(api.Result, *api.Failure)) { done = cb },
+	}
+	session := NewSession(deps, "source", api.View{})
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionBuilder, Op: api.BuilderList, Builder: &api.BuilderAction{}}
+	session.finish(host, "nevermind.builder", "", api.Result{Next: &action, OriginIdentity: first, OriginBound: true}, nil)
+	if done == nil {
+		t.Fatal("action not started")
+	}
+	current = replacement
+	view := api.ListView("stale")
+	done(api.Result{View: &view}, nil)
+	if len(host.pushed) != 0 {
+		t.Fatal("stale result navigated")
+	}
+}

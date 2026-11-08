@@ -81,13 +81,18 @@ func (s *Session) withShortcut(action search.Action, accelerator string) search.
 }
 
 func (s *Session) actionBody(action api.Action, key string) search.Action {
+	return s.actionBodyFor(route{extID: s.extID, action: action, identity: s.installationIdentity, identityBound: true, viewIntent: s.viewIntent}, key)
+}
+
+func (s *Session) actionBodyFor(r route, key string) search.Action {
+	action := r.action
 	title := orDefault(action.Title, defaultTitle(action.Kind))
 	switch action.Kind {
 	case api.ActionRun:
 		if action.Ref == nil {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 		}
-		token := s.issue(key, route{extID: s.extID, action: action, viewIntent: s.viewIntent})
+		token := s.issue(key, r)
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runHandle(h, token) }}
 	case api.ActionOpenURL:
 		url := action.URL
@@ -100,27 +105,30 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			break
 		}
 		path := action.Path
-		identity := s.installationIdentity
-		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, s.extID, path, identity) }}
+		identity := r.identity
+		return search.Action{Title: title, Run: func(h search.Host) { s.deps.CopyImage(h, r.extID, path, identity) }}
 	case api.ActionPasteText, api.ActionPaste, api.ActionTypeText:
-		return s.pasteOperation(action, title)
+		return s.pasteOperationFor(r, title)
 	case api.ActionPushView:
 		if action.View == nil {
 			break
 		}
 		view := *action.View
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			child := s.navigationChild(s.extID, view, api.NavPush)
+			child := s.navigationChild(r.extID, view, api.NavPush)
+			if r.identityBound {
+				child.installationIdentity = r.identity
+			}
 			h.Push(child.Open(h))
 		}}
 	case api.ActionToggleSetting:
 		if s.deps.ToggleSetting == nil || strings.TrimSpace(action.Setting) == "" {
 			break
 		}
-		token := s.issue(key, route{extID: s.extID, action: action, identity: s.installationIdentity})
+		token := s.issue(key, r)
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.runHandle(h, token) }}
 	case api.ActionReplaceView, api.ActionRootView:
-		return s.hostOperation(action, title)
+		return s.hostOperationFor(r, title)
 	case api.ActionRefreshView:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			if s.dismissed {
@@ -151,7 +159,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		if pane := action.Setting; action.Op == "open-system-settings" && s.deps.OpenSettingsPane != nil {
 			return search.Action{Title: title, Run: func(h search.Host) { h.Hide(); s.deps.OpenSettingsPane(pane) }}
 		}
-		return s.hostOperation(action, title)
+		return s.hostOperationFor(r, title)
 	case api.ActionUpdate:
 		if s.deps.RunUpdate == nil {
 			break
@@ -159,7 +167,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		op := action.Op
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
 	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionWindow:
-		return s.hostOperation(action, title)
+		return s.hostOperationFor(r, title)
 	case api.ActionAccount:
 		if action.Op != api.AccountSignIn || s.deps.SignIn == nil {
 			break
@@ -172,7 +180,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 				h.Toast(unavailableMessage)
 				return
 			}
-			s.deps.HostOperation(h, s.extID, op)
+			s.deps.HostOperation(h, r.extID, op)
 		}}
 	case api.ActionShortcut:
 		if s.deps.ShortcutAction == nil {
@@ -184,12 +192,12 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		if action.Chat == nil || s.deps.Chats == nil {
 			break
 		}
-		return s.chatOperation(action, title)
+		return s.chatOperation(action, title, r)
 	case api.ActionBuilder:
-		if action.Builder == nil || s.deps.Chats == nil || !api.IsBuiltInID(s.extID) {
+		if action.Builder == nil || s.deps.Chats == nil || !api.IsBuiltInID(r.extID) {
 			break
 		}
-		return s.builderOperation(action, title)
+		return s.builderOperation(action, title, r)
 	case api.ActionRecordPaletteShortcut:
 		if s.deps.RecordPaletteShortcut == nil {
 			break
@@ -201,7 +209,8 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 
 // pasteOperation sends a paste or typing action to the app in front. The palette hides first, and the services of the
 // extension perform it, so the capabilities the extension declared apply. The HUD reports the outcome.
-func (s *Session) pasteOperation(action api.Action, title string) search.Action {
+func (s *Session) pasteOperationFor(r route, title string) search.Action {
+	action := r.action
 	dismiss := search.DismissAuto
 	if action.Paste != nil && action.Paste.KeepPaletteOpen {
 		dismiss = search.DismissNever
@@ -211,15 +220,15 @@ func (s *Session) pasteOperation(action api.Action, title string) search.Action 
 			h.Toast(unavailableMessage)
 			return
 		}
-		s.deps.Paste(h, s.extID, action)
+		s.deps.Paste(h, r.extID, action)
 	}}
 }
 
 // hostOperation is a declarative action the host performs itself. It runs through the route, so a Confirmation asks
 // first, as it does for a run action.
-func (s *Session) hostOperation(action api.Action, title string) search.Action {
+func (s *Session) hostOperationFor(r route, title string) search.Action {
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		s.runRoute(h, route{extID: s.extID, action: action})
+		s.runRoute(h, r)
 	}}
 }
 
