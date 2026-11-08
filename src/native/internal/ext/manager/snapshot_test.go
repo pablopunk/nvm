@@ -188,3 +188,23 @@ func TestSupervisedFollowUpRetainsOriginAcrossReplacement(t *testing.T) {
 		t.Fatalf("stale follow-up error=%v", err)
 	}
 }
+
+func TestPasteAdmissionRejectsReplacedInstallation(t *testing.T) {
+	h := newHarness(t)
+	const id = "acme.fallback"
+	contents := fixtureContents(t, id)
+	if err := h.m.Install(id, contents, true); err != nil {
+		t.Fatal(err)
+	}
+	first := h.m.SnapshotIdentity(id)
+	if err := h.m.Disable(id); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.m.Enable(id); err != nil {
+		t.Fatal(err)
+	}
+	err := h.m.PerformPasteForIdentity(id, first, api.PasteText("Paste", "fixture"))
+	if !errors.Is(err, ErrChangedInstallation) {
+		t.Fatalf("stale paste admission: %v", err)
+	}
+}

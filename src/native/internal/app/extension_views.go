@@ -97,11 +97,13 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 				p.onUI(func() { done(bitmap) })
 			}()
 		},
-		OpenURL:               func(url string) { _ = mygo.Shell.OpenExternal(url) },
-		CopyText:              func(h search.Host, text string) { p.copyText(h, text) },
-		CopyImage:             func(h search.Host, extID, path string, identity any) { p.copyImageFile(h, m, extID, path, identity) },
-		LinkCard:              p.linkCardOf,
-		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
+		OpenURL:   func(url string) { _ = mygo.Shell.OpenExternal(url) },
+		CopyText:  func(h search.Host, text string) { p.copyText(h, text) },
+		CopyImage: func(h search.Host, extID, path string, identity any) { p.copyImageFile(h, m, extID, path, identity) },
+		LinkCard:  p.linkCardOf,
+		PasteBound: func(h search.Host, extID string, identity any, action api.Action) {
+			p.pasteFromExtension(h, m, extID, identity, action)
+		},
 		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
 		Window:                p.performExtensionWindow,
@@ -167,7 +169,7 @@ var extensionCameras = extview.NewMemoryCameras()
 
 // pasteFromExtension hides the palette, then has the extension's services send the paste or typing action to the app
 // in front, off the UI thread. The HUD says Pasted or Typed, or the reason the action could not run.
-func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string, action api.Action) {
+func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string, identity any, action api.Action) {
 	title := action.Title
 	if title == "" {
 		title = pasteActionTitle
@@ -176,7 +178,7 @@ func (p *App) pasteFromExtension(h search.Host, m *manager.Manager, extID string
 	if action.Kind == api.ActionTypeText {
 		done = "Typed"
 	}
-	p.hideThenRun(h, title, done, func() error { return m.PerformPaste(extID, action) }, func(err error) palette.Feedback {
+	p.hideThenRun(h, title, done, func() error { return m.PerformPasteForIdentity(extID, identity, action) }, func(err error) palette.Feedback {
 		return palette.Feedback{Title: title, Message: err.Error(), Tone: feedback.ToneError}
 	})
 }

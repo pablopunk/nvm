@@ -31,3 +31,30 @@ func (m *Manager) PerformPaste(extID string, action api.Action) error {
 	}
 	return nil
 }
+
+// PerformPasteForIdentity admits the service of the installation that created the action.
+func (m *Manager) PerformPasteForIdentity(extID string, identity any, action api.Action) error {
+	raw, err := json.Marshal(action)
+	if err != nil {
+		return api.ErrInvalidInput
+	}
+	m.mu.Lock()
+	e, err := m.findLocked(extID)
+	var actual any
+	if err == nil && e.snapshotIdentity != nil {
+		actual = e.snapshotIdentity
+	}
+	if err != nil || !m.isRunnable(e) || e.host == nil || !sameInvocationIdentity(actual, identity) {
+		m.mu.Unlock()
+		return ErrChangedInstallation
+	}
+	host := e.host
+	m.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), pasteCallBudget)
+	defer cancel()
+	reply := host.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceDesktopPaste, Op: protocol.OpPerform, Args: raw})
+	if reply.Failure != nil {
+		return errors.New(reply.Failure.Message)
+	}
+	return nil
+}

@@ -207,7 +207,7 @@ func (s *Session) actionBodyFor(r route, key string) search.Action {
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Toast(unavailableMessage) }}
 }
 
-// pasteOperation sends a paste or typing action to the app in front. The palette hides first, and the services of the
+// pasteOperationFor sends a paste or typing action to the app in front. The palette hides first, and the services of the
 // extension perform it, so the capabilities the extension declared apply. The HUD reports the outcome.
 func (s *Session) pasteOperationFor(r route, title string) search.Action {
 	action := r.action
@@ -216,6 +216,10 @@ func (s *Session) pasteOperationFor(r route, title string) search.Action {
 		dismiss = search.DismissNever
 	}
 	return search.Action{Title: title, Dismiss: dismiss, Run: func(h search.Host) {
+		if s.deps.PasteBound != nil && r.identityBound {
+			s.deps.PasteBound(h, r.extID, r.identity, action)
+			return
+		}
 		if s.deps.Paste == nil {
 			h.Toast(unavailableMessage)
 			return
