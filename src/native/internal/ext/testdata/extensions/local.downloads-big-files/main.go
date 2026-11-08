@@ -47,6 +47,7 @@ func LoadItems(ctx api.Context, loader string) ([]api.Item, error) {
 	files, err := ctx.Desktop().Files().Find([]string{"~/Downloads"}, api.FindOptions{
 		SortBy:    "size",
 		Order:     "desc",
+		Depth:     2,
 		Limit:     100,
 		ScanLimit: 10000,
 	})

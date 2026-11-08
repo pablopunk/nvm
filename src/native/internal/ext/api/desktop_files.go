@@ -1,6 +1,7 @@
 package api
 
-// FindOptions filters a directory walk. Kind may be image, video, media or file. Scanning stops at
+// FindOptions filters a directory walk. Depth is how many folder levels below each root are read: zero reads only the
+// items directly in the root. Kind may be image, video, media or file. Scanning stops at
 // ScanLimit candidates before sorting, so huge roots return approximate newest results.
 type FindOptions struct {
 	Limit             int      `json:"limit,omitempty"`

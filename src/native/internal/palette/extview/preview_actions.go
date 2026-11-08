@@ -78,10 +78,10 @@ func offersPreview(item api.Item) bool {
 	return slices.ContainsFunc(actions, isPreviewAction)
 }
 
-// isPreviewAction is true for an action that previews content: one the extension or the host marks as its preview, or
-// one that pushes a preview view.
+// isPreviewAction is true for an action that previews content: one the extension or the host marks as its preview, one
+// that pushes a preview view, or one an extension titles Preview and runs itself, as the host's own option is titled.
 func isPreviewAction(action api.Action) bool {
-	if action.Preview {
+	if action.Preview || action.Kind == api.ActionRun && action.Title == api.PreviewTitle {
 		return true
 	}
 	return action.Kind == api.ActionPushView && action.View != nil &&
