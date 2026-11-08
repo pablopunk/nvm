@@ -114,6 +114,8 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 			child.parent = s
 			h.Push(child.Open(h))
 		}}
+	case api.ActionReplaceView, api.ActionRootView:
+		return s.hostOperation(action, title)
 	case api.ActionRefreshView:
 		return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			if s.dismissed {

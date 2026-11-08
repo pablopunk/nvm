@@ -10,6 +10,16 @@ import (
 // palette first, and a failed OS command reports its sentence as a toast.
 func (s *Session) runDeclared(h search.Host, action api.Action) {
 	switch action.Kind {
+	case api.ActionReplaceView, api.ActionRootView:
+		if action.View == nil || action.View.Validate() != nil {
+			h.Toast(unavailableMessage)
+			return
+		}
+		navigation := api.NavReplace
+		if action.Kind == api.ActionRootView {
+			navigation = api.NavRoot
+		}
+		s.finish(h, s.extID, action.Title, api.Result{View: action.View, Navigation: navigation}, nil)
 	case api.ActionSetQuery:
 		h.SetQuery(action.Query)
 	case api.ActionOpenPath:
