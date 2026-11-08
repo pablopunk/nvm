@@ -1,13 +1,17 @@
 package child
 
 import (
- "testing"
+	"testing"
 
- "github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
 func TestRefreshProducesValidHostAction(t *testing.T) {
- action := (remoteViews{}).Refresh()
- if action.Kind != api.ActionRefreshView { t.Fatalf("kind = %q", action.Kind) }
- if err := action.Validate(); err != nil { t.Fatalf("refresh action: %v", err) }
+	action := (remoteViews{}).Refresh()
+	if action.Kind != api.ActionRefreshView {
+		t.Fatalf("kind = %q", action.Kind)
+	}
+	if err := action.Validate(); err != nil {
+		t.Fatalf("refresh action: %v", err)
+	}
 }

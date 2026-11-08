@@ -67,31 +67,35 @@ func TestManualRefreshJoinsInFlightAndReportsFailure(t *testing.T) {
 }
 
 func TestManualRefreshRejectsIncompatibleViews(t *testing.T) {
- ref := &api.ActionRef{ID: "search"}
- source := &api.DataSource{Loader: "load"}
- handler := &api.Refresh{Ref: &api.ActionRef{ID: "refresh"}}
- views := []api.View{
-  {Kind: api.ViewPreview, Source: source},
-  {Kind: api.ViewEditor, Refresh: handler},
-  {Kind: api.ViewList, Source: source, Search: ref},
-  {Kind: api.ViewGrid, Source: source, Refresh: handler},
-  {Kind: api.ViewList, Refresh: &api.Refresh{Ref: &api.ActionRef{}}},
- }
- for _, view := range views {
-  calls := 0
-  s := NewSession(Deps{Load: func(string, string, func([]api.Item, *api.Failure)) { calls++ }, Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) { calls++ }}, "test", view)
-  h := &fakeHost{}
-  s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
-  if calls != 0 || len(h.toasts) != 1 || h.toasts[0] != unavailableMessage { t.Fatalf("view=%v calls=%d toasts=%v", view.Kind, calls, h.toasts) }
- }
+	ref := &api.ActionRef{ID: "search"}
+	source := &api.DataSource{Loader: "load"}
+	handler := &api.Refresh{Ref: &api.ActionRef{ID: "refresh"}}
+	views := []api.View{
+		{Kind: api.ViewPreview, Source: source},
+		{Kind: api.ViewEditor, Refresh: handler},
+		{Kind: api.ViewList, Source: source, Search: ref},
+		{Kind: api.ViewGrid, Source: source, Refresh: handler},
+		{Kind: api.ViewList, Refresh: &api.Refresh{Ref: &api.ActionRef{}}},
+	}
+	for _, view := range views {
+		calls := 0
+		s := NewSession(Deps{Load: func(string, string, func([]api.Item, *api.Failure)) { calls++ }, Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) { calls++ }}, "test", view)
+		h := &fakeHost{}
+		s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
+		if calls != 0 || len(h.toasts) != 1 || h.toasts[0] != unavailableMessage {
+			t.Fatalf("view=%v calls=%d toasts=%v", view.Kind, calls, h.toasts)
+		}
+	}
 }
 
 func TestManualSourceRefreshKeepsRowsOnFailure(t *testing.T) {
- var done func([]api.Item, *api.Failure)
- s := NewSession(Deps{Load: func(_ string, _ string, cb func([]api.Item, *api.Failure)) { done = cb }}, "test", api.View{Kind: api.ViewGrid, Source: &api.DataSource{Loader: "load"}})
- s.items = []api.Item{{ID: "cached"}}
- h := &fakeHost{}
- s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
- done(nil, &api.Failure{Message: "load failed"})
- if len(s.items) != 1 || s.items[0].ID != "cached" || s.failure == nil || s.failure.Message != "load failed" { t.Fatalf("items=%v failure=%v", s.items, s.failure) }
+	var done func([]api.Item, *api.Failure)
+	s := NewSession(Deps{Load: func(_ string, _ string, cb func([]api.Item, *api.Failure)) { done = cb }}, "test", api.View{Kind: api.ViewGrid, Source: &api.DataSource{Loader: "load"}})
+	s.items = []api.Item{{ID: "cached"}}
+	h := &fakeHost{}
+	s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
+	done(nil, &api.Failure{Message: "load failed"})
+	if len(s.items) != 1 || s.items[0].ID != "cached" || s.failure == nil || s.failure.Message != "load failed" {
+		t.Fatalf("items=%v failure=%v", s.items, s.failure)
+	}
 }
