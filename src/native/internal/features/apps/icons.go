@@ -135,13 +135,13 @@ func (s *Icons) drain(_ context.Context) {
 		}
 		path := s.queued[0]
 		s.queued = s.queued[1:]
-		delete(s.queuedIn, path)
 		s.loading++
 		s.mu.Unlock()
 
 		img, err := s.load(path)
 
 		s.mu.Lock()
+		delete(s.queuedIn, path) // tracked until its load ends, so a request during the load joins it
 		if err == nil {
 			s.memory[path] = img
 			delete(s.failedAt, path)
