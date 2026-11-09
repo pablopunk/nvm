@@ -37,3 +37,12 @@ func Level(pcm []int16) float64 {
 	}
 	return math.Min(maxLevel, math.Sqrt(sum/float64(len(pcm))))
 }
+
+// Peak returns the highest absolute amplitude in a frame, normalized to 0..1.
+func Peak(pcm []int16) float64 {
+	var peak float64
+	for _, sample := range pcm {
+		peak = max(peak, math.Abs(float64(sample))/32768)
+	}
+	return peak
+}

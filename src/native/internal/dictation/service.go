@@ -39,14 +39,14 @@ var (
 const defaultReadyTimeout = 7 * time.Second
 
 // Config holds the ports a Service runs on. OnLevel receives the meter level about every 100 ms while recording,
-// from the capture goroutine, so it must only hand the value to the UI. Background runs the backend calls that
+// from the capture goroutine. Deferred consumers must check current before applying it. Background runs the backend calls that
 // nobody waits for (preparation and its cancellation); nil runs them on a supervised goroutine. Warn logs a
 // recovery the user does not see, such as the default microphone standing in for a chosen one that failed.
 type Config struct {
 	Microphone  platform.Microphone
 	Codec       platform.OpusCodec
 	Transcriber Transcriber
-	OnLevel     func(level float64)
+	OnLevel     func(level float64, current func() bool)
 	Background  func(name string, fn func())
 	Warn        func(event string, fields map[string]any)
 	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
@@ -104,8 +104,9 @@ func (s *Service) Start(deviceID string) error {
 		return ErrBusy
 	}
 	s.phase = PhaseRecording
+	s.level.Store(0)
 	op := newOperation()
-	op.onLevel = s.publishLevel
+	op.onLevel = func(level float64) { s.publishOperationLevel(op, level) }
 	s.starting = op
 	s.mu.Unlock()
 
@@ -203,11 +204,24 @@ func (s *Service) releasePreparation(op *operation, userCancelled bool) {
 	})
 }
 
-func (s *Service) publishLevel(level float64) {
-	s.level.Store(math.Float64bits(level))
-	if s.cfg.OnLevel != nil {
-		s.cfg.OnLevel(level)
+// publishOperationLevel ignores late samples from an operation that has been cancelled or replaced.
+func (s *Service) publishOperationLevel(op *operation, level float64) {
+	s.mu.Lock()
+	if s.cur != op || s.phase != PhaseRecording {
+		s.mu.Unlock()
+		return
 	}
+	s.level.Store(math.Float64bits(level))
+	s.mu.Unlock()
+	if s.cfg.OnLevel != nil {
+		s.cfg.OnLevel(level, func() bool { return s.operationRecording(op) })
+	}
+}
+
+func (s *Service) operationRecording(op *operation) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cur == op && s.phase == PhaseRecording
 }
 
 // Stop ends the recording, sends the segments to the backend and returns the joined text. An empty text means no
@@ -220,11 +234,11 @@ func (s *Service) Stop() (string, error) {
 		return "", ErrNotRecording
 	}
 	s.phase = PhaseTranscribing
+	s.level.Store(0)
 	s.mu.Unlock()
 
 	_ = op.stream.Close()
 	<-op.done
-	s.publishLevel(0)
 	text, err := s.finish(op)
 	if err != nil && !errors.Is(err, ErrCancelled) || !op.hasSpeechAudio() {
 		s.releasePreparation(op, false)
@@ -345,6 +359,7 @@ func (s *Service) Cancel() {
 	}
 	s.cur, s.starting = nil, nil
 	s.phase = PhaseIdle
+	s.level.Store(0)
 	s.mu.Unlock()
 	if op == nil {
 		return
@@ -353,7 +368,6 @@ func (s *Service) Cancel() {
 	if stream != nil {
 		_ = stream.Close()
 	}
-	s.publishLevel(0)
 }
 
 // newOperation returns a dictation that has not opened its microphone yet.

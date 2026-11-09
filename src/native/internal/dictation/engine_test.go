@@ -245,3 +245,26 @@ func TestEngineMicrophoneIDMapsTheDefaultSpellings(t *testing.T) {
 		t.Fatal("the default spellings must name the system microphone")
 	}
 }
+
+func TestEngineDeliversCapturedMicrophoneLevels(t *testing.T) {
+	mic := fake.NewMicrophone()
+	mic.Queue(speech(0.2, 8192)...)
+	levels := make(chan float64, 4)
+	engine := NewEngine(EngineConfig{
+		Microphone: mic,
+		Codec:      fake.NewOpusCodec(),
+		OnLevel:    func(level float64, _ func() bool) { levels <- level },
+	})
+	if err := engine.Start(api.DictationStartOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case level := <-levels:
+		if level != 0.5 {
+			t.Fatalf("level = %v, want 0.5", level)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no microphone level reached the engine callback")
+	}
+	_ = engine.Cancel()
+}

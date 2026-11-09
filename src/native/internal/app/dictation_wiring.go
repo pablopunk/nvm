@@ -86,6 +86,11 @@ func (p *App) newDictationEngine() *dict.Engine {
 		Recordings: p.dictationRecordingStore(),
 		Muter:      p.dictationMuter(),
 		Background: supervisedDictation,
+		OnLevel: func(level float64, current func() bool) {
+			if p.extIndicators != nil {
+				p.extIndicators.reportDictationLevel(level, current)
+			}
+		},
 		Warn: func(event string, fields map[string]any) {
 			logx.Default().Warn(event, logx.F(fields))
 		},

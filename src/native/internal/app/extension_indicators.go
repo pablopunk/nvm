@@ -8,6 +8,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/commands"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	builtindictation "github.com/pablopunk/nvm/native/internal/ext/builtins/dictation"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 )
 
@@ -15,12 +16,18 @@ import (
 // indicator at a time: the latest show wins, and a duration hides an indicator only while it is still the one shown.
 // It is called from extension goroutines, so its state is guarded and the panel is touched on the UI thread.
 type extensionIndicators struct {
-	app   *App
-	mu    sync.Mutex
-	owner string
-	id    string
-	shown bool
-	gen   uint64
+	app             *App
+	mu              sync.Mutex
+	owner           string
+	id              string
+	shown           bool
+	gen             uint64
+	recording       bool
+	level           float64
+	levelCurrent    func() bool
+	levelPending    bool
+	levelPendingGen uint64
+	applyLevel      func(float64)
 }
 
 var _ services.IndicatorSurface = (*extensionIndicators)(nil)
@@ -39,6 +46,7 @@ func (s *extensionIndicators) ShowIndicator(owner string, input api.IndicatorInp
 	defer s.mu.Unlock()
 	s.gen++
 	s.owner, s.id, s.shown = owner, input.ID, true
+	s.recording = owner == builtindictation.ID && input.ID == builtindictation.IndicatorID && input.Status == api.IndicatorRecording
 	status := indicatorStatusOf(input)
 	s.app.onUI(func() { s.app.aiPanelFor().show(status) })
 	if input.DurationMs > 0 {
@@ -68,6 +76,8 @@ func (s *extensionIndicators) expire(gen uint64) {
 
 func (s *extensionIndicators) hideLocked() {
 	s.shown = false
+	s.recording = false
+	s.gen++
 	s.app.onUI(func() { s.app.aiPanelFor().hide() })
 }
 
@@ -102,4 +112,41 @@ func nonEmpty(parts ...string) []string {
 		}
 	}
 	return kept
+}
+
+// reportDictationLevel coalesces capture updates while a UI dispatch is pending. The generation check drops
+// deliveries queued before an indicator was replaced or hidden.
+func (s *extensionIndicators) reportDictationLevel(level float64, current func() bool) {
+	s.mu.Lock()
+	if !s.shown || !s.recording || !current() {
+		s.mu.Unlock()
+		return
+	}
+	s.level, s.levelCurrent = level, current
+	if s.levelPending && s.levelPendingGen == s.gen {
+		s.mu.Unlock()
+		return
+	}
+	s.levelPending = true
+	gen := s.gen
+	s.levelPendingGen = gen
+	s.mu.Unlock()
+	s.app.onUI(func() {
+		if s.applyLevel != nil {
+			if level, valid := s.takeLevel(gen); valid {
+				s.applyLevel(level)
+			}
+			return
+		}
+		s.app.aiPanelFor().appendLevel(func() (float64, bool) { return s.takeLevel(gen) })
+	})
+}
+
+func (s *extensionIndicators) takeLevel(gen uint64) (float64, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.levelPendingGen == gen {
+		s.levelPending = false
+	}
+	return s.level, s.shown && s.recording && s.gen == gen && s.levelCurrent != nil && s.levelCurrent()
 }

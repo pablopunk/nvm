@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -20,12 +21,14 @@ type operation struct {
 	done     chan struct{}
 	prepared chan struct{}
 	// preparedOK is set before prepared closes; it reports whether the backend accepted the preparation.
-	preparedOK bool
-	frames     int
-	current    [][]byte
-	segments   [][][]byte
-	failure    error
-	onLevel    func(float64)
+	preparedOK  bool
+	frames      int
+	current     [][]byte
+	segments    [][][]byte
+	failure     error
+	onLevel     func(float64)
+	levelPeak   float64
+	levelSmooth float64
 	// ready is closed once the readiness tracker hears the device; tracker is nil when the device needs no wait.
 	ready   chan struct{}
 	tracker *readinessTracker
@@ -71,8 +74,13 @@ func (op *operation) addFrame(frame []int16) bool {
 	op.current = append(op.current, packet)
 	op.frames++
 	op.noteFrame(frame)
-	if op.onLevel != nil && op.frames%levelEveryFrames == 0 {
-		op.onLevel(Level(frame))
+	if op.onLevel != nil {
+		op.levelPeak = max(op.levelPeak, Peak(frame))
+		if op.frames%levelEveryFrames == 0 {
+			op.levelSmooth = max(math.Sqrt(op.levelPeak), op.levelSmooth*0.6)
+			op.onLevel(op.levelSmooth)
+			op.levelPeak = 0
+		}
 	}
 	if len(op.current) == framesPerSegment {
 		op.closeSegment()

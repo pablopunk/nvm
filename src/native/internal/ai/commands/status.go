@@ -20,10 +20,14 @@ const (
 	ToneError   Tone = "error"
 )
 
+// WaveformSamples is the number of recent microphone levels shown in the recording indicator.
+const WaveformSamples = 32
+
 // Status is what the indicator shows: a title, one line of copy and its tone.
 type Status struct {
 	Title    string
 	Subtitle string
 	Tone     Tone
 	Activity Activity
+	Waveform [WaveformSamples]float64
 }

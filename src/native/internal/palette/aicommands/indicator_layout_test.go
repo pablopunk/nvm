@@ -1,6 +1,7 @@
 package aicommands
 
 import (
+	"bytes"
 	"strings"
 	"testing"
 	"time"
@@ -76,5 +77,21 @@ func TestIndicatorWithoutLiveActivityStaysStill(t *testing.T) {
 	tester.Frame()
 	if tester.FramePending() {
 		t.Fatal("a neutral result claimed live activity")
+	}
+}
+
+func TestRecordingWaveformReflectsMicrophoneLevels(t *testing.T) {
+	status := commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}
+	tester := ui.NewTester(func(c *ui.Context) { Indicator(c, status) }, Width(status), Height(status))
+	tester.SetPreferences(ui.Preferences{ReduceMotion: true})
+	tester.Frame()
+	quiet := append([]byte(nil), tester.Image().Pix...)
+	for i := range status.Waveform {
+		status.Waveform[i] = 0.8
+	}
+	tester.Frame()
+	loud := tester.Image().Pix
+	if bytes.Equal(quiet, loud) {
+		t.Fatal("recording indicator did not reflect microphone levels")
 	}
 }

@@ -42,6 +42,9 @@ func (i *aiIndicator) show(status commands.Status) {
 		if entering {
 			i.entry++
 		}
+		if !entering && i.status.Activity == commands.ActivityRecording && status.Activity == commands.ActivityRecording {
+			status.Waveform = i.status.Waveform
+		}
 		i.status = status
 	})
 	if width, height := aicommands.Width(status), aicommands.Height(status); width != i.width || height != i.height {
@@ -53,6 +56,22 @@ func (i *aiIndicator) show(status commands.Status) {
 	if !w.IsVisible() {
 		w.ShowInactive()
 	}
+}
+
+// appendLevel advances the recording trace without showing or resizing the panel.
+func (i *aiIndicator) appendLevel(take func() (float64, bool)) {
+	if i.window == nil {
+		take()
+		return
+	}
+	i.window.Update(func() {
+		level, current := take()
+		if !current || !i.window.IsVisible() || i.status.Activity != commands.ActivityRecording {
+			return
+		}
+		copy(i.status.Waveform[:], i.status.Waveform[1:])
+		i.status.Waveform[len(i.status.Waveform)-1] = level
+	})
 }
 
 // hide closes the panel when it is open.

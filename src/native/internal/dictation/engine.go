@@ -27,6 +27,7 @@ type EngineConfig struct {
 	Account    Account
 	Recordings *recordings.Store
 	Muter      *audiomute.Muter
+	OnLevel    func(level float64, current func() bool)
 	Background func(name string, fn func())
 	Warn       func(event string, fields map[string]any)
 }
@@ -46,6 +47,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 	serviceConfig := Config{
 		Microphone: cfg.Microphone,
 		Codec:      cfg.Codec,
+		OnLevel:    cfg.OnLevel,
 		Background: cfg.Background,
 		Warn:       cfg.Warn,
 	}

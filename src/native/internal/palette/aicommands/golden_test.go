@@ -16,7 +16,7 @@ var indicatorStatuses = []struct {
 }{
 	{"indicator-reading", commands.Status{Title: fixTitle, Subtitle: "Reading Selection", Tone: commands.ToneLoading}},
 	{"indicator-fixing", commands.Status{Title: fixTitle, Subtitle: "Fixing Text", Tone: commands.ToneLoading}},
-	{"indicator-dictation-recording", commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}},
+	{"indicator-dictation-recording", commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording, Waveform: [commands.WaveformSamples]float64{0, 0.1, 0.2, 0.4, 0.7, 1, 0.6, 0.3, 0.1}}},
 	{"indicator-dictation-transcribing", commands.Status{Title: "Dictate", Subtitle: "Transcribing", Tone: commands.ToneLoading, Activity: commands.ActivityTranscribing}},
 	{"indicator-dictation-waiting", commands.Status{Title: "Dictate", Subtitle: "Waiting for microphone", Tone: commands.ToneLoading, Activity: commands.ActivityLoading}},
 	{"indicator-dictation-no-speech", commands.Status{Title: "Dictate", Subtitle: "No speech detected", Tone: commands.ToneLoading}},

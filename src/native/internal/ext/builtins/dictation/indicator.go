@@ -7,8 +7,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
-// indicatorID is the id of the dictation's indicator, as 1.x named it.
-const indicatorID = "dictation"
+// IndicatorID identifies the dictation indicator.
+const IndicatorID = "dictation"
 
 // Indicator timings: a microphone that takes longer than this to open shows that it is waiting, and the terminal states
 // stay on screen long enough to read.
@@ -20,7 +20,7 @@ const (
 
 // indicatorInput is the dictation indicator in one state.
 func indicatorInput(subtitle string, status api.IndicatorStatus) api.IndicatorInput {
-	return api.IndicatorInput{ID: indicatorID, Title: dictateTitle, Subtitle: subtitle, Status: status}
+	return api.IndicatorInput{ID: IndicatorID, Title: dictateTitle, Subtitle: subtitle, Status: status}
 }
 
 // The states of the dictation indicator, in the order a dictation passes through them.
@@ -150,5 +150,5 @@ func showIndicator(ctx api.Context, input api.IndicatorInput) {
 
 // hideIndicator closes the dictation indicator.
 func hideIndicator(ctx api.Context) {
-	_ = ctx.Indicators().Hide(indicatorID)
+	_ = ctx.Indicators().Hide(IndicatorID)
 }

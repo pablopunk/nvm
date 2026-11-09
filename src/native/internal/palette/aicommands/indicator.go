@@ -14,6 +14,7 @@ const (
 	BaseWidth           = 224
 	BaseHeight          = 44
 	expandedWidth       = 320
+	recordingWidth      = 272
 	messageLineHeight   = 16
 	messageChromeHeight = 44
 )
@@ -75,6 +76,9 @@ func Indicator(c *ui.Context, s commands.Status) {
 						ContentTransition(design.IndicatorContentTransition())
 				})
 			}
+			if s.Activity == commands.ActivityRecording {
+				waveform(c, s.Waveform, tone)
+			}
 		})
 	})
 }
@@ -88,6 +92,9 @@ func compactIndicator(s commands.Status) bool {
 // Width keeps short live states compact and gives explanations room to wrap.
 func Width(s commands.Status) int {
 	if compactIndicator(s) {
+		if s.Activity == commands.ActivityRecording {
+			return recordingWidth
+		}
 		return BaseWidth
 	}
 	return expandedWidth
@@ -114,4 +121,14 @@ func indicatorColumns(text string) int {
 		}
 	}
 	return columns
+}
+
+// waveform renders recent microphone levels around a common baseline. Silence stays visible as a fine trace.
+func waveform(c *ui.Context, samples [commands.WaveformSamples]float64, tone ui.Color) {
+	ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
+		for _, level := range samples {
+			height := max(float32(1), float32(min(1, max(0, level)))*20)
+			ui.Box(c).Width(1).Height(height).Radius(1).Background(tone)
+		}
+	})
 }

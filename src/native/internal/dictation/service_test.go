@@ -104,7 +104,7 @@ func newHarness(t *testing.T) harness {
 		Microphone:  h.mic,
 		Codec:       h.codec,
 		Transcriber: h.transcriber,
-		OnLevel:     func(level float64) { h.levels <- level },
+		OnLevel:     func(level float64, _ func() bool) { h.levels <- level },
 		Background:  func(_ string, fn func()) { fn() },
 	})
 	return h
@@ -333,8 +333,8 @@ func TestLevelFollowsTheCapturedSignal(t *testing.T) {
 	for len(h.levels) > 0 {
 		peak = max(peak, <-h.levels)
 	}
-	if peak < 0.49 || peak > 0.51 {
-		t.Fatalf("peak level = %v, want half scale for a half-scale signal", peak)
+	if peak < 0.70 || peak > 0.71 {
+		t.Fatalf("peak level = %v, want square-root display scale for a half-scale signal", peak)
 	}
 }
 
