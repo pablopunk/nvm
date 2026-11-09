@@ -24,6 +24,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -76,6 +80,10 @@
           {
             "title": "Uninstall Terminal…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",
@@ -150,6 +158,10 @@
           {
             "title": "Remove Last...",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           }
         ]
       },
@@ -245,6 +257,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -276,6 +292,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -305,6 +325,10 @@
           {
             "title": "Uninstall Clocks…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",
@@ -853,6 +877,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -949,6 +977,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -978,6 +1010,10 @@
           {
             "title": "Uninstall Calendar…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",
@@ -1482,6 +1518,10 @@
           {
             "title": "Uninstall Calculator…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",
@@ -2777,6 +2817,10 @@
             "label": ""
           },
           {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
             "title": "Set keyboard shortcut",
             "label": ""
           },
@@ -3235,6 +3279,10 @@
           {
             "title": "Uninstall Firefox…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",
@@ -3822,6 +3870,10 @@
           {
             "title": "Uninstall Terminal…",
             "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           },
           {
             "title": "Set keyboard shortcut",

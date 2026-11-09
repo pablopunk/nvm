@@ -141,9 +141,7 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound 
 
 func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item, bound map[string]string) search.Item {
 	item = extview.WithPreviewActions(item)
-	if !m.IsBuiltIn(extID) { // built-in rows keep their curated 1.x menus
-		item = extview.WithRevealShortcut(item, platform.ShellLabelsFor(p.goos).RevealInFileManager)
-	}
+	item = extview.WithRevealShortcut(item, platform.ShellLabelsFor(p.goos).RevealInFileManager)
 	deps := p.extensionViewDeps(m)
 	row := search.Item{
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",

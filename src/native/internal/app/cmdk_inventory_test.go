@@ -11,6 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -41,7 +42,7 @@ func menuCases(t *testing.T) []menuCase {
 	return []menuCase{
 		{kind: "application", name: "Firefox", row: func(t *testing.T) search.Item {
 			return rootRowNamed(t, "Firefox")
-		}, menu: applicationMenu(goldenPalette(t).appsvc.SupportsUninstall())},
+		}, menu: applicationMenu(goldenPalette(t))},
 		{kind: "clipboard entry", row: func(t *testing.T) search.Item {
 			p, _, _ := seededClipPalette(t)
 			return p.Results()[1]
@@ -136,13 +137,13 @@ func TestRowMenusMatchTheInventory(t *testing.T) {
 }
 
 // applicationMenu is the menu of an application row: Open, then Uninstall when the platform supports it, then the
-// shortcut and alias actions.
-func applicationMenu(uninstallable bool) []string {
+// file manager reveal every result with a file has (Command+Enter), then the shortcut and alias actions.
+func applicationMenu(p *App) []string {
 	menu := []string{"Open Firefox"}
-	if uninstallable {
+	if p.appsvc.SupportsUninstall() {
 		menu = append(menu, "Uninstall Firefox…")
 	}
-	return append(menu, setShortcutTitle, setAliasTitle)
+	return append(menu, platform.ShellLabelsFor(p.goos).RevealInFileManager, setShortcutTitle, setAliasTitle)
 }
 
 // namedInInventory reports whether the inventory names title, with the item's name written as <name> when title carries it.

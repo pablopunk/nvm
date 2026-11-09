@@ -155,3 +155,35 @@ func TestFileRowsRevealOnCommandEnter(t *testing.T) {
 		t.Fatalf("a row with no file has %+v on Command+Enter, want none", got)
 	}
 }
+
+// TestFilterAnswerThatNamesAnotherSourceLoadsItsRows is the GitHub Issues filter: each choice answers with a view whose
+// rows come from its own loader. The open list must load from the new loader, not show the empty state of a view that
+// carries no rows of its own.
+func TestFilterAnswerThatNamesAnotherSourceLoadsItsRows(t *testing.T) {
+	loaded := map[string][]api.Item{
+		"issues:all":      {{ID: "a", Title: "Repo issue"}},
+		"issues:authored": {{ID: "b", Title: "My issue"}},
+	}
+	options := []api.ViewFilterOption{{Title: "My repos", Value: "all"}, {Title: "Authored by me", Value: "authored"}}
+	view := func(value string) api.View {
+		list := api.ListView("Issues")
+		list.Source = &api.DataSource{Loader: "issues:" + value}
+		list.Filter = &api.ViewFilter{Value: value, Options: options, OnChange: &api.ActionRef{ID: "change"}}
+		return list
+	}
+	authored := view("authored")
+	log := &invokeLog{results: map[string]api.Result{"change": {View: &authored, Navigation: api.NavReplace}}}
+	deps := log.deps(fake.NewFS())
+	deps.Load = func(_, loader string, done func([]api.Item, *api.Failure)) { done(loaded[loader], nil) }
+	session := NewSession(deps, "local.github-issues", view("all"))
+	session.listPage()
+	session.start()
+	if got := rowTitles(session.rows("")); len(got) != 1 || got[0] != "Repo issue" {
+		t.Fatalf("first rows = %v, want the repo issue", got)
+	}
+
+	session.stepCategory(1)
+	if got := rowTitles(session.rows("")); len(got) != 1 || got[0] != "My issue" {
+		t.Fatalf("rows after choosing Authored by me = %v, want the authored issue, not an empty list", got)
+	}
+}

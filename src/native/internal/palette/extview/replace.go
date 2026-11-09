@@ -12,10 +12,17 @@ func (s *Session) Replace(view api.View) {
 }
 
 // replaceInPlace takes a view a picker's handler answers with, as a replacement of the open one: the picker keeps its
-// place, and the page shows the new content on its next frame without a navigation step.
+// place, and the page shows the new content on its next frame without a navigation step. When the answer names another
+// data source, as a GitHub filter does by naming its loader, the rows load from it: replacing the rows alone would show
+// the empty state until the next open.
 func (s *Session) replaceInPlace(view api.View) {
+	reload := view.Source != nil && (s.view.Source == nil || *view.Source != *s.view.Source)
 	s.Replace(view)
 	if view.Filter != nil && s.accessory != nil {
 		s.accessory.Value = view.Filter.Value
+	}
+	if reload {
+		s.items, s.sections = nil, nil
+		s.loadSource()
 	}
 }

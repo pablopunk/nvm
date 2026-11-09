@@ -40,9 +40,10 @@ Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias fo
 | A3 | (generic) | Set keyboard shortcut / Remove keyboard shortcut | | G1, G2 | done |
 | A4 | (generic) | Set alias | | G5 | done |
 | — | apps.ts:225 | Force Quit <name> | | 1.x shows it only in the Force Quit Apps command, not on the row | extra (removed from the row) |
-| — | (none) | Show in Folder, Copy Path, Quit <name> | | 1.x has no such row action | extra (removed from the row) |
+| A5 | (new) | Show in Finder / Show in File Manager | ⌘↵ | every result with a file, applications included | done (a standard of palette results, `extview.WithRevealShortcut`) |
+| — | (none) | Copy Path, Quit <name> | | 1.x has no such row action | extra (removed from the row) |
 
-Total for an app row in 1.x: Open, Uninstall (when supported), Set keyboard shortcut, Remove keyboard shortcut (when bound), Set alias.
+Total for an app row: Open, Uninstall (when supported), Show in Finder (⌘↵, new), Set keyboard shortcut, Remove keyboard shortcut (when bound), Set alias.
 
 ### B2. Files (`src/app/extensions/files.ts:33`)
 
