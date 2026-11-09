@@ -252,6 +252,8 @@ func TestJourneyInstalledDownloadsBigFilesListsTheBiggestFirstAndAsksBeforeTrash
 	must(t, app.Key("ctrl+k"))
 	_, err := app.WaitFor("Search actions", elementWait)
 	must(t, err)
+	waitForRow(t, app, "Reveal in Finder", elementWait) // the row's reveal action, which takes Command+Enter
+	shoot(t, app, "installed-downloads-actions")
 	must(t, app.Type("Trash"))
 	waitForRow(t, app, "Move to Trash", elementWait)
 	must(t, app.Key("Return"))
