@@ -132,8 +132,6 @@ func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 			if x.attaches() {
 				attachButton(c, x.spec.PickImages, x.addImages)
 			}
-			ui.Spacer(c)
-			x.sendButton(c, k)
 		})
 	})
 }
@@ -194,24 +192,6 @@ func (x *ExtensionChat) awaitingAnswer() bool {
 // streaming reports whether the newest message is still arriving, which is when the view offers Stop.
 func (x *ExtensionChat) streaming() bool {
 	return x.presentation.busy
-}
-
-// sendButton offers sending from the composer when no reply is streaming.
-func (x *ExtensionChat) sendButton(c *ui.Context, k *design.TokenSet) {
-	if x.streaming() {
-		return
-	}
-	empty := !x.canSend(x.draft)
-	send := ui.ButtonBase(c).Padding(4).Radius(14).Background(k.AccentFill).Disabled(empty)
-	if empty {
-		send.Opacity(0.35)
-	}
-	send.Children(func() {
-		ui.Icon(c, design.Icon("corner-down-left")).FontSize(14).TextColor(k.AccentContrast)
-	})
-	if send.Clicked() {
-		x.send(x.draft)
-	}
 }
 
 func (x *ExtensionChat) hasTierPicker() bool { return x.spec.ChooseTier != nil }
@@ -301,7 +281,7 @@ func (x *ExtensionChat) sideFor() *palette.Side {
 // primaryKey is the footer's primary action: Stop while a reply streams, otherwise Send.
 func (x *ExtensionChat) primaryKey() *design.KeyHint {
 	if x.streaming() && x.spec.Stop != nil {
-		return &design.KeyHint{Title: "Stop"}
+		return &design.KeyHint{Title: "Stop", Emphasized: true}
 	}
-	return &design.KeyHint{Title: "Send", Key: palette.KeyLabel("↵")}
+	return &design.KeyHint{Title: "Send", Key: palette.KeyLabel("↵"), Emphasized: true}
 }

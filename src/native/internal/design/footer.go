@@ -10,6 +10,8 @@ type KeyHint struct {
 	Title string
 	// Key is the key's label, already spelled for the platform. Empty draws the title alone.
 	Key string
+	// Emphasized makes the primary action stand out from secondary controls.
+	Emphasized bool
 }
 
 // FooterData is the status bar under the palette: where the user is, and what Enter and the action menu do.
@@ -69,7 +71,11 @@ func footerPlate(e ui.Element, k *TokenSet, vertical, horizontal float32) ui.Ele
 func keyHint(c *ui.Context, hint *KeyHint) {
 	k := Tokens(c)
 	ui.Row(c).Gap(6).AlignItems(ui.Center).Children(func() {
-		ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(k.Strong)
+		color := k.Strong
+		if hint.Emphasized {
+			color = k.AccentContrast
+		}
+		ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(color)
 		if hint.Key != "" {
 			Keycap(c, hint.Key)
 		}
@@ -85,7 +91,12 @@ func clickableKeyHint(c *ui.Context, hint *KeyHint, action func()) {
 	}
 	k := Tokens(c)
 	button := ui.ButtonBase(c).Padding(2, 6).Radius(8)
-	if button.Hovered() {
+	if hint.Emphasized {
+		button.Background(k.AccentFill)
+		if button.Hovered() {
+			button.Border(1, k.Accent)
+		}
+	} else if button.Hovered() {
 		button.Background(k.Selected)
 	}
 	button.Children(func() { keyHint(c, hint) })

@@ -15,6 +15,9 @@ const attachmentSize = 48
 func attachButton(c *ui.Context, pick func(done func([]chat.Image)), done func([]chat.Image)) {
 	k := design.Tokens(c)
 	button := ui.ButtonBase(c).Padding(3, 6).Radius(6).Label("Attach images")
+	if button.Hovered() {
+		button.Background(k.Interactive)
+	}
 	button.Children(func() {
 		ui.Icon(c, design.Icon("image")).FontSize(14).TextColor(k.Secondary)
 	})
@@ -33,6 +36,9 @@ func attachmentsRow(c *ui.Context, images []chat.Image, removeAt func(index int)
 				width, height := fittedPicture(image, attachmentSize, attachmentSize)
 				picture(c, image, width, height)
 				remove := ui.ButtonBase(c).Padding(3).Radius(10).Label("Remove " + imageLabel(image, index))
+				if remove.Hovered() {
+					remove.Background(k.Interactive)
+				}
 				remove.Children(func() {
 					ui.Icon(c, design.Icon("x")).FontSize(11).TextColor(k.Muted)
 				})

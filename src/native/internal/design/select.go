@@ -22,6 +22,9 @@ func Select(c *ui.Context, d SelectData) int {
 	}
 	chosen := -1
 	button := ui.ButtonBase(c).Padding(3, 8).Radius(6).Disabled(d.Disabled)
+	if !d.Disabled && button.Hovered() {
+		button.Background(k.Interactive)
+	}
 	button.Children(func() {
 		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, selectedTitle(d)).FontSize(12).FontWeight(600).TextColor(color).SingleLine()
