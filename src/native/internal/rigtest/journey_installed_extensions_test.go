@@ -85,3 +85,40 @@ func TestJourneyInstalledWallpapersGridShowsTheFolderImages(t *testing.T) {
 	must(t, err)
 	shoot(t, app, "installed-wallpapers-grid")
 }
+
+// TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing enables converted extensions that need macOS
+// tools and opens each one in the real palette. On the Linux rig their tools are absent, so each must land on its own
+// plain empty state or sign-in form, never a blank page or a raw error.
+func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *testing.T) {
+	home := t.TempDir()
+	cases := []struct {
+		id, title, query, expect, shot string
+	}{
+		{"local.quit-running-app", "Quit App", "kill app", "No Running Apps", "installed-quit-app"},
+		{"local.restart-app", "Restart App", "relaunch app", "No Running Apps", "installed-restart-app"},
+		{"local.remove-app-quarantine", "Remove App Quarantine", "Remove App Quarantine", "No quarantined apps found", "installed-quarantine"},
+		{"local.paperless-ai-search", "Paperless AI Search", "Notflix Documents", "Paperless API Token", "installed-paperless-connect"},
+	}
+	for _, c := range cases {
+		seedInstalledExtension(t, home, c.id)
+	}
+	app := Launch(t, Options{Home: home, Run: "states"})
+
+	openExtensionsView(t, app)
+	for _, c := range cases {
+		enableThroughReview(t, app, c.title, c.title)
+		clearSearch(t, app)
+	}
+	hidePalette(t, app)
+
+	for _, c := range cases {
+		must(t, app.SummonPalette())
+		must(t, app.Type(c.query))
+		waitForRowPrefix(t, app, c.title, elementWait)
+		must(t, app.Key("Return"))
+		_, err := app.WaitFor(c.expect, elementWait)
+		must(t, err)
+		shoot(t, app, c.shot)
+		hidePalette(t, app)
+	}
+}
