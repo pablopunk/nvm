@@ -223,3 +223,41 @@ func TestJourneyInstalledSnippetsViewAndDeleteWithConfirmation(t *testing.T) {
 	must(t, err)
 	shoot(t, app, "installed-snippets-deleted")
 }
+
+// TestJourneyInstalledDownloadsBigFilesListsTheBiggestFirstAndAsksBeforeTrashing opens the converted Downloads Big Files
+// extension over a Downloads folder with three files: the biggest comes first with its size, and Move to Trash asks for
+// confirmation before it does anything.
+func TestJourneyInstalledDownloadsBigFilesListsTheBiggestFirstAndAsksBeforeTrashing(t *testing.T) {
+	home := t.TempDir()
+	seedInstalledExtension(t, home, "local.downloads-big-files")
+	downloads := filepath.Join(home, "Downloads")
+	must(t, os.MkdirAll(filepath.Join(downloads, "nested"), 0o755))
+	for name, size := range map[string]int{"huge-video.mkv": 3 << 20, "nested/medium.zip": 1 << 20, "small.txt": 100} {
+		must(t, os.WriteFile(filepath.Join(downloads, name), make([]byte, size), 0o644))
+	}
+	app := Launch(t, Options{Home: home, Run: "downloads"})
+
+	openExtensionsView(t, app)
+	enableThroughReview(t, app, "Downloads Big Files", "Downloads Big Files")
+	hidePalette(t, app)
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("big files downloads"))
+	waitForRowPrefix(t, app, "List Big Files in Downloads", elementWait)
+	must(t, app.Key("Return"))
+	waitForRow(t, app, "huge-video.mkv", elementWait)
+	waitForRow(t, app, "medium.zip", elementWait)
+	shoot(t, app, "installed-downloads-list")
+
+	must(t, app.Key("ctrl+k"))
+	_, err := app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	must(t, app.Type("Trash"))
+	waitForRow(t, app, "Move to Trash", elementWait)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Move to Trash", elementWait)
+	must(t, err)
+	shoot(t, app, "installed-downloads-trash-confirm")
+	must(t, app.Key("Escape"))
+	waitForRow(t, app, "huge-video.mkv", elementWait)
+}
