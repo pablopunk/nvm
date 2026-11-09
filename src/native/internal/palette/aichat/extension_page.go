@@ -22,5 +22,5 @@ type renderDeps struct {
 
 // newPage returns the transcript state that draws with deps.
 func newPage(deps renderDeps) *page {
-	return &page{deps: deps, thinkingOpen: map[int]bool{}}
+	return &page{deps: deps, list: ui.ListState{FollowEnd: true}, thinkingOpen: map[int]bool{}}
 }

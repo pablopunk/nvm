@@ -125,7 +125,7 @@ func (x *ExtensionChat) composer(c *ui.Context, k *design.TokenSet) {
 		if len(x.images) > 0 {
 			attachmentsRow(c, x.images, x.removeImage)
 		}
-		ui.TextAreaBase(c, &x.draft).Bind(&x.input).Lines(1, 6).Placeholder(placeholder).
+		ui.TextAreaBase(c, &x.draft).Bind(&x.input).Lines(3, 3).Placeholder(placeholder).
 			PlaceholderColor(k.Faint).FontSize(13).TextColor(k.Strong).Padding(10, 12, 4, 12).
 			OnTextKey(x.composerKey)
 		ui.Row(c).Padding(0, 6, 6, 6).AlignItems(ui.Center).Gap(4).Children(func() {
@@ -177,6 +177,7 @@ func (x *ExtensionChat) send(text string) bool {
 	if !x.canSend(text) || x.spec.Send == nil || (x.streaming() && !x.awaitingAnswer()) {
 		return false
 	}
+	x.page.list.ScrollToEnd()
 	x.spec.Send(x.host, text, x.images)
 	x.draft, x.images = "", nil
 	return true
