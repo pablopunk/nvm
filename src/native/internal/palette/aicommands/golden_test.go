@@ -43,3 +43,17 @@ const (
 	fixTitle    = "Fix Selected Text with AI"
 	triageTitle = "Triage Selected Text with AI"
 )
+
+// TestRecordingReducedMotionGoldens keeps the accessible static trace in the visual contract.
+func TestRecordingReducedMotionGoldens(t *testing.T) {
+	status := commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}
+	for i := range status.Waveform {
+		status.Waveform[i] = 0.8
+	}
+	options := golden.Options{Group: "aicommands", Width: Width(status), Height: Height(status), Interact: reduceIndicatorMotion}
+	golden.AssertMatrix(t, "indicator-dictation-reduced-motion", func(c *ui.Context) { Indicator(c, status) }, options)
+}
+
+func reduceIndicatorMotion(tester *ui.Tester) {
+	tester.SetPreferences(ui.Preferences{ReduceMotion: true})
+}
