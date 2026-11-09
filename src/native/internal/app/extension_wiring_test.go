@@ -9,7 +9,10 @@ import (
 )
 
 // unwiredManagerFields are the manager inputs the app leaves unset on purpose. Entries can only be removed.
-var unwiredManagerFields = map[string]string{}
+var unwiredManagerFields = map[string]string{
+	"Options.Budgets":     "the supervisor's DefaultBudgets apply",
+	"Options.MemoryLimit": "an address-space cap breaks Go's large reservations; ResidentLimit is the real guard",
+}
 
 func structFields(t *testing.T, path, name string) []string {
 	t.Helper()

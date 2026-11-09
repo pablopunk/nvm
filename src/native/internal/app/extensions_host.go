@@ -118,6 +118,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Home:            userHomeDir(),
 		MenuBarRefresh:  p.refreshMenuBar,
 		RootRefresh:     p.refreshRootRows,
+		ResidentLimit:   extensionResidentLimit,
 		Rename:          p.renameExtensionItself,
 		ViewsInvalidate: p.invalidateExtensionViews,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
@@ -194,6 +195,10 @@ func (p *App) extensionsStateChanged() {
 	p.restoreDurableGrids()
 	p.extensionStateRefresh.request(p.onUI, p.redrawExtensionState)
 }
+
+// extensionResidentLimit is the memory at which the host stops one extension, so a runaway one cannot take the machine
+// with it. A typical extension uses about 45 MB.
+const extensionResidentLimit = 1 << 30
 
 func (p *App) extensionCommandsChanged() {
 	p.extensionCommandRefresh.request(p.onUI, func() {
