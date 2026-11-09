@@ -19,7 +19,9 @@ type Item struct {
 	Video     string `json:"video,omitempty"`
 	// File is the local file the row or grid cell drags out to other applications, as 1.x's path does. Without
 	// DragImage, the drag shows the file itself when it is an image. Relative paths do not drag. A built-in row with no
-	// Image or Icon shows the file's system icon.
+	// Image or Icon shows the file's system icon. A row with a File also reveals it in the file manager on
+	// Command+Enter (Control+Enter elsewhere), a standard of palette results: the host adds the action, or takes the
+	// key for the row's own reveal action, unless the row already binds that key.
 	File *FileRef `json:"file,omitempty"`
 	// DragImage is the local image file the drag shows instead of File, such as a thumbnail. It needs a File.
 	DragImage   *FileRef    `json:"dragImage,omitempty"`

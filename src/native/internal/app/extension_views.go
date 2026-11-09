@@ -124,6 +124,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		SignIn:         p.signInFromRoot,
 		OpenPath:       func(path string) { _ = ports.Shell.OpenPath(path) },
 		RevealPath:     func(path string) { _ = ports.Shell.Reveal(path) },
+		RevealTitle:    platform.ShellLabelsFor(p.goos).RevealInFileManager,
 		QuickLook:      func(path string) error { return ports.Shell.QuickLook(path) },
 		OpenWith:       func(path, appPath string) error { return ports.Shell.OpenWith(path, appDescriptor(appPath)) },
 		Trash:          func(path string) error { return ports.Shell.Trash(path) },

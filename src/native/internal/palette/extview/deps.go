@@ -65,6 +65,9 @@ type Deps struct {
 	HostOperation func(h search.Host, extID, op string)
 	// SignIn runs the host's sign-in flow for the palette's account, on h. Nil makes the account action report unavailable.
 	SignIn func(h search.Host)
+	// RevealTitle is the title of the Command-Enter action a row with a file gets, such as "Show in Finder". Empty
+	// makes it "Reveal in File Manager".
+	RevealTitle string
 	// OpenPath opens a file or folder with its default app, and RevealPath selects it in the file manager. Nil makes
 	// the action report unavailable.
 	OpenPath   func(path string)

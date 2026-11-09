@@ -116,3 +116,42 @@ func TestEmptyListWithPageActionsShowsTheActionsHint(t *testing.T) {
 		t.Fatalf("empty list texts = %v, want the empty state and the Actions hint", tt.Texts())
 	}
 }
+
+// TestFileRowsRevealOnCommandEnter is the standard of palette results that are files: Command+Enter reveals the file in
+// the file manager. A row with a File gets the action added; a row that already has a reveal action takes the key for it;
+// a row that binds the key itself keeps its own binding.
+func TestFileRowsRevealOnCommandEnter(t *testing.T) {
+	session := NewSession(Deps{RevealTitle: "Show in Finder"}, "acme.files", api.View{})
+	reveals := func(row search.Item) []search.Action {
+		var out []search.Action
+		for _, action := range row.Actions {
+			if action.Key == ui.KeyEnter && action.Mods == palette.Mod {
+				out = append(out, action)
+			}
+		}
+		return out
+	}
+
+	added := session.row(api.Item{ID: "a", Title: "photo.png", File: &api.FileRef{Path: "/Users/p/photo.png"}})
+	if got := reveals(added); len(got) != 1 || got[0].Title != "Show in Finder" {
+		t.Fatalf("a file row's Command+Enter actions = %+v, want one named Show in Finder", got)
+	}
+
+	own := session.row(api.Item{ID: "b", Title: "b.png", File: &api.FileRef{Path: "/b.png"}, Actions: []api.Action{api.RevealPath("Reveal in Finder", "/b.png")}})
+	if got := reveals(own); len(got) != 1 || got[0].Title != "Reveal in Finder" {
+		t.Fatalf("a row with its own reveal action has %+v on Command+Enter, want that action and no second one", got)
+	}
+
+	bound := api.RevealPath("Reveal", "/c.png")
+	bound.Shortcut = "CommandOrControl+Enter"
+	other := api.Action{Kind: api.ActionCopyText, Title: "Copy", Text: "x"}
+	keep := session.row(api.Item{ID: "c", Title: "c.png", File: &api.FileRef{Path: "/c.png"}, Actions: []api.Action{other, bound}})
+	if got := reveals(keep); len(got) != 1 || got[0].Title != "Reveal" {
+		t.Fatalf("a row that binds the key itself has %+v on it, want only its own action", got)
+	}
+
+	plain := session.row(api.Item{ID: "d", Title: "not a file"})
+	if got := reveals(plain); len(got) != 0 {
+		t.Fatalf("a row with no file has %+v on Command+Enter, want none", got)
+	}
+}
