@@ -63,10 +63,17 @@ func TestInstalledSnippetsAddEditAndDeleteKeepTheListInStep(t *testing.T) {
 	}
 	save := *editor.Editor.Submit.Ref
 	stale := api.ActionRef{ID: save.ID, Args: map[string]string{"id": hello.ID, "updatedAt": "1"}}
-	_, err = r.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: stale, EditorContent: "overwrite"})
+	staleResponse, err := r.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: stale, EditorContent: "overwrite"})
+	message := ""
 	var callErr *CallError
-	if !errors.As(err, &callErr) || !strings.Contains(callErr.Failure.Message, "changed since you opened it") {
-		t.Fatalf("saving a stale edit = %v, want it refused", err)
+	switch {
+	case errors.As(err, &callErr):
+		message = callErr.Failure.Message
+	case staleResponse.Failure != nil:
+		message = staleResponse.Failure.Message
+	}
+	if !strings.Contains(message, "changed since you opened it") {
+		t.Fatalf("saving a stale edit = %v / %+v, want it refused", err, staleResponse.Failure)
 	}
 	edited := run(api.Invocation{Ref: save, EditorContent: "Hello again"})
 	if snippetTitles(edited) != "Hello again,Another note" {
