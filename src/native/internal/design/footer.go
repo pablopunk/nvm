@@ -75,7 +75,7 @@ func keyHint(c *ui.Context, hint *KeyHint) {
 		if hint.Emphasized {
 			color = k.AccentContrast
 		}
-		ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(color)
+		ui.Text(c, hint.Title).FontSize(12).FontWeight(500).TextColor(color).SingleLine()
 		if hint.Key != "" {
 			Keycap(c, hint.Key)
 		}

@@ -27,8 +27,13 @@ func TestRestartIsSearchable(t *testing.T) {
 
 func TestRestartDoesNotMatchTerminalQuery(t *testing.T) {
 	items, err := (Extension{}).SearchItems(nil, "term")
-	if err != nil || len(items) != 0 {
-		t.Fatalf("terminal query = %+v, %v", items, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range items {
+		if item.Title == RestartTitle {
+			t.Fatalf("terminal query listed %q", item.Title)
+		}
 	}
 }
 

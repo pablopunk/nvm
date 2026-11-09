@@ -80,7 +80,6 @@ func TestEditWithAIStartsAChatBoundToTheExtension(t *testing.T) {
 // 1.x titles its tweak chats, before any message is sent.
 func TestEditWithAINamesTheChatTweakOfTheExtension(t *testing.T) {
 	chats := goldenChatService(t, fake.NewSet())
-	bindBuilderChat(t, chats, "acme.good")
 	m := newFixtureManager(t, "acme.good")
 	waitForState(t, m, "acme.good", supervisor.StateRunning)
 	p := &App{chats: chats}
