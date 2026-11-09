@@ -32,12 +32,11 @@ type Selection interface {
 	ReplaceText(text string) (replaced bool, err error)
 	// Files returns paths selected in the captured app without changing focus or the clipboard.
 	Files() ([]string, error)
-	// Read returns the selection's text and files and the app they came from in one call. Files and SourceApp stay empty
-	// when the extension may not read them or the system cannot say; only a failure to read the text is an error.
+	// Read returns text, files and source app at once. Only a text failure is an error.
 	Read() (SelectionSnapshot, error)
 }
 
-// SelectionSnapshot is everything Selection.Read found. Found is false when no text could be captured.
+// SelectionSnapshot is the answer of Selection.Read.
 type SelectionSnapshot struct {
 	Text      string   `json:"text"`
 	Found     bool     `json:"found"`

@@ -46,11 +46,11 @@ func (s *Session) row(item api.Item) search.Item {
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
 		Icon: rowIcon(item), Tone: rowTone(item), TintTitle: item.TintTitle,
-		Accessory: accessoryText(item.Accessories),
-		Detail:    s.detailPane(item.Detail),
-		Image:     s.bitmap(item.Image),
+		Accessory:  accessoryText(item.Accessories),
+		Detail:     s.detailPane(item.Detail),
+		Image:      s.bitmap(item.Image),
 		ImageShape: imageShape(item.Image),
-		Disabled:  item.Disabled, Contextual: item.Contextual,
+		Disabled:   item.Disabled, Contextual: item.Contextual,
 		Prominent: item.Appearance != nil && item.Appearance.Prominence == api.ProminencePrimary,
 		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
 	}

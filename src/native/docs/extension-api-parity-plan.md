@@ -43,30 +43,32 @@ Decided here so that the work packages can proceed. The owner can overrule any r
 |---|---|---|
 | `ctx.state` | Better alternative | In 1.x it carries view state such as `selectedItemId`. Use the invocation for view state, package variables for per-process state and `Cache` for shared state. A fixture proves each one, and the reference names them |
 | `ctx.extension.rename(...)` | Add | Title, subtitle, command title and command subtitle through the existing authoring path. The authoring code handles titles only today, so it gains subtitles |
-| `ctx.actions.refreshContributions()` | Add | `Views().RefreshCommands()`, with the same rate limits as `InvalidateRoot`, returning what changed |
+| `ctx.actions.refreshContributions()` | Better alternative | `Views().InvalidateRoot()` already refreshes the calling extension's commands |
 | `actions?(ctx)` and `ctx.action()` | Already better | Durable actions are `Commands`. Ledger row and a fixture for dynamic commands |
 | `ctx.desktop.selection.read()` | Add | Returns access state, text and files in one call |
 | `ActionSection.lazyActions` | Better alternative | 1.x only appends these to `actions`, so nothing is lost by using `Actions`. Real laziness is covered in WP3.14 |
-| Folder field `canCreateDirectories` | Add | Passed to the native picker, default true |
-| Preview `clipboardType` | Add or map | Follow what the 1.x palette shows for text, image and video |
-| `previewIntent` | Add or map | Must keep the selected item's in-palette preview behavior |
+| Folder field `canCreateDirectories` | Already there | `Field.DisableDirectoryCreation`, inverted |
+| Preview `clipboardType` | Better alternative | 1.x only showed it as the subtitle; use the view's subtitle |
+| `previewIntent` | Better alternative | The host offers preview itself on rows that have preview content |
 | `ctx.actions.native` | Drop deliberately | Replaced by named actions and built-in-only host actions. Every use in 1.x gets a named replacement in the ledger |
 | `ownership.claim`, `remove` | Drop deliberately | Host-only in 1.x. The host keeps enforcing ownership |
 | 1.x JS and TS extensions | Add a converter | No TS-to-Go converter exists in the Go app, only `convertedFrom` state inheritance. See WP3.16 |
 
 ### 3.2 Accepted by 2.x but ignored by the host
 
-Each one is implemented or removed. Nothing stays accepted and ignored.
+Each one is implemented, or kept with a stated reason in the G4 allowlist because removing it would stop existing extension source from compiling.
 
 | Field | Decision |
 |---|---|
 | `EditorSpec.LivePreview` (1.x `preview`) | Implement |
 | `EditorSpec.TitleFromLine` (1.x `titleFromContent`) | Implement |
-| `Image.Shape`, `Tint`, `Mask` | Implement in rows, grids and details through design tokens |
+| `Image.Shape`, `Mask` | Implement in rows and grid tiles |
+| `Image.Tint` | Keep so existing source compiles; 1.x never drew it |
 | `WindowOptions.IgnoreMouseEvents` | Implement where the UI toolkit allows. Otherwise report `unsupported` through capabilities |
 | `PasteOptions.KeepPaletteOpen` | Implement |
-| `Pagination.PageSize` | Implement |
-| `TemplateOptions.IncludeSelectedText`, `PromptMissing` | Implement |
+| `Pagination.PageSize` | Keep so existing source compiles; 1.x never read it |
+| `TemplateOptions.IncludeSelectedText` | Implement. `{selectedText}` was always empty in 2.x |
+| `TemplateOptions.PromptMissing` | Keep so existing source compiles; `Missing` is always reported |
 | `Confirmation.Destructive` | Implement in the confirmation row |
 
 ## 4. Work packages

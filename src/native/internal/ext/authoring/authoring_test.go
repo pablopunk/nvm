@@ -135,3 +135,18 @@ func TestRenameCommandRefusesABlankTitle(t *testing.T) {
 		t.Fatal("a blank command name was accepted")
 	}
 }
+
+func TestApplyChangesOnlyTheNamesItIsGiven(t *testing.T) {
+	files := fake.NewFS()
+	dir := writeExtension(t, files, "acme.names", "Old")
+	if err := Apply(files, dir, "", "New subtitle", "run", "Go"); err != nil {
+		t.Fatal(err)
+	}
+	m := manifestOf(t, files, dir)
+	if m["title"] != "Old" || m["subtitle"] != "New subtitle" {
+		t.Fatalf("manifest = %v", m)
+	}
+	if titles, _ := m["commandTitles"].(map[string]any); titles["run"] != "Go" {
+		t.Fatalf("commandTitles = %v", m["commandTitles"])
+	}
+}

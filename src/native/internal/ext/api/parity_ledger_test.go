@@ -47,6 +47,9 @@ func fieldNames(fields *ast.FieldList, into map[string]bool) {
 		for _, name := range field.Names {
 			into[name.Name] = true
 		}
+		if nested, ok := field.Type.(*ast.StructType); ok {
+			fieldNames(nested.Fields, into)
+		}
 	}
 }
 

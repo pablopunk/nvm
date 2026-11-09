@@ -16,9 +16,9 @@ type TileData struct {
 	// ImageShape is the corners of Image: square, rounded (the default) or circle.
 	ImageShape string
 	FileIcon   *ui.Bitmap
-	Icon     string
-	Glyph    string
-	Title    string
+	Icon       string
+	Glyph      string
+	Title      string
 	// Tone tints a glyph or icon with the named tone; Prominent gives the tile the gold key.
 	Tone      string
 	Prominent bool

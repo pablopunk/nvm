@@ -441,6 +441,7 @@ func init() {
 		"ErrorCode":               reflect.ValueOf((*api.ErrorCode)(nil)),
 		"ExactFrame":              reflect.ValueOf((*api.ExactFrame)(nil)),
 		"Extension":               reflect.ValueOf((*api.Extension)(nil)),
+		"ExtensionRename":         reflect.ValueOf((*api.ExtensionRename)(nil)),
 		"ExtensionRow":            reflect.ValueOf((*api.ExtensionRow)(nil)),
 		"Fact":                    reflect.ValueOf((*api.Fact)(nil)),
 		"Failure":                 reflect.ValueOf((*api.Failure)(nil)),
@@ -539,7 +540,9 @@ func init() {
 		"Secrets":                 reflect.ValueOf((*api.Secrets)(nil)),
 		"Selection":               reflect.ValueOf((*api.Selection)(nil)),
 		"SelectionAccess":         reflect.ValueOf((*api.SelectionAccess)(nil)),
+		"SelectionSnapshot":       reflect.ValueOf((*api.SelectionSnapshot)(nil)),
 		"SelectionState":          reflect.ValueOf((*api.SelectionState)(nil)),
+		"Self":                    reflect.ValueOf((*api.Self)(nil)),
 		"SettingChoice":           reflect.ValueOf((*api.SettingChoice)(nil)),
 		"SettingDefinition":       reflect.ValueOf((*api.SettingDefinition)(nil)),
 		"SettingRef":              reflect.ValueOf((*api.SettingRef)(nil)),
@@ -639,6 +642,7 @@ func init() {
 		"_SearchProvider":    reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_SearchProvider)(nil)),
 		"_Secrets":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Secrets)(nil)),
 		"_Selection":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Selection)(nil)),
+		"_Self":              reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Self)(nil)),
 		"_Settings":          reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Settings)(nil)),
 		"_Shell":             reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Shell)(nil)),
 		"_Shortcuts":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Shortcuts)(nil)),
@@ -1025,6 +1029,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	WOwnership   func() api.Ownership
 	WScheduler   func() api.Scheduler
 	WSecrets     func() api.Secrets
+	WSelf        func() api.Self
 	WSettings    func() api.Settings
 	WShortcuts   func() api.Shortcuts
 	WStd         func() context.Context
@@ -1107,6 +1112,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Scheduler() a
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Secrets() api.Secrets {
 	return W.WSecrets()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Self() api.Self {
+	return W.WSelf()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Settings() api.Settings {
 	return W.WSettings()
@@ -1663,6 +1671,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Selection struct {
 	IValue       interface{}
 	WAccess      func() (api.SelectionAccess, error)
 	WFiles       func() ([]string, error)
+	WRead        func() (api.SelectionSnapshot, error)
 	WReplaceText func(text string) (replaced bool, err error)
 	WText        func() (text string, found bool, err error)
 }
@@ -1673,11 +1682,24 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) Access() (a
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) Files() ([]string, error) {
 	return W.WFiles()
 }
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) Read() (api.SelectionSnapshot, error) {
+	return W.WRead()
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) ReplaceText(text string) (replaced bool, err error) {
 	return W.WReplaceText(text)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Selection) Text() (text string, found bool, err error) {
 	return W.WText()
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Self is an interface wrapper for Self type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Self struct {
+	IValue  interface{}
+	WRename func(change api.ExtensionRename) error
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Self) Rename(change api.ExtensionRename) error {
+	return W.WRename(change)
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Settings is an interface wrapper for Settings type

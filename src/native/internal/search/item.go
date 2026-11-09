@@ -86,10 +86,10 @@ type Item struct {
 	Image     *ui.Bitmap
 	// ImageShape is the corners of Image: square, rounded (the default) or circle.
 	ImageShape string
-	Accessory string
-	Actions   []Action
-	Detail    func(c *ui.Context, h Host) // preview pane
-	ID        string
+	Accessory  string
+	Actions    []Action
+	Detail     func(c *ui.Context, h Host) // preview pane
+	ID         string
 	// Disabled rows stay visible as context: they draw muted, carry no actions and are skipped by the keyboard.
 	Disabled bool
 	// Contextual rows are plain guidance text, such as a load error, drawn full contrast and wrapped.
