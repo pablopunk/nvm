@@ -90,7 +90,7 @@ func hostSelectors(t *testing.T) map[string]bool {
 func apiStructFields(t *testing.T) map[string]string {
 	t.Helper()
 	fields := map[string]string{}
-	for _, file := range parseAPISources(t) {
+	for _, file := range apiSources(t) {
 		ast.Inspect(file, func(node ast.Node) bool {
 			spec, ok := node.(*ast.TypeSpec)
 			if !ok {
