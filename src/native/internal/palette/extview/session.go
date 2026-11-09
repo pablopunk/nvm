@@ -109,6 +109,7 @@ func (s *Session) Open(host search.Host) *palette.View {
 // on the next frame after the host refreshes it.
 func (s *Session) Palette() *palette.View {
 	page := s.pageOfKind()
+	page.Presentation = palettePresentation(s.view)
 	page.ExtensionID = s.extID
 	if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
 		page.OnDataChanged = s.refreshAfterMutation
@@ -171,7 +172,7 @@ func (s *Session) pageOfKind() *palette.View {
 
 // listPage is the searchable list of items, with its search accessory, its loading state and its close hook.
 func (s *Session) listPage() *palette.View {
-	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder, Presentation: palettePresentation(s.view), Hint: s.view.Hint}
+	page := &palette.View{Title: s.view.Title, Placeholder: s.view.Placeholder, Hint: s.view.Hint}
 	if s.view.Search != nil {
 		page.Providers = s.searchProviders
 	} else {
@@ -205,14 +206,13 @@ func (s *Session) emptyState() (string, string) {
 	return s.emptyTitle(), s.emptySubtitle()
 }
 
-// palettePresentation is how the palette frames a view: its own presentation, and as in 1.x a view of size large gets
-// the large window of a preview, which is what a grid of screenshots or the clipboard history needs. A side-preview
-// list keeps its own size.
+// palettePresentation is how the palette frames a view of any kind. As in 1.x a view of size large takes the large
+// window, and so does every preview, whose content needs the room. A side-preview list keeps its own size.
 func palettePresentation(view api.View) palette.Presentation {
 	switch {
 	case view.Presentation == api.PresentSidePreview:
 		return palette.SidePreview
-	case view.Presentation == api.PresentPreview, view.Size == api.SizeLarge:
+	case view.Presentation == api.PresentPreview, view.Size == api.SizeLarge, view.Kind == api.ViewPreview, view.Kind == api.ViewFilePreview:
 		return palette.Preview
 	}
 	return palette.Stacked

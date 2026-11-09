@@ -16,6 +16,8 @@ func TestLargeViewsGetThePreviewWindow(t *testing.T) {
 		{"default size stacks", api.View{}, palette.Stacked},
 		{"large size takes the large window", api.View{Size: api.SizeLarge}, palette.Preview},
 		{"preview takes the large window", api.View{Presentation: api.PresentPreview}, palette.Preview},
+		{"a preview page takes the large window", api.View{Kind: api.ViewPreview}, palette.Preview},
+		{"a file preview takes the large window", api.View{Kind: api.ViewFilePreview}, palette.Preview},
 		{"side preview keeps its own size", api.View{Size: api.SizeLarge, Presentation: api.PresentSidePreview}, palette.SidePreview},
 	}
 	for _, tc := range cases {
