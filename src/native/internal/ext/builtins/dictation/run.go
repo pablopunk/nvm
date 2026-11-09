@@ -153,7 +153,7 @@ func screenTermsAsync(ctx api.Context, settings Settings, cleanWithAI bool) <-ch
 		terms <- nil
 		return terms
 	}
-	go func() { terms <- readScreenTerms(ctx, settings.ScreenTermLimit) }()
+	go func() { terms <- readScreenTerms(ctx) }()
 	return terms
 }
 

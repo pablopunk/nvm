@@ -6,15 +6,7 @@ import (
 	"unicode/utf8"
 )
 
-// Screen term limits: the settings offer these sizes, and the default is the one a new install starts with.
-const (
-	DefaultScreenTermLimit = 30
-	maxScreenTermLimit     = 100
-	screenTermMinLength    = 3
-)
-
-// ScreenTermLimits are the sizes the settings let the user choose.
-var ScreenTermLimits = []int{10, 30, 50}
+const screenTermMinLength = 3
 
 var (
 	screenWordPattern  = regexp.MustCompile(`[\p{L}\p{N}][\p{L}\p{N}'_-]*`)
@@ -24,20 +16,9 @@ var (
 	screenStopWords    = wordSet(screenStopWordList)
 )
 
-// NormalizeScreenTermLimit returns limit when the settings offer it, and the default otherwise.
-func NormalizeScreenTermLimit(limit int) int {
-	for _, allowed := range ScreenTermLimits {
-		if limit == allowed {
-			return limit
-		}
-	}
-	return DefaultScreenTermLimit
-}
-
-// ExtractScreenTerms picks up to limit distinct words from text that the model may need to spell as they appear on
+// ExtractScreenTerms picks every distinct word from text that the model may need to spell as they appear on
 // screen: at least three characters, not all digits, not a stop word. The first occurrence of each word is kept.
-func ExtractScreenTerms(text string, limit int) []string {
-	limit = min(maxScreenTermLimit, max(1, limit))
+func ExtractScreenTerms(text string) []string {
 	seen := map[string]bool{}
 	var terms []string
 	for _, match := range screenWordPattern.FindAllString(text, -1) {
@@ -51,9 +32,6 @@ func ExtractScreenTerms(text string, limit int) []string {
 		}
 		seen[key] = true
 		terms = append(terms, term)
-		if len(terms) >= limit {
-			break
-		}
 	}
 	return terms
 }

@@ -35,11 +35,11 @@ func cleanupWarning(ctx api.Context) func(error) {
 }
 
 // readScreenTerms reads the words on screen that the cleanup may need to spell as they appear.
-func readScreenTerms(ctx api.Context, limit int) []string {
+func readScreenTerms(ctx api.Context) []string {
 	result, err := ctx.OCR().Screen(api.OCROptions{TimeoutMs: screenReadTimeout.Milliseconds()})
 	if err != nil {
 		ctx.Logs().Log(api.LogWarn, "Dictation screen context unavailable", map[string]string{"message": err.Error()})
 		return nil
 	}
-	return cleanup.ExtractScreenTerms(result.Text, limit)
+	return cleanup.ExtractScreenTerms(result.Text)
 }

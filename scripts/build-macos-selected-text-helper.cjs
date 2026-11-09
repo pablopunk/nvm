@@ -19,6 +19,7 @@ const sources = [
   'window-fullscreen.swift',
   'window-listing.swift',
   'window-raise.swift',
+  'ocr.swift',
 ].map((name) => path.join(root, 'src/app/resources/macos-helper', name));
 const outputDirectory = path.join(root, 'build/native');
 const output = path.join(outputDirectory, 'macos-selected-text');

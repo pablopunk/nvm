@@ -1,6 +1,8 @@
 package cleanup
 
 import (
+	"strings"
+	"fmt"
 	"slices"
 	"testing"
 )
@@ -17,7 +19,7 @@ func TestAWordInTheDictionaryIsADictionaryTermEvenWhenTheScreenHasIt(t *testing.
 
 func TestExtractScreenTermsDropsShortDigitsStopWordsAndRepeats(t *testing.T) {
 	text := "The Kubernetes dashboard, 2026 and the Grafana panel. It is a db of 42 items; kubernetes again!"
-	got := ExtractScreenTerms(text, 30)
+	got := ExtractScreenTerms(text)
 	want := []string{"Kubernetes", "dashboard", "Grafana", "panel", "items", "again"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("ExtractScreenTerms = %v, want %v", got, want)
@@ -25,24 +27,18 @@ func TestExtractScreenTermsDropsShortDigitsStopWordsAndRepeats(t *testing.T) {
 }
 
 func TestExtractScreenTermsKeepsEdgesOnlyWhenTheyAreWordCharacters(t *testing.T) {
-	got := ExtractScreenTerms("__deploy-prod__ --- 'quoted'", 30)
+	got := ExtractScreenTerms("__deploy-prod__ --- 'quoted'")
 	if !slices.Equal(got, []string{"deploy-prod", "quoted"}) {
 		t.Fatalf("ExtractScreenTerms = %v, want the edge punctuation trimmed", got)
 	}
 }
 
-func TestExtractScreenTermsStopsAtTheLimit(t *testing.T) {
-	got := ExtractScreenTerms("alpha bravo charlie delta echo", 2)
-	if !slices.Equal(got, []string{"alpha", "bravo"}) {
-		t.Fatalf("ExtractScreenTerms(limit 2) = %v", got)
+func TestExtractScreenTermsKeepsEveryWord(t *testing.T) {
+	var text strings.Builder
+	for i := range 500 {
+		fmt.Fprintf(&text, "word%dx ", i)
 	}
-}
-
-func TestScreenTermLimitFallsBackToTheDefaultForUnofferedSizes(t *testing.T) {
-	if got := NormalizeScreenTermLimit(50); got != 50 {
-		t.Fatalf("limit 50 = %d", got)
-	}
-	if got := NormalizeScreenTermLimit(7); got != DefaultScreenTermLimit {
-		t.Fatalf("limit 7 = %d, want the default", got)
+	if got := ExtractScreenTerms(text.String()); len(got) != 500 {
+		t.Fatalf("kept %d words, want all 500", len(got))
 	}
 }

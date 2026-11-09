@@ -22,10 +22,10 @@ func TestPromptNamesDictionaryBeforeScreenTerms(t *testing.T) {
 	}
 }
 
-func TestPromptBudgetsTheDictionaryAndTheScreenTerms(t *testing.T) {
+func TestPromptBudgetsTheDictionaryAndKeepsEveryScreenTerm(t *testing.T) {
 	long := strings.Repeat("Z", 5000)
 	got := Prompt("x", Terms{Dictionary: []string{long}, Screen: []string{long}})
-	if strings.Count(got, "Z") != dictionaryPromptChars+screenPromptChars {
-		t.Fatalf("prompt keeps %d terms characters, want %d", strings.Count(got, "Z"), dictionaryPromptChars+screenPromptChars)
+	if want := dictionaryPromptChars + len(long); strings.Count(got, "Z") != want {
+		t.Fatalf("prompt keeps %d terms characters, want %d", strings.Count(got, "Z"), want)
 	}
 }

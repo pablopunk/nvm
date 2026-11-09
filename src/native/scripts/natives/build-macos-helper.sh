@@ -6,7 +6,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/../.." && pwd)"
 helper_dir="$root/../app/resources/macos-helper"
 sources=(
-  main.swift menus.swift microphone.swift selected-text.swift window-manager.swift window-subcommands.swift window-accessibility.swift
+  main.swift menus.swift microphone.swift ocr.swift selected-text.swift window-manager.swift window-subcommands.swift window-accessibility.swift
   window-all.swift window-display.swift window-frame-writer.swift window-fullscreen.swift window-listing.swift
   window-raise.swift
 )

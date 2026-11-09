@@ -1,8 +1,6 @@
 package dictation
 
 import (
-	"strconv"
-
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/dictation/cleanup"
 )
@@ -26,7 +24,6 @@ const (
 	fieldDictionary   = "dictionary"
 	fieldClipboard    = "copyToClipboard"
 	fieldScreen       = "useScreenContext"
-	fieldScreenLimit  = "screenTermLimit"
 	defaultDeviceID   = "default"
 	settingsSave      = "Save"
 	dictionaryRows    = 8
@@ -41,12 +38,11 @@ type Settings struct {
 	Dictionary       string `json:"dictionary"`
 	CopyToClipboard  bool   `json:"copyToClipboard"`
 	UseScreenContext bool   `json:"useScreenContext"`
-	ScreenTermLimit  int    `json:"screenTermLimit"`
 }
 
 // defaultSettings are the choices a new install starts with.
 func defaultSettings() Settings {
-	return Settings{DeviceID: defaultDeviceID, ScreenTermLimit: cleanup.DefaultScreenTermLimit}
+	return Settings{DeviceID: defaultDeviceID}
 }
 
 // readSettings returns the saved choices, else the app's legacy choices, else the defaults. A value the storage cannot
@@ -63,12 +59,11 @@ func (e Extension) readSettings(ctx api.Context) Settings {
 	return settings
 }
 
-// normalizedSettings keeps the values the form can show: a device id, and a screen term limit the form offers.
+// normalizedSettings keeps the values the form can show: a device id.
 func normalizedSettings(settings Settings) Settings {
 	if settings.DeviceID == "" {
 		settings.DeviceID = defaultDeviceID
 	}
-	settings.ScreenTermLimit = cleanup.NormalizeScreenTermLimit(settings.ScreenTermLimit)
 	return settings
 }
 
@@ -95,7 +90,6 @@ func (e Extension) settingsView(ctx api.Context) api.View {
 			"Keep the transcription on the clipboard after pasting."),
 		checkboxField(fieldScreen, "Use screen text", settings.UseScreenContext,
 			"Read words from the screen to fix names and terms. Off unless you turn it on."),
-		screenLimitField(settings.ScreenTermLimit),
 	}
 	return api.FormView(settingsTitle, fields, api.Run(refSaveSettings, settingsSave, nil))
 }
@@ -150,31 +144,15 @@ func checkboxField(id, label string, value bool, description string) api.Field {
 	return field
 }
 
-func screenLimitField(limit int) api.Field {
-	field := api.FieldOf(fieldScreenLimit, api.FieldDropdown, "Screen term limit")
-	field.Value = api.TextValue(strconv.Itoa(limit))
-	for _, option := range cleanup.ScreenTermLimits {
-		field.Options = append(field.Options, api.Option{
-			Title: strconv.Itoa(option) + " terms", Value: strconv.Itoa(option),
-		})
-	}
-	return field
-}
-
 // saveSettings stores the form's choices, and returns to the page that opened the form. Cleaning with AI stays off
 // when the account cannot use it, as 1.x stored it.
 func (e Extension) saveSettings(ctx api.Context, form api.FormValues) (api.Result, error) {
-	limit, err := strconv.Atoi(form[fieldScreenLimit].Text)
-	if err != nil {
-		limit = cleanup.DefaultScreenTermLimit
-	}
 	settings := normalizedSettings(Settings{
 		DeviceID:         form[fieldDevice].Text,
 		CleanupWithAI:    form[fieldCleanup].Flag && aiAvailable(ctx),
 		Dictionary:       form[fieldDictionary].Text,
 		CopyToClipboard:  form[fieldClipboard].Flag,
 		UseScreenContext: form[fieldScreen].Flag,
-		ScreenTermLimit:  limit,
 	})
 	if err := ctx.Storage().Set(storageSettingsKey, settings); err != nil {
 		return api.Result{}, err

@@ -161,7 +161,7 @@ func TestACleanupThatFailsPastesTheRawTranscript(t *testing.T) {
 func TestScreenWordsJoinTheCleanupPrompt(t *testing.T) {
 	ctx := newContext()
 	ctx.ocr = fakeOCR{text: "Kubernetes dashboard the Kubernetes"}
-	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true,"useScreenContext":true,"screenTermLimit":10}`)
+	ctx.storage.values[storageSettingsKey] = []byte(`{"cleanupWithAi":true,"useScreenContext":true}`)
 	ext := New(Legacy{})
 	dictate(t, ext, ctx)
 	ctx.dictation.transcript = "open the dashboard"

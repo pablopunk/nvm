@@ -98,22 +98,21 @@ func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testi
 		fieldDictionary:  api.TextValue("Kubernetes"),
 		fieldClipboard:   api.FlagValue(true),
 		fieldScreen:      api.FlagValue(true),
-		fieldScreenLimit: api.TextValue("50"),
 	}
 	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != api.NavPop {
 		t.Fatalf("navigation %q; want pop", result.Navigation)
 	}
 	settings := ext.readSettings(ctx)
-	if settings.DeviceID != "mic-1" || settings.CleanupWithAI || settings.Dictionary != "Kubernetes" || !settings.CopyToClipboard || !settings.UseScreenContext || settings.ScreenTermLimit != 50 {
+	if settings.DeviceID != "mic-1" || settings.CleanupWithAI || settings.Dictionary != "Kubernetes" || !settings.CopyToClipboard || !settings.UseScreenContext {
 		t.Fatalf("settings %+v; want the saved choices, cleaning off without an account", settings)
 	}
 }
 
 func TestLegacyChoicesAnswerUntilTheBuiltInSaves(t *testing.T) {
 	ctx := newContext()
-	legacy := Settings{DeviceID: "legacy-mic", ScreenTermLimit: 10}
+	legacy := Settings{DeviceID: "legacy-mic"}
 	ext := New(Legacy{Settings: &legacy, History: []history.Entry{{ID: "old", Text: "kept", CreatedAt: 9}}})
-	if got := ext.readSettings(ctx); got.DeviceID != "legacy-mic" || got.ScreenTermLimit != 10 {
+	if got := ext.readSettings(ctx); got.DeviceID != "legacy-mic" {
 		t.Fatalf("settings %+v; want the legacy choices", got)
 	}
 	if entries := ext.readHistory(ctx); len(entries) != 1 || entries[0].Text != "kept" {
