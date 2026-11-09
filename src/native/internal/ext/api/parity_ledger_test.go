@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"go/ast"
-	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
