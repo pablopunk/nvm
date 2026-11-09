@@ -1,5 +1,6 @@
 // Smoke test of the pi host against a fake backend: one turn that calls a host tool and then answers.
-// Run by hand: node test/smoke.mjs (after npm ci). It needs no network and no account.
+// Run by hand: node test/smoke.mjs (after npm ci). It needs no network and no account. PI_NODE and PI_HOST point it at a
+// packaged runtime instead, such as the one inside the app.
 import { spawn } from 'node:child_process';
 import http from 'node:http';
 import os from 'node:os';
@@ -51,7 +52,7 @@ const server = http.createServer((request, response) => {
 
 await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
 const port = server.address().port;
-const child = spawn('node', [path.join(here, '..', 'host.mjs')], { stdio: ['pipe', 'pipe', 'inherit'] });
+const child = spawn(process.env.PI_NODE || 'node', [process.env.PI_HOST || path.join(here, '..', 'host.mjs')], { stdio: ['pipe', 'pipe', 'inherit'] });
 const events = [];
 const lines = readline.createInterface({ input: child.stdout });
 const done = new Promise((resolve, reject) => {

@@ -44,5 +44,14 @@ cp "$root/sidecar/pi-host/host.mjs" "$root/sidecar/pi-host/package.json" "$root/
 (cd "$out" && npm ci --omit=dev --ignore-scripts --no-audit --no-fund >/dev/null)
 # Source maps and docs are not read at run time.
 find "$out/node_modules" \( -name '*.map' -o -name '*.md' -o -name '*.markdown' \) -type f -delete
+# mygo omits dot-prefixed names when it ships resources, and pi-ai imports one data file that way: ship it undotted.
+models="$out/node_modules/@earendil-works/pi-ai/dist/providers"
+mv "$models/data/.manifest.json" "$models/data/manifest.json"
+sed -i.bak 's#\./data/\.manifest\.json#./data/manifest.json#' "$models/all.js"
+rm -f "$models/all.js.bak"
+if grep -q '\.manifest\.json' "$models/all.js"; then
+  echo "pi host: pi-ai still imports a dotfile" >&2
+  exit 1
+fi
 rm -f "$out/package.json" "$out/package-lock.json"
 echo "pi host: $out ($(du -sh "$out" | cut -f1))"
