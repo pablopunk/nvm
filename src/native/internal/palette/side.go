@@ -115,15 +115,14 @@ func (s *Side) bind(host *Palette) {
 	}
 }
 
-// draw draws the side's chrome and its page: the title or search row, the notices and the rows or body. The side is
-// drawn on the surface the split gives it, which the host's pane does not paint.
+// draw draws the side's chrome and its page: the title or search row, the notices and the rows or body. It paints no
+// surface of its own, so the side shares the glass of the page beside it.
 func (s *Side) draw(c *ui.Context, host *Palette) {
 	if s.root == nil {
 		return
 	}
 	s.bind(host)
-	k := design.Tokens(c)
-	ui.Row(c).Grow(1).FillHeight().MinHeight(0).Clip().Background(k.Sunken).Children(func() {
+	ui.Row(c).Grow(1).FillHeight().MinHeight(0).Clip().Children(func() {
 		s.focusEdge(c)
 		ui.Column(c).Grow(1).FillHeight().MinHeight(0).Clip().Children(func() {
 			v := s.shell.cur()
