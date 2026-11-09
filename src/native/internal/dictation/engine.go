@@ -100,10 +100,15 @@ func (e *Engine) Devices() ([]api.DictationDevice, error) {
 
 // Start mutes the output when asked, then opens the microphone. A failed start gives the output back.
 func (e *Engine) Start(options api.DictationStartOptions) error {
+	return e.StartWithLevel(options, nil)
+}
+
+// StartWithLevel keeps the meter bound to the recording admitted by this start.
+func (e *Engine) StartWithLevel(options api.DictationStartOptions, sink func(float64, string, func() bool)) error {
 	if options.MuteSystemAudioWhileRecord {
 		e.beginMute()
 	}
-	if err := e.service.Start(microphoneID(options.DeviceID)); err != nil {
+	if err := e.service.StartWithLevel(microphoneID(options.DeviceID), sink); err != nil {
 		e.restoreMute()
 		return userFailure(err)
 	}

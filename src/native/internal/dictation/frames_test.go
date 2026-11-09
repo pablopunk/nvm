@@ -88,3 +88,23 @@ func TestLevelCallbackCanReenterServiceAndExpiresOnCancel(t *testing.T) {
 		t.Fatal("cancelled operation still reports a current level")
 	}
 }
+
+func TestRecordingSinkIsBoundToAdmittedOperation(t *testing.T) {
+	s := NewService(Config{})
+	old, next := newOperation(), newOperation()
+	defer old.cancel()
+	defer next.cancel()
+	var got []string
+	var valid func() bool
+	old.levelSink = func(_ float64, operation string, current func() bool) { got = append(got, operation); valid = current }
+	s.phase, s.cur = PhaseRecording, old
+	s.publishOperationLevel(old, 0.5)
+	if len(got) != 1 || got[0] != old.id || !valid() {
+		t.Fatal("recording sink lost identity or lifetime")
+	}
+	s.cur = next
+	s.publishOperationLevel(old, 0.8)
+	if len(got) != 1 || valid() {
+		t.Fatal("old recording reached its sink after replacement")
+	}
+}

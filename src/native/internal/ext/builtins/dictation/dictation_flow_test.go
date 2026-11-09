@@ -16,7 +16,7 @@ func TestDictateStartsWithTheChosenMicrophoneAndMutesTheOutput(t *testing.T) {
 	if len(ctx.dictation.starts) != 1 {
 		t.Fatalf("starts = %d; want one", len(ctx.dictation.starts))
 	}
-	if got := ctx.dictation.starts[0]; got.DeviceID != "mic-1" || !got.MuteSystemAudioWhileRecord {
+	if got := ctx.dictation.starts[0]; got.DeviceID != "mic-1" || !got.MuteSystemAudioWhileRecord || got.IndicatorID != IndicatorID {
 		t.Fatalf("start options = %+v; want mic-1 with the output muted", got)
 	}
 	if last := ctx.indicators.last(); last.Subtitle != "Listening" || last.Status != api.IndicatorRecording {

@@ -86,11 +86,6 @@ func (p *App) newDictationEngine() *dict.Engine {
 		Recordings: p.dictationRecordingStore(),
 		Muter:      p.dictationMuter(),
 		Background: supervisedDictation,
-		OnLevel: func(level float64, current func() bool) {
-			if p.extIndicators != nil {
-				p.extIndicators.reportDictationLevel(level, current)
-			}
-		},
 		Warn: func(event string, fields map[string]any) {
 			logx.Default().Warn(event, logx.F(fields))
 		},
@@ -126,6 +121,11 @@ func (d *extensionDictation) Devices() ([]api.DictationDevice, error) {
 
 func (d *extensionDictation) Start(options api.DictationStartOptions) error {
 	return d.engineFor().Start(options)
+}
+
+// StartWithLevel is the extension host’s declarative indicator binding.
+func (d *extensionDictation) StartWithLevel(options api.DictationStartOptions, sink func(float64, string, func() bool)) error {
+	return d.engineFor().StartWithLevel(options, sink)
 }
 
 func (d *extensionDictation) Stop() (string, error) {

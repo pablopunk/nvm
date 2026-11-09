@@ -18,6 +18,7 @@ func SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 
 var checks = map[string]func(api.Context) string{
 	"status":     statusCheck,
+	"meter":      meterCheck,
 	"available":  availableCheck,
 	"devices":    devicesCheck,
 	"dictate":    dictateCheck,
@@ -99,4 +100,17 @@ func deleteCheck(ctx api.Context) string {
 		return "delete failed: " + err.Error()
 	}
 	return "delete: done"
+}
+
+// meterCheck exercises the same declarative binding as the built-in, under a different owner.
+func meterCheck(ctx api.Context) string {
+	const id = "microphone"
+	if err := ctx.Indicators().Show(api.IndicatorInput{ID: id, Title: "Fixture recording", Status: api.IndicatorRecording}); err != nil {
+		return err.Error()
+	}
+	defer ctx.Indicators().Hide(id)
+	if err := ctx.Dictation().Start(api.DictationStartOptions{IndicatorID: id}); err != nil {
+		return err.Error()
+	}
+	return "meter: " + cancelCheck(ctx)
 }

@@ -18,12 +18,13 @@ const (
 
 // aiIndicator is the panel the AI commands show their status in. It is created on first use and runs on the UI thread.
 type aiIndicator struct {
-	app    *App
-	window *mygo.Window
-	status commands.Status
-	width  int
-	height int
-	entry  uint64
+	app                *App
+	window             *mygo.Window
+	status             commands.Status
+	width              int
+	height             int
+	entry              uint64
+	recordingOperation string
 }
 
 // aiPanelFor returns the app's AI indicator, created on first use.
@@ -42,9 +43,7 @@ func (i *aiIndicator) show(status commands.Status) {
 		if entering {
 			i.entry++
 		}
-		if !entering && i.status.Activity == commands.ActivityRecording && status.Activity == commands.ActivityRecording {
-			status.Waveform = i.status.Waveform
-		}
+		i.recordingOperation = ""
 		i.status = status
 	})
 	if width, height := aicommands.Width(status), aicommands.Height(status); width != i.width || height != i.height {
@@ -59,18 +58,17 @@ func (i *aiIndicator) show(status commands.Status) {
 }
 
 // appendLevel advances the recording trace without showing or resizing the panel.
-func (i *aiIndicator) appendLevel(take func() (float64, bool)) {
+func (i *aiIndicator) appendLevel(take func() (float64, string, bool)) {
 	if i.window == nil {
 		take()
 		return
 	}
 	i.window.Update(func() {
-		level, current := take()
+		level, operation, current := take()
 		if !current || !i.window.IsVisible() || i.status.Activity != commands.ActivityRecording {
 			return
 		}
-		copy(i.status.Waveform[:], i.status.Waveform[1:])
-		i.status.Waveform[len(i.status.Waveform)-1] = level
+		i.appendRecordingSample(operation, level)
 	})
 }
 

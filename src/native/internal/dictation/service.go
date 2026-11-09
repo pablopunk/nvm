@@ -98,6 +98,11 @@ func (s *Service) Snapshot() Snapshot {
 // also has to start delivering sound first (ErrNotReady when it does not), so its first words are not lost. A Cancel
 // while the microphone is still opening ends the start with ErrCancelled, and the stream that opened late is closed.
 func (s *Service) Start(deviceID string) error {
+	return s.StartWithLevel(deviceID, nil)
+}
+
+// StartWithLevel binds a host-owned meter to the admitted recording only.
+func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, func() bool)) error {
 	s.mu.Lock()
 	if s.phase != PhaseIdle {
 		s.mu.Unlock()
@@ -106,6 +111,7 @@ func (s *Service) Start(deviceID string) error {
 	s.phase = PhaseRecording
 	s.level.Store(0)
 	op := newOperation()
+	op.levelSink = sink
 	op.onLevel = func(level float64) { s.publishOperationLevel(op, level) }
 	s.starting = op
 	s.mu.Unlock()
@@ -202,26 +208,6 @@ func (s *Service) releasePreparation(op *operation, userCancelled bool) {
 		<-op.prepared
 		_ = s.cfg.Transcriber.CancelPreparation(context.Background(), op.id, userCancelled)
 	})
-}
-
-// publishOperationLevel ignores late samples from an operation that has been cancelled or replaced.
-func (s *Service) publishOperationLevel(op *operation, level float64) {
-	s.mu.Lock()
-	if s.cur != op || s.phase != PhaseRecording {
-		s.mu.Unlock()
-		return
-	}
-	s.level.Store(math.Float64bits(level))
-	s.mu.Unlock()
-	if s.cfg.OnLevel != nil {
-		s.cfg.OnLevel(level, func() bool { return s.operationRecording(op) })
-	}
-}
-
-func (s *Service) operationRecording(op *operation) bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.cur == op && s.phase == PhaseRecording
 }
 
 // Stop ends the recording, sends the segments to the backend and returns the joined text. An empty text means no

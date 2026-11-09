@@ -59,6 +59,10 @@ type DictationDevice struct {
 // DictationStartOptions chooses a microphone and whether system audio is muted while recording. An empty DeviceID
 // is the system default microphone.
 type DictationStartOptions struct {
+	// IndicatorID binds host-owned microphone levels to this extension’s recording indicator.
+	// Show that indicator with IndicatorRecording first. Levels never cross into extension code;
+	// a replacement indicator or a new recording starts a fresh trace. Empty disables the binding.
+	IndicatorID                string `json:"indicatorId,omitempty"`
 	DeviceID                   string `json:"deviceId,omitempty"`
 	MuteSystemAudioWhileRecord bool   `json:"muteSystemAudioWhileRecording,omitempty"`
 }

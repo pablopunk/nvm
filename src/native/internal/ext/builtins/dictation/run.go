@@ -44,7 +44,7 @@ func (e Extension) start(ctx api.Context) (api.Result, error) {
 	deferred := newDeferredIndicator(ctx.Indicators())
 	deferred.begin(waitingIndicator(""))
 	go nameMicrophone(ctx, settings.DeviceID, deferred)
-	err := ctx.Dictation().Start(api.DictationStartOptions{DeviceID: settings.DeviceID, MuteSystemAudioWhileRecord: true})
+	err := ctx.Dictation().Start(api.DictationStartOptions{IndicatorID: IndicatorID, DeviceID: settings.DeviceID, MuteSystemAudioWhileRecord: true})
 	if err != nil {
 		deferred.cancel()
 		showFailure(ctx, err)

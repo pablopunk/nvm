@@ -27,6 +27,7 @@ type operation struct {
 	segments    [][][]byte
 	failure     error
 	onLevel     func(float64)
+	levelSink   func(float64, string, func() bool)
 	levelPeak   float64
 	levelSmooth float64
 	// ready is closed once the readiness tracker hears the device; tracker is nil when the device needs no wait.

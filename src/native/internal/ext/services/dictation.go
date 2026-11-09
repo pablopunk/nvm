@@ -43,7 +43,7 @@ func (h *Handler) serveDictation(ctx context.Context, call protocol.ServiceCall)
 		if err := decodeArgs(call.Args, &options); err != nil {
 			return nil, err
 		}
-		return nil, engine.Start(options)
+		return nil, h.startDictation(options)
 	case protocol.OpStop:
 		return engine.Stop()
 	case protocol.OpCancel:
