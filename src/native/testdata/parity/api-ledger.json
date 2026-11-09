@@ -1,0 +1,7588 @@
+[
+ {
+  "member": "ActionPanelVisibility='hidden'",
+  "status": "same",
+  "target": "value:hidden",
+  "verified": "name"
+ },
+ {
+  "member": "ActionPanelVisibility='menu'",
+  "status": "same",
+  "target": "value:menu",
+  "verified": "name"
+ },
+ {
+  "member": "ActionPanelVisibility='visible'",
+  "status": "same",
+  "target": "value:visible",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='accent'",
+  "status": "same",
+  "target": "value:accent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='danger'",
+  "status": "same",
+  "target": "value:danger",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='muted'",
+  "status": "same",
+  "target": "value:muted",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='success'",
+  "status": "same",
+  "target": "value:success",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAccessoryTone='warning'",
+  "status": "same",
+  "target": "value:warning",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.cancelLabel",
+  "status": "renamed",
+  "target": "Confirmation.CancelLabel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.confirmLabel",
+  "status": "renamed",
+  "target": "Confirmation.ConfirmLabel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.confirmMessage",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Confirmation.Message"
+ },
+ {
+  "member": "ExtensionAction.dismissAfterRun",
+  "status": "same",
+  "target": "Action.DismissAfterRun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.dismissAfterRun='auto'",
+  "verified": "decision",
+  "note": "A bool replaces the single auto value",
+  "status": "better",
+  "target": "Action.DismissAfterRun"
+ },
+ {
+  "member": "ExtensionAction.draftConflict",
+  "status": "renamed",
+  "target": "Invocation.DraftConflict",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.editorContent",
+  "status": "renamed",
+  "target": "Invocation.EditorContent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.fields",
+  "status": "renamed",
+  "target": "FormSpec.Fields",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.formValues",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Invocation.Form"
+ },
+ {
+  "member": "ExtensionAction.icon",
+  "status": "same",
+  "target": "Action.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.previewIntent",
+  "verified": "decision",
+  "note": "WP3.12: map the in-palette preview action",
+  "status": "open",
+  "target": ""
+ },
+ {
+  "member": "ExtensionAction.promptMessage",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "PromptSpec.Message"
+ },
+ {
+  "member": "ExtensionAction.requiresConfirmation",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Action.Confirm"
+ },
+ {
+  "member": "ExtensionAction.selectedItemId",
+  "status": "renamed",
+  "target": "Invocation.SelectedItemID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.shortcut",
+  "status": "same",
+  "target": "Action.Shortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.shortcutScope",
+  "verified": "decision",
+  "note": "Deprecated in 1.x; Command.GlobalShortcut replaces it",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionAction.style",
+  "status": "same",
+  "target": "Action.Style",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.style='destructive'",
+  "status": "same",
+  "target": "value:destructive",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.style='regular'",
+  "verified": "decision",
+  "status": "same",
+  "target": "Action.Style"
+ },
+ {
+  "member": "ExtensionAction.submenu",
+  "status": "same",
+  "target": "Action.Submenu",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.submitTitle",
+  "status": "renamed",
+  "target": "FormSpec.SubmitTitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.subtitle",
+  "status": "same",
+  "target": "Action.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.text",
+  "status": "same",
+  "target": "Action.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.title",
+  "status": "same",
+  "target": "Action.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAction.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Action.Kind"
+ },
+ {
+  "member": "ExtensionAction.value",
+  "status": "renamed",
+  "target": "Invocation.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.action",
+  "verified": "decision",
+  "note": "A command runs its own handler",
+  "status": "better",
+  "target": "Command"
+ },
+ {
+  "member": "ExtensionActionContribution.actionId",
+  "status": "same",
+  "target": "Command.ActionID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.actionPanel",
+  "status": "same",
+  "target": "Command.ActionPanel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.actions",
+  "status": "same",
+  "target": "Command.Actions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.aliases",
+  "status": "same",
+  "target": "Command.Aliases",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.appearance",
+  "status": "same",
+  "target": "Command.Appearance",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.background",
+  "status": "renamed",
+  "target": "Action.Background",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.customizable",
+  "status": "same",
+  "target": "Command.Customizable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.dismissAfterRun",
+  "status": "same",
+  "target": "Command.DismissAfterRun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.dismissAfterRun='auto'",
+  "verified": "decision",
+  "status": "better",
+  "target": "Command.DismissAfterRun"
+ },
+ {
+  "member": "ExtensionActionContribution.globalShortcut",
+  "status": "same",
+  "target": "Command.GlobalShortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.icon",
+  "status": "same",
+  "target": "Command.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.id",
+  "status": "same",
+  "target": "Command.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.image",
+  "status": "renamed",
+  "target": "Item.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.keywords",
+  "status": "same",
+  "target": "Command.Keywords",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.mode",
+  "status": "same",
+  "target": "Command.Mode",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.placement",
+  "status": "same",
+  "target": "Command.Placement",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.run",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ActionHandler.RunAction"
+ },
+ {
+  "member": "ExtensionActionContribution.score",
+  "status": "same",
+  "target": "Command.Score",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.subtitle",
+  "status": "same",
+  "target": "Command.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.title",
+  "status": "same",
+  "target": "Command.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionContribution.triggers",
+  "status": "same",
+  "target": "Command.Triggers",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionPanel.sections",
+  "status": "same",
+  "target": "ActionPanel.Sections",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionPanel.title",
+  "status": "same",
+  "target": "ActionPanel.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionPlacement='hidden'",
+  "status": "same",
+  "target": "value:hidden",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionPlacement='root'",
+  "status": "same",
+  "target": "value:root",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionPlacement='search'",
+  "status": "same",
+  "target": "value:search",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionResult.action",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Result.Next"
+ },
+ {
+  "member": "ExtensionActionResult.navigation",
+  "status": "renamed",
+  "target": "Result.Navigation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionResult.patch",
+  "status": "renamed",
+  "target": "Result.Patch",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionResult.view",
+  "status": "renamed",
+  "target": "Result.View",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionSection.actions",
+  "status": "same",
+  "target": "ActionSection.Actions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionActionSection.isLoading",
+  "verified": "decision",
+  "note": "Decide in WP3.12",
+  "status": "open",
+  "target": ""
+ },
+ {
+  "member": "ExtensionActionSection.lazyActions",
+  "verified": "decision",
+  "note": "1.x appends these to actions",
+  "status": "better",
+  "target": "ActionSection.Actions"
+ },
+ {
+  "member": "ExtensionActionSection.title",
+  "status": "same",
+  "target": "ActionSection.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.ask",
+  "status": "same",
+  "target": "AI.Ask",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments",
+  "status": "same",
+  "target": "AI.Attachments",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.clipboard",
+  "status": "renamed",
+  "target": "AttachmentBuilder.Clipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.file",
+  "status": "renamed",
+  "target": "AttachmentBuilder.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.image",
+  "status": "renamed",
+  "target": "AttachmentBuilder.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.ocrImage",
+  "status": "renamed",
+  "target": "AttachmentBuilder.OCRImage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.selectedFiles",
+  "status": "renamed",
+  "target": "AttachmentBuilder.SelectedFiles",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.selectedText",
+  "status": "renamed",
+  "target": "AttachmentBuilder.SelectedText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.attachments.text",
+  "status": "renamed",
+  "target": "AttachmentBuilder.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.decide",
+  "status": "same",
+  "target": "AI.Decide",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.isAvailable",
+  "status": "same",
+  "target": "AI.IsAvailable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.prepare",
+  "status": "same",
+  "target": "AI.Prepare",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.session",
+  "status": "same",
+  "target": "AI.Session",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAi.stream",
+  "status": "same",
+  "target": "AI.Stream",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.as",
+  "status": "renamed",
+  "target": "Attachment.As",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.as='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.as='metadata'",
+  "verified": "decision",
+  "status": "same",
+  "target": "Attachment.As"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.as='ocr'",
+  "status": "same",
+  "target": "value:ocr",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.as='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.file",
+  "status": "renamed",
+  "target": "Attachment.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.filePath",
+  "status": "renamed",
+  "target": "Attachment.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.ocr",
+  "status": "renamed",
+  "target": "Attachment.OCR",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.path",
+  "status": "renamed",
+  "target": "Attachment.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.title",
+  "status": "renamed",
+  "target": "Attachment.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=file.type='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.data",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Attachment.DataURL"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.dataUrl",
+  "status": "renamed",
+  "target": "Attachment.DataURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.filePath",
+  "status": "renamed",
+  "target": "Attachment.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.imageDataUrl",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Attachment.DataURL"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.mimeType",
+  "status": "renamed",
+  "target": "Attachment.MimeType",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.ocr",
+  "status": "renamed",
+  "target": "Attachment.OCR",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.path",
+  "status": "renamed",
+  "target": "Attachment.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.title",
+  "status": "renamed",
+  "target": "Attachment.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=image.type='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=text.text",
+  "status": "renamed",
+  "target": "Attachment.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=text.title",
+  "status": "renamed",
+  "target": "Attachment.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=text.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Attachment.Kind"
+ },
+ {
+  "member": "ExtensionAiAttachment#type=text.type='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.cleanupExpiredConversations",
+  "status": "same",
+  "target": "AIBuilder.CleanupExpiredConversations",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.getChat",
+  "status": "same",
+  "target": "AIBuilder.GetChat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.listChats",
+  "status": "same",
+  "target": "AIBuilder.ListChats",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.openChat",
+  "status": "same",
+  "target": "AIBuilder.OpenChat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.openChatsList",
+  "status": "same",
+  "target": "AIBuilder.OpenChatsList",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.removeChat",
+  "status": "same",
+  "target": "AIBuilder.RemoveChat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.startChat",
+  "status": "same",
+  "target": "AIBuilder.StartChat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiBuilder.tweakExtension",
+  "status": "same",
+  "target": "AIBuilder.TweakExtension",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiModel='fast'",
+  "status": "same",
+  "target": "value:fast",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiModel='smart'",
+  "status": "same",
+  "target": "value:smart",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiOptions.attachments",
+  "status": "same",
+  "target": "AIOptions.Attachments",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiOptions.model",
+  "status": "same",
+  "target": "AIOptions.Model",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiOptions.onDelta",
+  "verified": "decision",
+  "note": "Stream events replace callbacks",
+  "status": "better",
+  "target": "AIStream.Events"
+ },
+ {
+  "member": "ExtensionAiOptions.onEvent",
+  "verified": "decision",
+  "note": "Stream events replace callbacks",
+  "status": "better",
+  "target": "AIStream.Events"
+ },
+ {
+  "member": "ExtensionAiOptions.signal",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ {
+  "member": "ExtensionAiOptions.system",
+  "status": "same",
+  "target": "AIOptions.System",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStream.abort",
+  "status": "renamed",
+  "target": "AIStream.Abort",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStream.result",
+  "status": "renamed",
+  "target": "AIStream.Result",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=aborted.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=aborted.type='aborted'",
+  "status": "same",
+  "target": "value:aborted",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=delta.text",
+  "status": "renamed",
+  "target": "AIStreamEvent.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=delta.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=delta.type='delta'",
+  "status": "same",
+  "target": "value:delta",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=done.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=done.type='done'",
+  "status": "same",
+  "target": "value:done",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=error.data",
+  "verified": "decision",
+  "note": "Decide in WP3.12",
+  "status": "open",
+  "target": ""
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=error.message",
+  "status": "renamed",
+  "target": "AIStreamEvent.Message",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=error.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=error.type='error'",
+  "status": "same",
+  "target": "value:error",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=start.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent#type=start.type='start'",
+  "status": "same",
+  "target": "value:start",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent.isError",
+  "status": "renamed",
+  "target": "AIStreamEvent.IsError",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent.name",
+  "status": "renamed",
+  "target": "AIStreamEvent.Name",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent.type",
+  "status": "renamed",
+  "target": "AIStreamEvent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent.type='tool_end'",
+  "status": "same",
+  "target": "value:tool_end",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionAiStreamEvent.type='tool_start'",
+  "status": "same",
+  "target": "value:tool_start",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionApp.firstSeenAt",
+  "status": "renamed",
+  "target": "App.FirstSeenMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionApp.id",
+  "status": "same",
+  "target": "App.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionApp.name",
+  "status": "same",
+  "target": "App.Name",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionApp.path",
+  "status": "same",
+  "target": "App.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundMode='background'",
+  "status": "same",
+  "target": "value:background",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundMode='noView'",
+  "status": "same",
+  "target": "value:noView",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundMode='view'",
+  "status": "same",
+  "target": "value:view",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=app.frontmost.changed.debounceMs",
+  "status": "same",
+  "target": "Trigger.DebounceMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=app.frontmost.changed.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=app.frontmost.changed.type='app.frontmost.changed'",
+  "status": "same",
+  "target": "value:app.frontmost.changed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=clipboard.changed.debounceMs",
+  "status": "same",
+  "target": "Trigger.DebounceMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=clipboard.changed.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=clipboard.changed.type='clipboard.changed'",
+  "status": "same",
+  "target": "value:clipboard.changed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.debounceMs",
+  "status": "same",
+  "target": "Trigger.DebounceMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.extensions",
+  "status": "same",
+  "target": "Trigger.Extensions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.ignore",
+  "status": "same",
+  "target": "Trigger.Ignore",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.includeHidden",
+  "status": "same",
+  "target": "Trigger.IncludeHidden",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.kind",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "FileKindFilter"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.kind='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.kind='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.kind='media'",
+  "status": "same",
+  "target": "value:media",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.kind='video'",
+  "status": "same",
+  "target": "value:video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.roots",
+  "status": "same",
+  "target": "Trigger.Roots",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=files.changed.type='files.changed'",
+  "status": "same",
+  "target": "value:files.changed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=interval.delayMs",
+  "status": "same",
+  "target": "Trigger.DelayMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=interval.every",
+  "status": "same",
+  "target": "Trigger.Every",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=interval.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=interval.type='interval'",
+  "status": "same",
+  "target": "value:interval",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=startup.delayMs",
+  "status": "same",
+  "target": "Trigger.DelayMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=startup.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger#type=startup.type='startup'",
+  "status": "same",
+  "target": "value:startup",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger.type",
+  "status": "same",
+  "target": "Trigger.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger.type='login'",
+  "status": "same",
+  "target": "value:login",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionBackgroundTrigger.type='wake'",
+  "status": "same",
+  "target": "value:wake",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='ai'",
+  "status": "same",
+  "target": "value:ai",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='camera'",
+  "status": "same",
+  "target": "value:camera",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='clipboard.history'",
+  "status": "same",
+  "target": "value:clipboard.history",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='desktop.apps'",
+  "status": "same",
+  "target": "value:desktop.apps",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='desktop.files'",
+  "status": "same",
+  "target": "value:desktop.files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='desktop.window-management'",
+  "status": "same",
+  "target": "value:desktop.window-management",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='dictation'",
+  "status": "same",
+  "target": "value:dictation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='extensions.ownership'",
+  "status": "same",
+  "target": "value:extensions.ownership",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='ocr'",
+  "status": "same",
+  "target": "value:ocr",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='places'",
+  "status": "same",
+  "target": "value:places",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='settings.write'",
+  "status": "same",
+  "target": "value:settings.write",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='shortcuts'",
+  "status": "same",
+  "target": "value:shortcuts",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='system'",
+  "status": "same",
+  "target": "value:system",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCapability='updates'",
+  "status": "same",
+  "target": "value:updates",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=files.concealed",
+  "status": "same",
+  "target": "ClipboardContent.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=files.paths",
+  "status": "same",
+  "target": "ClipboardContent.Paths",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=files.type",
+  "status": "same",
+  "target": "ClipboardContent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=files.type='files'",
+  "status": "same",
+  "target": "value:files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=html.concealed",
+  "status": "same",
+  "target": "ClipboardContent.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=html.html",
+  "status": "same",
+  "target": "ClipboardContent.HTML",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=html.text",
+  "status": "same",
+  "target": "ClipboardContent.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=html.type",
+  "status": "same",
+  "target": "ClipboardContent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=html.type='html'",
+  "status": "same",
+  "target": "value:html",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.concealed",
+  "status": "same",
+  "target": "ClipboardContent.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.image",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.imageDataUrl",
+  "status": "same",
+  "target": "ClipboardContent.ImageDataURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.path",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.type",
+  "status": "same",
+  "target": "ClipboardContent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=image.type='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=text.concealed",
+  "status": "same",
+  "target": "ClipboardContent.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=text.html",
+  "status": "same",
+  "target": "ClipboardContent.HTML",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=text.text",
+  "status": "same",
+  "target": "ClipboardContent.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=text.type",
+  "status": "same",
+  "target": "ClipboardContent.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardContent#type=text.type='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.createdAt",
+  "status": "renamed",
+  "target": "ClipboardEntry.CreatedAtMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.filePath",
+  "status": "same",
+  "target": "ClipboardEntry.FilePath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.id",
+  "status": "same",
+  "target": "ClipboardEntry.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.imageDataUrl",
+  "status": "same",
+  "target": "ClipboardEntry.ImageDataURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.imagePath",
+  "status": "same",
+  "target": "ClipboardEntry.ImagePath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.text",
+  "status": "same",
+  "target": "ClipboardEntry.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.thumbnailUrl",
+  "status": "same",
+  "target": "ClipboardEntry.ThumbnailURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.type",
+  "status": "same",
+  "target": "ClipboardEntry.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardEntry.videoUrl",
+  "status": "same",
+  "target": "ClipboardEntry.VideoURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardHistory.clear",
+  "status": "same",
+  "target": "ClipboardHistory.Clear",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardHistory.get",
+  "status": "same",
+  "target": "ClipboardHistory.Get",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardHistory.list",
+  "status": "same",
+  "target": "ClipboardHistory.List",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardHistory.remove",
+  "status": "same",
+  "target": "ClipboardHistory.Remove",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardHistory.search",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ClipboardHistory.List"
+ },
+ {
+  "member": "ExtensionClipboardReadOptions.formats",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "SystemClipboard.Read"
+ },
+ {
+  "member": "ExtensionClipboardReadOptions.formats='files'",
+  "status": "same",
+  "target": "value:files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardReadOptions.formats='html'",
+  "status": "same",
+  "target": "value:html",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardReadOptions.formats='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardReadOptions.formats='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardReadResult#type=empty.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ClipboardContent"
+ },
+ {
+  "member": "ExtensionClipboardReadResult#type=empty.type='empty'",
+  "status": "same",
+  "target": "value:empty",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionClipboardWriteOptions.concealed",
+  "status": "same",
+  "target": "ClipboardContent.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.actionId",
+  "status": "same",
+  "target": "Command.ActionID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.aliases",
+  "status": "same",
+  "target": "Command.Aliases",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.appearance",
+  "status": "same",
+  "target": "Command.Appearance",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.background",
+  "status": "renamed",
+  "target": "Action.Background",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.dismissAfterRun",
+  "status": "same",
+  "target": "Command.DismissAfterRun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.dismissAfterRun='auto'",
+  "verified": "decision",
+  "status": "better",
+  "target": "Command.DismissAfterRun"
+ },
+ {
+  "member": "ExtensionCommand.globalShortcut",
+  "status": "same",
+  "target": "Command.GlobalShortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.icon",
+  "status": "same",
+  "target": "Command.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.id",
+  "status": "same",
+  "target": "Command.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.mode",
+  "status": "same",
+  "target": "Command.Mode",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.run",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ActionHandler.RunAction"
+ },
+ {
+  "member": "ExtensionCommand.score",
+  "status": "same",
+  "target": "Command.Score",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.shortcut",
+  "status": "renamed",
+  "target": "Action.Shortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.shortcutScope",
+  "verified": "decision",
+  "note": "Deprecated in 1.x; Command.GlobalShortcut replaces it",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionCommand.subtitle",
+  "status": "same",
+  "target": "Command.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.title",
+  "status": "same",
+  "target": "Command.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCommand.triggers",
+  "status": "same",
+  "target": "Command.Triggers",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.action",
+  "verified": "decision",
+  "note": "Durable actions are Commands",
+  "status": "better",
+  "target": "Command"
+ },
+ {
+  "member": "ExtensionContext.actions",
+  "verified": "decision",
+  "note": "Constructors and action kinds replace the actions namespace",
+  "status": "better",
+  "target": "Action"
+ },
+ {
+  "member": "ExtensionContext.actions.background",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ModeBackground"
+ },
+ {
+  "member": "ExtensionContext.actions.camera",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionCamera"
+ },
+ {
+  "member": "ExtensionContext.actions.copyImage",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:CopyImage"
+ },
+ {
+  "member": "ExtensionContext.actions.copyText",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:CopyText"
+ },
+ {
+  "member": "ExtensionContext.actions.native",
+  "verified": "decision",
+  "note": "Replaced by named actions and built-in-only host actions",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionContext.actions.openPalette",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionOpenPalette"
+ },
+ {
+  "member": "ExtensionContext.actions.openPath",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:OpenPath"
+ },
+ {
+  "member": "ExtensionContext.actions.openUrl",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:OpenURL"
+ },
+ {
+  "member": "ExtensionContext.actions.openWith",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:OpenWith"
+ },
+ {
+  "member": "ExtensionContext.actions.paste",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:Paste"
+ },
+ {
+  "member": "ExtensionContext.actions.pasteText",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PasteText"
+ },
+ {
+  "member": "ExtensionContext.actions.pop",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionPop"
+ },
+ {
+  "member": "ExtensionContext.actions.push",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PushView"
+ },
+ {
+  "member": "ExtensionContext.actions.quickLook",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:QuickLook"
+ },
+ {
+  "member": "ExtensionContext.actions.recordShortcut",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionShortcut"
+ },
+ {
+  "member": "ExtensionContext.actions.ref",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Action.Ref"
+ },
+ {
+  "member": "ExtensionContext.actions.refreshContributions",
+  "verified": "decision",
+  "note": "InvalidateRoot also revalidates the commands of the calling extension",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ {
+  "member": "ExtensionContext.actions.removeShortcut",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionShortcut"
+ },
+ {
+  "member": "ExtensionContext.actions.replace",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionReplaceView"
+ },
+ {
+  "member": "ExtensionContext.actions.revealPath",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:RevealPath"
+ },
+ {
+  "member": "ExtensionContext.actions.root",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:RootView"
+ },
+ {
+  "member": "ExtensionContext.actions.run",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:Run"
+ },
+ {
+  "member": "ExtensionContext.actions.setPaletteShortcut",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionRecordPaletteShortcut"
+ },
+ {
+  "member": "ExtensionContext.actions.shellExec",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionShellExec"
+ },
+ {
+  "member": "ExtensionContext.actions.shellScript",
+  "verified": "decision",
+  "note": "Run a handler that calls Shell.Script",
+  "status": "better",
+  "target": "Shell.Script"
+ },
+ {
+  "member": "ExtensionContext.actions.system",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:SystemOp"
+ },
+ {
+  "member": "ExtensionContext.actions.toggleSetting",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionToggleSetting"
+ },
+ {
+  "member": "ExtensionContext.actions.trash",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:Trash"
+ },
+ {
+  "member": "ExtensionContext.actions.typeText",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:TypeText"
+ },
+ {
+  "member": "ExtensionContext.actions.updates",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ActionUpdate"
+ },
+ {
+  "member": "ExtensionContext.ai",
+  "status": "same",
+  "target": "AI",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.aiBuilder",
+  "status": "same",
+  "target": "AIBuilder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.cache",
+  "status": "same",
+  "target": "Cache",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.clipboard",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ClipboardHistory"
+ },
+ {
+  "member": "ExtensionContext.clipboard.history",
+  "status": "same",
+  "target": "ClipboardHistory",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.command",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "LaunchContext"
+ },
+ {
+  "member": "ExtensionContext.data",
+  "status": "same",
+  "target": "Data",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop",
+  "status": "same",
+  "target": "Desktop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps",
+  "status": "same",
+  "target": "Apps",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps.frontmost",
+  "status": "same",
+  "target": "Apps.Frontmost",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps.icon",
+  "status": "same",
+  "target": "Apps.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps.launch",
+  "status": "same",
+  "target": "Apps.Launch",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps.list",
+  "status": "same",
+  "target": "Apps.List",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.apps.search",
+  "status": "same",
+  "target": "Apps.Search",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard",
+  "status": "same",
+  "target": "SystemClipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.read",
+  "status": "same",
+  "target": "SystemClipboard.Read",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.readFiles",
+  "status": "same",
+  "target": "SystemClipboard.ReadFiles",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.readHtml",
+  "status": "same",
+  "target": "SystemClipboard.ReadHTML",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.readImage",
+  "status": "same",
+  "target": "SystemClipboard.ReadImage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.readText",
+  "status": "same",
+  "target": "SystemClipboard.ReadText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.write",
+  "status": "same",
+  "target": "SystemClipboard.Write",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.writeFiles",
+  "status": "same",
+  "target": "SystemClipboard.WriteFiles",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.writeHtml",
+  "status": "same",
+  "target": "SystemClipboard.WriteHTML",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.writeImage",
+  "status": "same",
+  "target": "SystemClipboard.WriteImage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.clipboard.writeText",
+  "status": "same",
+  "target": "SystemClipboard.WriteText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files",
+  "status": "same",
+  "target": "Files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.displayPath",
+  "status": "same",
+  "target": "Files.DisplayPath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.find",
+  "status": "same",
+  "target": "Files.Find",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.findImages",
+  "status": "same",
+  "target": "Files.FindImages",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.findMedia",
+  "status": "same",
+  "target": "Files.FindMedia",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.findVideos",
+  "status": "same",
+  "target": "Files.FindVideos",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.indexSnapshot",
+  "status": "same",
+  "target": "Files.IndexSnapshot",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.indexedRoots",
+  "status": "same",
+  "target": "Files.IndexedRoots",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.metadata",
+  "status": "same",
+  "target": "Files.Metadata",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.open",
+  "status": "same",
+  "target": "Files.Open",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.openWithApps",
+  "status": "same",
+  "target": "Files.OpenWithApps",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.preview",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Files.QuickLook"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.readText",
+  "status": "same",
+  "target": "Files.ReadText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.recent",
+  "status": "same",
+  "target": "Files.Recent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.reindex",
+  "status": "same",
+  "target": "Files.Reindex",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.reveal",
+  "status": "same",
+  "target": "Files.Reveal",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.searchIndex",
+  "status": "same",
+  "target": "Files.SearchIndex",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.thumbnail",
+  "status": "same",
+  "target": "Files.Thumbnail",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.toFileUrl",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Files.FileURL"
+ },
+ {
+  "member": "ExtensionContext.desktop.files.writeText",
+  "status": "same",
+  "target": "Files.WriteText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.keyboard",
+  "status": "same",
+  "target": "Keyboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.keyboard.typeText",
+  "status": "same",
+  "target": "Keyboard.TypeText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.selection",
+  "status": "same",
+  "target": "Selection",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.selection.access",
+  "status": "same",
+  "target": "Selection.Access",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.selection.files",
+  "status": "same",
+  "target": "Selection.Files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.selection.read",
+  "verified": "decision",
+  "note": "WP3.12: add Selection.Read",
+  "status": "open",
+  "target": ""
+ },
+ {
+  "member": "ExtensionContext.desktop.selection.replaceText",
+  "status": "same",
+  "target": "Selection.ReplaceText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.selection.text",
+  "status": "same",
+  "target": "Selection.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell",
+  "status": "same",
+  "target": "Shell",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell.appleScript",
+  "status": "same",
+  "target": "Shell.AppleScript",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell.exec",
+  "status": "same",
+  "target": "Shell.Exec",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell.openExternal",
+  "status": "same",
+  "target": "Shell.OpenExternal",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell.script",
+  "status": "same",
+  "target": "Shell.Script",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.shell.which",
+  "status": "same",
+  "target": "Shell.Which",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement",
+  "status": "same",
+  "target": "WindowManagement",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.apply",
+  "status": "same",
+  "target": "WindowManagement.Apply",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.applyTo",
+  "status": "same",
+  "target": "WindowManagement.ApplyTo",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.displays",
+  "status": "same",
+  "target": "WindowManagement.Displays",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.focus",
+  "status": "same",
+  "target": "WindowManagement.Focus",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.focusNeighbor",
+  "status": "same",
+  "target": "WindowManagement.FocusNeighbor",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.waitForWindow",
+  "status": "same",
+  "target": "WindowManagement.WaitForWindow",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.desktop.windowManagement.windows",
+  "status": "same",
+  "target": "WindowManagement.Windows",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.dictation",
+  "status": "same",
+  "target": "Dictation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.drafts",
+  "status": "same",
+  "target": "Drafts",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.drafts.commit",
+  "status": "same",
+  "target": "Drafts.Commit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.drafts.discard",
+  "status": "same",
+  "target": "Drafts.Discard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.extension",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Identity"
+ },
+ {
+  "member": "ExtensionContext.extension.rename",
+  "verified": "decision",
+  "note": "WP3.12: add a rename service",
+  "status": "open",
+  "target": ""
+ },
+ {
+  "member": "ExtensionContext.extensions",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Ownership"
+ },
+ {
+  "member": "ExtensionContext.extensions.ownership",
+  "status": "same",
+  "target": "Ownership",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.input",
+  "status": "same",
+  "target": "Input",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.input.prompt",
+  "status": "same",
+  "target": "Input.Prompt",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.launch",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "LaunchContext"
+ },
+ {
+  "member": "ExtensionContext.logs",
+  "status": "same",
+  "target": "Logs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.menuBar",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Views"
+ },
+ {
+  "member": "ExtensionContext.menuBar.refresh",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Views.RefreshMenuBar"
+ },
+ {
+  "member": "ExtensionContext.navigation",
+  "status": "same",
+  "target": "Navigation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.navigation.pop",
+  "status": "same",
+  "target": "Navigation.Pop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.navigation.push",
+  "status": "same",
+  "target": "Navigation.Push",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.navigation.replace",
+  "status": "same",
+  "target": "Navigation.Replace",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.navigation.root",
+  "status": "same",
+  "target": "Navigation.Root",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.navigation.run",
+  "status": "same",
+  "target": "Navigation.Run",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.ocr",
+  "status": "same",
+  "target": "OCR",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.ocr.image",
+  "status": "same",
+  "target": "OCR.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.ocr.region",
+  "status": "same",
+  "target": "OCR.Region",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.ocr.screen",
+  "status": "same",
+  "target": "OCR.Screen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.secrets",
+  "status": "same",
+  "target": "Secrets",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.settings",
+  "status": "same",
+  "target": "Settings",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.shortcuts",
+  "status": "same",
+  "target": "Shortcuts",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.shortcuts.list",
+  "status": "same",
+  "target": "Shortcuts.List",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.shortcuts.palette",
+  "status": "same",
+  "target": "Shortcuts.Palette",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.signal",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ {
+  "member": "ExtensionContext.state",
+  "verified": "decision",
+  "note": "View state arrives in the invocation; package variables hold per-process state; Cache holds shared state",
+  "status": "better",
+  "target": "Cache"
+ },
+ {
+  "member": "ExtensionContext.storage",
+  "status": "same",
+  "target": "Storage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.system",
+  "status": "same",
+  "target": "System",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.text",
+  "status": "same",
+  "target": "Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.ui",
+  "verified": "decision",
+  "note": "Constructors in the api package replace the ui namespace",
+  "status": "better",
+  "target": "View"
+ },
+ {
+  "member": "ExtensionContext.ui.actions",
+  "verified": "decision",
+  "note": "Plain slice, no helper needed",
+  "status": "better",
+  "target": "Action"
+ },
+ {
+  "member": "ExtensionContext.ui.camera",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ViewCamera"
+ },
+ {
+  "member": "ExtensionContext.ui.chat",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ViewChat"
+ },
+ {
+  "member": "ExtensionContext.ui.collection",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:CollectionView"
+ },
+ {
+  "member": "ExtensionContext.ui.confirm",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:WithConfirmation"
+ },
+ {
+  "member": "ExtensionContext.ui.editor",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:EditorView"
+ },
+ {
+  "member": "ExtensionContext.ui.empty",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "EmptyState"
+ },
+ {
+  "member": "ExtensionContext.ui.error",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:ErrorView"
+ },
+ {
+  "member": "ExtensionContext.ui.form",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:FormView"
+ },
+ {
+  "member": "ExtensionContext.ui.grid",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:GridView"
+ },
+ {
+  "member": "ExtensionContext.ui.indicator",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Indicators"
+ },
+ {
+  "member": "ExtensionContext.ui.indicator.hide",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Indicators.Hide"
+ },
+ {
+  "member": "ExtensionContext.ui.indicator.show",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Indicators.Show"
+ },
+ {
+  "member": "ExtensionContext.ui.indicator.update",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Indicators.Update"
+ },
+ {
+  "member": "ExtensionContext.ui.item",
+  "verified": "decision",
+  "note": "Plain struct literal, no helper needed",
+  "status": "better",
+  "target": "Item"
+ },
+ {
+  "member": "ExtensionContext.ui.list",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:ListView"
+ },
+ {
+  "member": "ExtensionContext.ui.loading",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.IsLoading"
+ },
+ {
+  "member": "ExtensionContext.ui.preview",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PreviewView"
+ },
+ {
+  "member": "ExtensionContext.ui.previewAction",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PreviewFile"
+ },
+ {
+  "member": "ExtensionContext.ui.previewFile",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PreviewFileView"
+ },
+ {
+  "member": "ExtensionContext.ui.previewView",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:PreviewView"
+ },
+ {
+  "member": "ExtensionContext.ui.progress",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "func:ProgressView"
+ },
+ {
+  "member": "ExtensionContext.ui.webview",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "const:ViewWebview"
+ },
+ {
+  "member": "ExtensionContext.updates",
+  "status": "same",
+  "target": "Updates",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.updates.getState",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Updates.State"
+ },
+ {
+  "member": "ExtensionContext.views",
+  "status": "same",
+  "target": "Views",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.views.invalidate",
+  "status": "same",
+  "target": "Views.Invalidate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.views.refresh",
+  "status": "same",
+  "target": "Views.Refresh",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows",
+  "status": "same",
+  "target": "Windows",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows.close",
+  "status": "same",
+  "target": "Windows.Close",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows.create",
+  "status": "same",
+  "target": "Windows.Create",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows.hide",
+  "status": "same",
+  "target": "Windows.Hide",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows.show",
+  "status": "same",
+  "target": "Windows.Show",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContext.windows.toggle",
+  "status": "same",
+  "target": "Windows.Toggle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionContributionRefreshResult.error",
+  "verified": "decision",
+  "note": "The refresh is asynchronous; failures appear in the extension row",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ {
+  "member": "ExtensionContributionRefreshResult.ok",
+  "verified": "decision",
+  "note": "The refresh is asynchronous; failures appear in the extension row",
+  "status": "better",
+  "target": "Views.InvalidateRoot"
+ },
+ {
+  "member": "ExtensionCrudCollection.add",
+  "status": "same",
+  "target": "CollectionSpec.Add",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.emptyView",
+  "status": "renamed",
+  "target": "View.EmptyView",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.emptyView.subtitle",
+  "status": "renamed",
+  "target": "View.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.emptyView.title",
+  "status": "renamed",
+  "target": "View.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.id",
+  "status": "renamed",
+  "target": "View.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.items",
+  "status": "same",
+  "target": "CollectionSpec.Items",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.searchBarPlaceholder",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.Placeholder"
+ },
+ {
+  "member": "ExtensionCrudCollection.subtitle",
+  "status": "renamed",
+  "target": "View.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudCollection.title",
+  "status": "renamed",
+  "target": "View.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudItem.edit",
+  "status": "same",
+  "target": "CrudItem.Edit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudItem.preview",
+  "status": "same",
+  "target": "CrudItem.Preview",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionCrudItem.remove",
+  "status": "same",
+  "target": "CrudItem.Remove",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionData.loader",
+  "status": "same",
+  "target": "Data.Loader",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionData.staleWhileRevalidate",
+  "status": "same",
+  "target": "Data.StaleWhileRevalidate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDataLoaderHandle._loader",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "DataSource.Loader"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=choice.confidence",
+  "status": "same",
+  "target": "DecisionAnswer.Confidence",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=choice.probabilities",
+  "status": "same",
+  "target": "DecisionAnswer.Probabilities",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=choice.type",
+  "status": "same",
+  "target": "DecisionAnswer.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=choice.type='choice'",
+  "status": "same",
+  "target": "value:choice",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=choice.value",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=predicate.probability",
+  "status": "same",
+  "target": "DecisionAnswer.Probability",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=predicate.type",
+  "status": "same",
+  "target": "DecisionAnswer.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=predicate.type='predicate'",
+  "status": "same",
+  "target": "value:predicate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=predicate.value",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=score.confidence",
+  "status": "same",
+  "target": "DecisionAnswer.Confidence",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=score.probabilities",
+  "status": "same",
+  "target": "DecisionAnswer.Probabilities",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=score.type",
+  "status": "same",
+  "target": "DecisionAnswer.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=score.type='score'",
+  "status": "same",
+  "target": "value:score",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionAnswer#type=score.value",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "DecisionResult.Answers"
+ },
+ {
+  "member": "ExtensionDecisionOptions.attachments",
+  "status": "same",
+  "target": "DecisionRequest.Attachments",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionOptions.input",
+  "status": "same",
+  "target": "DecisionRequest.Input",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionOptions.questions",
+  "status": "same",
+  "target": "DecisionRequest.Questions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionOptions.signal",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Context.Std"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=choice.id",
+  "status": "same",
+  "target": "DecisionQuestion.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=choice.options",
+  "status": "same",
+  "target": "DecisionQuestion.Options",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=choice.question",
+  "status": "same",
+  "target": "DecisionQuestion.Question",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=choice.type",
+  "status": "same",
+  "target": "DecisionQuestion.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=choice.type='choice'",
+  "status": "same",
+  "target": "value:choice",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=predicate.id",
+  "status": "same",
+  "target": "DecisionQuestion.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=predicate.question",
+  "status": "same",
+  "target": "DecisionQuestion.Question",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=predicate.type",
+  "status": "same",
+  "target": "DecisionQuestion.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=predicate.type='predicate'",
+  "status": "same",
+  "target": "value:predicate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.id",
+  "status": "same",
+  "target": "DecisionQuestion.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.labels",
+  "status": "same",
+  "target": "DecisionQuestion.Labels",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.max",
+  "status": "same",
+  "target": "DecisionQuestion.Max",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.min",
+  "status": "same",
+  "target": "DecisionQuestion.Min",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.question",
+  "status": "same",
+  "target": "DecisionQuestion.Question",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.type",
+  "status": "same",
+  "target": "DecisionQuestion.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionQuestion#type=score.type='score'",
+  "status": "same",
+  "target": "value:score",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.answers",
+  "status": "same",
+  "target": "DecisionResult.Answers",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.id",
+  "status": "same",
+  "target": "DecisionResult.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.model",
+  "status": "same",
+  "target": "DecisionResult.Model",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.usage",
+  "status": "same",
+  "target": "DecisionResult.Usage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.usage.inputTokens",
+  "status": "same",
+  "target": "DecisionResult.InputTokens",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDecisionResult.usage.outputTokens",
+  "status": "same",
+  "target": "DecisionResult.OutputTokens",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.actions",
+  "status": "same",
+  "target": "Detail.Actions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.image",
+  "status": "same",
+  "target": "Detail.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.link",
+  "status": "same",
+  "target": "Detail.Link",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.markdown",
+  "status": "same",
+  "target": "Detail.Markdown",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.metadata",
+  "status": "same",
+  "target": "Detail.Metadata",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.subtitle",
+  "status": "same",
+  "target": "Detail.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.text",
+  "status": "same",
+  "target": "Detail.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.title",
+  "status": "same",
+  "target": "Detail.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetail.video",
+  "status": "same",
+  "target": "Detail.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.description",
+  "status": "renamed",
+  "target": "LinkCard.Description",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.image",
+  "status": "renamed",
+  "target": "LinkCard.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.siteName",
+  "status": "renamed",
+  "target": "LinkCard.SiteName",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.status",
+  "status": "renamed",
+  "target": "LinkCard.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.status='loading'",
+  "status": "same",
+  "target": "value:loading",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.status='ready'",
+  "status": "same",
+  "target": "value:ready",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.status='unavailable'",
+  "status": "same",
+  "target": "value:unavailable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.title",
+  "status": "renamed",
+  "target": "LinkCard.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDetailLink.url",
+  "status": "renamed",
+  "target": "LinkCard.URL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.apiAvailable",
+  "status": "same",
+  "target": "Dictation.APIAvailable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.cancel",
+  "status": "same",
+  "target": "Dictation.Cancel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.deleteRecording",
+  "status": "same",
+  "target": "Dictation.DeleteRecording",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.devices",
+  "status": "same",
+  "target": "Dictation.Devices",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.recordings",
+  "status": "same",
+  "target": "Dictation.Recordings",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.retry",
+  "status": "same",
+  "target": "Dictation.Retry",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.start",
+  "status": "same",
+  "target": "Dictation.Start",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.status",
+  "status": "same",
+  "target": "Dictation.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictation.stop",
+  "status": "same",
+  "target": "Dictation.Stop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationDevice.id",
+  "status": "same",
+  "target": "DictationDevice.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationDevice.isDefault",
+  "status": "same",
+  "target": "DictationDevice.IsDefault",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationDevice.title",
+  "status": "same",
+  "target": "DictationDevice.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationStatus='error'",
+  "status": "same",
+  "target": "value:error",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationStatus='idle'",
+  "status": "same",
+  "target": "value:idle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationStatus='recording'",
+  "status": "same",
+  "target": "value:recording",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDictationStatus='transcribing'",
+  "status": "same",
+  "target": "value:transcribing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.frame",
+  "status": "same",
+  "target": "DisplayInfo.Frame",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.frame.height",
+  "status": "renamed",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.frame.width",
+  "status": "renamed",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.frame.x",
+  "status": "renamed",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.frame.y",
+  "status": "renamed",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.id",
+  "status": "same",
+  "target": "DisplayInfo.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.isPrimary",
+  "status": "renamed",
+  "target": "DisplayInfo.Primary",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.workArea",
+  "status": "same",
+  "target": "DisplayInfo.WorkArea",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.workArea.height",
+  "status": "renamed",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.workArea.width",
+  "status": "renamed",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.workArea.x",
+  "status": "renamed",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDisplayInfo.workArea.y",
+  "status": "renamed",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftConflict.currentContent",
+  "status": "same",
+  "target": "DraftConflict.CurrentContent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftConflict.currentVersion",
+  "status": "same",
+  "target": "DraftConflict.CurrentVersion",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftConflict.key",
+  "status": "same",
+  "target": "DraftConflict.Key",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftConflict.storedContent",
+  "status": "same",
+  "target": "DraftConflict.StoredContent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftConflict.storedVersion",
+  "status": "same",
+  "target": "DraftConflict.StoredVersion",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.navigation",
+  "status": "renamed",
+  "target": "DraftResolution.Navigation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.navigation='pop'",
+  "status": "same",
+  "target": "value:pop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.navigation='push'",
+  "status": "same",
+  "target": "value:push",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.navigation='replace'",
+  "status": "same",
+  "target": "value:replace",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.navigation='root'",
+  "status": "same",
+  "target": "value:root",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionDraftResolutionFollowUp.view",
+  "status": "renamed",
+  "target": "DraftResolution.View",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.autosave",
+  "status": "renamed",
+  "target": "DraftOptions.Autosave",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.autosave.action",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "DraftOptions.Autosave"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.autosave.debounceMs",
+  "status": "renamed",
+  "target": "DraftOptions.DebounceMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.key",
+  "status": "renamed",
+  "target": "DraftOptions.Key",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.onConflict",
+  "status": "renamed",
+  "target": "DraftOptions.OnConflict",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorDraftOptions.version",
+  "status": "renamed",
+  "target": "DraftOptions.Version",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorFormat='markdown'",
+  "status": "same",
+  "target": "value:markdown",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionEditorFormat='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.birthtime",
+  "status": "renamed",
+  "target": "FileRef.BirthtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.birthtimeMs",
+  "status": "same",
+  "target": "FileRef.BirthtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.dateAdded",
+  "status": "renamed",
+  "target": "FileRef.DateAddedMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.dateAddedMs",
+  "status": "same",
+  "target": "FileRef.DateAddedMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.displayPath",
+  "status": "same",
+  "target": "FileRef.DisplayPath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.extension",
+  "status": "same",
+  "target": "FileRef.Extension",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.fileUrl",
+  "status": "same",
+  "target": "FileRef.FileURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.height",
+  "status": "same",
+  "target": "FileRef.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.kind",
+  "status": "same",
+  "target": "FileRef.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.mimeType",
+  "status": "same",
+  "target": "FileRef.MimeType",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.mtime",
+  "status": "renamed",
+  "target": "FileRef.MtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.mtimeMs",
+  "status": "same",
+  "target": "FileRef.MtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.name",
+  "status": "same",
+  "target": "FileRef.Name",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.path",
+  "status": "same",
+  "target": "FileRef.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.size",
+  "status": "same",
+  "target": "FileRef.Size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.thumbnailUrl",
+  "status": "same",
+  "target": "FileRef.ThumbnailURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.url",
+  "status": "same",
+  "target": "FileRef.URL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.videoUrl",
+  "status": "same",
+  "target": "FileRef.VideoURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFile.width",
+  "status": "same",
+  "target": "FileRef.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileIndexOptions.ignore",
+  "status": "same",
+  "target": "IndexOptions.Ignore",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileIndexOptions.includeHidden",
+  "status": "same",
+  "target": "IndexOptions.IncludeHidden",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileIndexOptions.query",
+  "status": "same",
+  "target": "IndexOptions.Query",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileIndexOptions.roots",
+  "status": "same",
+  "target": "IndexOptions.Roots",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileKind='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileKind='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFileKind='video'",
+  "status": "same",
+  "target": "value:video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.depth",
+  "status": "same",
+  "target": "FindOptions.Depth",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.extensions",
+  "status": "same",
+  "target": "FindOptions.Extensions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.includeDimensions",
+  "status": "same",
+  "target": "FindOptions.IncludeDimensions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.kind",
+  "status": "same",
+  "target": "FindOptions.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.kind='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.kind='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.kind='media'",
+  "status": "same",
+  "target": "value:media",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.kind='video'",
+  "status": "same",
+  "target": "value:video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.limit",
+  "status": "same",
+  "target": "FindOptions.Limit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.order",
+  "status": "same",
+  "target": "FindOptions.Order",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.order='asc'",
+  "status": "same",
+  "target": "value:asc",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.order='desc'",
+  "status": "same",
+  "target": "value:desc",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.pattern",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "FindOptions.Patterns"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.scanLimit",
+  "status": "same",
+  "target": "FindOptions.ScanLimit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy",
+  "status": "same",
+  "target": "FindOptions.SortBy",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='added'",
+  "status": "same",
+  "target": "value:added",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='created'",
+  "status": "same",
+  "target": "value:created",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='modified'",
+  "status": "same",
+  "target": "value:modified",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='name'",
+  "status": "same",
+  "target": "value:name",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='recent'",
+  "status": "same",
+  "target": "value:recent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFindFilesOptions.sortBy='size'",
+  "status": "same",
+  "target": "value:size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.buttonLabel",
+  "status": "same",
+  "target": "Field.ButtonLabel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.canCreateDirectories",
+  "verified": "decision",
+  "note": "Inverted: true in 1.x is false here",
+  "status": "renamed",
+  "target": "Field.DisableDirectoryCreation"
+ },
+ {
+  "member": "ExtensionFormField.defaultPath",
+  "status": "same",
+  "target": "Field.DefaultPath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.description",
+  "status": "same",
+  "target": "Field.Description",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.disabled",
+  "status": "same",
+  "target": "Field.Disabled",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.error",
+  "status": "same",
+  "target": "Field.Error",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.extensions",
+  "status": "same",
+  "target": "Field.Extensions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.filterName",
+  "status": "same",
+  "target": "Field.FilterName",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.id",
+  "status": "same",
+  "target": "Field.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.label",
+  "status": "same",
+  "target": "Field.Label",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.options",
+  "status": "same",
+  "target": "Field.Options",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.placeholder",
+  "status": "same",
+  "target": "Field.Placeholder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.required",
+  "status": "same",
+  "target": "Field.Required",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.rows",
+  "status": "same",
+  "target": "Field.Rows",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.type",
+  "status": "same",
+  "target": "Field.Type",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormField.value",
+  "status": "same",
+  "target": "Field.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='checkbox'",
+  "status": "same",
+  "target": "value:checkbox",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='date'",
+  "status": "same",
+  "target": "value:date",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='description'",
+  "status": "same",
+  "target": "value:description",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='dropdown'",
+  "status": "same",
+  "target": "value:dropdown",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='email'",
+  "status": "same",
+  "target": "value:email",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='files'",
+  "status": "same",
+  "target": "value:files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='folder'",
+  "status": "same",
+  "target": "value:folder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='multiselect'",
+  "status": "same",
+  "target": "value:multiselect",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='number'",
+  "status": "same",
+  "target": "value:number",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='password'",
+  "status": "same",
+  "target": "value:password",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='select'",
+  "status": "same",
+  "target": "value:select",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='separator'",
+  "status": "same",
+  "target": "value:separator",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='textarea'",
+  "status": "same",
+  "target": "value:textarea",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormFieldType='url'",
+  "status": "same",
+  "target": "value:url",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormOption.title",
+  "status": "renamed",
+  "target": "Option.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionFormOption.value",
+  "status": "renamed",
+  "target": "Option.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.alt",
+  "status": "same",
+  "target": "Image.Alt",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.dark",
+  "status": "same",
+  "target": "Image.Dark",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.fallback",
+  "status": "same",
+  "target": "Image.Fallback",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.fit",
+  "status": "same",
+  "target": "Image.Fit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.fit='contain'",
+  "status": "same",
+  "target": "value:contain",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.fit='cover'",
+  "status": "same",
+  "target": "value:cover",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.light",
+  "status": "same",
+  "target": "Image.Light",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.mask",
+  "status": "same",
+  "target": "Image.Mask",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.mask='circle'",
+  "status": "same",
+  "target": "value:circle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.mask='none'",
+  "status": "same",
+  "target": "value:none",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.mask='rounded'",
+  "status": "same",
+  "target": "value:rounded",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.shape",
+  "status": "same",
+  "target": "Image.Shape",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.shape='circle'",
+  "status": "same",
+  "target": "value:circle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.shape='rounded'",
+  "status": "same",
+  "target": "value:rounded",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.shape='square'",
+  "status": "same",
+  "target": "value:square",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.src",
+  "status": "same",
+  "target": "Image.Src",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionImage.tint",
+  "status": "same",
+  "target": "Image.Tint",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.birthtimeMs",
+  "status": "same",
+  "target": "IndexedFile.BirthtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.dateAddedMs",
+  "status": "same",
+  "target": "IndexedFile.DateAddedMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.displayPath",
+  "status": "same",
+  "target": "IndexedFile.DisplayPath",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.extension",
+  "status": "same",
+  "target": "IndexedFile.Extension",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.fileUrl",
+  "status": "same",
+  "target": "IndexedFile.FileURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.id",
+  "status": "same",
+  "target": "IndexedFile.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.kind",
+  "status": "same",
+  "target": "IndexedFile.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.mtimeMs",
+  "status": "same",
+  "target": "IndexedFile.MtimeMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.name",
+  "status": "same",
+  "target": "IndexedFile.Name",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.path",
+  "status": "same",
+  "target": "IndexedFile.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.size",
+  "status": "same",
+  "target": "IndexedFile.Size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.thumbnailUrl",
+  "status": "same",
+  "target": "IndexedFile.ThumbnailURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.url",
+  "status": "same",
+  "target": "IndexedFile.URL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndexedFile.videoUrl",
+  "status": "same",
+  "target": "IndexedFile.VideoURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.durationMs",
+  "status": "same",
+  "target": "IndicatorInput.DurationMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.id",
+  "status": "same",
+  "target": "IndicatorInput.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.status",
+  "status": "same",
+  "target": "IndicatorInput.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.subtitle",
+  "status": "same",
+  "target": "IndicatorInput.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.title",
+  "status": "same",
+  "target": "IndicatorInput.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.total",
+  "status": "same",
+  "target": "IndicatorInput.Total",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorInput.value",
+  "status": "same",
+  "target": "IndicatorInput.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorStatus='error'",
+  "status": "same",
+  "target": "value:error",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorStatus='loading'",
+  "status": "same",
+  "target": "value:loading",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorStatus='recording'",
+  "status": "same",
+  "target": "value:recording",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorStatus='success'",
+  "status": "same",
+  "target": "value:success",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionIndicatorStatus='transcribing'",
+  "status": "same",
+  "target": "value:transcribing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.accessories",
+  "status": "same",
+  "target": "Item.Accessories",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.actionId",
+  "status": "renamed",
+  "target": "Command.ActionID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.actionPanel",
+  "status": "same",
+  "target": "Item.ActionPanel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.actionPanelVisibility",
+  "status": "same",
+  "target": "Item.ActionPanelVisibility",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.actions",
+  "status": "same",
+  "target": "Item.Actions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.aliases",
+  "status": "same",
+  "target": "Item.Aliases",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.appearance",
+  "status": "same",
+  "target": "Item.Appearance",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.background",
+  "status": "renamed",
+  "target": "Action.Background",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.contextual",
+  "status": "same",
+  "target": "Item.Contextual",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.customizable",
+  "status": "renamed",
+  "target": "Command.Customizable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.detail",
+  "status": "same",
+  "target": "Item.Detail",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.disabled",
+  "status": "same",
+  "target": "Item.Disabled",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.dismissAfterRun",
+  "status": "renamed",
+  "target": "Action.DismissAfterRun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.dismissAfterRun='auto'",
+  "verified": "decision",
+  "status": "better",
+  "target": "Action.DismissAfterRun"
+ },
+ {
+  "member": "ExtensionItem.filePath",
+  "status": "renamed",
+  "target": "Item.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.fileUrl",
+  "status": "renamed",
+  "target": "Item.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.globalShortcut",
+  "status": "renamed",
+  "target": "Command.GlobalShortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.glyph",
+  "status": "same",
+  "target": "Item.Glyph",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.icon",
+  "status": "same",
+  "target": "Item.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.id",
+  "status": "same",
+  "target": "Item.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.image",
+  "status": "same",
+  "target": "Item.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.keywords",
+  "status": "same",
+  "target": "Item.Keywords",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.lastUsed",
+  "status": "renamed",
+  "target": "Item.LastUsedMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.path",
+  "status": "renamed",
+  "target": "Action.Path",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.primaryAction",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Item.Primary"
+ },
+ {
+  "member": "ExtensionItem.queryFallback",
+  "status": "same",
+  "target": "Item.QueryFallback",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.score",
+  "status": "same",
+  "target": "Item.Score",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.shortcut",
+  "status": "same",
+  "target": "Item.Shortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.shortcutScope",
+  "verified": "decision",
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionItem.subtitle",
+  "status": "same",
+  "target": "Item.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.text",
+  "status": "renamed",
+  "target": "Action.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.title",
+  "status": "same",
+  "target": "Item.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.video",
+  "status": "same",
+  "target": "Item.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItem.videoUrl",
+  "status": "renamed",
+  "target": "Item.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAccessory.icon",
+  "status": "renamed",
+  "target": "Accessory.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAccessory.text",
+  "status": "renamed",
+  "target": "Accessory.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAccessory.tone",
+  "status": "renamed",
+  "target": "Accessory.Tone",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAccessory.tooltip",
+  "status": "renamed",
+  "target": "Accessory.Tooltip",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAppearance.background",
+  "status": "renamed",
+  "target": "Appearance.Background",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAppearance.background='accent'",
+  "status": "same",
+  "target": "value:accent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAppearance.foreground",
+  "status": "renamed",
+  "target": "Appearance.Foreground",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAppearance.prominence",
+  "status": "renamed",
+  "target": "Appearance.Prominence",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemAppearance.prominence='primary'",
+  "status": "same",
+  "target": "value:primary",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemSection.items",
+  "status": "same",
+  "target": "ItemSection.Items",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemSection.subtitle",
+  "status": "same",
+  "target": "ItemSection.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionItemSection.title",
+  "status": "same",
+  "target": "ItemSection.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.changedPaths",
+  "status": "same",
+  "target": "LaunchContext.ChangedPaths",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.event",
+  "status": "same",
+  "target": "LaunchContext.Event",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.files",
+  "status": "same",
+  "target": "LaunchContext.Files",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.reason",
+  "status": "same",
+  "target": "LaunchContext.Reason",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.refresh",
+  "status": "same",
+  "target": "LaunchContext.Refresh",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.startedAt",
+  "status": "renamed",
+  "target": "LaunchContext.StartedAtMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLaunchContext.trigger",
+  "status": "same",
+  "target": "LaunchContext.Trigger",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLogs.recent",
+  "status": "same",
+  "target": "Logs.Recent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.icon",
+  "status": "same",
+  "target": "MenuBar.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.id",
+  "status": "same",
+  "target": "MenuBar.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.popover",
+  "status": "same",
+  "target": "MenuBar.Popover",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.popover.height",
+  "status": "renamed",
+  "target": "Popover.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.popover.view",
+  "status": "renamed",
+  "target": "Popover.View",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.popover.width",
+  "status": "renamed",
+  "target": "Popover.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.sections",
+  "status": "same",
+  "target": "MenuBar.Sections",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.sections.items",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "MenuSection.Rows"
+ },
+ {
+  "member": "ExtensionMenuBar.sections.title",
+  "status": "same",
+  "target": "MenuBar.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.title",
+  "status": "same",
+  "target": "MenuBar.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBar.tooltip",
+  "status": "same",
+  "target": "MenuBar.Tooltip",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarContribution.render",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ {
+  "member": "ExtensionMenuBarContribution.triggers",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='activity'",
+  "status": "same",
+  "target": "value:activity",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='alarm-clock'",
+  "status": "same",
+  "target": "value:alarm-clock",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='battery-medium'",
+  "status": "same",
+  "target": "value:battery-medium",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='bell'",
+  "status": "same",
+  "target": "value:bell",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='bell-dot'",
+  "status": "same",
+  "target": "value:bell-dot",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='bot'",
+  "status": "same",
+  "target": "value:bot",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='briefcase'",
+  "status": "same",
+  "target": "value:briefcase",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='bug'",
+  "status": "same",
+  "target": "value:bug",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='calendar'",
+  "status": "same",
+  "target": "value:calendar",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='chart-line'",
+  "status": "same",
+  "target": "value:chart-line",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='circle'",
+  "status": "same",
+  "target": "value:circle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='circle-alert'",
+  "status": "same",
+  "target": "value:circle-alert",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='circle-check'",
+  "status": "same",
+  "target": "value:circle-check",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='circle-dot'",
+  "status": "same",
+  "target": "value:circle-dot",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='circle-x'",
+  "status": "same",
+  "target": "value:circle-x",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='clipboard'",
+  "status": "same",
+  "target": "value:clipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='clock'",
+  "status": "same",
+  "target": "value:clock",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='cloud'",
+  "status": "same",
+  "target": "value:cloud",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='cloud-sun'",
+  "status": "same",
+  "target": "value:cloud-sun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='code'",
+  "status": "same",
+  "target": "value:code",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='coffee'",
+  "status": "same",
+  "target": "value:coffee",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='cpu'",
+  "status": "same",
+  "target": "value:cpu",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='dollar-sign'",
+  "status": "same",
+  "target": "value:dollar-sign",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='download'",
+  "status": "same",
+  "target": "value:download",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='droplet'",
+  "status": "same",
+  "target": "value:droplet",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='eye'",
+  "status": "same",
+  "target": "value:eye",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='flame'",
+  "status": "same",
+  "target": "value:flame",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='folder'",
+  "status": "same",
+  "target": "value:folder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='gauge'",
+  "status": "same",
+  "target": "value:gauge",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='git-branch'",
+  "status": "same",
+  "target": "value:git-branch",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='git-commit-horizontal'",
+  "status": "same",
+  "target": "value:git-commit-horizontal",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='git-pull-request'",
+  "status": "same",
+  "target": "value:git-pull-request",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='globe'",
+  "status": "same",
+  "target": "value:globe",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='hard-drive'",
+  "status": "same",
+  "target": "value:hard-drive",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='heart'",
+  "status": "same",
+  "target": "value:heart",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='house'",
+  "status": "same",
+  "target": "value:house",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='inbox'",
+  "status": "same",
+  "target": "value:inbox",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='list-todo'",
+  "status": "same",
+  "target": "value:list-todo",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='lock'",
+  "status": "same",
+  "target": "value:lock",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='mail'",
+  "status": "same",
+  "target": "value:mail",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='memory-stick'",
+  "status": "same",
+  "target": "value:memory-stick",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='message-square'",
+  "status": "same",
+  "target": "value:message-square",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='mic'",
+  "status": "same",
+  "target": "value:mic",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='mic-off'",
+  "status": "same",
+  "target": "value:mic-off",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='moon'",
+  "status": "same",
+  "target": "value:moon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='music'",
+  "status": "same",
+  "target": "value:music",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='pause'",
+  "status": "same",
+  "target": "value:pause",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='play'",
+  "status": "same",
+  "target": "value:play",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='refresh-cw'",
+  "status": "same",
+  "target": "value:refresh-cw",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='rocket'",
+  "status": "same",
+  "target": "value:rocket",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='server'",
+  "status": "same",
+  "target": "value:server",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='shield'",
+  "status": "same",
+  "target": "value:shield",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='sparkles'",
+  "status": "same",
+  "target": "value:sparkles",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='square-check'",
+  "status": "same",
+  "target": "value:square-check",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='star'",
+  "status": "same",
+  "target": "value:star",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='sticky-note'",
+  "status": "same",
+  "target": "value:sticky-note",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='sun'",
+  "status": "same",
+  "target": "value:sun",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='terminal'",
+  "status": "same",
+  "target": "value:terminal",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='thermometer'",
+  "status": "same",
+  "target": "value:thermometer",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='timer'",
+  "status": "same",
+  "target": "value:timer",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='upload'",
+  "status": "same",
+  "target": "value:upload",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='video'",
+  "status": "same",
+  "target": "value:video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='wifi'",
+  "status": "same",
+  "target": "value:wifi",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarIcon='zap'",
+  "status": "same",
+  "target": "value:zap",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.action",
+  "status": "same",
+  "target": "MenuRow.Action",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.checked",
+  "status": "same",
+  "target": "MenuRow.Checked",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.disabled",
+  "status": "same",
+  "target": "MenuRow.Disabled",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.icon",
+  "status": "same",
+  "target": "MenuRow.Icon",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.id",
+  "status": "same",
+  "target": "MenuRow.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.items",
+  "status": "same",
+  "target": "MenuRow.Items",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.shortcut",
+  "status": "same",
+  "target": "MenuRow.Shortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.subtitle",
+  "status": "same",
+  "target": "MenuRow.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMenuBarRow.title",
+  "status": "same",
+  "target": "MenuRow.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=link.label",
+  "status": "renamed",
+  "target": "Metadata.Label",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=link.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=link.type='link'",
+  "status": "same",
+  "target": "value:link",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=link.url",
+  "status": "renamed",
+  "target": "Metadata.URL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=link.value",
+  "status": "renamed",
+  "target": "Metadata.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=separator.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=separator.type='separator'",
+  "status": "same",
+  "target": "value:separator",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=tag.label",
+  "status": "renamed",
+  "target": "Metadata.Label",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=tag.tone",
+  "status": "renamed",
+  "target": "Metadata.Tone",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=tag.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=tag.type='tag'",
+  "status": "same",
+  "target": "value:tag",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=tag.value",
+  "status": "renamed",
+  "target": "Metadata.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=text.copyable",
+  "status": "renamed",
+  "target": "Metadata.Copyable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=text.label",
+  "status": "renamed",
+  "target": "Metadata.Label",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=text.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Metadata.Kind"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=text.type='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionMetadataItem#type=text.value",
+  "status": "renamed",
+  "target": "Metadata.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionNavigationMode='pop'",
+  "status": "same",
+  "target": "value:pop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionNavigationMode='push'",
+  "status": "same",
+  "target": "value:push",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionNavigationMode='replace'",
+  "status": "same",
+  "target": "value:replace",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionNavigationMode='root'",
+  "status": "same",
+  "target": "value:root",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.boundingBox",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Rect"
+ },
+ {
+  "member": "ExtensionOcrBlock.boundingBox.height",
+  "status": "renamed",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.boundingBox.width",
+  "status": "renamed",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.boundingBox.x",
+  "status": "renamed",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.boundingBox.y",
+  "status": "renamed",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.confidence",
+  "status": "same",
+  "target": "OCRBlock.Confidence",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrBlock.text",
+  "status": "same",
+  "target": "OCRBlock.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrOptions.language",
+  "status": "same",
+  "target": "OCROptions.Language",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrOptions.languages",
+  "status": "same",
+  "target": "OCROptions.Languages",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrOptions.timeoutMs",
+  "status": "same",
+  "target": "OCROptions.TimeoutMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrRegion.height",
+  "status": "same",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrRegion.width",
+  "status": "same",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrRegion.x",
+  "status": "same",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrRegion.y",
+  "status": "same",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrResult.blocks",
+  "status": "same",
+  "target": "OCRResult.Blocks",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrResult.confidence",
+  "status": "same",
+  "target": "OCRResult.Confidence",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrResult.language",
+  "status": "same",
+  "target": "OCRResult.Language",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOcrResult.text",
+  "status": "same",
+  "target": "OCRResult.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOwnership.canWrite",
+  "status": "same",
+  "target": "Ownership.CanWrite",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOwnership.claim",
+  "verified": "decision",
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionOwnership.filesForChat",
+  "status": "same",
+  "target": "Ownership.FilesForChat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOwnership.ownerOf",
+  "status": "same",
+  "target": "Ownership.OwnerOf",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionOwnership.reload",
+  "verified": "decision",
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionOwnership.remove",
+  "verified": "decision",
+  "note": "Host-only in 1.x; the host enforces ownership",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionPagination.hasMore",
+  "status": "same",
+  "target": "Pagination.HasMore",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPagination.onLoadMore",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Pagination.Next"
+ },
+ {
+  "member": "ExtensionPagination.pageSize",
+  "status": "same",
+  "target": "Pagination.PageSize",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPaletteShortcut.accelerator",
+  "status": "renamed",
+  "target": "ShortcutRecord.Accelerator",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPaletteShortcut.scope",
+  "status": "renamed",
+  "target": "ShortcutRecord.Scope",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPaletteShortcut.scope='palette'",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Shortcuts.Palette"
+ },
+ {
+  "member": "ExtensionPaletteShortcut.title",
+  "status": "renamed",
+  "target": "ShortcutRecord.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteOptions.restoreClipboard",
+  "status": "same",
+  "target": "PasteOptions.RestoreClipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteOptions.restoreDelayMs",
+  "status": "same",
+  "target": "PasteOptions.RestoreDelayMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.concealed",
+  "status": "same",
+  "target": "PasteOptions.Concealed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.expectedFrontmostAppId",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "PasteOptions.ExpectedFrontmostID"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.keepPaletteOpen",
+  "status": "same",
+  "target": "PasteOptions.KeepPaletteOpen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.plainText",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "PasteOptions.PlainTextOnly"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.restoreClipboard",
+  "status": "same",
+  "target": "PasteOptions.RestoreClipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPasteTextOptions.restoreDelayMs",
+  "status": "same",
+  "target": "PasteOptions.RestoreDelayMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.clipboardType",
+  "verified": "decision",
+  "note": "1.x only showed it as the preview subtitle",
+  "status": "better",
+  "target": "View.Subtitle"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.filePath",
+  "status": "renamed",
+  "target": "FilePreview.File",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.imageDataUrl",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Item.Image"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.imagePath",
+  "status": "renamed",
+  "target": "PreviewSpec.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind",
+  "status": "renamed",
+  "target": "FileRef.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind='clipboard'",
+  "status": "same",
+  "target": "value:clipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind='file'",
+  "status": "same",
+  "target": "value:file",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind='image'",
+  "status": "same",
+  "target": "value:image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind='text'",
+  "status": "same",
+  "target": "value:text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.kind='video'",
+  "status": "same",
+  "target": "value:video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.shortcut",
+  "status": "renamed",
+  "target": "Item.Shortcut",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.text",
+  "status": "renamed",
+  "target": "PreviewSpec.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.thumbnailUrl",
+  "status": "renamed",
+  "target": "FileRef.ThumbnailURL",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.title",
+  "status": "renamed",
+  "target": "Item.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionPreviewItemDescriptor.videoUrl",
+  "status": "renamed",
+  "target": "PreviewSpec.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionRuntimeCache.get",
+  "status": "same",
+  "target": "Cache.Get",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionRuntimeCache.getStale",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Cache.Stale"
+ },
+ {
+  "member": "ExtensionRuntimeCache.has",
+  "status": "same",
+  "target": "Cache.Has",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionRuntimeCache.invalidate",
+  "status": "same",
+  "target": "Cache.Invalidate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionRuntimeCache.set",
+  "status": "same",
+  "target": "Cache.Set",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.id",
+  "status": "renamed",
+  "target": "ViewFilter.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.items",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ViewFilter.Options"
+ },
+ {
+  "member": "ExtensionSearchAccessory.items.title",
+  "status": "renamed",
+  "target": "ViewFilterOption.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.items.value",
+  "status": "renamed",
+  "target": "ViewFilter.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.onChange",
+  "status": "renamed",
+  "target": "ViewFilter.OnChange",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.tooltip",
+  "status": "renamed",
+  "target": "ViewFilter.Tooltip",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSearchAccessory.value",
+  "status": "renamed",
+  "target": "ViewFilter.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSecrets.clear",
+  "status": "same",
+  "target": "Secrets.Clear",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSecrets.delete",
+  "status": "same",
+  "target": "Secrets.Delete",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSecrets.get",
+  "status": "same",
+  "target": "Secrets.Get",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSecrets.set",
+  "status": "same",
+  "target": "Secrets.Set",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSettings.definitions",
+  "status": "same",
+  "target": "Settings.Definitions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSettings.get",
+  "status": "same",
+  "target": "Settings.Get",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSettings.set",
+  "status": "same",
+  "target": "Settings.Set",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSettings.toggle",
+  "status": "same",
+  "target": "Settings.Toggle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellOptions.cwd",
+  "status": "same",
+  "target": "ShellOptions.CWD",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellOptions.env",
+  "status": "same",
+  "target": "ShellOptions.Env",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellOptions.outputLimit",
+  "status": "same",
+  "target": "ShellOptions.OutputLimit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellOptions.shell",
+  "status": "same",
+  "target": "ShellOptions.Shell",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellOptions.timeout",
+  "status": "renamed",
+  "target": "ShellOptions.TimeoutMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellResult.exitCode",
+  "status": "same",
+  "target": "ShellResult.ExitCode",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellResult.stderr",
+  "status": "same",
+  "target": "ShellResult.Stderr",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShellResult.stdout",
+  "status": "same",
+  "target": "ShellResult.Stdout",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.accelerator",
+  "status": "same",
+  "target": "ShortcutRecord.Accelerator",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.actionId",
+  "status": "same",
+  "target": "ShortcutRecord.ActionID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.scope",
+  "status": "same",
+  "target": "ShortcutRecord.Scope",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.scope='global'",
+  "verified": "decision",
+  "status": "same",
+  "target": "ShortcutRecord.Scope"
+ },
+ {
+  "member": "ExtensionShortcutRecord.source",
+  "status": "same",
+  "target": "ShortcutRecord.Source",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.source='extension'",
+  "status": "same",
+  "target": "value:extension",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.source='user'",
+  "verified": "decision",
+  "status": "same",
+  "target": "ShortcutRecord.Source"
+ },
+ {
+  "member": "ExtensionShortcutRecord.subtitle",
+  "status": "same",
+  "target": "ShortcutRecord.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionShortcutRecord.title",
+  "status": "same",
+  "target": "ShortcutRecord.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.clear",
+  "status": "same",
+  "target": "Storage.Clear",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.delete",
+  "status": "same",
+  "target": "Storage.Delete",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.get",
+  "status": "same",
+  "target": "Storage.Get",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.memo",
+  "status": "same",
+  "target": "Storage.Memo",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.memoStale",
+  "status": "same",
+  "target": "Storage.MemoStale",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionStorage.set",
+  "status": "same",
+  "target": "Storage.Set",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.capabilities",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "System.HasCapability"
+ },
+ {
+  "member": "ExtensionSystem.capabilities.has",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "System.HasCapability"
+ },
+ {
+  "member": "ExtensionSystem.labels",
+  "status": "same",
+  "target": "System.Labels",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.labels.keyboardSettings",
+  "status": "renamed",
+  "target": "SystemLabels.KeyboardSettings",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.labels.openSystemSettings",
+  "status": "renamed",
+  "target": "SystemLabels.OpenSystemSettings",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.labels.previewFile",
+  "status": "renamed",
+  "target": "SystemLabels.PreviewFile",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.labels.revealInFileManager",
+  "status": "renamed",
+  "target": "SystemLabels.RevealInFileManager",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionSystem.os",
+  "status": "same",
+  "target": "System.OS",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateOptions.cursorToken",
+  "status": "same",
+  "target": "TemplateOptions.CursorToken",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateOptions.includeClipboard",
+  "status": "same",
+  "target": "TemplateOptions.IncludeClipboard",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateOptions.includeSelectedText",
+  "status": "same",
+  "target": "TemplateOptions.IncludeSelectedText",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateOptions.promptMissing",
+  "status": "same",
+  "target": "TemplateOptions.PromptMissing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateOptions.returnCursor",
+  "verified": "decision",
+  "note": "Template always returns the cursor",
+  "status": "better",
+  "target": "Text.Template"
+ },
+ {
+  "member": "ExtensionTemplateOptions.returnResult",
+  "verified": "decision",
+  "note": "Template always returns the result",
+  "status": "better",
+  "target": "Text.Template"
+ },
+ {
+  "member": "ExtensionTemplateOptions.variables",
+  "status": "same",
+  "target": "TemplateOptions.Variables",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateResult.cursor",
+  "status": "same",
+  "target": "TemplateResult.Cursor",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTemplateResult.missingVariables",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "TemplateResult.Missing"
+ },
+ {
+  "member": "ExtensionTemplateResult.text",
+  "status": "same",
+  "target": "TemplateResult.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionText.template",
+  "status": "same",
+  "target": "Text.Template",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionTypeTextOptions.delayMs",
+  "status": "same",
+  "target": "TypeOptions.DelayMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.availableVersion",
+  "status": "same",
+  "target": "UpdateState.AvailableVersion",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.channel",
+  "status": "same",
+  "target": "UpdateState.Channel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.channel='nightly'",
+  "status": "same",
+  "target": "value:nightly",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.channel='stable'",
+  "status": "same",
+  "target": "value:stable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.checking",
+  "status": "same",
+  "target": "UpdateState.Checking",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.currentVersion",
+  "status": "same",
+  "target": "UpdateState.CurrentVersion",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.downloadedVersion",
+  "status": "same",
+  "target": "UpdateState.DownloadedVersion",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.downloading",
+  "status": "same",
+  "target": "UpdateState.Downloading",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.errorMessage",
+  "status": "same",
+  "target": "UpdateState.ErrorMessage",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.installing",
+  "status": "same",
+  "target": "UpdateState.Installing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.status",
+  "status": "same",
+  "target": "UpdateState.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionUpdateState.supported",
+  "status": "same",
+  "target": "UpdateState.Supported",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.actionPanel",
+  "status": "same",
+  "target": "View.ActionPanel",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.actionPanelPresentation",
+  "verified": "decision",
+  "note": "Deprecated and ignored in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionView.actionPanelPresentation='compact'",
+  "verified": "decision",
+  "note": "Deprecated and ignored in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ExtensionView.actionPanelPresentation='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.actionPanelVisibility",
+  "status": "same",
+  "target": "View.ActionPanelVisibility",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.actions",
+  "status": "same",
+  "target": "View.Actions",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.aspectRatio",
+  "status": "renamed",
+  "target": "GridSpec.AspectRatio",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.columns",
+  "status": "renamed",
+  "target": "GridSpec.Columns",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.content",
+  "status": "renamed",
+  "target": "EditorSpec.Content",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.contentSizing",
+  "status": "same",
+  "target": "View.ContentSizing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.contentSizing='fill'",
+  "status": "same",
+  "target": "value:fill",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.contentSizing='fit'",
+  "status": "same",
+  "target": "value:fit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.controls",
+  "status": "renamed",
+  "target": "CameraSpec.Controls",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.detail",
+  "status": "same",
+  "target": "View.Detail",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.detail.placement",
+  "status": "renamed",
+  "target": "DetailPane.Placement",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.detail.placement='bottom'",
+  "status": "same",
+  "target": "value:bottom",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.detail.placement='side'",
+  "status": "same",
+  "target": "value:side",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.detail.visible",
+  "status": "renamed",
+  "target": "DetailPane.Visible",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.deviceId",
+  "status": "renamed",
+  "target": "CameraSpec.DeviceID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.draft",
+  "status": "renamed",
+  "target": "EditorSpec.Draft",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.emptyView",
+  "status": "same",
+  "target": "View.EmptyView",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.emptyView.subtitle",
+  "status": "same",
+  "target": "View.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.emptyView.title",
+  "status": "same",
+  "target": "View.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.fields",
+  "status": "renamed",
+  "target": "FormSpec.Fields",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.format",
+  "status": "renamed",
+  "target": "EditorSpec.Format",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.framing",
+  "status": "renamed",
+  "target": "CameraSpec.Framing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.framing='contain'",
+  "status": "same",
+  "target": "value:contain",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.framing='cover'",
+  "status": "same",
+  "target": "value:cover",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.html",
+  "status": "renamed",
+  "target": "WebviewSpec.HTML",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.id",
+  "status": "same",
+  "target": "View.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.image",
+  "status": "renamed",
+  "target": "PreviewSpec.Image",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.isLoading",
+  "status": "same",
+  "target": "View.IsLoading",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.items",
+  "status": "same",
+  "target": "View.Items",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.label",
+  "status": "renamed",
+  "target": "ProgressSpec.Label",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.language",
+  "status": "renamed",
+  "target": "EditorSpec.Language",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.layout",
+  "status": "renamed",
+  "target": "GridSpec.Layout",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.layout='compact'",
+  "status": "same",
+  "target": "value:compact",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.layout='square'",
+  "status": "same",
+  "target": "value:square",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.layout='wide'",
+  "status": "same",
+  "target": "value:wide",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.maxVisibleItems",
+  "status": "same",
+  "target": "View.MaxVisibleItems",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages",
+  "status": "renamed",
+  "target": "ChatSpec.Messages",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages.content",
+  "status": "renamed",
+  "target": "EditorSpec.Content",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages.role",
+  "status": "renamed",
+  "target": "ChatMessage.Role",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages.role='assistant'",
+  "status": "same",
+  "target": "value:assistant",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages.role='system'",
+  "status": "same",
+  "target": "value:system",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.messages.role='user'",
+  "status": "same",
+  "target": "value:user",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.mirrored",
+  "status": "renamed",
+  "target": "CameraSpec.Mirrored",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.muted",
+  "status": "renamed",
+  "target": "CameraSpec.Muted",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.onSearchChange",
+  "status": "same",
+  "target": "View.OnSearchChange",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.onSelectionChange",
+  "status": "same",
+  "target": "View.OnSelectionChange",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.pagination",
+  "status": "same",
+  "target": "View.Pagination",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.placeholder",
+  "status": "same",
+  "target": "View.Placeholder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.presentation",
+  "status": "same",
+  "target": "View.Presentation",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.preview",
+  "status": "same",
+  "target": "View.Preview",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.readOnly",
+  "status": "renamed",
+  "target": "EditorSpec.ReadOnly",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.refresh",
+  "status": "same",
+  "target": "View.Refresh",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.refresh.action",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Refresh.Ref"
+ },
+ {
+  "member": "ExtensionView.refresh.immediate",
+  "status": "renamed",
+  "target": "Refresh.Immediate",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.refresh.intervalMs",
+  "status": "renamed",
+  "target": "Refresh.IntervalMs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.refresh.mode",
+  "status": "renamed",
+  "target": "Refresh.Mode",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.searchAccessory",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.Filter"
+ },
+ {
+  "member": "ExtensionView.searchBarPlaceholder",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.Placeholder"
+ },
+ {
+  "member": "ExtensionView.sections",
+  "status": "same",
+  "target": "View.Sections",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.selectedItemId",
+  "status": "same",
+  "target": "View.SelectedItemID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.showDeviceSwitcher",
+  "status": "renamed",
+  "target": "CameraSpec.ShowDeviceSwitcher",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.size",
+  "status": "same",
+  "target": "View.Size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.status",
+  "status": "same",
+  "target": "View.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.steps",
+  "status": "renamed",
+  "target": "ProgressSpec.Steps",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.steps.status",
+  "status": "same",
+  "target": "View.Status",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.steps.title",
+  "status": "same",
+  "target": "View.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.submitAction",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "FormSpec.Submit"
+ },
+ {
+  "member": "ExtensionView.subtitle",
+  "status": "same",
+  "target": "View.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.title",
+  "status": "same",
+  "target": "View.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.titleFromContent",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "EditorSpec.TitleFromLine"
+ },
+ {
+  "member": "ExtensionView.total",
+  "status": "renamed",
+  "target": "ProgressSpec.Total",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.Kind"
+ },
+ {
+  "member": "ExtensionView.type='camera'",
+  "status": "same",
+  "target": "value:camera",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='chat'",
+  "status": "same",
+  "target": "value:chat",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='editor'",
+  "status": "same",
+  "target": "value:editor",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='form'",
+  "status": "same",
+  "target": "value:form",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='grid'",
+  "status": "same",
+  "target": "value:grid",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='list'",
+  "status": "same",
+  "target": "value:list",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='preview'",
+  "status": "same",
+  "target": "value:preview",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='progress'",
+  "status": "same",
+  "target": "value:progress",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='prompt'",
+  "status": "same",
+  "target": "value:prompt",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.type='webview'",
+  "status": "same",
+  "target": "value:webview",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.value",
+  "status": "renamed",
+  "target": "ProgressSpec.Value",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.video",
+  "status": "renamed",
+  "target": "PreviewSpec.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.videoUrl",
+  "status": "renamed",
+  "target": "PreviewSpec.Video",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionView.webviewPermissions",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "WebviewSpec.Permissions"
+ },
+ {
+  "member": "ExtensionView.windowPresentation",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.WindowCompact"
+ },
+ {
+  "member": "ExtensionView.windowPresentation='compact'",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "View.WindowCompact"
+ },
+ {
+  "member": "ExtensionView.windowPresentation='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.isLoading",
+  "status": "same",
+  "target": "ViewPatch.IsLoading",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.items",
+  "status": "same",
+  "target": "ViewPatch.Items",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.items.id",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Item.ID"
+ },
+ {
+  "member": "ExtensionViewPatch.mode",
+  "status": "same",
+  "target": "ViewPatch.Mode",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.removeItemIds",
+  "status": "same",
+  "target": "ViewPatch.RemoveItemIDs",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.searchResultIds",
+  "status": "same",
+  "target": "ViewPatch.SearchResultIds",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionViewPatch.selectedItemId",
+  "status": "same",
+  "target": "ViewPatch.SelectedItemID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='autoplay'",
+  "status": "same",
+  "target": "value:autoplay",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='camera'",
+  "status": "same",
+  "target": "value:camera",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='clipboard-read'",
+  "status": "same",
+  "target": "value:clipboard-read",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='clipboard-write'",
+  "status": "same",
+  "target": "value:clipboard-write",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='display-capture'",
+  "status": "same",
+  "target": "value:display-capture",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWebviewPermission='microphone'",
+  "status": "same",
+  "target": "value:microphone",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.changed",
+  "status": "renamed",
+  "target": "ApplyResult.Changed",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.frame",
+  "status": "renamed",
+  "target": "ApplyResult.Frame",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.frame.height",
+  "status": "renamed",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.frame.width",
+  "status": "renamed",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.frame.x",
+  "status": "renamed",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.frame.y",
+  "status": "renamed",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.message",
+  "status": "renamed",
+  "target": "ApplyResult.Message",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.ok",
+  "status": "renamed",
+  "target": "ApplyResult.OK",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.outcome",
+  "status": "renamed",
+  "target": "ApplyResult.Outcome",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.outcome='exact'",
+  "status": "same",
+  "target": "value:exact",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.outcome='partial'",
+  "status": "same",
+  "target": "value:partial",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason",
+  "status": "renamed",
+  "target": "ApplyResult.Reason",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='denied'",
+  "status": "same",
+  "target": "value:denied",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='focus-not-restored'",
+  "status": "same",
+  "target": "value:focus-not-restored",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='full-screen'",
+  "status": "same",
+  "target": "value:full-screen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='invalid-spec'",
+  "status": "same",
+  "target": "value:invalid-spec",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='minimized'",
+  "status": "same",
+  "target": "value:minimized",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='no-history'",
+  "status": "same",
+  "target": "value:no-history",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='no-target'",
+  "status": "same",
+  "target": "value:no-target",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='no-window'",
+  "status": "same",
+  "target": "value:no-window",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='not-resizable'",
+  "status": "open",
+  "target": "",
+  "verified": "none"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='single-display'",
+  "status": "same",
+  "target": "value:single-display",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='target-lost'",
+  "status": "same",
+  "target": "value:target-lost",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='unapplied'",
+  "status": "same",
+  "target": "value:unapplied",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='unknown-window'",
+  "status": "same",
+  "target": "value:unknown-window",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowApplyResult.reason='unsupported'",
+  "status": "same",
+  "target": "value:unsupported",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowCapability='windows.all-spaces'",
+  "status": "open",
+  "target": "",
+  "verified": "none"
+ },
+ {
+  "member": "ExtensionWindowCapability='windows.always-on-top'",
+  "status": "same",
+  "target": "value:windows.always-on-top",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowCapability='windows.display-recovery'",
+  "status": "open",
+  "target": "",
+  "verified": "none"
+ },
+ {
+  "member": "ExtensionWindowCapability='windows.frame-restore'",
+  "status": "open",
+  "target": "",
+  "verified": "none"
+ },
+ {
+  "member": "ExtensionWindowDimension.unit",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Dimension.Unit"
+ },
+ {
+  "member": "ExtensionWindowDimension.unit='percent'",
+  "verified": "decision",
+  "status": "same",
+  "target": "Dimension.Unit"
+ },
+ {
+  "member": "ExtensionWindowDimension.unit='points'",
+  "verified": "decision",
+  "status": "same",
+  "target": "Dimension.Unit"
+ },
+ {
+  "member": "ExtensionWindowDimension.value",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Dimension.Value"
+ },
+ {
+  "member": "ExtensionWindowHandle.id",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "WindowHandle"
+ },
+ {
+  "member": "ExtensionWindowInfo.appId",
+  "status": "same",
+  "target": "WindowInfo.AppID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.appName",
+  "status": "same",
+  "target": "WindowInfo.AppName",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.displayId",
+  "status": "same",
+  "target": "WindowInfo.DisplayID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.frame",
+  "status": "same",
+  "target": "WindowInfo.Frame",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.frame.height",
+  "status": "renamed",
+  "target": "Rect.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.frame.width",
+  "status": "renamed",
+  "target": "Rect.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.frame.x",
+  "status": "renamed",
+  "target": "Rect.X",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.frame.y",
+  "status": "renamed",
+  "target": "Rect.Y",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.handle",
+  "status": "same",
+  "target": "WindowInfo.Handle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.isFullScreen",
+  "status": "renamed",
+  "target": "WindowInfo.FullScreen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.isMinimized",
+  "status": "renamed",
+  "target": "WindowInfo.Minimized",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowInfo.title",
+  "status": "same",
+  "target": "WindowInfo.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=center.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=center.kind='center'",
+  "status": "same",
+  "target": "value:center",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=display.direction",
+  "status": "renamed",
+  "target": "WindowLayout.Direction",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=display.direction='next'",
+  "status": "same",
+  "target": "value:next",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=display.direction='previous'",
+  "status": "same",
+  "target": "value:previous",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=display.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=display.kind='display'",
+  "status": "same",
+  "target": "value:display",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.edge",
+  "status": "renamed",
+  "target": "WindowLayout.Edge",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.edge='bottom'",
+  "status": "same",
+  "target": "value:bottom",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.edge='left'",
+  "status": "same",
+  "target": "value:left",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.edge='right'",
+  "status": "same",
+  "target": "value:right",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.edge='top'",
+  "status": "same",
+  "target": "value:top",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=edge.kind='edge'",
+  "status": "same",
+  "target": "value:edge",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.height",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ExactFrame.Height"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.kind='exact'",
+  "status": "same",
+  "target": "value:exact",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.width",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ExactFrame.Width"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.x",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ExactFrame.X"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=exact.y",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "ExactFrame.Y"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.cycleGroup",
+  "status": "renamed",
+  "target": "WindowLayout.CycleGroup",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.cycleGroup='bottom'",
+  "status": "same",
+  "target": "value:bottom",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.cycleGroup='left'",
+  "status": "same",
+  "target": "value:left",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.cycleGroup='right'",
+  "status": "same",
+  "target": "value:right",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.cycleGroup='top'",
+  "status": "same",
+  "target": "value:top",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.height",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Rect.Height"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.kind='fraction'",
+  "status": "same",
+  "target": "value:fraction",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.width",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Rect.Width"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.x",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Rect.X"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=fraction.y",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Rect.Y"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=maximize-height.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=maximize-height.kind='maximize-height'",
+  "status": "same",
+  "target": "value:maximize-height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=maximize-width.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=maximize-width.kind='maximize-width'",
+  "status": "same",
+  "target": "value:maximize-width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.direction",
+  "status": "renamed",
+  "target": "WindowLayout.Direction",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.direction='larger'",
+  "status": "same",
+  "target": "value:larger",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.direction='smaller'",
+  "status": "same",
+  "target": "value:smaller",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.kind='resize-step'",
+  "status": "same",
+  "target": "value:resize-step",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=resize-step.step",
+  "status": "renamed",
+  "target": "WindowLayout.Step",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=restore.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=restore.kind='restore'",
+  "status": "same",
+  "target": "value:restore",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.heightFraction",
+  "status": "renamed",
+  "target": "WindowLayout.HeightFraction",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.kind='scaled-center'",
+  "status": "same",
+  "target": "value:scaled-center",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.maxHeight",
+  "status": "renamed",
+  "target": "WindowLayout.MaxHeight",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.maxWidth",
+  "status": "renamed",
+  "target": "WindowLayout.MaxWidth",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=scaled-center.widthFraction",
+  "status": "renamed",
+  "target": "WindowLayout.WidthFraction",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=toggle-full-screen.kind",
+  "status": "renamed",
+  "target": "WindowLayout.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowLayoutSpec#kind=toggle-full-screen.kind='toggle-full-screen'",
+  "status": "same",
+  "target": "value:toggle-full-screen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.applyGapToMaximize",
+  "status": "same",
+  "target": "WindowManagementOptions.ApplyGapToMaximize",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.cycle",
+  "status": "same",
+  "target": "WindowManagementOptions.Cycle",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.cycleOrder",
+  "status": "same",
+  "target": "WindowManagementOptions.CycleOrder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.cycleOrder='half-third-two-thirds'",
+  "status": "same",
+  "target": "value:half-third-two-thirds",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.cycleOrder='half-two-thirds-third'",
+  "status": "same",
+  "target": "value:half-two-thirds-third",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayMoveSizing",
+  "status": "same",
+  "target": "WindowManagementOptions.DisplayMoveSizing",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayMoveSizing='keep-size'",
+  "status": "same",
+  "target": "value:keep-size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayMoveSizing='proportional'",
+  "status": "same",
+  "target": "value:proportional",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayOrder",
+  "status": "same",
+  "target": "WindowManagementOptions.DisplayOrder",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayOrder='left-to-right'",
+  "status": "same",
+  "target": "value:left-to-right",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.displayOrder='top-to-bottom'",
+  "status": "same",
+  "target": "value:top-to-bottom",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.innerGap",
+  "status": "same",
+  "target": "WindowManagementOptions.InnerGap",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.outerGap",
+  "status": "same",
+  "target": "WindowManagementOptions.OuterGap",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.outerGap.bottom",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Edges"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.outerGap.left",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Edges"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.outerGap.right",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Edges"
+ },
+ {
+  "member": "ExtensionWindowManagementOptions.outerGap.top",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Edges"
+ },
+ {
+  "member": "ExtensionWindowOptions.alwaysOnTop",
+  "status": "same",
+  "target": "WindowOptions.AlwaysOnTop",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.chrome",
+  "status": "same",
+  "target": "WindowOptions.Chrome",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.chrome='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.chrome='none'",
+  "status": "same",
+  "target": "value:none",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.focusable",
+  "status": "same",
+  "target": "WindowOptions.Focusable",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.height",
+  "status": "same",
+  "target": "WindowOptions.Height",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.hideOnBlur",
+  "status": "same",
+  "target": "WindowOptions.HideOnBlur",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.id",
+  "status": "same",
+  "target": "WindowOptions.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.ignoreMouseEvents",
+  "status": "same",
+  "target": "WindowOptions.IgnoreMouseEvents",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.persistent",
+  "status": "same",
+  "target": "WindowOptions.Persistent",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.position",
+  "status": "same",
+  "target": "WindowOptions.Position",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.position='bottom-center'",
+  "status": "same",
+  "target": "value:bottom-center",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.position='center'",
+  "status": "same",
+  "target": "value:center",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.position='menu-bar'",
+  "status": "same",
+  "target": "value:menu-bar",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.position='top-center'",
+  "status": "same",
+  "target": "value:top-center",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.remembersFrame",
+  "status": "same",
+  "target": "WindowOptions.RemembersFrame",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.restoreKey",
+  "status": "same",
+  "target": "WindowOptions.RestoreKey",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.showInactive",
+  "status": "same",
+  "target": "WindowOptions.ShowInactive",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.size",
+  "status": "same",
+  "target": "WindowOptions.Size",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.title",
+  "status": "same",
+  "target": "WindowOptions.Title",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.titleBar",
+  "status": "same",
+  "target": "WindowOptions.TitleBar",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.titleBar='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.titleBar='hidden'",
+  "status": "same",
+  "target": "value:hidden",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.visibleOnAllSpaces",
+  "status": "same",
+  "target": "WindowOptions.VisibleOnAllSpaces",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowOptions.width",
+  "status": "same",
+  "target": "WindowOptions.Width",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowRestoreDescriptor.options",
+  "status": "renamed",
+  "target": "WindowRestore.Options",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionWindowRestoreDescriptor.view",
+  "status": "renamed",
+  "target": "WindowRestore.View",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='blue'",
+  "status": "same",
+  "target": "value:blue",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='green'",
+  "status": "same",
+  "target": "value:green",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='orange'",
+  "status": "same",
+  "target": "value:orange",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='pink'",
+  "status": "same",
+  "target": "value:pink",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='purple'",
+  "status": "same",
+  "target": "value:purple",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='red'",
+  "status": "same",
+  "target": "value:red",
+  "verified": "name"
+ },
+ {
+  "member": "ForegroundColor='yellow'",
+  "status": "same",
+  "target": "value:yellow",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.commandId",
+  "status": "same",
+  "target": "LogEntry.CommandID",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.data",
+  "status": "same",
+  "target": "LogEntry.Data",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.extensionId",
+  "status": "same",
+  "target": "LogEntry.ExtensionID",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.level",
+  "status": "same",
+  "target": "LogEntry.Level",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.message",
+  "status": "same",
+  "target": "LogEntry.Message",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.scope",
+  "status": "same",
+  "target": "LogEntry.Scope",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.source",
+  "status": "same",
+  "target": "LogEntry.Source",
+  "verified": "name"
+ },
+ {
+  "member": "LogEntry.timestamp",
+  "status": "renamed",
+  "target": "LogEntry.TimestampMs",
+  "verified": "name"
+ },
+ {
+  "member": "LogLevel='debug'",
+  "status": "same",
+  "target": "value:debug",
+  "verified": "name"
+ },
+ {
+  "member": "LogLevel='error'",
+  "status": "same",
+  "target": "value:error",
+  "verified": "name"
+ },
+ {
+  "member": "LogLevel='info'",
+  "status": "same",
+  "target": "value:info",
+  "verified": "name"
+ },
+ {
+  "member": "LogLevel='warn'",
+  "status": "same",
+  "target": "value:warn",
+  "verified": "name"
+ },
+ {
+  "member": "LogSource='extension'",
+  "status": "same",
+  "target": "value:extension",
+  "verified": "name"
+ },
+ {
+  "member": "LogSource='host'",
+  "status": "same",
+  "target": "value:host",
+  "verified": "name"
+ },
+ {
+  "member": "LogSource='main'",
+  "verified": "decision",
+  "note": "Go has one host process",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "LogSource='renderer'",
+  "verified": "decision",
+  "note": "Go has no renderer process",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "NevermindExtension.actions",
+  "verified": "decision",
+  "note": "Dynamic durable actions are Commands",
+  "status": "better",
+  "target": "CommandProvider.Commands"
+ },
+ {
+  "member": "NevermindExtension.capabilities",
+  "status": "same",
+  "target": "Manifest.Capabilities",
+  "verified": "name"
+ },
+ {
+  "member": "NevermindExtension.commands",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "CommandProvider.Commands"
+ },
+ {
+  "member": "NevermindExtension.id",
+  "status": "renamed",
+  "target": "Identity.ID",
+  "verified": "name"
+ },
+ {
+  "member": "NevermindExtension.menuBar",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "MenuBarProvider"
+ },
+ {
+  "member": "NevermindExtension.permissions",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "Manifest.Capabilities"
+ },
+ {
+  "member": "NevermindExtension.restoreWindow",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "WindowRestorer.RestoreWindow"
+ },
+ {
+  "member": "NevermindExtension.rootItems",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "RootProvider.RootItems"
+ },
+ {
+  "member": "NevermindExtension.searchItems",
+  "verified": "decision",
+  "status": "renamed",
+  "target": "SearchProvider.SearchItems"
+ },
+ {
+  "member": "NevermindExtension.subtitle",
+  "status": "same",
+  "target": "Manifest.Subtitle",
+  "verified": "name"
+ },
+ {
+  "member": "NevermindExtension.title",
+  "status": "renamed",
+  "target": "Identity.Title",
+  "verified": "name"
+ },
+ {
+  "member": "PatchMode='append'",
+  "status": "same",
+  "target": "value:append",
+  "verified": "name"
+ },
+ {
+  "member": "PatchMode='patch'",
+  "status": "same",
+  "target": "value:patch",
+  "verified": "name"
+ },
+ {
+  "member": "PatchMode='prepend'",
+  "status": "same",
+  "target": "value:prepend",
+  "verified": "name"
+ },
+ {
+  "member": "PatchMode='replace'",
+  "status": "same",
+  "target": "value:replace",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.extensionId",
+  "status": "renamed",
+  "target": "LogQuery.ExtensionID",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.level",
+  "status": "renamed",
+  "target": "LogQuery.Level",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.limit",
+  "status": "renamed",
+  "target": "LogQuery.Limit",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.query",
+  "status": "renamed",
+  "target": "LogQuery.Query",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.sinceMs",
+  "status": "renamed",
+  "target": "LogQuery.SinceMs",
+  "verified": "name"
+ },
+ {
+  "member": "RecentLogOptions.source",
+  "status": "renamed",
+  "target": "LogQuery.Source",
+  "verified": "name"
+ },
+ {
+  "member": "ShortcutScope='global'",
+  "verified": "decision",
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ShortcutScope='local'",
+  "verified": "decision",
+  "note": "Deprecated in 1.x",
+  "status": "dropped",
+  "target": ""
+ },
+ {
+  "member": "ViewPresentation='preview'",
+  "status": "same",
+  "target": "value:preview",
+  "verified": "name"
+ },
+ {
+  "member": "ViewPresentation='root'",
+  "status": "same",
+  "target": "value:root",
+  "verified": "name"
+ },
+ {
+  "member": "ViewPresentation='side-preview'",
+  "status": "same",
+  "target": "value:side-preview",
+  "verified": "name"
+ },
+ {
+  "member": "ViewPresentation='stacked'",
+  "status": "same",
+  "target": "value:stacked",
+  "verified": "name"
+ },
+ {
+  "member": "ViewSize='default'",
+  "status": "same",
+  "target": "value:default",
+  "verified": "name"
+ },
+ {
+  "member": "ViewSize='large'",
+  "status": "same",
+  "target": "value:large",
+  "verified": "name"
+ }
+]
