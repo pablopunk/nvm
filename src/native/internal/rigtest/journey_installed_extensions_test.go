@@ -5,6 +5,7 @@ package rigtest
 import (
 	"bytes"
 	"image"
+	"image/color"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -34,8 +35,14 @@ func seedInstalledExtension(t *testing.T, home, id string) {
 
 func installedPNG(t *testing.T) []byte {
 	t.Helper()
+	picture := image.NewRGBA(image.Rect(0, 0, 160, 90))
+	for y := 0; y < 90; y++ {
+		for x := 0; x < 160; x++ {
+			picture.Set(x, y, color.RGBA{R: uint8(x), G: uint8(2 * y), B: 160, A: 255})
+		}
+	}
 	var buffer bytes.Buffer
-	must(t, png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 16, 9))))
+	must(t, png.Encode(&buffer, picture))
 	return buffer.Bytes()
 }
 
