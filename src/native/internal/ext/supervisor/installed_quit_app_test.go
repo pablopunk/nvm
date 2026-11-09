@@ -54,7 +54,7 @@ func TestInstalledQuitAppListsRunningAppsFromApplications(t *testing.T) {
 	if len(safari.Accessories) != 1 || safari.Accessories[0].Text != "2 processes" {
 		t.Fatalf("Safari accessories = %+v, want its two processes counted", safari.Accessories)
 	}
-	if safari.Primary == nil || safari.Primary.Title != "Kill Safari" || !safari.Primary.Destructive || safari.Primary.Ref.Args["pids"] != "501,502" {
+	if safari.Primary == nil || safari.Primary.Title != "Kill Safari" || safari.Primary.Style != "destructive" || safari.Primary.Ref.Args["pids"] != "501,502" {
 		t.Fatalf("Safari primary = %+v, want a destructive kill of 501 and 502", safari.Primary)
 	}
 	if code := items[1]; code.Accessories[0].Text != "PID 610" {
