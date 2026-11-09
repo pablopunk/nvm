@@ -86,6 +86,8 @@ func submitFormFixture(t *testing.T, app *App) {
 	_, err = app.WaitFor("Ada Lovelace", elementWait) // the Set Name row shows what the field will hold
 	must(t, err)
 	must(t, app.Key("Return")) // set Name
+	// The rows are back only after the edit closes; a Down sent before that is lost and the next edit hits the wrong field.
+	must(t, app.WaitForTogether(elementWait, "Ada Lovelace", "Bio"))
 
 	for range 3 { // Name, Bio, API token, then Email
 		must(t, app.Key("Down"))
