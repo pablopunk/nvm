@@ -5,7 +5,6 @@ import (
 	"go/parser"
 	"go/token"
 	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -90,14 +89,8 @@ func hostSelectors(t *testing.T) map[string]bool {
 // apiStructFields lists Type.Field for the exported fields of the API's structs.
 func apiStructFields(t *testing.T) map[string]string {
 	t.Helper()
-	packages, err := parser.ParseDir(token.NewFileSet(), ".", func(info os.FileInfo) bool {
-		return !strings.HasSuffix(info.Name(), "_test.go")
-	}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
 	fields := map[string]string{}
-	for _, file := range packages["api"].Files {
+	for _, file := range parseAPISources(t) {
 		ast.Inspect(file, func(node ast.Node) bool {
 			spec, ok := node.(*ast.TypeSpec)
 			if !ok {

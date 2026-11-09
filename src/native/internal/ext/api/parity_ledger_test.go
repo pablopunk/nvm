@@ -80,16 +80,31 @@ func indexDeclaration(decl ast.Decl, index *apiIndex) {
 	}
 }
 
-func buildAPIIndex(t *testing.T) *apiIndex {
+// parseAPISources parses the package's non-test files.
+func parseAPISources(t *testing.T) []*ast.File {
 	t.Helper()
-	index := &apiIndex{types: map[string]map[string]bool{}, functions: map[string]bool{}, constants: map[string]bool{}}
-	packages, err := parser.ParseDir(token.NewFileSet(), ".", func(info os.FileInfo) bool {
-		return !strings.HasSuffix(info.Name(), "_test.go")
-	}, 0)
+	sources, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, file := range packages["api"].Files {
+	var files []*ast.File
+	for _, source := range sources {
+		if strings.HasSuffix(source, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), source, nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, file)
+	}
+	return files
+}
+
+func buildAPIIndex(t *testing.T) *apiIndex {
+	t.Helper()
+	index := &apiIndex{types: map[string]map[string]bool{}, functions: map[string]bool{}, constants: map[string]bool{}}
+	for _, file := range parseAPISources(t) {
 		for _, decl := range file.Decls {
 			indexDeclaration(decl, index)
 		}

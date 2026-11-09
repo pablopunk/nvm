@@ -11,7 +11,7 @@ import (
 const (
 	builderEditedRow = "Clock journey edited row"
 	builderEditWords = "say edited instead"
-	builderChatHint  = "Tweak " + builderTitle
+	builderChatHint  = builderDoneText // the extension's own chat reopens, with its transcript
 	builderListQuery = "clock journey"
 	builderTitle     = "Clock journey"
 	builderEditDone  = "The edited clock is on the root."
