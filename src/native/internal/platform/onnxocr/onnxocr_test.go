@@ -2,13 +2,16 @@ package onnxocr
 
 import (
 	"context"
+	"encoding/json"
 	"image"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDetectionSizeEnlargesSmallImagesAndCapsHugeOnes(t *testing.T) {
@@ -66,9 +69,17 @@ func TestReadsSpanishWithItsAccents(t *testing.T) {
 	if _, err := os.Stat(assets.Library); err != nil {
 		t.Skip("the OCR runtime is not fetched")
 	}
-	got, err := read(context.Background(), assets, filepath.Join("testdata", "spanish.png"))
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestOCRChildProcess$", "--"}, assets.Args(filepath.Join("testdata", "spanish.png")))...)
+	cmd.Env = append(os.Environ(), "NVM_OCR_TEST_CHILD=1")
+	data, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("OCR child failed: %v: %s", err, data)
+	}
+	var got output
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatalf("OCR child output: %v: %s", err, data)
 	}
 	for _, want := range []string{"Configuración de la canción", "año pasado", "señal, niño, corazón", "Última actualización", "Búsqueda en español"} {
 		if !strings.Contains(got.Text, want) {
@@ -86,4 +97,17 @@ func testLibraryName() string {
 	default:
 		return "libonnxruntime.so"
 	}
+}
+
+func TestOCRChildProcess(t *testing.T) {
+	if os.Getenv("NVM_OCR_TEST_CHILD") != "1" {
+		return
+	}
+	for i, arg := range os.Args {
+		if arg == "--" {
+			code, _ := Main(append([]string{os.Args[0]}, os.Args[i+1:]...), os.Stdout, os.Stderr)
+			os.Exit(code)
+		}
+	}
+	os.Exit(2)
 }

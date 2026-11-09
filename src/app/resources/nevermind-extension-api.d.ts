@@ -1112,6 +1112,7 @@ export type ExtensionOcrResult = {
   language?: string | null;
   blocks?: ExtensionOcrBlock[];
 };
+/** Language values are optional hints; hosts may use a multilingual recognizer that ignores them. The Go host bundles Latin-script recognition on macOS, Linux, and Windows. */
 export type ExtensionOcrOptions = {
   language?: string;
   languages?: string[];
