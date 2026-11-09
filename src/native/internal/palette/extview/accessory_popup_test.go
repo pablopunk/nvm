@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // notesWithFilter is the list view of the acme.views fixture's notes, with its search accessory: a view-level dropdown
@@ -92,6 +93,9 @@ func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
 		t.Fatalf("page actions = %+v, want Next Filter and Previous Filter", actions)
 	}
 	for _, action := range actions {
+		if action.Dismiss != search.DismissNever {
+			t.Fatalf("%q dismisses the palette", action.Title)
+		}
 		if action.Key != 0 || action.Mods != 0 {
 			t.Fatalf("%q binds a key (%v %v); a filter action must bind none", action.Title, action.Mods, action.Key)
 		}

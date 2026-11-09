@@ -21,8 +21,8 @@ func (s *Session) accessoryActions() []search.Action {
 		}
 	}
 	return []search.Action{
-		{Title: "Next " + name, Run: step(1), Section: viewGroupTitle, MenuOnly: true},
-		{Title: "Previous " + name, Run: step(-1), Section: viewGroupTitle, MenuOnly: true},
+		{Title: "Next " + name, Run: step(1), Section: viewGroupTitle, MenuOnly: true, Dismiss: search.DismissNever},
+		{Title: "Previous " + name, Run: step(-1), Section: viewGroupTitle, MenuOnly: true, Dismiss: search.DismissNever},
 	}
 }
 
