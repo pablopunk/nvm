@@ -350,6 +350,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
 	}
+	if data.Secondary == nil && !root && v.Body == nil && p.actionableItem() == nil && len(p.menuActions()) > 0 {
+		data.Secondary = actionsKeyHint() // a list with no rows still has its page actions, such as Add Snippet
+	}
 	design.Footer(c, data)
 }
 

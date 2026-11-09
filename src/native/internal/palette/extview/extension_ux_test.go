@@ -13,6 +13,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // wallpaperPreview is the view the Online Wallpapers extension answers Preview with: the full-size image, a line of text
@@ -93,5 +94,25 @@ func TestCollectionFilterChangesTheRowsOfTheOpenGrid(t *testing.T) {
 	tt.Frame()
 	if !tt.HasText("Quiet Dunes") || tt.HasText("Loud Peaks") {
 		t.Fatalf("the filter did not change the rows; texts = %v", tt.Texts())
+	}
+}
+
+// TestEmptyListWithPageActionsShowsTheActionsHint is the Snippets extension before any snippet exists: the list is
+// empty, and its only way forward is the Add Snippet page action, so the footer must say the action menu is there.
+func TestEmptyListWithPageActionsShowsTheActionsHint(t *testing.T) {
+	view := api.ListView("Snippets")
+	view.EmptyView = &api.EmptyState{Title: "No snippets yet", Subtitle: "Add a snippet to save a piece of text."}
+	view.ActionPanel = api.Panel(api.Section("Snippets", api.Run("add", "Add Snippet", nil)))
+	log := &invokeLog{}
+	session := NewSession(log.deps(fake.NewFS()), "local.text-snippets", view)
+	root := &palette.View{Title: "Root", Search: func(string) []search.Item { return nil }}
+	p := palette.New(palette.Options{Root: root, Clock: fake.NewClock(), Synchronous: true})
+	p.Attach(editWindow{})
+	p.Show()
+	p.Push(session.listPage())
+	tt := ui.NewTester(p.View, 720, 470)
+	tt.Frame()
+	if !tt.HasText("No snippets yet") || !tt.HasText("Actions") {
+		t.Fatalf("empty list texts = %v, want the empty state and the Actions hint", tt.Texts())
 	}
 }
