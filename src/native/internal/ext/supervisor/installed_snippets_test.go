@@ -11,6 +11,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 func snippetTitles(view api.View) string {
@@ -33,6 +34,8 @@ func TestInstalledSnippetsAddEditAndDeleteKeepTheListInStep(t *testing.T) {
 	}
 	rig := newServicesRig(t)
 	rig.deps.Home = t.TempDir()
+	clipboard := fake.NewClipboard()
+	rig.deps.Clipboard = clipboard
 	r := servicedRuntime(t, filepath.Join("installed", "local.text-snippets"), rig, installedManifest(t, raw))
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -55,6 +58,14 @@ func TestInstalledSnippetsAddEditAndDeleteKeepTheListInStep(t *testing.T) {
 	}
 	if hello.Primary == nil || hello.Primary.Title != "Copy Snippet" || !hello.Primary.Background {
 		t.Fatalf("primary = %+v, want a background copy", hello.Primary)
+	}
+
+	copied, err := r.Call(ctx, protocol.MethodRun, "", &api.Invocation{Ref: *hello.Primary.Ref})
+	if err != nil || copied.Failure != nil {
+		t.Fatalf("copy snippet failed: %v / %+v", err, copied.Failure)
+	}
+	if text, err := clipboard.ReadText(); err != nil || text != "Hello world\nsecond line" {
+		t.Fatalf("copied text=%q err=%v", text, err)
 	}
 
 	editor := run(api.Invocation{Ref: api.ActionRef{ID: "edit", Args: map[string]string{"id": hello.ID}}})
