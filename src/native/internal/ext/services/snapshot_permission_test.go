@@ -13,8 +13,8 @@ import (
 
 type deniedThumbnailFS struct{ platform.FS }
 
-func (deniedThumbnailFS) ReadFilePrefix(string, int64) ([]byte, int64, error) {
-	return nil, 0, fs.ErrPermission
+func (deniedThumbnailFS) Lstat(string) (fs.FileInfo, error) {
+	return nil, fs.ErrPermission
 }
 func TestThumbnailOSDenialKeepsPublicFoundFalse(t *testing.T) {
 	_, deps := newDesktopHost(t)

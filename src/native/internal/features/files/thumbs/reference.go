@@ -2,8 +2,9 @@ package thumbs
 
 import "net/url"
 
-// GridEdge bounds extension grid pictures independently of full file previews.
-const GridEdge = 256
+// GridEdge bounds extension grid pictures. A tile of a large grid is wider than 600 pixels on a Retina display, so a grid
+// picture is rendered at preview size: anything smaller looks soft.
+const GridEdge = PreviewEdge
 
 const thumbnailFragment = "nevermind-thumbnail"
 
@@ -18,11 +19,15 @@ func GridReference(fileURL string) string {
 	return u.String()
 }
 
-// ReferenceEdge keeps ordinary file references at preview resolution. Only the
-// thumbnail service's rendering hint requests the smaller grid size.
-func ReferenceEdge(ref string) int {
+// IsGridReference reports whether ref is a reference GridReference made.
+func IsGridReference(ref string) bool {
 	u, err := url.Parse(ref)
-	if err == nil && u.Scheme == "file" && u.Fragment == thumbnailFragment {
+	return err == nil && u.Scheme == "file" && u.Fragment == thumbnailFragment
+}
+
+// ReferenceEdge is the size a file reference is rendered at.
+func ReferenceEdge(ref string) int {
+	if IsGridReference(ref) {
 		return GridEdge
 	}
 	return PreviewEdge

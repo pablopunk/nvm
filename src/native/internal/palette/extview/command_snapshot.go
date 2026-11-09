@@ -332,7 +332,7 @@ func verifiedSnapshotPaths(items []api.Item, evidence *api.SnapshotEvidence) map
 
 // snapshotImageSource keeps an embedded PNG or the host's thumbnail reference, which is inert until drawn.
 func snapshotImageSource(src string) bool {
-	return strings.HasPrefix(src, "data:image/png;base64,") || thumbs.ReferenceEdge(src) == thumbs.GridEdge
+	return strings.HasPrefix(src, "data:image/png;base64,") || thumbs.IsGridReference(src)
 }
 
 // Put stores only inert presentation, never actions, paths, or external image references.

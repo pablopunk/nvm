@@ -19,10 +19,8 @@ import (
 type Deps struct {
 	CommandSnapshots        *CommandSnapshots
 	CommandSnapshotIdentity func(extID string) any
-	// DurableGrids saves grid snapshots across launches. Nil keeps them in memory only.
-	DurableGrids  *DurableGrids
-	InvokeRefresh func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
-	Invoke        func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	InvokeRefresh           func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
+	Invoke                  func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// InvokeCommand is used only by a root command's primary action. Views and secondary actions use Invoke.
 	InvokeCommand        func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	InvokeCommandContext func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))
