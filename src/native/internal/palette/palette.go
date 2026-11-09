@@ -139,7 +139,7 @@ type Palette struct {
 	// settled is false while the providers of the shown query are still answering: the list then shows the
 	// rows it has, and no empty state. pending is true while a provider reports a call in flight (View.Pending
 	// covers the views that are not provider-backed).
-	settled    bool
+	settled bool
 	// detailOpen is whether the side pane of the chosen row was open when the list last settled. While providers are
 	// still answering, rows arrive and the top row changes under the user's typing; the pane follows the row only at
 	// rest, so a late row never makes the layout flash between a list and a split.
