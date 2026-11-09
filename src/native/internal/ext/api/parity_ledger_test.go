@@ -13,7 +13,7 @@ import (
 )
 
 // maxOpenLedgerRows ratchets the 1.x members with no decision yet. Lower it as rows close; it never goes up.
-const maxOpenLedgerRows = 13
+const maxOpenLedgerRows = 0
 
 const parityDir = "../../../testdata/parity"
 

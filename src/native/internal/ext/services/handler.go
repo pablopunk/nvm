@@ -130,6 +130,9 @@ type Deps struct {
 	// SearchRefresh asks the palette to search again for a query, for one extension's background data. It must not
 	// block. Nil makes the request a no-op.
 	SearchRefresh func(extensionID, query string)
+	// Rename writes an extension's new names and reloads it. It must not block on the extension's own call. Nil answers
+	// unavailable.
+	Rename func(extensionID string, change api.ExtensionRename) error
 }
 
 // documents are the extension's files: one store folder holds all of them.
@@ -289,6 +292,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveAI(ctx, call)
 	case protocol.ServiceBuilder:
 		return h.serveBuilder(call)
+	case protocol.ServiceExtension:
+		return h.serveExtension(call)
 	case protocol.ServiceDictation:
 		return h.serveDictation(ctx, call)
 	}

@@ -31,7 +31,7 @@ func drawCompactCell(c *ui.Context, it search.Item) {
 		ui.Text(c, it.Glyph).FontSize(26)
 		return
 	}
-	design.Tile(c, design.TileData{Image: it.Image, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
+	design.Tile(c, design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
 }
 
 // selectionFooter is the left footer of a grid with SelectionFooter: the chosen tile's title and subtitle, or nothing.
@@ -68,7 +68,7 @@ func drawGridCell(c *ui.Context, it search.Item) {
 		if it.Glyph != "" {
 			ui.Text(c, it.Glyph).FontSize(26)
 		} else {
-			design.Tile(c, design.TileData{Image: it.Image, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
+			design.Tile(c, design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Tone: it.Tone, Title: it.Title})
 		}
 		ui.Text(c, it.Title).FontSize(13).TextColor(k.Strong).FillWidth().SingleLine()
 		if it.Subtitle != "" {

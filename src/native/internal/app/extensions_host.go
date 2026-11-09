@@ -118,6 +118,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Home:            userHomeDir(),
 		MenuBarRefresh:  p.refreshMenuBar,
 		RootRefresh:     p.refreshRootRows,
+		Rename:          p.renameExtensionItself,
 		ViewsInvalidate: p.invalidateExtensionViews,
 		SearchRefresh:   func(_, query string) { p.RefreshSearch(query) },
 		OnChange:        p.extensionsStateChanged,

@@ -9,6 +9,17 @@ import (
 
 // imageRef picks the source an image draws from: Src, else the light variant, else the dark one, else the fallback.
 // It is "" for an image with no source.
+// imageShape is the corners an image asks for. Mask is another name for Shape, which wins when both are set.
+func imageShape(image *api.Image) string {
+	if image == nil {
+		return ""
+	}
+	if image.Shape != "" {
+		return string(image.Shape)
+	}
+	return string(image.Mask)
+}
+
 func imageRef(image *api.Image) string {
 	if image == nil {
 		return ""

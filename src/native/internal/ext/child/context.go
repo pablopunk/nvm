@@ -48,6 +48,10 @@ func (c hostContext) Identity() api.Identity {
 	return c.identity
 }
 
+func (c hostContext) Self() api.Self {
+	return remoteSelf{link: c.link}
+}
+
 func (c hostContext) Clock() api.Clock {
 	return c.clock
 }

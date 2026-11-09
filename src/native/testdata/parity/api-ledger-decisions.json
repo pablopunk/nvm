@@ -13,9 +13,9 @@
   "target": "Invocation.Form"
  },
  "ExtensionAction.previewIntent": {
-  "note": "WP3.12: map the in-palette preview action",
-  "status": "open",
-  "target": ""
+  "note": "The host offers preview itself on rows with preview content",
+  "status": "better",
+  "target": "func:PreviewFile"
  },
  "ExtensionAction.promptMessage": {
   "status": "renamed",
@@ -56,8 +56,8 @@
   "target": "Result.Next"
  },
  "ExtensionActionSection.isLoading": {
-  "note": "Decide in WP3.12",
-  "status": "open",
+  "note": "Declared in 1.x but never read by its palette",
+  "status": "dropped",
   "target": ""
  },
  "ExtensionActionSection.lazyActions": {
@@ -104,8 +104,8 @@
   "target": "Context.Std"
  },
  "ExtensionAiStreamEvent#type=error.data": {
-  "note": "Decide in WP3.12",
-  "status": "open",
+  "note": "Errors reach extensions as Message; raw provider payloads stay in the host",
+  "status": "dropped",
   "target": ""
  },
  "ExtensionBackgroundTrigger#type=files.changed.kind": {
@@ -295,18 +295,16 @@
   "target": "Files.FileURL"
  },
  "ExtensionContext.desktop.selection.read": {
-  "note": "WP3.12: add Selection.Read",
-  "status": "open",
-  "target": ""
+  "status": "same",
+  "target": "Selection.Read"
  },
  "ExtensionContext.extension": {
   "status": "renamed",
   "target": "Identity"
  },
  "ExtensionContext.extension.rename": {
-  "note": "WP3.12: add a rename service",
-  "status": "open",
-  "target": ""
+  "status": "same",
+  "target": "Self.Rename"
  },
  "ExtensionContext.extensions": {
   "status": "renamed",
@@ -655,6 +653,11 @@
  "ExtensionViewPatch.items.id": {
   "status": "renamed",
   "target": "Item.ID"
+ },
+ "ExtensionWindowApplyResult.reason='not-resizable'": {
+  "note": "A window that cannot resize reports unapplied, with less specific copy",
+  "status": "renamed",
+  "target": "value:unapplied"
  },
  "ExtensionWindowDimension.unit": {
   "status": "renamed",

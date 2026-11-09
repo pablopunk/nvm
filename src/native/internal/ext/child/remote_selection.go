@@ -42,6 +42,21 @@ func (s remoteSelection) Files() ([]string, error) {
 	return paths, err
 }
 
+func (s remoteSelection) Read() (api.SelectionSnapshot, error) {
+	text, found, err := s.Text()
+	if err != nil {
+		return api.SelectionSnapshot{}, err
+	}
+	snapshot := api.SelectionSnapshot{Text: text, Found: found}
+	if files, err := s.Files(); err == nil {
+		snapshot.Files = files
+	}
+	if app, err := (remoteApps{link: s.link}).Frontmost(); err == nil {
+		snapshot.SourceApp = &app
+	}
+	return snapshot, nil
+}
+
 func (s remoteSelection) ReplaceText(text string) (bool, error) {
 	var replaced bool
 	err := s.link.Call(protocol.ServiceDesktopSelection, protocol.OpReplace, protocol.ReplaceTextArgs{Text: text}, &replaced)

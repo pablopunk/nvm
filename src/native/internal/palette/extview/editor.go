@@ -15,6 +15,8 @@ import (
 // editorState is one editor page: its text, the draft it autosaves under when the view asks for one, and what its
 // submit does with the text.
 type editorState struct {
+	// livePreview shows the Markdown source beside its rendered preview.
+	livePreview bool
 	sess        *Session
 	page        *palette.View
 	text        string
@@ -44,7 +46,12 @@ type draftTrack struct {
 // editorView builds the page of a ViewEditor. Its submit action gets the text as Invocation.EditorContent.
 func (s *Session) editorView(spec api.EditorSpec) *palette.View {
 	ed := newEditorState(s, s.view.Title, spec.Content, spec.Placeholder, spec.ReadOnly)
-	ed.markdown = spec.Format == "markdown"
+	ed.markdown = spec.Format == "markdown" && !spec.LivePreview
+	ed.livePreview = spec.Format == "markdown" && spec.LivePreview
+	if spec.TitleFromLine {
+		fallback := s.view.Title
+		ed.page.TitleFn = func() string { return titleFromFirstLine(ed.text, fallback) }
+	}
 	if ed.markdown {
 		ed.page.Input = &ed.focus
 	}
@@ -83,6 +90,8 @@ func (ed *editorState) body(c *ui.Context, _ search.Host) {
 	ui.Column(c).Grow(1).Children(func() {
 		if ed.markdown {
 			ui.Column(c).Grow(1).Margin(12).Padding(8, 4).Children(func() { ed.markdownBody(c) })
+		} else if ed.livePreview {
+			ed.livePreviewBody(c)
 		} else {
 			ui.TextArea(c, &ed.text).Grow(1).Margin(12).Padding(10).FontSize(14).Placeholder(ed.placeholder).ReadOnly(ed.readOnly).AutoFocus().Value(ed.text)
 		}

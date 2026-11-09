@@ -97,6 +97,7 @@ type Context interface {
 	Std() context.Context
 	Launch() LaunchContext
 	Identity() Identity
+	Self() Self
 	Clock() Clock
 
 	Storage() Storage

@@ -12,8 +12,10 @@ const TileSize = 32
 // TileData is the icon of a row. The first of these that is set wins: a preview image, the file's own icon,
 // a Lucide icon, then the one or two letters of Glyph (or of Title).
 type TileData struct {
-	Image    *ui.Bitmap
-	FileIcon *ui.Bitmap
+	Image *ui.Bitmap
+	// ImageShape is the corners of Image: square, rounded (the default) or circle.
+	ImageShape string
+	FileIcon   *ui.Bitmap
 	Icon     string
 	Glyph    string
 	Title    string
@@ -22,12 +24,23 @@ type TileData struct {
 	Prominent bool
 }
 
+// ImageRadius is the corner radius of a picture of the given size with the named shape.
+func ImageRadius(shape string, size float32) float32 {
+	switch shape {
+	case "square", "none":
+		return 0
+	case "circle":
+		return size / 2
+	}
+	return 8
+}
+
 // Tile draws a row's icon: a 32 by 32 tile, either a picture or a small raised key with a tinted symbol.
 func Tile(c *ui.Context, d TileData) {
 	k := Tokens(c)
 	switch {
 	case d.Image != nil:
-		ui.Image(c, d.Image).Size(TileSize, TileSize).Fit(ui.Cover).Radius(8).Clip()
+		ui.Image(c, d.Image).Size(TileSize, TileSize).Fit(ui.Cover).Radius(ImageRadius(d.ImageShape, TileSize)).Clip()
 	case d.FileIcon != nil:
 		ui.Row(c).Size(TileSize, TileSize).Center().Children(func() { ui.Image(c, d.FileIcon).Size(28, 28) })
 	default:

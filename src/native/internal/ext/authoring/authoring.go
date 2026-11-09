@@ -86,6 +86,34 @@ func RenameCommand(files platform.FS, dir, commandID, title string) error {
 	return replaceFile(files, filepath.Join(dir, bundle.ManifestFile), data)
 }
 
+// Apply writes every name change at once, so a rename from an extension is one manifest write. Empty fields stay as
+// they are.
+func Apply(files platform.FS, dir, title, subtitle, commandID, commandTitle string) error {
+	manifest, _, err := readFolder(files, dir)
+	if err != nil {
+		return err
+	}
+	if title = strings.TrimSpace(title); title != "" {
+		manifest["title"] = title
+	}
+	if subtitle = strings.TrimSpace(subtitle); subtitle != "" {
+		manifest["subtitle"] = subtitle
+	}
+	if commandTitle = strings.TrimSpace(commandTitle); commandID != "" && commandTitle != "" {
+		titles, _ := manifest["commandTitles"].(map[string]any)
+		if titles == nil {
+			titles = map[string]any{}
+		}
+		titles[commandID] = commandTitle
+		manifest["commandTitles"] = titles
+	}
+	data, err := encodeManifest(manifest)
+	if err != nil {
+		return err
+	}
+	return replaceFile(files, filepath.Join(dir, bundle.ManifestFile), data)
+}
+
 func readFolder(files platform.FS, dir string) (map[string]any, []byte, error) {
 	data, err := files.ReadFile(filepath.Join(dir, bundle.ManifestFile))
 	if err != nil {

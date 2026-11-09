@@ -203,7 +203,11 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 // pasteOperation sends a paste or typing action to the app in front. The palette hides first, and the services of the
 // extension perform it, so the capabilities the extension declared apply. The HUD reports the outcome.
 func (s *Session) pasteOperation(action api.Action, title string) search.Action {
-	return search.Action{Title: title, Run: func(h search.Host) {
+	dismiss := search.DismissAuto
+	if action.Paste != nil && action.Paste.KeepPaletteOpen {
+		dismiss = search.DismissNever
+	}
+	return search.Action{Title: title, Dismiss: dismiss, Run: func(h search.Host) {
 		if s.deps.Paste == nil {
 			h.Toast(unavailableMessage)
 			return
@@ -310,11 +314,15 @@ func (s *Session) confirmPage(r route) *palette.View {
 	title := orDefault(confirmation.Title, orDefault(r.action.Title, "Confirm"))
 	label := orDefault(confirmation.ConfirmLabel, "Confirm")
 	cancel := orDefault(confirmation.CancelLabel, "Cancel")
+	tone := ""
+	if confirmation.Destructive || string(r.action.Style) == "destructive" {
+		tone = "red"
+	}
 	return &palette.View{
 		Title: "Confirm", Placeholder: title,
 		Search: func(string) []search.Item {
 			return []search.Item{
-				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: "red", Actions: []search.Action{
+				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: tone, Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						h.Pop()
 						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity})

@@ -44,6 +44,7 @@ const (
 	ServiceBuilder    = "builder"
 	ServiceBundle     = "bundle"
 	ServiceDictation  = "dictation"
+	ServiceExtension  = "extension"
 )
 
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the

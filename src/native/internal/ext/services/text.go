@@ -33,7 +33,7 @@ func (h *Handler) expand(args protocol.TemplateArgs) api.TemplateResult {
 	if cursorToken == "" {
 		cursorToken = defaultCursorToken
 	}
-	values := h.standardVariables(args.Options, cursorToken)
+	values := h.standardVariables(args.Input, args.Options, cursorToken)
 	for name, value := range args.Options.Variables {
 		values[name] = value
 	}
@@ -41,7 +41,7 @@ func (h *Handler) expand(args protocol.TemplateArgs) api.TemplateResult {
 	return api.TemplateResult{Text: text, Cursor: cursor, Missing: missing}
 }
 
-func (h *Handler) standardVariables(options api.TemplateOptions, cursorToken string) map[string]string {
+func (h *Handler) standardVariables(input string, options api.TemplateOptions, cursorToken string) map[string]string {
 	now := h.deps.Clock.Now().Local()
 	return map[string]string{
 		"date":         now.Format("2006-01-02"),
@@ -49,7 +49,7 @@ func (h *Handler) standardVariables(options api.TemplateOptions, cursorToken str
 		"datetime":     now.Format("2006-01-02 15:04"),
 		"uuid":         newUUID(),
 		"clipboard":    h.clipboardFor(options),
-		"selectedText": "",
+		"selectedText": h.selectedTextFor(input, options),
 		"cursor":       cursorToken,
 	}
 }
@@ -64,6 +64,22 @@ func (h *Handler) clipboardFor(options api.TemplateOptions) string {
 	}
 	text, err := h.deps.Clipboard.ReadText()
 	if err != nil {
+		return ""
+	}
+	return text
+}
+
+// selectedTextFor captures the selection only for a template that asks for it, because capturing it takes focus and
+// the clipboard. It needs the desktop.selection capability, and an extension can opt out.
+func (h *Handler) selectedTextFor(input string, options api.TemplateOptions) string {
+	if !strings.Contains(input, "selectedText") || (options.IncludeSelectedText != nil && !*options.IncludeSelectedText) {
+		return ""
+	}
+	if !h.capabilities[api.CapabilityDesktopSelection] || h.deps.Selection == nil {
+		return ""
+	}
+	text, found, err := h.deps.Selection.Text()
+	if err != nil || !found {
 		return ""
 	}
 	return text

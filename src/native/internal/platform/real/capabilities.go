@@ -64,8 +64,12 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if selectionCopySupported(goos, getenv, hasTool) {
 		supported = append(supported, platform.CapabilitySelectionCopy)
 	}
+	supported = append(supported, platform.CapabilityWindowAlwaysOnTop)
+	if goos != "windows" {
+		supported = append(supported, platform.CapabilityWindowAllSpaces)
+	}
 	if !isWaylandSession(goos, getenv) {
-		supported = append(supported, platform.CapabilityWindowPlacement)
+		supported = append(supported, platform.CapabilityWindowPlacement, platform.CapabilityWindowFrameRestore, platform.CapabilityWindowDisplayRecovery)
 	}
 	if windowManagementCapable(goos, getenv, hasTool) {
 		supported = append(supported, platform.CapabilityWindowManagement)

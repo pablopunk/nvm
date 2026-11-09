@@ -32,6 +32,7 @@ const (
 
 	OpRefreshMenuBar  = "refreshMenuBar"
 	OpInvalidateRoot  = "invalidateRoot"
+	OpRename          = "rename"
 	OpInvalidateViews = "invalidateViews"
 
 	OpReadImage      = "read-image"

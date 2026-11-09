@@ -57,7 +57,8 @@ func (h *Handler) publicCapability(name string) bool {
 	case "apps.frontmost", "notifications.show",
 		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "clipboard.paste", "selection.copy",
 		"keyboard.type-text", "apps.running", "apps.quit", "apps.hide", "apps.uninstall", "autostart.signIn",
-		"system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
+		"system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings",
+		"windows.always-on-top", "windows.all-spaces", "windows.frame-restore", "windows.display-recovery":
 		return h.deps.Capabilities.Supported(platform.Capability(name))
 	case "clipboard.concealed":
 		_, ok := h.deps.Clipboard.(platform.ConcealedClipboard)

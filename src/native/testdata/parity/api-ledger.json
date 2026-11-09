@@ -117,9 +117,9 @@
  {
   "member": "ExtensionAction.previewIntent",
   "verified": "decision",
-  "note": "WP3.12: map the in-palette preview action",
-  "status": "open",
-  "target": ""
+  "note": "The host offers preview itself on rows with preview content",
+  "status": "better",
+  "target": "func:PreviewFile"
  },
  {
   "member": "ExtensionAction.promptMessage",
@@ -408,8 +408,8 @@
  {
   "member": "ExtensionActionSection.isLoading",
   "verified": "decision",
-  "note": "Decide in WP3.12",
-  "status": "open",
+  "note": "Declared in 1.x but never read by its palette",
+  "status": "dropped",
   "target": ""
  },
  {
@@ -820,8 +820,8 @@
  {
   "member": "ExtensionAiStreamEvent#type=error.data",
   "verified": "decision",
-  "note": "Decide in WP3.12",
-  "status": "open",
+  "note": "Errors reach extensions as Message; raw provider payloads stay in the host",
+  "status": "dropped",
   "target": ""
  },
  {
@@ -2033,9 +2033,8 @@
  {
   "member": "ExtensionContext.desktop.selection.read",
   "verified": "decision",
-  "note": "WP3.12: add Selection.Read",
-  "status": "open",
-  "target": ""
+  "status": "same",
+  "target": "Selection.Read"
  },
  {
   "member": "ExtensionContext.desktop.selection.replaceText",
@@ -2166,9 +2165,8 @@
  {
   "member": "ExtensionContext.extension.rename",
   "verified": "decision",
-  "note": "WP3.12: add a rename service",
-  "status": "open",
-  "target": ""
+  "status": "same",
+  "target": "Self.Rename"
  },
  {
   "member": "ExtensionContext.extensions",
@@ -6538,9 +6536,10 @@
  },
  {
   "member": "ExtensionWindowApplyResult.reason='not-resizable'",
-  "status": "open",
-  "target": "",
-  "verified": "none"
+  "verified": "decision",
+  "note": "A window that cannot resize reports unapplied, with less specific copy",
+  "status": "renamed",
+  "target": "value:unapplied"
  },
  {
   "member": "ExtensionWindowApplyResult.reason='single-display'",
@@ -6574,9 +6573,9 @@
  },
  {
   "member": "ExtensionWindowCapability='windows.all-spaces'",
-  "status": "open",
-  "target": "",
-  "verified": "none"
+  "status": "same",
+  "target": "value:windows.all-spaces",
+  "verified": "name"
  },
  {
   "member": "ExtensionWindowCapability='windows.always-on-top'",
@@ -6586,15 +6585,15 @@
  },
  {
   "member": "ExtensionWindowCapability='windows.display-recovery'",
-  "status": "open",
-  "target": "",
-  "verified": "none"
+  "status": "same",
+  "target": "value:windows.display-recovery",
+  "verified": "name"
  },
  {
   "member": "ExtensionWindowCapability='windows.frame-restore'",
-  "status": "open",
-  "target": "",
-  "verified": "none"
+  "status": "same",
+  "target": "value:windows.frame-restore",
+  "verified": "name"
  },
  {
   "member": "ExtensionWindowDimension.unit",

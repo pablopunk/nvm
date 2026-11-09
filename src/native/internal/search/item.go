@@ -84,6 +84,8 @@ type Item struct {
 	// DragImage is the file whose picture the drag shows, when it is not the first of DragPaths. Empty means the first.
 	DragImage string
 	Image     *ui.Bitmap
+	// ImageShape is the corners of Image: square, rounded (the default) or circle.
+	ImageShape string
 	Accessory string
 	Actions   []Action
 	Detail    func(c *ui.Context, h Host) // preview pane

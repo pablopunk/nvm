@@ -49,6 +49,7 @@ func (s *Session) row(item api.Item) search.Item {
 		Accessory: accessoryText(item.Accessories),
 		Detail:    s.detailPane(item.Detail),
 		Image:     s.bitmap(item.Image),
+		ImageShape: imageShape(item.Image),
 		Disabled:  item.Disabled, Contextual: item.Contextual,
 		Prominent: item.Appearance != nil && item.Appearance.Prominence == api.ProminencePrimary,
 		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),

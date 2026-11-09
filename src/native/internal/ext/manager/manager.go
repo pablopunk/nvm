@@ -116,6 +116,8 @@ type Options struct {
 	AIQuota *quota.Registry
 	// SearchRefresh receives an extension's RefreshSearch calls. It must not block.
 	SearchRefresh func(extensionID, query string)
+	// Rename receives an extension's Self().Rename calls. It must not block on the extension's own call.
+	Rename func(extensionID string, change api.ExtensionRename) error
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
 	// BuiltInSettings returns the host's store for a built-in's settings, such as config.json, or nil when the built-in
@@ -195,6 +197,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			RootRefresh:    opts.RootRefresh,
 			AIQuota:        opts.AIQuota,
 			SearchRefresh:  opts.SearchRefresh,
+			Rename:         opts.Rename,
 			Bundles:        bundled.Shipped(),
 			Notes:          ports.Notes,
 			Displays:       services.NewSharedDisplays(),

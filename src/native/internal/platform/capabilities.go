@@ -37,6 +37,11 @@ const (
 	CapabilitySystemSettings   Capability = "system.settings"
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
+	// The extension window capabilities, named as the extension API reports them.
+	CapabilityWindowAlwaysOnTop     Capability = "windows.always-on-top"
+	CapabilityWindowAllSpaces       Capability = "windows.all-spaces"
+	CapabilityWindowFrameRestore    Capability = "windows.frame-restore"
+	CapabilityWindowDisplayRecovery Capability = "windows.display-recovery"
 	CapabilityFocusReturn      Capability = "focus.return"
 	CapabilityFrontmostApp     Capability = "apps.frontmost"
 	CapabilityMicrophone       Capability = "microphone.capture"
@@ -64,7 +69,8 @@ func AllCapabilities() []Capability {
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
 		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
-		CapabilityAppUninstall,
+		CapabilityAppUninstall, CapabilityWindowAlwaysOnTop, CapabilityWindowAllSpaces, CapabilityWindowFrameRestore,
+		CapabilityWindowDisplayRecovery,
 	}
 	slices.Sort(list)
 	return list

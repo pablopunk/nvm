@@ -103,6 +103,24 @@ func (p *App) renameForm(extID, commandID, title string) *palette.View {
 	})
 }
 
+// renameExtensionItself applies a rename an extension asked for. The reload waits for the UI thread, so the extension's
+// own call returns first.
+func (p *App) renameExtensionItself(extensionID string, change api.ExtensionRename) error {
+	dir, ok := p.extensionFolder(extensionID)
+	if !ok {
+		return errors.New("this extension has no folder to rename")
+	}
+	if err := authoring.Apply(p.ports.FS, dir, change.Title, change.Subtitle, change.CommandID, change.CommandTitle); err != nil {
+		return err
+	}
+	p.onUI(func() {
+		if ctl := p.currentExtensionController(); ctl != nil {
+			_ = ctl.Refresh()
+		}
+	})
+	return nil
+}
+
 // renameTarget writes a new title: the command's, or the extension's when no command is named.
 func (p *App) renameTarget(dir, commandID, title string) error {
 	if commandID != "" {
