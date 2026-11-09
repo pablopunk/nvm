@@ -32,7 +32,7 @@ type Pagination struct {
 
 // ViewFilter narrows a view's rows by one choice, such as a category or a kind of file. The host shows it as a button in
 // the footer bar, where the current option is named and a press opens a menu of Options with a check mark on Value, and
-// in the action menu as Next and Previous actions on Command+] and Command+[. A view has no control in its search field:
+// in the action menu as Next and Previous actions, which bind no key. A view has no control in its search field:
 // nothing an extension declares can place one there. A chosen option becomes Value and arrives as Invocation.Value
 // through OnChange.
 type ViewFilter struct {

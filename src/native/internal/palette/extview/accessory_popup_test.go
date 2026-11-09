@@ -78,9 +78,9 @@ func TestViewFilterClosedWithoutAChoiceChangesNothing(t *testing.T) {
 	}
 }
 
-// TestAccessoryStepsFromTheKeyboardAndAnswersInPlace checks that a view with a search accessory lists Next and
-// Previous actions on Command+] and Command+[ without the extension asking for them, and that a handler answering with
-// a replacing view changes the open page's rows.
+// TestAccessoryStepsFromTheKeyboardAndAnswersInPlace checks that a view with a filter lists Next and Previous actions
+// without the extension asking for them, binds no key to them (a bracket is not on the same place of every keyboard
+// layout), and that a handler answering with a replacing view changes the open page's rows.
 func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
 	replacement := api.View{Kind: api.ViewList, Title: "Notes", Items: []api.Item{{ID: "n2", Title: "Release plan"}},
 		Filter: &api.ViewFilter{Value: "done", Options: notesWithFilter.Filter.Options, OnChange: &api.ActionRef{ID: "filter"}}}
@@ -88,8 +88,13 @@ func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
 	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
 	page := session.listPage()
 	actions := session.accessoryActions()
-	if len(actions) != 2 || actions[0].Key != ui.KeyBracketRight || actions[1].Key != ui.KeyBracketLeft {
-		t.Fatalf("page actions = %+v, want Next on ] and Previous on [", actions)
+	if len(actions) != 2 || actions[0].Title != "Next Filter" || actions[1].Title != "Previous Filter" {
+		t.Fatalf("page actions = %+v, want Next Filter and Previous Filter", actions)
+	}
+	for _, action := range actions {
+		if action.Key != 0 || action.Mods != 0 {
+			t.Fatalf("%q binds a key (%v %v); a filter action must bind none", action.Title, action.Mods, action.Key)
+		}
 	}
 	actions[0].Run(nil)
 	if page.Accessory.Value != "done" {
