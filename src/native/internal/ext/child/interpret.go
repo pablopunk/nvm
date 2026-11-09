@@ -19,17 +19,7 @@ import (
 // ActionHandler). The interpreter does not expose methods of interpreted struct values through reflection, so
 // entry points are looked up by name at load time. A missing entry point means the extension does not provide
 // that capability.
-var entryPoints = map[string]string{
-	protocol.MethodCommands: "Commands",
-	protocol.MethodRoot:     "RootItems",
-	protocol.MethodSearch:   "SearchItems",
-	protocol.MethodRun:      "RunAction",
-	protocol.MethodLoad:     "LoadItems",
-
-	protocol.MethodMenuBars:        "MenuBars",
-	protocol.MethodMenuBarTriggers: "MenuBarTriggers",
-	protocol.MethodRestoreWindow:   "RestoreWindow",
-}
+var entryPoints = protocol.EntryPoints
 
 // extension is one interpreted extension: the functions it declares and the services it may use.
 type extension struct {

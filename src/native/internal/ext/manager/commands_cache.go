@@ -31,6 +31,9 @@ func (m *Manager) CachedCommands() []CommandResult {
 	for _, target := range targets {
 		if result, ok := m.commands.lookup(target.id); ok {
 			out = append(out, result)
+			if isDormant(target) {
+				continue
+			}
 		}
 		if generation, ok := m.commands.begin(target.id, m.config.Clock.Now()); ok {
 			go m.learnCommands(target, generation)
@@ -53,7 +56,19 @@ func (m *Manager) rememberCommands(target runtimeTarget, generation uint64, resu
 	if err != nil || entry.runtime != target.runtime || !m.isRunnable(entry) {
 		return false
 	}
-	return m.commands.finish(target.id, generation, result, m.config.Clock.Now())
+	changed := m.commands.finish(target.id, generation, result, m.config.Clock.Now())
+	if result.Failure == nil {
+		m.snapshots.put(target.id, entry.bundle.Hash, result.Commands)
+	}
+	return changed
+}
+
+// seed records commands saved by an earlier run, so a dormant extension lists them without starting.
+func (c *commandCache) seed(id string, result CommandResult) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.ensureLocked()
+	c.known[id] = result
 }
 
 func (c *commandCache) lookup(id string) (CommandResult, bool) {

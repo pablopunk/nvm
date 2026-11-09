@@ -26,6 +26,7 @@ type Runtime struct {
 	reason       string
 	generation   uint64
 	child        *childProcess
+	declared     []string
 	failures     []time.Time
 	retryAt      time.Time
 	diagnostics  []string
@@ -51,6 +52,19 @@ func New(cfg Config, identity api.Identity, sourcePath string, services ServiceH
 	}
 	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
 	return r
+}
+
+// StartDormant marks the extension ready to start on its first call. declared lists the methods its source implements,
+// which is what Provides answers until a child reports its own.
+func (r *Runtime) StartDormant(declared []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state != StateIdle {
+		return
+	}
+	r.declared = declared
+	r.state = StateDormant
+	r.notifyLocked()
 }
 
 // Start launches the child in the background and returns at once. It does nothing while the extension is
@@ -96,7 +110,7 @@ func (r *Runtime) Provides(method string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.child == nil {
-		return false
+		return r.state == StateDormant && slices.Contains(r.declared, method)
 	}
 	return slices.Contains(r.child.methods, method)
 }

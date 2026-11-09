@@ -99,6 +99,10 @@ func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*c
 			r.mu.Unlock()
 			return child, budget, nil
 		}
+		if r.state == StateDormant {
+			r.startLocked()
+			waitStarting = true
+		}
 		if r.state == StateFailed && !r.cfg.Clock.Now().Before(r.retryAt) {
 			r.startLocked()
 		}
@@ -123,7 +127,7 @@ func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*c
 // reason is the one a palette row shows, so it must not be replaced by the bare state name.
 func notRunningReason(state State, reason string) string {
 	switch state {
-	case StateIdle:
+	case StateIdle, StateDormant:
 		return "stopped"
 	case StateStarting:
 		return "starting"

@@ -29,6 +29,10 @@ func (m *Manager) commandsWithin(ctx context.Context, budget supervisor.Budget) 
 	targets, _ := m.targetsFor(protocol.MethodCommands)
 	results := make([]CommandResult, 0, len(targets))
 	for _, target := range targets {
+		if known, ok := m.commands.lookup(target.id); ok && isDormant(target) {
+			results = append(results, known)
+			continue
+		}
 		result := m.commandsOf(ctx, target, budget)
 		if generation, ok := m.commands.begin(target.id, m.config.Clock.Now()); ok {
 			m.rememberCommands(target, generation, result)

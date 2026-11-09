@@ -132,7 +132,7 @@ func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget)
 // offersMethod is true when a running child declares method, and when the runtime is not running at all: then the
 // call answers with why it is not running, which is how a failed extension shows its pointer row.
 func offersMethod(runtime runner, state supervisor.State, method string) bool {
-	return isAnswerable(state) && (state != supervisor.StateRunning || runtime.Provides(method))
+	return isAnswerable(state) && ((state != supervisor.StateRunning && state != supervisor.StateDormant) || runtime.Provides(method))
 }
 
 func isAnswerable(state supervisor.State) bool {

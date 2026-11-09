@@ -143,6 +143,7 @@ type Manager struct {
 	entries         map[string]*entry
 	// commands keeps each extension's durable commands once they are known; see CachedCommands.
 	commands       commandCache
+	snapshots      *commandSnapshots
 	commandsChange func()
 	runObserver    RunObserver
 	// legacyStatePath is the 1.x state file read by inheritLocked.
@@ -172,6 +173,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		enabled:         enabled,
 		builtInSettings: opts.BuiltInSettings,
 		commandsChange:  opts.CommandsChange,
+		snapshots:       openCommandSnapshots(ports.Files, opts.DataRoot),
 		runObserver:     opts.RunObserver,
 		config: supervisor.Config{
 			Worker:        ports.Worker,
@@ -292,7 +294,7 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
 		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
 		if m.isEnabled(loaded.Manifest.ID) {
-			next.runtime.Start()
+			m.startEntry(next)
 		}
 	}
 	m.entries[key] = next
