@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
@@ -23,7 +24,7 @@ func (h *heldViewServices) Serve(context.Context, protocol.ServiceCall) protocol
 
 func TestCanceledViewBoundsUninterruptibleHostCalls(t *testing.T) {
 	host := &heldViewServices{entered: make(chan struct{}, 4), release: make(chan struct{})}
-	r := New(Config{}, api.Identity{ID: "acme.test", Title: "test"}, "", host)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test", Title: "test"}, "", host)
 	defer close(host.release)
 	for i := 0; i < 4; i++ {
 		ctx, cancel := context.WithCancel(context.Background())

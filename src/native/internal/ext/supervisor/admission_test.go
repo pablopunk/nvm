@@ -46,7 +46,7 @@ func (p *admissionProbe) WriteLine([]byte) error {
 }
 
 func TestAdmissionHonorsCancellationAndStoppedLifetime(t *testing.T) {
-	r := New(Config{}, api.Identity{ID: "acme.test"}, "", nil)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test"}, "", nil)
 	r.mu.Lock()
 	r.state = StateStarting
 	lifetime := r.lifetime
@@ -71,7 +71,7 @@ func TestCancelledDispatchGateDoesNotAdmit(t *testing.T) {
 }
 
 func TestCancelledQueuedCallNeverDispatches(t *testing.T) {
-	r := New(Config{}, api.Identity{ID: "acme.test"}, "", nil)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test"}, "", nil)
 	probe := &admissionProbe{writes: make(chan struct{}, 1)}
 	r.mu.Lock()
 	r.state, r.child = StateRunning, &childProcess{proc: probe}
@@ -98,7 +98,7 @@ func TestCancelledQueuedCallNeverDispatches(t *testing.T) {
 func TestStopCancelsViewServiceContext(t *testing.T) {
 	probe := &lifetimeProbe{entered: make(chan struct{}), release: make(chan struct{})}
 	defer close(probe.release)
-	r := New(Config{}, api.Identity{ID: "acme.test"}, "", probe)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test"}, "", probe)
 	lifetime := r.lifetimeContext()
 	done := make(chan error, 1)
 	go func() {
@@ -115,7 +115,7 @@ func TestStopCancelsViewServiceContext(t *testing.T) {
 func TestCancelledServiceDoesNotStart(t *testing.T) {
 	probe := &uninterruptibleProbe{entered: make(chan struct{}), release: make(chan struct{})}
 	defer close(probe.release)
-	r := New(Config{}, api.Identity{ID: "acme.test"}, "", probe)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test"}, "", probe)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if _, err := r.answerViewService(ctx, r.lifetimeContext(), nil, protocol.ServiceCall{}, protocol.MethodRun); !errors.Is(err, context.Canceled) {
@@ -131,7 +131,7 @@ func TestCancelledServiceDoesNotStart(t *testing.T) {
 func TestStopReleasesUninterruptibleServiceWait(t *testing.T) {
 	probe := &uninterruptibleProbe{entered: make(chan struct{}), release: make(chan struct{})}
 	defer close(probe.release)
-	r := New(Config{}, api.Identity{ID: "acme.test"}, "", probe)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.test"}, "", probe)
 	lifetime := r.lifetimeContext()
 	done := make(chan error, 1)
 	go func() {
