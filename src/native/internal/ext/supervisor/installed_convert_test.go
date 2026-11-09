@@ -14,8 +14,8 @@ import (
 // finderSelection is a selection engine whose Finder selection is a fixed list of files.
 type finderSelection struct{ files []string }
 
-func (finderSelection) Text() (string, bool, error)       { return "", false, nil }
-func (finderSelection) Replace(string) (bool, error)      { return false, nil }
+func (finderSelection) Text() (string, bool, error) { return "", false, nil }
+func (finderSelection) Replace(string) (bool, error) { return false, nil }
 func (finderSelection) Undo() error                       { return nil }
 func (s finderSelection) Files(context.Context) ([]string, error) { return s.files, nil }
 
