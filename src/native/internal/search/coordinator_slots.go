@@ -36,7 +36,7 @@ func (c *Coordinator) deliver(gen, idx int, b Batch) {
 		return
 	}
 	s := c.slots[idx]
-	if s.refreshing {
+	if s.refreshing && !(b.Pending && len(b.Items) == 0 && !b.Replace && !b.Final) {
 		// A provider's first batch belongs to the new invocation. It is authoritative even
 		// when empty; subsequent batches extend its streamed answer.
 		s.items = nil

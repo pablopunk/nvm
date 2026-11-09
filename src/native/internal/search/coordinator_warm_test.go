@@ -101,3 +101,30 @@ func TestFailedWarmRefreshKeepsItsCachedRows(t *testing.T) {
 		t.Fatalf("failed revalidation erased cached apps: %v", titles(rows))
 	}
 }
+
+func TestWarmFallbackSurvivesPendingRefresh(t *testing.T) {
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot, Flat: true})
+	t.Cleanup(c.Cancel)
+	p := refreshControl{calls: make(chan chan Batch, 2)}
+	providers := []Provider{p}
+	c.Query("hello", providers)
+	first := <-p.calls
+	first <- Batch{Items: []Item{{ID: "web", Title: "Search the web", QueryFallback: true}}, Final: true}
+	sink.untilSettled(t, c.Gen())
+	warm, _ := c.Query("hello", providers)
+	if !containsTitle(warm.Items, "Search the web") {
+		t.Fatal("warm snapshot lost fallback")
+	}
+	second := <-p.calls
+	second <- Batch{Pending: true}
+	snap := sink.next(t)
+	if !containsTitle(snap.Items, "Search the web") {
+		t.Fatalf("pending refresh removed fallback: %v", titles(snap.Items))
+	}
+	second <- Batch{Items: []Item{{ID: "answer", Title: "Answer", Answers: true}, {ID: "web", Title: "Search the web", QueryFallback: true}}, Final: true}
+	settled := sink.untilSettled(t, c.Gen())
+	if rows := settled[len(settled)-1].Items; containsTitle(rows, "Search the web") || !containsTitle(rows, "Answer") {
+		t.Fatalf("answer did not suppress fallback: %v", titles(rows))
+	}
+}

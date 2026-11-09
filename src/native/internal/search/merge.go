@@ -10,8 +10,8 @@ const DefaultLimit = 40
 
 // withoutQueryFallbacks drops the query fallbacks an answer makes unnecessary. An answer is a row that marks
 // AnswersQuery; the answer may come from any provider, so the ranked and appended rows are checked together. While a
-// provider is still running, every fallback is dropped too: a fallback shown early would vanish when the answer it
-// loses to arrives a moment later.
+// first search is still running, every fallback is dropped too. A previously settled query keeps its fallbacks
+// during revalidation, unless a current or cached answer suppresses them.
 func withoutQueryFallbacks(ranked, appended []Item, settled bool) ([]Item, []Item) {
 	answered := slices.ContainsFunc(ranked, isAnswer) || slices.ContainsFunc(appended, isAnswer)
 	if answered || !settled {

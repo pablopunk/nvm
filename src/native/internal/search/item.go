@@ -96,7 +96,7 @@ type Item struct {
 	// the rows marked QueryFallback are left out.
 	Answers bool
 	// QueryFallback marks an open-ended row that echoes the query, such as a web search or Automate. It is held back
-	// until every provider has answered, and it is left out when a row answers the query.
+	// until every provider has answered the first time, and it is left out when a row answers the query.
 	QueryFallback bool
 	// Score ranks the row against the others of its query: the merged results are sorted by it, highest
 	// first, then by TiePriority, LastUsed and title (compareRows).

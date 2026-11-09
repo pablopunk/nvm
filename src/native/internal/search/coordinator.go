@@ -81,6 +81,7 @@ type Coordinator struct {
 	slots             []*slot            // one per provider of the current generation, in provider order
 	pending           int                // slots not finished yet
 	emitted           bool               // a snapshot of the current generation has been produced
+	warmSettled       bool               // this query had a complete snapshot before refresh
 	cache             *queryCache
 	stats             map[string]*ProviderStats
 }
@@ -132,6 +133,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	c.pending = len(providers)
 	c.emitted = false
 	remembered, hit := c.cache.get(q)
+	c.warmSettled = hit && remembered.settled
 	var warm Snapshot
 	if hit {
 		for _, s := range c.slots {
@@ -275,10 +277,10 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
-	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled), Settled: settled, Pending: c.pendingCallsLocked()}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled), Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	providerRows := c.providerCache(snap.Items)
-	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled})
+	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled || c.warmSettled})
 	return snap
 }
 
