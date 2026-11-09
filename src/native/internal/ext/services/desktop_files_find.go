@@ -133,10 +133,10 @@ func (h *Handler) fileMetadata(raw json.RawMessage) (api.FileRef, error) {
 	return ref, nil
 }
 
-// fileThumbnail returns a host-owned reference to the picture of an image file, or Found false when it has none. It never
+// fileThumbnail returns a host-owned reference to the picture of a file, or Found false when it has none. It never
 // reads the file: a grid asks for one per row before it can show any row, and reading a file can take seconds. The palette
-// decodes the picture when its tile is drawn, so pictures fill in one by one, and a file that does not decode stays a
-// placeholder.
+// decodes the picture when its tile is drawn, so pictures fill in one by one, and a file with no picture stays a
+// placeholder. The picture is also made ahead of time, so a grid opened later finds it ready.
 func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, error) {
 	path, err := absolutePathArg(raw)
 	if err != nil {
@@ -152,10 +152,22 @@ func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, 
 		}
 		return protocol.ThumbnailResult{}, nil
 	}
-	if !info.Mode().IsRegular() || info.Size() > thumbs.MaxSourceBytes || files.KindOf(filepath.Base(path)) != files.KindImage {
+	if !info.Mode().IsRegular() || !h.drawsPictureOf(path, info.Size()) {
 		return protocol.ThumbnailResult{}, nil
 	}
+	if h.deps.PrepareFilePicture != nil {
+		h.deps.PrepareFilePicture(path)
+	}
 	return protocol.ThumbnailResult{URL: thumbs.GridReference(fileURLFor(path)), Found: true}, nil
+}
+
+// drawsPictureOf reports whether a grid can draw this file: any file where the system draws pictures, and otherwise an
+// image the decoder accepts.
+func (h *Handler) drawsPictureOf(path string, size int64) bool {
+	if h.deps.FilePictures != nil {
+		return true
+	}
+	return size <= thumbs.MaxSourceBytes && files.KindOf(filepath.Base(path)) == files.KindImage
 }
 
 // fileURLOf returns the file: URL of an absolute path.

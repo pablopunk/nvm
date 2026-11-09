@@ -68,15 +68,17 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 	textReader := ocr.New(ocr.Deps{Text: ports.Text, Capture: ports.Capture, FS: ports.FS, TempDir: os.TempDir()})
 	selections := p.extensionSelection()
 	return manager.New(manager.Ports{
-		Files:     ports.FS,
-		FileIndex: fileIndexPort{p: p},
-		Clock:     ports.Clock,
-		Worker:    real.NewWorker(),
-		Processes: ports.Processes,
-		Keychain:  ports.Keychain,
-		Network:   ports.PublicHTTP,
-		Clipboard: ports.Clipboard,
-		Logs:      logx.Default(),
+		Files:              ports.FS,
+		FilePictures:       ports.FilePictures,
+		PrepareFilePicture: p.prepareFilePicture,
+		FileIndex:          fileIndexPort{p: p},
+		Clock:              ports.Clock,
+		Worker:             real.NewWorker(),
+		Processes:          ports.Processes,
+		Keychain:           ports.Keychain,
+		Network:            ports.PublicHTTP,
+		Clipboard:          ports.Clipboard,
+		Logs:               logx.Default(),
 
 		Shell:           ports.Shell,
 		Commands:        ports.Commands,
@@ -293,4 +295,11 @@ func extensionsDir() string {
 	d := filepath.Join(sharedDir(), folders.ExtensionsName)
 	_ = os.MkdirAll(d, 0o755)
 	return d
+}
+
+// prepareFilePicture makes a file's grid picture ahead of time, once the file service is up.
+func (p *App) prepareFilePicture(path string) {
+	if p.files != nil {
+		p.files.prepareGridPicture(path)
+	}
 }

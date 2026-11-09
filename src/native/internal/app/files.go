@@ -62,6 +62,8 @@ type fileService struct {
 	icons        *asyncCache[*ui.Bitmap]
 	thumbs       *asyncCache[*ui.Bitmap]
 	gridPictures *asyncCache[*ui.Bitmap]
+	gridWarmups  *asyncCache[bool]
+	pictures     platform.FilePictures
 	redraw       func()
 	ctx          context.Context
 	log          *logx.Logger
@@ -108,6 +110,8 @@ func newFileService(d fileDeps) (*fileService, error) {
 		icons:        newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
 		thumbs:       newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
 		gridPictures: newAsyncCache[*ui.Bitmap](ctx, 0, 1, gridPictureEntries, nil),
+		gridWarmups:  newAsyncCache[bool](ctx, gridWarmWorkers, fileQueue, gridWarmEntries, nil),
+		pictures:     d.Ports.FilePictures,
 		redraw:       redraw,
 		ctx:          ctx,
 		log:          logger,

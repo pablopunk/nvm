@@ -13,6 +13,12 @@ import (
 // every tile of the largest grids.
 const gridPictureEntries = 160
 
+// A grid picture is made ahead of time by this many workers, and this many files are remembered as already made.
+const (
+	gridWarmWorkers = 2
+	gridWarmEntries = 2000
+)
+
 // gridPicturePermits is how many grid pictures are made at once.
 var gridPicturePermits = make(chan struct{}, 4)
 
@@ -94,7 +100,7 @@ func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
 	if err != nil {
 		return nil
 	}
-	data, err := cache.Rendered(path, mtimeMs, size, thumbs.GridEdge)
+	data, err := cache.RenderedWith(path, mtimeMs, size, thumbs.GridEdge, func() ([]byte, error) { return s.drawGridPicture(ctx, path) })
 	if err != nil {
 		return nil
 	}
@@ -104,4 +110,26 @@ func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
 	}
 	s.gridPictures.Put(key, bm)
 	return bm
+}
+
+// drawGridPicture draws a file the cache does not have: with the system's own pictures where there are any, which cover
+// videos, documents and every other kind, and by decoding the image otherwise.
+func (s *fileService) drawGridPicture(ctx context.Context, path string) ([]byte, error) {
+	if s.pictures != nil {
+		if data, err := s.pictures.FilePicture(ctx, path, thumbs.GridEdge); err == nil {
+			return data, nil
+		}
+	}
+	return thumbs.Render(s.fsys, path, thumbs.GridEdge)
+}
+
+// prepareGridPicture makes the picture of a file ahead of time, so a grid that lists the file later finds it ready. It
+// returns at once; each version of a file is prepared once.
+func (s *fileService) prepareGridPicture(path string) {
+	info, err := s.fsys.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return
+	}
+	key := path + "\x00" + strconv.FormatInt(info.ModTime().UnixMilli(), 10) + "\x00" + strconv.FormatInt(info.Size(), 10)
+	s.gridWarmups.Get(key, func() bool { return s.gridPicture(s.ctx, path) != nil })
 }

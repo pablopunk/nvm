@@ -41,8 +41,10 @@ type Ports struct {
 	// FileDialog shows the operating system's file and folder choosers for extension form fields.
 	FileDialog FileDialog
 	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
-	Text    TextRecognizer
-	Capture ScreenCapturer
+	Text TextRecognizer
+	// FilePictures draws a picture of any file. It is nil where the platform has no such service.
+	FilePictures FilePictures
+	Capture      ScreenCapturer
 	// OutputMute mutes the speakers while a dictation records. Only the dictation's audio mute uses it.
 	OutputMute OutputMuter
 	// FileDrag carries files out of the palette to other applications as a native drag.

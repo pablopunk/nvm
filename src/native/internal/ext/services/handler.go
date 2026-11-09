@@ -37,7 +37,11 @@ var errHandlerClosed = unavailable("this extension's services are closed")
 // then answer unavailable, and nothing falls back to plaintext.
 type Deps struct {
 	Files platform.FS
-	Clock platform.Clock
+	// FilePictures draws a picture of any file where the platform can. Nil limits pictures to images.
+	FilePictures platform.FilePictures
+	// PrepareFilePicture makes the picture of a file ahead of time and returns at once. Nil makes none.
+	PrepareFilePicture func(path string)
+	Clock              platform.Clock
 	// DataRoot holds one folder per extension, named after its id. Each folder is that extension's store.
 	DataRoot string
 	Keychain platform.Keychain

@@ -101,6 +101,11 @@ func (c *Cache) Thumbnail(path string, mtimeMs, size int64) ([]byte, error) {
 // Rendered returns the PNG of the image at path scaled to edge, from disk when it is there and rendered otherwise, so a
 // picture is only ever scaled once per version of the file.
 func (c *Cache) Rendered(path string, mtimeMs, size int64, edge int) ([]byte, error) {
+	return c.RenderedWith(path, mtimeMs, size, edge, func() ([]byte, error) { return Render(c.fsys, path, edge) })
+}
+
+// RenderedWith is Rendered with the caller's way of drawing a picture that is not stored yet.
+func (c *Cache) RenderedWith(path string, mtimeMs, size int64, edge int, render func() ([]byte, error)) ([]byte, error) {
 	key := keyFor(path, mtimeMs, size)
 	if edge != Edge {
 		key = keyFor(path+"\x00"+strconv.Itoa(edge), mtimeMs, size)
@@ -108,7 +113,7 @@ func (c *Cache) Rendered(path string, mtimeMs, size int64, edge int) ([]byte, er
 	if data, ok := c.read(key); ok {
 		return data, nil
 	}
-	data, err := Render(c.fsys, path, edge)
+	data, err := render()
 	if err != nil {
 		return nil, err
 	}

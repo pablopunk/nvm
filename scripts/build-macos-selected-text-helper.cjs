@@ -20,6 +20,7 @@ const sources = [
   'window-listing.swift',
   'window-raise.swift',
   'ocr.swift',
+  'thumbnail.swift',
 ].map((name) => path.join(root, 'src/app/resources/macos-helper', name));
 const outputDirectory = path.join(root, 'build/native');
 const output = path.join(outputDirectory, 'macos-selected-text');

@@ -32,15 +32,18 @@ import (
 // substitute fakes. Keychain, Network (the public-address port), Clipboard and Logs feed the context services;
 // nil ones make the services that need them unavailable.
 type Ports struct {
-	Files     platform.FS
-	FileIndex services.FileIndex
-	Clock     platform.Clock
-	Worker    platform.Worker
-	Processes platform.Processes
-	Keychain  platform.Keychain
-	Network   platform.HTTP
-	Clipboard platform.Clipboard
-	Logs      *logx.Logger
+	Files platform.FS
+	// FilePictures and PrepareFilePicture are the file pictures the services offer.
+	FilePictures       platform.FilePictures
+	PrepareFilePicture func(path string)
+	FileIndex          services.FileIndex
+	Clock              platform.Clock
+	Worker             platform.Worker
+	Processes          platform.Processes
+	Keychain           platform.Keychain
+	Network            platform.HTTP
+	Clipboard          platform.Clipboard
+	Logs               *logx.Logger
 	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
 	Shell        platform.Shell
 	Commands     platform.Commands
@@ -187,22 +190,24 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Log:           ports.Logs,
 		},
 		serviceDeps: services.Deps{
-			Files:          ports.Files,
-			FileIndex:      ports.FileIndex,
-			Clock:          ports.Clock,
-			DataRoot:       opts.DataRoot,
-			Keychain:       ports.Keychain,
-			Network:        ports.Network,
-			Clipboard:      ports.Clipboard,
-			Logs:           ports.Logs,
-			MenuBarRefresh: opts.MenuBarRefresh,
-			RootRefresh:    opts.RootRefresh,
-			AIQuota:        opts.AIQuota,
-			SearchRefresh:  opts.SearchRefresh,
-			Rename:         opts.Rename,
-			Bundles:        bundled.Shipped(),
-			Notes:          ports.Notes,
-			Displays:       services.NewSharedDisplays(),
+			Files:              ports.Files,
+			FilePictures:       ports.FilePictures,
+			PrepareFilePicture: ports.PrepareFilePicture,
+			FileIndex:          ports.FileIndex,
+			Clock:              ports.Clock,
+			DataRoot:           opts.DataRoot,
+			Keychain:           ports.Keychain,
+			Network:            ports.Network,
+			Clipboard:          ports.Clipboard,
+			Logs:               ports.Logs,
+			MenuBarRefresh:     opts.MenuBarRefresh,
+			RootRefresh:        opts.RootRefresh,
+			AIQuota:            opts.AIQuota,
+			SearchRefresh:      opts.SearchRefresh,
+			Rename:             opts.Rename,
+			Bundles:            bundled.Shipped(),
+			Notes:              ports.Notes,
+			Displays:           services.NewSharedDisplays(),
 
 			Shell:           ports.Shell,
 			ViewsInvalidate: opts.ViewsInvalidate,
