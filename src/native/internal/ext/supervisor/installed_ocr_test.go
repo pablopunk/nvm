@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -103,8 +104,17 @@ func TestInstalledOCRScreenCopiesVisibleTextAndReportsEachOutcome(t *testing.T) 
 	}
 
 	r, _, indicators = ocrRuntime(t, "local.ocr-screen", "unused", errors.Join(platform.ErrDenied))
-	if _, err := r.Call(ctx, "run", "", &invoke); err == nil || !strings.Contains(err.Error(), "screen record") {
-		t.Fatalf("denied capture = %v, want a message about screen recording", err)
+	deniedResponse, err := r.Call(ctx, protocol.MethodRun, "", &invoke)
+	message := ""
+	var callErr *CallError
+	switch {
+	case errors.As(err, &callErr):
+		message = callErr.Failure.Message
+	case deniedResponse.Failure != nil:
+		message = deniedResponse.Failure.Message
+	}
+	if !strings.Contains(message, "screen record") {
+		t.Fatalf("denied capture = %v / %+v, want a message about screen recording", err, deniedResponse.Failure)
 	}
 	if last := indicators.last(); last.Status != api.IndicatorError || !strings.Contains(last.Subtitle, "screen record") {
 		t.Fatalf("indicator = %+v, want the permission explained", last)
