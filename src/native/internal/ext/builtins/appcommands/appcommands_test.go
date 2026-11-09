@@ -25,6 +25,13 @@ func TestRestartIsSearchable(t *testing.T) {
 	}
 }
 
+func TestRestartDoesNotMatchTerminalQuery(t *testing.T) {
+	items, err := (Extension{}).SearchItems(nil, "term")
+	if err != nil || len(items) != 0 {
+		t.Fatalf("terminal query = %+v, %v", items, err)
+	}
+}
+
 func TestEmptyQueryListsNothing(t *testing.T) {
 	if items, _ := (Extension{}).SearchItems(nil, ""); len(items) != 0 {
 		t.Fatalf("items = %+v, want none for the empty root", items)

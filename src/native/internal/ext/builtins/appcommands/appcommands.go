@@ -59,8 +59,10 @@ func (Extension) SearchItems(_ api.Context, query string) ([]api.Item, error) {
 	if score := commandmatch.Score(quitTitle, quitKeywords, lq); score > 0 {
 		items = append(items, quitItem(score))
 	}
-	if score := commandmatch.Score(RestartTitle, "restart relaunch nevermind", lq); score > 0 {
-		items = append(items, restartItem(score))
+	if strings.Contains(strings.ToLower(RestartTitle), lq) || strings.Contains("relaunch", lq) {
+		if score := commandmatch.Score(RestartTitle, "restart relaunch nevermind", lq); score > 0 {
+			items = append(items, restartItem(score))
+		}
 	}
 	return items, nil
 }

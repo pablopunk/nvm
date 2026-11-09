@@ -122,6 +122,18 @@ func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*c
 // notRunningReason names the state of a runtime that cannot take a call, with the reason it recorded. The
 // reason is the one a palette row shows, so it must not be replaced by the bare state name.
 func notRunningReason(state State, reason string) string {
+	switch state {
+	case StateIdle:
+		return "stopped"
+	case StateStarting:
+		return "starting"
+	case StateFailed:
+		return "restarting after a failure: " + reason
+	case StateBroken:
+		return "does not load: " + reason
+	case StateDisabled:
+		return "disabled: " + reason
+	}
 	if reason == "" {
 		return "not running: " + string(state)
 	}
