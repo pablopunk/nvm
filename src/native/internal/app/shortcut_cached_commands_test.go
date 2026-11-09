@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aicommands"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/diagnostics"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -14,6 +15,18 @@ import (
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
+
+func TestFixSelectedTextShortcutUsesPortableIdentity(t *testing.T) {
+	key := commandShortcutKey(aicommands.ID, api.Command{ID: aicommands.FixCommandID})
+	loaded, ok := shortcuts.ActionIDOf("extension:nevermind.ai-commands:fix-selected-text-with-ai")
+	if !ok || key != loaded {
+		t.Fatalf("command key = %q, loaded key = %q, recognized = %v", key, loaded, ok)
+	}
+	extID, commandID, ok := splitExtensionCommandShortcutID(loaded)
+	if !ok || extID != aicommands.ID || commandID != aicommands.FixCommandID {
+		t.Fatalf("shortcut resolves to %q:%q, recognized = %v", extID, commandID, ok)
+	}
+}
 
 type shortcutCommandProbe struct {
 	calls    chan api.Invocation
