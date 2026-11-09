@@ -92,12 +92,12 @@ func TestJourneyInstalledWallpapersGridShowsTheFolderImages(t *testing.T) {
 func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *testing.T) {
 	home := t.TempDir()
 	cases := []struct {
-		id, title, query, expect, shot string
+		id, title, row, query, expect, shot string
 	}{
-		{"local.quit-running-app", "Quit App", "kill app", "No Running Apps", "installed-quit-app"},
-		{"local.restart-app", "Restart App", "relaunch app", "No Running Apps", "installed-restart-app"},
-		{"local.remove-app-quarantine", "Remove App Quarantine", "Remove App Quarantine", "No quarantined apps found", "installed-quarantine"},
-		{"local.paperless-ai-search", "Paperless AI Search", "Notflix Documents", "Paperless API Token", "installed-paperless-connect"},
+		{"local.quit-running-app", "Quit App", "Quit App", "kill app", "No Running Apps", "installed-quit-app"},
+		{"local.restart-app", "Restart App", "Restart App", "relaunch app", "No Running Apps", "installed-restart-app"},
+		{"local.remove-app-quarantine", "Remove App Quarantine", "Remove App Quarantine", "Remove App Quarantine", "No quarantined apps found", "installed-quarantine"},
+		{"local.paperless-ai-search", "Paperless AI Search", "Search Paperless with AI", "Notflix Documents", "Paperless API Token", "installed-paperless-connect"},
 	}
 	for _, c := range cases {
 		seedInstalledExtension(t, home, c.id)
@@ -114,7 +114,7 @@ func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *
 	for _, c := range cases {
 		must(t, app.SummonPalette())
 		must(t, app.Type(c.query))
-		waitForRowPrefix(t, app, c.title, elementWait)
+		waitForRowPrefix(t, app, c.row, elementWait)
 		must(t, app.Key("Return"))
 		_, err := app.WaitFor(c.expect, elementWait)
 		must(t, err)
