@@ -43,8 +43,20 @@ func TestJourneyBackgroundShortcutPastesItsFollowUpIntoTheSource(t *testing.T) {
 		must(t, app.Key("ctrl+a"))
 		clipboard := fmt.Sprintf("clipboard before background paste %d", round)
 		must(t, app.ClipboardSet(clipboard))
-		must(t, app.PressHotkey("Control+Alt+Shift+P"))
-		waitNoteOnDisk(t, app, "nvm paste fixture")
+		if round == 3 {
+			// Keep the physical modifiers held while the background action delivers its paste.
+			keys, err := XdotoolKeys("Control+Alt+Shift+P")
+			must(t, err)
+			t.Cleanup(func() { _ = app.xdo("keyup", keys) })
+			must(t, app.xdo("keydown", keys))
+			must(t, app.xdo("keyup", "p"))
+			waitNoteOnDisk(t, app, "nvm paste fixture")
+			must(t, app.xdo("keyup", keys))
+		} else {
+			must(t, app.PressHotkey("Control+Alt+Shift+P"))
+			waitNoteOnDisk(t, app, "nvm paste fixture")
+		}
+		assertActiveWindow(t, note)
 		waitClipboardEquals(t, app, clipboard)
 	}
 	window, err := app.PaletteWindow()
