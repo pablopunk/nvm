@@ -74,15 +74,24 @@ export function previewView(ctx: ExtensionContext) {
       keyof typeof TEXT_PREVIEW_FIXTURES
     >
   ).map((name) => previewFileFixtureAction(ctx, name));
+  const nativePreviewAction = ctx.actions.quickLook(
+    writeTextPreviewFixture('short-notes.md'),
+    'Preview File in System',
+  );
   return ctx.ui.previewView({
     id: 'dev-ui-preview',
     title: 'Dev UI · Preview',
     content:
       '# Preview Fixture\n\nThis exercises `ctx.ui.previewView`, bounded text/binary `ctx.ui.previewFile`, action panels, and `ctx.text.template(...)`.',
-    actions: [templateAction, legacyPreviewAction, ...fileActions],
+    actions: [
+      templateAction,
+      legacyPreviewAction,
+      nativePreviewAction,
+      ...fileActions,
+    ],
     actionPanel: {
       sections: [
-        { actions: [templateAction, legacyPreviewAction] },
+        { actions: [templateAction, legacyPreviewAction, nativePreviewAction] },
         { title: 'ctx.ui.previewFile', actions: fileActions },
       ],
     },

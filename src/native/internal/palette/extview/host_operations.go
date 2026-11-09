@@ -28,8 +28,6 @@ func (s *Session) runDeclared(h search.Host, action api.Action) {
 		s.revealPath(h, action.Path)
 	case api.ActionSystem:
 		s.runSystemOp(h, action.Op)
-	case api.ActionQuickLook:
-		s.fileOperation(h, s.deps.QuickLook, action.Path)
 	case api.ActionOpenWith:
 		s.openWithApp(h, action.Path, action.App)
 	case api.ActionTrash:
@@ -87,18 +85,6 @@ func (s *Session) runSystemOp(h search.Host, op string) {
 			h.Toast(failure)
 		}
 	})
-}
-
-// fileOperation runs a file operation the host owns and reports its failure as a toast. The palette stays open: Quick
-// Look is a preview, not a hand-off to another app.
-func (s *Session) fileOperation(h search.Host, run func(string) error, path string) {
-	if run == nil {
-		h.Toast(unavailableMessage)
-		return
-	}
-	if err := run(path); err != nil {
-		h.Toast(err.Error())
-	}
 }
 
 // openWithApp opens a file with the application at appPath. Opening hides the palette, as opening a path does.

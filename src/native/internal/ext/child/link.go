@@ -1,6 +1,7 @@
 package child
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -164,6 +165,10 @@ func failureError(failure *api.Failure) error {
 
 func sentinelFor(code api.ErrorCode) error {
 	switch code {
+	case api.CodeCancelled:
+		return context.Canceled
+	case api.CodeTimeout:
+		return context.DeadlineExceeded
 	case api.CodeUnavailable:
 		return api.ErrNotAvailable
 	case api.CodePermission:

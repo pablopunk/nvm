@@ -1,6 +1,9 @@
 package api
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 // Sentinel errors a service or handler may return. The host maps them to ErrorCode values for
 // the palette, so authors should prefer them over ad-hoc messages.
@@ -40,6 +43,10 @@ func FailureOf(err error) Failure {
 	switch {
 	case err == nil:
 		return Failure{}
+	case errors.Is(err, context.Canceled):
+		return Failure{Code: CodeCancelled, Message: "the operation was cancelled"}
+	case errors.Is(err, context.DeadlineExceeded):
+		return Failure{Code: CodeTimeout, Message: "the operation timed out"}
 	case errors.Is(err, ErrNotAvailable):
 		return Failure{Code: CodeUnavailable, Message: err.Error()}
 	case errors.Is(err, ErrPermission):

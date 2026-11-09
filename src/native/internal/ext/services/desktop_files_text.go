@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"path/filepath"
@@ -34,18 +35,12 @@ func (h *Handler) readText(raw json.RawMessage) (string, error) {
 }
 
 // quickLookFile shows a file in the system's previewer, outside Nevermind. Systems without one refuse it.
-func (h *Handler) quickLookFile(raw json.RawMessage) error {
+func (h *Handler) quickLookFile(ctx context.Context, raw json.RawMessage) error {
 	path, err := absolutePathArg(raw)
 	if err != nil {
 		return err
 	}
-	if h.deps.Shell == nil {
-		return unavailable("files are not available in this build")
-	}
-	if !h.actions.allow() {
-		return rateExceeded("file opens")
-	}
-	return unsupportedAsUnavailable(h.deps.Shell.QuickLook(path), "Quick Look is not available on this system")
+	return h.showFilePreview(ctx, path, filePreviewService)
 }
 
 // openWithApp opens a file with one application from the open-with list.

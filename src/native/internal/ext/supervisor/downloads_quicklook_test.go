@@ -9,6 +9,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // The fixture is an unchanged copy of the installed Downloads Big Files extension.
@@ -18,6 +19,7 @@ func TestDownloadsQuickLookFollowsHostCapability(t *testing.T) {
 		t.Run(map[bool]string{false: "unsupported", true: "supported"}[supported], func(t *testing.T) {
 			rig := newServicesRig(t)
 			rig.deps.Home = t.TempDir()
+			rig.deps.Shell = fake.NewShell()
 			downloads := filepath.Join(rig.deps.Home, "Downloads")
 			if err := os.MkdirAll(downloads, 0700); err != nil {
 				t.Fatal(err)

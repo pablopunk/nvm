@@ -14,6 +14,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/bundled"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/pablopunk/nvm/native/internal/ai/extai"
 	aiquota "github.com/pablopunk/nvm/native/internal/ai/quota"
@@ -151,6 +152,7 @@ type documents struct {
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
 type Handler struct {
+	closed           atomic.Bool
 	deps             Deps
 	manifest         api.Manifest
 	capabilities     map[api.Capability]bool
@@ -212,6 +214,7 @@ func New(deps Deps, manifest api.Manifest) *Handler {
 // Close flushes and closes the extension's store. A handler closed before its first call never opens the store,
 // and every later call answers unavailable. Close is safe to call more than once.
 func (h *Handler) Close() error {
+	h.closed.Store(true)
 	h.ai.close()
 	h.schedules.close()
 	h.openOnce.Do(func() { h.openErr = errHandlerClosed })
@@ -302,18 +305,6 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveDictation(ctx, call)
 	}
 	return nil, invalid("unknown service %q", call.Service)
-}
-
-// require refuses a call whose capability the manifest does not declare, and records the refusal.
-func (h *Handler) require(capability api.Capability) error {
-	if h.capabilities[capability] {
-		return nil
-	}
-	h.logger.Warn("refused a call that needs an undeclared capability", logx.F{"capability": string(capability)})
-	return serviceError{
-		failure: api.Failure{Code: api.CodePermission, Message: fmt.Sprintf("this extension did not declare the %s capability in its manifest", capability)},
-		cause:   api.ErrPermission,
-	}
 }
 
 // openedDocuments opens the extension's store on first use and returns its typed documents.

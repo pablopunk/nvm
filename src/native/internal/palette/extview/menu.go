@@ -13,6 +13,7 @@ const viewGroupTitle = "View"
 // MenuSection is one group of an action menu. The primary action's group has no title, a panel's sections keep theirs,
 // and the fallback actions of a menu without a panel have none.
 type MenuSection struct {
+	Primary bool
 	Title   string
 	Actions []api.Action
 }
@@ -23,7 +24,7 @@ type MenuSection struct {
 func MenuSections(primary *api.Action, panel *api.ActionPanel, fallback []api.Action) []MenuSection {
 	var sections []MenuSection
 	if primary != nil {
-		sections = append(sections, MenuSection{Actions: []api.Action{*primary}})
+		sections = append(sections, MenuSection{Primary: true, Actions: []api.Action{*primary}})
 	}
 	if panel != nil && len(panel.Sections) > 0 {
 		for _, section := range panel.Sections {
@@ -69,9 +70,16 @@ func sameWireAction(a, b api.Action) bool {
 // MenuActionsFor maps the sections of a menu outside a view, such as a root row's or a command's, to palette actions.
 func MenuActionsFor(deps Deps, extID string, sections []MenuSection) []search.Action {
 	var out []search.Action
+	hasPrimary := sectionsHavePrimary(sections)
 	for _, section := range sections {
 		for _, action := range section.Actions {
+			if !actionSupported(deps, action) {
+				continue
+			}
 			mapped := ActionFor(deps, extID, action)
+			if hasPrimary && !section.Primary {
+				mapped.MenuOnly = true
+			}
 			mapped.Section = section.Title
 			out = append(out, mapped)
 		}
@@ -107,9 +115,19 @@ func (s *Session) viewActionsNotIn(own []api.Action) []api.Action {
 // each takes the title of its group.
 func (s *Session) sectionActions(itemID string, first int, sections []MenuSection) []search.Action {
 	var out []search.Action
+	hasPrimary := sectionsHavePrimary(sections)
+	index := first
 	for _, section := range sections {
 		for _, action := range section.Actions {
-			mapped := s.actionAt(itemID, first+len(out), action)
+			actionIndex := index
+			index++
+			if !actionSupported(s.deps, action) {
+				continue
+			}
+			mapped := s.actionAt(itemID, actionIndex, action)
+			if hasPrimary && !section.Primary {
+				mapped.MenuOnly = true
+			}
 			mapped.Section = section.Title
 			out = append(out, mapped)
 		}

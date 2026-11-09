@@ -75,7 +75,7 @@ func (s *Session) itemActions(item api.Item) []search.Action {
 	}
 	out := s.sectionActions(item.ID, 0, own)
 	view := []MenuSection{{Title: viewGroupTitle, Actions: s.viewActionsNotIn(flattenSections(own))}}
-	for _, mapped := range s.sectionActions(item.ID, len(out), view) {
+	for _, mapped := range s.sectionActions(item.ID, len(flattenSections(own)), view) {
 		mapped.MenuHidden, mapped.MenuOnly = s.viewHidesMenu(), true
 		out = append(out, mapped)
 	}

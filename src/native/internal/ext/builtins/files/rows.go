@@ -9,7 +9,6 @@ import (
 // with the modifier.
 const (
 	revealShortcut = "CommandOrControl+Enter"
-	quickLookCap   = "quick-look"
 )
 
 // recentFiles lists the newest files of the index, of one kind when kind is set.
@@ -56,9 +55,7 @@ func fileActions(ctx api.Context, file api.FileRef) []api.Action {
 	preview := api.PreviewFile(previewTitle(file), file)
 	preview.Shortcut = api.PreviewShortcut
 	actions := []api.Action{preview}
-	if ctx.System().HasCapability(quickLookCap) {
-		actions = append(actions, api.QuickLook(labels.PreviewFile, file.Path))
-	}
+	actions = append(actions, api.QuickLook(labels.PreviewFile, file.Path))
 	reveal := api.RevealPath(labels.RevealInFileManager, file.Path)
 	reveal.Shortcut = revealShortcut
 	return append(actions, reveal)

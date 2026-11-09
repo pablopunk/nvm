@@ -1846,6 +1846,7 @@ export type ExtensionContext = {
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
+    /** Native system file preview. The Go host omits this action when unsupported; saved invocations fail safely. Content rows and their other actions remain visible. */
     quickLook(
       filePath: string,
       title?: string,

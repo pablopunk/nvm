@@ -13,6 +13,9 @@ type snapshotPermissionDenied struct{}
 func (snapshotPermissionDenied) Error() string { return "snapshot source access denied" }
 
 func (h *Handler) serveMarked(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
+	if h.closed.Load() {
+		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeUnavailable, Message: errHandlerClosed.Error()}}
+	}
 	result, err := h.dispatch(ctx, call)
 	if err != nil {
 		if _, ok := err.(snapshotPermissionDenied); ok {

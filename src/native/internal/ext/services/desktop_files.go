@@ -36,7 +36,7 @@ func (h *Handler) serveDesktopFiles(ctx context.Context, call protocol.ServiceCa
 	case protocol.OpReadText:
 		return h.readText(call.Args)
 	case protocol.OpQuickLook:
-		return nil, h.quickLookFile(call.Args)
+		return nil, h.quickLookFile(ctx, call.Args)
 	case protocol.OpOpenWith:
 		return nil, h.openWithApp(call.Args)
 	case protocol.OpDisplayPath:

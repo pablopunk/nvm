@@ -72,11 +72,14 @@ type Deps struct {
 	// the action report unavailable.
 	OpenPath   func(path string)
 	RevealPath func(path string)
-	// QuickLook shows a file in the system's previewer, OpenWith opens a file with the app at appPath, and Trash
+	// ActionSupported reads cheap host support snapshots. Nil preserves legacy discovery.
+	ActionSupported func(action api.Action) bool
+	// PreviewFile runs the installation-bound preview operation asynchronously.
+	PreviewFile func(extID, path string, identity any, done func(error))
+	// OpenWith opens a file with the app at appPath, and Trash
 	// moves a file to the Trash. Nil makes the action report unavailable; failures show as a toast.
-	QuickLook func(path string) error
-	OpenWith  func(path, appPath string) error
-	Trash     func(path string) error
+	OpenWith func(path, appPath string) error
+	Trash    func(path string) error
 	// Indicate shows a result's toast as a passive indicator owned by the extension. Nil shows the message under the
 	// search field instead.
 	Indicate func(extID string, input api.IndicatorInput)

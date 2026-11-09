@@ -74,16 +74,16 @@ func TestKindChangeShowsTheKindInTheFooter(t *testing.T) {
 	}
 }
 
-// TestFileRowPreviewsItsFileAndOffersTheMenuWithoutQuickLook checks the row's pane names its file, and that a system
-// without Quick Look lists only the preview and the reveal.
-func TestFileRowPreviewsItsFileAndOffersTheMenuWithoutQuickLook(t *testing.T) {
+// TestFileRowDeclaresPreviewActionsWithoutPlatformBranches checks the row's pane names its file, and that a system
+// host chooses which actions the current system can offer.
+func TestFileRowDeclaresPreviewActionsWithoutPlatformBranches(t *testing.T) {
 	ctx := fakeContext{files: &fakeFiles{}}
 	row := fileItem(ctx, api.FileRef{Path: "/h/a.pdf", Name: "a.pdf", DisplayPath: "~/a.pdf", Kind: "file"}, 1)
 	if row.Detail == nil || row.Detail.File == nil || row.Detail.File.Path != "/h/a.pdf" {
 		t.Fatalf("detail = %+v, want the row's file", row.Detail)
 	}
-	if titles := menuTitles(row.Actions); !slices.Equal(titles, []string{"Preview Contents", "Show in Finder"}) {
-		t.Fatalf("menu = %v, want the preview and the reveal", titles)
+	if titles := menuTitles(row.Actions); !slices.Equal(titles, []string{"Preview Contents", "Quick Look", "Show in Finder"}) {
+		t.Fatalf("menu = %v, want declarative previews and reveal", titles)
 	}
 }
 

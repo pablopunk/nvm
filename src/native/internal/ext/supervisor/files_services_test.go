@@ -6,6 +6,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/features/files"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
@@ -28,6 +29,7 @@ func TestFilesFixtureUsesEveryFilesMethodThroughTheChild(t *testing.T) {
 	rig := newServicesRig(t)
 	rig.deps.FileIndex = fixedFileIndex{root: rig.root}
 	rig.deps.Shell = fake.NewShell()
+	rig.deps.Capabilities = platform.NewCapabilities(platform.CapabilityShellQuickLook)
 	if err := rig.deps.Files.MkdirAll(rig.root+"/notes", 0o755); err != nil {
 		t.Fatal(err)
 	}

@@ -100,11 +100,16 @@ func (m *Manager) Enable(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
+	wasEnabled := m.isEnabled(id)
 	if err := m.enabled.SetEnabled(id, true); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	if e.runtime == nil {
 		return fmt.Errorf("extension %s does not load: %s", id, joinProblems(e.bundle.Problems))
+	}
+	if !wasEnabled {
+		m.replaceLocked(filepath.Base(e.bundle.Dir), e.bundle)
+		return nil
 	}
 	e.runtime.Reset()
 	e.runtime.Start()

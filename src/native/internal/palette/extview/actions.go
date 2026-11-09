@@ -220,7 +220,7 @@ func (s *Session) pasteOperation(action api.Action, title string) search.Action 
 // first, as it does for a run action.
 func (s *Session) hostOperation(action api.Action, title string) search.Action {
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
-		s.runRoute(h, route{extID: s.extID, action: action})
+		s.runRoute(h, route{extID: s.extID, action: action, identity: s.installationIdentity})
 	}}
 }
 
@@ -367,7 +367,7 @@ func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, de
 		return
 	}
 	if action.Confirm != nil {
-		r := route{extID: extID, action: action}
+		r := route{extID: extID, action: action, identity: s.installationIdentity}
 		if action.Kind == api.ActionToggleSetting && extID == s.extID {
 			r.identity = s.installationIdentity
 		}
