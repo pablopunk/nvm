@@ -61,20 +61,19 @@ func TestFocusReturnNeedsAnX11SessionAndXdotool(t *testing.T) {
 	}
 }
 
-func TestTextRecognitionIsOnMacOSAndLinuxWithTesseractOnly(t *testing.T) {
-	none := func(string) bool { return false }
-	withTesseract := func(name string) bool { return name == tesseractBinary }
-	if got := textCapabilities("windows", withTesseract); len(got) != 0 {
-		t.Fatalf("windows = %v, want no text capabilities", got)
-	}
-	if got := textCapabilities("linux", none); len(got) != 0 {
-		t.Fatalf("linux without tesseract = %v", got)
-	}
-	if got := textCapabilities("linux", withTesseract); !reflect.DeepEqual(got, []platform.Capability{platform.CapabilityTextRecognize}) {
-		t.Fatalf("linux with tesseract = %v, want text recognition only", got)
-	}
-	want := []platform.Capability{platform.CapabilityTextRecognize, platform.CapabilityScreenCapture}
-	if got := textCapabilities("darwin", none); !reflect.DeepEqual(got, want) {
-		t.Fatalf("darwin = %v, want %v", got, want)
+func TestTextRecognitionRequiresBundledAssetsOnEveryOS(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		for _, available := range []bool{false, true} {
+			var want []platform.Capability
+			if available {
+				want = append(want, platform.CapabilityTextRecognize)
+			}
+			if goos == "darwin" {
+				want = append(want, platform.CapabilityScreenCapture)
+			}
+			if got := textCapabilities(goos, available); !reflect.DeepEqual(got, want) {
+				t.Fatalf("%s assets=%t: got %v, want %v", goos, available, got, want)
+			}
+		}
 	}
 }

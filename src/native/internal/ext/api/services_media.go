@@ -7,7 +7,7 @@ type OCRInput struct {
 	File   *FileRef `json:"file,omitempty"`
 }
 
-// OCROptions selects recognition languages. Empty means the host default.
+// OCROptions supplies language hints. The bundled recognizer reads Latin scripts together and does not require hints.
 type OCROptions struct {
 	Language  string   `json:"language,omitempty"`
 	Languages []string `json:"languages,omitempty"`

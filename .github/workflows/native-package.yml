@@ -75,6 +75,7 @@ jobs:
         run: |
           bash scripts/natives/build-libopus.sh
           bash scripts/natives/build-macos-helper.sh
+          bash scripts/natives/fetch-ocr.sh darwin "${{ matrix.arch }}"
           bash scripts/natives/build-pi-host.sh
 
       - name: Import the signing certificate
@@ -254,6 +255,7 @@ jobs:
         working-directory: src/native
         run: |
           bash scripts/natives/build-libopus.sh
+          bash scripts/natives/fetch-ocr.sh linux "${{ matrix.arch }}"
           bash scripts/natives/build-pi-host.sh
 
       - name: Stamp the package settings
@@ -326,6 +328,10 @@ jobs:
         with:
           go-version-file: src/native/go.mod
           cache-dependency-path: src/native/go.sum
+
+      - name: Fetch OCR runtime and models
+        working-directory: src/native
+        run: bash scripts/natives/fetch-ocr.sh windows amd64
 
       - name: Install NSIS and osslsigncode
         run: sudo apt-get update && sudo apt-get install -y nsis osslsigncode

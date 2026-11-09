@@ -3,6 +3,7 @@ module github.com/pablopunk/nvm/native
 go 1.27.3
 
 require (
+	github.com/benedoc-inc/onnxer v0.7.1-0.20260807135226-d3f86f897e42
 	github.com/ebitengine/purego v0.11.1
 	github.com/egoist/mygo v0.7.4
 	github.com/traefik/yaegi v0.16.1

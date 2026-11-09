@@ -1,3 +1,5 @@
+github.com/benedoc-inc/onnxer v0.7.1-0.20260807135226-d3f86f897e42 h1:t83n3WN03mjqpNKiprsgrYntyTfxPkRPTzQ0JD8bOcE=
+github.com/benedoc-inc/onnxer v0.7.1-0.20260807135226-d3f86f897e42/go.mod h1:wALlP3CtDgGF1KMaqxuVCw8XOK8G2T95xg3ZW4f87Vw=
 github.com/ebitengine/purego v0.11.1 h1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=
 github.com/ebitengine/purego v0.11.1/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/egoist/mygo v0.7.4 h1:0qkDpDRo7C9g8PM8eu4V6FVouhLiTrUdqKD6I31Lv3Q=

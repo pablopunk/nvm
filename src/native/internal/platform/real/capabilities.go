@@ -87,15 +87,14 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
 		supported = append(supported, platform.CapabilityMicrophone)
 	}
-	supported = append(supported, textCapabilities(goos, hasTool)...)
+	supported = append(supported, textCapabilities(goos, ocrAssetsAvailable())...)
 	return platform.NewCapabilities(supported...)
 }
 
-// textCapabilities lists the text intents of an OS. Reading text is on macOS (the Vision framework) and on Linux when
-// Tesseract is installed; the screen can be captured only on macOS, so screen text is macOS only.
-func textCapabilities(goos string, hasTool func(string) bool) []platform.Capability {
+// textCapabilities advertises recognition only when its bundled runtime and models are available.
+func textCapabilities(goos string, hasOCR bool) []platform.Capability {
 	var supported []platform.Capability
-	if goos == "darwin" || (goos == "linux" && hasTool(tesseractBinary)) {
+	if hasOCR {
 		supported = append(supported, platform.CapabilityTextRecognize)
 	}
 	if goos == "darwin" {

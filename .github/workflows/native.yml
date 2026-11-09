@@ -75,6 +75,9 @@ jobs:
       - name: Staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
 
+      - name: Fetch OCR runtime and models
+        run: bash scripts/natives/fetch-ocr.sh linux amd64
+
       - name: Test with race detector
         run: go test -race -count=1 -timeout 25m ./...
 
@@ -118,6 +121,13 @@ jobs:
 
       - name: Vet
         run: go vet ./...
+
+      - name: Fetch OCR runtime and models
+        shell: bash
+        run: |
+          goos=$(go env GOOS | tr -d '\r')
+          goarch=$(go env GOARCH | tr -d '\r')
+          bash scripts/natives/fetch-ocr.sh "$goos" "$goarch"
 
       - name: Test
         run: go test -count=1 -timeout 40m ./...
