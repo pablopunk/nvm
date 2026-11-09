@@ -187,7 +187,7 @@ func TestInstalledOCRClipboardImageUnwrapsLinesAndKeepsParagraphs(t *testing.T) 
 	defer cancel()
 	invoke := api.Invocation{Ref: api.ActionRef{ID: "copy-text"}}
 
-	r, clipboard, _ := ocrRuntime(t, "local.ocr-clipboard-image", "This sentence was\nwrapped by the terminal.\n\nhttps://example.com/docs/get\ning-started?lang=en&v=2\n\nLast paragraph.", nil)
+	r, clipboard, _ := ocrRuntime(t, "local.ocr-clipboard-image", "This sentence was\nwrapped by the terminal.\n\nhttps://example.com/docs/gett\ning-started?lang=en&v=2\n\nLast paragraph.", nil)
 	screenshotOnClipboard(t, clipboard)
 	done := runInstalledResult(t, ctx, r, invoke)
 	if done.Next == nil || done.Next.Kind != api.ActionPop {
