@@ -174,7 +174,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		if p.chosen < 0 && len(p.results) > 0 {
 			p.chosen = 0
 		}
-		if it != nil && it.Detail != nil {
+		if p.showDetail(v, it) {
 			detailColumn(c, v).FillHeight().Padding(8, 8, 8+p.footerOverlayClearance(), 2).Children(func() {
 				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.Wash).Border(1, k.Lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.Lo).Children(func() {
 					it.Detail(c, p)
@@ -402,4 +402,15 @@ func (p *Palette) openActionsFromFooter() {
 	if !p.actionsOpen && len(p.menuActions()) > 0 {
 		p.openActionMenu(0)
 	}
+}
+
+// showDetail reports whether the chosen row's side pane is drawn. A view that streams rows from providers decides it
+// only when the list is settled or the user chose the row; in between it keeps the last decision, so rows that
+// arrive while the user types cannot open or close the pane.
+func (p *Palette) showDetail(v *View, it *search.Item) bool {
+	has := it != nil && it.Detail != nil
+	if v.Providers == nil || p.settled || p.choicePinned {
+		p.detailOpen = has
+	}
+	return has && p.detailOpen
 }
