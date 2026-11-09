@@ -89,8 +89,8 @@ func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testi
 	ctx.ai.available = false
 	ext := New(Legacy{})
 	view := run(t, ext, ctx, RefOpenSettings, nil, nil).View
-	if view == nil || view.Form == nil || len(view.Form.Fields) != 6 {
-		t.Fatalf("settings view %+v; want the six 1.x fields", view)
+	if view == nil || view.Form == nil || len(view.Form.Fields) != 5 {
+		t.Fatalf("settings view %+v; want the five fields", view)
 	}
 	form := api.FormValues{
 		fieldDevice:     api.TextValue("mic-1"),
