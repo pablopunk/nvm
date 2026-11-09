@@ -48,6 +48,7 @@ type ExtensionChat struct {
 	sideRoot      *palette.View
 	previewHidden bool
 	specFrom      func() ExtensionChatSpec
+	wasBusy       bool
 }
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
@@ -95,11 +96,23 @@ func (x *ExtensionChat) body(c *ui.Context, h search.Host) {
 		x.spec.Host(h)
 	}
 	k := design.Tokens(c)
+	x.refocusWhenAReplyEnds()
 	ui.Column(c).Grow(1).FillHeight().MinHeight(0).Padding(8, 16, 12, 16).Children(func() {
 		x.transcript(c)
 		x.activity(c)
 		x.composer(c, k)
 	})
+}
+
+// refocusWhenAReplyEnds gives the keyboard back to the composer when a reply finishes, so the user can answer at once, as
+// 1.x does. Something else may have taken it while the reply ran: a tool that opened the browser, a menu, a click. The
+// side page keeps it when the user gave it there.
+func (x *ExtensionChat) refocusWhenAReplyEnds() {
+	busy := x.streaming()
+	if x.wasBusy && !busy && !x.side.Focused() {
+		x.input.Focus()
+	}
+	x.wasBusy = busy
 }
 
 // composer is the card under the transcript: pictures, the input, and its send and attachment controls.
