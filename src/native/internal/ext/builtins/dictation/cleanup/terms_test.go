@@ -1,9 +1,9 @@
 package cleanup
 
 import (
-	"strings"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 )
 

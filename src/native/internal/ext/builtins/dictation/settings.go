@@ -2,7 +2,6 @@ package dictation
 
 import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
-	"github.com/pablopunk/nvm/native/internal/ext/builtins/dictation/cleanup"
 )
 
 // storageSettingsKey and storageHistoryKey name the built-in's documents in its storage.

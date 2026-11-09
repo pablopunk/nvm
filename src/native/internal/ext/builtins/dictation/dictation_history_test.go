@@ -93,11 +93,11 @@ func TestSettingsFormSavesTheChoicesAndKeepsCleaningOffWithoutAnAccount(t *testi
 		t.Fatalf("settings view %+v; want the six 1.x fields", view)
 	}
 	form := api.FormValues{
-		fieldDevice:      api.TextValue("mic-1"),
-		fieldCleanup:     api.FlagValue(true),
-		fieldDictionary:  api.TextValue("Kubernetes"),
-		fieldClipboard:   api.FlagValue(true),
-		fieldScreen:      api.FlagValue(true),
+		fieldDevice:     api.TextValue("mic-1"),
+		fieldCleanup:    api.FlagValue(true),
+		fieldDictionary: api.TextValue("Kubernetes"),
+		fieldClipboard:  api.FlagValue(true),
+		fieldScreen:     api.FlagValue(true),
 	}
 	if result := run(t, ext, ctx, refSaveSettings, nil, form); result.Navigation != api.NavPop {
 		t.Fatalf("navigation %q; want pop", result.Navigation)
