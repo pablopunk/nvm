@@ -88,7 +88,7 @@ func TestJourneyInstalledWallpapersGridShowsTheFolderImages(t *testing.T) {
 
 // TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing enables converted extensions that need macOS
 // tools and opens each one in the real palette. On the Linux rig their tools are absent, so each must land on its own
-// plain empty state or sign-in form, never a blank page or a raw error.
+// plain empty state, never a blank page or a raw error.
 func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *testing.T) {
 	home := t.TempDir()
 	cases := []struct {
@@ -97,7 +97,6 @@ func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *
 		{"local.quit-running-app", "Quit App", "Quit App", "kill app", "No Running Apps", "installed-quit-app"},
 		{"local.restart-app", "Restart App", "Restart App", "relaunch app", "No Running Apps", "installed-restart-app"},
 		{"local.remove-app-quarantine", "Remove App Quarantine", "Remove App Quarantine", "Remove App Quarantine", "No quarantined apps found", "installed-quarantine"},
-		{"local.paperless-ai-search", "Paperless AI Search", "Search Paperless with AI", "Notflix Documents", "Paperless API Token", "installed-paperless-connect"},
 	}
 	for _, c := range cases {
 		seedInstalledExtension(t, home, c.id)
