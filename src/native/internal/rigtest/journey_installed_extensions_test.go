@@ -170,3 +170,56 @@ func TestJourneyInstalledSnippetsAddASnippetAndSeeItsActions(t *testing.T) {
 	}
 	shoot(t, app, "installed-snippets-row-actions")
 }
+
+// TestJourneyInstalledSnippetsViewAndDeleteWithConfirmation continues the Snippets walk: a saved snippet opens
+// read-only from its action menu, and deleting it asks for confirmation and then returns to the empty list.
+func TestJourneyInstalledSnippetsViewAndDeleteWithConfirmation(t *testing.T) {
+	home := t.TempDir()
+	seedInstalledExtension(t, home, "local.text-snippets")
+	app := Launch(t, Options{Home: home, Run: "snippets-delete"})
+
+	openExtensionsView(t, app)
+	enableThroughReview(t, app, "snippets", "Snippets")
+	hidePalette(t, app)
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("Snippets"))
+	waitForRowPrefix(t, app, "Snippets", elementWait)
+	must(t, app.Key("Return"))
+	_, err := app.WaitFor("No snippets yet", elementWait)
+	must(t, err)
+	must(t, app.Key("ctrl+k"))
+	_, err = app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Write the text you want to save…", elementWait)
+	must(t, err)
+	must(t, app.Type("Remove me later"))
+	must(t, app.Key("ctrl+Return"))
+	waitForRow(t, app, "Remove me later", elementWait)
+
+	must(t, app.Key("ctrl+k"))
+	_, err = app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	must(t, app.Type("View"))
+	waitForRow(t, app, "View Snippet", elementWait)
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Remove me later", elementWait)
+	must(t, err)
+	shoot(t, app, "installed-snippets-view")
+	must(t, app.Key("Escape"))
+	waitForRow(t, app, "Remove me later", elementWait)
+
+	must(t, app.Key("ctrl+k"))
+	_, err = app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	must(t, app.Type("Delete"))
+	waitForRow(t, app, "Delete Snippet", elementWait)
+	must(t, app.Key("Return"))
+	waitForRow(t, app, "Delete", elementWait)
+	shoot(t, app, "installed-snippets-delete-confirm")
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("No snippets yet", elementWait)
+	must(t, err)
+	shoot(t, app, "installed-snippets-deleted")
+}
