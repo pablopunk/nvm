@@ -45,7 +45,9 @@ func Footer(c *ui.Context, d FooterData) {
 			})
 		}
 		ui.Box(c).Grow(1)
-		if d.Primary != nil || d.Secondary != nil || d.Hint != "" {
+		if d.Primary != nil && d.Primary.Emphasized {
+			footerActionsWithCTA(c, d, k)
+		} else if d.Primary != nil || d.Secondary != nil || d.Hint != "" {
 			footerPlate(ui.Row(c).Gap(12).AlignItems(ui.Center).Radius(16), k, 6, 10).Children(func() {
 				if d.Primary != nil {
 					clickableKeyHint(c, d.Primary, d.PrimaryAction)
@@ -59,6 +61,33 @@ func Footer(c *ui.Context, d FooterData) {
 			})
 		}
 	})
+}
+
+// footerActionsWithCTA draws the secondary action on a plate and the emphasized primary action as a separate full-radius
+// call to action at the end of the bar.
+func footerActionsWithCTA(c *ui.Context, d FooterData, k *TokenSet) {
+	if d.Secondary != nil {
+		footerPlate(ui.Row(c).Radius(16), k, 6, 10).Children(func() {
+			clickableKeyHint(c, d.Secondary, d.SecondaryAction)
+		})
+	}
+	callToAction(c, d.Primary, d.PrimaryAction)
+}
+
+// callToAction draws the primary action as an accent pill. Its 1px edge is always present, matching the fill at rest and
+// turning to the accent under the pointer, so hovering never shifts the layout.
+func callToAction(c *ui.Context, hint *KeyHint, action func()) {
+	k := Tokens(c)
+	edge := k.AccentFill
+	button := ui.ButtonBase(c).Padding(6, 12).Radius(999).Background(k.AccentFill)
+	if button.Hovered() {
+		edge = k.Accent
+	}
+	button.Border(1, edge)
+	button.Children(func() { keyHint(c, hint) })
+	if action != nil && button.Clicked() {
+		action()
+	}
 }
 
 // footerPlate gives a footer bar the look of the palette's active row: the same lit plate and edge, so the bars read as
@@ -91,12 +120,7 @@ func clickableKeyHint(c *ui.Context, hint *KeyHint, action func()) {
 	}
 	k := Tokens(c)
 	button := ui.ButtonBase(c).Padding(2, 6).Radius(8)
-	if hint.Emphasized {
-		button.Background(k.AccentFill)
-		if button.Hovered() {
-			button.Border(1, k.Accent)
-		}
-	} else if button.Hovered() {
+	if button.Hovered() {
 		button.Background(k.Selected)
 	}
 	button.Children(func() { keyHint(c, hint) })
