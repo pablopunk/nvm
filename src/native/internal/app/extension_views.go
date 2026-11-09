@@ -55,6 +55,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 	return extview.Deps{
 		CommandSnapshots:        &p.commandSnapshots,
 		CommandSnapshotIdentity: m.SnapshotIdentity,
+		DurableGrids:            p.exts.grids.Load(),
 		InvokeRefresh: func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			invoke(ctx, extID, in, done)
 		},

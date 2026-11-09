@@ -161,9 +161,12 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	if _, _, err := r.childForCall(ctx, lifetime, req.Method); err != nil {
 		return protocol.Response{}, err
 	}
+	queued := r.cfg.Clock.Now()
 	select {
 	case r.slots <- struct{}{}:
+		r.noteSlowSlot(req.Method, r.cfg.Clock.Now().Sub(queued), "waited")
 	case <-ctx.Done():
+		r.noteSlowSlot(req.Method, r.cfg.Clock.Now().Sub(queued), "gave up")
 		return protocol.Response{}, ctx.Err()
 	case <-lifetime.Done():
 		return protocol.Response{}, unavailable("stopped")

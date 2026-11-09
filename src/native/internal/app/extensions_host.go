@@ -22,6 +22,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -31,7 +32,8 @@ import (
 // extensionHost holds the extension manager once it has started. The manager is built off the first-paint path
 // and published atomically, so searches read nil until it exists and then the live manager.
 type extensionHost struct {
-	mgr atomic.Pointer[manager.Manager]
+	mgr   atomic.Pointer[manager.Manager]
+	grids atomic.Pointer[extview.DurableGrids]
 }
 
 // extensionManager returns the running manager, or nil while extensions are still loading.
@@ -47,7 +49,9 @@ func (p *App) startExtensions() {
 		log.Println("extensions:", err)
 		return
 	}
+	p.publishDurableGrids(m)
 	p.exts.mgr.Store(m)
+	p.restoreDurableGrids()
 	p.restoreExtensionWindows(m)
 	log.Printf("extensions: %d installed", len(m.List()))
 }
@@ -186,6 +190,7 @@ func (p *App) extensionHistory() *clipboard.History {
 // the menu bar to reconcile its items with the new state. Starting every child makes a burst of changes, so the redraw
 // runs once for the burst; it runs on the UI thread, and it reads the state as it is then.
 func (p *App) extensionsStateChanged() {
+	p.restoreDurableGrids()
 	p.extensionStateRefresh.request(p.onUI, p.redrawExtensionState)
 }
 
@@ -287,4 +292,26 @@ func extensionsDir() string {
 	d := filepath.Join(sharedDir(), folders.ExtensionsName)
 	_ = os.MkdirAll(d, 0o755)
 	return d
+}
+
+// publishDurableGrids opens the saved grids before the manager is published, so every view built over the manager can
+// save to them.
+func (p *App) publishDurableGrids(m *manager.Manager) {
+	if p.store == nil {
+		return
+	}
+	p.exts.grids.Store(extview.NewDurableGrids(p.store, extview.DurableGridDeps{
+		Snapshots: &p.commandSnapshots,
+		Identity:  m.SnapshotIdentity,
+		Revision:  m.SnapshotRevision,
+		Files:     p.ports.FS,
+		OnUI:      p.onUI,
+	}))
+}
+
+// restoreDurableGrids brings back the saved grids of the extensions that are running now. It returns at once.
+func (p *App) restoreDurableGrids() {
+	if grids := p.exts.grids.Load(); grids != nil {
+		grids.Restore()
+	}
 }

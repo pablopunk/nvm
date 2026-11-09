@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/logx"
 )
 
 // ServiceHandler answers the host services a child calls while a request runs. It runs on the request's goroutine,
@@ -37,6 +39,30 @@ func (r *Runtime) serveCall(ctx context.Context, call protocol.ServiceCall) prot
 	return r.services.Serve(ctx, call)
 }
 
+// slowServiceCall is how long one host service call may hold a request before it is worth a log line.
+const slowServiceCall = 2 * time.Second
+
+// noteSlowServiceCall names a service call that held a request up, because a request holds the extension's only slot
+// and everything behind it, an opening view included, waits for it. A file call names the file it was reading.
+func (r *Runtime) noteSlowServiceCall(call protocol.ServiceCall, took time.Duration) {
+	if took < slowServiceCall {
+		return
+	}
+	fields := logx.F{"service": call.Service, "op": call.Op, "duration_ms": took.Milliseconds()}
+	var args protocol.PathArgs
+	if call.Service == protocol.ServiceDesktopFiles && json.Unmarshal(call.Args, &args) == nil && args.Path != "" {
+		fields["file"] = filepath.Base(args.Path)
+	}
+	r.logLifecycle(logx.Warn, "extension service call slow", fields)
+}
+
+// noteSlowSlot records a request that sat behind another one of the same extension.
+func (r *Runtime) noteSlowSlot(method string, took time.Duration, outcome string) {
+	if took >= slowServiceCall {
+		r.logLifecycle(logx.Warn, "extension request queued", logx.F{"method": method, "outcome": outcome, "duration_ms": took.Milliseconds()})
+	}
+}
+
 // lifetimeContext returns the context that ends when the runtime stops. Host waits on behalf of a call end with it.
 func (r *Runtime) lifetimeContext() context.Context {
 	r.mu.Lock()
@@ -50,6 +76,8 @@ func (r *Runtime) answerViewService(parent, lifetime context.Context, child *chi
 	if lifetime.Err() != nil {
 		return protocol.ServiceReply{}, lifetime.Err()
 	}
+	started := r.cfg.Clock.Now()
+	defer func() { r.noteSlowServiceCall(call, r.cfg.Clock.Now().Sub(started)) }()
 	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(parent, method), lifetime), serviceCallTimeout)
 	defer cancel()
 	stop := context.AfterFunc(lifetime, cancel)

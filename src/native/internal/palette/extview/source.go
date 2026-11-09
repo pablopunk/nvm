@@ -185,9 +185,7 @@ func (s *Session) refreshNow() {
 			s.loading, s.failure = false, nil
 		}
 		s.Apply(patch)
-		if s.snapshotRef != nil && s.deps.CommandSnapshots != nil && s.deps.CommandSnapshotIdentity != nil && sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
-			s.deps.CommandSnapshots.PutVerified(s.snapshotIdentity, *s.snapshotRef, s.view, s.items, result.SnapshotEvidence)
-		}
+		s.rememberVerifiedSnapshot(result.SnapshotEvidence)
 		s.cacheRefreshPatch(patch)
 		s.refreshHost()
 	})
