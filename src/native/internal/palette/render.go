@@ -73,7 +73,6 @@ func (p *Palette) header(c *ui.Context, v *View) {
 // searchRow is the field at the top of the pane; the design package draws it and reports what happened.
 func (p *Palette) searchRow(c *ui.Context, v *View) {
 	data := design.SearchData{
-		Loading:    p.loadingActionOrView(),
 		HideInput:  v.HideInput,
 		Back:       len(p.stack) > 1,
 		Query:      &p.query,
@@ -315,7 +314,7 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if root {
 		name = ""
 	}
-	loading := p.loadingMore()
+	loading := p.loadingActionOrView()
 	if loading {
 		status := "Loading…"
 		if len(p.results) > 0 {

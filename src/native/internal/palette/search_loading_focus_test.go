@@ -35,3 +35,26 @@ func TestSearchLoadingChangesPreserveInputAndSelection(t *testing.T) {
 		t.Fatalf("loading change lost the search selection: %q", h.p.Query())
 	}
 }
+
+func TestSearchInputDoesNotMoveWhenLoadingChanges(t *testing.T) {
+	loading := false
+	root := &View{
+		Title:   "Root",
+		Loading: func() bool { return loading },
+		Search: func(string) []search.Item {
+			return []search.Item{{ID: "settings", Title: "Settings"}}
+		},
+	}
+	h := newHarness(t, root, true)
+	h.typeText("set")
+	before, ok := h.tt.Find("Search")
+	if !ok {
+		t.Fatal("search input not found")
+	}
+	loading = true
+	h.frame()
+	during, ok := h.tt.Find("Search")
+	if !ok || during != before {
+		t.Fatalf("the input moved when loading started: before=%v during=%v", before, during)
+	}
+}

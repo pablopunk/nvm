@@ -6,10 +6,10 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// SearchData is the field at the top of the palette: an icon, then either the view's title or a text input.
+// SearchData is the field at the top of the palette: an icon, then either the view's title or a text input. The row
+// never shows progress: anything that appears or disappears beside the input moves the text the user is typing, so
+// loading is shown in the footer and in the rows.
 type SearchData struct {
-	// Loading animates only while the host is waiting on a user action or the view's data source.
-	Loading bool
 	// Title is shown in place of the input when HideInput is set.
 	Title     string
 	HideInput bool
@@ -45,9 +45,6 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 		k := Tokens(c)
 		bolt := ui.Icon(c, Icon("zap")).FontSize(21).TextColor(k.Accent)
 		events.Back = d.Back && bolt.Clicked()
-		if d.Loading {
-			ui.Spinner(c)
-		}
 		if d.HideInput {
 			ui.Text(c, d.Title).FontSize(21).TextColor(k.Strong).Grow(1).SingleLine()
 			return
