@@ -69,21 +69,21 @@ type View struct {
 	Sections []ItemSection `json:"sections,omitempty"`
 	Source   *DataSource   `json:"source,omitempty"`
 
-	IsLoading         bool             `json:"isLoading,omitempty"`
-	EmptyView         *EmptyState      `json:"emptyView,omitempty"`
-	Detail            *DetailPane      `json:"detail,omitempty"`
-	Pagination        *Pagination      `json:"pagination,omitempty"`
-	SearchAccessory   *SearchAccessory `json:"searchAccessory,omitempty"`
-	Refresh           *Refresh         `json:"refresh,omitempty"`
-	SelectedItemID    string           `json:"selectedItemId,omitempty"`
-	MaxVisibleItems   int              `json:"maxVisibleItems,omitempty"`
-	OnSelectionChange *ActionRef       `json:"onSelectionChange,omitempty"`
+	IsLoading         bool        `json:"isLoading,omitempty"`
+	EmptyView         *EmptyState `json:"emptyView,omitempty"`
+	Detail            *DetailPane `json:"detail,omitempty"`
+	Pagination        *Pagination `json:"pagination,omitempty"`
+	Filter            *ViewFilter `json:"filter,omitempty"`
+	Refresh           *Refresh    `json:"refresh,omitempty"`
+	SelectedItemID    string      `json:"selectedItemId,omitempty"`
+	MaxVisibleItems   int         `json:"maxVisibleItems,omitempty"`
+	OnSelectionChange *ActionRef  `json:"onSelectionChange,omitempty"`
 	// OnSearchChange runs for the trimmed search text after the user pauses typing. Its patch may replace the items, and
 	// its SearchResultIds are a second batch of those ids, shown after the local matches. Only list and grid views carry it.
 	OnSearchChange *ActionRef `json:"onSearchChange,omitempty"`
 	// Search answers every typed query with the rows of the search, in the order the handler gives them. The host does not
 	// filter or sort them, and shows the rows of the latest answer while the next one runs. The handler gets the trimmed
-	// text as Invocation.Value, and the value of SearchAccessory as Ref.Args under the accessory's id. It runs off the
+	// text as Invocation.Value, and the value of Filter as Ref.Args under the filter's id. It runs off the
 	// UI thread under the search budget, so it must answer quickly. Only list and grid views carry it.
 	Search *ActionRef `json:"search,omitempty"`
 	// Hint is the right footer text of a list or grid view, such as the keys it answers. Empty shows the host's default.

@@ -18,7 +18,7 @@ func (s *Session) footerName(*search.Item) string {
 // tabCyclesAccessory is the key handler of a list whose search accessory cycles on Tab, or nil when it does not. Tab
 // chooses the next option, wrapping after the last, and the choice runs OnChange as a picked option does.
 func (s *Session) tabCyclesAccessory(accessory *palette.Accessory) func(c *ui.Context, h search.Host) bool {
-	if accessory == nil || s.view.SearchAccessory == nil || !s.view.SearchAccessory.CycleOnTab {
+	if accessory == nil || s.view.Filter == nil || !s.view.Filter.CycleOnTab {
 		return nil
 	}
 	return func(c *ui.Context, h search.Host) bool {

@@ -30,21 +30,19 @@ func Footer(c *ui.Context, d FooterData) {
 	k := Tokens(c)
 	ui.Row(c).Absolute().Bottom(8).Left(8).Right(8).Gap(8).AlignItems(ui.Center).Children(func() {
 		if !d.HideName {
-			ui.Row(c).Padding(6, 10).Gap(6).AlignItems(ui.Center).Radius(16).
-				Background(k.Interactive).Border(1, k.EdgeSubtle).Children(func() {
+			footerPlate(ui.Row(c).Gap(6).AlignItems(ui.Center).Radius(16), k, 6, 10).Children(func() {
 				ui.Icon(c, Icon("zap")).FontSize(14).TextColor(k.Muted)
 				ui.Text(c, d.Name).FontSize(12).TextColor(k.Muted).SingleLine()
 			})
 		}
 		if d.Control != nil {
-			ui.Row(c).Padding(3, 4).Radius(16).Background(k.Interactive).Border(1, k.EdgeSubtle).Children(func() {
+			footerPlate(ui.Row(c).Radius(16), k, 3, 4).Children(func() {
 				d.Control(c)
 			})
 		}
 		ui.Box(c).Grow(1)
 		if d.Primary != nil || d.Secondary != nil || d.Hint != "" {
-			ui.Row(c).Padding(6, 10).Gap(12).AlignItems(ui.Center).Radius(16).
-				Background(k.Interactive).Border(1, k.EdgeSubtle).Children(func() {
+			footerPlate(ui.Row(c).Gap(12).AlignItems(ui.Center).Radius(16), k, 6, 10).Children(func() {
 				if d.Primary != nil {
 					if d.PrimaryAction != nil {
 						button := ui.ButtonBase(c)
@@ -65,6 +63,12 @@ func Footer(c *ui.Context, d FooterData) {
 			})
 		}
 	})
+}
+
+// footerPlate gives a footer bar the look of the palette's active row: the same lit plate and edge, so the bars read as
+// part of the list and not as a plain strip.
+func footerPlate(e ui.Element, k *TokenSet, vertical, horizontal float32) ui.Element {
+	return SelectedFill(PlatePadding(e, true, vertical, horizontal), k, false)
 }
 
 // keyHint draws an action's title with its key cap at the end of the footer.

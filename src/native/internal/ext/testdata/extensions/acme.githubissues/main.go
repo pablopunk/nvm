@@ -18,7 +18,7 @@ const (
 	defaultFilter   = "pablopunk"
 )
 
-var issueFilters = []api.SearchAccessoryOption{
+var issueFilters = []api.ViewFilterOption{
 	{Title: "My repos (pablopunk/*)", Value: "pablopunk"},
 	{Title: "Assigned to me", Value: "assigned"},
 	{Title: "Authored by me", Value: "authored"},
@@ -87,7 +87,7 @@ func issuesResult(ctx api.Context, filter string, navigation api.NavigationMode)
 	}
 	view := api.ListView("GitHub Issues")
 	view.Source = &api.DataSource{Loader: "issues:" + filter, CacheKey: "issues:v2:" + filter, TTLMs: 30000, StaleTTLMs: 1800000, Retry: true}
-	view.SearchAccessory = &api.SearchAccessory{Value: filter, Options: issueFilters, OnChange: &api.ActionRef{ID: filterActionID}}
+	view.Filter = &api.ViewFilter{Value: filter, Options: issueFilters, OnChange: &api.ActionRef{ID: filterActionID}}
 	view.EmptyView = &api.EmptyState{Title: "No open issues", Subtitle: "No results found for this filter."}
 	view.Placeholder = "Filter issues…"
 	return api.Result{View: &view, Navigation: navigation}, nil

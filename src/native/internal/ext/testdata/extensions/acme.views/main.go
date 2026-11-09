@@ -214,7 +214,7 @@ var searchResultsView = api.View{
 	EmptyView:      &api.EmptyState{Title: "No fruit found", Subtitle: "Try yellow."},
 }
 
-var accessoryOptions = []api.SearchAccessoryOption{
+var accessoryOptions = []api.ViewFilterOption{
 	{Title: "All", Value: "all"},
 	{Title: "Done", Value: "done"},
 }
@@ -236,7 +236,7 @@ var sourceView = api.View{
 	EmptyView:  &api.EmptyState{Title: "No notes yet", Subtitle: "Create one to see it here"},
 	Refresh:    &api.Refresh{Immediate: true, Ref: &api.ActionRef{ID: "tick"}},
 	Pagination: &api.Pagination{HasMore: true, Next: &api.ActionRef{ID: "more"}},
-	SearchAccessory: &api.SearchAccessory{
+	Filter: &api.ViewFilter{
 		Value: "all", Options: accessoryOptions, OnChange: &api.ActionRef{ID: "filter"},
 	},
 }

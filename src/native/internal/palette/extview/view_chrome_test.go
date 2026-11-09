@@ -17,8 +17,8 @@ import (
 // steps through.
 var searchFilesChrome = api.View{
 	Kind: api.ViewList, Title: "Search Files", Hint: "Tab kind", Status: "All files · 3 files indexed",
-	SearchAccessory: &api.SearchAccessory{
-		Options: []api.SearchAccessoryOption{{Title: "All files", Value: ""}, {Title: "Images", Value: "image"}, {Title: "Videos", Value: "video"}},
+	Filter: &api.ViewFilter{
+		Options: []api.ViewFilterOption{{Title: "All files", Value: ""}, {Title: "Images", Value: "image"}, {Title: "Videos", Value: "video"}},
 		Value:   "", CycleOnTab: true, OnChange: &api.ActionRef{ID: "kind"},
 	},
 }

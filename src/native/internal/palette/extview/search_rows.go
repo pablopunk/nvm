@@ -38,7 +38,7 @@ func (s *Session) searchRef() api.ActionRef {
 
 // withAccessoryArg is ref with the search accessory's value under its id in Args, when the view has an accessory.
 func (s *Session) withAccessoryArg(ref api.ActionRef) api.ActionRef {
-	if accessory := s.view.SearchAccessory; accessory != nil && s.accessory != nil && accessory.ID != "" {
+	if accessory := s.view.Filter; accessory != nil && s.accessory != nil && accessory.ID != "" {
 		args := make(map[string]string, len(ref.Args)+1)
 		for key, value := range ref.Args {
 			args[key] = value

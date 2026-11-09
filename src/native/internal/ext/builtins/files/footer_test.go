@@ -49,8 +49,8 @@ func TestSearchFilesViewTabsThroughKindsAndRefreshesItsFooter(t *testing.T) {
 	ctx := fakeContext{files: files}
 	ext := Extension{state: &viewState{}}
 	view := ext.searchFilesView(ctx)
-	if view.Hint != "Tab kind" || view.SearchAccessory == nil || !view.SearchAccessory.CycleOnTab {
-		t.Fatalf("view = hint %q, accessory %+v; want Tab kind and cycling kinds", view.Hint, view.SearchAccessory)
+	if view.Hint != "Tab kind" || view.Filter == nil || !view.Filter.CycleOnTab {
+		t.Fatalf("view = hint %q, accessory %+v; want Tab kind and cycling kinds", view.Hint, view.Filter)
 	}
 	if view.Refresh == nil || view.Refresh.IntervalMs != statusIntervalMs || view.Refresh.Ref.ID != refStatus {
 		t.Fatalf("refresh = %+v, want the status refresh every second", view.Refresh)

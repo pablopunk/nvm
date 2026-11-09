@@ -94,13 +94,8 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 			data.Placeholder = rootPlaceholders[p.phIndex%len(rootPlaceholders)]
 		}
 	}
-	data.AccessoryOptions, data.AccessorySelected = accessoryChoices(v)
 	events := design.SearchRow(c, data)
 	p.searchSpan = events.Selection
-	if v.Accessory != nil && events.AccessoryChoice >= 0 {
-		v.Accessory.Choose(events.AccessoryChoice)
-		p.search()
-	}
 	if events.Back {
 		p.Pop()
 	}
@@ -335,6 +330,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if v.FooterControlVisible == nil || v.FooterControlVisible() {
 		data.Control = v.FooterControl
 	}
+	if data.Control == nil && v.Accessory != nil && len(v.Accessory.Options) > 0 {
+		data.Control = p.filterControl(v.Accessory)
+	}
 	if it := p.actionableItem(); it != nil && len(it.Actions) > 0 {
 		if action, ok := it.DefaultAction(); ok {
 			data.Primary = &design.KeyHint{Title: action.Title, Key: KeyLabel("↵")}
@@ -369,13 +367,16 @@ func actionsKeyHint() *design.KeyHint {
 	return &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
 }
 
-// accessoryChoices are the picker's option titles and the index of its current option; no titles when the view has
-// no picker.
-func accessoryChoices(v *View) ([]string, int) {
-	if v.Accessory == nil {
-		return nil, 0
+// filterControl is the footer button of a view's filter: the current option, and a menu of the options to choose from.
+// A view has no control in its search field; the filter lives here, beside the footer's other buttons.
+func (p *Palette) filterControl(filter *Accessory) func(*ui.Context) {
+	return func(c *ui.Context) {
+		choice := design.Select(c, design.SelectData{Options: filter.Titles(), Selected: filter.SelectedIndex()})
+		if choice >= 0 {
+			filter.Choose(choice)
+			p.search()
+		}
 	}
-	return v.Accessory.Titles(), v.Accessory.SelectedIndex()
 }
 
 // emptyText is the empty state's title and subtitle of a view: its EmptyFn when it has one, its fixed texts otherwise.

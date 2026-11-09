@@ -10,12 +10,12 @@ type GridSpec struct {
 	Columns     int    `json:"columns,omitempty"`
 	Layout      string `json:"layout,omitempty"` // square, wide or compact
 	AspectRatio string `json:"aspectRatio,omitempty"`
-	// CategoryKeys makes Tab and Shift+Tab step the view's SearchAccessory: the next or previous option, wrapping, with
-	// its OnChange run as a pick of its menu would run it. The accessory stays drawn and shows the chosen option.
-	// Without a SearchAccessory with an OnChange, the keys do nothing.
+	// CategoryKeys makes Tab and Shift+Tab step the view's Filter: the next or previous option, wrapping, with
+	// its OnChange run as a pick of its menu would run it. The footer button shows the chosen option.
+	// Without a Filter with an OnChange, the keys do nothing.
 	CategoryKeys bool `json:"categoryKeys,omitempty"`
 	// SelectionFooter shows the selected item's title and subtitle in the footer. The view's subtitle is not repeated
-	// there: a SearchAccessory already names the category.
+	// there: a Filter already names the category.
 	SelectionFooter bool `json:"selectionFooter,omitempty"`
 }
 

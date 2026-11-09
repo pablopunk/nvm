@@ -30,21 +30,23 @@ type Pagination struct {
 	Next     *ActionRef `json:"next,omitempty"`
 }
 
-// SearchAccessory is a small filter control at the end of the search bar, such as a category
-// picker. The host shows it as a native popup menu of Options, with a check mark on Value, as a
-// native select does; a chosen option becomes Value and arrives as Invocation.Value through OnChange.
-type SearchAccessory struct {
-	ID       string                  `json:"id,omitempty"`
-	Tooltip  string                  `json:"tooltip,omitempty"`
-	Value    string                  `json:"value,omitempty"`
-	Options  []SearchAccessoryOption `json:"options"`
-	OnChange *ActionRef              `json:"onChange,omitempty"`
+// ViewFilter narrows a view's rows by one choice, such as a category or a kind of file. The host shows it as a button in
+// the footer bar, where the current option is named and a press opens a menu of Options with a check mark on Value, and
+// in the action menu as Next and Previous actions on Command+] and Command+[. A view has no control in its search field:
+// nothing an extension declares can place one there. A chosen option becomes Value and arrives as Invocation.Value
+// through OnChange.
+type ViewFilter struct {
+	ID       string             `json:"id,omitempty"`
+	Tooltip  string             `json:"tooltip,omitempty"`
+	Value    string             `json:"value,omitempty"`
+	Options  []ViewFilterOption `json:"options"`
+	OnChange *ActionRef         `json:"onChange,omitempty"`
 	// CycleOnTab makes Tab choose the next option, wrapping, and run OnChange.
 	CycleOnTab bool `json:"cycleOnTab,omitempty"`
 }
 
-// SearchAccessoryOption is one value of a SearchAccessory.
-type SearchAccessoryOption struct {
+// ViewFilterOption is one value of a ViewFilter.
+type ViewFilterOption struct {
 	Title string `json:"title"`
 	Value string `json:"value"`
 }

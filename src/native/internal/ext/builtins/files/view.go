@@ -7,7 +7,7 @@ import (
 )
 
 // The Search Files view's kinds, offered by its search accessory. "All files" is the empty kind.
-var searchKinds = []api.SearchAccessoryOption{
+var searchKinds = []api.ViewFilterOption{
 	{Title: "All files", Value: ""},
 	{Title: "Images", Value: "image"},
 	{Title: "Videos", Value: "video"},
@@ -46,7 +46,7 @@ func (e Extension) searchFilesView(ctx api.Context) api.View {
 	view.EmptyView = indexEmptyState(ctx)
 	view.Refresh = &api.Refresh{IntervalMs: statusIntervalMs, Ref: &api.ActionRef{ID: refStatus}}
 	view.OnSearchChange = &api.ActionRef{ID: refSearch}
-	view.SearchAccessory = &api.SearchAccessory{ID: "kind", Tooltip: "Kind", Value: "", Options: searchKinds, OnChange: &api.ActionRef{ID: refKind}, CycleOnTab: true}
+	view.Filter = &api.ViewFilter{ID: "kind", Tooltip: "Kind", Value: "", Options: searchKinds, OnChange: &api.ActionRef{ID: refKind}, CycleOnTab: true}
 	return view
 }
 

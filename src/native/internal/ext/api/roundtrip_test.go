@@ -31,7 +31,7 @@ func wireSamples() []namedSample {
 	list.Sections = []ItemSection{{Title: "Cities", Items: []Item{{ID: "london", Title: "London"}}}}
 	list.Refresh = &Refresh{IntervalMs: 60000, Mode: PatchMerge, Immediate: true, Ref: &ActionRef{ID: "tick"}}
 	list.Pagination = &Pagination{HasMore: true, PageSize: 50, Next: &ActionRef{ID: "more"}}
-	list.SearchAccessory = &SearchAccessory{ID: "zone", Options: []SearchAccessoryOption{{Title: "All", Value: "all"}}}
+	list.Filter = &ViewFilter{ID: "zone", Options: []ViewFilterOption{{Title: "All", Value: "all"}}}
 	list.Detail = &DetailPane{Placement: "side", Visible: boolPtr(true)}
 	list.ActionPanel = Panel(Section("Clock", Run("settings", "Settings", nil)))
 

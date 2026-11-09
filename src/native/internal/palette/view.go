@@ -81,7 +81,8 @@ type View struct {
 	// host has started. It is read on every frame: while it holds, the palette shows a loading placeholder after the
 	// rows, which never takes the choice.
 	Pending func() bool
-	// Accessory is a small choice at the end of the search field, such as a category. Its change is passed to OnChange.
+	// Accessory is the view's filter, such as a category: a button in the footer that names the current option and opens
+	// a menu of the options. The search field has no control of its own. Its change is passed to OnChange.
 	Accessory *Accessory
 	// SelectID names the row to choose once the view's rows first show, such as an item the extension selected.
 	SelectID string
@@ -130,7 +131,8 @@ type Grid struct {
 	Cell             func(c *ui.Context, it search.Item)
 }
 
-// Accessory is a search field's option picker: a native popup menu of the options, with a check mark on the current one.
+// Accessory is a view's filter: a footer button that opens a native popup menu of the options, with a check mark on the
+// current one.
 // Choosing an option makes it the value and reports it to OnChange.
 type Accessory struct {
 	Value    string

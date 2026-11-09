@@ -15,7 +15,7 @@ func (s *Session) Replace(view api.View) {
 // place, and the page shows the new content on its next frame without a navigation step.
 func (s *Session) replaceInPlace(view api.View) {
 	s.Replace(view)
-	if view.SearchAccessory != nil && s.accessory != nil {
-		s.accessory.Value = view.SearchAccessory.Value
+	if view.Filter != nil && s.accessory != nil {
+		s.accessory.Value = view.Filter.Value
 	}
 }

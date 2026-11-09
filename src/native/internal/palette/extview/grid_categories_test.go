@@ -14,9 +14,9 @@ func categoryGrid(changes *[]string) *Session {
 	view := api.View{
 		Kind: api.ViewGrid, Title: "Symbols",
 		Grid: &api.GridSpec{CategoryKeys: true},
-		SearchAccessory: &api.SearchAccessory{
+		Filter: &api.ViewFilter{
 			ID: "category", Value: "all",
-			Options:  []api.SearchAccessoryOption{{Title: "All", Value: "all"}, {Title: "Music", Value: "music"}, {Title: "Arrows", Value: "arrows"}},
+			Options:  []api.ViewFilterOption{{Title: "All", Value: "all"}, {Title: "Music", Value: "music"}, {Title: "Arrows", Value: "arrows"}},
 			OnChange: &api.ActionRef{ID: "category"},
 		},
 	}

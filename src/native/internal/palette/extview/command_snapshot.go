@@ -341,7 +341,7 @@ func (c *CommandSnapshots) Put(identity any, ref api.ActionRef, view api.View, i
 	if !ok {
 		return
 	}
-	if view.Kind != api.ViewGrid || view.Refresh == nil || view.Refresh.Ref == nil || !view.Refresh.Immediate || len(items) == 0 || len(items) > 200 || len(view.Sections) != 0 || view.Source != nil || view.Pagination != nil || view.SearchAccessory != nil || view.OnSelectionChange != nil || view.OnSearchChange != nil || view.Search != nil || len(view.Actions) != 0 || view.ActionPanel != nil || len(view.FooterHints) != 0 {
+	if view.Kind != api.ViewGrid || view.Refresh == nil || view.Refresh.Ref == nil || !view.Refresh.Immediate || len(items) == 0 || len(items) > 200 || len(view.Sections) != 0 || view.Source != nil || view.Pagination != nil || view.Filter != nil || view.OnSelectionChange != nil || view.OnSearchChange != nil || view.Search != nil || len(view.Actions) != 0 || view.ActionPanel != nil || len(view.FooterHints) != 0 {
 		c.remove(key)
 		return
 	}

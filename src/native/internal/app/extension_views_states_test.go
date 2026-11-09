@@ -64,7 +64,7 @@ func TestSourceLoadsRefreshesInPlaceAndPaginates(t *testing.T) {
 	}
 }
 
-func TestSearchAccessoryReplacesTheRowsThroughTheExtension(t *testing.T) {
+func TestViewFilterReplacesTheRowsThroughTheExtension(t *testing.T) {
 	m := viewManager(t)
 	p := goldenPalette(t)
 	_, page, _ := openFixtureView(t, p, m, "source", syncViewDeps(m))

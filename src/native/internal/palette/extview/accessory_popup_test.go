@@ -16,17 +16,17 @@ import (
 var notesWithFilter = api.View{
 	Kind: api.ViewList, Title: "Notes",
 	Items: []api.Item{{ID: "n1", Title: "Draft plan"}, {ID: "n2", Title: "Release plan", Subtitle: "Done"}},
-	SearchAccessory: &api.SearchAccessory{
+	Filter: &api.ViewFilter{
 		Value:    "all",
-		Options:  []api.SearchAccessoryOption{{Title: "All", Value: "all"}, {Title: "Done", Value: "done"}},
+		Options:  []api.ViewFilterOption{{Title: "All", Value: "all"}, {Title: "Done", Value: "done"}},
 		OnChange: &api.ActionRef{ID: "filter"},
 	},
 }
 
-// TestSearchAccessoryOpensANativeMenuAndChoosesItsOption shows an extension's search accessory in a real palette. A
+// TestViewFilterOpensANativeMenuAndChoosesItsOption shows an extension's search accessory in a real palette. A
 // press opens the native menu of its options, the current one checked, and choosing one makes it the value and runs
 // the extension's handler.
-func TestSearchAccessoryOpensANativeMenuAndChoosesItsOption(t *testing.T) {
+func TestViewFilterOpensANativeMenuAndChoosesItsOption(t *testing.T) {
 	log := &invokeLog{results: map[string]api.Result{"filter": {}}}
 	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
 	page := session.listPage()
@@ -55,9 +55,9 @@ func TestSearchAccessoryOpensANativeMenuAndChoosesItsOption(t *testing.T) {
 	}
 }
 
-// TestSearchAccessoryClosedWithoutAChoiceChangesNothing checks Escape or a click elsewhere leaves the value and the
+// TestViewFilterClosedWithoutAChoiceChangesNothing checks Escape or a click elsewhere leaves the value and the
 // handler alone.
-func TestSearchAccessoryClosedWithoutAChoiceChangesNothing(t *testing.T) {
+func TestViewFilterClosedWithoutAChoiceChangesNothing(t *testing.T) {
 	log := &invokeLog{results: map[string]api.Result{"filter": {}}}
 	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
 	page := session.listPage()
@@ -83,7 +83,7 @@ func TestSearchAccessoryClosedWithoutAChoiceChangesNothing(t *testing.T) {
 // a replacing view changes the open page's rows.
 func TestAccessoryStepsFromTheKeyboardAndAnswersInPlace(t *testing.T) {
 	replacement := api.View{Kind: api.ViewList, Title: "Notes", Items: []api.Item{{ID: "n2", Title: "Release plan"}},
-		SearchAccessory: &api.SearchAccessory{Value: "done", Options: notesWithFilter.SearchAccessory.Options, OnChange: &api.ActionRef{ID: "filter"}}}
+		Filter: &api.ViewFilter{Value: "done", Options: notesWithFilter.Filter.Options, OnChange: &api.ActionRef{ID: "filter"}}}
 	log := &invokeLog{results: map[string]api.Result{"filter": {View: &replacement, Navigation: api.NavReplace}}}
 	session := NewSession(log.deps(fake.NewFS()), "acme.views", notesWithFilter)
 	page := session.listPage()

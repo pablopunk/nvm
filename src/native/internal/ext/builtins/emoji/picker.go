@@ -28,7 +28,7 @@ func (e *Extension) pickerView(ctx api.Context) api.View {
 		MaxVisibleItems: RowLimit,
 		Search:          &api.ActionRef{ID: rowsAction},
 		OnSearchChange:  &api.ActionRef{ID: meaningAction},
-		SearchAccessory: &api.SearchAccessory{
+		Filter: &api.ViewFilter{
 			ID: categoryArgName, Tooltip: "Character category", Value: emoji.AllCategory, Options: categoryOptions(),
 			OnChange: &api.ActionRef{ID: categoryAction},
 		},
@@ -36,12 +36,12 @@ func (e *Extension) pickerView(ctx api.Context) api.View {
 }
 
 // categoryOptions lists All Characters, then the catalog's groups, in catalog order.
-func categoryOptions() []api.SearchAccessoryOption {
+func categoryOptions() []api.ViewFilterOption {
 	names := categoryNames()
-	options := make([]api.SearchAccessoryOption, 0, len(names)+1)
-	options = append(options, api.SearchAccessoryOption{Title: allCharacters, Value: emoji.AllCategory})
+	options := make([]api.ViewFilterOption, 0, len(names)+1)
+	options = append(options, api.ViewFilterOption{Title: allCharacters, Value: emoji.AllCategory})
 	for _, name := range names {
-		options = append(options, api.SearchAccessoryOption{Title: name, Value: name})
+		options = append(options, api.ViewFilterOption{Title: name, Value: name})
 	}
 	return options
 }

@@ -86,7 +86,7 @@ func browseView(ctx api.Context, state browseState) (api.View, error) {
 	view.Subtitle = fmt.Sprintf("Wallhaven · %s · Landscape · 1080p+ · Page %d/%d", sourceLabel(state), state.page, lastPage)
 	view.Placeholder = "Filter this page… · Use Search Online Wallpapers for a new search"
 	view.EmptyView = &api.EmptyState{Title: "No matching wallpapers", Subtitle: "Try another category or use Search Online Wallpapers."}
-	view.SearchAccessory = collectionAccessory(state)
+	view.Filter = collectionAccessory(state)
 	view.Actions = common
 	return view, nil
 }
@@ -110,17 +110,17 @@ func sourceLabel(state browseState) string {
 	return ""
 }
 
-func collectionAccessory(state browseState) *api.SearchAccessory {
+func collectionAccessory(state browseState) *api.ViewFilter {
 	value := state.feed
-	var options []api.SearchAccessoryOption
+	var options []api.ViewFilterOption
 	if state.query != "" {
 		value = "search"
-		options = append(options, api.SearchAccessoryOption{Title: "Search results", Value: "search"})
+		options = append(options, api.ViewFilterOption{Title: "Search results", Value: "search"})
 	}
 	for _, candidate := range feeds {
-		options = append(options, api.SearchAccessoryOption{Title: candidate.title, Value: candidate.value})
+		options = append(options, api.ViewFilterOption{Title: candidate.title, Value: candidate.value})
 	}
-	return &api.SearchAccessory{Value: value, Options: options, OnChange: &api.ActionRef{ID: actionChangeFeed}}
+	return &api.ViewFilter{Value: value, Options: options, OnChange: &api.ActionRef{ID: actionChangeFeed}}
 }
 
 func browseActions(state browseState, lastPage int) []api.Action {

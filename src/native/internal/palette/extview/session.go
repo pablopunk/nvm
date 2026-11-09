@@ -232,7 +232,7 @@ func (s *Session) gridPage() *palette.View {
 
 // searchAccessory is the picker at the end of the search field, when the view names options and a handler.
 func (s *Session) searchAccessory() *palette.Accessory {
-	spec := s.view.SearchAccessory
+	spec := s.view.Filter
 	if spec == nil || spec.OnChange == nil || len(spec.Options) == 0 {
 		return nil
 	}

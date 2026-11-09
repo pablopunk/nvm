@@ -11,7 +11,7 @@ import (
 // Previous step its options with Command+] and Command+[, and the action menu lists them. Every view that declares an
 // accessory gets them from the host, so no extension has to remember to make its picker reachable from the keyboard.
 func (s *Session) accessoryActions() []search.Action {
-	spec := s.view.SearchAccessory
+	spec := s.view.Filter
 	if s.accessory == nil || spec == nil || spec.OnChange == nil || len(spec.Options) < 2 {
 		return nil
 	}

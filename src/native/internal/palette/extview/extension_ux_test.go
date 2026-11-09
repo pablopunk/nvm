@@ -67,10 +67,10 @@ func TestPreviewShowsItsImageAndText(t *testing.T) {
 // TestCollectionFilterChangesTheRowsOfTheOpenGrid is the Online Wallpapers filter: choosing another collection in the
 // accessory menu replaces the grid's rows in place, from the keyboard as well as the pointer.
 func TestCollectionFilterChangesTheRowsOfTheOpenGrid(t *testing.T) {
-	feeds := []api.SearchAccessoryOption{{Title: "Top this month", Value: "top"}, {Title: "Minimal", Value: "minimal"}}
+	feeds := []api.ViewFilterOption{{Title: "Top this month", Value: "top"}, {Title: "Minimal", Value: "minimal"}}
 	view := func(value string, title string) api.View {
 		return api.View{Kind: api.ViewList, Title: "Wallpapers", Items: []api.Item{{ID: value, Title: title}},
-			SearchAccessory: &api.SearchAccessory{Value: value, Options: feeds, OnChange: &api.ActionRef{ID: "change-collection"}}}
+			Filter: &api.ViewFilter{Value: value, Options: feeds, OnChange: &api.ActionRef{ID: "change-collection"}}}
 	}
 	minimal := view("minimal", "Quiet Dunes")
 	log := &invokeLog{results: map[string]api.Result{"change-collection": {View: &minimal, Navigation: api.NavReplace}}}

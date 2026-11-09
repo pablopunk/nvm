@@ -19,10 +19,6 @@ type SearchData struct {
 	Placeholder string
 	Query       *string
 	Input       *ui.Handle
-	// AccessoryOptions are the titles of the picker at the end of the field, in order; none draws no picker.
-	AccessoryOptions []string
-	// AccessorySelected is the index of the picker's current option.
-	AccessorySelected int
 	// AIHint shows the "Tab to ask AI" chip beside the input.
 	AIHint bool
 	// Concealed masks the text while a secret is typed; the query still holds the real text.
@@ -37,8 +33,6 @@ type SearchData struct {
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
 type SearchEvents struct {
 	Back, Changed, Submitted bool
-	// AccessoryChoice is the index of the option chosen in the picker this frame, or -1 when none was.
-	AccessoryChoice int
 	// Selection is the start and end, in characters, of the input's selection as this frame built it; start <= end.
 	Selection [2]int
 }
@@ -46,7 +40,7 @@ type SearchEvents struct {
 // SearchRow draws the search field and reports its events. It draws no state of its own: the query and the
 // focus live with the caller.
 func SearchRow(c *ui.Context, d SearchData) SearchEvents {
-	events := SearchEvents{AccessoryChoice: -1}
+	var events SearchEvents
 	ui.Row(c).Padding(14, 18).Gap(12).AlignItems(ui.Center).Children(func() {
 		k := Tokens(c)
 		bolt := ui.Icon(c, Icon("zap")).FontSize(21).TextColor(k.Accent)
@@ -74,9 +68,6 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 		events.Selection = [2]int{min(anchor, caret), max(anchor, caret)}
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
-		if len(d.AccessoryOptions) > 0 {
-			events.AccessoryChoice = Select(c, SelectData{Options: d.AccessoryOptions, Selected: d.AccessorySelected})
-		}
 		if d.AIHint {
 			Chip(c, ChipData{Icon: "sparkles", Bold: "Tab", Text: "to ask AI"})
 		}
