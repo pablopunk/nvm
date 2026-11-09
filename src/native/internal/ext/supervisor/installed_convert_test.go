@@ -16,7 +16,7 @@ type finderSelection struct{ files []string }
 
 func (finderSelection) Text() (string, bool, error) { return "", false, nil }
 func (finderSelection) Replace(string) (bool, error) { return false, nil }
-func (finderSelection) Undo() error                       { return nil }
+func (finderSelection) Undo() error { return nil }
 func (s finderSelection) Files(context.Context) ([]string, error) { return s.files, nil }
 
 func convertRuntime(t *testing.T, files []string) *Runtime {
