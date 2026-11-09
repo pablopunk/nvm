@@ -22,6 +22,9 @@ type ShellResult struct {
 type Shell interface {
 	OpenExternal(url string) error
 	// Exec resolves bare program names against the merged user-login PATH and Options.Env, including desktop launches.
+	// Exec, Script, AppleScript and Which share a budget of budget.ShellRunsPerMinute runs per minute for the extension.
+	// To check many items, run one Script that loops over them rather than one Exec per item: a run over the budget
+	// fails with a quota error.
 	Exec(command string, args []string, options ShellOptions) (ShellResult, error)
 	Script(script string, options ShellOptions) (ShellResult, error)
 	AppleScript(script string, options ShellOptions) (ShellResult, error)

@@ -150,3 +150,22 @@ func TestProcessOperationsAreRateLimited(t *testing.T) {
 	}
 	requireCode(t, serve(t, h, protocol.ServiceDesktopShell, protocol.OpExec, protocol.ShellExecArgs{Command: "tool"}), api.CodeQuota, "rate limited")
 }
+
+// TestProcessBudgetCoversAScanOfManyApps is Remove App Quarantine on a Mac with a few hundred apps: one xattr run per
+// app must fit in the budget the API states, and the refusal past it says what to do instead.
+func TestProcessBudgetCoversAScanOfManyApps(t *testing.T) {
+	commands, h := processHost(t, "darwin", api.CapabilitySystem)
+	const apps = 300
+	commands.Script("/usr/bin/xattr", make([]fake.HelperScript, apps)...)
+	for i := 0; i < apps; i++ {
+		mustOK(t, serve(t, h, protocol.ServiceDesktopShell, protocol.OpExec, protocol.ShellExecArgs{Command: "/usr/bin/xattr"}))
+	}
+	if processRunsPerMinute <= apps {
+		t.Fatalf("budget = %d runs per minute, want more than the %d runs of the scan", processRunsPerMinute, apps)
+	}
+	commands.Script("tool", make([]fake.HelperScript, processRunsPerMinute)...)
+	for i := 0; i < processRunsPerMinute-apps; i++ {
+		mustOK(t, serve(t, h, protocol.ServiceDesktopShell, protocol.OpExec, protocol.ShellExecArgs{Command: "tool"}))
+	}
+	requireCode(t, serve(t, h, protocol.ServiceDesktopShell, protocol.OpExec, protocol.ShellExecArgs{Command: "tool"}), api.CodeQuota, "run one script that handles many items")
+}

@@ -41,7 +41,7 @@ func (h *Handler) runProcess(ctx context.Context, call protocol.ServiceCall) (an
 		return nil, unavailable("processes are not available in this build")
 	}
 	if !h.processes.allow() {
-		return nil, rateExceeded("process runs")
+		return nil, processBudgetExceeded()
 	}
 	switch call.Op {
 	case protocol.OpExec:
