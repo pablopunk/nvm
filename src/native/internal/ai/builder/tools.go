@@ -16,6 +16,7 @@ const apiPageBytes = 12 << 10
 // Tool names the model calls. They name what a tool does, as the builder's instructions refer to them.
 const (
 	readAPIToolName = "read_extension_api"
+	read1xMappingToolName = "read_1x_mapping"
 	writeToolName   = "write_extension"
 )
 
@@ -54,6 +55,23 @@ func readAPITool() agent.Tool {
 				return agent.Result{}, err
 			}
 			return apiPage(apiReference, in.Offset)
+		},
+	}
+}
+
+// read1xMappingTool reads the table of what each 1.x API name became, for converting older extensions.
+func read1xMappingTool() agent.Tool {
+	return agent.Tool{
+		Name:        read1xMappingToolName,
+		Description: "Read one page of the table of 1.x extension API names and their Go replacements. Use it when converting a 1.x extension.",
+		Label:       "Reading the 1.x mapping",
+		Schema:      readSchema,
+		Run: func(_ context.Context, args json.RawMessage) (agent.Result, error) {
+			var in readArgs
+			if err := json.Unmarshal(args, &in); err != nil {
+				return agent.Result{}, err
+			}
+			return apiPage(migration1x, in.Offset)
 		},
 	}
 }

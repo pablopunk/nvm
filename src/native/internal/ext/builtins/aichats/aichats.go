@@ -56,13 +56,13 @@ func New() Extension {
 func (Extension) Manifest() api.Manifest {
 	return api.Manifest{
 		APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "AI Builder"},
-		Capabilities: []api.Capability{api.CapabilityAI, api.CapabilityExtensionsOwnership},
+		Capabilities: []api.Capability{api.CapabilityAI, api.CapabilityExtensionsOwnership, api.CapabilityDesktopFiles},
 	}
 }
 
 // Commands lists the AI Chats command and the hidden cleanup job that runs at startup and hourly.
 func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
-	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand()}, nil
+	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand(), convertCommand()}, nil
 }
 
 // RootItems lists the four most recent conversations and builder chats as Continue rows.
@@ -92,6 +92,14 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 	case cleanupCommandID:
 		_, err := ctx.AIBuilder().CleanupExpiredConversations()
 		return api.Result{}, err
+	case commandConvert:
+		view, err := convertView(ctx)
+		if err != nil {
+			return api.Result{}, err
+		}
+		return ctx.Navigation().Push(view), nil
+	case opConvert:
+		return startConversion(ctx, in.Ref.Args[argPath])
 	case opNewSubmit:
 		return newChatSubmit(ctx, in), nil
 	case opOpenChat, opOpenBuilder:

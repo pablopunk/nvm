@@ -241,6 +241,18 @@ function targetExists(target, index) {
   return !member || [...index.types.get(type).values()].includes(member);
 }
 
+// migrationText is what the builder reads to convert a 1.x extension: every 1.x name that is not the same in Go.
+function migrationText(rows) {
+  const lines = ['# 1.x extension API names and their Go replacements', '', 'Names not listed keep their name in Go.', ''];
+  for (const row of rows) {
+    if (row.status === 'same' || row.status === 'open') continue;
+    const name = row.member.replace(/^Extension(?=[A-Z])/, '').replace(/^Context\./, 'ctx.');
+    const target = row.status === 'dropped' ? 'gone' : row.target;
+    lines.push(`- ${name} -> ${target}${row.note ? ` (${row.note})` : ''}`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
 function readJSON(file, fallback) {
   return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : fallback;
 }
@@ -251,6 +263,7 @@ function main() {
   const index = indexGoApi();
   const rows = members.map((member) => buildRow(member, index, decisions));
   fs.writeFileSync(path.join(parity, 'api-ledger.json'), `${JSON.stringify(rows, null, 1)}\n`);
+  fs.writeFileSync(path.join(native, 'internal/ai/builder/migration_1x.txt'), migrationText(rows));
   for (const row of rows) {
     if (row.status !== 'open' && row.status !== 'dropped' && !targetExists(row.target, index)) console.log(`bad target: ${row.member} -> ${row.target}`);
   }
