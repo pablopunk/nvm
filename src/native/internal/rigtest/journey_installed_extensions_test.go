@@ -121,3 +121,45 @@ func TestJourneyInstalledExtensionsShowTheirOwnStatesWhereMacToolsAreMissing(t *
 		hidePalette(t, app)
 	}
 }
+
+// TestJourneyInstalledSnippetsAddASnippetAndSeeItsActions walks the converted Snippets extension the way a user adds a
+// first snippet: open the empty list, open the action menu, choose Add Snippet, type the text, save with the editor's
+// shortcut, and find the new row with its copy, view, edit, paste and delete actions.
+func TestJourneyInstalledSnippetsAddASnippetAndSeeItsActions(t *testing.T) {
+	home := t.TempDir()
+	seedInstalledExtension(t, home, "local.text-snippets")
+	app := Launch(t, Options{Home: home, Run: "snippets-add"})
+
+	openExtensionsView(t, app)
+	enableThroughReview(t, app, "snippets", "Snippets")
+	hidePalette(t, app)
+
+	must(t, app.SummonPalette())
+	must(t, app.Type("Snippets"))
+	waitForRowPrefix(t, app, "Snippets", elementWait)
+	must(t, app.Key("Return"))
+	_, err := app.WaitFor("No snippets yet", elementWait)
+	must(t, err)
+
+	must(t, app.Key("ctrl+k"))
+	_, err = app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	waitForRow(t, app, "Add Snippet", elementWait)
+	shoot(t, app, "installed-snippets-add-menu")
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Write the text you want to save…", elementWait)
+	must(t, err)
+	must(t, app.Type("Hello from the rig"))
+	shoot(t, app, "installed-snippets-editor")
+	must(t, app.Key("ctrl+Return"))
+	waitForRow(t, app, "Hello from the rig", elementWait)
+	shoot(t, app, "installed-snippets-saved")
+
+	must(t, app.Key("ctrl+k"))
+	_, err = app.WaitFor("Search actions", elementWait)
+	must(t, err)
+	for _, action := range []string{"View Snippet", "Edit Snippet", "Paste Snippet", "Delete Snippet"} {
+		waitForRow(t, app, action, elementWait)
+	}
+	shoot(t, app, "installed-snippets-row-actions")
+}
