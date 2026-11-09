@@ -10,6 +10,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
@@ -92,7 +93,12 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		},
 		LoadImage: func(ctx context.Context, ref string, done func(*ui.Bitmap)) {
 			go func() {
-				bitmap := loadExtensionBitmapContext(ctx, ports.FS, ref, ports.PublicHTTP)
+				var bitmap *ui.Bitmap
+				if p.files != nil && thumbs.IsGridReference(ref) {
+					bitmap = p.files.gridPicture(ctx, localImagePath(ref))
+				} else {
+					bitmap = loadExtensionBitmapContext(ctx, ports.FS, ref, ports.PublicHTTP)
+				}
 				p.onUI(func() { done(bitmap) })
 			}()
 		},

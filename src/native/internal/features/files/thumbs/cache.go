@@ -16,7 +16,7 @@ import (
 )
 
 // CacheBytes bounds the thumbnails kept on disk. Past it the least recently used files are removed.
-const CacheBytes = 200 << 20
+const CacheBytes = 600 << 20
 
 // Cache keeps thumbnails under one folder of the app's cache directory, one PNG file per source file version. The key
 // is a hash of the path, the modification time and the size, so an edited picture gets a new thumbnail and the old one
@@ -95,11 +95,20 @@ func (c *Cache) load() error {
 // Thumbnail returns the PNG thumbnail of the image at path, from disk when it is there and rendered otherwise. mtimeMs and
 // size identify the version of the file the thumbnail is for.
 func (c *Cache) Thumbnail(path string, mtimeMs, size int64) ([]byte, error) {
+	return c.Rendered(path, mtimeMs, size, Edge)
+}
+
+// Rendered returns the PNG of the image at path scaled to edge, from disk when it is there and rendered otherwise, so a
+// picture is only ever scaled once per version of the file.
+func (c *Cache) Rendered(path string, mtimeMs, size int64, edge int) ([]byte, error) {
 	key := keyFor(path, mtimeMs, size)
+	if edge != Edge {
+		key = keyFor(path+"\x00"+strconv.Itoa(edge), mtimeMs, size)
+	}
 	if data, ok := c.read(key); ok {
 		return data, nil
 	}
-	data, err := Render(c.fsys, path, Edge)
+	data, err := Render(c.fsys, path, edge)
 	if err != nil {
 		return nil, err
 	}

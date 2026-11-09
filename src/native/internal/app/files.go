@@ -46,24 +46,25 @@ type fileDeps struct {
 // draw, and the desktop actions on a file. The index is served from memory and read without locks; everything that
 // costs I/O or decoding runs on the caches' worker pools, so a view never waits for it.
 type fileService struct {
-	ix         *files.Index
-	fsys       platform.FS
-	shell      platform.Shell
-	clock      platform.Clock
-	clipboard  platform.Clipboard
-	copyFiles  func(paths ...string) error
-	home       string
-	labels     platform.ShellLabels
-	quickLook  bool
-	thumbDir   string
-	thumbOnce  sync.Once
-	thumbCache *thumbs.Cache
-	thumbErr   error
-	icons      *asyncCache[*ui.Bitmap]
-	thumbs     *asyncCache[*ui.Bitmap]
-	redraw     func()
-	ctx        context.Context
-	log        *logx.Logger
+	ix           *files.Index
+	fsys         platform.FS
+	shell        platform.Shell
+	clock        platform.Clock
+	clipboard    platform.Clipboard
+	copyFiles    func(paths ...string) error
+	home         string
+	labels       platform.ShellLabels
+	quickLook    bool
+	thumbDir     string
+	thumbOnce    sync.Once
+	thumbCache   *thumbs.Cache
+	thumbErr     error
+	icons        *asyncCache[*ui.Bitmap]
+	thumbs       *asyncCache[*ui.Bitmap]
+	gridPictures *asyncCache[*ui.Bitmap]
+	redraw       func()
+	ctx          context.Context
+	log          *logx.Logger
 }
 
 // newFileService builds the service without starting anything. Start begins the index and the progress ticker.
@@ -94,21 +95,22 @@ func newFileService(d fileDeps) (*fileService, error) {
 		return nil, err
 	}
 	return &fileService{
-		ix:        ix,
-		fsys:      d.Ports.FS,
-		shell:     d.Ports.Shell,
-		clock:     d.Ports.Clock,
-		clipboard: d.Clipboard,
-		copyFiles: d.CopyFiles,
-		home:      d.Home,
-		labels:    d.Labels,
-		quickLook: d.Ports.Capabilities.Supported(platform.CapabilityShellQuickLook),
-		thumbDir:  d.ThumbDir,
-		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
-		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
-		redraw:    redraw,
-		ctx:       ctx,
-		log:       logger,
+		ix:           ix,
+		fsys:         d.Ports.FS,
+		shell:        d.Ports.Shell,
+		clock:        d.Ports.Clock,
+		clipboard:    d.Clipboard,
+		copyFiles:    d.CopyFiles,
+		home:         d.Home,
+		labels:       d.Labels,
+		quickLook:    d.Ports.Capabilities.Supported(platform.CapabilityShellQuickLook),
+		thumbDir:     d.ThumbDir,
+		icons:        newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
+		thumbs:       newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
+		gridPictures: newAsyncCache[*ui.Bitmap](ctx, 0, 1, gridPictureEntries, nil),
+		redraw:       redraw,
+		ctx:          ctx,
+		log:          logger,
 	}, nil
 }
 
