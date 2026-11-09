@@ -7,7 +7,7 @@ type Desktop interface {
 	Selection() Selection
 	Apps() Apps
 	Menus() Menus
-	// WindowManagement returns nil on hosts without window management. Check
+	// WindowManagement always returns a typed service; unsupported calls return an error. Check
 	// System().HasCapability("window-management") before calling it.
 	WindowManagement() WindowManagement
 	Files() Files

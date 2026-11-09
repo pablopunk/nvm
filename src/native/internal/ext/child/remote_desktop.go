@@ -6,11 +6,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// remoteDesktop is the desktop surface the host serves. The sub-surfaces the host does not serve yet (keyboard,
-// selection, and the rest of the window API) are the embedded nil interfaces: calling one reports an internal failure
-// with a reference, as every unwired service does.
+// remoteDesktop returns typed service proxies. Unsupported operations return structured host failures.
 type remoteDesktop struct {
-	api.Desktop
 	link  *hostLink
 	clock platform.Clock
 }
@@ -49,7 +46,6 @@ func (d remoteDesktop) WindowManagement() api.WindowManagement {
 
 // remoteSystemClipboard reads and writes the system clipboard. Each method is one host call; see remote_clipboard.go for the formats.
 type remoteSystemClipboard struct {
-	api.SystemClipboard
 	link *hostLink
 }
 
@@ -75,7 +71,6 @@ func (c remoteSystemClipboard) WriteImage(dataURL string, concealed bool) error 
 
 // remoteApps lists, searches, launches and reads icons of the apps the host indexed.
 type remoteApps struct {
-	api.Apps
 	link *hostLink
 }
 

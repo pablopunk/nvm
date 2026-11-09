@@ -18,7 +18,6 @@ const (
 // remoteWindowManagement lists displays and windows, places and focuses them, and waits for a window to appear. Each
 // call is one exchange with the host's window engine, except the wait, which polls the listing.
 type remoteWindowManagement struct {
-	api.WindowManagement
 	link  *hostLink
 	clock platform.Clock
 }

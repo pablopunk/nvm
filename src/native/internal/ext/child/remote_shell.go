@@ -8,7 +8,6 @@ import (
 // remoteShell opens web links and runs programs and scripts on the host. Each run is one host call under the
 // host's deadline and output limit.
 type remoteShell struct {
-	api.Shell
 	link *hostLink
 }
 

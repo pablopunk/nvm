@@ -7,7 +7,6 @@ import (
 
 // remoteKeyboard types text and sends the undo gesture through the host.
 type remoteKeyboard struct {
-	api.Keyboard
 	link *hostLink
 }
 
@@ -21,7 +20,6 @@ func (k remoteKeyboard) Undo() error {
 
 // remoteSelection reads and replaces the selected text of the summoned app through the host.
 type remoteSelection struct {
-	api.Selection
 	link *hostLink
 }
 

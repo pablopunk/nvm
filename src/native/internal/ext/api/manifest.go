@@ -27,8 +27,8 @@ type Manifest struct {
 	APIVersion string `json:"apiVersion"`
 	Identity
 	Subtitle string `json:"subtitle,omitempty"`
-	// Capabilities are review metadata: what the extension says it does. They are not an access
-	// check. An enabled extension has the full host context whether or not it declares anything.
+	// Capabilities declare access the extension needs. Host services enforce the relevant declaration;
+	// they are distinct from operating-system support and permissions, and do not grant either.
 	Capabilities []Capability `json:"capabilities,omitempty"`
 	// Settings are the user-visible settings the extension declares. Values are stored per extension, and
 	// the declaration is the only way a setting exists: Settings.Set on an undeclared id is refused.

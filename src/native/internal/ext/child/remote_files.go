@@ -8,7 +8,6 @@ import (
 // remoteFiles finds, describes, previews and opens local files on the host. Text writes, previews and the file index
 // are not served yet.
 type remoteFiles struct {
-	api.Files
 	link *hostLink
 }
 

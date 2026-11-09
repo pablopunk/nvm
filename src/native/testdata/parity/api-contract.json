@@ -1,0 +1,676 @@
+[
+  {
+    "interface": "AI",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteAI",
+    "methods": [
+      "Ask",
+      "Attachments",
+      "Chats",
+      "Decide",
+      "Fast",
+      "IsAvailable",
+      "Prepare",
+      "Session",
+      "Stream"
+    ]
+  },
+  {
+    "interface": "AIBuilder",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteBuilder",
+    "methods": [
+      "CleanupExpiredConversations",
+      "ExtensionPreview",
+      "GetChat",
+      "ListChats",
+      "OpenChat",
+      "OpenChatsList",
+      "RemoveChat",
+      "StartChat",
+      "TweakExtension"
+    ]
+  },
+  {
+    "interface": "AIChats",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteChats",
+    "methods": [
+      "Continue",
+      "Get",
+      "List",
+      "New",
+      "Open",
+      "Remove",
+      "Stop",
+      "Tier"
+    ]
+  },
+  {
+    "interface": "AISession",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSession",
+    "methods": [
+      "Ask",
+      "Reset",
+      "Stream"
+    ]
+  },
+  {
+    "interface": "AIStream",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteStream",
+    "methods": [
+      "Abort",
+      "Events",
+      "Result"
+    ]
+  },
+  {
+    "interface": "Account",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteAccount",
+    "methods": [
+      "SignedIn"
+    ]
+  },
+  {
+    "interface": "ActionHandler",
+    "kind": "extension-callback",
+    "methods": [
+      "RunAction"
+    ]
+  },
+  {
+    "interface": "Apps",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteApps",
+    "methods": [
+      "ForceQuit",
+      "Frontmost",
+      "Hide",
+      "Icon",
+      "Launch",
+      "List",
+      "Quit",
+      "QuitAll",
+      "Running",
+      "Search",
+      "UninstallReview",
+      "UninstallTrash"
+    ]
+  },
+  {
+    "interface": "AttachmentBuilder",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteAttachments",
+    "methods": [
+      "Clipboard",
+      "File",
+      "Image",
+      "OCRImage",
+      "SelectedFiles",
+      "SelectedText",
+      "Text"
+    ]
+  },
+  {
+    "interface": "Bundle",
+    "kind": "service",
+    "package": "child",
+    "implementation": "bundleReader",
+    "methods": [
+      "Records"
+    ]
+  },
+  {
+    "interface": "Cache",
+    "kind": "local",
+    "package": "child",
+    "implementation": "processCache",
+    "methods": [
+      "Get",
+      "Has",
+      "Invalidate",
+      "Set",
+      "Stale"
+    ]
+  },
+  {
+    "interface": "ClipboardHistory",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteHistory",
+    "methods": [
+      "Clear",
+      "Get",
+      "List",
+      "Remove"
+    ]
+  },
+  {
+    "interface": "Clock",
+    "kind": "local",
+    "package": "platform/real",
+    "implementation": "realClock",
+    "methods": [
+      "Now"
+    ]
+  },
+  {
+    "interface": "CommandProvider",
+    "kind": "extension-callback",
+    "methods": [
+      "Commands"
+    ]
+  },
+  {
+    "interface": "Context",
+    "kind": "context",
+    "package": "child",
+    "implementation": "hostContext",
+    "methods": [
+      "AI",
+      "AIBuilder",
+      "Account",
+      "Cache",
+      "Clipboard",
+      "Clock",
+      "Data",
+      "Desktop",
+      "Diagnostics",
+      "Dictation",
+      "Drafts",
+      "Identity",
+      "Indicators",
+      "Input",
+      "Jobs",
+      "Launch",
+      "Logs",
+      "Navigation",
+      "Network",
+      "Notes",
+      "OCR",
+      "Ownership",
+      "Scheduler",
+      "Secrets",
+      "Self",
+      "Settings",
+      "Shortcuts",
+      "Std",
+      "Storage",
+      "System",
+      "Text",
+      "Updates",
+      "Views",
+      "Windows"
+    ]
+  },
+  {
+    "interface": "Data",
+    "kind": "service",
+    "package": "child",
+    "implementation": "dataSources",
+    "methods": [
+      "Bundled",
+      "Loader",
+      "StaleWhileRevalidate"
+    ]
+  },
+  {
+    "interface": "DataLoader",
+    "kind": "extension-callback",
+    "methods": [
+      "LoadItems"
+    ]
+  },
+  {
+    "interface": "Desktop",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteDesktop",
+    "methods": [
+      "Apps",
+      "Clipboard",
+      "Files",
+      "Keyboard",
+      "Menus",
+      "Selection",
+      "Shell",
+      "WindowManagement"
+    ]
+  },
+  {
+    "interface": "Diagnostics",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteDiagnostics",
+    "methods": [
+      "Export",
+      "Recent",
+      "ReportProblem",
+      "Reporting"
+    ]
+  },
+  {
+    "interface": "Dictation",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteDictation",
+    "methods": [
+      "APIAvailable",
+      "Cancel",
+      "DeleteRecording",
+      "Devices",
+      "Recordings",
+      "Retry",
+      "Start",
+      "Status",
+      "Stop"
+    ]
+  },
+  {
+    "interface": "Drafts",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteDrafts",
+    "methods": [
+      "Commit",
+      "Discard"
+    ]
+  },
+  {
+    "interface": "Extension",
+    "kind": "extension-callback",
+    "methods": [
+      "Manifest"
+    ]
+  },
+  {
+    "interface": "Files",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteFiles",
+    "methods": [
+      "DisplayPath",
+      "FileURL",
+      "Find",
+      "FindImages",
+      "FindMedia",
+      "FindVideos",
+      "IndexSnapshot",
+      "IndexStatus",
+      "IndexedRoots",
+      "Metadata",
+      "Open",
+      "OpenWithApps",
+      "QuickLook",
+      "ReadText",
+      "Recent",
+      "Reindex",
+      "Reveal",
+      "SearchIndex",
+      "Thumbnail",
+      "WriteBytes",
+      "WriteText"
+    ]
+  },
+  {
+    "interface": "Indicators",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteIndicators",
+    "methods": [
+      "Hide",
+      "Show",
+      "Update"
+    ]
+  },
+  {
+    "interface": "Input",
+    "kind": "local",
+    "package": "api",
+    "implementation": "promptInput",
+    "methods": [
+      "Prompt"
+    ]
+  },
+  {
+    "interface": "Jobs",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteJobs",
+    "methods": [
+      "ClearError",
+      "List",
+      "Run",
+      "SetEnabled"
+    ]
+  },
+  {
+    "interface": "Keyboard",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteKeyboard",
+    "methods": [
+      "TypeText",
+      "Undo"
+    ]
+  },
+  {
+    "interface": "Logs",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteLogs",
+    "methods": [
+      "Log",
+      "Recent"
+    ]
+  },
+  {
+    "interface": "MenuBarProvider",
+    "kind": "extension-callback",
+    "methods": [
+      "MenuBarTriggers",
+      "MenuBars"
+    ]
+  },
+  {
+    "interface": "Menus",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteMenus",
+    "methods": [
+      "Invoke",
+      "Snapshot"
+    ]
+  },
+  {
+    "interface": "Navigation",
+    "kind": "local",
+    "package": "child",
+    "implementation": "childNavigation",
+    "methods": [
+      "Pop",
+      "Push",
+      "Replace",
+      "Root",
+      "Run"
+    ]
+  },
+  {
+    "interface": "Network",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteNetwork",
+    "methods": [
+      "Fetch"
+    ]
+  },
+  {
+    "interface": "Notes",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteNotes",
+    "methods": [
+      "Create",
+      "Delete",
+      "Get",
+      "List",
+      "Recent",
+      "Update"
+    ]
+  },
+  {
+    "interface": "OCR",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteOCR",
+    "methods": [
+      "Image",
+      "Region",
+      "Screen"
+    ]
+  },
+  {
+    "interface": "Ownership",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteOwnership",
+    "methods": [
+      "CanWrite",
+      "FilesForChat",
+      "OwnerOf"
+    ]
+  },
+  {
+    "interface": "RootProvider",
+    "kind": "extension-callback",
+    "methods": [
+      "RootItems"
+    ]
+  },
+  {
+    "interface": "RowActionProvider",
+    "kind": "extension-callback",
+    "methods": [
+      "RowActions"
+    ]
+  },
+  {
+    "interface": "Scheduler",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteScheduler",
+    "methods": [
+      "Cancel",
+      "Once",
+      "Pending"
+    ]
+  },
+  {
+    "interface": "SearchProvider",
+    "kind": "extension-callback",
+    "methods": [
+      "SearchItems"
+    ]
+  },
+  {
+    "interface": "Secrets",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSecrets",
+    "methods": [
+      "Clear",
+      "Delete",
+      "Get",
+      "Set"
+    ]
+  },
+  {
+    "interface": "Selection",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSelection",
+    "methods": [
+      "Access",
+      "Files",
+      "Read",
+      "ReplaceText",
+      "Text"
+    ]
+  },
+  {
+    "interface": "Self",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSelf",
+    "methods": [
+      "Rename"
+    ]
+  },
+  {
+    "interface": "Settings",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSettings",
+    "methods": [
+      "Definitions",
+      "Get",
+      "PublishDisplay",
+      "Set",
+      "Toggle"
+    ]
+  },
+  {
+    "interface": "Shell",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteShell",
+    "methods": [
+      "AppleScript",
+      "Exec",
+      "OpenExternal",
+      "Script",
+      "Which"
+    ]
+  },
+  {
+    "interface": "Shortcuts",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteShortcuts",
+    "methods": [
+      "Aliases",
+      "List",
+      "Palette"
+    ]
+  },
+  {
+    "interface": "Storage",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteStorage",
+    "methods": [
+      "Clear",
+      "Delete",
+      "Get",
+      "Memo",
+      "MemoStale",
+      "Set"
+    ]
+  },
+  {
+    "interface": "System",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSystem",
+    "methods": [
+      "HasCapability",
+      "Labels",
+      "Notify",
+      "OS",
+      "OpenPermissionPane",
+      "Permissions",
+      "Places",
+      "RequestPermission",
+      "SettingsPanes"
+    ]
+  },
+  {
+    "interface": "SystemClipboard",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteSystemClipboard",
+    "methods": [
+      "Read",
+      "ReadFiles",
+      "ReadHTML",
+      "ReadImage",
+      "ReadImageFile",
+      "ReadRTF",
+      "ReadText",
+      "Write",
+      "WriteFiles",
+      "WriteHTML",
+      "WriteImage",
+      "WriteImageFile",
+      "WriteText"
+    ]
+  },
+  {
+    "interface": "Text",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteText",
+    "methods": [
+      "Template"
+    ]
+  },
+  {
+    "interface": "Updates",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteUpdates",
+    "methods": [
+      "State"
+    ]
+  },
+  {
+    "interface": "Views",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteViews",
+    "methods": [
+      "Invalidate",
+      "InvalidateRoot",
+      "Refresh",
+      "RefreshMenuBar",
+      "RefreshSearch"
+    ]
+  },
+  {
+    "interface": "WindowManagement",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteWindowManagement",
+    "methods": [
+      "Apply",
+      "ApplyTo",
+      "Displays",
+      "Focus",
+      "FocusNeighbor",
+      "SwitchDesktop",
+      "WaitForWindow",
+      "Windows"
+    ]
+  },
+  {
+    "interface": "WindowRestorer",
+    "kind": "extension-callback",
+    "methods": [
+      "RestoreWindow"
+    ]
+  },
+  {
+    "interface": "Windows",
+    "kind": "local",
+    "package": "child",
+    "implementation": "childWindows",
+    "methods": [
+      "Close",
+      "Create",
+      "Hide",
+      "Show",
+      "Toggle"
+    ]
+  }
+]
