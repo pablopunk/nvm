@@ -14,6 +14,7 @@ func historyView(ctx api.Context) *api.View {
 	return &api.View{
 		Kind: api.ViewList, Title: "AI Chats", Placeholder: "Search AI Chats", Items: historyItems(ctx),
 		Refresh: &api.Refresh{Ref: &api.ActionRef{ID: opRefreshHistory}},
+		Actions: []api.Action{api.Run(commandConvert, "Convert 1.x Extension", nil)},
 	}
 }
 

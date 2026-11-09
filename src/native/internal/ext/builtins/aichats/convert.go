@@ -5,10 +5,9 @@ import (
 	"path/filepath"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// Commands and refs of the 1.x converter. The path of the file to convert travels under argPath.
+// Refs of the 1.x converter. The path of the file to convert travels under argPath.
 const (
 	commandConvert = "convert-1x-extension"
 	opConvert      = "convert"
@@ -17,13 +16,6 @@ const (
 
 // legacyExtensionsRoot is where 1.x extensions live; 2.x folders are found there too, but as folders.
 const legacyExtensionsRoot = "~/.config/nevermind/extensions"
-
-func convertCommand() api.Command {
-	return api.Command{
-		ID: commandConvert, Title: "Convert 1.x Extension", Subtitle: "Rewrite an older extension for this version with AI",
-		Icon: "sparkles", Section: search.KindCommands,
-	}
-}
 
 // convertView lists the 1.x extension files that are still in the extensions folder.
 func convertView(ctx api.Context) (*api.View, error) {

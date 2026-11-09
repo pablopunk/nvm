@@ -15,9 +15,9 @@ const apiPageBytes = 12 << 10
 
 // Tool names the model calls. They name what a tool does, as the builder's instructions refer to them.
 const (
-	readAPIToolName = "read_extension_api"
+	readAPIToolName       = "read_extension_api"
 	read1xMappingToolName = "read_1x_mapping"
-	writeToolName   = "write_extension"
+	writeToolName         = "write_extension"
 )
 
 // readSchema is the arguments of read_extension_api: the byte offset of the page to read, from the start of the reference.

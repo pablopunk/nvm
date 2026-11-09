@@ -62,7 +62,7 @@ func (Extension) Manifest() api.Manifest {
 
 // Commands lists the AI Chats command and the hidden cleanup job that runs at startup and hourly.
 func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
-	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand(), convertCommand()}, nil
+	return []api.Command{aiChatsCommand(chatCount(ctx)), cleanupCommand()}, nil
 }
 
 // RootItems lists the four most recent conversations and builder chats as Continue rows.
