@@ -38,9 +38,10 @@ func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *W
 	return &Workshop{chats: chats, extensions: extensions, dispatch: dispatch, written: map[string]string{}}
 }
 
-// Toolset returns the tools of the builder chat chatID for one turn: the API reader and write_extension.
+// Toolset returns the tools of the builder chat chatID for one turn: the API reader, the read-only extension reader and
+// write_extension.
 func (w *Workshop) Toolset(chatID string) chat.Toolset {
-	registry, err := agent.NewRegistry(readAPITool(), w.writeTool(chatID))
+	registry, err := agent.NewRegistry(readAPITool(), w.readExtensionTool(), w.writeTool(chatID))
 	if err != nil {
 		log.Println("builder: could not register the tools:", err)
 		return chat.Toolset{}

@@ -147,7 +147,7 @@ func TestToolsetOffersTheReaderAndTheWriter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Wire: %v", err)
 	}
-	for _, name := range []string{readAPIToolName, writeToolName} {
+	for _, name := range []string{readAPIToolName, readExtensionToolName, writeToolName} {
 		if !strings.Contains(string(wire), name) {
 			t.Fatalf("tools = %s, want %s", wire, name)
 		}
