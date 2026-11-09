@@ -2,6 +2,20 @@
 
 Status: proposed, 2026-11-09, against `20ba2e70`. Extends `src/native/PLAN.md` with WP3.11 to WP3.17.
 
+## Status (2026-11-09, `826e2d34`)
+
+| Work package | State | Evidence and what is left |
+|---|---|---|
+| WP3.11 Ledger and gates | ready for review | All 1,258 members of the 1.x API have a row: 863 same, 357 renamed, 23 better, 15 dropped. Most same and renamed rows are matched by name and still need the behavior read (`verified` is `name`) |
+| WP3.12 API gaps | ready for review | `Selection.Read`, `Self().Rename`, window capabilities. Unit tests in CI; not exercised by hand |
+| WP3.13 Accepted fields | ready for review | `KeepPaletteOpen`, `{selectedText}`, confirmation tone, title from first line, live preview, image shapes. G4 reader check is name-based, so it is a floor. `IgnoreMouseEvents` still has no implementation |
+| WP3.14 Speed | partial | Command-only extensions start on first use. Owner's Mac, physical footprint of app and children: 584 MB to 112 MB, 29 children to 2. CI benchmarks on Linux: dormant first call 83 ms, search round trip 98 µs. The 83 ms misses the proposed 50 ms, which still needs a Mac reading. Not done: G2 CI baselines, ratified budgets, idle shutdown (deliberately left out: it would kill long-running work such as Caffeinate) |
+| WP3.15 Builder discovery | partial | G3 passes; window restore and interpreter limits added; 1.x name table readable through `read_1x_mapping`. Not done: recipes, OS availability table, the eval harness (needs a live model) |
+| WP3.16 Conformance | partial | 1.x converter, offered from the AI Chats action menu; no live conversion run. Not done: G4 route check, fixture audit, macOS fixture run, Windows |
+| WP3.17 Sign-off | not started | Needs the owner, and WP3.14 to WP3.16 finished |
+
+CI runs were against a throwaway workflow with `go generate`, `go build`, `go vet` and `go test ./...`. Build and vet pass. 101 tests fail: 100 also fail on the commit before this work (`99902a27`), nearly all stale goldens, and one (`TestEditWithAINamesTheChatTweakOfTheExtension`) comes from the concurrent per-extension chat work. No required CI check has passed on this work.
+
 ## 1. Outcome
 
 The 2.x extension API replaces 1.x with no loss. Each of the four promises below is a check that fails in CI, so it stays true after this plan ends.
