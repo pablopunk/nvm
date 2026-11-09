@@ -168,3 +168,50 @@ func TestInstalledURLFromScreenshotRepairsAWrappedTerminalURL(t *testing.T) {
 		t.Fatalf("view = %q with %+v, want the review page", none.Title, none.Items)
 	}
 }
+
+func clipboardText(t *testing.T, clipboard *fake.Clipboard) string {
+	t.Helper()
+	text, err := clipboard.ReadText()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return text
+}
+
+// TestInstalledOCRClipboardImageUnwrapsLinesAndKeepsParagraphs runs the installed OCR Image in Clipboard extension on a
+// clipboard screenshot: hard-wrapped lines join into one line per paragraph, paragraph breaks stay, and a wrapped URL
+// comes out as one URL. Without an image it asks for a file, and an image with no text leaves the clipboard unchanged.
+func TestInstalledOCRClipboardImageUnwrapsLinesAndKeepsParagraphs(t *testing.T) {
+	requireUnixProcesses(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	invoke := api.Invocation{Ref: api.ActionRef{ID: "copy-text"}}
+
+	r, clipboard, _ := ocrRuntime(t, "local.ocr-clipboard-image", "This sentence was\nwrapped by the terminal.\n\nhttps://example.com/docs/get\ning-started?lang=en&v=2\n\nLast paragraph.", nil)
+	screenshotOnClipboard(t, clipboard)
+	done := runInstalledResult(t, ctx, r, invoke)
+	if done.Next == nil || done.Next.Kind != api.ActionPop {
+		t.Fatalf("next = %+v, want the command to finish", done.Next)
+	}
+	const want = "This sentence was wrapped by the terminal.\n\nhttps://example.com/docs/getting-started?lang=en&v=2\n\nLast paragraph."
+	if got := clipboardText(t, clipboard); got != want {
+		t.Fatalf("clipboard = %q, want %q", got, want)
+	}
+
+	r, clipboard, _ = ocrRuntime(t, "local.ocr-clipboard-image", "unused", nil)
+	prompt := runInstalledResult(t, ctx, r, invoke)
+	if prompt.Next == nil || prompt.Next.Kind == api.ActionPop || clipboardText(t, clipboard) != "" {
+		t.Fatalf("with no image the command answered %+v, want a prompt for an image file", prompt.Next)
+	}
+
+	r, clipboard, _ = ocrRuntime(t, "local.ocr-clipboard-image", "  \n ", nil)
+	screenshotOnClipboard(t, clipboard)
+	if err := clipboard.WriteText("keep me"); err != nil {
+		t.Fatal(err)
+	}
+	screenshotOnClipboard(t, clipboard)
+	response, err := r.Call(ctx, protocol.MethodRun, "", &invoke)
+	if err == nil && (response.Failure == nil || !strings.Contains(response.Failure.Message, "No text was found")) {
+		t.Fatalf("an image with no text answered %+v, want the no-text failure", response)
+	}
+}
