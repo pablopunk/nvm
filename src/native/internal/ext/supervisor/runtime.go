@@ -155,18 +155,13 @@ func (r *Runtime) Call(ctx context.Context, method, query string, invocation *ap
 
 // Do sends a prepared request, assigning its id, and returns the child's response. The rules of Call apply.
 func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Response, error) {
-	waitStarting := req.Method == protocol.MethodRun || req.Method == protocol.MethodLoad
-	if err := r.readyForCall(ctx, waitStarting); err != nil {
+	if err := r.checkRunnable(); err != nil {
 		return protocol.Response{}, err
 	}
 	select {
 	case r.slots <- struct{}{}:
 	case <-ctx.Done():
 		return protocol.Response{}, ctx.Err()
-	}
-	if err := r.readyForCall(ctx, waitStarting); err != nil {
-		<-r.slots
-		return protocol.Response{}, err
 	}
 	req.ID = r.newRequestID()
 	result := make(chan callResult, 1)
@@ -190,19 +185,6 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	case <-ctx.Done():
 		return protocol.Response{}, ctx.Err()
 	}
-}
-
-// readyForCall waits only for a child already starting. Calls remain bounded by their caller and terminal states
-// still fail normally; no request is replayed after it has been sent to an extension.
-func (r *Runtime) readyForCall(ctx context.Context, waitStarting bool) error {
-	err := r.checkRunnable()
-	if !waitStarting || r.Status().State != StateStarting {
-		return err
-	}
-	if err := r.WaitFor(ctx, func(status Status) bool { return status.State != StateStarting }); err != nil {
-		return err
-	}
-	return r.checkRunnable()
 }
 
 // Load runs the extension's data loader and returns its items. A child-side failure is a *CallError too, so the
