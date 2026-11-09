@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -326,12 +327,15 @@ func TestLevelFollowsTheCapturedSignal(t *testing.T) {
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	// A stopped operation must not publish live levels. Observe capture before stopping it.
+	var peak float64
+	select {
+	case peak = <-h.levels:
+	case <-time.After(time.Second):
+		t.Fatal("recording did not publish a live microphone level")
+	}
 	if _, err := h.service.Stop(); err != nil {
 		t.Fatalf("Stop: %v", err)
-	}
-	var peak float64
-	for len(h.levels) > 0 {
-		peak = max(peak, <-h.levels)
 	}
 	if peak < 0.70 || peak > 0.71 {
 		t.Fatalf("peak level = %v, want square-root display scale for a half-scale signal", peak)

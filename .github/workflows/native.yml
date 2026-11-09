@@ -13,6 +13,11 @@ on:
       - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   workflow_dispatch:
+    inputs:
+      refresh_indicator_assets:
+        description: Generate recording goldens and the API reference as reviewable artifacts
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -68,6 +73,22 @@ jobs:
             echo "$unformatted"
             exit 1
           fi
+
+      - name: Generate indicator review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_indicator_assets
+        run: |
+          (cd internal/ai/builder && go generate)
+          (cd internal/palette/aicommands && go test -run '^(TestIndicatorGoldens|TestRecordingReducedMotionGoldens)$' -update .)
+
+      - name: Upload indicator review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_indicator_assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicator-review-assets
+          path: |
+            src/native/internal/ai/builder/reference_gen.go
+            src/native/internal/palette/aicommands/testdata/golden/aicommands/indicator-dictation-*.png
+          if-no-files-found: error
 
       - name: Vet
         run: go vet ./...

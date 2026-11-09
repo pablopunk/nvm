@@ -18,7 +18,10 @@ func TestOCRRunsEachReadInAChildOfTheApp(t *testing.T) {
 		t.Fatal(err)
 	}
 	helper := fake.NewHelper()
-	helper.Script(binary, fake.HelperScript{Stdout: []byte(`{"text":"niño","blocks":[]}`)})
+	helper.Script(binary,
+		fake.HelperScript{Stdout: []byte(`{"text":"niño","blocks":[]}`)},
+		fake.HelperScript{Stdout: []byte(`{"text":"niño","blocks":[]}`)},
+	)
 	recognizer := onnxText{helper: helper}
 	assets := onnxocr.Assets{Library: "/runtime", Detector: "/det", Recognizer: "/rec", Dictionary: "/dict"}
 	for range 2 {
