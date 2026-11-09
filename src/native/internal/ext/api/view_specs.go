@@ -213,4 +213,8 @@ type ChatSpec struct {
 	// Side is a view drawn beside the transcript, as the AI Chats page draws the preview of a builder's extension. The
 	// host hides and shows it with a palette action, and keeps the side's place while the owner returns the same view.
 	Side *View `json:"side,omitempty"`
+
+	// SideExtension names the extension whose actions the rows of Side run. Only a built-in may set it; otherwise they run
+	// in the extension that returned the view.
+	SideExtension string `json:"sideExtension,omitempty"`
 }

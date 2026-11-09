@@ -88,13 +88,23 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 // cursor survive the renders. Each render hands the page the side the owner returned.
 func (s *Session) chatSide() *palette.View {
 	side := *s.view.Chat.Side
-	if s.chatSideSession == nil {
-		s.chatSideSession = NewSession(s.deps, s.extID, side)
+	owner := s.chatSideOwner()
+	if s.chatSideSession == nil || s.chatSideSession.extID != owner {
+		s.chatSideSession = NewSession(s.deps, owner, side)
 		s.chatSidePage = s.chatSideSession.Palette()
 		return s.chatSidePage
 	}
 	s.chatSideSession.Replace(side)
 	return s.chatSidePage
+}
+
+// chatSideOwner is the extension the side's rows run in. The preview of a builder chat shows another extension's rows, so
+// they must run there; only a built-in may name another extension.
+func (s *Session) chatSideOwner() string {
+	if named := s.view.Chat.SideExtension; named != "" && api.IsBuiltInID(s.extID) {
+		return named
+	}
+	return s.extID
 }
 
 // apiChatImages maps the pictures a user attached to a message to the API's data URLs, which a submit carries.

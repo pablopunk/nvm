@@ -6,6 +6,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aichats"
 )
 
 // chatFixtureView is the dev chat view: a user turn with a picture, a reasoning block still streaming, a waiting tool
@@ -126,5 +127,23 @@ func TestChatPrimaryKeyIsStopWhileAReplyStreams(t *testing.T) {
 	s = NewSession(Deps{}, "acme.chat", done)
 	if got := s.chatPage().Primary().Title; got != "Send" {
 		t.Fatalf("primary after the reply = %q, want Send", got)
+	}
+}
+
+func TestChatSideRunsInTheExtensionItPreviews(t *testing.T) {
+	view := chatFixtureView()
+	view.Chat.Side = &api.View{Kind: api.ViewList, Title: "Preview"}
+	view.Chat.SideExtension = "local.wallpapers"
+
+	builtIn := NewSession(Deps{}, aichats.ID, view)
+	builtIn.chatSpec().Side()
+	if builtIn.chatSideSession.extID != "local.wallpapers" {
+		t.Fatalf("a built-in's side runs in %q, want the previewed extension", builtIn.chatSideSession.extID)
+	}
+
+	other := NewSession(Deps{}, "acme.chat", view)
+	other.chatSpec().Side()
+	if other.chatSideSession.extID != "acme.chat" {
+		t.Fatalf("an extension's side runs in %q, want its own extension", other.chatSideSession.extID)
 	}
 }

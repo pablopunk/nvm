@@ -65,7 +65,8 @@ func chatView(ctx api.Context, detail api.ChatDetail) *api.View {
 		Chat: &api.ChatSpec{
 			Messages: detail.Messages, Tier: detail.Tier, Attach: attachable(detail.Tier),
 			OnTier: chatRef(opTier, id), Submit: chatRef(opSubmit, id), Stop: chatRef(opStop, id),
-			Side: builderPreview(ctx, detail),
+			Side:          builderPreview(ctx, detail),
+			SideExtension: detail.ExtensionID,
 		},
 		Actions: chatActions(detail),
 	}
