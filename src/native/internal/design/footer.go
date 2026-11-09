@@ -18,6 +18,8 @@ type FooterData struct {
 	HideName      bool
 	Control       func(*ui.Context)
 	PrimaryAction func()
+	// SecondaryAction runs on a click of the Secondary hint, which opens the action menu.
+	SecondaryAction func()
 	// Primary is what Enter does and Secondary what the action menu key opens. A page may have only one of them. With
 	// neither, Hint, if set, is shown instead.
 	Primary   *KeyHint
@@ -44,18 +46,10 @@ func Footer(c *ui.Context, d FooterData) {
 		if d.Primary != nil || d.Secondary != nil || d.Hint != "" {
 			footerPlate(ui.Row(c).Gap(12).AlignItems(ui.Center).Radius(16), k, 6, 10).Children(func() {
 				if d.Primary != nil {
-					if d.PrimaryAction != nil {
-						button := ui.ButtonBase(c)
-						button.Children(func() { keyHint(c, d.Primary) })
-						if button.Clicked() {
-							d.PrimaryAction()
-						}
-					} else {
-						keyHint(c, d.Primary)
-					}
+					clickableKeyHint(c, d.Primary, d.PrimaryAction)
 				}
 				if d.Secondary != nil {
-					keyHint(c, d.Secondary)
+					clickableKeyHint(c, d.Secondary, d.SecondaryAction)
 				}
 				if d.Primary == nil && d.Secondary == nil && d.Hint != "" {
 					ui.Text(c, d.Hint).FontSize(12).TextColor(k.Muted).SingleLine()
@@ -80,4 +74,22 @@ func keyHint(c *ui.Context, hint *KeyHint) {
 			Keycap(c, hint.Key)
 		}
 	})
+}
+
+// clickableKeyHint draws a footer hint as a button that lights up under the pointer and runs action on a click. With
+// no action it is the plain hint.
+func clickableKeyHint(c *ui.Context, hint *KeyHint, action func()) {
+	if action == nil {
+		keyHint(c, hint)
+		return
+	}
+	k := Tokens(c)
+	button := ui.ButtonBase(c).Padding(2, 6).Radius(8).Label(hint.Title)
+	if button.Hovered() {
+		button.Background(k.Selected)
+	}
+	button.Children(func() { keyHint(c, hint) })
+	if button.Clicked() {
+		action()
+	}
 }

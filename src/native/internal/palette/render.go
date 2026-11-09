@@ -347,6 +347,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	} else if hint := viewHint(v); hint != "" {
 		data.Hint = KeyLabel(hint)
 	}
+	if data.Secondary != nil && data.Secondary.Title == actionsKeyHint().Title {
+		data.SecondaryAction = p.openActionsFromFooter
+	}
 	design.Footer(c, data)
 }
 
@@ -392,4 +395,11 @@ func viewHint(v *View) string {
 		return v.HintFn()
 	}
 	return v.Hint
+}
+
+// openActionsFromFooter is a click on the footer's Actions hint: it opens the menu as the action-menu key does.
+func (p *Palette) openActionsFromFooter() {
+	if !p.actionsOpen && len(p.menuActions()) > 0 {
+		p.openActionMenu(0)
+	}
 }
