@@ -61,10 +61,10 @@ func readLines(proc platform.WorkerProcess, done <-chan struct{}) <-chan lineRes
 	return out
 }
 
-// exchange writes one request to the running child and waits for its response, within the method's budget.
-// Any host-side failure kills the child and is recorded, so the next call starts from a clean state.
-func (r *Runtime) exchange(ctx context.Context, req protocol.Request, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
-	child, budget, err := r.runningChild(req.Method)
+// exchange admits a request to one child and waits for its response within the method's budget. Cancellation before
+// admission prevents dispatch; an ordinary request already dispatched may finish. Stop cancels its captured lifetime.
+func (r *Runtime) exchange(admission, ctx, lifetime context.Context, gate *dispatchGate, req protocol.Request, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
+	child, budget, err := r.childForCall(admission, lifetime, req.Method)
 	if err != nil {
 		return protocol.Response{}, err
 	}
@@ -72,20 +72,51 @@ func (r *Runtime) exchange(ctx context.Context, req protocol.Request, onDenied f
 	if err != nil {
 		return protocol.Response{}, r.failChild(child, api.CodeInternal, "request cannot be encoded")
 	}
+	if err := gate.admit(admission, lifetime); err != nil {
+		return protocol.Response{}, err
+	}
 	if err := child.proc.WriteLine(line); err != nil {
 		return protocol.Response{}, r.failChild(child, api.CodeInternal, "cannot send a request: "+err.Error())
 	}
-	return r.awaitResponse(ctx, child, req, budget, onDenied)
+	return r.awaitResponse(ctx, lifetime, child, req, budget, onDenied)
 }
 
-// runningChild returns the child a request should go to, with the budget of its method.
-func (r *Runtime) runningChild(method string) (*childProcess, Budget, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.state != StateRunning || r.child == nil {
-		return nil, Budget{}, unavailable(notRunningReason(r.state, r.reason))
+// childForCall binds a request to a particular child after any in-progress startup. Stop ends the captured lifetime,
+// so a request cannot follow an installation across disable, replacement, or an explicit restart.
+func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*childProcess, Budget, error) {
+	waitStarting := method == protocol.MethodRun || method == protocol.MethodLoad
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, Budget{}, err
+		}
+		r.mu.Lock()
+		if r.lifetime != lifetime || lifetime.Err() != nil {
+			r.mu.Unlock()
+			return nil, Budget{}, unavailable("stopped")
+		}
+		if r.state == StateRunning && r.child != nil {
+			child, budget := r.child, r.cfg.BudgetFor(method)
+			r.mu.Unlock()
+			return child, budget, nil
+		}
+		if r.state == StateFailed && !r.cfg.Clock.Now().Before(r.retryAt) {
+			r.startLocked()
+		}
+		if r.state != StateStarting || !waitStarting {
+			reason := notRunningReason(r.state, r.reason)
+			r.mu.Unlock()
+			return nil, Budget{}, unavailable(reason)
+		}
+		changed := r.changed
+		r.mu.Unlock()
+		select {
+		case <-changed:
+		case <-ctx.Done():
+			return nil, Budget{}, ctx.Err()
+		case <-lifetime.Done():
+			return nil, Budget{}, unavailable("stopped")
+		}
 	}
-	return r.child, r.cfg.BudgetFor(method), nil
 }
 
 // notRunningReason names the state of a runtime that cannot take a call, with the reason it recorded. The
@@ -101,7 +132,7 @@ func notRunningReason(state State, reason string) string {
 // spends answering a service call is added back to both the soft and the hard deadline, because an extension that
 // waits for a shell command, a network reply or a palette confirmation is not busy. The soft budget only records a
 // diagnostic; the hard budget kills the child.
-func (r *Runtime) awaitResponse(ctx context.Context, child *childProcess, req protocol.Request, budget Budget, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
+func (r *Runtime) awaitResponse(ctx, lifetime context.Context, child *childProcess, req protocol.Request, budget Budget, onDenied func(*api.SnapshotDenial)) (protocol.Response, error) {
 	clock := r.cfg.Clock
 	started := clock.Now()
 	var blocked time.Duration
@@ -115,6 +146,8 @@ func (r *Runtime) awaitResponse(ctx context.Context, child *childProcess, req pr
 	deniedPathsNotified := make(map[string]bool)
 	for {
 		select {
+		case <-lifetime.Done():
+			return protocol.Response{}, unavailable("stopped")
 		case <-ctx.Done():
 			return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
 		case line, open := <-child.lines:
@@ -126,7 +159,7 @@ func (r *Runtime) awaitResponse(ctx context.Context, child *childProcess, req pr
 				var reply protocol.ServiceReply
 				var err error
 				if req.Invocation != nil && req.Invocation.AwaitInitialView {
-					reply, err = r.answerViewService(ctx, child, call, req.Method)
+					reply, err = r.answerViewService(ctx, lifetime, child, call, req.Method)
 					if ctx.Err() != nil {
 						return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
 					}
@@ -137,7 +170,10 @@ func (r *Runtime) awaitResponse(ctx context.Context, child *childProcess, req pr
 						return protocol.Response{}, err
 					}
 				} else {
-					reply, err = r.answerService(child, call, budget, req.Method)
+					reply, err = r.answerViewService(context.Background(), lifetime, child, call, req.Method)
+					if errors.Is(err, context.DeadlineExceeded) {
+						return protocol.Response{}, r.failChild(child, api.CodeTimeout, "service did not finish in time")
+					}
 				}
 				denial := observeSnapshotService(evidence, call, reply)
 				if denial != nil {

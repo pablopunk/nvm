@@ -155,16 +155,26 @@ func (r *Runtime) Call(ctx context.Context, method, query string, invocation *ap
 
 // Do sends a prepared request, assigning its id, and returns the child's response. The rules of Call apply.
 func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Response, error) {
-	if err := r.checkRunnable(); err != nil {
+	r.mu.Lock()
+	lifetime := r.lifetime
+	r.mu.Unlock()
+	if _, _, err := r.childForCall(ctx, lifetime, req.Method); err != nil {
 		return protocol.Response{}, err
 	}
 	select {
 	case r.slots <- struct{}{}:
 	case <-ctx.Done():
 		return protocol.Response{}, ctx.Err()
+	case <-lifetime.Done():
+		return protocol.Response{}, unavailable("stopped")
+	}
+	if err := ctx.Err(); err != nil {
+		<-r.slots
+		return protocol.Response{}, err
 	}
 	req.ID = r.newRequestID()
 	result := make(chan callResult, 1)
+	gate := &dispatchGate{}
 	onDenied := func(failure *api.SnapshotDenial) {
 		if req.Invocation != nil && req.Invocation.ProtectSnapshot && req.Invocation.OnSnapshotDenied != nil {
 			req.Invocation.OnSnapshotDenied(failure)
@@ -176,13 +186,14 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 		if req.Invocation != nil && req.Invocation.AwaitInitialView {
 			exchangeCtx = ctx
 		}
-		response, err := r.exchange(exchangeCtx, req, onDenied)
+		response, err := r.exchange(ctx, exchangeCtx, lifetime, gate, req, onDenied)
 		result <- callResult{response: response, err: err}
 	}()
 	select {
 	case outcome := <-result:
 		return outcome.response, outcome.err
 	case <-ctx.Done():
+		gate.cancel()
 		return protocol.Response{}, ctx.Err()
 	}
 }
@@ -207,32 +218,6 @@ func (r *Runtime) Load(ctx context.Context, loader string) ([]api.Item, error) {
 type callResult struct {
 	response protocol.Response
 	err      error
-}
-
-// checkRunnable returns the reason a call cannot run now, or nil when a running child exists. An expired
-// backoff starts a new child in the background; the call still fails fast so the palette never waits on it.
-func (r *Runtime) checkRunnable() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	switch r.state {
-	case StateRunning:
-		return nil
-	case StateFailed:
-		if r.cfg.Clock.Now().Before(r.retryAt) {
-			return unavailable("restarting after a failure: " + r.reason)
-		}
-		r.startLocked()
-		return unavailable("restarting after a failure: " + r.reason)
-	case StateIdle:
-		return unavailable("stopped")
-	case StateStarting:
-		return unavailable("starting")
-	case StateBroken:
-		return unavailable("does not load: " + r.reason)
-	case StateDisabled:
-		return unavailable("disabled: " + r.reason)
-	}
-	return unavailable("not available")
 }
 
 func (r *Runtime) newRequestID() uint64 {

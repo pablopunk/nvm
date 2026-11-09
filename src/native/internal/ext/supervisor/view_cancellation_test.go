@@ -29,7 +29,7 @@ func TestCanceledViewBoundsUninterruptibleHostCalls(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		done := make(chan error, 1)
 		go func() {
-			_, err := r.answerViewService(ctx, nil, protocol.ServiceCall{}, protocol.MethodRun)
+			_, err := r.answerViewService(ctx, r.lifetimeContext(), nil, protocol.ServiceCall{}, protocol.MethodRun)
 			done <- err
 		}()
 		select {
@@ -49,7 +49,7 @@ func TestCanceledViewBoundsUninterruptibleHostCalls(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := r.answerViewService(ctx, nil, protocol.ServiceCall{}, protocol.MethodRun); !errors.Is(err, context.Canceled) {
+	if _, err := r.answerViewService(ctx, r.lifetimeContext(), nil, protocol.ServiceCall{}, protocol.MethodRun); !errors.Is(err, context.Canceled) {
 		t.Fatalf("bounded call: %v", err)
 	}
 	select {
@@ -114,6 +114,12 @@ func TestCancellationOwnsSerializedExchange(t *testing.T) {
 				t.Logf("slot available %s after cancellation", time.Since(holdStart))
 			case <-time.After(waitTimeout):
 				t.Fatal("exchange did not release slot")
+			}
+			if view {
+				response, err := r.Call(context.Background(), protocol.MethodRun, "", &api.Invocation{Ref: api.ActionRef{ID: "screenshots.grid"}, AwaitInitialView: true})
+				if err != nil || response.Failure != nil {
+					t.Fatalf("reopen while child restarts: %v %+v", err, response.Failure)
+				}
 			}
 		})
 	}

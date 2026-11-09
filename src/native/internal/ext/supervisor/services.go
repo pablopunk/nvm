@@ -29,23 +29,6 @@ func serviceCallFrom(line lineResult, open bool) (protocol.ServiceCall, bool) {
 // command or an OCR read may take longer than a run is allowed to compute, and the run budget does not count that wait.
 const serviceCallTimeout = 3 * time.Minute
 
-// answerService runs one service call and writes its reply to the child. A slow service ends at serviceCallTimeout
-// or when the runtime stops, so it never outlives the host.
-func (r *Runtime) answerService(child *childProcess, call protocol.ServiceCall, budget Budget, method string) (reply protocol.ServiceReply, err error) {
-	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), method), r.lifetimeContext()), serviceCallTimeout)
-	defer cancel()
-	reply = r.serveCall(ctx, call)
-	reply.ReplyTo = call.CallID
-	line, err := json.Marshal(reply)
-	if err != nil {
-		line = []byte(fmt.Sprintf(`{"replyTo":%d,"failure":{"code":"internal","message":"reply cannot be encoded"}}`, call.CallID))
-	}
-	if err := child.proc.WriteLine(line); err != nil {
-		return reply, r.failChild(child, api.CodeInternal, "cannot answer a service call: "+err.Error())
-	}
-	return reply, nil
-}
-
 // serveCall dispatches to the handler, or refuses the call when the runtime has none.
 func (r *Runtime) serveCall(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
 	if r.services == nil {
@@ -61,15 +44,24 @@ func (r *Runtime) lifetimeContext() context.Context {
 	return r.lifetime
 }
 
-// answerViewService allows a canceled view to leave even when a filesystem call cannot be interrupted.
-// At most four such host calls can remain outstanding for one runtime.
-func (r *Runtime) answerViewService(parent context.Context, child *childProcess, call protocol.ServiceCall, method string) (protocol.ServiceReply, error) {
-	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(parent, method), r.lifetimeContext()), serviceCallTimeout)
+// answerViewService lets a stopped runtime or canceled view leave even when a filesystem call cannot be interrupted.
+// At most four abandoned host calls can remain outstanding for one runtime.
+func (r *Runtime) answerViewService(parent, lifetime context.Context, child *childProcess, call protocol.ServiceCall, method string) (protocol.ServiceReply, error) {
+	if lifetime.Err() != nil {
+		return protocol.ServiceReply{}, lifetime.Err()
+	}
+	ctx, cancel := context.WithTimeout(protocol.WithLifetime(protocol.WithRequestMethod(parent, method), lifetime), serviceCallTimeout)
 	defer cancel()
+	stop := context.AfterFunc(lifetime, cancel)
+	defer stop()
 	select {
 	case r.viewServices <- struct{}{}:
 	case <-ctx.Done():
 		return protocol.ServiceReply{}, ctx.Err()
+	}
+	if err := ctx.Err(); err != nil {
+		<-r.viewServices
+		return protocol.ServiceReply{}, err
 	}
 	result := make(chan protocol.ServiceReply, 1)
 	go func() { defer func() { <-r.viewServices }(); result <- r.serveCall(ctx, call) }()
