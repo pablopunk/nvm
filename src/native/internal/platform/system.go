@@ -8,6 +8,8 @@ type System interface {
 	// Quit asks the app to quit: its windows close, its stores flush and its menu bar items go, then the event loop
 	// stops. It returns at once; the quit runs on the main thread.
 	Quit()
+	// Relaunch restarts the app through its normal quit lifecycle.
+	Relaunch()
 	// LockScreen locks the computer and asks for the user's password to continue.
 	LockScreen() error
 	// Sleep puts the computer to sleep.

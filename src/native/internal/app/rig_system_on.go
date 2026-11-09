@@ -44,6 +44,7 @@ var _ platform.System = rigSystem{}
 func (r rigSystem) LockScreen() error { return r.record("LockScreen") }
 func (r rigSystem) Sleep() error      { return r.record("Sleep") }
 func (r rigSystem) Restart() error    { return r.record("Restart") }
+func (r rigSystem) Relaunch()         { _ = r.record("Relaunch") }
 func (r rigSystem) ShutDown() error   { return r.record("ShutDown") }
 func (r rigSystem) LogOut() error     { return r.record("LogOut") }
 func (r rigSystem) EmptyTrash() error { return r.record("EmptyTrash") }

@@ -32,6 +32,7 @@ const (
 	CommandRestart            = "command:restart"
 	CommandSystemSettings     = "command:system-settings"
 	CommandQuitNevermind      = "command:quit-nevermind"
+	CommandRestartNevermind   = "command:restart-nevermind"
 	CommandPlaceDownloads     = "command:place-downloads"
 	CommandPlaceDocuments     = "command:place-documents"
 	CommandPlaceDesktop       = "command:place-desktop"

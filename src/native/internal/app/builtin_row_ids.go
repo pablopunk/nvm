@@ -37,6 +37,9 @@ func builtInRowActionID(builtIn string, row search.Item) string {
 		if row.ID == appcommands.QuitOp {
 			return shortcuts.CommandQuitNevermind
 		}
+		if row.ID == appcommands.RestartOp {
+			return shortcuts.CommandRestartNevermind
+		}
 	}
 	return ""
 }

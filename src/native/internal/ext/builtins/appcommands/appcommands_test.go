@@ -7,7 +7,7 @@ import (
 )
 
 func TestQuitIsFoundByItsTitleAndKeywords(t *testing.T) {
-	for _, query := range []string{"quit", "Nevermind", "exit"} {
+	for _, query := range []string{"quit", "exit"} {
 		items, err := Extension{}.SearchItems(nil, query)
 		if err != nil || len(items) != 1 {
 			t.Fatalf("SearchItems(%q) = %+v, %v; want Quit Nevermind", query, items, err)
@@ -15,6 +15,13 @@ func TestQuitIsFoundByItsTitleAndKeywords(t *testing.T) {
 		if p := items[0].Primary; p == nil || p.Kind != api.ActionSystem || p.Op != QuitOp {
 			t.Errorf("primary = %+v, want the quit op", p)
 		}
+	}
+}
+
+func TestRestartIsSearchable(t *testing.T) {
+	items, err := (Extension{}).SearchItems(nil, "restart nevermind")
+	if err != nil || len(items) != 1 || items[0].Title != RestartTitle || items[0].Primary == nil || items[0].Primary.Op != RestartOp {
+		t.Fatalf("restart search = %+v, %v", items, err)
 	}
 }
 

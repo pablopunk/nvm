@@ -20,6 +20,11 @@ func (p *App) runSystemOp(op string, done func(failure string)) {
 		done("")
 		return
 	}
+	if op == appcommands.RestartOp {
+		p.ports.System.Relaunch()
+		done("")
+		return
+	}
 	id, ok := systemfeat.CommandForOp(op)
 	if !ok {
 		done(unknownSystemOpMessage)

@@ -39,6 +39,16 @@ func TestQuitNevermindReachesTheSystemQuit(t *testing.T) {
 	}
 }
 
+func TestRestartNevermindRequestsRelaunch(t *testing.T) {
+	p := goldenPalette(t)
+	done := false
+	p.runSystemOp(appcommands.RestartOp, func(failure string) { done = failure == "" })
+	calls := fakeSystem(t, p).Calls()
+	if !done || len(calls) != 1 || calls[0].Op != fake.OpSystemRelaunch {
+		t.Fatalf("relaunch calls = %+v, done = %v", calls, done)
+	}
+}
+
 // TestMenubarQuitReachesTheSystemQuit checks the menu bar's Quit row takes the same path as Quit Nevermind.
 func TestMenubarQuitReachesTheSystemQuit(t *testing.T) {
 	p := goldenPalette(t)

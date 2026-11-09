@@ -34,6 +34,7 @@ func builtInRowTitles(builtIn string) []builtInRowTitle {
 		}
 	case appcommands.ID:
 		out = append(out, builtInRowTitle{actionID: shortcuts.CommandQuitNevermind, title: appcommands.QuitTitle})
+		out = append(out, builtInRowTitle{actionID: shortcuts.CommandRestartNevermind, title: appcommands.RestartTitle})
 	}
 	slices.SortFunc(out, func(a, b builtInRowTitle) int { return strings.Compare(a.actionID, b.actionID) })
 	return out
