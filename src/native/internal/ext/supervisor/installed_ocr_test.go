@@ -120,3 +120,51 @@ func TestInstalledOCRScreenCopiesVisibleTextAndReportsEachOutcome(t *testing.T) 
 		t.Fatalf("indicator = %+v, want the permission explained", last)
 	}
 }
+
+func screenshotOnClipboard(t *testing.T, clipboard *fake.Clipboard) {
+	t.Helper()
+	var buffer bytes.Buffer
+	if err := png.Encode(&buffer, image.NewRGBA(image.Rect(0, 0, 4, 4))); err != nil {
+		t.Fatal(err)
+	}
+	if err := clipboard.WriteImagePNG(buffer.Bytes()); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestInstalledURLFromScreenshotRepairsAWrappedTerminalURL runs the installed Get URL from Screenshot extension on a
+// terminal screenshot whose login URL wraps across two lines under a line of prose: it finds one URL, joins the wrapped
+// lines, copies it, and says so. A screenshot with no URL opens a page to repair the text by hand.
+func TestInstalledURLFromScreenshotRepairsAWrappedTerminalURL(t *testing.T) {
+	requireUnixProcesses(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	invoke := api.Invocation{Ref: api.ActionRef{ID: "extract-url"}}
+
+	r, clipboard, _ := ocrRuntime(t, "local.url-from-screenshot", "Open this URL in your browser to sign in:\nhttps://auth.example.com/device/ver\nify?code=ABCD-1234\n", nil)
+	screenshotOnClipboard(t, clipboard)
+	view := runInstalledView(t, ctx, r, invoke)
+	if view.Title != "URL Copied" {
+		t.Fatalf("title = %q, want URL Copied; items = %+v", view.Title, view.Items)
+	}
+	var found []string
+	for _, item := range view.Items {
+		if strings.HasPrefix(item.ID, "url-") {
+			found = append(found, item.Subtitle)
+		}
+	}
+	const want = "https://auth.example.com/device/verify?code=ABCD-1234"
+	if len(found) != 1 || found[0] != want {
+		t.Fatalf("urls = %v, want the wrapped lines joined into %s", found, want)
+	}
+	if text, _ := clipboard.ReadText(); text != want {
+		t.Fatalf("clipboard = %q, want the repaired URL", text)
+	}
+
+	r, clipboard, _ = ocrRuntime(t, "local.url-from-screenshot", "nothing to see here", nil)
+	screenshotOnClipboard(t, clipboard)
+	none := runInstalledView(t, ctx, r, invoke)
+	if none.Title != "No URL Found" || len(none.Items) != 2 || none.Items[1].Title != "Review Recognized Text" {
+		t.Fatalf("view = %q with %+v, want the review page", none.Title, none.Items)
+	}
+}
