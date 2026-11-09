@@ -5,7 +5,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/palette"
-	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // Defaults of a data source's snapshot windows, as the Electron host uses them: a snapshot younger than the fresh

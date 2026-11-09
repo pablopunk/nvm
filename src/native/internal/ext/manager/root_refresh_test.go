@@ -91,7 +91,7 @@ func TestSupervisedHeldInvalidationRetainsInvocationOrigin(t *testing.T) {
 	unblock := func() { releaseOnce.Do(func() { close(release) }) }
 	defer unblock()
 	h := newHarness(t, func(o *Options) {
-		o.ViewInvalidate = func(_ string, identity any) {
+		o.ViewsInvalidate = func(_ string, identity any) {
 			entered <- identity
 			<-release
 		}

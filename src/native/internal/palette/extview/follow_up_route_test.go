@@ -78,7 +78,7 @@ func TestCrossExtensionDeclarativeWindowUsesTarget(t *testing.T) {
 			}
 			return target
 		},
-		Window: func(_ search.Host, id string, _ api.Action) { got = id },
+		Window: func(id string, _ api.Action) { got = id },
 	}
 	s := NewSession(deps, "source", api.View{})
 	h := &fakeHost{}
