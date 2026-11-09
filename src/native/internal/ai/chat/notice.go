@@ -40,6 +40,7 @@ type Notice struct {
 var (
 	ErrEmpty            = errors.New("chat: the message is empty")
 	ErrBusy             = errors.New("chat: this chat is still answering")
+	ErrExtensionHasChat = errors.New("chat: this extension already has its chat")
 	ErrNotFound         = errors.New("chat: no such chat")
 	ErrNothingToAsk     = errors.New("chat: there is no message to ask again")
 	ErrNotSignedIn      = errors.New("chat: not signed in")

@@ -225,30 +225,10 @@ func (s *Service) SendWithImages(id, text string, images []Image) error {
 	return s.startTurn(id)
 }
 
-// Bind records that the chat of kind builder writes or edits the extension id. It refuses a busy chat, since the
-// instruction of its next turn depends on the binding.
-func (s *Service) Bind(id, extension string) error {
-	if s.Busy(id) {
-		return ErrBusy
-	}
-	return s.mutate(id, func(c *Chat) { c.Extension = extension })
-}
-
 // Retitle names the chat id. A chat an extension action opens is named before its first message, so the list and the
 // transcript show what it edits.
 func (s *Service) Retitle(id, title string) error {
 	return s.mutate(id, func(c *Chat) { c.Title = title })
-}
-
-// Owners returns the builder chats bound to the extension id, most recently changed first.
-func (s *Service) Owners(extension string) []Chat {
-	var owners []Chat
-	for _, chat := range s.Chats() {
-		if chat.Kind == KindBuilder && chat.Extension == extension {
-			owners = append(owners, chat)
-		}
-	}
-	return owners
 }
 
 // Note adds an informational notice to the transcript, such as the outcome of an action the chat started.

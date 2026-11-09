@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -84,5 +85,31 @@ func TestBuilderChatIsRecordedOnItsFirstMessage(t *testing.T) {
 	stored, _ := f.store.All()
 	if len(stored) != 1 || stored[0].Extension != "user.clock" || stored[0].Kind != KindBuilder {
 		t.Fatalf("stored = %+v, want the builder chat with its binding", stored)
+	}
+}
+
+// TestAnExtensionHasOneChat checks a second chat cannot bind an extension another chat owns, even one still unused.
+func TestAnExtensionHasOneChat(t *testing.T) {
+	f := newFixture(t)
+	first, err := f.svc.NewChat(KindBuilder, TierSmart)
+	if err != nil {
+		t.Fatalf("NewChat: %v", err)
+	}
+	second, err := f.svc.NewChat(KindBuilder, TierSmart)
+	if err != nil {
+		t.Fatalf("NewChat: %v", err)
+	}
+	if err := f.svc.Bind(first.ID, "user.clock"); err != nil {
+		t.Fatalf("Bind: %v", err)
+	}
+	if err := f.svc.Bind(first.ID, "user.clock"); err != nil {
+		t.Fatalf("binding the owner again: %v", err)
+	}
+	if err := f.svc.Bind(second.ID, "user.clock"); !errors.Is(err, ErrExtensionHasChat) {
+		t.Fatalf("Bind of a second chat = %v, want ErrExtensionHasChat", err)
+	}
+	owners := f.svc.Owners("user.clock")
+	if len(owners) != 1 || owners[0].ID != first.ID {
+		t.Fatalf("owners = %+v, want the first chat alone", owners)
 	}
 }

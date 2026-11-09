@@ -66,11 +66,14 @@ type extensionChatPages struct {
 	p *App
 }
 
-// Start creates a chat of kind, bound to extension when it is not empty, and sends prompt first when it is not empty. It
-// returns the new chat's ID.
+// Start creates a chat of kind, bound to extension when it is not empty, and sends prompt first when it is not empty. An
+// extension has one chat, so an extension that has one gets that chat back. It returns the chat's ID.
 func (c extensionChatPages) Start(kind, prompt, extension string) (string, error) {
 	if c.p.chats == nil {
 		return "", errChatsUnavailable
+	}
+	if owners := c.p.chats.Owners(extension); extension != "" && len(owners) > 0 {
+		return c.openOwner(owners[0].ID, prompt), nil
 	}
 	chatKind, tier := startedChatKind(kind)
 	record, err := c.p.chats.NewChat(chatKind, tier)
@@ -93,6 +96,18 @@ func (c extensionChatPages) Start(kind, prompt, extension string) (string, error
 		})
 	}
 	return record.ID, nil
+}
+
+// openOwner returns the chat that owns an extension, after sending prompt to it when there is one.
+func (c extensionChatPages) openOwner(chatID, prompt string) string {
+	if prompt != "" {
+		c.p.onUI(func() {
+			if err := c.p.chats.Send(chatID, prompt); err != nil {
+				log.Println("chat: could not send:", err)
+			}
+		})
+	}
+	return chatID
 }
 
 // tweakChatTitle names a builder chat that edits the extension titled title, as 1.x names its tweak chats.
