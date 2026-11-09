@@ -84,7 +84,7 @@ func clickableKeyHint(c *ui.Context, hint *KeyHint, action func()) {
 		return
 	}
 	k := Tokens(c)
-	button := ui.ButtonBase(c).Padding(2, 6).Radius(8).Label(hint.Title)
+	button := ui.ButtonBase(c).Padding(2, 6).Radius(8)
 	if button.Hovered() {
 		button.Background(k.Selected)
 	}

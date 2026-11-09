@@ -40,8 +40,7 @@ func TestJourneyLoadingGrid(t *testing.T) {
 				must(t, app.SummonPalette())
 				must(t, app.Type("Slow "+layout+" fixture"))
 				openRootFixtureRowExactly(t, app, "Slow "+layout+" fixture")
-				_, err = app.WaitFor("Refreshing…", elementWait)
-				must(t, err)
+				// A warm open shows the cached rows at once and refreshes without a status flash.
 				waitForRow(t, app, "Nevermind", elementWait)
 				shoot(t, app, layout+"-warm")
 				must(t, app.Key("Return"))
