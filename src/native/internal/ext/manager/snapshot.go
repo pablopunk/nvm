@@ -2,6 +2,27 @@ package manager
 
 import "github.com/pablopunk/nvm/native/internal/ext/api"
 
+// SnapshotRevision binds a durable snapshot to the enabled installation that supplied the given in-memory identity.
+// A caller must still validate OS access to each file before exposing any persisted content.
+func (m *Manager) SnapshotRevision(id string, identity any) (string, bool) {
+	selected, ok := identity.(*byte)
+	if !ok || selected == nil {
+		return "", false
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	if err != nil || e.builtin || e.runtime == nil || !m.isRunnable(e) || selected != e.snapshotIdentity || !e.bundle.Runnable() || e.bundle.Hash == "" {
+		return "", false
+	}
+	for _, capability := range e.bundle.Manifest.Capabilities {
+		if capability == api.CapabilityDesktopFiles {
+			return e.bundle.Hash, true
+		}
+	}
+	return "", false
+}
+
 // SnapshotIdentity scopes an in-memory presentation snapshot to an enabled installation.
 // The opaque identity is replaced on disable or installation replacement.
 func (m *Manager) SnapshotIdentity(id string) any {
