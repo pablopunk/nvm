@@ -227,7 +227,7 @@ func paletteSummary(colors palette) string {
 	if colors.Monochrome {
 		single = "Single-color fallback: no sufficiently distinct second color was found.\n"
 	}
-	return fmt.Sprintf("Icon tint (first dominant color, Light style): %s\nSelection highlight (second color, softened): %s\n%sIcon tint requires macOS 26+. Changes use undocumented preferences; applying colors selects Tinted Light and automatically restarts Dock without changing system-wide appearance. Some apps need reopening or logout/login. Preview does not change any settings.", hex(colors.Tint), hex(colors.Highlight), single)
+	return fmt.Sprintf("Icon tint (most vivid dominant color, Light style): %s\nSelection highlight (second vivid color): %s\n%sIcon tint requires macOS 26+. Changes use undocumented preferences; applying colors selects Tinted Light and automatically restarts Dock without changing system-wide appearance. Some apps need reopening or logout/login. Preview does not change any settings.", hex(colors.Tint), hex(colors.Highlight), single)
 }
 
 func wallpaperRoot(ctx api.Context) (string, error) {

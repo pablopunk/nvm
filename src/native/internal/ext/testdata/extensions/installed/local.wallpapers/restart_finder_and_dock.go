@@ -93,7 +93,7 @@ func quoteShell(text string) string {
 
 func extractPalette(ctx api.Context, path string) (palette, error) {
 	meta, _ := ctx.Desktop().Files().Metadata(path)
-	key := fmt.Sprintf("palette-v1:%s:%d:%d", path, meta.MtimeMs, meta.Size)
+	key := fmt.Sprintf("palette-v2:%s:%d:%d", path, meta.MtimeMs, meta.Size)
 	var colors palette
 	err := ctx.Storage().Memo(key, paletteTTL, &colors, func() (any, error) {
 		sampled, sampleErr := samplePalette(ctx, path)
@@ -126,7 +126,8 @@ func buildPalette(samples [][]float64) (palette, error) {
 	if len(candidates) == 0 {
 		candidates = clusters
 	}
-	first := candidates[0].rgb
+	sortByVividness(candidates)
+	first := vivid(candidates[0].rgb)
 	second, hasSecond := distinctColor(first, candidates)
 	if !hasSecond {
 		second, hasSecond = distinctColor(first, clusters)
@@ -135,7 +136,41 @@ func buildPalette(samples [][]float64) (palette, error) {
 	if hasSecond {
 		highlight = second
 	}
-	return palette{Tint: first, Highlight: softened(highlight), Monochrome: !hasSecond}, nil
+	return palette{Tint: first, Highlight: softened(vivid(highlight)), Monochrome: !hasSecond}, nil
+}
+
+// sortByVividness prefers saturated colors that still cover a visible share of the image,
+// so a mostly dark wallpaper tints with its most colorful accent instead of its shadows.
+func sortByVividness(clusters []colorCluster) {
+	score := func(cluster colorCluster) float64 {
+		saturation, _ := saturationAndValue(cluster.rgb)
+		return math.Sqrt(float64(cluster.count)) * (0.1 + saturation)
+	}
+	sort.SliceStable(clusters, func(i, j int) bool { return score(clusters[i]) > score(clusters[j]) })
+}
+
+func saturationAndValue(rgb [3]float64) (float64, float64) {
+	high, low := maxChannel(rgb), minChannel(rgb)
+	if high == 0 {
+		return 0, 0
+	}
+	return (high - low) / high, high
+}
+
+// vivid keeps the hue and lifts saturation and brightness; near-gray colors stay gray.
+func vivid(rgb [3]float64) [3]float64 {
+	saturation, value := saturationAndValue(rgb)
+	if saturation < 0.08 {
+		return rgb
+	}
+	high, low := maxChannel(rgb), minChannel(rgb)
+	newSaturation, newValue := math.Max(saturation, 0.8), math.Max(value, 0.9)
+	newLow := newValue * (1 - newSaturation)
+	var out [3]float64
+	for channel := range rgb {
+		out[channel] = newLow + (rgb[channel]-low)/(high-low)*(newValue-newLow)
+	}
+	return out
 }
 
 func binColors(samples [][]float64) []colorBin {
@@ -223,7 +258,7 @@ func distinctColor(first [3]float64, clusters []colorCluster) ([3]float64, bool)
 
 func softened(rgb [3]float64) [3]float64 {
 	for channel := range rgb {
-		rgb[channel] = rgb[channel]*0.5 + 0.5
+		rgb[channel] = rgb[channel]*0.8 + 0.2
 	}
 	return rgb
 }
