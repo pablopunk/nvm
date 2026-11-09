@@ -110,6 +110,8 @@ type Options struct {
 	MenuBarRefresh func(extensionID string)
 	// RootRefresh receives an extension's InvalidateRoot calls. It must not block.
 	RootRefresh func(extensionID string)
+	// ViewsInvalidate receives an extension's Views.Invalidate calls. It must not block.
+	ViewsInvalidate func(extensionID string)
 	// AIQuota shares each extension's model-call count with the app's other callers of the same owner.
 	AIQuota *quota.Registry
 	// SearchRefresh receives an extension's RefreshSearch calls. It must not block.
@@ -198,6 +200,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Displays:       services.NewSharedDisplays(),
 
 			Shell:           ports.Shell,
+			ViewsInvalidate: opts.ViewsInvalidate,
 			Commands:        ports.Commands,
 			Home:            opts.Home,
 			Capabilities:    ports.Capabilities,

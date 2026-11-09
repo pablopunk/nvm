@@ -20,6 +20,11 @@ func (h *Handler) serveViews(call protocol.ServiceCall) (any, error) {
 	case protocol.OpInvalidateRoot:
 		h.refreshRoot()
 		return nil, nil
+	case protocol.OpInvalidateViews:
+		if h.deps.ViewsInvalidate != nil {
+			h.deps.ViewsInvalidate(h.manifest.ID)
+		}
+		return nil, nil
 	case protocol.OpRefreshSearch:
 		return nil, h.refreshSearch(call.Args)
 	}

@@ -30,8 +30,9 @@ const (
 
 	OpRecords = "records"
 
-	OpRefreshMenuBar = "refreshMenuBar"
-	OpInvalidateRoot = "invalidateRoot"
+	OpRefreshMenuBar  = "refreshMenuBar"
+	OpInvalidateRoot  = "invalidateRoot"
+	OpInvalidateViews = "invalidateViews"
 
 	OpReadImage      = "read-image"
 	OpWriteImage     = "write-image"
