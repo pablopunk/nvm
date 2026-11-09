@@ -71,7 +71,7 @@ func TestReadsSpanishWithItsAccents(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestOCRChildProcess$", "--"}, assets.Args(filepath.Join("testdata", "spanish.png")))...)
+	cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestOCRChildProcess$", "--"}, assets.Args(filepath.Join("testdata", "spanish.png"))...)...)
 	cmd.Env = append(os.Environ(), "NVM_OCR_TEST_CHILD=1")
 	data, err := cmd.CombinedOutput()
 	if err != nil {
