@@ -45,6 +45,9 @@ type Options struct {
 	BuilderTools func(chatID string) Toolset
 	// Logger receives the turns that fail. Nil means the process logger.
 	Logger *logx.Logger
+	// Engine returns the engine that drives the replies of a chat, or nil for the native loop. It runs on the UI thread
+	// and is asked for every turn, so it returns the same engine for a chat as long as the chat should keep its context.
+	Engine func(chat Chat) agent.Engine
 }
 
 // Toolset is the tools a conversation may call and the policy each call passes before it runs.
@@ -341,7 +344,7 @@ func (s *Service) startTurn(id string) error {
 	if err != nil {
 		return err
 	}
-	r := newRun(agent.Start(context.Background(), s.setupFor(chat), history), chat.Kind, chat.Tier, s.opts.Clock.Now())
+	r := newRun(s.startAgent(chat, history), chat.Kind, chat.Tier, s.opts.Clock.Now())
 	s.runs[id] = r
 	go s.consume(id, r)
 	return nil
@@ -380,4 +383,15 @@ func titleText(text string) string {
 		return "Image"
 	}
 	return text
+}
+
+// startAgent begins the turn: on the chat's engine when it has one, on the native loop otherwise.
+func (s *Service) startAgent(chat Chat, history []backend.Message) *agent.Turn {
+	setup := s.setupFor(chat)
+	if s.opts.Engine != nil {
+		if engine := s.opts.Engine(chat); engine != nil {
+			return agent.StartExternal(context.Background(), setup, engine, history)
+		}
+	}
+	return agent.Start(context.Background(), setup, history)
 }

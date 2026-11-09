@@ -89,3 +89,15 @@ func (r *Registry) Wire() (json.RawMessage, error) {
 	}
 	return data, nil
 }
+
+// All returns the tools in registration order.
+func (r *Registry) All() []Tool {
+	if r == nil {
+		return nil
+	}
+	all := make([]Tool, 0, len(r.order))
+	for _, name := range r.order {
+		all = append(all, r.tools[name])
+	}
+	return all
+}

@@ -75,6 +75,17 @@ func (id identity) setIdentityHeaders(req *platform.Request) {
 	req.Header.Set(headerArch, id.arch)
 }
 
+// headerMap is the compatibility headers as a map, for a process that makes its own requests.
+func (id identity) headerMap() map[string]string {
+	return map[string]string{
+		headerClient:        clientName,
+		headerClientVersion: id.version,
+		headerAPIVersion:    APIVersion,
+		headerPlatform:      id.platform,
+		headerArch:          id.arch,
+	}
+}
+
 // newRequestID returns a random identifier for one request, used for support and log correlation. It is
 // empty when the system random source fails, and the header is then omitted.
 func newRequestID() string {

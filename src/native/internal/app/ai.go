@@ -66,6 +66,7 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		OnSettled:    p.chatSettled,
 		Tools:        p.chatToolset(),
 		BuilderTools: p.builderToolset,
+		Engine:       p.chatEngine,
 	})
 }
 

@@ -74,6 +74,7 @@ jobs:
         run: |
           bash scripts/natives/build-libopus.sh
           bash scripts/natives/build-macos-helper.sh
+          bash scripts/natives/build-pi-host.sh
 
       - name: Import the signing certificate
         if: steps.decide.outputs.sign == 'true'
@@ -250,7 +251,9 @@ jobs:
 
       - name: Build libopus for this machine
         working-directory: src/native
-        run: bash scripts/natives/build-libopus.sh
+        run: |
+          bash scripts/natives/build-libopus.sh
+          bash scripts/natives/build-pi-host.sh
 
       - name: Stamp the package settings
         working-directory: src/native
