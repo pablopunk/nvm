@@ -161,7 +161,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		previousChoice := p.chosen
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			list = ui.List(c, &p.list, listRowCount(p.results, p.pendingBatch()), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
+			list = ui.List(c, &p.list, len(p.results), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
 			p.prepareFooterReveal(c, list, v)
 		})
 		if p.chosen != previousChoice {
@@ -182,14 +182,6 @@ func (p *Palette) listBody(c *ui.Context) {
 			})
 		}
 	})
-}
-
-// listRowCount is the number of list rows: one per result, and one loading row after them while a batch arrives.
-func listRowCount(results []search.Item, loading bool) int {
-	if loading {
-		return len(results) + 1
-	}
-	return len(results)
 }
 
 // listRowKey keeps an identified result mounted when its title or rank changes. Anonymous rows use their position
@@ -314,12 +306,9 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if root {
 		name = ""
 	}
-	loading := p.loadingActionOrView()
+	loading := p.loadingActionOrView() && (len(p.results) == 0 || p.actionPending)
 	if loading {
 		status := "Loading…"
-		if len(p.results) > 0 {
-			status = "Refreshing…"
-		}
 		if name != "" {
 			name += " · "
 		}
@@ -332,7 +321,7 @@ func (p *Palette) footer(c *ui.Context, v *View) {
 	if data.Control == nil && v.Accessory != nil && len(v.Accessory.Options) > 0 {
 		data.Control = p.filterControl(v.Accessory)
 	}
-	if it := p.actionableItem(); it != nil && len(it.Actions) > 0 {
+	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
 		if action, ok := it.DefaultAction(); ok {
 			data.Primary = &design.KeyHint{Title: action.Title, Key: KeyLabel("↵")}
 		}

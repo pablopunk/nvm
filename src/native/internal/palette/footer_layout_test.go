@@ -63,22 +63,23 @@ func TestRootFooterShowsPendingStatusWithoutIdentity(t *testing.T) {
 		t.Run(fmt.Sprintf("cached=%t", cached), func(t *testing.T) {
 			pending := true
 			titles := []string{}
-			status := "Loading…"
 			if cached {
 				titles = []string{"Cached row"}
-				status = "Refreshing…"
 			}
 			h := newHarness(t, loadingView(false, &pending, &titles), true)
-			if _, ok := h.tt.Find(status); !ok {
-				t.Fatalf("root footer lost %q status", status)
+			if _, ok := h.tt.Find("Loading…"); ok == cached {
+				t.Fatal("loading status must appear only without cached rows")
+			}
+			if _, ok := h.tt.Find("Refreshing…"); ok {
+				t.Fatal("cached rows must not flash a refresh status")
 			}
 			if _, ok := h.tt.Find("Nevermind"); ok {
 				t.Fatal("root identity pill was restored")
 			}
 			pending = false
 			h.frame()
-			if _, ok := h.tt.Find(status); ok {
-				t.Fatalf("completed load kept %q status", status)
+			if _, ok := h.tt.Find("Loading…"); ok {
+				t.Fatal("completed load kept loading status")
 			}
 		})
 	}
