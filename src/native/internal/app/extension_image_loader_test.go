@@ -14,7 +14,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-func TestImageReferencesKeepGridAndPreviewSizesSeparate(t *testing.T) {
+func TestImageReferencesPreserveSmallSources(t *testing.T) {
 	var encoded bytes.Buffer
 	if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 512, 256))); err != nil {
 		t.Fatal(err)
@@ -25,7 +25,7 @@ func TestImageReferencesKeepGridAndPreviewSizesSeparate(t *testing.T) {
 		ref   string
 		width int
 	}{
-		{thumbs.GridReference("file:///image%20%231.png"), thumbs.GridEdge},
+		{thumbs.GridReference("file:///image%20%231.png"), 512},
 		{"file:///image%20%231.png", 512},
 		{"/image #1.png", 512},
 	} {
