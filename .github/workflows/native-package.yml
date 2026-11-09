@@ -1,8 +1,8 @@
 name: Native packages
 
 # Builds the Go app (src/native) into installable packages on each OS. Signing runs when the existing Apple or Windows
-# certificate secrets exist, and macOS notarization runs whenever the Apple notary secrets exist too, pull requests
-# included. Without them the packages are unsigned and the run says so. Release flags (releaseBuild) need
+# certificate secrets exist. Dispatched macOS builds are notarized when the Apple notary secrets exist; pull request
+# previews skip notarization for faster iteration. Without signing secrets packages are unsigned and the run says so. Release flags (releaseBuild) need
 # workflow_dispatch with release=true.
 
 on:
@@ -61,11 +61,12 @@ jobs:
         env:
           HAS_CERTIFICATE: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
           HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           sign=false
           notarize=false
           if [ "$HAS_CERTIFICATE" = true ]; then sign=true; fi
-          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ]; then notarize=true; fi
+          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$EVENT_NAME" = workflow_dispatch ]; then notarize=true; fi
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
           echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
 
@@ -207,7 +208,7 @@ jobs:
       - name: Note the signing state
         run: |
           if [ "${{ steps.decide.outputs.sign }}" = true ]; then
-            echo "macOS ${{ matrix.arch }}: signed${{ steps.decide.outputs.notarize == 'true' && ' and notarized, DMG stapled' || ', not notarized (no notary secrets)' }}." >> "$GITHUB_STEP_SUMMARY"
+            echo "macOS ${{ matrix.arch }}: signed${{ steps.decide.outputs.notarize == 'true' && ' and notarized, DMG stapled' || ', not notarized' }}." >> "$GITHUB_STEP_SUMMARY"
           else
             echo "macOS ${{ matrix.arch }}: UNSIGNED. Ad hoc signed; Gatekeeper blocks it on other Macs. Add the MACOS_CERT_* and APPLE_* secrets to sign it." >> "$GITHUB_STEP_SUMMARY"
           fi
