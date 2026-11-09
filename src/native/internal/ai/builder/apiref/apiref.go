@@ -17,7 +17,7 @@ import (
 
 // entryInterfaces are the api interfaces whose methods are the entry points an extension source defines. Each method
 // name is the top-level function name the child looks up.
-var entryInterfaces = []string{"CommandProvider", "RootProvider", "SearchProvider", "ActionHandler", "DataLoader", "MenuBarProvider"}
+var entryInterfaces = []string{"CommandProvider", "RootProvider", "SearchProvider", "ActionHandler", "DataLoader", "MenuBarProvider", "WindowRestorer"}
 
 // rootTypes are the wire types the model must know beyond the entry points: the manifest, and the context the
 // handlers receive. Everything they reach is included, except the services behind Context (see services).

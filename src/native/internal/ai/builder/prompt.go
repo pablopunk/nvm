@@ -24,6 +24,7 @@ Rules:
 - Manifest: {"apiVersion":"API_VERSION","id":"user.my-extension","title":"My extension"}. The id is lowercase and dot-separated, and never starts with "nevermind.". Leave commandTitles out unless the user asks to rename a command.
 - Source: main.go, package main, under 200 lines. Import only the standard library and "github.com/pablopunk/nvm/native/internal/ext/api". No goroutines, no cgo, no file or network access unless the API offers it. There is no max builtin; write the comparison out.
 - The reference names types without their package. In source, write each one with the api. prefix (api.Item, api.Action). Use only the names in the reference; do not invent functions, fields or constants.
+- The source is interpreted, not compiled. Entry points must be top-level functions, because the host cannot call methods of your own types. Receive from a channel into a variable before returning it: return <-ch fails at run time. Some standard library packages are missing; write_extension reports them, so replace the import with what is available.
 - Each entry point is optional. Define the ones the extension needs, with exactly the signatures in the reference.
 - SearchItems runs on every keystroke: return nil unless the query is relevant, and be fast.
 - Only promise behavior the API supports. Keep the id of the extension, and of its commands, stable when you change it.
