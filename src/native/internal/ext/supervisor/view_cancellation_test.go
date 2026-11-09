@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
-	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 type heldViewServices struct {
