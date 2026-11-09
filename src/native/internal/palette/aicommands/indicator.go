@@ -77,7 +77,7 @@ func Indicator(c *ui.Context, s commands.Status) {
 				})
 			}
 			if s.Activity == commands.ActivityRecording {
-				waveform(c, s.Waveform, tone)
+				waveform(c, s.Waveform, tone, c.Preferences().ReduceMotion)
 			}
 		})
 	})
@@ -124,9 +124,12 @@ func indicatorColumns(text string) int {
 }
 
 // waveform renders recent microphone levels around a common baseline. Silence stays visible as a fine trace.
-func waveform(c *ui.Context, samples [commands.WaveformSamples]float64, tone ui.Color) {
+func waveform(c *ui.Context, samples [commands.WaveformSamples]float64, tone ui.Color, reduceMotion bool) {
 	ui.Row(c).Gap(1).AlignItems(ui.Center).Children(func() {
 		for _, level := range samples {
+			if reduceMotion {
+				level = 0.3
+			}
 			height := max(float32(1), float32(min(1, max(0, level)))*20)
 			ui.Box(c).Width(1).Height(height).Radius(1).Background(tone)
 		}

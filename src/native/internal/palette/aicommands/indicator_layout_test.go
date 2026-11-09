@@ -83,7 +83,6 @@ func TestIndicatorWithoutLiveActivityStaysStill(t *testing.T) {
 func TestRecordingWaveformReflectsMicrophoneLevels(t *testing.T) {
 	status := commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}
 	tester := ui.NewTester(func(c *ui.Context) { Indicator(c, status) }, Width(status), Height(status))
-	tester.SetPreferences(ui.Preferences{ReduceMotion: true})
 	tester.Frame()
 	quiet := append([]byte(nil), tester.Image().Pix...)
 	for i := range status.Waveform {
@@ -93,5 +92,20 @@ func TestRecordingWaveformReflectsMicrophoneLevels(t *testing.T) {
 	loud := tester.Image().Pix
 	if bytes.Equal(quiet, loud) {
 		t.Fatal("recording indicator did not reflect microphone levels")
+	}
+}
+
+func TestRecordingWaveformIsStaticWithReducedMotion(t *testing.T) {
+	status := commands.Status{Title: "Dictate", Subtitle: "Listening", Tone: commands.ToneLoading, Activity: commands.ActivityRecording}
+	tester := ui.NewTester(func(c *ui.Context) { Indicator(c, status) }, Width(status), Height(status))
+	tester.SetPreferences(ui.Preferences{ReduceMotion: true})
+	tester.Frame()
+	quiet := append([]byte(nil), tester.Image().Pix...)
+	for i := range status.Waveform {
+		status.Waveform[i] = 0.8
+	}
+	tester.Frame()
+	if !bytes.Equal(quiet, tester.Image().Pix) {
+		t.Fatal("reduced-motion waveform changed with microphone levels")
 	}
 }
