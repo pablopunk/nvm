@@ -7,12 +7,12 @@ import (
 
 func TestTitleFromFirstLine(t *testing.T) {
 	tests := map[string]string{
-		"# Heading\nbody":             "Heading",
-		"\n\n  plain line":            "plain line",
-		"- [x] done item":             "done item",
+		"# Heading\nbody":               "Heading",
+		"\n\n  plain line":              "plain line",
+		"- [x] done item":               "done item",
 		"**bold** and [link](http://a)": "bold and link",
-		"![alt](pic.png) text":        "alt text",
-		"":                            "Fallback",
+		"![alt](pic.png) text":          "alt text",
+		"":                              "Fallback",
 	}
 	for content, want := range tests {
 		if got := titleFromFirstLine(content, "Fallback"); got != want {

@@ -1,10 +1,10 @@
 package services
 
 import (
-	"strings"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"

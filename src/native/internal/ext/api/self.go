@@ -2,8 +2,8 @@ package api
 
 // ExtensionRename holds new names. An empty field keeps its value.
 type ExtensionRename struct {
-	Title    string `json:"title,omitempty"`
-	Subtitle string `json:"subtitle,omitempty"`
+	Title        string `json:"title,omitempty"`
+	Subtitle     string `json:"subtitle,omitempty"`
 	CommandID    string `json:"commandId,omitempty"`
 	CommandTitle string `json:"commandTitle,omitempty"`
 }

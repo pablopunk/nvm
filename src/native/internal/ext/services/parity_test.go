@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 func templateText(t *testing.T, h *Handler, input string, options api.TemplateOptions) string {
@@ -21,7 +22,8 @@ func templateText(t *testing.T, h *Handler, input string, options api.TemplateOp
 }
 
 func TestTemplateFillsSelectedTextWhenAskedAndPermitted(t *testing.T) {
-	permitted := desktopHandler(t, Deps{Selection: &filesSelection{}}, api.CapabilityDesktopSelection)
+	clock := fake.NewClock()
+	permitted := desktopHandler(t, Deps{Clock: clock, Selection: &filesSelection{}}, api.CapabilityDesktopSelection)
 	if got := templateText(t, permitted, "<{selectedText}>", api.TemplateOptions{}); got != "<text>" {
 		t.Fatalf("got %q", got)
 	}
@@ -29,7 +31,7 @@ func TestTemplateFillsSelectedTextWhenAskedAndPermitted(t *testing.T) {
 	if got := templateText(t, permitted, "<{selectedText}>", api.TemplateOptions{IncludeSelectedText: &off}); got != "<>" {
 		t.Fatalf("opted out, got %q", got)
 	}
-	undeclared := desktopHandler(t, Deps{Selection: &filesSelection{}})
+	undeclared := desktopHandler(t, Deps{Clock: clock, Selection: &filesSelection{}})
 	if got := templateText(t, undeclared, "<{selectedText}>", api.TemplateOptions{}); got != "<>" {
 		t.Fatalf("undeclared, got %q", got)
 	}

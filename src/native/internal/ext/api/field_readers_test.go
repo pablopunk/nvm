@@ -37,7 +37,7 @@ var unreadFields = map[string]string{
 	"QuitResult.WasRunning":           "answer",
 	"SavedDictation.CreatedAtMs":      "answer",
 	"TemplateOptions.PromptMissing":   "accepted so source compiles; Missing is always reported",
-	"TemplateResult.Missing": "answer",
+	"TemplateResult.Missing":          "answer",
 	"TemplateResult.Cursor":           "answer",
 	"TweakRequest.ExtensionFile":      "read through the builder port",
 	"UpdateState.AvailableVersion":    "answer",
