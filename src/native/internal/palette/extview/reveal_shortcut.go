@@ -10,11 +10,11 @@ import (
 // revealShortcut is the standard key of a palette result that is a file: it shows the file in the file manager.
 const revealShortcut = "CommandOrControl+Enter"
 
-// withRevealShortcut gives a row with a file the standard Command+Enter reveal. A row whose own action already binds
+// WithRevealShortcut gives a row with a file the standard Command+Enter reveal. A row whose own action already binds
 // that key keeps it. A row with a reveal action that has no key takes the key for it. Any other row with a File gets a
 // reveal action added, so every file result answers the key the same way. The row's slices are copied, never changed,
 // because the items are shared with the view's snapshot.
-func withRevealShortcut(item api.Item, title string) api.Item {
+func WithRevealShortcut(item api.Item, title string) api.Item {
 	if item.Disabled || bindsRevealKey(item) {
 		return item
 	}

@@ -41,7 +41,7 @@ func rowIcon(item api.Item) string {
 func (s *Session) row(item api.Item) search.Item {
 	if !s.snapshotPending {
 		item = WithPreviewActions(item)
-		item = withRevealShortcut(item, s.deps.RevealTitle)
+		item = WithRevealShortcut(item, s.deps.RevealTitle)
 	}
 	row := search.Item{
 		ID: item.ID, Title: item.Title, Subtitle: item.Subtitle, Glyph: item.Glyph,
