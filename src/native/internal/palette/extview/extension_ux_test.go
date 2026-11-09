@@ -112,7 +112,7 @@ func TestEmptyListWithPageActionsShowsTheActionsHint(t *testing.T) {
 	p.Push(session.listPage())
 	tt := ui.NewTester(p.View, 720, 470)
 	tt.Frame()
-	if !tt.HasText("No snippets yet") || !tt.HasText("Actions") {
+	if !tt.HasText("No snippets yet") || !tt.HasText(palette.KeyLabel("⌃K Actions")) {
 		t.Fatalf("empty list texts = %v, want the empty state and the Actions hint", tt.Texts())
 	}
 }

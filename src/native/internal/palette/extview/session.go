@@ -194,6 +194,9 @@ func (s *Session) listPage() *palette.View {
 	page.OnKey = s.tabCyclesAccessory(page.Accessory)
 	page.Footer = s.footerName
 	page.Hint = s.view.Hint
+	if page.Hint == "" && (len(s.view.Actions) > 0 || s.view.ActionPanel != nil) {
+		page.Hint = "⌃K Actions" // with no rows the footer has no Actions entry, and the page actions need one
+	}
 	return page
 }
 
