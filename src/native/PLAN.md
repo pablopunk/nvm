@@ -639,6 +639,8 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 - **Acceptance:** goldens and journeys unchanged after each migration; any missing primitive is added to the API (not bypassed) in the same PR.
 - **Rungs:** L1-L6. **UX:** the migrated feature's journeys. **UI:** goldens identical.
 
+WP3.11 to WP3.17 (extension API parity with 1.x: ledger, gaps, ignored fields, runtime speed, builder discovery, conformance, sign-off) are in `docs/extension-api-parity-plan.md`.
+
 ## M4 OS depth
 
 ### WP4.1 Window management  `[XL]` (split in three PRs)
