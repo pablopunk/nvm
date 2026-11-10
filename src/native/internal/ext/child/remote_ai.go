@@ -133,7 +133,7 @@ func (a remoteAttachments) File(path, as, title string) api.Attachment {
 }
 
 func (a remoteAttachments) SelectedText(title string) (api.Attachment, error) {
-	text, found, err := (remoteSelection{link: a.link}).Text()
+	text, found, err := remoteSelection(a).Text()
 	if err != nil {
 		return api.Attachment{}, err
 	}
@@ -147,7 +147,7 @@ func (a remoteAttachments) SelectedText(title string) (api.Attachment, error) {
 }
 
 func (a remoteAttachments) SelectedFiles(as string) ([]api.Attachment, error) {
-	paths, err := (remoteSelection{link: a.link}).Files()
+	paths, err := remoteSelection(a).Files()
 	if err != nil {
 		return nil, err
 	}
