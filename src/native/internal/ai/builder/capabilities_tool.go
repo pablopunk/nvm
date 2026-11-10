@@ -15,7 +15,7 @@ import (
 func listCapabilitiesTool() agent.Tool {
 	return agent.Tool{
 		Name:        "list_capabilities",
-		Description: "Read a bounded page of known manifest capability declarations. These names do not indicate host support or granted permissions. Use read_extension_api for views and System.HasCapability for runtime support.",
+		Description: "Read a bounded page of known manifest capability declarations. These names do not indicate host support or granted permissions. Runtime probe names can differ (for example, desktop.window-management declares access, while window-management is a runtime probe). Read read_extension_api for the correct System.HasCapability probe names and view APIs.",
 		Label:       "Reading capabilities",
 		Schema:      readSchema,
 		Run: func(ctx context.Context, args json.RawMessage) (agent.Result, error) {
@@ -31,16 +31,19 @@ func listCapabilitiesTool() agent.Tool {
 				names = append(names, string(capability))
 			}
 			sort.Strings(names)
-			body := strings.Join(names, "\n")
-			if in.Offset < 0 || in.Offset > len(body) {
-				return agent.Result{}, fmt.Errorf("offset must be between 0 and %d", len(body))
-			}
-			end := pageEnd(body, in.Offset)
-			header := fmt.Sprintf("Known manifest declarations, bytes %d to %d of %d. These do not indicate host support or permissions.", in.Offset, end, len(body))
-			if end < len(body) {
-				header += fmt.Sprintf(" Continue with offset %d.", end)
-			}
-			return agent.Result{Text: header + "\n\n" + body[in.Offset:end], Outcome: "Read capabilities"}, nil
+			return capabilityPage(strings.Join(names, "\n"), in.Offset)
 		},
 	}
+}
+
+func capabilityPage(body string, offset int) (agent.Result, error) {
+	if offset < 0 || offset > len(body) {
+		return agent.Result{}, fmt.Errorf("offset must be between 0 and %d", len(body))
+	}
+	end := pageEnd(body, offset)
+	header := fmt.Sprintf("Known manifest declarations, bytes %d to %d of %d. These do not indicate host support or permissions.", offset, end, len(body))
+	if end < len(body) {
+		header += fmt.Sprintf(" Continue with offset %d.", end)
+	}
+	return agent.Result{Text: header + "\n\n" + body[offset:end], Outcome: "Read capabilities"}, nil
 }
