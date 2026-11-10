@@ -80,15 +80,6 @@ func (s *fileService) systemIcon(path string) *ui.Bitmap {
 // reopening a grid paints at once; after a launch it comes from the disk cache, and only a file never seen is scaled. It
 // runs on a worker and answers nil when the file has no picture.
 func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
-	select {
-	case gridPicturePermits <- struct{}{}:
-	case <-ctx.Done():
-		return nil
-	}
-	defer func() { <-gridPicturePermits }()
-	if ctx.Err() != nil {
-		return nil
-	}
 	sources, ok := s.fsys.(platform.FileSources)
 	if !ok {
 		return nil
@@ -98,6 +89,20 @@ func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
 		return nil
 	}
 	defer source.Close()
+	return s.gridPictureFromSource(ctx, path, source)
+}
+
+// gridPictureFromSource renders only from the caller's already authorized source.
+func (s *fileService) gridPictureFromSource(ctx context.Context, path string, source platform.ReadSource) *ui.Bitmap {
+	select {
+	case gridPicturePermits <- struct{}{}:
+	case <-ctx.Done():
+		return nil
+	}
+	defer func() { <-gridPicturePermits }()
+	if ctx.Err() != nil {
+		return nil
+	}
 	info, err := source.Stat()
 	if err != nil || !info.Mode().IsRegular() {
 		return nil
