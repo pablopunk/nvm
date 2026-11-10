@@ -11,8 +11,10 @@ func TestManualRefreshPreservesRowsAndRejectsObsoleteLoads(t *testing.T) {
 	clock := fake.NewClock()
 	cache := NewMemoryCache()
 	cache.Put("test/key", CacheEntry{Items: []api.Item{{ID: "cached"}}, At: clock.Now()})
-	var loads []func([]api.Item, *api.Failure)
-	s := NewSession(Deps{Clock: clock, Cache: cache, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}, "test", api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}})
+	var loads []func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+	s := NewSession(Deps{Clock: clock, Cache: cache, Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+		loads = append(loads, done)
+	}}, "test", api.View{Kind: api.ViewList, Source: &api.DataSource{CacheKey: "key", Loader: "load"}})
 	host := &removalHost{}
 	page := s.Open(host)
 	action := s.actionBody(api.Action{Kind: api.ActionRefreshView}, "refresh")
@@ -21,8 +23,8 @@ func TestManualRefreshPreservesRowsAndRejectsObsoleteLoads(t *testing.T) {
 	if len(loads) != 2 || len(s.items) != 1 || s.items[0].ID != "cached" {
 		t.Fatalf("loads=%d items=%v", len(loads), s.items)
 	}
-	loads[1]([]api.Item{{ID: "new"}}, nil)
-	loads[0]([]api.Item{{ID: "old"}}, nil)
+	loads[1]([]api.Item{{ID: "new"}}, nil, nil)
+	loads[0]([]api.Item{{ID: "old"}}, nil, nil)
 	if s.items[0].ID != "new" {
 		t.Fatalf("obsolete load applied: %v", s.items)
 	}
@@ -32,7 +34,7 @@ func TestManualRefreshPreservesRowsAndRejectsObsoleteLoads(t *testing.T) {
 	}
 	action.Run(host)
 	page.OnLeave()
-	loads[2]([]api.Item{{ID: "dismissed"}}, nil)
+	loads[2]([]api.Item{{ID: "dismissed"}}, nil, nil)
 	if s.items[0].ID != "new" {
 		t.Fatalf("dismissed load applied: %v", s.items)
 	}
@@ -79,7 +81,7 @@ func TestManualRefreshRejectsIncompatibleViews(t *testing.T) {
 	}
 	for _, view := range views {
 		calls := 0
-		s := NewSession(Deps{Load: func(string, string, func([]api.Item, *api.Failure)) { calls++ }, Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) { calls++ }}, "test", view)
+		s := NewSession(Deps{Load: func(string, string, func([]api.Item, *api.SnapshotEvidence, *api.Failure)) { calls++ }, Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) { calls++ }}, "test", view)
 		h := &fakeHost{}
 		s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
 		if calls != 0 || len(h.toasts) != 1 || h.toasts[0] != unavailableMessage {
@@ -89,12 +91,12 @@ func TestManualRefreshRejectsIncompatibleViews(t *testing.T) {
 }
 
 func TestManualSourceRefreshKeepsRowsOnFailure(t *testing.T) {
-	var done func([]api.Item, *api.Failure)
-	s := NewSession(Deps{Load: func(_ string, _ string, cb func([]api.Item, *api.Failure)) { done = cb }}, "test", api.View{Kind: api.ViewGrid, Source: &api.DataSource{Loader: "load"}})
+	var done func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+	s := NewSession(Deps{Load: func(_ string, _ string, cb func([]api.Item, *api.SnapshotEvidence, *api.Failure)) { done = cb }}, "test", api.View{Kind: api.ViewGrid, Source: &api.DataSource{Loader: "load"}})
 	s.items = []api.Item{{ID: "cached"}}
 	h := &fakeHost{}
 	s.actionBody(api.Action{Kind: api.ActionRefreshView}, "").Run(h)
-	done(nil, &api.Failure{Message: "load failed"})
+	done(nil, nil, &api.Failure{Message: "load failed"})
 	if len(s.items) != 1 || s.items[0].ID != "cached" || s.failure == nil || s.failure.Message != "load failed" {
 		t.Fatalf("items=%v failure=%v", s.items, s.failure)
 	}

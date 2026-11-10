@@ -23,7 +23,7 @@ type settingStore struct {
 func (st *settingStore) deps(files *fake.FS) Deps {
 	return Deps{
 		Invoke:  func(string, api.Invocation, func(api.Result, *api.Failure)) {},
-		Load:    func(string, string, func([]api.Item, *api.Failure)) {},
+		Load:    func(string, string, func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {},
 		OpenURL: func(string) {}, CopyText: func(search.Host, string) {}, Files: files,
 		ReadSetting: func(_, key string) (json.RawMessage, error) {
 			value, ok := st.values[key]

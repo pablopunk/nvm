@@ -33,12 +33,12 @@ func syncViewDeps(m *manager.Manager) extview.Deps {
 			}
 			done(result, failure)
 		},
-		Load: func(extID, loader string, done func([]api.Item, *api.Failure)) {
-			items, failure, err := m.Load(context.Background(), extID, loader)
+		Load: func(extID, loader string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+			items, evidence, failure, err := m.Load(context.Background(), extID, loader)
 			if err != nil {
 				failure = &api.Failure{Code: api.CodeInternal, Message: err.Error()}
 			}
-			done(items, failure)
+			done(items, evidence, failure)
 		},
 		LoadImage: func(ctx context.Context, ref string, done func(*ui.Bitmap)) {
 			done(loadExtensionBitmap(real.NewPorts().FS, ref))

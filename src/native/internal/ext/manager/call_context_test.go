@@ -63,7 +63,7 @@ func TestManagerCallBudgetOwnership(t *testing.T) {
 						t.Fatal(failure, err)
 					}
 				case protocol.MethodLoad:
-					if _, failure, err := m.Load(ctx, id, "loader"); failure != nil || err != nil {
+					if _, _, failure, err := m.Load(ctx, id, "loader"); failure != nil || err != nil {
 						t.Fatal(failure, err)
 					}
 				case protocol.MethodCommands:

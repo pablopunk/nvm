@@ -29,7 +29,7 @@ type Deps struct {
 	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their
 	// provider runs off the UI thread and needs the answer to build its rows. Nil leaves those rows empty.
 	Answer        func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)
-	Load          func(extID, loader string, done func([]api.Item, *api.Failure))
+	Load          func(extID, loader string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure))
 	LoadImage     func(ctx context.Context, ref string, done func(*ui.Bitmap))
 	LoadGridImage func(context.Context, GridImageRequest, func(GridImageResult))
 	OpenURL       func(url string)

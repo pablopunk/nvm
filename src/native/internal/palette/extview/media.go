@@ -83,7 +83,7 @@ func (s *Session) requestImage(ref string) {
 		if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 			version = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
 		}
-		request := GridImageRequest{Session: s.imageSession, ExtensionID: s.extID, Identity: s.installationIdentity, Source: ref, Command: s.snapshotRef, Generation: generation, SnapshotVersion: version}
+		request := GridImageRequest{Session: s.imageSession, ExtensionID: s.extID, Identity: s.installationIdentity, Source: ref, Command: s.pictureCommand(), Generation: generation, SnapshotVersion: version}
 		s.guard.Lock()
 		if s.gridScope == nil || !s.gridScope.Matches(request.Binding()) {
 			s.gridScope = picture.NewScope(ctx, request.Binding(), s.pictureEvidence)
