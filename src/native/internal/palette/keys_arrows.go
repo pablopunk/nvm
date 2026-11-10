@@ -32,21 +32,18 @@ func (p *Palette) onSearchKey(k ui.TextKey) bool {
 			p.query = text
 		}
 		p.onEnter()
-		// Apply replacement and caret before the next queued key reaches this field.
-		if p.caretToEnd {
-			p.caretToEnd = false
-			if text != p.query {
-				k.SetText(p.query)
-			}
-			end := utf8.RuneCountInString(p.query)
-			k.SetTextSelection(end, end)
-		} else if text != p.query {
-			k.SetText(p.query)
-		}
+		p.syncSearchField(k, text)
 		return true
 	}
 	if k.Text() != p.query {
 		return false
+	}
+	if k.Key == ui.KeyDown || k.Key == ui.KeyUp {
+		if !p.stepWithArrow(k.Key) {
+			return false
+		}
+		p.syncSearchField(k, k.Text())
+		return true
 	}
 	start := p.searchSpan[0]
 	switch {
@@ -58,6 +55,43 @@ func (p *Palette) onSearchKey(k ui.TextKey) bool {
 		p.edge = edgeRight
 	default:
 		return false
+	}
+	return true
+}
+
+// syncSearchField applies a replaced query and its caret before the next queued key reaches the field.
+func (p *Palette) syncSearchField(k ui.TextKey, text string) {
+	if p.caretToEnd {
+		p.caretToEnd = false
+		if text != p.query {
+			k.SetText(p.query)
+		}
+		end := utf8.RuneCountInString(p.query)
+		k.SetTextSelection(end, end)
+	} else if text != p.query {
+		k.SetText(p.query)
+	}
+}
+
+// stepWithArrow moves the choice for ArrowUp or ArrowDown as the key arrives. Enter acts as it arrives too, so keys
+// pressed faster than frames are drawn keep their order and none is lost: Down then Enter runs the row below.
+func (p *Palette) stepWithArrow(key ui.Key) bool {
+	v := p.cur()
+	if v.sideNow().Focused() || v.Body != nil {
+		return false
+	}
+	delta := 1
+	if key == ui.KeyUp {
+		delta = -1
+	}
+	switch {
+	case p.actionsOpen:
+		p.moveMenuChoice(delta)
+	case v.Grid != nil:
+		p.choose(p.chosen + delta*max(v.Grid.Columns, 1))
+	case p.stepRootHistory(delta < 0, delta > 0):
+	default:
+		p.choose(p.chosen + delta)
 	}
 	return true
 }

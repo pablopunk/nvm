@@ -49,6 +49,14 @@ func (p *Palette) menuTextKey(key ui.TextKey) bool {
 		p.closeActionMenu()
 		return true
 	}
+	if key.Mods == 0 && (key.Key == ui.KeyDown || key.Key == ui.KeyUp) {
+		delta := 1
+		if key.Key == ui.KeyUp {
+			delta = -1
+		}
+		p.moveMenuChoice(delta)
+		return true
+	}
 	return false
 }
 
