@@ -2154,8 +2154,8 @@ export type ExtensionContext = {
 
   /**
    * Desktop APIs for enabled trusted extensions. Electron treats capability declarations as review metadata; the Go host enforces its manifest declarations.
-   * Go selection, keyboard typing and paste report OS permission denials as permission errors and unsupported operations as unavailable.
-   * Cancellation prevents a selection, keyboard, or paste effect that has not started; a synchronous native effect already started may finish.
+   * Go selection, keyboard typing, paste and basic app lifecycle operations report OS permission denials as permission errors and unsupported operations as unavailable.
+   * Cancellation prevents a selection, keyboard, paste, launch, quit or hide effect that has not started; a synchronous native effect already started may finish.
    */
   desktop: {
     keyboard: {

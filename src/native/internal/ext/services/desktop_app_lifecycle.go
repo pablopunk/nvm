@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -27,7 +28,7 @@ type AppLifecycle interface {
 
 // runningPaths returns the paths of the indexed apps that run, in request order. Paths the index does not list are
 // not running.
-func (h *Handler) runningPaths(raw json.RawMessage) ([]string, error) {
+func (h *Handler) runningPaths(ctx context.Context, raw json.RawMessage) ([]string, error) {
 	var args protocol.PathsArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return nil, err
@@ -40,6 +41,9 @@ func (h *Handler) runningPaths(raw json.RawMessage) ([]string, error) {
 		return nil, err
 	}
 	listed := h.listedApps(args.Paths)
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return nil, err
+	}
 	running, err := lifecycle.RunningApps(listed)
 	if err != nil {
 		return nil, h.lifecycleFailure("running status", err)
@@ -48,7 +52,7 @@ func (h *Handler) runningPaths(raw json.RawMessage) ([]string, error) {
 }
 
 // quitApp quits or force quits one indexed app, under the desktop action rate limit.
-func (h *Handler) quitApp(raw json.RawMessage, force bool) (api.QuitResult, error) {
+func (h *Handler) quitApp(ctx context.Context, raw json.RawMessage, force bool) (api.QuitResult, error) {
 	var args protocol.PathArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.QuitResult{}, err
@@ -68,6 +72,9 @@ func (h *Handler) quitApp(raw json.RawMessage, force bool) (api.QuitResult, erro
 	if !h.actions.allow() {
 		return api.QuitResult{}, rateExceeded("app actions")
 	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return api.QuitResult{}, err
+	}
 	outcome, err := quitFunc(lifecycle, force)(featureApp(app))
 	if err != nil {
 		return api.QuitResult{}, h.lifecycleFailure(action, err)
@@ -76,7 +83,7 @@ func (h *Handler) quitApp(raw json.RawMessage, force bool) (api.QuitResult, erro
 }
 
 // quitAllApps asks every running app to quit. It needs the system declaration, as the 1.x Quit All command did.
-func (h *Handler) quitAllApps() ([]api.App, error) {
+func (h *Handler) quitAllApps(ctx context.Context) ([]api.App, error) {
 	if err := h.require(api.CapabilitySystem); err != nil {
 		return nil, err
 	}
@@ -87,6 +94,9 @@ func (h *Handler) quitAllApps() ([]api.App, error) {
 	if !h.actions.allow() {
 		return nil, rateExceeded("app actions")
 	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return nil, err
+	}
 	asked, err := lifecycle.QuitAllApps()
 	if err != nil {
 		return nil, h.lifecycleFailure("quit all", err)
@@ -95,7 +105,7 @@ func (h *Handler) quitAllApps() ([]api.App, error) {
 }
 
 // hideApp hides one indexed app's windows. Only macOS can.
-func (h *Handler) hideApp(raw json.RawMessage) error {
+func (h *Handler) hideApp(ctx context.Context, raw json.RawMessage) error {
 	var args protocol.PathArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return err
@@ -111,6 +121,9 @@ func (h *Handler) hideApp(raw json.RawMessage) error {
 	if !h.actions.allow() {
 		return rateExceeded("app actions")
 	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return err
+	}
 	if err := lifecycle.HideApp(featureApp(app)); err != nil {
 		return h.lifecycleFailure("hide", err)
 	}
@@ -123,7 +136,7 @@ func (h *Handler) lifecycle(capability platform.Capability, action string) (AppL
 	if h.deps.Apps == nil {
 		return nil, unavailable("apps cannot be %s in this build", action)
 	}
-	if !h.deps.Capabilities.Supported(capability) {
+	if !h.appLifecycleSupported(capability) {
 		return nil, unavailable("%s is not available on this system yet", action)
 	}
 	return h.deps.Apps, nil
@@ -153,6 +166,9 @@ func (h *Handler) lifecycleFailure(action string, err error) error {
 	h.logger.Warn("the app action failed", logx.F{"action": action, "reason": reason})
 	if h.deps.Notify != nil {
 		h.deps.Notify(h.manifest.Title, reason)
+	}
+	if errors.Is(err, platform.ErrDenied) {
+		return permissionDenied(reason)
 	}
 	return unavailable("%s", reason)
 }
@@ -200,4 +216,8 @@ func apiApps(list []appfeature.App) []api.App {
 		out = append(out, api.App{ID: app.ID, Name: app.Name, Path: app.Path})
 	}
 	return out
+}
+
+func (h *Handler) appLifecycleSupported(capability platform.Capability) bool {
+	return h.deps.Apps != nil && h.deps.Capabilities.Supported(capability)
 }

@@ -31,3 +31,7 @@ func (h *Handler) admitDesktopEffect(ctx context.Context) error {
 	}
 	return protocol.LifetimeOf(ctx).Err()
 }
+
+func permissionDenied(message string) error {
+	return serviceError{failure: api.Failure{Code: api.CodePermission, Message: message}, cause: api.ErrPermission}
+}

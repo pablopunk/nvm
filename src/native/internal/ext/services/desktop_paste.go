@@ -260,7 +260,7 @@ func pasteFailure(err error) error {
 	case errors.Is(err, platform.ErrConflict):
 		return unavailable("The focused app changed, so nothing was pasted.")
 	case errors.Is(err, platform.ErrDenied):
-		return selectionPermission("Allow Nevermind to control the keyboard in System Settings.")
+		return permissionDenied("Allow Nevermind to control the keyboard in System Settings.")
 	case errors.Is(err, platform.ErrUnsupported):
 		return unavailable("This paste is not available on this system yet.")
 	case errors.Is(err, selection.ErrConcealedContent), errors.Is(err, selection.ErrFormattedClipboard),

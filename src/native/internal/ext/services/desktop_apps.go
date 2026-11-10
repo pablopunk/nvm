@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -33,21 +34,21 @@ func (h *Handler) serveDesktopApps(ctx context.Context, call protocol.ServiceCal
 	case protocol.OpSearch:
 		return h.searchApps(call.Args)
 	case protocol.OpLaunch:
-		return nil, h.launchApp(call.Args)
+		return nil, h.launchApp(ctx, call.Args)
 	case protocol.OpIcon:
 		return h.appIcon(call.Args)
 	case protocol.OpFrontmost:
 		return h.frontmostApp(ctx)
 	case protocol.OpRunning:
-		return h.runningPaths(call.Args)
+		return h.runningPaths(ctx, call.Args)
 	case protocol.OpQuit:
-		return h.quitApp(call.Args, false)
+		return h.quitApp(ctx, call.Args, false)
 	case protocol.OpForceQuit:
-		return h.quitApp(call.Args, true)
+		return h.quitApp(ctx, call.Args, true)
 	case protocol.OpQuitAll:
-		return h.quitAllApps()
+		return h.quitAllApps(ctx)
 	case protocol.OpHideApp:
-		return nil, h.hideApp(call.Args)
+		return nil, h.hideApp(ctx, call.Args)
 	case protocol.OpUninstallReview, protocol.OpUninstallTrash:
 		return h.serveUninstall(call)
 	}
@@ -109,7 +110,7 @@ func appsNamed(apps []api.App, query string) []api.App {
 	return out
 }
 
-func (h *Handler) launchApp(raw json.RawMessage) error {
+func (h *Handler) launchApp(ctx context.Context, raw json.RawMessage) error {
 	var args protocol.PathArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return err
@@ -124,7 +125,17 @@ func (h *Handler) launchApp(raw json.RawMessage) error {
 	if h.deps.Shell == nil {
 		return unavailable("apps cannot be launched in this build")
 	}
-	return h.deps.Shell.LaunchApp(app)
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return err
+	}
+	err = h.deps.Shell.LaunchApp(app)
+	if errors.Is(err, platform.ErrDenied) {
+		return permissionDenied(err.Error())
+	}
+	if errors.Is(err, platform.ErrUnsupported) {
+		return unavailable("%s", err.Error())
+	}
+	return err
 }
 
 func (h *Handler) appIcon(raw json.RawMessage) (protocol.IconResult, error) {

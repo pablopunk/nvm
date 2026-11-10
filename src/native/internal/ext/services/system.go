@@ -56,11 +56,13 @@ func (h *Handler) publicCapability(name string) bool {
 		return h.deps.Windows != nil && h.deps.Desktops != nil && h.deps.Desktops.Supported()
 	case "system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
 		return h.deps.SystemCommands.SupportsCapability(platform.Capability(name))
+	case "apps.running", "apps.quit", "apps.hide", "apps.uninstall":
+		return h.appLifecycleSupported(platform.Capability(name))
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",
 		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "clipboard.paste", "selection.copy",
-		"keyboard.type-text", "apps.running", "apps.quit", "apps.hide", "apps.uninstall", "autostart.signIn",
+		"keyboard.type-text", "autostart.signIn",
 		"windows.always-on-top", "windows.all-spaces", "windows.frame-restore", "windows.display-recovery":
 		return h.deps.Capabilities.Supported(platform.Capability(name))
 	case "clipboard.concealed":

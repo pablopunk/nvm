@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -207,7 +208,7 @@ func TestHideReachesThePortOnceTheCapabilityIsOffered(t *testing.T) {
 func TestScriptFailureReachesTheHUDAndTheLog(t *testing.T) {
 	port := &lifecycleRecorder{err: appfeature.ScriptFailure{ExitCode: 1, Stderr: "execution error: Not authorized to send Apple events to System Events. (-1743)"}}
 	h, notices, logged := lifecycleTestHandler(t, port, platform.CapabilityAppHide)
-	err := h.hideApp(mustRaw(t, protocol.PathArgs{Path: notesApp}))
+	err := h.hideApp(context.Background(), mustRaw(t, protocol.PathArgs{Path: notesApp}))
 	if err == nil || err.Error() != automationHint {
 		t.Fatalf("hide error = %v; want the automation hint", err)
 	}
@@ -223,7 +224,7 @@ func TestScriptFailureReachesTheHUDAndTheLog(t *testing.T) {
 func TestOtherLifecycleFailureReachesTheHUDAndTheLog(t *testing.T) {
 	port := &lifecycleRecorder{err: errors.New("could not force quit Notes")}
 	h, notices, logged := lifecycleTestHandler(t, port, platform.CapabilityAppQuit)
-	_, err := h.quitApp(mustRaw(t, protocol.PathArgs{Path: notesApp}), true)
+	_, err := h.quitApp(context.Background(), mustRaw(t, protocol.PathArgs{Path: notesApp}), true)
 	if err == nil || err.Error() != "could not force quit Notes" {
 		t.Fatalf("force quit error = %v; want the message", err)
 	}
@@ -251,4 +252,24 @@ func mustRaw(t *testing.T, v any) json.RawMessage {
 		t.Fatalf("encode: %v", err)
 	}
 	return raw
+}
+
+func TestCancelledLifecycleHasNoEffect(t *testing.T) {
+	port := &lifecycleRecorder{}
+	h, _, _ := lifecycleTestHandler(t, port, platform.CapabilityAppQuit, platform.CapabilityAppHide, platform.CapabilityAppRunning)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	raw := mustRaw(t, protocol.PathArgs{Path: notesApp})
+	if _, err := h.quitApp(ctx, raw, false); err == nil {
+		t.Fatal("cancelled quit succeeded")
+	}
+	if err := h.hideApp(ctx, raw); err == nil {
+		t.Fatal("cancelled hide succeeded")
+	}
+	if _, err := h.runningPaths(ctx, mustRaw(t, protocol.PathsArgs{Paths: []string{notesApp}})); err == nil {
+		t.Fatal("cancelled running succeeded")
+	}
+	if len(port.quit) != 0 || len(port.hidden) != 0 || len(port.asked) != 0 {
+		t.Fatal("cancelled call reached lifecycle")
+	}
 }

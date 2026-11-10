@@ -45,7 +45,7 @@ func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.Servi
 		}
 		paths, err := engine.Files(ctx)
 		if errors.Is(err, platform.ErrDenied) {
-			return nil, selectionPermission("Allow Nevermind to access Finder in System Settings.")
+			return nil, permissionDenied("Allow Nevermind to access Finder in System Settings.")
 		}
 		if errors.Is(err, platform.ErrUnsupported) {
 			return nil, unavailable("Selected files are not available on this system yet.")
@@ -101,7 +101,7 @@ func selectionFailure(err error) error {
 	case errors.Is(err, platform.ErrConflict):
 		return unavailable("The focused app changed, so nothing was pasted.")
 	case errors.Is(err, platform.ErrDenied):
-		return selectionPermission("Allow Nevermind to control the keyboard in System Settings.")
+		return permissionDenied("Allow Nevermind to control the keyboard in System Settings.")
 	case errors.Is(err, platform.ErrUnsupported):
 		return unavailable("Selected text is not available on this system yet.")
 	case errors.Is(err, selection.ErrSourceGone), errors.Is(err, selection.ErrFormattedClipboard),
@@ -144,8 +144,4 @@ func (h *Handler) typeTextCall(ctx context.Context, raw json.RawMessage) error {
 		return err
 	}
 	return h.typeTextContext(ctx, args.Text, args.Options.DelayMs)
-}
-
-func selectionPermission(message string) error {
-	return serviceError{failure: api.Failure{Code: api.CodePermission, Message: message}, cause: api.ErrPermission}
 }
