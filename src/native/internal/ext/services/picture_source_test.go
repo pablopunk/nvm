@@ -12,7 +12,8 @@ import (
 
 func TestPictureSourceNeedsDeclaredFilesAndLiveHost(t *testing.T) {
 	for _, declared := range []bool{false, true} {
-		host, deps := newDesktopHost(t)
+		_, deps := newDesktopHost(t)
+		files := fake.NewFS()
 		path := filepath.Join(t.TempDir(), "source.png")
 		files.Seed(path, []byte("pixels"))
 		var caps []api.Capability
