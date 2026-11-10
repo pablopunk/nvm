@@ -93,10 +93,10 @@ func TestToggleSettingInNestedViewKeepsOriginalInstallation(t *testing.T) {
 	deps := Deps{CommandSnapshotIdentity: func(string) any { return current }, ToggleSetting: func(_ string, _ string, identity any, _ func(error)) { got = identity }}
 	parent := NewSession(deps, "acme", api.ListView("Parent"))
 	host := &fakeHost{}
-	current = replacement
 	toggle := api.Action{Kind: api.ActionToggleSetting, Setting: "compact"}
 	view := api.ListView("Nested", api.Item{ID: "toggle", Title: "Toggle", Primary: api.Primary(toggle)})
 	parent.action(api.PushView("Open", view), "open").Run(host)
+	current = replacement // navigation after replacement is refused, so the nested view opens first
 	host.pushed[0].Search("")[0].Actions[0].Run(host)
 	if got != old {
 		t.Fatal("nested view acquired replacement installation authority")
