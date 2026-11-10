@@ -95,6 +95,7 @@ func submitFormFixture(t *testing.T, app *App) {
 	must(t, app.Key("Return")) // edit Email
 	must(t, app.Type("not-an-email"))
 	must(t, app.Key("Return")) // set Email
+	must(t, app.WaitForTogether(elementWait, "not-an-email", "Website"))
 	must(t, app.Key("ctrl+Return"))
 	_, err = app.WaitFor("Enter an email address", elementWait) // refused, and the Email row is selected again
 	must(t, err)
@@ -108,6 +109,7 @@ func submitFormFixture(t *testing.T, app *App) {
 	_, err = app.WaitFor("ada@example.test", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // set Email
+	must(t, app.WaitForTogether(elementWait, "ada@example.test", "Website"))
 
 	for range 4 { // Website, Seats, Due date, then Accept the terms
 		must(t, app.Key("Down"))
