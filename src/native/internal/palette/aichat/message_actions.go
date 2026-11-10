@@ -2,7 +2,7 @@ package aichat
 
 import (
 	"fmt"
-	"strings"
+	"unicode"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -13,6 +13,9 @@ func (x *ExtensionChat) messageCopyActions() []search.Action {
 	if x.spec.CopyMessage == nil {
 		return nil
 	}
+	if x.spec.CopyRevision != nil && x.spec.CopyRevision == x.copyRevision {
+		return x.copyActions
+	}
 	var actions []search.Action
 	copyMessage := x.spec.CopyMessage
 	for i, message := range x.spec.Messages {
@@ -20,14 +23,31 @@ func (x *ExtensionChat) messageCopyActions() []search.Action {
 			continue
 		}
 		index := i
-		preview := []rune(strings.Join(strings.Fields(message.Text), " "))
-		if len(preview) > 40 {
-			preview = append(preview[:40], '…')
-		}
-		title := fmt.Sprintf("Copy message %d: %s", i+1, string(preview))
+		title := fmt.Sprintf("Copy message %d: %s", i+1, messageCopyPreview(message.Text))
 		actions = append(actions, search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			copyMessage(h, index)
 		}})
 	}
+	x.copyRevision, x.copyActions = x.spec.CopyRevision, actions
 	return actions
+}
+
+func messageCopyPreview(text string) string {
+	preview := make([]rune, 0, 41)
+	space := false
+	for offset, char := range text {
+		if offset >= 256 || len(preview) >= 40 {
+			return string(append(preview, '…'))
+		}
+		if unicode.IsSpace(char) {
+			space = len(preview) > 0
+			continue
+		}
+		if space && len(preview) < 39 {
+			preview = append(preview, ' ')
+		}
+		preview = append(preview, char)
+		space = false
+	}
+	return string(preview)
 }

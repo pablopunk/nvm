@@ -75,6 +75,14 @@ Use statuses: needs verification, reproduces, implementing, ready for review, ch
 
 ## Completion
 
+P8 checkpoint (2026-11-10): individual message copying is implemented on
+`followup/native-message-copy`, pending independent review, CI and packaged interaction validation.
+Copy actions retain the displayed transcript revision and exact text; the chat action menu preserves
+both extension and host actions. Copy metadata is cached per view revision, and preview work is
+bounded. Targeted retry remains open pending the user's choice for later conversation history.
+The separate P6 choice between automatic learning and explicitly saved rules is also pending;
+the proposed manual-only design is not an accepted product change.
+
 P5 implementation checkpoint (2026-11-10): the rooted bounded snapshot and manager revision prerequisites
 are integrated on `followup/native-source-snapshot`. Static review found no source-snapshot defect and
 one manager cancellation gap; the repair checks cancellation after staging and cleans up before a swap.

@@ -148,6 +148,7 @@ func (s *Session) refreshNow() {
 			manualHost.Toast(failure.Message)
 		}
 		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat && result.View.Chat != nil {
+			s.chatRevision++
 			s.view = *result.View
 			s.refreshHost()
 			return

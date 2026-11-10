@@ -1,6 +1,7 @@
 package aichat
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
@@ -27,5 +28,17 @@ func TestMessageCopyActionsTargetEachTextTurn(t *testing.T) {
 	actions[2].Run(nil)
 	if len(selected) != 2 || selected[0] != 0 || selected[1] != 3 {
 		t.Fatalf("selected = %v", selected)
+	}
+}
+
+func TestMessageCopyPreviewIsBoundedWithoutChangingTargetText(t *testing.T) {
+	for _, text := range []string{strings.Repeat("α", 10000), strings.Repeat(" ", 10000) + "value"} {
+		preview := messageCopyPreview(text)
+		if len([]rune(preview)) > 41 || !strings.HasSuffix(preview, "…") {
+			t.Fatalf("unbounded preview: %q", preview)
+		}
+	}
+	if got := messageCopyPreview("  first\n  second\tthird "); got != "first second third" {
+		t.Fatalf("preview whitespace = %q", got)
 	}
 }

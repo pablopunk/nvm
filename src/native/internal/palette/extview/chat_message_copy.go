@@ -1,11 +1,19 @@
 package extview
 
 import (
-	"bytes"
-	"encoding/json"
+	"reflect"
+	"slices"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
+
+type chatCopyState struct {
+	view     *api.ChatSpec
+	revision uint64
+	identity *byte
+	copy     func(search.Host, int)
+}
 
 // messageCopier binds the action to the displayed transcript. A refresh invalidates an open action menu.
 func (s *Session) messageCopier() func(search.Host, int) {
@@ -13,23 +21,33 @@ func (s *Session) messageCopier() func(search.Host, int) {
 		return nil
 	}
 	displayed := s.view.Chat
-	snapshot, err := json.Marshal(displayed.Messages)
-	if err != nil {
-		return nil
+	if s.chatCopies != nil && s.chatCopies.view == displayed && s.chatCopies.revision == s.chatRevision {
+		return s.chatCopies.copy
 	}
-	return func(h search.Host, index int) {
-		if s.view.Chat == nil || s.view.Chat != displayed {
+	revision := s.chatRevision
+	// Strings are immutable: retain their values, copying only slice and tool metadata, never image bytes.
+	snapshot := slices.Clone(displayed.Messages)
+	for i, message := range snapshot {
+		snapshot[i].Images = slices.Clone(message.Images)
+		if message.Tool != nil {
+			tool := *message.Tool
+			snapshot[i].Tool = &tool
+		}
+	}
+	copyMessage := func(h search.Host, index int) {
+		if s.dismissed || s.view.Chat == nil || s.view.Chat != displayed || s.chatRevision != revision {
 			h.Toast("Chat changed. Choose the message again.")
 			return
 		}
-		current, err := json.Marshal(s.view.Chat.Messages)
-		if err != nil || !bytes.Equal(snapshot, current) || index < 0 || index >= len(s.view.Chat.Messages) {
+		if !reflect.DeepEqual(snapshot, s.view.Chat.Messages) || index < 0 || index >= len(snapshot) {
 			h.Toast("Chat changed. Choose the message again.")
 			return
 		}
-		message := s.view.Chat.Messages[index]
+		message := snapshot[index]
 		if message.Tool == nil && (message.Role == "user" || message.Role == "assistant") && message.Content != "" {
 			s.deps.CopyText(h, message.Content)
 		}
 	}
+	s.chatCopies = &chatCopyState{view: displayed, revision: revision, identity: new(byte), copy: copyMessage}
+	return copyMessage
 }
