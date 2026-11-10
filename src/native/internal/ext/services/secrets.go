@@ -117,12 +117,15 @@ func (h *Handler) secretDelete(args json.RawMessage) error {
 	if err := checkSecretName(request.Key); err != nil {
 		return err
 	}
-	if err := h.deps.Keychain.Delete(h.serviceFor(), request.Key); err != nil {
-		return keychainFailure(err)
-	}
 	docs, err := h.openedDocuments()
 	if err != nil {
 		return err
+	}
+	if _, err := docs.secrets.Load(); err != nil {
+		return unavailable("the secret index cannot be read")
+	}
+	if err := h.deps.Keychain.Delete(h.serviceFor(), request.Key); err != nil {
+		return keychainFailure(err)
 	}
 	return forgetSecretName(docs, request.Key)
 }

@@ -97,7 +97,7 @@ func (k *countingKeychain) Delete(service, account string) error {
 }
 
 func TestUnreadableSecretIndexBlocksKeychainChanges(t *testing.T) {
-	for _, op := range []string{protocol.OpSet, protocol.OpClear} {
+	for _, op := range []string{protocol.OpSet, protocol.OpDelete, protocol.OpClear} {
 		t.Run(op, func(t *testing.T) {
 			files := fake.NewFS()
 			clock := fake.NewClock()
@@ -124,6 +124,8 @@ func TestUnreadableSecretIndexBlocksKeychainChanges(t *testing.T) {
 			var args any
 			if op == protocol.OpSet {
 				args = protocol.KeyValueArgs{Key: "TOKEN", Value: []byte(`"replacement"`)}
+			} else if op == protocol.OpDelete {
+				args = protocol.KeyArgs{Key: "TOKEN"}
 			}
 			reply := serve(t, h, protocol.ServiceSecrets, op, args)
 			requireCode(t, reply, api.CodeUnavailable, "secret index")
