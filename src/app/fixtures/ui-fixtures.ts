@@ -66,6 +66,7 @@ const extension: NevermindExtension = {
     'desktop.files',
     'desktop.apps',
     'clipboard.history',
+    'system',
     'ocr',
   ],
   actions(ctx) {

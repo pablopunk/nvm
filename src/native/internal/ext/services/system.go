@@ -50,6 +50,10 @@ func (h *Handler) publicCapability(name string) bool {
 		return ocr.Availability(h.deps.Capabilities).Image
 	case "ocr.screen":
 		return ocr.Availability(h.deps.Capabilities).Screen
+	case "shell.exec":
+		return platform.ProcessAvailability(h.deps.Commands, h.deps.OS).Exec
+	case "shell.script":
+		return platform.ProcessAvailability(h.deps.Commands, h.deps.OS).LoginScript
 	case "quick-look":
 		return h.filePreview().Supported()
 	case "windows.switch-desktop":

@@ -2,7 +2,8 @@ package api
 
 // ShellOptions controls a process. Zero TimeoutMs and OutputLimit take the host defaults: 30 s, clamped to
 // 1 s to 120 s, and 200000 characters per stream. Shell makes Exec join the command and its arguments into one
-// line for /bin/sh -c; Script always runs under /bin/bash as a login shell.
+// line for /bin/sh -c; Script uses /bin/bash as a login shell on macOS and Linux.
+// POSIX shell forms are unavailable on Windows; plain argv Exec is portable.
 type ShellOptions struct {
 	CWD         string            `json:"cwd,omitempty"`
 	Env         map[string]string `json:"env,omitempty"`
@@ -18,7 +19,8 @@ type ShellResult struct {
 	ExitCode int    `json:"exitCode"`
 }
 
-// Shell runs processes. Declare the system capability for review; it is metadata, not a sandbox.
+// Shell runs processes. Declare system; the host enforces that declaration.
+// Probe shell.exec or shell.script for structural support, independently of permission or tool readiness.
 type Shell interface {
 	OpenExternal(url string) error
 	// Exec resolves bare program names against the merged user-login PATH and Options.Env, including desktop launches.

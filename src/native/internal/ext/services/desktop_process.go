@@ -37,7 +37,7 @@ func (h *Handler) runProcess(ctx context.Context, call protocol.ServiceCall) (an
 	if err := h.require(api.CapabilitySystem); err != nil {
 		return nil, err
 	}
-	if h.deps.Commands == nil {
+	if !platform.ProcessAvailability(h.deps.Commands, h.deps.OS).Exec {
 		return nil, unavailable("processes are not available in this build")
 	}
 	if !h.processes.allow() {
@@ -71,6 +71,9 @@ func (h *Handler) execProgram(ctx context.Context, raw json.RawMessage) (api.She
 	}
 	spec := platform.CommandSpec{Binary: command, Args: programArgs}
 	if args.Options.Shell {
+		if !platform.ProcessAvailability(h.deps.Commands, h.deps.OS).LoginScript {
+			return api.ShellResult{}, unavailable("POSIX shell execution is not available on this system")
+		}
 		spec = platform.CommandSpec{Binary: posixShellBinary, Args: []string{"-c", strings.Join(append([]string{command}, programArgs...), " ")}}
 	}
 	return h.run(ctx, spec, args.Options)
@@ -80,6 +83,9 @@ func (h *Handler) runLoginScript(ctx context.Context, raw json.RawMessage) (api.
 	var args protocol.ShellScriptArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.ShellResult{}, err
+	}
+	if !platform.ProcessAvailability(h.deps.Commands, h.deps.OS).LoginScript {
+		return api.ShellResult{}, unavailable("login shell scripts are not available on this system")
 	}
 	script := h.expandHomeInScript(args.Script)
 	return h.run(ctx, platform.CommandSpec{Binary: loginScriptShell, Args: []string{"-lc", script}}, args.Options)
@@ -136,6 +142,9 @@ func (h *Handler) run(ctx context.Context, spec platform.CommandSpec, options ap
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	limit := outputLimit(options.OutputLimit)
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return api.ShellResult{}, err
+	}
 	result, err := h.deps.Commands.Run(runCtx, spec)
 	stdout := limitOutput(result.Stdout, limit, result.Truncated)
 	stderr := limitOutput(result.Stderr, limit, result.Truncated)

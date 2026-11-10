@@ -9,6 +9,14 @@ import (
 func (m *Manager) OperationsSupported(required []api.Operation) bool {
 	for _, operation := range required {
 		switch operation {
+		case api.OperationShellExec:
+			if !platform.ProcessAvailability(m.serviceDeps.Commands, m.serviceDeps.OS).Exec {
+				return false
+			}
+		case api.OperationShellScript:
+			if !platform.ProcessAvailability(m.serviceDeps.Commands, m.serviceDeps.OS).LoginScript {
+				return false
+			}
 		case api.OperationFilePreview:
 			if !platform.BindFilePreview(m.serviceDeps.Shell, m.serviceDeps.Capabilities).Supported() {
 				return false

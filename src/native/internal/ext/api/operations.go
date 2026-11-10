@@ -12,6 +12,8 @@ import (
 type Operation string
 
 const (
+	OperationShellExec        Operation = "shell.exec"
+	OperationShellScript      Operation = "shell.script"
 	OperationSystemLock       Operation = "system.lock"
 	OperationSystemSleep      Operation = "system.sleep"
 	OperationSystemRestart    Operation = "system.restart"

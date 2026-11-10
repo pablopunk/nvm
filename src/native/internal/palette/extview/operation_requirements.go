@@ -41,6 +41,9 @@ func (s *Session) runRoute(h search.Host, r route) {
 		h.Toast("This action requires an operation unavailable on this system.")
 		return
 	}
+	if r.action.Kind == api.ActionShellExec {
+		r.action = frozenShellAction(r.action)
+	}
 	if r.action.Confirm != nil {
 		h.Push(s.confirmPage(r))
 		return

@@ -144,6 +144,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		Trash:               func(path string) error { return ports.Shell.Trash(path) },
 		RunSystem:           p.runSystemOp,
 		SystemCommand:       p.extensionSystemCommand(m),
+		ShellAction:         p.extensionShellAction(m),
 		HyperKey:            p.hyperKey,
 		OnUI:                p.onUI,
 		Files:               ports.FS,

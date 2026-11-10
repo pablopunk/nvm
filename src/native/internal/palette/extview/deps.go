@@ -91,6 +91,8 @@ type Deps struct {
 	RunSystem func(op string, done func(failure string))
 	// SystemCommand dispatches an OS operation for the originating installation.
 	SystemCommand func(extID, op string, identity any, done func(failure string))
+	// ShellAction runs a confirmed descriptor for its originating installation.
+	ShellAction func(context.Context, string, api.ShellCommand, any, func(api.ShellResult, error))
 	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and
 	// remove drops the user's shortcut. Nil makes the action report unavailable.
 	ShortcutAction func(h search.Host, op, target string)

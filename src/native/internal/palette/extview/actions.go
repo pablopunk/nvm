@@ -159,7 +159,7 @@ func (s *Session) actionBody(action api.Action, key string) search.Action {
 		}
 		op := action.Op
 		return search.Action{Title: title, Dismiss: runDismissal(action), Run: func(h search.Host) { s.runUpdate(h, op) }}
-	case api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionWindow:
+	case api.ActionShellExec, api.ActionOpenPath, api.ActionRevealPath, api.ActionSetQuery, api.ActionQuickLook, api.ActionOpenWith, api.ActionTrash, api.ActionWindow:
 		return s.hostOperation(action, title)
 	case api.ActionAccount:
 		if action.Op != api.AccountSignIn || s.deps.SignIn == nil {
@@ -363,6 +363,10 @@ func (s *Session) submit(h search.Host, in api.Invocation, afterRun func(failed 
 func (s *Session) runFollowUp(h search.Host, extID string, action api.Action, depth int) {
 	if depth > maxFollowUps {
 		h.Toast("This action asked for too many follow-up actions")
+		return
+	}
+	if action.Kind == api.ActionShellExec {
+		s.runRoute(h, route{extID: extID, action: action, identity: s.installationIdentity})
 		return
 	}
 	if action.Confirm != nil {

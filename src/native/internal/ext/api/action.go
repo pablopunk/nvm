@@ -193,6 +193,8 @@ type PasteOptions struct {
 }
 
 // ShellCommand is a process to run. Set exactly one of Command (argv style) or Script.
+// Declarative shell actions ask for confirmation, require system, and show captured output as plain text.
+// Script uses the host login-script implementation (macOS/Linux); argv Command is portable.
 type ShellCommand struct {
 	Command     string            `json:"command,omitempty"`
 	Args        []string          `json:"args,omitempty"`

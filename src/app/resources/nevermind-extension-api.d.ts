@@ -54,6 +54,8 @@
  * remain supported. Saved shortcuts explain unavailability; background runs skip without prompts.
  */
 export type GoExtensionOperation =
+  | 'shell.exec'
+  | 'shell.script'
   | 'files.preview'
   | 'windows.switch-desktop'
   | 'system.lock'
@@ -1973,14 +1975,14 @@ export type ExtensionContext = {
       ) => ExtensionActionResult | Promise<ExtensionActionResult>,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Run a shell command. Declare the `system` capability for review. */
+    /** Run a shell command. Declare `system`. Go maps this to ActionShellExec with ShellCommand: host confirmation, installation-bound dispatch, quota/time/output limits and plain-text exit/stdout/stderr result; direct Shell.Exec keeps its service policy. */
     shellExec(
       title: string,
       command: string,
       args?: string[],
       options?: ExtensionShellOptions,
     ): ExtensionAction;
-    /** Run a shell script through `/bin/bash -lc` by default. Declare the `system` capability for review. */
+    /** Run a shell script through `/bin/bash -lc` by default. Declare `system`. Go login scripts require `shell.script` support (macOS/Linux); Windows supports argv execution via `shell.exec`. */
     shellScript(
       title: string,
       script: string,

@@ -13,6 +13,9 @@ func (m *Manager) ActionSupported(action api.Action) bool {
 	if !m.OperationsSupported(action.Requires) {
 		return false
 	}
+	if action.Kind == api.ActionShellExec {
+		return m.shellActionSupported(action.Shell)
+	}
 	if action.Kind == api.ActionSystem {
 		if action.Op == "quit" || action.Op == "restart-app" {
 			return true
