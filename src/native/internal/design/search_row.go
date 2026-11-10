@@ -44,7 +44,10 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 	ui.Row(c).Padding(14, 18).Gap(12).AlignItems(ui.Center).Children(func() {
 		k := Tokens(c)
 		bolt := ui.Icon(c, Icon("zap")).FontSize(21).TextColor(k.Accent)
-		events.Back = d.Back && bolt.Clicked()
+		if d.Back {
+			bolt.Role(ui.RoleButton).Label("Back")
+			events.Back = bolt.Clicked()
+		}
 		if d.HideInput {
 			ui.Text(c, d.Title).FontSize(21).TextColor(k.Strong).Grow(1).SingleLine()
 			return
