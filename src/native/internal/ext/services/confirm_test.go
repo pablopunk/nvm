@@ -162,3 +162,31 @@ func TestConfirmWaitIsBoundedByTheConfirmationNotTheRequest(t *testing.T) {
 		t.Fatalf("the question's deadline is %s away, want about %s", remaining, ConfirmWait)
 	}
 }
+
+func TestOperationConfirmationLateSuccessCannotResumeStoppedLifetime(t *testing.T) {
+	host, deps := newDesktopHost(t)
+	rememberText(t, host.history, "preserve")
+	lifetime, stop := context.WithCancel(context.Background())
+	defer stop()
+	deps.Confirm = func(context.Context, Question) (bool, error) { stop(); return true, nil }
+	handler := desktopHandler(t, deps, api.CapabilityClipboardHistory)
+	ctx := protocol.WithLifetime(protocol.WithRequestMethod(context.Background(), protocol.MethodRun), lifetime)
+	reply := handler.Serve(ctx, protocol.ServiceCall{CallID: 1, Service: protocol.ServiceClipboardHistory, Op: protocol.OpClear})
+	requireCode(t, reply, api.CodeCancelled, "not confirmed in time")
+	if host.history.Len() != 1 {
+		t.Fatal("stale affirmative answer cleared history")
+	}
+}
+
+func TestOperationConfirmationLateSuccessCannotResumeClosedHost(t *testing.T) {
+	host, deps := newDesktopHost(t)
+	rememberText(t, host.history, "preserve")
+	var handler *Handler
+	deps.Confirm = func(context.Context, Question) (bool, error) { _ = handler.Close(); return true, nil }
+	handler = desktopHandler(t, deps, api.CapabilityClipboardHistory)
+	reply := serveRun(t, handler, protocol.ServiceClipboardHistory, protocol.OpClear, protocol.ClearArgs{})
+	requireCode(t, reply, api.CodeUnavailable, "closed")
+	if host.history.Len() != 1 {
+		t.Fatal("closed host accepted stale affirmative answer")
+	}
+}
