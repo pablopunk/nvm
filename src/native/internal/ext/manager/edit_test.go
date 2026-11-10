@@ -39,7 +39,7 @@ func TestEditAdmissionRejectsManagedChangesAndForeignTokens(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); !errors.Is(err, ErrEditConflict) {
+			if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); !errors.Is(err, ErrEditConflict) {
 				t.Fatalf("got %v", err)
 			}
 		})
@@ -56,7 +56,7 @@ func TestEditAdmissionDetectsCollisionAndExternalChange(t *testing.T) {
 	if err := h.m.Install("acme.good", contents, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, absent); !errors.Is(err, ErrEditConflict) {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, absent); !errors.Is(err, ErrEditConflict) {
 		t.Fatalf("collision: %v", err)
 	}
 	_, rev, err := h.m.EditSnapshot("acme.good")
@@ -66,7 +66,7 @@ func TestEditAdmissionDetectsCollisionAndExternalChange(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(h.root, "acme.good", "main.go"), []byte("changed externally"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); !errors.Is(err, ErrEditConflict) {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); !errors.Is(err, ErrEditConflict) {
 		t.Fatalf("external change: %v", err)
 	}
 }
@@ -83,14 +83,14 @@ func TestEditAdmissionCancellationAndUnrelatedFiles(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if err := h.m.InstallEdit(ctx, "acme.good", contents, true, rev); !errors.Is(err, context.Canceled) {
+	if _, err := h.m.InstallEdit(ctx, "acme.good", contents, true, rev); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel: %v", err)
 	}
 	path := filepath.Join(h.root, "acme.good", "notes.txt")
 	if err := os.WriteFile(path, []byte("keep"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); err == nil {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, true, rev); err == nil {
 		t.Fatal("accepted unrelated file")
 	}
 	if data, err := os.ReadFile(path); err != nil || string(data) != "keep" {
@@ -108,10 +108,10 @@ func TestEditAdmissionPublishesAndConsumesRevision(t *testing.T) {
 	if err != nil || files != nil {
 		t.Fatalf("absence: %v %v", files, err)
 	}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", contents, false, rev); err != nil {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, false, rev); err != nil {
 		t.Fatal(err)
 	}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", contents, false, rev); !errors.Is(err, ErrEditConflict) {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", contents, false, rev); !errors.Is(err, ErrEditConflict) {
 		t.Fatalf("reused revision: %v", err)
 	}
 }
@@ -127,7 +127,7 @@ func TestEditFailedStageLeavesExistingFolderAndNoStaging(t *testing.T) {
 		t.Fatal(err)
 	}
 	invalid := map[string][]byte{"main.go": []byte("package main")}
-	if err := h.m.InstallEdit(context.Background(), "acme.good", invalid, false, rev); err == nil {
+	if _, err := h.m.InstallEdit(context.Background(), "acme.good", invalid, false, rev); err == nil {
 		t.Fatal("invalid stage accepted")
 	}
 	after, _, err := h.m.EditSnapshot("acme.good")

@@ -71,6 +71,13 @@ func (c *fakeConversation) ReserveExtension(id, target string, turn *chat.Builde
 
 func (c *fakeConversation) SetStep(_, label string) { c.steps = append(c.steps, label) }
 
+func (c *fakeConversation) CommitExtension(id, target string, turn *chat.BuilderTurn) error {
+	if turn == nil || c.active[id] != turn {
+		return chat.ErrNotFound
+	}
+	return c.Bind(id, target)
+}
+
 func (c *fakeConversation) ClearStep(string) { c.steps = append(c.steps, "") }
 
 // fakeExtensions is the extension manager the workshop checks and installs through.
@@ -133,33 +140,33 @@ func cloneFakeFiles(files map[string][]byte) map[string][]byte {
 	return out
 }
 
-func (e *fakeExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, _ bool, revision any) error {
+func (e *fakeExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, _ bool, revision any) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	token, ok := revision.(*fakeEditRevision)
 	if !ok || token.owner != e || token.id != id || token.generation != e.generation {
-		return errors.New("edit conflict")
+		return false, errors.New("edit conflict")
 	}
 	current, _, err := e.EditSnapshot(id)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(current) != len(token.files) || (current == nil) != (token.files == nil) {
-		return errors.New("edit conflict")
+		return false, errors.New("edit conflict")
 	}
 	for name, data := range current {
 		if !bytes.Equal(data, token.files[name]) {
-			return errors.New("edit conflict")
+			return false, errors.New("edit conflict")
 		}
 	}
 	if e.installErr != nil {
-		return e.installErr
+		return false, e.installErr
 	}
 	e.generation++
 	e.installs = append(e.installs, id)
 	e.files[id] = cloneFakeFiles(files)
-	return nil
+	return true, nil
 }
 
 // finished is the outcome of a turn that ended with its answer.

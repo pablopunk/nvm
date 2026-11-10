@@ -37,10 +37,10 @@ func writeForTest(w *Workshop, ctx context.Context, chatID string, args json.Raw
 // synchronous runs every UI call at once, as a UI thread that is free does.
 func synchronous(fn func()) { fn() }
 
-// TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles checks the write: the extension is checked, installed
+// TestWriteInstallsEnabledAndBindsBeforeReturning checks the write: the extension is checked, installed
 // enabled, the steps the chat shows are checking then installing and then cleared, and the chat is bound to the
-// extension once its turn settles.
-func TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles(t *testing.T) {
+// extension before the tool returns, including when deletion is waiting for the turn to settle.
+func TestWriteInstallsEnabledAndBindsBeforeReturning(t *testing.T) {
 	conversation := newFakeConversation(builderChat("chat-1"))
 	extensions := newFakeExtensions()
 	w := New(conversation, extensions, synchronous)
@@ -58,8 +58,8 @@ func TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles(t *testing.T) {
 	if strings.Join(conversation.steps, "|") != "Checking…|Installing…|" {
 		t.Fatalf("steps = %q, want checking, installing, then cleared", conversation.steps)
 	}
-	if _, bound := conversation.bound["chat-1"]; bound {
-		t.Fatal("the chat was bound before its turn settled")
+	if conversation.bound["chat-1"] != "user.clock" {
+		t.Fatal("published extension was not bound before the tool returned")
 	}
 	w.Settled("chat-1", finished())
 	if conversation.bound["chat-1"] != "user.clock" {

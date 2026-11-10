@@ -47,14 +47,14 @@ func (e builderExtensions) EditSnapshot(id string) (map[string][]byte, any, erro
 	return m.EditSnapshot(id)
 }
 
-func (e builderExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, enable bool, revision any) error {
+func (e builderExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, enable bool, revision any) (bool, error) {
 	m, err := e.manager()
 	if err != nil {
-		return err
+		return false, err
 	}
 	token, ok := revision.(*manager.EditRevision)
 	if !ok || token == nil {
-		return errors.New("invalid edit revision")
+		return false, errors.New("invalid edit revision")
 	}
 	return m.InstallEdit(ctx, id, files, enable, token)
 }

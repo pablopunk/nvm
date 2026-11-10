@@ -61,6 +61,21 @@ func (s *Service) extensionClaimedElsewhere(id, extension string) bool {
 	return false
 }
 
+// CommitExtension records an already published target before its worker returns. Unlike Bind it is
+// allowed during the matching reserved turn, including while deletion waits for that worker to drain.
+// This keeps the normal chat-removal policy informed even when settlement skips OnSettled.
+func (s *Service) CommitExtension(id, extension string, turn *BuilderTurn) error {
+	r := s.runs[id]
+	c, known := s.Chat(id)
+	if r == nil || turn == nil || r.builderTurn != turn || !r.extensionClaims[extension] || !known || c.Kind != KindBuilder {
+		return ErrNotFound
+	}
+	if c.Extension != "" && c.Extension != extension {
+		return ErrExtensionHasChat
+	}
+	return s.mutate(id, func(c *Chat) { c.Extension = extension })
+}
+
 // Owners returns the builder chats bound to the extension id: those with a transcript, most recently changed first, then
 // any opened but not used yet.
 func (s *Service) Owners(extension string) []Chat {

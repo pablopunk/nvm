@@ -97,3 +97,40 @@ func TestDelayedReservationCannotClaimForReplacementTurn(t *testing.T) {
 		t.Fatalf("current turn refused: %v", err)
 	}
 }
+
+func TestPublishedOwnershipSurvivesDeletionDuringTurn(t *testing.T) {
+	f := newFixture(t)
+	c, err := f.svc.NewChat(KindBuilder, TierSmart)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Persist the chat just as Send does before starting a worker.
+	if err := f.svc.mutate(c.ID, func(c *Chat) {
+		c.Messages = append(c.Messages, Message{Author: AuthorUser, Text: "Create extension"})
+	}); err != nil {
+		t.Fatal(err)
+	}
+	turn := NewBuilderTurn()
+	r := &run{kind: KindBuilder, builderTurn: turn}
+	f.svc.runs[c.ID] = r
+	if err := f.svc.CommitExtension(c.ID, "user.target", turn); err == nil {
+		t.Fatal("unreserved publication accepted")
+	}
+	if err := f.svc.ReserveExtension(c.ID, "user.target", turn); err != nil {
+		t.Fatal(err)
+	}
+	// Delete marks a running recorded chat doomed before cancellation; model that point without a loop.
+	f.svc.doomed[c.ID] = true
+	if err := f.svc.CommitExtension(c.ID, "user.target", NewBuilderTurn()); err == nil {
+		t.Fatal("foreign turn recorded ownership")
+	}
+	if err := f.svc.CommitExtension(c.ID, "user.target", turn); err != nil {
+		t.Fatal(err)
+	}
+	var removed Chat
+	f.svc.opts.OnRemoved = func(c Chat) { removed = c }
+	f.svc.settle(c.ID, r, Outcome{Ending: EndStopped})
+	if removed.Extension != "user.target" {
+		t.Fatalf("removal lost published target: %+v", removed)
+	}
+}

@@ -113,6 +113,7 @@ func (w *Workshop) writeWithReads(ctx context.Context, chatID string, args json.
 		}
 		revision = token
 	}
+	published := false
 	w.step(ctx, chatID, checkingStep)
 	err = ctx.Err()
 	if err == nil {
@@ -122,13 +123,22 @@ func (w *Workshop) writeWithReads(ctx context.Context, chatID string, args json.
 		w.step(ctx, chatID, installingStep)
 		err = ctx.Err()
 		if err == nil {
-			err = w.extensions.InstallEdit(ctx, candidate.Manifest.ID, candidate.Files(), true, revision)
+			published, err = w.extensions.InstallEdit(ctx, candidate.Manifest.ID, candidate.Files(), true, revision)
 		}
 	}
-	if err == nil {
+	if published {
 		done := make(chan struct{})
-		w.dispatch(func() { w.finishWrite(chatID, candidate, nil); close(done) })
+		var bindingErr error
+		w.dispatch(func() {
+			w.chats.ClearStep(chatID)
+			bindingErr = w.chats.CommitExtension(chatID, candidate.Manifest.ID, turn)
+			if bindingErr != nil {
+				w.written[chatID] = candidate.Manifest.ID
+			}
+			close(done)
+		})
 		<-done
+		err = errors.Join(err, bindingErr)
 	} else if !w.onUI(ctx, func() { w.finishWrite(chatID, candidate, err) }) {
 		return agent.Result{}, errors.New("the turn was stopped before the extension was written")
 	}

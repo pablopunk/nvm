@@ -78,9 +78,11 @@ Use statuses: needs verification, reproduces, implementing, ready for review, ch
 P5 implementation checkpoint (2026-11-10): the rooted bounded snapshot and manager revision prerequisites
 are integrated on `followup/native-source-snapshot`. Static review found no source-snapshot defect and
 one manager cancellation gap; the repair checks cancellation after staging and cleans up before a swap.
-Per-turn snapshot paging and active-turn target reservations are present. Builder tools and the app
-adapter still use the old write flow until their integration is complete; these prerequisites do not
-yet establish read-before-write protection. Regression tests are written, not locally run. Independent
-review, final integrated CI and the signed Mac create/edit journeys remain outstanding.
+Builder tools now share per-turn snapshot paging and use conditional installation through the app
+adapter. Existing targets require complete sequential reads; creation requires confirmed absence.
+Target reservations carry the originating turn identity. Publication is reported separately from later
+errors, and ownership is recorded before the tool returns, including while chat deletion is pending.
+These integrated changes await independent review and their own CI; regression tests are written,
+not locally run. Signed Mac create/edit journeys and the remaining builder tool parity stay open.
 
 For this plan, completion means all in-scope work packages have exact-head automated evidence and the relevant packaged terminal journeys, or explicit user deferral. Full green CI is necessary but not sufficient. The coordinator presents a short final ledger of accepted outcomes, exact installed artifact, residual risks and separately deferred work before merge is considered.

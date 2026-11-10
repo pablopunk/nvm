@@ -72,37 +72,39 @@ func (m *Manager) readEditTarget(id string) (map[string][]byte, bool, error) {
 
 // InstallEdit admits an already validated candidate only if its manager-issued revision remains current.
 // Cancellation is checked immediately before publication. Once admitted, errors may follow visible effects.
+// The boolean reports whether the candidate became visible, including when later steps fail.
 // Manager operations are serialized; an uncooperative external writer is not locked out.
-func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[string][]byte, enable bool, revision *EditRevision) error {
+func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[string][]byte, enable bool, revision *EditRevision) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.closed || revision == nil || revision.manager != m || revision.id != id || revision.generation != m.editGeneration {
-		return ErrEditConflict
+		return false, ErrEditConflict
 	}
 	current, exists, err := m.readEditTarget(id)
 	if err != nil {
-		return fmt.Errorf("revalidate extension: %w", err)
+		return false, fmt.Errorf("revalidate extension: %w", err)
 	}
 	if exists != revision.exists || !equalEditFiles(current, revision.files) {
-		return ErrEditConflict
+		return false, ErrEditConflict
 	}
 	if e, err := m.findLocked(id); err == nil && (e.builtin || filepath.Base(e.bundle.Dir) != id || !exists) {
-		return ErrEditConflict
+		return false, ErrEditConflict
 	}
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	m.editGeneration++
-	if err := install.InstallContext(ctx, m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
-		return err
+	published, err := install.InstallContextResult(ctx, m.ports.Files, m.ports.Clock, m.root, id, contents)
+	if err != nil {
+		return published, err
 	}
 	if err := m.enabled.SetEnabled(id, enable); err != nil {
-		return fmt.Errorf("save enabled state: %w", err)
+		return true, fmt.Errorf("save enabled state: %w", err)
 	}
-	return m.reloadLocked()
+	return true, m.reloadLocked()
 }
 
 func cloneEditFiles(files map[string][]byte) map[string][]byte {

@@ -27,7 +27,8 @@ const (
 )
 
 // Install writes files as the extension id under root. The files must include extension.json and main.go,
-// and the manifest must load cleanly with exactly this id. A failed install changes nothing visible.
+// and the manifest must load cleanly with exactly this id. Cleanup errors can follow publication;
+// callers needing that distinction use InstallContextResult.
 func Install(files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) error {
 	return InstallContext(context.Background(), files, clock, root, id, contents)
 }
@@ -35,15 +36,21 @@ func Install(files platform.FS, clock platform.Clock, root, id string, contents 
 // InstallContext stages a candidate, then checks cancellation immediately before the first publication
 // rename. Cancellation after that admission does not roll back an admitted installation.
 func InstallContext(ctx context.Context, files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) error {
+	_, err := InstallContextResult(ctx, files, clock, root, id, contents)
+	return err
+}
+
+// InstallContextResult also reports whether the candidate became visible, even if later cleanup fails.
+func InstallContextResult(ctx context.Context, files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return err
+		return false, err
 	}
 	staging, _, err := Stage(files, clock, root, id, contents)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if err := ctx.Err(); err != nil {
-		return errors.Join(err, Discard(files, staging))
+		return false, errors.Join(err, Discard(files, staging))
 	}
 	return swapIn(files, clock, root, id, staging)
 }
@@ -115,7 +122,7 @@ func checkStaged(staged bundle.Bundle, id string) error {
 
 // swapIn moves the staged folder to its final name, moving any previous version aside first and rolling
 // back when the final rename fails.
-func swapIn(files platform.FS, clock platform.Clock, root, id, staging string) error {
+func swapIn(files platform.FS, clock platform.Clock, root, id, staging string) (bool, error) {
 	target := filepath.Join(root, id)
 	trash := filepath.Join(root, trashPrefix+id+"-"+strconv.FormatInt(clock.Now().UnixNano(), 36))
 	previousExists := false
@@ -123,7 +130,7 @@ func swapIn(files platform.FS, clock platform.Clock, root, id, staging string) e
 		previousExists = true
 		if err := files.Rename(target, trash); err != nil {
 			_ = removeTree(files, staging)
-			return fmt.Errorf("replace extension %s: %w", id, err)
+			return false, fmt.Errorf("replace extension %s: %w", id, err)
 		}
 	}
 	if err := files.Rename(staging, target); err != nil {
@@ -131,12 +138,12 @@ func swapIn(files platform.FS, clock platform.Clock, root, id, staging string) e
 			_ = files.Rename(trash, target)
 		}
 		_ = removeTree(files, staging)
-		return fmt.Errorf("install extension %s: %w", id, err)
+		return false, fmt.Errorf("install extension %s: %w", id, err)
 	}
 	if previousExists {
-		return removeTree(files, trash)
+		return true, removeTree(files, trash)
 	}
-	return nil
+	return true, nil
 }
 
 func writeFolder(files platform.FS, dir string, contents map[string][]byte) error {
