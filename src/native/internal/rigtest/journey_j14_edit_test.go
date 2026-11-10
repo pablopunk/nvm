@@ -25,6 +25,7 @@ func TestJourneyJ14EditChangesAnExtensionAndShowsTheNewRow(t *testing.T) {
 	fake.SetScript(
 		fixtures.ToolCallReply("", writeCall(t, "call_create", clockManifest, clockSource(builderRootRow))),
 		fixtures.TextReply(builderDoneText),
+		fixtures.ToolCallReply("", fixtures.ToolCall{ID: "call_read_before_edit", Name: "read_extension", Arguments: []string{`{"id":"user.clock-journey"}`}}),
 		fixtures.ToolCallReply("", writeCall(t, "call_edit", clockManifest, clockSource(builderEditedRow))),
 		fixtures.TextReply(builderEditDone),
 	)

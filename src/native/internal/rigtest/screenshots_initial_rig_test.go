@@ -101,10 +101,9 @@ func TestJourneyMigratedScreenshotsGrid(t *testing.T) {
 	shoot(t, app, "screenshots-actions")
 	must(t, app.Key("Escape"))
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Capture-", elementWait)
+	_, err = app.WaitFor("/12)", elementWait) // only the mounted preview includes its position in the twelve-image set
 	must(t, err)
 	shoot(t, app, "screenshots-preview")
 	must(t, app.Key("Escape"))
-	_, err = app.WaitFor("Capture-", elementWait)
-	must(t, err)
+	must(t, app.WaitForTogether(elementWait, "Capture-", "Screenshots"))
 }
