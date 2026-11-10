@@ -1561,7 +1561,9 @@ export type ExtensionAi = {
         ocr?: boolean;
       },
     ): ExtensionAiAttachment;
+    /** Go hosts use the existing desktop.selection declaration and selection permission/admission checks; no selected text returns unavailable. Construction does not contact AI. */
     selectedText(title?: string): Promise<ExtensionAiAttachment>;
+    /** Go hosts use desktop.files selection checks; no selection returns an empty list. File contents are read only when the attachment is consumed. */
     selectedFiles(options?: {
       title?: string;
       as?: 'text' | 'image' | 'metadata' | 'ocr';

@@ -70,7 +70,9 @@ type AttachmentBuilder interface {
 	Text(text, title string) Attachment
 	Image(pathOrDataURL string, title string, ocr bool) Attachment
 	File(path string, as string, title string) Attachment
+	// SelectedText uses desktop.selection; no selected text returns ErrNotAvailable.
 	SelectedText(title string) (Attachment, error)
+	// SelectedFiles uses desktop.files; no selected files returns an empty list. No file contents are read here.
 	SelectedFiles(as string) ([]Attachment, error)
 	Clipboard(as string) ([]Attachment, error)
 	OCRImage(path string, title string) (Attachment, error)

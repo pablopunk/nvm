@@ -109,7 +109,7 @@ func mergeAIOptions(base, call api.AIOptions) api.AIOptions {
 }
 
 // remoteAttachments builds attachments. Text, images and files are plain data; the clipboard and OCR are read on the
-// host. Selected text and selected files have no host port yet, so they answer unavailable.
+// host. Selection-backed builders reuse the desktop selection service and its authority checks.
 type remoteAttachments struct {
 	link *hostLink
 }
@@ -132,12 +132,30 @@ func (a remoteAttachments) File(path, as, title string) api.Attachment {
 	return api.Attachment{Kind: "file", Path: path, As: as, Title: title}
 }
 
-func (a remoteAttachments) SelectedText(string) (api.Attachment, error) {
-	return api.Attachment{}, unsupported("ctx.ai.attachments.selectedText")
+func (a remoteAttachments) SelectedText(title string) (api.Attachment, error) {
+	text, found, err := (remoteSelection{link: a.link}).Text()
+	if err != nil {
+		return api.Attachment{}, err
+	}
+	if !found {
+		return api.Attachment{}, fmt.Errorf("no text is selected: %w", api.ErrNotAvailable)
+	}
+	if title == "" {
+		title = "Selected Text"
+	}
+	return a.Text(text, title), nil
 }
 
-func (a remoteAttachments) SelectedFiles(string) ([]api.Attachment, error) {
-	return nil, unsupported("ctx.ai.attachments.selectedFiles")
+func (a remoteAttachments) SelectedFiles(as string) ([]api.Attachment, error) {
+	paths, err := (remoteSelection{link: a.link}).Files()
+	if err != nil {
+		return nil, err
+	}
+	attachments := make([]api.Attachment, 0, len(paths))
+	for _, path := range paths {
+		attachments = append(attachments, a.File(path, as, ""))
+	}
+	return attachments, nil
 }
 
 func (a remoteAttachments) Clipboard(as string) ([]api.Attachment, error) {
