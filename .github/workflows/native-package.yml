@@ -21,6 +21,10 @@ on:
         description: Link the release flags into these builds (releaseBuild, analytics endpoint)
         type: boolean
         default: false
+      fast:
+        description: Mac arm64 only, zipped instead of a DMG, not notarized, cached natives. For installing on your own Mac
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,9 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { arch: arm64, runner: macos-latest }
-          - { arch: amd64, runner: macos-15-intel }
+        include: ${{ fromJSON(inputs.fast && '[{"arch":"arm64","runner":"macos-latest"}]' || '[{"arch":"arm64","runner":"macos-latest"},{"arch":"amd64","runner":"macos-15-intel"}]') }}
     env:
       RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release || false }}
       VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '' }}
@@ -62,15 +64,25 @@ jobs:
           HAS_CERTIFICATE: ${{ secrets.MACOS_CERT_P12_BASE64 != '' && secrets.MACOS_CERT_PASSWORD != '' }}
           HAS_NOTARY: ${{ secrets.APPLE_ID != '' && secrets.APPLE_TEAM_ID != '' && secrets.APPLE_APP_SPECIFIC_PASSWORD != '' }}
           EVENT_NAME: ${{ github.event_name }}
+          FAST: ${{ inputs.fast }}
         run: |
           sign=false
           notarize=false
           if [ "$HAS_CERTIFICATE" = true ]; then sign=true; fi
-          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$EVENT_NAME" = workflow_dispatch ]; then notarize=true; fi
+          if [ "$sign" = true ] && [ "$HAS_NOTARY" = true ] && [ "$EVENT_NAME" = workflow_dispatch ] && [ "$FAST" != true ]; then notarize=true; fi
           echo "sign=$sign" >> "$GITHUB_OUTPUT"
           echo "notarize=$notarize" >> "$GITHUB_OUTPUT"
 
+      - name: Restore the natives of a fast build
+        id: natives
+        if: inputs.fast
+        uses: actions/cache@v4
+        with:
+          path: src/native/resources/darwin-${{ matrix.arch }}
+          key: natives-darwin-${{ matrix.arch }}-${{ hashFiles('src/native/scripts/natives/**', 'src/app/resources/macos-helper/**', 'src/native/sidecar/pi-host/host.mjs', 'src/native/sidecar/pi-host/package-lock.json') }}
+
       - name: Build the natives for this Mac
+        if: steps.natives.outputs.cache-hit != 'true'
         working-directory: src/native
         run: |
           bash scripts/natives/build-libopus.sh
@@ -152,7 +164,7 @@ jobs:
         env:
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.NATIVE_UPDATE_PRIVATE_KEY }}
           GH_TOKEN: ${{ github.token }}
-        run: go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}"
+        run: go tool mygo build -platform "darwin/${{ matrix.arch }}" -sign "${SIGNING_IDENTITY:--}" ${{ inputs.fast && '-skip-dmg -skip-notarize' || '' }}
 
       - name: Verify the link flags and the signature
         working-directory: src/native
@@ -202,7 +214,13 @@ jobs:
             echo "macOS ${{ matrix.arch }}: no update feed. Set NATIVE_UPDATE_PUBLIC_KEY (variable), NATIVE_UPDATE_PRIVATE_KEY (secret) and dispatch a release run to publish one." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: Zip the app of a fast build
+        if: inputs.fast
+        working-directory: src/native/dist/darwin-${{ matrix.arch }}
+        run: ditto -c -k --sequesterRsrc --keepParent "Nevermind Next.app" nevermind-next-fast.zip
+
       - name: Checksums
+        if: ${{ !inputs.fast }}
         working-directory: src/native/dist/darwin-${{ matrix.arch }}
         run: shasum -a 256 ./*.dmg > SHA256SUMS
 
@@ -220,6 +238,7 @@ jobs:
           name: native-macos-${{ matrix.arch }}
           path: |
             src/native/dist/darwin-${{ matrix.arch }}/*.dmg
+            src/native/dist/darwin-${{ matrix.arch }}/*.zip
             src/native/dist/darwin-${{ matrix.arch }}/update-*.json
             src/native/dist/darwin-${{ matrix.arch }}/*.tar.gz
             src/native/dist/darwin-${{ matrix.arch }}/*.delta
@@ -227,6 +246,7 @@ jobs:
           retention-days: 14
 
   linux:
+    if: ${{ !inputs.fast }}
     name: Linux ${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -311,6 +331,7 @@ jobs:
           retention-days: 14
 
   windows:
+    if: ${{ !inputs.fast }}
     name: Windows amd64
     runs-on: ubuntu-latest
     timeout-minutes: 45
