@@ -12,6 +12,7 @@ import (
 // version on disk: a reinstall changes it, so the host reads the declarations again.
 type MenuBarExtension struct {
 	ID       string
+	Title    string
 	Revision string
 }
 
@@ -24,7 +25,7 @@ func (m *Manager) MenuBarExtensions() []MenuBarExtension {
 	for _, key := range m.sortedKeysLocked() {
 		e := m.entries[key]
 		if e.runtime != nil && m.isRunnable(e) && e.runtime.Provides(protocol.MethodMenuBars) {
-			listed = append(listed, MenuBarExtension{ID: e.bundle.Manifest.ID, Revision: e.bundle.Hash})
+			listed = append(listed, MenuBarExtension{ID: e.bundle.Manifest.ID, Title: e.bundle.Manifest.Title, Revision: e.bundle.Hash})
 		}
 	}
 	return listed

@@ -86,6 +86,7 @@ func trailingCommands(p *App) []command {
 	cmds = append(cmds, p.accountCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.classifyImageSlot()...)
+	cmds = append(cmds, p.menuBarToggleCommands()...)
 	return cmds
 }
 

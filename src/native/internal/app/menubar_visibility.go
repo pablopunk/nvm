@@ -3,6 +3,7 @@ package app
 import (
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/store"
 )
@@ -97,4 +98,40 @@ func (p *App) setMenuBarShown(id string, shown bool, h search.Host) {
 	p.visibility.setShown(id, shown)
 	p.syncMenuBarItems()
 	h.Refresh()
+}
+
+// menuBarToggleIDPrefix starts the command id of a menu bar toggle, the id 1.x gives the same row.
+const menuBarToggleIDPrefix = "extension-menubar:"
+
+// menuBarToggleCommands are the root rows that show or hide each menu bar extension. The host owns them, as in 1.x: an
+// extension that adds a menu bar item gets its toggle without declaring anything.
+func (p *App) menuBarToggleCommands() []command {
+	m := p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	var rows []command
+	for _, extension := range m.MenuBarExtensions() {
+		rows = append(rows, p.menuBarToggleCommand(extension))
+	}
+	return rows
+}
+
+// menuBarToggleCommand is the row of one extension. Its title says what pressing it will do.
+func (p *App) menuBarToggleCommand(extension manager.MenuBarExtension) command {
+	id, title := extension.ID, extension.Title
+	if title == "" {
+		title = id
+	}
+	row := command{
+		ID: menuBarToggleIDPrefix + id, Keywords: "menu bar menubar tray status bar", Icon: "panel-top",
+		PhraseMatch: true, Dismiss: search.DismissNever,
+		Run: func(h search.Host) { p.setMenuBarShown(id, !p.visibility.shown(id), h) },
+	}
+	if p.visibility.shown(id) {
+		row.Title, row.Subtitle = "Hide "+title+" from Menu Bar", "Shown in the menu bar"
+	} else {
+		row.Title, row.Subtitle = "Show "+title+" in Menu Bar", "Hidden from the menu bar"
+	}
+	return row
 }
