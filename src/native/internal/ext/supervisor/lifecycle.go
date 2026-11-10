@@ -101,6 +101,7 @@ func (r *Runtime) adopt(generation uint64, child *childProcess) {
 	}
 	r.child = child
 	r.state = StateRunning
+	r.restartingSearch = false
 	r.reason = ""
 	r.notifyLocked()
 	r.mu.Unlock()
@@ -132,6 +133,7 @@ func (r *Runtime) startFailed(generation uint64, reason string, broken bool) {
 	if generation != r.generation {
 		return
 	}
+	r.restartingSearch = false
 	if broken {
 		r.state = StateBroken
 		r.reason = reason

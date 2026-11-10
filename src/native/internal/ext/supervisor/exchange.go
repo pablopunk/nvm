@@ -54,6 +54,7 @@ func readLines(proc platform.WorkerProcess, done <-chan struct{}) <-chan lineRes
 			select {
 			case out <- lineResult{data: line}:
 			case <-done:
+				_, _ = proc.Wait()
 				return
 			}
 		}
@@ -84,12 +85,15 @@ func (r *Runtime) exchange(admission, ctx, lifetime context.Context, gate *dispa
 // childForCall binds a request to a particular child after any in-progress startup. Stop ends the captured lifetime,
 // so a request cannot follow an installation across disable, replacement, or an explicit restart.
 func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*childProcess, Budget, error) {
-	waitStarting := method == protocol.MethodRun || method == protocol.MethodLoad
+	waitStarting := method == protocol.MethodRun || method == protocol.MethodLoad || method == protocol.MethodSearch
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, Budget{}, err
 		}
 		r.mu.Lock()
+		if r.restartingSearch {
+			waitStarting = true
+		}
 		if r.lifetime != lifetime || lifetime.Err() != nil {
 			r.mu.Unlock()
 			return nil, Budget{}, unavailable("stopped")
@@ -165,7 +169,7 @@ func (r *Runtime) awaitResponse(ctx, lifetime context.Context, child *childProce
 		case <-lifetime.Done():
 			return protocol.Response{}, unavailable("stopped")
 		case <-ctx.Done():
-			return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
+			return protocol.Response{}, r.cancelRequestChild(child, req.Method, ctx.Err())
 		case line, open := <-child.lines:
 			if call, ok := serviceCallFrom(line, open); ok {
 				if sequence != 0 {
@@ -174,10 +178,10 @@ func (r *Runtime) awaitResponse(ctx, lifetime context.Context, child *childProce
 				callStart := clock.Now()
 				var reply protocol.ServiceReply
 				var err error
-				if req.Invocation != nil && req.Invocation.AwaitInitialView {
+				if req.Method == protocol.MethodSearch || req.Invocation != nil && req.Invocation.AwaitInitialView {
 					reply, err = r.answerViewService(ctx, lifetime, child, call, req.Method)
 					if ctx.Err() != nil {
-						return protocol.Response{}, r.cancelViewChild(child, ctx.Err())
+						return protocol.Response{}, r.cancelRequestChild(child, req.Method, ctx.Err())
 					}
 					if errors.Is(err, context.DeadlineExceeded) {
 						return protocol.Response{}, r.failChild(child, api.CodeTimeout, "view service did not finish in time")

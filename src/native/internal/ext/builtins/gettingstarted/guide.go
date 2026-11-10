@@ -5,13 +5,17 @@ import (
 )
 
 // guideView is the guide: its rows, with the palette shortcut the user set read from the shortcut table.
-func guideView(ctx api.Context) api.View {
+func guideView(ctx api.Context, complete bool) api.View {
 	rows := guideRows(ctx.Shortcuts().Palette().Label, ctx.Account().SignedIn())
 	items := make([]api.Item, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, guideItem(row))
 	}
-	view := api.ListView("Getting Started", items...)
+	title := "Getting Started"
+	if complete {
+		title = "Help"
+	}
+	view := api.ListView(title, items...)
 	view.Placeholder = "Search tips"
 	return view
 }

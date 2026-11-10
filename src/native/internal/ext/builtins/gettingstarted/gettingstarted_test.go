@@ -213,7 +213,7 @@ func itemWithTitle(t *testing.T, view *api.View, title string) api.Item {
 func guideTitles(t *testing.T, ctx api.Context) []string {
 	t.Helper()
 	var titles []string
-	for _, item := range guideView(ctx).Items {
+	for _, item := range guideView(ctx, false).Items {
 		titles = append(titles, item.Title)
 	}
 	return titles
@@ -225,7 +225,7 @@ func TestGuideOffersSignInWhileSignedOutAfterTheShortcutRow(t *testing.T) {
 	if got := strings.Join(guideTitles(t, ctx), "|"); got != strings.Join(want, "|") {
 		t.Fatalf("rows = %v, want %v", got, want)
 	}
-	view := guideView(ctx)
+	view := guideView(ctx, false)
 	row := itemWithTitle(t, &view, "Sign in to Nevermind")
 	if row.Subtitle != "Optional: connect your account to use AI chats." || row.Disabled {
 		t.Fatalf("sign-in row = %+v", row)
@@ -238,9 +238,27 @@ func TestGuideOffersSignInWhileSignedOutAfterTheShortcutRow(t *testing.T) {
 func TestGuideShowsTheAccountAsDisabledWhenSignedIn(t *testing.T) {
 	ctx := newContext("")
 	ctx.account.signedIn = true
-	view := guideView(ctx)
+	view := guideView(ctx, false)
 	row := itemWithTitle(t, &view, "Nevermind account")
 	if row.Subtitle != "You are already signed in. Account access is only needed for AI chats." || !row.Disabled || row.Primary != nil {
 		t.Fatalf("account row = %+v, want a disabled information row", row)
+	}
+}
+
+func TestGuideTitleTracksCompletion(t *testing.T) {
+	for _, complete := range []bool{false, true} {
+		ctx := newContext("")
+		ext := New(complete)
+		result, err := ext.RunAction(ctx, api.Invocation{Ref: api.ActionRef{ID: openActionID}})
+		if err != nil || result.View == nil {
+			t.Fatalf("open: %+v, %v", result, err)
+		}
+		want := "Getting Started"
+		if complete {
+			want = "Help"
+		}
+		if result.View.Title != want {
+			t.Fatalf("complete %v: title = %q, want %q", complete, result.View.Title, want)
+		}
 	}
 }
