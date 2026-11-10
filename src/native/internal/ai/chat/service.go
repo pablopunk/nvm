@@ -57,6 +57,8 @@ type Options struct {
 type Toolset struct {
 	Registry *agent.Registry
 	Policy   agent.Policy
+	// BuilderTurn binds builder callbacks to this toolset's turn, never a later turn of the same chat.
+	BuilderTurn *BuilderTurn
 }
 
 // Service runs the chats: it sends a message, streams the reply into the transcript, stops or repeats a turn,
@@ -331,7 +333,9 @@ func (s *Service) startTurn(id string) error {
 	if err != nil {
 		return err
 	}
-	r := newRun(s.startAgent(chat, history), chat.Kind, chat.Tier, s.opts.Clock.Now())
+	setup, builderTurn := s.setupFor(chat)
+	r := newRun(s.startAgent(chat, history, setup), chat.Kind, chat.Tier, s.opts.Clock.Now())
+	r.builderTurn = builderTurn
 	s.runs[id] = r
 	go s.consume(id, r)
 	return nil
@@ -373,8 +377,7 @@ func titleText(text string) string {
 }
 
 // startAgent begins the turn: on the chat's engine when it has one, on the native loop otherwise.
-func (s *Service) startAgent(chat Chat, history []backend.Message) *agent.Turn {
-	setup := s.setupFor(chat)
+func (s *Service) startAgent(chat Chat, history []backend.Message, setup agent.Setup) *agent.Turn {
 	if s.opts.Engine != nil {
 		if engine := s.opts.Engine(chat); engine != nil {
 			return agent.StartExternal(context.Background(), setup, engine, history)

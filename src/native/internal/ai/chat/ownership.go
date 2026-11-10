@@ -1,5 +1,11 @@
 package chat
 
+// BuilderTurn identifies one builder toolset. Its nonzero size gives each allocation a distinct identity.
+// It contains no model-visible authority and is accepted only by the run holding this exact token.
+type BuilderTurn struct{ marker byte }
+
+func NewBuilderTurn() *BuilderTurn { return &BuilderTurn{} }
+
 // Bind records that the chat of kind builder writes or edits the extension id. An extension has one chat, so it refuses
 // an extension another chat owns. It refuses a busy chat, since the instruction of its next turn depends on the binding.
 func (s *Service) Bind(id, extension string) error {
@@ -22,10 +28,10 @@ func (s *Service) Bind(id, extension string) error {
 // ReserveExtension reserves a builder target for the active turn. Like binding, this runs on the UI
 // thread. Other chats cannot bind or reserve it until the turn settles; Stop retains the reservation
 // while the worker drains. The tool context governs cancellation at publication admission.
-func (s *Service) ReserveExtension(id, extension string) error {
+func (s *Service) ReserveExtension(id, extension string, turn *BuilderTurn) error {
 	r, busy := s.runs[id]
 	c, known := s.Chat(id)
-	if !busy || !known || c.Kind != KindBuilder || extension == "" || s.doomed[id] {
+	if !busy || !known || c.Kind != KindBuilder || extension == "" || s.doomed[id] || turn == nil || r.builderTurn != turn {
 		return ErrNotFound
 	}
 	if c.Extension != "" && c.Extension != extension {

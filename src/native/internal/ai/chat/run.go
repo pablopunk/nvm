@@ -17,6 +17,7 @@ type run struct {
 	steps   int
 	// extensionClaims reserves builder targets until this turn settles, including while cancellation drains.
 	extensionClaims map[string]bool
+	builderTurn     *BuilderTurn
 	// reasoningSince is when the reasoning of the current model turn began; zero when none is open.
 	reasoningSince time.Time
 }
