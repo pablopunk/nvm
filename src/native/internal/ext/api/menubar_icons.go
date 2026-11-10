@@ -1,13 +1,15 @@
 package api
 
-// MenuBarIcon is a curated status glyph. The list is closed so that every host renders the same
-// set; unknown names fall back to MenuIconDefault and produce a diagnostic.
+import "sync"
+
+// MenuBarIcon is a status glyph, named by any Lucide icon in kebab-case such as bell or git-branch. Unknown names fall
+// back to MenuIconDefault and produce a diagnostic.
 type MenuBarIcon string
 
 // MenuIconDefault is the fallback glyph.
 const MenuIconDefault MenuBarIcon = "zap"
 
-// MenuBarIcons is the curated glyph set, in the same order as the TypeScript declaration.
+// MenuBarIcons is the glyph set 1.x offered, in the same order as the TypeScript declaration.
 var MenuBarIcons = []MenuBarIcon{
 	"zap", "circle", "circle-dot", "circle-check", "circle-alert", "circle-x", "bell", "bell-dot",
 	"timer", "clock", "alarm-clock", "calendar", "coffee", "mic", "mic-off", "video", "music",
@@ -19,12 +21,23 @@ var MenuBarIcons = []MenuBarIcon{
 	"gauge", "thermometer", "droplet", "house", "briefcase", "dollar-sign",
 }
 
-// KnownMenuBarIcon reports whether name is in the curated set.
+// KnownMenuBarIcon reports whether name is a Lucide icon the host can draw.
 func KnownMenuBarIcon(name MenuBarIcon) bool {
+	knownMenuBarIconsOnce.Do(indexMenuBarIcons)
+	return knownMenuBarIcons[name]
+}
+
+var (
+	knownMenuBarIconsOnce sync.Once
+	knownMenuBarIcons     map[MenuBarIcon]bool
+)
+
+func indexMenuBarIcons() {
+	knownMenuBarIcons = make(map[MenuBarIcon]bool, len(MenuBarIcons)+len(lucideMenuBarIcons))
 	for _, icon := range MenuBarIcons {
-		if icon == name {
-			return true
-		}
+		knownMenuBarIcons[icon] = true
 	}
-	return false
+	for _, name := range lucideMenuBarIcons {
+		knownMenuBarIcons[MenuBarIcon(name)] = true
+	}
 }
