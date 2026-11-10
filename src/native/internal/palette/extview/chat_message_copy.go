@@ -25,6 +25,7 @@ func (s *Session) messageCopier() func(search.Host, int) {
 		return s.chatCopies.copy
 	}
 	revision := s.chatRevision
+	state := &chatCopyState{view: displayed, revision: revision, identity: new(byte)}
 	// Strings are immutable: retain their values, copying only slice and tool metadata, never image bytes.
 	snapshot := slices.Clone(displayed.Messages)
 	for i, message := range snapshot {
@@ -39,7 +40,15 @@ func (s *Session) messageCopier() func(search.Host, int) {
 			h.Toast("Chat changed. Choose the message again.")
 			return
 		}
-		if !reflect.DeepEqual(snapshot, s.view.Chat.Messages) || index < 0 || index >= len(snapshot) {
+		if !reflect.DeepEqual(snapshot, s.view.Chat.Messages) {
+			if s.chatCopies == state {
+				s.chatCopies = nil
+			}
+			h.Toast("Chat changed. Choose the message again.")
+			h.Refresh()
+			return
+		}
+		if index < 0 || index >= len(snapshot) {
 			h.Toast("Chat changed. Choose the message again.")
 			return
 		}
@@ -48,6 +57,7 @@ func (s *Session) messageCopier() func(search.Host, int) {
 			s.deps.CopyText(h, message.Content)
 		}
 	}
-	s.chatCopies = &chatCopyState{view: displayed, revision: revision, identity: new(byte), copy: copyMessage}
+	state.copy = copyMessage
+	s.chatCopies = state
 	return copyMessage
 }

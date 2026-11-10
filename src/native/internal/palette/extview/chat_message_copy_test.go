@@ -49,6 +49,32 @@ func TestMessageCopyUsesChosenTextAndRejectsChangedTranscript(t *testing.T) {
 	}
 }
 
+func TestCopyMenuRecoversAfterInPlaceTranscriptChange(t *testing.T) {
+	var copied []string
+	s := NewSession(Deps{CopyText: func(_ search.Host, text string) { copied = append(copied, text) }}, "acme.chat", chatFixtureView())
+	oldCopy := s.messageCopier()
+	s.view.Chat.Messages[2].Content = "Updated answer"
+	host := &fakeHost{}
+	oldCopy(host, 2)
+	if len(copied) != 0 || len(host.toasts) != 1 || s.chatCopies != nil {
+		t.Fatal("stale copy did not invalidate its snapshot")
+	}
+	page := s.Palette()
+	current := s.chatCopies
+	oldCopy(host, 2)
+	if s.chatCopies != current {
+		t.Fatal("old action invalidated the replacement snapshot")
+	}
+	for _, action := range page.Actions() {
+		if action.Title == "Copy message 3: Updated answer" {
+			action.Run(host)
+		}
+	}
+	if len(copied) != 1 || copied[0] != "Updated answer" {
+		t.Fatalf("reopened menu did not copy current message: %q", copied)
+	}
+}
+
 func TestMessageCopyRejectsReplacementConversation(t *testing.T) {
 	view := chatFixtureView()
 	copies := 0
