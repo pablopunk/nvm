@@ -80,6 +80,9 @@ func (w *Workshop) Settled(chatID string, _ chat.Outcome) {
 // writeExtension is the write_extension tool of chat chatID: it checks the arguments, the ownership of the id, the
 // extension in a child process, and then installs it enabled. A failure is returned as the tool's error.
 func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.RawMessage) (agent.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return agent.Result{}, err
+	}
 	var in writeArgs
 	if err := json.Unmarshal(args, &in); err != nil {
 		return agent.Result{}, err
@@ -92,10 +95,16 @@ func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.
 		return agent.Result{}, errors.New(problem)
 	}
 	w.step(ctx, chatID, checkingStep)
-	err = w.verify(candidate)
+	err = ctx.Err()
+	if err == nil {
+		err = w.verify(candidate)
+	}
 	if err == nil {
 		w.step(ctx, chatID, installingStep)
-		err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), true)
+		err = ctx.Err()
+		if err == nil {
+			err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), true)
+		}
 	}
 	if !w.onUI(ctx, func() { w.finishWrite(chatID, candidate, err) }) {
 		return agent.Result{}, errors.New("the turn was stopped before the extension was written")
