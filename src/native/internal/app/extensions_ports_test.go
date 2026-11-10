@@ -13,6 +13,7 @@ func appWithCapabilities(t *testing.T, names ...platform.Capability) *App {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	p := goldenPalette(t)
 	p.ports.Capabilities = platform.NewCapabilities(names...)
+	p.systemSvc = newSystemServices(p.ports, p.goos)
 	m, err := p.newExtensionManager()
 	if err != nil {
 		t.Fatalf("newExtensionManager: %v", err)

@@ -17,6 +17,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 type gridSourceStub struct {
@@ -131,7 +132,7 @@ func TestScopedGridSourceRendersOrReportsReadDenialAndCloses(t *testing.T) {
 				return manager.PictureSource{Path: "/image.png", Source: source, Current: func() bool { return true }}, nil
 			}}
 			queue := make(completionUIQueue, 1)
-			p := &App{uiQueue: queue, files: newTestFiles(t, "/home", nil)}
+			p := &App{uiQueue: queue, files: newTestFiles(t, testpath.Abs("home"), nil)}
 			var result extview.GridImageResult
 			p.loadScopedGridImage(context.Background(), grants, extview.GridImageRequest{}, func(got extview.GridImageResult) { result = got })
 			select {

@@ -70,18 +70,20 @@ type managerFakes struct {
 	diagnostics    services.DiagnosticsSurface
 	jobs           services.JobsSurface
 	shortcuts      services.ShortcutTable
+	systemCommands *systemfeat.Services
 }
 
 // paletteSurfaces are the palette's own surfaces as the app hands them to the built-ins: its settings, permissions,
 // updates, diagnostics, background jobs and shortcuts.
 func paletteSurfaces(p *App) managerFakes {
 	return managerFakes{
-		settingsHost: p.builtInSettingsStore,
-		permissions:  permissionSurface{p: p},
-		updates:      updatesSurface{p: p},
-		diagnostics:  diagnosticsSurface{p: p},
-		jobs:         jobsSurface{p: p},
-		shortcuts:    p.extensionShortcuts(),
+		settingsHost:   p.builtInSettingsStore,
+		permissions:    permissionSurface{p: p},
+		updates:        updatesSurface{p: p},
+		diagnostics:    diagnosticsSurface{p: p},
+		jobs:           jobsSurface{p: p},
+		shortcuts:      p.extensionShortcuts(),
+		systemCommands: p.systemSvc,
 	}
 }
 
@@ -163,6 +165,7 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Diagnostics:     fakes.diagnostics,
 		Jobs:            fakes.jobs,
 		Shortcuts:       fakes.shortcuts,
+		SystemCommands:  fakes.systemCommands,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dir, "extension-data"),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/egoist/mygo/ui"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"image"
 	"image/png"
 	"io/fs"
@@ -14,7 +15,7 @@ import (
 func TestGridPictureReopensSourceBeforeMemoryAndDiskHits(t *testing.T) {
 	for _, disk := range []bool{false, true} {
 		t.Run(map[bool]string{false: "memory", true: "disk"}[disk], func(t *testing.T) {
-			service := newTestFiles(t, "/home", nil)
+			service := newTestFiles(t, testpath.Abs("home"), nil)
 			files := service.fsys.(*fake.FS)
 			var encoded bytes.Buffer
 			if err := png.Encode(&encoded, image.NewNRGBA(image.Rect(0, 0, 8, 8))); err != nil {

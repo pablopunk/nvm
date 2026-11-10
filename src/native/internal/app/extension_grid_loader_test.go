@@ -7,6 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 	"github.com/pablopunk/nvm/native/internal/store"
 	"image"
 	"image/png"
@@ -48,7 +49,7 @@ func TestLoaderBackedGridRendersThroughHostEvidenceAndWarmSnapshot(t *testing.T)
 	}
 	defer m.Close()
 	queue := make(completionUIQueue, 8)
-	p := &App{ports: services.Ports(), uiQueue: queue, files: newTestFiles(t, "/home", nil)}
+	p := &App{ports: services.Ports(), uiQueue: queue, files: newTestFiles(t, testpath.Abs("home"), nil)}
 	deps := p.extensionViewDeps(m)
 	deps.Clock, deps.Cache = services.Clock, extview.NewMemoryCache()
 	nextUI := func() {
