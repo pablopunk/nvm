@@ -2144,8 +2144,8 @@ export type ExtensionContext = {
   };
 
   /**
-   * Desktop APIs for enabled trusted extensions. Capability declarations are review metadata and do not gate namespaces.
-   * In the Go host, OS permission denials are reported as permission errors and unsupported operations as unavailable.
+   * Desktop APIs for enabled trusted extensions. Electron treats capability declarations as review metadata; the Go host enforces its manifest declarations.
+   * Go selection, keyboard typing and paste report OS permission denials as permission errors and unsupported operations as unavailable.
    * Cancellation prevents a selection, keyboard, or paste effect that has not started; a synchronous native effect already started may finish.
    */
   desktop: {

@@ -1,8 +1,10 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/logx"
 )
 
@@ -16,4 +18,16 @@ func (h *Handler) require(capability api.Capability) error {
 		failure: api.Failure{Code: api.CodePermission, Message: fmt.Sprintf("this extension did not declare the %s capability in its manifest", capability)},
 		cause:   api.ErrPermission,
 	}
+}
+
+// admitDesktopEffect is the final admission boundary for migrated synchronous desktop operations.
+// A native operation admitted here may finish after cancellation; it is never replayed.
+func (h *Handler) admitDesktopEffect(ctx context.Context) error {
+	if h.closed.Load() {
+		return errHandlerClosed
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return protocol.LifetimeOf(ctx).Err()
 }

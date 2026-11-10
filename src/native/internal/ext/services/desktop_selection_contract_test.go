@@ -113,3 +113,35 @@ func TestKeyboardAndPasteDenialIsPermission(t *testing.T) {
 	requireCode(t, serve(t, h, protocol.ServiceDesktopKeyboard, protocol.OpTypeText, protocol.TypeTextArgs{Text: "x"}), api.CodePermission, "Allow Nevermind")
 	requireCode(t, serve(t, h, protocol.ServiceDesktopPaste, protocol.OpPerform, api.PasteText("Paste", "x")), api.CodePermission, "Allow Nevermind")
 }
+
+func TestClosedHostDuringImagePreparationDoesNotPaste(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "image.png")
+	if err := os.WriteFile(path, pngSignature, 0600); err != nil {
+		t.Fatal(err)
+	}
+	recorder := &pasteRecorder{}
+	var h *Handler
+	files := cancelReadFS{FS: real.NewPorts().FS, cancel: func() { _ = h.Close() }}
+	h = desktopHandler(t, Deps{Paste: recorder, Files: files}, api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard)
+	action := api.Paste("Image", api.ClipboardContent{Type: "image", ImagePath: path}, api.PasteOptions{})
+	if err := h.PerformPaste(action); !errors.Is(err, api.ErrNotAvailable) {
+		t.Fatalf("closed host paste: %v", err)
+	}
+	if len(recorder.pasted) != 0 {
+		t.Fatal("closed host admitted paste after content preparation")
+	}
+}
+
+func TestStoppedLifetimeDoesNotAdmitPaste(t *testing.T) {
+	recorder := &pasteRecorder{}
+	h := desktopHandler(t, Deps{Paste: recorder}, api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard)
+	lifetime, stop := context.WithCancel(context.Background())
+	stop()
+	ctx := protocol.WithLifetime(context.Background(), lifetime)
+	if err := h.performPasteContext(ctx, api.PasteText("Paste", "x")); !errors.Is(err, context.Canceled) {
+		t.Fatalf("stopped lifetime paste: %v", err)
+	}
+	if len(recorder.pasted) != 0 {
+		t.Fatal("stopped lifetime admitted paste")
+	}
+}

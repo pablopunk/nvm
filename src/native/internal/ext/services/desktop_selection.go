@@ -40,7 +40,7 @@ func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.Servi
 		if !ok {
 			return nil, unavailable("selected files are not available in this build")
 		}
-		if err := ctx.Err(); err != nil {
+		if err := h.admitDesktopEffect(ctx); err != nil {
 			return nil, err
 		}
 		paths, err := engine.Files(ctx)
@@ -60,7 +60,7 @@ func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.Servi
 	}
 	switch call.Op {
 	case protocol.OpText:
-		if err := ctx.Err(); err != nil {
+		if err := h.admitDesktopEffect(ctx); err != nil {
 			return nil, err
 		}
 		text, found, err := h.deps.Selection.Text()
@@ -85,7 +85,7 @@ func (h *Handler) replaceSelection(ctx context.Context, call protocol.ServiceCal
 	if !h.actions.allow() {
 		return false, rateExceeded("desktop actions")
 	}
-	if err := ctx.Err(); err != nil {
+	if err := h.admitDesktopEffect(ctx); err != nil {
 		return false, err
 	}
 	replaced, err := h.deps.Selection.Replace(args.Text)
@@ -132,7 +132,7 @@ func (h *Handler) undoSelection(ctx context.Context) error {
 	if !h.actions.allow() {
 		return rateExceeded("desktop actions")
 	}
-	if err := ctx.Err(); err != nil {
+	if err := h.admitDesktopEffect(ctx); err != nil {
 		return err
 	}
 	return selectionFailure(h.deps.Selection.Undo())

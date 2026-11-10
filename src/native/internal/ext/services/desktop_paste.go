@@ -218,7 +218,7 @@ func (h *Handler) pasteContext(ctx context.Context, content selection.Content, o
 	if h.deps.Paste == nil {
 		return unavailable("paste is not available in this build")
 	}
-	if err := ctx.Err(); err != nil {
+	if err := h.admitDesktopEffect(ctx); err != nil {
 		return err
 	}
 	return pasteFailure(h.deps.Paste.Paste(content, options))
@@ -236,7 +236,7 @@ func (h *Handler) typeTextContext(ctx context.Context, text string, delayMs int6
 		return unavailable("typing is not available in this build")
 	}
 	delay := time.Duration(min(max(delayMs, 0), maxTypeDelayMs)) * time.Millisecond
-	if err := ctx.Err(); err != nil {
+	if err := h.admitDesktopEffect(ctx); err != nil {
 		return err
 	}
 	return pasteFailure(h.deps.Paste.TypeText(text, delay))
