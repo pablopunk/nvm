@@ -17,20 +17,7 @@ func (s *Session) invokeRefresh(ref api.ActionRef, done func(api.Result, *api.Fa
 				paths = s.deps.CommandSnapshots.SnapshotPaths(s.snapshotIdentity, *s.snapshotRef)
 			}
 		}
-		in.OnSnapshotDenied = func(denial *api.SnapshotDenial) {
-			s.onUI(func() {
-				if !snapshotPathsCover(paths, denial) {
-					return
-				}
-				if s.dismissed || (s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID))) {
-					return
-				}
-				s.guard.Lock()
-				generation := s.imageGeneration
-				s.guard.Unlock()
-				s.applySnapshotImageDenial(generation, version, denial)
-			})
-		}
+		in.OnSnapshotDenied = s.snapshotDenialHandler(paths, version)
 	}
 	if s.deps.InvokeRefresh != nil {
 		s.deps.InvokeRefresh(s.workContext, s.extID, in, done)

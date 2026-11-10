@@ -19,7 +19,7 @@ func (p *App) builtInOpenPage(id string, fallback *palette.View) *palette.View {
 	if !ok || result.View == nil {
 		return fallback
 	}
-	return p.builtInPalette(id, *result.View)
+	return extview.NewSession(p.extensionViewDeps(p.extensionManager()), id, *result.View, result.SnapshotEvidence).Palette()
 }
 
 // builtInRun runs one of a built-in's actions in process and returns its result. It reports false without the extension
