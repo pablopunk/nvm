@@ -26,7 +26,7 @@ func TestOpenedChatMenuComesFromTheBuiltInWithShortcuts(t *testing.T) {
 	var titles []string
 	var askAgain search.Action
 	for _, action := range actions {
-		if strings.HasPrefix(action.Title, "Copy message ") {
+		if strings.HasPrefix(action.Title, "Copy message ") || strings.HasPrefix(action.Title, "Retry message ") {
 			// The palette appends one row per transcript message after the built-in's menu. Users bind their own keys.
 			if action.Label != "" {
 				t.Errorf("%q is bound to %q; per-message rows carry no default shortcut", action.Title, action.Label)

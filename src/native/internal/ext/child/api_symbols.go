@@ -91,6 +91,7 @@ func init() {
 		"ChatOpen":                      reflect.ValueOf(constant.MakeFromLiteral("\"open\"", token.STRING, 0)),
 		"ChatRefuse":                    reflect.ValueOf(constant.MakeFromLiteral("\"refuse\"", token.STRING, 0)),
 		"ChatRemove":                    reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
+		"ChatRetry":                     reflect.ValueOf(constant.MakeFromLiteral("\"retry\"", token.STRING, 0)),
 		"ChatStop":                      reflect.ValueOf(constant.MakeFromLiteral("\"stop\"", token.STRING, 0)),
 		"ChatTier":                      reflect.ValueOf(constant.MakeFromLiteral("\"tier\"", token.STRING, 0)),
 		"CheckCompatibility":            reflect.ValueOf(api.CheckCompatibility),

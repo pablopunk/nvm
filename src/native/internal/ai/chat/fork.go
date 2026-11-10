@@ -9,6 +9,10 @@ import (
 // ErrStaleFork means the source changed since the user chose a message.
 var ErrStaleFork = errors.New("chat: conversation changed; choose the message again")
 
+// ErrBuilderFork refuses a retry in a new chat for a builder chat: an extension has one builder chat, and a fork without
+// the binding would lose the builder's tools and instruction.
+var ErrBuilderFork = errors.New("chat: a builder chat cannot be retried in a new chat; use Ask Again")
+
 // ForkReply starts a new conversation through the user request answered by index. The original is never changed.
 // expected is the complete snapshot the selection came from; callers must retain it until invoking the action.
 func (s *Service) ForkReply(expected Chat, index int) (Chat, error) {
@@ -21,6 +25,9 @@ func (s *Service) ForkReply(expected Chat, index int) (Chat, error) {
 	}
 	if !reflect.DeepEqual(source, expected) {
 		return Chat{}, ErrStaleFork
+	}
+	if source.Kind == KindBuilder {
+		return Chat{}, ErrBuilderFork
 	}
 	if source.Kind != KindConversation || index < 0 || index >= len(source.Messages) {
 		return Chat{}, ErrNothingToAsk

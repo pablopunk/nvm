@@ -26,30 +26,22 @@ func (s *Session) messageCopier() func(search.Host, int) {
 	}
 	revision := s.chatRevision
 	state := &chatCopyState{view: displayed, revision: revision, identity: new(byte)}
-	// Strings are immutable: retain their values, copying only slice and tool metadata, never image bytes.
-	snapshot := slices.Clone(displayed.Messages)
-	for i, message := range snapshot {
-		snapshot[i].Images = slices.Clone(message.Images)
-		if message.Tool != nil {
-			tool := *message.Tool
-			snapshot[i].Tool = &tool
-		}
-	}
+	snapshot := snapshotChatMessages(displayed.Messages)
 	copyMessage := func(h search.Host, index int) {
 		if s.dismissed || s.view.Chat == nil || s.view.Chat != displayed || s.chatRevision != revision {
-			h.Toast("Chat changed. Choose the message again.")
+			h.Toast(chatChangedMessage)
 			return
 		}
 		if !reflect.DeepEqual(snapshot, s.view.Chat.Messages) {
 			if s.chatCopies == state {
 				s.chatCopies = nil
 			}
-			h.Toast("Chat changed. Choose the message again.")
+			h.Toast(chatChangedMessage)
 			h.Refresh()
 			return
 		}
 		if index < 0 || index >= len(snapshot) {
-			h.Toast("Chat changed. Choose the message again.")
+			h.Toast(chatChangedMessage)
 			return
 		}
 		message := snapshot[index]
@@ -60,4 +52,18 @@ func (s *Session) messageCopier() func(search.Host, int) {
 	state.copy = copyMessage
 	s.chatCopies = state
 	return copyMessage
+}
+
+// snapshotChatMessages retains the values of a transcript. Strings are immutable: it copies only slice and tool
+// metadata, never image bytes.
+func snapshotChatMessages(messages []api.ChatMessage) []api.ChatMessage {
+	snapshot := slices.Clone(messages)
+	for i, message := range snapshot {
+		snapshot[i].Images = slices.Clone(message.Images)
+		if message.Tool != nil {
+			tool := *message.Tool
+			snapshot[i].Tool = &tool
+		}
+	}
+	return snapshot
 }

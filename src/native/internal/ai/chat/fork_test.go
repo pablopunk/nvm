@@ -41,7 +41,9 @@ func TestForkReplyKeepsSourceAndStopsAtSelectedRequest(t *testing.T) {
 func TestForkReplyRejectsStaleBusyAndBuilder(t *testing.T) {
 	f := newFixture(t)
 	source, _ := f.svc.NewChat(KindConversation, TierFast)
-	_ = f.svc.mutate(source.ID, func(c *Chat) { c.Messages = []Message{{Author: AuthorUser, Text: "q"}, {Author: AuthorAssistant, Text: "a"}} })
+	_ = f.svc.mutate(source.ID, func(c *Chat) {
+		c.Messages = []Message{{Author: AuthorUser, Text: "q"}, {Author: AuthorAssistant, Text: "a"}}
+	})
 	snapshot, _ := f.svc.Chat(source.ID)
 	_ = f.svc.Retitle(source.ID, "changed")
 	if _, err := f.svc.ForkReply(snapshot, 1); !errors.Is(err, ErrStaleFork) {
@@ -56,7 +58,7 @@ func TestForkReplyRejectsStaleBusyAndBuilder(t *testing.T) {
 	builder, _ := f.svc.NewChat(KindBuilder, TierSmart)
 	_ = f.svc.mutate(builder.ID, func(c *Chat) { c.Messages = current.Messages })
 	builder, _ = f.svc.Chat(builder.ID)
-	if _, err := f.svc.ForkReply(builder, 1); !errors.Is(err, ErrNothingToAsk) {
+	if _, err := f.svc.ForkReply(builder, 1); !errors.Is(err, ErrBuilderFork) {
 		t.Fatalf("builder: %v", err)
 	}
 }

@@ -142,4 +142,8 @@ type ChatPages interface {
 	Stop(chatID string)
 	SetTier(chatID string, tier chat.Tier) error
 	Remove(chatID string) error
+	// Retry leaves the chat alone and starts a new one from the request the answer at index replied to. shown is the
+	// transcript the user chose from; the store refuses it when the chat has changed since. It returns the new chat's ID,
+	// which is not empty when the chat exists even though its first reply could not start, and the error says why.
+	Retry(chatID string, index int, shown []api.ChatMessage) (newChatID string, err error)
 }

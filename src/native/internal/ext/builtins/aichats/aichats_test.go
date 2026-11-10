@@ -278,7 +278,7 @@ func actionNamed(actions []api.Action, title string) (api.Action, bool) {
 func TestIdleTranscriptMenuListsTheChatActionsInOrder(t *testing.T) {
 	detail := chat("1", "conversation", "Plan", user("Plan a trip."), assistant("Three days in Lisbon."))
 	detail.Tier = api.ModelFast
-	want := []string{"Ask Again", "Copy Reply", "Copy Message", "Switch to Smart", "New Chat", "Delete Chat"}
+	want := []string{"Ask Again", "Copy Reply", "Copy Message", "Switch to Smart", "New Chat", "Delete Chat", "Retry message 2: Three days in Lisbon."}
 	if got := actionTitles(chatActions(detail)); !reflect.DeepEqual(got, want) {
 		t.Fatalf("menu = %v, want %v", got, want)
 	}
