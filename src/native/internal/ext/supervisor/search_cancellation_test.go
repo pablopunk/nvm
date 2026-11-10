@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -16,11 +17,13 @@ import (
 )
 
 type searchProcess struct {
-	lines  chan []byte
-	writes chan []byte
-	killed chan struct{}
-	reaped chan struct{}
-	once   sync.Once
+	lines       chan []byte
+	writes      chan []byte
+	killed      chan struct{}
+	reaped      chan struct{}
+	once        sync.Once
+	killEntered chan struct{}
+	killRelease <-chan struct{}
 }
 
 func newSearchProcess() *searchProcess {
@@ -36,7 +39,16 @@ func (p *searchProcess) ReadLine() ([]byte, error) {
 		return nil, io.EOF
 	}
 }
-func (p *searchProcess) Kill() error { p.once.Do(func() { close(p.killed) }); return nil }
+func (p *searchProcess) Kill() error {
+	p.once.Do(func() {
+		if p.killEntered != nil {
+			close(p.killEntered)
+			<-p.killRelease
+		}
+		close(p.killed)
+	})
+	return nil
+}
 func (p *searchProcess) Wait() (int, error) {
 	<-p.killed
 	close(p.reaped)
@@ -44,7 +56,11 @@ func (p *searchProcess) Wait() (int, error) {
 }
 func (p *searchProcess) StderrTail() string { return "" }
 
-type searchWorker struct{ started chan *searchProcess }
+type searchWorker struct {
+	started      chan *searchProcess
+	holdRestarts bool
+	starts       atomic.Uint32
+}
 
 func receiveSearch[T any](t *testing.T, ch <-chan T) T {
 	t.Helper()
@@ -60,7 +76,9 @@ func receiveSearch[T any](t *testing.T, ch <-chan T) T {
 
 func (w *searchWorker) Start(platform.WorkerSpec) (platform.WorkerProcess, error) {
 	p := newSearchProcess()
-	p.lines <- []byte(`{"ok":true,"methods":["search","run"]}`)
+	if !w.holdRestarts || w.starts.Add(1) == 1 {
+		p.lines <- []byte(`{"ok":true,"methods":["search","run"]}`)
+	}
 	w.started <- p
 	return p, nil
 }
