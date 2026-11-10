@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -64,6 +65,8 @@ type fileService struct {
 	gridPictures *asyncCache[*ui.Bitmap]
 	gridWarmups  *asyncCache[bool]
 	pictures     platform.FilePictures
+	iconLook     atomic.Pointer[string]
+	themedIcons  atomic.Bool
 	redraw       func()
 	ctx          context.Context
 	log          *logx.Logger

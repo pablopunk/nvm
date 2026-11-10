@@ -23,14 +23,20 @@ const (
 type quickLookPictures struct {
 	helper platform.Helper
 	binary string
+	looks  *iconLookReader
 }
 
 func newFilePictures(helper platform.Helper) platform.FilePictures {
-	return quickLookPictures{helper: helper, binary: macosHelperPath()}
+	return quickLookPictures{helper: helper, binary: macosHelperPath(), looks: newIconLookReader(helper)}
 }
 
 // FilePicture asks the helper for the picture and reads the file it wrote.
 func (q quickLookPictures) FilePicture(ctx context.Context, path string, edge int) ([]byte, error) {
+	return q.drawnByHelper(ctx, thumbnailSubcommand, path, edge)
+}
+
+// drawnByHelper runs one drawing subcommand of the helper and reads the PNG it wrote.
+func (q quickLookPictures) drawnByHelper(ctx context.Context, subcommand, path string, edge int) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "nvm-picture-")
 	if err != nil {
 		return nil, err
@@ -39,7 +45,7 @@ func (q quickLookPictures) FilePicture(ctx context.Context, path string, edge in
 	output := filepath.Join(dir, "picture.png")
 	ctx, cancel := context.WithTimeout(ctx, filePictureTimeout)
 	defer cancel()
-	result, err := q.helper.Run(ctx, q.binary, []string{thumbnailSubcommand, path, strconv.Itoa(edge), output}, nil)
+	result, err := q.helper.Run(ctx, q.binary, []string{subcommand, path, strconv.Itoa(edge), output}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -61,4 +67,7 @@ func (q quickLookPictures) FilePictureFromSource(ctx context.Context, source pla
 	return q.FilePicture(ctx, staged, edge)
 }
 
-var _ platform.SourceFilePictures = quickLookPictures{}
+var (
+	_ platform.SourceFilePictures = quickLookPictures{}
+	_ platform.IconLooks          = quickLookPictures{}
+)

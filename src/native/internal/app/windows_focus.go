@@ -46,6 +46,9 @@ func (p *App) onPaletteShown() {
 		p.pasteLeases.revoke()
 	}
 	p.captureMenusOnShow()
+	if p.files != nil {
+		p.files.refreshIconLook()
+	}
 	p.showApps()
 }
 

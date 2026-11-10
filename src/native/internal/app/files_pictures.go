@@ -65,7 +65,7 @@ func (s *fileService) thumbnailFor(path string) *ui.Bitmap {
 
 // systemIcon asks the operating system for the icon of path and decodes it. It runs on a worker; a failure is nil.
 func (s *fileService) systemIcon(path string) *ui.Bitmap {
-	data, err := s.shell.AppIcon(path, iconSize*2)
+	data, err := s.systemIconPNG(path)
 	if err != nil {
 		return nil
 	}

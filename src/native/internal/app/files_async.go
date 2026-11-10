@@ -82,6 +82,14 @@ func (c *asyncCache[V]) Put(key string, v V) {
 	c.storeLocked(key, v)
 }
 
+// Clear forgets the stored values, so the next Get of each loads it again.
+func (c *asyncCache[V]) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.values = map[string]V{}
+	c.order = nil
+}
+
 // Len returns how many values are stored.
 func (c *asyncCache[V]) Len() int {
 	c.mu.Lock()
