@@ -15,24 +15,24 @@ import (
 // Runtime owns the child process of one extension. Calls are serialized: a child answers one request at a
 // time. Every method is safe for concurrent use; Call never blocks past its context.
 type Runtime struct {
-	cfg          Config
-	sourcePath   string
-	identity     api.Identity
-	services     ServiceHandler
-	slots        chan struct{}
-	viewServices chan struct{}
-	mu           sync.Mutex
-	state        State
-	reason       string
-	generation   uint64
-	child        *childProcess
-	declared     []string
+	cfg              Config
+	sourcePath       string
+	identity         api.Identity
+	services         ServiceHandler
+	slots            chan struct{}
+	viewServices     chan struct{}
+	mu               sync.Mutex
+	state            State
+	reason           string
+	generation       uint64
+	child            *childProcess
+	declared         []string
 	restartingSearch bool
-	failures     []time.Time
-	retryAt      time.Time
-	diagnostics  []string
-	nextRequest  uint64
-	changed      chan struct{}
+	failures         []time.Time
+	retryAt          time.Time
+	diagnostics      []string
+	nextRequest      uint64
+	changed          chan struct{}
 	// lifetime ends when the extension stops; host waits on behalf of a call end with it.
 	lifetime       context.Context
 	cancelLifetime context.CancelFunc

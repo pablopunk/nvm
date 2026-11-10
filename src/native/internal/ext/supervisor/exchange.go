@@ -54,6 +54,7 @@ func readLines(proc platform.WorkerProcess, done <-chan struct{}) <-chan lineRes
 			select {
 			case out <- lineResult{data: line}:
 			case <-done:
+				_, _ = proc.Wait()
 				return
 			}
 		}
