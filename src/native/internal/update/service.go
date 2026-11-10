@@ -198,12 +198,14 @@ func (s *Service) finishCheck(ctx context.Context, epoch int, offer Offer, found
 		return s.State(), false
 	}
 	state, download := s.answerLocked(offer, found, err)
+	beginDownload := func() {}
 	if download {
-		state = s.startDownloadLocked(ctx, epoch, offer)
+		state, beginDownload = s.startDownloadLocked(ctx, epoch, offer)
 	}
 	s.state = state
 	s.mu.Unlock()
 	s.notify(state)
+	beginDownload() // after the notice, so progress cannot be announced ahead of the download starting
 	return state, true
 }
 

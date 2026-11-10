@@ -51,7 +51,7 @@ func TestOneArrowKeyMovesOneRow(t *testing.T) {
 
 func TestArrowsStepWholeGridRowsAndLeaveBodiesAlone(t *testing.T) {
 	var ran string
-	view := &View{Title: "Grid", Grid: &Grid{Columns: 2}, Search: func(string) []search.Item { return arrowRows(&ran) }}
+	view := &View{Title: "Grid", Grid: &Grid{Columns: 2, Cell: func(*ui.Context, search.Item) {}}, Search: func(string) []search.Item { return arrowRows(&ran) }}
 	h := newHarness(t, view, false)
 	h.frame()
 	h.p.stepWithArrow(ui.KeyDown)
