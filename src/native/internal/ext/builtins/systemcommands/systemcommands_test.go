@@ -20,7 +20,9 @@ type fakeSystem struct {
 	supported map[string]bool
 }
 
-func (s fakeSystem) HasCapability(name string) bool { return s.supported[name] }
+func (s fakeSystem) HasCapability(name string) bool {
+	panic("discovery must leave support projection to the host")
+}
 
 func (s fakeSystem) Labels() api.SystemLabels {
 	return api.SystemLabels{SettingsCommand: "Open System Settings"}
@@ -95,13 +97,10 @@ func TestSleepDoesNotAsk(t *testing.T) {
 	}
 }
 
-func TestCommandsTheSystemLacksAreOmitted(t *testing.T) {
-	supported := map[string]bool{"system.sleep": true}
-	if items := searchTitles(t, supported, "lock"); len(items) != 0 {
-		t.Fatalf("items = %+v, want no lock command without its capability", items)
-	}
-	if items := searchTitles(t, supported, "sleep"); len(items) != 1 {
-		t.Fatalf("items = %+v, want Sleep", items)
+func TestSystemRowsDeclareRequirementsInsteadOfProbingSupport(t *testing.T) {
+	items := searchTitles(t, nil, "lock")
+	if len(items) != 1 || len(items[0].Requires) != 1 || items[0].Requires[0] != api.OperationSystemLock {
+		t.Fatalf("raw declaration lost its requirement: %+v", items)
 	}
 }
 

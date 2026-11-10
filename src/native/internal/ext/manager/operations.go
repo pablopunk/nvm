@@ -18,7 +18,9 @@ func (m *Manager) OperationsSupported(required []api.Operation) bool {
 				return false
 			}
 		default:
-			return false
+			if !m.serviceDeps.SystemCommands.SupportsCapability(platform.Capability(operation)) {
+				return false
+			}
 		}
 	}
 	return true

@@ -23,27 +23,27 @@ type Extension struct{}
 
 // Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
 func (Extension) Manifest() api.Manifest {
-	return api.Manifest{APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "System Commands"}}
+	return api.Manifest{APIVersion: "1.1", Identity: api.Identity{ID: ID, Title: "System Commands"}}
 }
 
 // rootScores are the 1.x scores of the commands the empty root lists, by operation, in the order of the catalog.
 var rootScores = map[string]int{"lock-screen": 22, "sleep": 21, "restart": 20, "open-system-settings": 19}
 
-// RootItems lists the supported commands the empty root shows: lock, sleep, restart and the system settings, at their
+// RootItems declares the commands the empty root shows: lock, sleep, restart and the system settings, at their
 // 1.x scores. The other commands show only for a query.
 func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
 	system := ctx.System()
 	var out []api.Item
 	for _, c := range catalog(system.Labels().SettingsCommand) {
 		score, ok := rootScores[c.op]
-		if ok && system.HasCapability(c.capability) {
+		if ok {
 			out = append(out, commandItem(c, score))
 		}
 	}
 	return out, nil
 }
 
-// SearchItems lists the supported commands that match the query. Commands show only for a query, never at the empty root.
+// SearchItems declares the commands that match the query. Commands show only for a query, never at the empty root.
 func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	lq := strings.ToLower(query)
 	if lq == "" {
@@ -52,9 +52,6 @@ func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) 
 	system := ctx.System()
 	var out []api.Item
 	for _, c := range catalog(system.Labels().SettingsCommand) {
-		if !system.HasCapability(c.capability) {
-			continue
-		}
 		if score := matchScore(c, lq); score > 0 {
 			out = append(out, commandItem(c, score))
 		}
@@ -72,7 +69,8 @@ func matchScore(c command, lq string) int {
 // it, and its usage key.
 func commandItem(c command, score int) api.Item {
 	item := api.Item{
-		ID: c.op, Title: c.title, Subtitle: c.subtitle, Icon: c.icon, Score: float64(score),
+		Requires: []api.Operation{c.capability},
+		ID:       c.op, Title: c.title, Subtitle: c.subtitle, Icon: c.icon, Score: float64(score),
 		Section: search.KindCommands, LearnKey: "cmd:" + c.title,
 		Primary: &api.Action{Kind: api.ActionSystem, Op: c.op, Title: c.title, Confirm: confirmationOf(c)},
 	}

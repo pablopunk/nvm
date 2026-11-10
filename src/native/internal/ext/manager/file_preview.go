@@ -13,6 +13,12 @@ func (m *Manager) ActionSupported(action api.Action) bool {
 	if !m.OperationsSupported(action.Requires) {
 		return false
 	}
+	if action.Kind == api.ActionSystem {
+		if action.Op == "quit" || action.Op == "restart-app" {
+			return true
+		}
+		return m.systemCommandSupported(action.Op)
+	}
 	if action.Kind == api.ActionQuickLook {
 		return platform.BindFilePreview(m.serviceDeps.Shell, m.serviceDeps.Capabilities).Supported()
 	}

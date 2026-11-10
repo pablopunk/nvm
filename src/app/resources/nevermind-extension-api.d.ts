@@ -53,7 +53,16 @@
  * Declare Go Manifest.APIVersion "1.1" when relying on this field. Existing 1.0 extensions
  * remain supported. Saved shortcuts explain unavailability; background runs skip without prompts.
  */
-export type GoExtensionOperation = 'files.preview' | 'windows.switch-desktop';
+export type GoExtensionOperation =
+  | 'files.preview'
+  | 'windows.switch-desktop'
+  | 'system.lock'
+  | 'system.sleep'
+  | 'system.restart'
+  | 'system.shutDown'
+  | 'system.logOut'
+  | 'system.emptyTrash'
+  | 'system.settings';
 
 /** Fractions are of the display work area (menu bar and Dock excluded), origin top-left. `x` and `y` are 0..1, `width` and `height` are above 0 and at most 1, and `x + width` and `y + height` are at most 1. */
 export type ExtensionWindowLayoutSpec =

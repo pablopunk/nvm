@@ -142,6 +142,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		OpenWith:            func(path, appPath string) error { return ports.Shell.OpenWith(path, appDescriptor(appPath)) },
 		Trash:               func(path string) error { return ports.Shell.Trash(path) },
 		RunSystem:           p.runSystemOp,
+		SystemCommand:       p.extensionSystemCommand(m),
 		HyperKey:            p.hyperKey,
 		OnUI:                p.onUI,
 		Files:               ports.FS,

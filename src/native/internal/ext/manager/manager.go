@@ -9,6 +9,7 @@ package manager
 
 import (
 	"github.com/pablopunk/nvm/native/internal/ext/bundled"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"path/filepath"
 	"sort"
 	"sync"
@@ -45,12 +46,13 @@ type Ports struct {
 	Clipboard          platform.Clipboard
 	Logs               *logx.Logger
 	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
-	Shell        platform.Shell
-	Commands     platform.Commands
-	Capabilities platform.Capabilities
-	OS           string
-	Windows      services.WindowEngine
-	Desktops     platform.DesktopSwitcher
+	Shell          platform.Shell
+	Commands       platform.Commands
+	Capabilities   platform.Capabilities
+	OS             string
+	Windows        services.WindowEngine
+	Desktops       platform.DesktopSwitcher
+	SystemCommands *systemfeat.Services
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
 	Menus     services.MenuPort
@@ -218,6 +220,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			OS:              ports.OS,
 			Windows:         ports.Windows,
 			Desktops:        ports.Desktops,
+			SystemCommands:  ports.SystemCommands,
 			Frontmost:       ports.Frontmost,
 			Menus:           ports.Menus,
 			Notifier:        ports.Notifier,

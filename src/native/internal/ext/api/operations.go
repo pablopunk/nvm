@@ -12,8 +12,15 @@ import (
 type Operation string
 
 const (
-	OperationFilePreview   Operation = "files.preview"
-	OperationSwitchDesktop Operation = "windows.switch-desktop"
+	OperationSystemLock       Operation = "system.lock"
+	OperationSystemSleep      Operation = "system.sleep"
+	OperationSystemRestart    Operation = "system.restart"
+	OperationSystemShutDown   Operation = "system.shutDown"
+	OperationSystemLogOut     Operation = "system.logOut"
+	OperationSystemEmptyTrash Operation = "system.emptyTrash"
+	OperationSystemSettings   Operation = "system.settings"
+	OperationFilePreview      Operation = "files.preview"
+	OperationSwitchDesktop    Operation = "windows.switch-desktop"
 )
 
 func validateRequirements(required []Operation) error {

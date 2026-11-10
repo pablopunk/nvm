@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/pablopunk/nvm/native/internal/ext/bundled"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -68,7 +69,8 @@ type Deps struct {
 	// Windows lists and places windows through the window engine. Nil answers unavailable.
 	Windows WindowEngine
 	// Desktops switches workspaces; nil means this operation is unsupported.
-	Desktops platform.DesktopSwitcher
+	Desktops       platform.DesktopSwitcher
+	SystemCommands *systemfeat.Services
 	// Frontmost names the app in front. Nil answers unavailable.
 	Frontmost FrontmostSource
 	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.

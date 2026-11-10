@@ -302,6 +302,7 @@ func (s *Session) navigationChild(extID string, view api.View, navigation api.Na
 // confirmPage asks before a destructive action runs: its first row runs it, its second cancels. Cancel and Escape leave
 // the page without running anything, and a confirmed action replaces the confirmation with its own result.
 func (s *Session) confirmPage(r route) *palette.View {
+	consumed := false
 	confirmation := r.action.Confirm
 	title := orDefault(confirmation.Title, orDefault(r.action.Title, "Confirm"))
 	label := orDefault(confirmation.ConfirmLabel, "Confirm")
@@ -312,16 +313,22 @@ func (s *Session) confirmPage(r route) *palette.View {
 	}
 	return &palette.View{
 		Title: "Confirm", Placeholder: title,
+		OnLeave: func() { consumed = true },
+		OnHide:  func() { consumed = true },
 		Search: func(string) []search.Item {
 			return []search.Item{
 				{Title: label, Subtitle: confirmation.Message, Icon: "check", Tone: tone, Actions: []search.Action{
 					{Title: "Confirm", Dismiss: search.DismissNever, Run: func(h search.Host) {
+						if consumed || s.dismissed {
+							return
+						}
+						consumed = true
 						h.Pop()
 						s.invoke(h, route{extID: r.extID, action: withoutConfirmation(r.action), command: r.command, viewIntent: r.viewIntent, identity: r.identity})
 					}},
 				}},
 				{Title: cancel, Icon: "x", Actions: []search.Action{
-					{Title: cancel, Dismiss: search.DismissNever, Run: func(h search.Host) { h.Pop() }},
+					{Title: cancel, Dismiss: search.DismissNever, Run: func(h search.Host) { consumed = true; h.Pop() }},
 				}},
 			}
 		},

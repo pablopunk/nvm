@@ -12,6 +12,15 @@ func (s *Session) invoke(h search.Host, r route) {
 		h.Toast("This action requires an operation unavailable on this system.")
 		return
 	}
+	if r.action.Kind == api.ActionSystem && r.action.Op != "quit" && r.action.Op != "restart-app" && s.deps.SystemCommand != nil {
+		h.Hide()
+		s.deps.SystemCommand(r.extID, r.action.Op, r.identity, func(failure string) {
+			if failure != "" {
+				h.Toast(failure)
+			}
+		})
+		return
+	}
 	if r.action.Kind == api.ActionQuickLook {
 		s.previewDeclaredFile(h, r)
 		return
