@@ -8,7 +8,8 @@ import (
 // runDeclared performs a declarative action on the host with the host's own services. Each kind keeps the palette
 // behavior of the native row it replaces: a set-query searches again and stays open, a path or an OS command hides the
 // palette first, and a failed OS command reports its sentence as a toast.
-func (s *Session) runDeclared(h search.Host, action api.Action) {
+func (s *Session) runDeclared(h search.Host, r route) {
+	action := r.action
 	switch action.Kind {
 	case api.ActionReplaceView, api.ActionRootView:
 		if action.View == nil || action.View.Validate() != nil {
@@ -33,20 +34,20 @@ func (s *Session) runDeclared(h search.Host, action api.Action) {
 	case api.ActionTrash:
 		s.trashPaths(h, action.Paths)
 	case api.ActionWindow:
-		s.runWindow(h, action)
+		s.runWindow(h, r)
 	default:
 		h.Toast(unavailableMessage)
 	}
 }
 
 // runWindow hands a window action to the host, after the palette hides so that the window takes the focus.
-func (s *Session) runWindow(h search.Host, action api.Action) {
+func (s *Session) runWindow(h search.Host, r route) {
 	if s.deps.Window == nil {
 		h.Toast(unavailableMessage)
 		return
 	}
 	h.Hide()
-	s.deps.Window(s.extID, action)
+	s.deps.Window(r.extID, r.action, r.identity)
 }
 
 func (s *Session) openPath(h search.Host, path string) {

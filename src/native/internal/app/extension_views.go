@@ -113,7 +113,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		LinkCard:              p.linkCardOf,
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
-		Window:                p.performExtensionWindow,
+		Window:                p.extensionWindowAction(m),
 		ToggleSetting: func(extID, key string, identity any, done func(error)) {
 			p.extCalls.Add(1)
 			go func() {

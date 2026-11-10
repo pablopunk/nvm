@@ -53,9 +53,11 @@ func (p *App) extensionWindowPage(extID string, view api.View, host search.Host)
 
 // performExtensionWindow runs a window action an extension's view asked for. The palette has hidden already, so a
 // failure is shown as a toast on the app.
-func (p *App) performExtensionWindow(extID string, action api.Action) {
-	if err := p.extWindows.Perform(extID, action); err != nil {
-		p.Toast(err.Error())
+func (p *App) extensionWindowAction(m *manager.Manager) func(string, api.Action, any) {
+	return func(extID string, action api.Action, identity any) {
+		if err := m.WindowAction(extID, action, identity, p.extWindows.Perform); err != nil {
+			p.Toast(err.Error())
+		}
 	}
 }
 

@@ -34,7 +34,7 @@ func TestDismissedCommandCompletesWindowEffectWithoutClosingANewerPalette(t *tes
 			windows := 0
 			deps := Deps{
 				Invoke: func(_ string, _ api.Invocation, callback func(api.Result, *api.Failure)) { done = callback },
-				Window: func(string, api.Action) { windows++ },
+				Window: func(string, api.Action, any) { windows++ },
 			}
 			action := api.Run("toggle", "Toggle floating window", nil)
 			action.DismissAfterRun = tc.auto

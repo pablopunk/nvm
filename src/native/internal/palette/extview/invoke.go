@@ -34,7 +34,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	if r.action.Kind != api.ActionRun {
-		s.runDeclared(h, r.action)
+		s.runDeclared(h, r)
 		return
 	}
 	if r.action.Ref == nil {

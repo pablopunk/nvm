@@ -23,7 +23,7 @@ func windowRowView(action api.Action) api.View {
 func TestWindowRowHidesThePaletteAndHandsTheActionToTheHost(t *testing.T) {
 	var gotExt string
 	var gotActions []api.Action
-	deps := Deps{Window: func(extID string, action api.Action) {
+	deps := Deps{Window: func(extID string, action api.Action, identity any) {
 		gotExt = extID
 		gotActions = append(gotActions, action)
 	}}
