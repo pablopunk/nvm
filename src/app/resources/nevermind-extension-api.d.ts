@@ -56,6 +56,8 @@
  * remain supported. Saved shortcuts explain unavailability; background runs skip without prompts.
  */
 export type GoExtensionOperation =
+  | 'ocr'
+  | 'ocr.screen'
   | 'shell.exec'
   | 'shell.script'
   | 'files.preview'
@@ -2113,7 +2115,12 @@ export type ExtensionContext = {
   /** Clipboard history. Enabled trusted extensions receive this API regardless of declarations. */
   clipboard: { history?: ExtensionClipboardHistory };
 
-  /** OCR helpers. Declarations do not gate this API; check `ctx.system.capabilities.has('ocr')` for OS support. */
+  /** OCR helpers. Electron declarations do not gate this API. Go hosts enforce the `ocr` declaration.
+   * On Go, probe `ocr` for images or `ocr.screen` for captures: probes intersect platform support
+   * with the wired recognizer/capture ports, without checking permission or temporary-folder readiness.
+   * Calls check cancellation before capture/recognition and between staging and recognition; already-admitted
+   * native work may finish. Permission denial remains distinct from unsupported and empty text.
+   */
   ocr?: {
     /** Recognize text in an image path, file URL, data URL, or `ExtensionFile`. */
     image(

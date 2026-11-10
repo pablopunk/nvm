@@ -22,7 +22,7 @@ func (h *Handler) serveOCR(ctx context.Context, call protocol.ServiceCall) (any,
 	if h.deps.OCR == nil {
 		return nil, unavailable("OCR is not available in this build")
 	}
-	support := ocr.Availability(h.deps.Capabilities)
+	support := h.deps.OCR.Availability(h.deps.Capabilities)
 	switch call.Op {
 	case protocol.OpImage:
 		return h.readImage(ctx, support, call.Args)
@@ -62,6 +62,9 @@ func (h *Handler) readImage(ctx context.Context, support ocr.Features, raw json.
 	if !h.ocrReads.allow() {
 		return api.OCRResult{}, rateExceeded("OCR reads")
 	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return api.OCRResult{}, err
+	}
 	var result platform.TextResult
 	if isData {
 		result, err = h.deps.OCR.ImagePNG(ctx, png, ocrOptionsOf(args.Options))
@@ -77,6 +80,9 @@ func (h *Handler) readScreen(ctx context.Context, support ocr.Features, options 
 	}
 	if !h.ocrReads.allow() || !h.screenReads.allow() {
 		return api.OCRResult{}, rateExceeded("screen reads")
+	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return api.OCRResult{}, err
 	}
 	if region != nil {
 		result, err := h.deps.OCR.Region(ctx, *region, ocrOptionsOf(options))

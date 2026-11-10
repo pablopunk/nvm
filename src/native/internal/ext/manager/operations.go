@@ -9,6 +9,14 @@ import (
 func (m *Manager) OperationsSupported(required []api.Operation) bool {
 	for _, operation := range required {
 		switch operation {
+		case api.OperationOCRImage:
+			if !m.serviceDeps.OCR.Availability(m.serviceDeps.Capabilities).Image {
+				return false
+			}
+		case api.OperationOCRScreen:
+			if !m.serviceDeps.OCR.Availability(m.serviceDeps.Capabilities).Screen {
+				return false
+			}
 		case api.OperationShellExec:
 			if !platform.ProcessAvailability(m.serviceDeps.Commands, m.serviceDeps.OS).Exec {
 				return false

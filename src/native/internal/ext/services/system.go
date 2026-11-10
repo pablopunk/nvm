@@ -5,7 +5,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
-	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -47,9 +46,9 @@ func (h *Handler) hasCapability(raw json.RawMessage) (bool, error) {
 func (h *Handler) publicCapability(name string) bool {
 	switch name {
 	case "ocr":
-		return ocr.Availability(h.deps.Capabilities).Image
+		return h.deps.OCR.Availability(h.deps.Capabilities).Image
 	case "ocr.screen":
-		return ocr.Availability(h.deps.Capabilities).Screen
+		return h.deps.OCR.Availability(h.deps.Capabilities).Screen
 	case "shell.exec":
 		return platform.ProcessAvailability(h.deps.Commands, h.deps.OS).Exec
 	case "shell.script":

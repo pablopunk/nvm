@@ -12,6 +12,8 @@ import (
 type Operation string
 
 const (
+	OperationOCRImage         Operation = "ocr"
+	OperationOCRScreen        Operation = "ocr.screen"
 	OperationShellExec        Operation = "shell.exec"
 	OperationShellScript      Operation = "shell.script"
 	OperationSystemLock       Operation = "system.lock"

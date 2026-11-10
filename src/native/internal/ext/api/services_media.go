@@ -29,7 +29,9 @@ type OCRResult struct {
 	Blocks     []OCRBlock `json:"blocks,omitempty"`
 }
 
-// OCR recognises text. Declare the ocr capability for review; check System().HasCapability("ocr").
+// OCR recognises text. Declare ocr; the host enforces that declaration.
+// Probe System().HasCapability("ocr") for images or "ocr.screen" for captures.
+// Probes describe wired implementations, independently of permission and temporary-folder readiness.
 // Screen and Region need screen-recording permission from the OS.
 type OCR interface {
 	Image(input OCRInput, options OCROptions) (OCRResult, error)
