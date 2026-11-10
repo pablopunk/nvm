@@ -23,7 +23,7 @@ func TestSignInApprovalConnectsTheAccountAndStoresTheToken(t *testing.T) {
 	if pending.SignIn.Code != "CODE-123" || !strings.HasPrefix(pending.SignIn.VerificationURL, "https://www.nvm.fyi/") {
 		t.Fatalf("pending sign-in = %+v, want the code and the verification page", pending.SignIn)
 	}
-	if pages := r.browsedPages(); len(pages) != 1 || pages[0] != pending.SignIn.VerificationURL {
+	if pages := r.waitForBrowsed(1); len(pages) != 1 || pages[0] != pending.SignIn.VerificationURL {
 		t.Fatalf("browser opened %v, want the verification page once", pages)
 	}
 
@@ -137,8 +137,8 @@ func TestBrowserFailureIsShownAndCanBeRetried(t *testing.T) {
 	if err := r.session.RetryOpenVerificationPage(); err == nil {
 		t.Fatal("RetryOpenVerificationPage succeeded with a failing browser")
 	}
-	if len(r.browsedPages()) != 2 || r.browsedPages()[1] != pending.SignIn.VerificationURL {
-		t.Fatalf("browser calls = %v, want the page opened again on retry", r.browsedPages())
+	if pages := r.waitForBrowsed(2); len(pages) != 2 || pages[1] != pending.SignIn.VerificationURL {
+		t.Fatalf("browser calls = %v, want the page opened again on retry", pages)
 	}
 	r.advancePoll()
 	r.waitForPhase(PhaseApproved)
