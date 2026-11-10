@@ -45,8 +45,8 @@ func historyRow(chat api.ChatSummary, now time.Time) api.Item {
 func removeAction(chat api.ChatSummary) api.Action {
 	title := chatTitle(chat.Title)
 	detail := title + " and its history"
-	if chat.Kind == "builder" {
-		detail += ". Generated extension files stay."
+	if chat.ExtensionID != "" {
+		detail += ". Its extension is removed too."
 	}
 	return api.Action{Kind: api.ActionChat, Op: api.ChatRemove, Title: "Remove Chat", Chat: &api.ChatAction{ChatID: chat.ID},
 		Confirm: &api.Confirmation{Title: fmt.Sprintf("Remove %q?", title), Message: detail, ConfirmLabel: "Remove Chat", CancelLabel: "Cancel", Destructive: true}}

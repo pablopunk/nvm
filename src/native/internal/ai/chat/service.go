@@ -43,6 +43,9 @@ type Options struct {
 	// BuilderTools returns the tools of the builder chat with the id, for one turn. It runs on the UI thread. Nil gives a
 	// builder no tools.
 	BuilderTools func(chatID string) Toolset
+	// OnRemoved runs on the UI thread after a recorded chat is deleted. A chat that expires or was never recorded does
+	// not count. Nil does nothing.
+	OnRemoved func(chat Chat)
 	// Logger receives the turns that fail. Nil means the process logger.
 	Logger *logx.Logger
 	// Engine returns the engine that drives the replies of a chat, or nil for the native loop. It runs on the UI thread
@@ -164,11 +167,15 @@ func (s *Service) Delete(id string) error {
 
 // remove deletes the chat from the store and the cache.
 func (s *Service) remove(id string) error {
+	record, known := s.cache.get(id)
 	if err := s.opts.Store.Remove(id); err != nil {
 		return err
 	}
 	s.cache.drop(id)
 	delete(s.doomed, id)
+	if known && s.opts.OnRemoved != nil {
+		s.opts.OnRemoved(record)
+	}
 	return nil
 }
 

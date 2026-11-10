@@ -18,7 +18,7 @@ type extensionController interface {
 // change the views make tells the background scheduler to bring the extension triggers up to date.
 func (p *App) currentExtensionController() extensionController {
 	if m := p.extensionManager(); m != nil {
-		return notifyingController{extensionController: m, changed: p.extensionsChanged}
+		return notifyingController{extensionController: m, removed: p.removeChatsOfExtension, changed: p.extensionsChanged}
 	}
 	return nil
 }
@@ -27,6 +27,8 @@ func (p *App) currentExtensionController() extensionController {
 type notifyingController struct {
 	extensionController
 	changed func()
+	// removed runs after an extension is uninstalled.
+	removed func(id string)
 }
 
 func (c notifyingController) Refresh() error {
@@ -49,6 +51,9 @@ func (c notifyingController) Disable(id string) error {
 
 func (c notifyingController) Uninstall(id string) error {
 	err := c.extensionController.Uninstall(id)
+	if err == nil && c.removed != nil {
+		c.removed(id)
+	}
 	c.changed()
 	return err
 }

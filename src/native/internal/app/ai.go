@@ -67,6 +67,7 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		Tools:        p.chatToolset(),
 		BuilderTools: p.builderToolset,
 		Engine:       p.chatEngine,
+		OnRemoved:    p.removeExtensionOfChat,
 	})
 }
 
