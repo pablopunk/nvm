@@ -39,8 +39,8 @@ func TestPartialRefreshDoesNotRenewSourceSnapshot(t *testing.T) {
 					cache.puts = nil
 				}
 				before, _ := cache.Get("test/key")
-				var loads []func([]api.Item, *api.Failure)
-				deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) {
+				var loads []func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+				deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
 					loads = append(loads, done)
 				}, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
 					done(api.Result{Patch: &test.patch}, nil)
@@ -62,13 +62,13 @@ func TestPartialRefreshDoesNotRenewSourceSnapshot(t *testing.T) {
 					t.Fatalf("unexpected cache write: %+v", cache.puts)
 				}
 				page.OnLeave()
-				loads[0]([]api.Item{{ID: "dismissed"}}, nil)
+				loads[0]([]api.Item{{ID: "dismissed"}}, nil, nil)
 				reopened := NewSession(deps, "test", view)
 				reopened.Open(&removalHost{})
 				if len(loads) != 2 || !reopened.loading || len(cache.puts) != writes {
 					t.Fatalf("reopen skipped source: loads=%d loading=%t writes=%v", len(loads), reopened.loading, cache.puts)
 				}
-				loads[1]([]api.Item{{ID: "fresh"}}, nil)
+				loads[1]([]api.Item{{ID: "fresh"}}, nil, nil)
 				entry, ok := cache.Get("test/key")
 				if !ok || len(cache.puts) != writes+1 || len(entry.Items) != 1 || entry.Items[0].ID != "fresh" || !entry.At.Equal(clock.Now()) {
 					t.Fatalf("fresh source not stored: entry=%+v writes=%v", entry, cache.puts)
@@ -85,7 +85,7 @@ func TestPartialRefreshPreservesFreshSnapshotAge(t *testing.T) {
 	cache.Put("test/key", CacheEntry{Items: []api.Item{{ID: "one", Title: "Old"}}, At: at})
 	clock.Advance(30 * time.Second)
 	loads := 0
-	deps := Deps{Cache: cache, Clock: clock, Load: func(string, string, func([]api.Item, *api.Failure)) { loads++ }, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
+	deps := Deps{Cache: cache, Clock: clock, Load: func(string, string, func([]api.Item, *api.SnapshotEvidence, *api.Failure)) { loads++ }, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
 		done(api.Result{Patch: &api.ViewPatch{Items: []api.Item{{ID: "one", Title: "Updated"}}}}, nil)
 	}}
 	ref := api.ActionRef{ID: "refresh"}
@@ -115,8 +115,10 @@ func TestReplacementRefreshOwnsSourceSnapshot(t *testing.T) {
 			if empty {
 				items = nil
 			}
-			var loads []func([]api.Item, *api.Failure)
-			deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
+			var loads []func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+			deps := Deps{Cache: cache, Clock: clock, Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+				loads = append(loads, done)
+			}, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
 				done(api.Result{Patch: &api.ViewPatch{Mode: api.PatchReplace, Items: items}}, nil)
 			}}
 			ref := api.ActionRef{ID: "refresh"}
@@ -124,7 +126,7 @@ func TestReplacementRefreshOwnsSourceSnapshot(t *testing.T) {
 			s := NewSession(deps, "test", view)
 			page := s.Open(&removalHost{})
 			s.refreshNow()
-			loads[0]([]api.Item{{ID: "obsolete"}}, nil)
+			loads[0]([]api.Item{{ID: "obsolete"}}, nil, nil)
 			if s.loading || len(cache.puts) != 1 || !reflect.DeepEqual(snapshotItemLabels(s.items), snapshotItemLabels(items)) {
 				t.Fatalf("obsolete source replaced refresh: loading=%t items=%v writes=%v", s.loading, s.items, cache.puts)
 			}

@@ -174,7 +174,9 @@ func TestFilterAnswerThatNamesAnotherSourceLoadsItsRows(t *testing.T) {
 	authored := view("authored")
 	log := &invokeLog{results: map[string]api.Result{"change": {View: &authored, Navigation: api.NavReplace}}}
 	deps := log.deps(fake.NewFS())
-	deps.Load = func(_, loader string, done func([]api.Item, *api.Failure)) { done(loaded[loader], nil) }
+	deps.Load = func(_, loader string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+		done(loaded[loader], nil, nil)
+	}
 	session := NewSession(deps, "local.github-issues", view("all"))
 	session.listPage()
 	session.start()

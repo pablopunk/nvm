@@ -10,8 +10,12 @@ import (
 
 // CacheEntry is the last items a data source loaded, and when it loaded them.
 type CacheEntry struct {
-	Items []api.Item
-	At    time.Time
+	Items           []api.Item
+	PictureEvidence *api.SnapshotEvidence
+	PictureIdentity any
+	PictureLoader   string
+	PictureVersion  *byte
+	At              time.Time
 }
 
 // Cache keeps data-source snapshots so a view shows the last items at once and refreshes them in place.

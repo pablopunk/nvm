@@ -233,8 +233,10 @@ func TestRemovalInvalidatesHeldSource(t *testing.T) {
 				initial.View.Refresh = nil
 			}
 			cache := &recordingSnapshotCache{Cache: NewMemoryCache()}
-			var loads []func([]api.Item, *api.Failure)
-			deps := Deps{Chats: chats, Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }, Invoke: func(_ string, in api.Invocation, done func(api.Result, *api.Failure)) {
+			var loads []func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+			deps := Deps{Chats: chats, Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+				loads = append(loads, done)
+			}, Invoke: func(_ string, in api.Invocation, done func(api.Result, *api.Failure)) {
 				result, err := ext.RunAction(ctx, in)
 				if err != nil {
 					t.Fatal(err)
@@ -254,13 +256,13 @@ func TestRemovalInvalidatesHeldSource(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				loads[1](fresh.View.Items, nil)
+				loads[1](fresh.View.Items, nil, nil)
 			}
 			before := len(cache.puts)
 			if before == 0 {
 				t.Fatal("fresh result was not cached")
 			}
-			loads[0](old, nil)
+			loads[0](old, nil, nil)
 			if len(cache.puts) != before || len(s.items) != 2 || s.items[1].ID != "two" {
 				t.Fatalf("stale source applied: items=%v puts=%v", s.items, cache.puts)
 			}
@@ -270,32 +272,34 @@ func TestRemovalInvalidatesHeldSource(t *testing.T) {
 
 func TestSourceLatestAndDismissed(t *testing.T) {
 	cache := &recordingSnapshotCache{Cache: NewMemoryCache()}
-	var loads []func([]api.Item, *api.Failure)
-	s := NewSession(Deps{Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { loads = append(loads, done) }}, "test", api.View{Source: &api.DataSource{CacheKey: "key"}})
+	var loads []func([]api.Item, *api.SnapshotEvidence, *api.Failure)
+	s := NewSession(Deps{Cache: cache, Clock: fake.NewClock(), Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
+		loads = append(loads, done)
+	}}, "test", api.View{Source: &api.DataSource{CacheKey: "key"}})
 	s.Open(&removalHost{})
 	s.reload()
-	loads[1]([]api.Item{{ID: "new"}}, nil)
-	loads[0]([]api.Item{{ID: "old"}}, nil)
+	loads[1]([]api.Item{{ID: "new"}}, nil, nil)
+	loads[0]([]api.Item{{ID: "old"}}, nil, nil)
 	if len(cache.puts) != 1 || len(s.items) != 1 || s.items[0].ID != "new" {
 		t.Fatalf("latest load lost: %v %v", s.items, cache.puts)
 	}
 	s.reload()
 	s.close()
-	loads[2]([]api.Item{{ID: "closed"}}, nil)
+	loads[2]([]api.Item{{ID: "closed"}}, nil, nil)
 	if len(cache.puts) != 1 || s.items[0].ID != "new" {
 		t.Fatalf("dismissed load applied: %v %v", s.items, cache.puts)
 	}
 }
 
 func TestStatusRefreshPreservesColdSource(t *testing.T) {
-	var load func([]api.Item, *api.Failure)
+	var load func([]api.Item, *api.SnapshotEvidence, *api.Failure)
 	ref := api.ActionRef{ID: "refresh"}
-	s := NewSession(Deps{Load: func(_ string, _ string, done func([]api.Item, *api.Failure)) { load = done }, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
+	s := NewSession(Deps{Load: func(_ string, _ string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) { load = done }, Invoke: func(_ string, _ api.Invocation, done func(api.Result, *api.Failure)) {
 		done(api.Result{Patch: &api.ViewPatch{Status: "ready"}}, nil)
 	}}, "test", api.View{Source: &api.DataSource{}, Refresh: &api.Refresh{Ref: &ref}})
 	s.Open(&removalHost{})
 	s.refreshNow()
-	load([]api.Item{{ID: "loaded"}}, nil)
+	load([]api.Item{{ID: "loaded"}}, nil, nil)
 	if s.view.Status != "ready" || len(s.items) != 1 || s.items[0].ID != "loaded" {
 		t.Fatalf("status=%s items=%v", s.view.Status, s.items)
 	}

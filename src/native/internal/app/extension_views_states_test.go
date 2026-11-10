@@ -93,7 +93,7 @@ func TestLoadingSourceShowsNoEmptyState(t *testing.T) {
 	m := viewManager(t)
 	p := goldenPalette(t)
 	deps := syncViewDeps(m)
-	deps.Load = func(string, string, func([]api.Item, *api.Failure)) {}
+	deps.Load = func(string, string, func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {}
 	_, page, _ := openFixtureView(t, p, m, "source", deps)
 	if page.Loading == nil || !page.Loading() {
 		t.Fatal("a source that is still loading must not show the empty state")
@@ -108,7 +108,7 @@ func TestSnapshotShowsBeforeTheReloadAndReloadsWhenStale(t *testing.T) {
 	loads := 0
 	deps := syncViewDeps(m)
 	deps.Clock, deps.Cache = clock, cache
-	deps.Load = func(extID, loader string, done func([]api.Item, *api.Failure)) {
+	deps.Load = func(extID, loader string, done func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {
 		loads++
 		syncViewDeps(m).Load(extID, loader, done)
 	}
@@ -232,7 +232,7 @@ func TestPaletteViewLoadingState(t *testing.T) {
 	m := viewManager(t)
 	p := goldenPalette(t)
 	deps := syncViewDeps(m)
-	deps.Load = func(string, string, func([]api.Item, *api.Failure)) {}
+	deps.Load = func(string, string, func([]api.Item, *api.SnapshotEvidence, *api.Failure)) {}
 	openFixtureView(t, p, m, "source", deps)
 	golden.AssertMatrix(t, "loading", p.View, viewsGoldens)
 }

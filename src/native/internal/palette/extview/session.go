@@ -51,6 +51,8 @@ type Session struct {
 	imageSession          *byte
 	gridScope             *picture.Scope
 	pictureEvidence       *api.SnapshotEvidence
+	pictureInvocation     *api.ActionRef
+	sourcePictureVersion  *byte
 	snapshotDenials       *snapshotDenialScope
 	imageAuthority        map[string]func() bool
 	imageSnapshotVersions map[string]uint64

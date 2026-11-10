@@ -40,7 +40,7 @@ func (s *Session) loadSource() {
 	source := s.view.Source
 	if key := s.snapshotKey(); key != "" {
 		if entry, ok := s.deps.Cache.Get(key); ok {
-			s.items = entry.Items
+			s.restoreLoadedSnapshot(entry)
 			age := s.deps.Clock.Now().Sub(entry.At)
 			if age < durationMs(source.TTLMs, defaultFreshMs) {
 				s.afterFirstLoad()
@@ -66,7 +66,7 @@ func (s *Session) reload() {
 	s.itemsRevision++
 	revision := s.itemsRevision
 	s.loading, s.failure = true, nil
-	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
+	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, evidence *api.SnapshotEvidence, failure *api.Failure) {
 		if s.dismissed || revision != s.itemsRevision {
 			return
 		}
@@ -76,7 +76,7 @@ func (s *Session) reload() {
 			s.refreshHost()
 			return
 		}
-		s.items = items
+		s.installLoadedItems(items, evidence)
 		s.putSnapshot(items)
 		s.refreshHost()
 		s.afterFirstLoad()
@@ -347,30 +347,6 @@ func (s *Session) snapshotKey() string {
 		return ""
 	}
 	return s.extID + "/" + source.CacheKey
-}
-
-func (s *Session) putSnapshot(items []api.Item) {
-	if key := s.snapshotKey(); key != "" {
-		s.deps.Cache.Put(key, CacheEntry{Items: items, At: s.deps.Clock.Now()})
-	}
-}
-
-// cacheRefreshPatch renews freshness only for a complete replacement. Partial patches update an existing snapshot
-// without making its unchanged rows fresh, and never create a snapshot before the source has produced one.
-func (s *Session) cacheRefreshPatch(patch api.ViewPatch) {
-	if patch.Mode == api.PatchReplace {
-		s.putSnapshot(s.items)
-		return
-	}
-	if len(patch.Items) == 0 && len(patch.RemoveItemIDs) == 0 {
-		return
-	}
-	if key := s.snapshotKey(); key != "" {
-		if entry, ok := s.deps.Cache.Get(key); ok {
-			entry.Items = applyPatch(entry.Items, patch)
-			s.deps.Cache.Put(key, entry)
-		}
-	}
 }
 
 func durationMs(ms, fallback int64) time.Duration {

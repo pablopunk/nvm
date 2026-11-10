@@ -106,6 +106,7 @@ func (s *Session) applySnapshotImageDenial(generation, version uint64, denial *a
 	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 		s.deps.CommandSnapshots.FilterPictureDenial(s.snapshotIdentity, *s.snapshotRef, version, denial)
 	}
+	s.filterSourcePictureDenial(denial)
 	if denial.AuthorityDenied {
 		s.clearPrivateSnapshot(denial.Failure)
 		return
