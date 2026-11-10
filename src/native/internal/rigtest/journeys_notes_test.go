@@ -55,18 +55,18 @@ func TestJourneyJ09SnippetCreateFindAndCopy(t *testing.T) {
 	_, err = app.WaitFor("Create Snippet", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // edit Name, the first row: the field is typed in the search field
+	waitForRow(t, app, "Clear Name", elementWait)
 	must(t, app.Type(name))
-	_, err = app.WaitFor(name, elementWait)
-	must(t, err)
+	must(t, app.WaitForTogether(elementWait, "Set Name", name))
 	must(t, app.Key("Return")) // set Name
-	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.WaitForTogether(elementWait, name, "Keyword (optional", "Content"))
 	must(t, app.Key("Down")) // Keyword
 	must(t, app.Key("Return"))
+	waitForRow(t, app, "Clear Keyword (optional, type it in the palette to find the snippet)", elementWait)
 	must(t, app.Type(";rig"))
-	_, err = app.WaitFor(";rig", elementWait)
-	must(t, err)
+	must(t, app.WaitForTogether(elementWait, "Set Keyword (optional", ";rig"))
 	must(t, app.Key("Return")) // set Keyword
-	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.WaitForTogether(elementWait, name, ";rig", "Keyword (optional", "Content"))
 	must(t, app.Key("Down")) // Content opens the text editor
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Save   esc Back", elementWait)
