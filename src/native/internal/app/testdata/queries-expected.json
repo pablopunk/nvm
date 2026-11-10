@@ -3755,6 +3755,37 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Toggle Timers in Menu Bar",
+        "subtitle": "Shown in the menu bar",
+        "section": "",
+        "id": "",
+        "icon": "panel-top",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Toggle Timers in Menu Bar",
+            "label": ""
+          },
+          {
+            "title": "Tweak with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"time\"",
         "subtitle": "Build a reusable command with AI",
