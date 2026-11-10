@@ -85,6 +85,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Capabilities:    ports.Capabilities,
 		OS:              p.goos,
 		Windows:         p.extensionWindows(),
+		Desktops:        ports.Desktops,
 		Frontmost:       ports.Windows,
 		Menus:           p.menuPort(),
 		Notifier:        ports.Notifier,

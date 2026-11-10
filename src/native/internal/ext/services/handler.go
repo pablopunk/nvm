@@ -67,6 +67,8 @@ type Deps struct {
 	Home string
 	// Windows lists and places windows through the window engine. Nil answers unavailable.
 	Windows WindowEngine
+	// Desktops switches workspaces; nil means this operation is unsupported.
+	Desktops platform.DesktopSwitcher
 	// Frontmost names the app in front. Nil answers unavailable.
 	Frontmost FrontmostSource
 	// Permissions reads and acts on the OS permissions. Nil lists none and answers unavailable.

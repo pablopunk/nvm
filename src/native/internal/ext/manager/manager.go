@@ -50,6 +50,7 @@ type Ports struct {
 	Capabilities platform.Capabilities
 	OS           string
 	Windows      services.WindowEngine
+	Desktops     platform.DesktopSwitcher
 	// Frontmost names the app in front for the apps service. Nil answers unavailable.
 	Frontmost services.FrontmostSource
 	Menus     services.MenuPort
@@ -216,6 +217,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Capabilities:    ports.Capabilities,
 			OS:              ports.OS,
 			Windows:         ports.Windows,
+			Desktops:        ports.Desktops,
 			Frontmost:       ports.Frontmost,
 			Menus:           ports.Menus,
 			Notifier:        ports.Notifier,

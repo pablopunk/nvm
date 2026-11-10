@@ -2,15 +2,12 @@ package services
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
-	"github.com/pablopunk/nvm/native/internal/platform"
 )
-
-// desktopKeyCodes are the arrow keys of the Mission Control shortcuts that move one space right or left.
-var desktopKeyCodes = map[string]int{"next": 124, "previous": 123}
 
 // desktopSwitchFailure is what the user sees when macOS refuses the keys that switch desktops: the two Mission Control
 // shortcuts must be on, and System Events must be allowed to receive the keys.
@@ -25,18 +22,16 @@ func (h *Handler) switchDesktop(ctx context.Context, call protocol.ServiceCall) 
 	if err := decodeArgs(call.Args, &args); err != nil {
 		return api.FocusResult{}, err
 	}
-	keyCode, ok := desktopKeyCodes[args.Direction]
-	if !ok {
+	if args.Direction != "next" && args.Direction != "previous" {
 		return api.FocusResult{Reason: "invalid-spec", Message: "Desktop direction must be next or previous."}, nil
 	}
-	if h.deps.OS != "darwin" {
+	if h.deps.Desktops == nil || !h.deps.Desktops.Supported() {
 		return api.FocusResult{Reason: "unavailable", Message: "Switching desktops is not available on this system."}, nil
 	}
 	if !h.actions.allow() {
 		return api.FocusResult{}, rateExceeded("window moves")
 	}
-	script := fmt.Sprintf(`tell application "System Events" to key code %d using control down`, keyCode)
-	result, err := h.run(ctx, platform.CommandSpec{Binary: osascriptBinary, Args: []string{"-e", script}}, api.ShellOptions{})
+	result, err := h.runDesktopSwitch(ctx, args.Direction)
 	if err != nil {
 		return api.FocusResult{}, err
 	}
@@ -45,4 +40,25 @@ func (h *Handler) switchDesktop(ctx context.Context, call protocol.ServiceCall) 
 		return api.FocusResult{Reason: "failed", Message: desktopSwitchFailure}, nil
 	}
 	return api.FocusResult{OK: true}, nil
+}
+
+// runDesktopSwitch preserves the service's process-result contract while the native port owns the effect.
+func (h *Handler) runDesktopSwitch(ctx context.Context, direction string) (api.ShellResult, error) {
+	runCtx, cancel := context.WithTimeout(ctx, defaultProcessTimeout)
+	defer cancel()
+	if h.closed.Load() {
+		return api.ShellResult{}, errHandlerClosed
+	}
+	result, err := h.deps.Desktops.Switch(runCtx, direction)
+	stdout := limitOutput(result.Stdout, defaultOutputLimit, result.Truncated)
+	stderr := limitOutput(result.Stderr, defaultOutputLimit, result.Truncated)
+	switch {
+	case ctx.Err() != nil:
+		return api.ShellResult{}, ctx.Err()
+	case errors.Is(runCtx.Err(), context.DeadlineExceeded):
+		return api.ShellResult{Stdout: stdout, Stderr: stderr + fmt.Sprintf("\nKilled after %dms", defaultProcessTimeout.Milliseconds()), ExitCode: -1}, nil
+	case err != nil:
+		return api.ShellResult{Stderr: err.Error(), ExitCode: 1}, nil
+	}
+	return api.ShellResult{Stdout: stdout, Stderr: stderr, ExitCode: result.ExitCode}, nil
 }

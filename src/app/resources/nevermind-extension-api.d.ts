@@ -1713,6 +1713,7 @@ export type ExtensionClipboardHistory = {
 export type ExtensionSystem = {
   /** Display label for the host OS, e.g. `macOS`. */
   os: string;
+  /** Cheap support probe; never requests permission. Go API additionally exposes `windows.switch-desktop` separately from the `window-management` family. Support does not imply permission or configured OS shortcuts. */
   capabilities: { has(id: ExtensionWindowCapability | string): boolean };
   labels: {
     revealInFileManager: string;

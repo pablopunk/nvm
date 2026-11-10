@@ -34,6 +34,7 @@ type Ports struct {
 	System       System
 	Permissions  Permissions
 	Windows      WindowManager
+	Desktops     DesktopSwitcher
 	Capabilities Capabilities
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone

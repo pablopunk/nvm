@@ -52,6 +52,8 @@ func (h *Handler) publicCapability(name string) bool {
 		return ocr.Availability(h.deps.Capabilities).Screen
 	case "quick-look":
 		return h.filePreview().Supported()
+	case "windows.switch-desktop":
+		return h.deps.Desktops != nil && h.deps.Desktops.Supported()
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
 	case "apps.frontmost", "notifications.show",

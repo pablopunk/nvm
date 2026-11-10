@@ -11,6 +11,7 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 // NewPorts returns the production port set. It has no side effects until a port method is called.
 func NewPorts() platform.Ports {
 	env := processSystemEnvironment()
+	commandPort := commands{userPath: newUserPathCache()}
 	return platform.Ports{
 		OSRelease:       newOSRelease(),
 		Clock:           realClock{},
@@ -28,7 +29,8 @@ func NewPorts() platform.Ports {
 		DeepLinks:       deepLinks{},
 		Processes:       processes{},
 		Helper:          helper{},
-		Commands:        commands{userPath: newUserPathCache()},
+		Commands:        commandPort,
+		Desktops:        NewDesktopSwitcher(env.goos, commandPort),
 		Hotkeys:         hotkeys{},
 		Focus:           newFocus(),
 		Tray:            trayHost{},

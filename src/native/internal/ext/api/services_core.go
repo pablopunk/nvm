@@ -267,7 +267,10 @@ type SystemLabels struct {
 
 // System is host metadata and a few system actions. Use HasCapability to omit unsupported rows from discovery
 // instead of duplicating platform checks. Names are dotted: "windows.always-on-top", "ocr",
-// "keyboard.type-text", "quick-look", "window-management". Notify, RequestPermission and OpenPermissionPane act, and
+// "keyboard.type-text", "quick-look", "window-management", "windows.switch-desktop".
+// The window-management family does not promise desktop switching; check the operation separately.
+// Probes do not request permissions, and support does not imply current permission.
+// Notify, RequestPermission and OpenPermissionPane act, and
 // they need the system declaration.
 type System interface {
 	OS() string

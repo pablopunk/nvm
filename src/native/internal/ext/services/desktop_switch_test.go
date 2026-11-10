@@ -8,6 +8,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // switchHost is a window-management handler whose osascript is a fake, on the named OS.
@@ -17,6 +18,7 @@ func switchHost(t *testing.T, goos string) (*fake.Commands, *Handler) {
 	commands := fake.NewCommands()
 	deps.Commands = commands
 	deps.OS = goos
+	deps.Desktops = real.NewDesktopSwitcher(goos, commands)
 	return commands, desktopHandler(t, deps, api.CapabilityWindowManagement)
 }
 
@@ -77,5 +79,20 @@ func TestUnknownDesktopDirectionIsAnInvalidSpec(t *testing.T) {
 	}
 	if len(commands.Calls()) != 0 {
 		t.Fatal("osascript ran for an unknown direction")
+	}
+}
+
+func TestDesktopSwitchProbeMatchesItsBoundExecutor(t *testing.T) {
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		commands, h := switchHost(t, goos)
+		if h.publicCapability("windows.switch-desktop") != (goos == "darwin") {
+			t.Fatalf("incorrect support on %s", goos)
+		}
+		if !h.publicCapability("window-management") {
+			t.Fatal("operation support changed legacy family probe")
+		}
+		if len(commands.Calls()) != 0 {
+			t.Fatal("discovery executed a process")
+		}
 	}
 }
