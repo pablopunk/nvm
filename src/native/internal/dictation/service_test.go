@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -104,7 +105,7 @@ func newHarness(t *testing.T) harness {
 		Microphone:  h.mic,
 		Codec:       h.codec,
 		Transcriber: h.transcriber,
-		OnLevel:     func(level float64) { h.levels <- level },
+		OnLevel:     func(level float64, _ func() bool) { h.levels <- level },
 		Background:  func(_ string, fn func()) { fn() },
 	})
 	return h
@@ -223,7 +224,7 @@ func TestStartReportsTheMicrophoneFailureAndStaysIdle(t *testing.T) {
 	for _, want := range []error{platform.ErrNotFound, platform.ErrDenied, platform.ErrUnsupported} {
 		h := newHarness(t)
 		h.mic.FailNext(fake.OpMicrophoneOpen, want)
-		if err := h.service.Start("gone"); !errors.Is(err, want) {
+		if err := h.service.Start(""); !errors.Is(err, want) {
 			t.Fatalf("Start error = %v, want %v", err, want)
 		}
 		if got := h.service.Snapshot().Phase; got != PhaseIdle {
@@ -326,15 +327,18 @@ func TestLevelFollowsTheCapturedSignal(t *testing.T) {
 	if err := h.service.Start("default"); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
+	// A stopped operation must not publish live levels. Observe capture before stopping it.
+	var peak float64
+	select {
+	case peak = <-h.levels:
+	case <-time.After(time.Second):
+		t.Fatal("recording did not publish a live microphone level")
+	}
 	if _, err := h.service.Stop(); err != nil {
 		t.Fatalf("Stop: %v", err)
 	}
-	var peak float64
-	for len(h.levels) > 0 {
-		peak = max(peak, <-h.levels)
-	}
-	if peak < 0.49 || peak > 0.51 {
-		t.Fatalf("peak level = %v, want half scale for a half-scale signal", peak)
+	if peak < 0.70 || peak > 0.71 {
+		t.Fatalf("peak level = %v, want square-root display scale for a half-scale signal", peak)
 	}
 }
 

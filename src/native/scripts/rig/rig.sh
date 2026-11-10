@@ -12,7 +12,7 @@
 #   RIG_IMAGE       image tag (default nvm-rig:local)
 #   RIG_CONTAINER   long-lived container name (default nvm-rig)
 #   RIG_ARTIFACTS   host directory for screenshots, test logs and service logs
-#                   (default: $TMPDIR/nvm-rig-artifacts)
+#                   (default for run: a new directory per run under $TMPDIR; otherwise $TMPDIR/nvm-rig-artifacts)
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -43,6 +43,10 @@ build_image() {
 # run_journeys executes the app build and the rig tests inside a fresh container, then exits with
 # the test's status. Artifacts land in $artifacts even when the tests fail.
 run_journeys() {
+  if [ -z "${RIG_ARTIFACTS:-}" ]; then
+    artifacts="$(mktemp -d "${TMPDIR:-/tmp}/nvm-rig-artifacts.XXXXXX")"
+  fi
+  echo "rig: artifacts in $artifacts"
   mkdir -p "$artifacts"
   local tests=("$@")
   if [ "${#tests[@]}" -eq 0 ]; then

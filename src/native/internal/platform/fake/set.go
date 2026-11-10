@@ -6,6 +6,7 @@ import "github.com/pablopunk/nvm/native/internal/platform"
 // fields to script the world and assert on what the code did.
 type Set struct {
 	Clock        *Clock
+	OSRelease    *OSRelease
 	FS           *FS
 	HTTP         *HTTP
 	PublicHTTP   *HTTP
@@ -20,6 +21,7 @@ type Set struct {
 	DeepLinks    *DeepLinks
 	Processes    *Processes
 	Helper       *Helper
+	Commands     *Commands
 	Hotkeys      *Hotkeys
 	Focus        *Focus
 	Tray         *TrayHost
@@ -27,11 +29,14 @@ type Set struct {
 	System       *System
 	Permissions  *Permissions
 	Windows      *WindowManager
+	Desktops     *Desktops
 	Microphone   *Microphone
 	Opus         *OpusCodec
 	FileDialog   *FileDialog
 	Text         *TextRecognizer
 	Capture      *ScreenCapturer
+	OutputMute   *OutputMute
+	FileDrag     *FileDrag
 	Capabilities platform.Capabilities
 }
 
@@ -41,6 +46,7 @@ func NewSet() *Set {
 	clipboard := NewClipboard()
 	return &Set{
 		Clock:        NewClock(),
+		OSRelease:    NewOSRelease(),
 		FS:           NewFS(),
 		HTTP:         NewHTTP(),
 		PublicHTTP:   NewHTTP(),
@@ -55,6 +61,7 @@ func NewSet() *Set {
 		DeepLinks:    NewDeepLinks(),
 		Processes:    NewProcesses(),
 		Helper:       NewHelper(),
+		Commands:     NewCommands(),
 		Hotkeys:      NewHotkeys(),
 		Focus:        NewFocus(),
 		Tray:         NewTrayHost(),
@@ -62,11 +69,14 @@ func NewSet() *Set {
 		System:       NewSystem(),
 		Permissions:  NewPermissions(),
 		Windows:      NewWindowManager(),
+		Desktops:     NewDesktops(),
 		Microphone:   NewMicrophone(),
 		Opus:         NewOpusCodec(),
 		FileDialog:   NewFileDialog(),
 		Text:         NewTextRecognizer(),
 		Capture:      NewScreenCapturer(),
+		OutputMute:   NewOutputMute(),
+		FileDrag:     NewFileDrag(),
 		Capabilities: platform.NewCapabilities(platform.AllCapabilities()...),
 	}
 }
@@ -76,6 +86,7 @@ func NewSet() *Set {
 func (s *Set) Ports() platform.Ports {
 	return platform.Ports{
 		Clock:        s.Clock,
+		OSRelease:    s.OSRelease,
 		FS:           s.FS,
 		HTTP:         s.HTTP,
 		PublicHTTP:   s.PublicHTTP,
@@ -90,6 +101,7 @@ func (s *Set) Ports() platform.Ports {
 		DeepLinks:    s.DeepLinks,
 		Processes:    s.Processes,
 		Helper:       s.Helper,
+		Commands:     s.Commands,
 		Hotkeys:      s.Hotkeys,
 		Focus:        s.Focus,
 		Tray:         s.Tray,
@@ -97,11 +109,14 @@ func (s *Set) Ports() platform.Ports {
 		System:       s.System,
 		Permissions:  s.Permissions,
 		Windows:      s.Windows,
+		Desktops:     s.Desktops,
 		Microphone:   s.Microphone,
 		Opus:         s.Opus,
 		FileDialog:   s.FileDialog,
 		Text:         s.Text,
 		Capture:      s.Capture,
+		OutputMute:   s.OutputMute,
+		FileDrag:     s.FileDrag,
 		Capabilities: s.Capabilities,
 	}
 }

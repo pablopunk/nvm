@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -46,24 +47,19 @@ func (s *Services) CommandTitle(id CommandID) string {
 
 // Run performs a command. Destructive commands must be confirmed by the extension that asks first; Run itself never asks.
 func (s *Services) Run(id CommandID) error {
-	system := s.ports.System
-	switch id {
-	case CommandLockScreen:
-		return system.LockScreen()
-	case CommandSleep:
-		return system.Sleep()
-	case CommandRestart:
-		return system.Restart()
-	case CommandShutDown:
-		return system.ShutDown()
-	case CommandLogOut:
-		return system.LogOut()
-	case CommandEmptyTrash:
-		return system.EmptyTrash()
-	case CommandSystemPanes:
-		return system.OpenSettings("", "")
+	return s.RunContext(context.Background(), id)
+}
+
+// RunContext admits one native command; an admitted synchronous OS call may finish after cancellation.
+func (s *Services) RunContext(ctx context.Context, id CommandID) error {
+	if !s.Supported(id) {
+		return platform.ErrUnsupported
 	}
-	return platform.ErrUnsupported
+	binding := s.commandBinding(id)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return binding.run()
 }
 
 // SettingsPanes returns the System Settings panes the root search offers. Only macOS has them; the sidebar is read
@@ -83,6 +79,9 @@ func (s *Services) SettingsPanes() []Pane {
 
 // OpenPane opens a settings pane, at an anchor section when the OS supports one.
 func (s *Services) OpenPane(pane Pane, anchor string) error {
+	if !s.Supported(CommandSystemPanes) {
+		return platform.ErrUnsupported
+	}
 	return s.ports.System.OpenSettings(pane.ID, anchor)
 }
 

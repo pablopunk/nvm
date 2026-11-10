@@ -125,16 +125,3 @@ func TestSubscriptionStopsAfterCancel(t *testing.T) {
 	default:
 	}
 }
-
-// TestUnchangedHistorySavesNothing: a pin that does not change anything is neither saved nor announced.
-func TestUnchangedHistorySavesNothing(t *testing.T) {
-	h := newHarness(t)
-	h.mustRemember(Entry{ID: "text:a", Kind: KindText, Text: "a"})
-	before := h.persist.Saves()
-	if _, err := h.history.SetPinned("text:a", false); err != nil {
-		t.Fatalf("SetPinned: %v", err)
-	}
-	if h.persist.Saves() != before {
-		t.Fatal("an unchanged pin saved the history")
-	}
-}

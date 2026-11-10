@@ -9,6 +9,12 @@ import (
 
 // FocusNeighbor raises the nearest window in a direction from the target app's focused window.
 func (s *Service) FocusNeighbor(ctx context.Context, direction geometry.NeighborDirection, options geometry.NeighborOptions, invocation Invocation) error {
+	err := s.focusNeighborOf(ctx, direction, options, invocation)
+	s.reportFailure("focus-neighbor", err)
+	return err
+}
+
+func (s *Service) focusNeighborOf(ctx context.Context, direction geometry.NeighborDirection, options geometry.NeighborOptions, invocation Invocation) error {
 	if !s.Available() {
 		return newFailure(ReasonUnsupported, "")
 	}

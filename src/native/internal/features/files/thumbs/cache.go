@@ -2,8 +2,11 @@ package thumbs
 
 import (
 	"container/list"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
+	"io/fs"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -13,7 +16,7 @@ import (
 )
 
 // CacheBytes bounds the thumbnails kept on disk. Past it the least recently used files are removed.
-const CacheBytes = 200 << 20
+const CacheBytes = 600 << 20
 
 // Cache keeps thumbnails under one folder of the app's cache directory, one PNG file per source file version. The key
 // is a hash of the path, the modification time and the size, so an edited picture gets a new thumbnail and the old one
@@ -92,11 +95,25 @@ func (c *Cache) load() error {
 // Thumbnail returns the PNG thumbnail of the image at path, from disk when it is there and rendered otherwise. mtimeMs and
 // size identify the version of the file the thumbnail is for.
 func (c *Cache) Thumbnail(path string, mtimeMs, size int64) ([]byte, error) {
+	return c.Rendered(path, mtimeMs, size, Edge)
+}
+
+// Rendered returns the PNG of the image at path scaled to edge, from disk when it is there and rendered otherwise, so a
+// picture is only ever scaled once per version of the file.
+func (c *Cache) Rendered(path string, mtimeMs, size int64, edge int) ([]byte, error) {
+	return c.RenderedWith(path, mtimeMs, size, edge, func() ([]byte, error) { return Render(c.fsys, path, edge) })
+}
+
+// RenderedWith is Rendered with the caller's way of drawing a picture that is not stored yet.
+func (c *Cache) RenderedWith(path string, mtimeMs, size int64, edge int, render func() ([]byte, error)) ([]byte, error) {
 	key := keyFor(path, mtimeMs, size)
+	if edge != Edge {
+		key = keyFor(path+"\x00"+strconv.Itoa(edge), mtimeMs, size)
+	}
 	if data, ok := c.read(key); ok {
 		return data, nil
 	}
-	data, err := Render(c.fsys, path, Edge)
+	data, err := render()
 	if err != nil {
 		return nil, err
 	}
@@ -124,58 +141,58 @@ func (c *Cache) Total() int64 {
 // read returns the stored bytes for key and marks it used. A stored file that cannot be read is forgotten.
 func (c *Cache) read(key string) ([]byte, bool) {
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	el, ok := c.entries[key]
-	if ok {
-		c.lru.MoveToFront(el)
-	}
-	c.mu.Unlock()
 	if !ok {
 		return nil, false
 	}
 	data, err := c.fsys.ReadFile(c.pathOf(key))
 	if err != nil {
-		c.forget(key)
+		c.total -= el.Value.(*cached).size
+		c.lru.Remove(el)
+		delete(c.entries, key)
 		return nil, false
 	}
+	c.lru.MoveToFront(el)
 	return data, true
 }
 
 // write stores data under key atomically and then enforces the bound.
 func (c *Cache) write(key string, data []byte) error {
 	target := c.pathOf(key)
-	tmp := target + ".tmp"
-	if err := c.fsys.WriteFile(tmp, data, 0o600); err != nil {
-		return err
+	var tmp string
+	for range 10 {
+		var suffix [16]byte
+		if _, err := rand.Read(suffix[:]); err != nil {
+			return err
+		}
+		tmp = target + "." + hex.EncodeToString(suffix[:]) + ".tmp"
+		err := c.fsys.CreateExclusive(tmp, data, 0o600)
+		if errors.Is(err, fs.ErrExist) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		defer c.fsys.Remove(tmp)
+		if err := c.fsys.Sync(tmp); err != nil {
+			return err
+		}
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if err := c.fsys.Rename(tmp, target); err != nil {
+			return err
+		}
+		if el, ok := c.entries[key]; ok {
+			c.total -= el.Value.(*cached).size
+			c.lru.Remove(el)
+			delete(c.entries, key)
+		}
+		c.pushFrontLocked(key, int64(len(data)))
+		c.evictLocked()
+		return nil
 	}
-	if err := c.fsys.Sync(tmp); err != nil {
-		return err
-	}
-	if err := c.fsys.Rename(tmp, target); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if el, ok := c.entries[key]; ok {
-		c.total -= el.Value.(*cached).size
-		c.lru.Remove(el)
-		delete(c.entries, key)
-	}
-	c.pushFrontLocked(key, int64(len(data)))
-	c.evictLocked()
-	return nil
-}
-
-// forget drops key from the index and removes its file.
-func (c *Cache) forget(key string) {
-	c.mu.Lock()
-	el, ok := c.entries[key]
-	if ok {
-		c.total -= el.Value.(*cached).size
-		c.lru.Remove(el)
-		delete(c.entries, key)
-	}
-	c.mu.Unlock()
-	_ = c.fsys.Remove(c.pathOf(key))
+	return fs.ErrExist
 }
 
 // pushFrontLocked records key as the most recently used entry. The caller holds mu.

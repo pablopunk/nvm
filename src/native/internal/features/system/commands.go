@@ -34,7 +34,7 @@ func Title(id CommandID, settingsTitle string) string {
 	case CommandSleep:
 		return "Sleep"
 	case CommandRestart:
-		return "Restart"
+		return "Restart Computer"
 	case CommandShutDown:
 		return "Shut Down"
 	case CommandLogOut:

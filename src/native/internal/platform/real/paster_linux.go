@@ -7,14 +7,21 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/x11"
 )
 
 // pasteGesture sends Ctrl+V to the focused X11 window with xdotool. Ctrl+V is the 1.x gesture; terminals that paste
 // with Ctrl+Shift+V are not covered.
 func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
 	return keyGesture(ctx, helper, expectedAppID, "ctrl+v")
+}
+
+// undoGesture sends Ctrl+Z to the focused X11 window with xdotool.
+func undoGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
+	return keyGesture(ctx, helper, expectedAppID, "ctrl+z")
 }
 
 // keyGesture sends one key chord to the focused X11 window with xdotool, after checking the focused window's class
@@ -24,7 +31,7 @@ func keyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chor
 		return platform.ErrUnsupported
 	}
 	if expectedAppID != "" {
-		focused, err := runXdotool(ctx, helper, "getactivewindow", "getwindowclassname")
+		focused, err := focusedWindowClass(ctx, helper)
 		if err != nil {
 			return err
 		}
@@ -50,4 +57,46 @@ func runXdotool(ctx context.Context, helper platform.Helper, args ...string) (st
 		return "", fmt.Errorf("xdotool %s exited with %d", args[0], result.ExitCode)
 	}
 	return strings.TrimSpace(string(result.Stdout)), nil
+}
+
+// frontmostAppID names the focused X11 window's class, the identity keyGesture checks before it types.
+func frontmostAppID(ctx context.Context, helper platform.Helper, _ int) (string, error) {
+	if !pasteCapable("linux", os.Getenv, programInstalled) {
+		return "", platform.ErrUnsupported
+	}
+	return focusedWindowClass(ctx, helper)
+}
+
+// focusedWindowClass resolves the EWMH active window first and falls back to the X server's input focus when
+// the window manager has no _NET_ACTIVE_WINDOW property. The class is always read for the resolved window ID.
+func focusedWindowClass(ctx context.Context, helper platform.Helper) (string, error) {
+	id, err := runXdotool(ctx, helper, "getactivewindow")
+	if err != nil || !isUsablePasteWindowID(id) {
+		id, err = runXdotool(ctx, helper, "getwindowfocus")
+		if err != nil || !isUsablePasteWindowID(id) {
+			return "", platform.ErrNotFound
+		}
+	}
+	properties, err := helper.Run(ctx, "xprop", []string{"-id", id, "WM_CLASS"}, nil)
+	if err != nil {
+		return "", err
+	}
+	if properties.ExitCode != 0 {
+		return "", fmt.Errorf("xprop WM_CLASS exited with %d", properties.ExitCode)
+	}
+	class := x11.ParseProperties(string(properties.Stdout)).WMClass()
+	if strings.TrimSpace(class) == "" || strings.EqualFold(class, "root") {
+		return "", platform.ErrNotFound
+	}
+	return class, nil
+}
+
+// isUsablePasteWindowID excludes X11's root window, which xdotool reports as ID zero.
+func isUsablePasteWindowID(id string) bool {
+	return id != "0" && isWindowID(id)
+}
+
+// typeGesture reports that typing is unavailable on Linux: keyboard.type-text is macOS only, as in 1.x.
+func typeGesture(context.Context, platform.Helper, string, string, time.Duration) error {
+	return platform.ErrUnsupported
 }

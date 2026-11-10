@@ -133,6 +133,18 @@ func (r *rig) browsedPages() []string {
 	return append([]string(nil), r.browsed...)
 }
 
+// waitForBrowsed waits for n browser opens, because the sign-in shows as pending just before it opens the browser.
+func (r *rig) waitForBrowsed(n int) []string {
+	r.t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	pages := r.browsedPages()
+	for len(pages) < n && time.Now().Before(deadline) {
+		time.Sleep(time.Millisecond)
+		pages = r.browsedPages()
+	}
+	return pages
+}
+
 // flush writes the store to the fake disk.
 func (r *rig) flush() {
 	r.t.Helper()

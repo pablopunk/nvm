@@ -23,7 +23,7 @@ func (p *App) extensionsViewFor(ctl func() extensionController) *palette.View {
 		Search: func(q string) []search.Item {
 			rows := []search.Item{
 				{Title: "Create Extension with AI", Subtitle: "Describe it; an extension is written, checked and installed", Icon: "zap", Tone: "yellow", Prominent: true,
-					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.builderView()) }}}},
+					Actions: []search.Action{{Title: "Create", Run: func(h search.Host) { h.Push(p.startedChatView("builder", "", "")) }}}},
 				{Title: "Reload Extensions", Icon: "rotate-ccw", Tone: "gray",
 					Actions: []search.Action{{Title: "Reload", Dismiss: search.DismissNever, Run: func(h search.Host) {
 						reloadExtensions(h, ctl())

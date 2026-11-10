@@ -5,49 +5,38 @@ package real
 import (
 	"context"
 	"errors"
-	"strings"
+	"os"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// tesseractText reads text with Tesseract's command line, which the user installs from their package manager.
-type tesseractText struct {
-	helper platform.Helper
+// linuxScreenCapture saves the screen with whichever capture program this desktop has.
+type linuxScreenCapture struct {
+	helper  platform.Helper
+	getenv  func(string) string
+	hasTool func(string) bool
 }
 
-func newTextRecognizer(helper platform.Helper) platform.TextRecognizer {
-	return tesseractText{helper: helper}
+func newScreenCapturer(helper platform.Helper) platform.ScreenCapturer {
+	return linuxScreenCapture{helper: helper, getenv: os.Getenv, hasTool: hasTool}
 }
 
-// Recognize runs `tesseract <path> stdout -l <languages> tsv` and parses the word rows of the output.
-func (t tesseractText) Recognize(ctx context.Context, path string, languages []string) (platform.TextResult, error) {
-	checked, err := checkLanguages(languages)
-	if err != nil {
-		return platform.TextResult{}, err
+// Capture writes a PNG of the whole screen to dst. A region is refused: these programs disagree on how to take one, and
+// on a scaled display cropping afterwards would read the wrong pixels.
+func (s linuxScreenCapture) Capture(ctx context.Context, dst string, region *platform.Rect) error {
+	if region != nil {
+		return platform.ErrUnsupported
 	}
-	args := []string{path, "stdout"}
-	if len(checked) > 0 {
-		args = append(args, "-l", strings.Join(checked, "+"))
+	tool, ok := linuxScreenTool(s.getenv, s.hasTool)
+	if !ok {
+		return platform.ErrUnsupported
 	}
-	args = append(args, "tsv")
-	result, err := t.helper.Run(ctx, tesseractBinary, args, nil)
+	result, err := s.helper.Run(ctx, tool.binary, tool.args(dst), nil)
 	if err != nil {
-		return platform.TextResult{}, err
+		return err
 	}
 	if result.ExitCode != 0 {
-		return platform.TextResult{}, errors.New(recognitionFailure(result.Stderr))
+		return errors.New(recognitionFailure(result.Stderr))
 	}
-	return parseTesseractTSV(result.Stdout, checked)
-}
-
-// Linux has no screen capture in this build; the capability is absent and this is never reached through the ports.
-func newScreenCapturer(platform.Helper) platform.ScreenCapturer {
-	return unsupportedScreenCapturer{}
-}
-
-type unsupportedScreenCapturer struct{}
-
-// Capture reports ErrUnsupported.
-func (unsupportedScreenCapturer) Capture(context.Context, string, *platform.Rect) error {
-	return platform.ErrUnsupported
+	return nil
 }

@@ -4,27 +4,38 @@ import (
 	"context"
 	"strings"
 	"time"
-
-	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // Calculator answers calculator queries: arithmetic, percentages, unit conversions, calendar and clock questions,
 // and currency conversions from cached rates. It reads the time only through its Clock, and it never blocks on the
 // network. It is safe for concurrent use.
 type Calculator struct {
-	clock platform.Clock
+	clock Clock
 	zone  *time.Location
 	rates *RateService
-	zones zoneCache
+	zones *zoneCache
+}
+
+// Clock is the one thing the calculator reads from its host: the current time.
+type Clock interface {
+	Now() time.Time
 }
 
 // New returns a calculator. Calendar answers are computed in zone, or the machine's local zone when zone is nil.
 // rates may be nil, which turns currency answers off.
-func New(clock platform.Clock, zone *time.Location, rates *RateService) *Calculator {
+func New(clock Clock, zone *time.Location, rates *RateService) *Calculator {
 	if zone == nil {
 		zone = time.Local
 	}
-	return &Calculator{clock: clock, zone: zone, rates: rates}
+	return &Calculator{clock: clock, zone: zone, rates: rates, zones: &zoneCache{}}
+}
+
+// WithClock returns a calculator that reads the time from clock and shares the zone lookups and the rates of c. A
+// host that answers each query with its own clock uses it, so the zone database is still read once.
+func (c *Calculator) WithClock(clock Clock) *Calculator {
+	bound := *c
+	bound.clock = clock
+	return &bound
 }
 
 // Evaluate answers a query that is arithmetic, a percentage, a unit conversion, or a calendar or clock question. It
@@ -51,7 +62,7 @@ func (c *Calculator) calculateWords(expression, query string) (Result, bool) {
 	if r, ok := calculateDate(expression, query, dateCalendar{now: now, zone: c.zone}); ok {
 		return r, true
 	}
-	if r, ok := calculateTimezone(&c.zones, expression, query, now); ok {
+	if r, ok := calculateTimezone(c.zones, expression, query, now); ok {
 		return r, true
 	}
 	if r, ok := calculateConversion(expression, query); ok {
@@ -100,12 +111,18 @@ func (c *Calculator) Query(input string) (Result, bool) {
 	return calculateRateResult(query, parsed, quote, c.clock.Now())
 }
 
-// Refresh fetches the rate pairs that Query queued since the last call and stores them in the cache. It is the
-// background hook: call it from a goroutine after a currency query, and it returns the first error it met while
-// keeping every quote it did get. It is a no-op when the calculator has no rate service.
-func (c *Calculator) Refresh(ctx context.Context) error {
+// RatesPending reports whether a currency query queued pairs that the next Refresh will fetch.
+func (c *Calculator) RatesPending() bool {
+	return c.rates != nil && c.rates.Pending()
+}
+
+// Refresh fetches the rate pairs that Query queued since the last call, through fetch, and stores them in the cache.
+// Quotes are dated by clock.
+// It is the background hook: call it from a goroutine after a currency query, and it returns the first error it met
+// while keeping every quote it did get. It is a no-op when the calculator has no rate service.
+func (c *Calculator) Refresh(ctx context.Context, clock Clock, fetch RateFetcher) error {
 	if c.rates == nil {
 		return nil
 	}
-	return c.rates.Refresh(ctx)
+	return c.rates.Refresh(ctx, clock, fetch)
 }

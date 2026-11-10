@@ -76,3 +76,21 @@ func TestDefinitionsCarryCurrentValues(t *testing.T) {
 		t.Fatalf("definitions = %+v; want three, with retries at 5", definitions)
 	}
 }
+
+func TestConcurrentSettingTogglesDoNotLoseUpdates(t *testing.T) {
+	h := handlerFor(t, newRig(t), settingsManifest("acme.one", api.CapabilitySettingsWrite))
+	const count = 20
+	results := make(chan protocol.ServiceReply, count)
+	for i := 0; i < count; i++ {
+		go func() {
+			results <- serve(t, h, protocol.ServiceSettings, protocol.OpToggle, protocol.KeyArgs{Key: "compact"})
+		}()
+	}
+	for i := 0; i < count; i++ {
+		mustOK(t, <-results)
+	}
+	got := decodeGet(t, mustOK(t, serve(t, h, protocol.ServiceSettings, protocol.OpGet, protocol.KeyArgs{Key: "compact"})))
+	if string(got.Value) != "false" {
+		t.Fatalf("%d toggles ended at %s", count, got.Value)
+	}
+}

@@ -71,7 +71,7 @@ func (p *Palette) restoreRootDraft() bool {
 
 // recallQuery puts a query on the search field and searches it.
 func (p *Palette) recallQuery(query string) {
-	p.query = query
+	p.replaceQuery(query)
 	p.search()
-	p.input.Focus()
+	p.focusInput()
 }

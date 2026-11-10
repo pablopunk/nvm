@@ -5,7 +5,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -13,7 +15,7 @@ import (
 func collectExtensionRows(t *testing.T, p *App, q string) []search.Item {
 	t.Helper()
 	var rows []search.Item
-	extensionProvider(p).Search(context.Background(), q, func(batch search.Batch) {
+	extensionProvider(p, &rootInput{}).Search(context.Background(), q, func(batch search.Batch) {
 		rows = append(rows, batch.Items...)
 	})
 	return rows
@@ -42,12 +44,14 @@ func TestFailedExtensionNeverShowsAtTheRootOrAboveRealRows(t *testing.T) {
 	p := &App{}
 	p.exts.mgr.Store(m)
 
-	if rows := extensionProvider(p).Root(context.Background()); len(rows) != 0 {
-		t.Fatalf("root rows for a failed extension = %d, want none", len(rows))
+	for _, row := range extensionProvider(p, &rootInput{}).Root(context.Background()) {
+		if row.Accessory == "Failed" || row.Title == "Broken source fixture is not responding" {
+			t.Fatalf("the root shows the failed extension as %q", row.Title)
+		}
 	}
 	pointer := findRowTitled(t, collectExtensionRows(t, p, "syntax"), "Broken source fixture is not responding")
-	if pointer.Score >= scoreWebSearch {
-		t.Fatalf("failed row score %d must rank below the web search fallback (%d)", pointer.Score, scoreWebSearch)
+	if pointer.Score >= scoreQueryFallback {
+		t.Fatalf("failed row score %d must rank below the query fallback band (%d)", pointer.Score, scoreQueryFallback)
 	}
 }
 
@@ -66,5 +70,31 @@ func TestRunningExtensionYieldsItsItemRows(t *testing.T) {
 		if row.Accessory == "Failed" {
 			t.Fatalf("running extension yielded a failed row %q", row.Title)
 		}
+	}
+}
+
+// pendingCommandDeps starts a command's invocation and never answers it, so the palette is observed while the run is
+// still in flight: whatever has closed it by then was the dispatch-time dismissal, not the result.
+func pendingCommandDeps() extview.Deps {
+	return extview.Deps{Invoke: func(string, api.Invocation, func(api.Result, *api.Failure)) {}}
+}
+
+// commandLeavesPaletteOpen runs a command row's action through the palette and reports whether the palette is still shown.
+func commandLeavesPaletteOpen(t *testing.T, command api.Command) bool {
+	t.Helper()
+	p := shownPalette(t)
+	p.RunAction(extview.ActionFor(pendingCommandDeps(), "acme.commands", commandAction(command)))
+	return p.Visible()
+}
+
+func TestCommandThatDismissesAfterRunClosesThePalette(t *testing.T) {
+	if commandLeavesPaletteOpen(t, api.Command{ID: "run", Title: "Run", DismissAfterRun: true}) {
+		t.Fatal("a command with DismissAfterRun left the palette open after its run")
+	}
+}
+
+func TestCommandWithoutDismissAfterRunKeepsThePaletteOpen(t *testing.T) {
+	if !commandLeavesPaletteOpen(t, api.Command{ID: "run", Title: "Run"}) {
+		t.Fatal("a command without DismissAfterRun closed the palette after its run")
 	}
 }

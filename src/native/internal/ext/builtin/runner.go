@@ -53,6 +53,12 @@ func (r *Runner) Provides(method string) bool {
 	case protocol.MethodMenuBars, protocol.MethodMenuBarTriggers:
 		_, ok := r.ext.(api.MenuBarProvider)
 		return ok
+	case protocol.MethodRestoreWindow:
+		_, ok := r.ext.(api.WindowRestorer)
+		return ok
+	case protocol.MethodRowActions:
+		_, ok := r.ext.(api.RowActionProvider)
+		return ok
 	}
 	return false
 }
@@ -117,10 +123,12 @@ func (r *Runner) answer(ctx context.Context, method, query string, invocation *a
 			response = protocol.Response{Failure: child.PanicFailure(recovered)}
 		}
 	}()
-	data, err := r.dispatch(ctx, method, query, invocation)
+	call, finishEvidence := r.observedCall()
+	defer func() { response.SnapshotEvidence = finishEvidence() }()
+	data, err := call.dispatch(ctx, method, query, invocation)
 	if err != nil {
 		failure := api.FailureOf(err)
-		return protocol.Response{Failure: &failure}
+		return protocol.Response{Data: data, Failure: &failure}
 	}
 	return protocol.Response{Data: data}
 }

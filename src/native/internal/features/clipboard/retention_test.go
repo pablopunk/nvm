@@ -61,43 +61,26 @@ func TestHistoryPropertiesHoldUnderRandomOperations(t *testing.T) {
 	policy := Retention{MaxEntries: 12, MaxAge: 3 * time.Hour, MaxImageBytes: 5000, MaxMemoryBytes: 4000}
 	h.history.policy = policy
 	rng := rand.New(rand.NewPCG(1, 2))
-	pinned := map[string]bool{}
 	for step := range 1500 {
-		switch rng.IntN(7) {
+		switch rng.IntN(5) {
 		case 0, 1:
 			h.rememberRandomEntry(rng, step)
 		case 2:
-			id := h.randomID(rng)
-			if id != "" {
-				ok, _ := h.history.SetPinned(id, true)
-				if ok {
-					pinned[id] = true
-				}
-			}
-		case 3:
-			id := h.randomID(rng)
-			if id != "" {
-				ok, _ := h.history.SetPinned(id, false)
-				if ok {
-					delete(pinned, id)
-				}
-			}
-		case 4:
 			h.clock.Advance(time.Duration(rng.IntN(40)) * time.Minute)
 			if _, err := h.history.Enforce(); err != nil {
 				t.Fatalf("step %d: Enforce: %v", step, err)
 			}
-		case 5:
+		case 3:
 			h.clock.Advance(time.Duration(rng.IntN(5)) * time.Second)
-		case 6:
+		case 4:
 			id := h.randomID(rng)
-			if id != "" && !pinned[id] {
+			if id != "" {
 				if _, err := h.history.Delete(id); err != nil {
 					t.Fatalf("step %d: Delete: %v", step, err)
 				}
 			}
 		}
-		h.checkInvariants(t, step, policy, pinned)
+		h.checkInvariants(t, step, policy)
 	}
 }
 
@@ -138,30 +121,21 @@ func (h *harness) liveOrder() []Entry {
 }
 
 // checkInvariants asserts the history properties after one step.
-func (h *harness) checkInvariants(t *testing.T, step int, policy Retention, pinned map[string]bool) {
+func (h *harness) checkInvariants(t *testing.T, step int, policy Retention) {
 	t.Helper()
 	entries := h.liveOrder()
 	seen := map[string]bool{}
-	unpinned := 0
 	var memory, imageBytes int64
 	for _, e := range entries {
 		if seen[e.ID] {
 			t.Fatalf("step %d: duplicate id %s", step, e.ID)
 		}
 		seen[e.ID] = true
-		if !e.Pinned {
-			unpinned++
-		}
 		memory += e.memoryBytes()
 		imageBytes += e.imageBytes()
 	}
-	for id := range pinned {
-		if !seen[id] {
-			t.Fatalf("step %d: pinned entry %s was dropped", step, id)
-		}
-	}
-	if unpinned > policy.MaxEntries {
-		t.Fatalf("step %d: %d unpinned entries, cap %d", step, unpinned, policy.MaxEntries)
+	if len(entries) > policy.MaxEntries {
+		t.Fatalf("step %d: %d entries, cap %d", step, len(entries), policy.MaxEntries)
 	}
 	stats := h.history.Stats()
 	if stats.Entries != len(entries) || stats.MemoryBytes != memory || stats.ImageBytes != imageBytes {
@@ -198,7 +172,7 @@ func TestHistoryConcurrentUseIsRaceFree(t *testing.T) {
 				case 1:
 					_ = h.history.Search("conc")
 				case 2:
-					_, _ = h.history.SetPinned(fmt.Sprintf("text:%d:%d", worker, step/2), true)
+					_, _ = h.history.Clear()
 				case 3:
 					_, _ = h.history.Enforce()
 				case 4:

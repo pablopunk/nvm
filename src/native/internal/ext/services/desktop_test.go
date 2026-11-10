@@ -17,7 +17,11 @@ import (
 )
 
 // stubWindows is a window engine with one display and one window, so the placement path can be asserted.
-type stubWindows struct{ focused, placed []api.WindowHandle }
+type stubWindows struct {
+	focused, placed []api.WindowHandle
+	applied         []api.LayoutKind
+	neighbors       []string
+}
 
 func (s *stubWindows) Displays(context.Context) ([]api.DisplayInfo, error) {
 	return []api.DisplayInfo{{ID: "main", Primary: true}}, nil
@@ -37,11 +41,26 @@ func (s *stubWindows) ApplyTo(_ context.Context, handle api.WindowHandle, _ api.
 	return api.ApplyResult{OK: true, Outcome: "applied"}, nil
 }
 
+func (s *stubWindows) Apply(_ context.Context, layout api.WindowLayout, _ api.WindowManagementOptions) (api.ApplyResult, error) {
+	s.applied = append(s.applied, layout.Kind)
+	return api.ApplyResult{OK: true, Outcome: "exact"}, nil
+}
+
+func (s *stubWindows) FocusNeighbor(_ context.Context, direction string, wrap bool) (api.FocusResult, error) {
+	s.neighbors = append(s.neighbors, direction)
+	if direction == "down" && !wrap {
+		return api.FocusResult{OK: false, Reason: "no-neighbor", Message: "No window lies in that direction."}, nil
+	}
+	return api.FocusResult{OK: true}, nil
+}
+
 type stubShortcuts struct{}
 
 func (stubShortcuts) List() []api.ShortcutRecord {
 	return []api.ShortcutRecord{{ActionID: "palette", Accelerator: "Command+Alt+K", Source: "user"}}
 }
+
+func (stubShortcuts) Aliases(string) map[string][]string { return nil }
 
 func (stubShortcuts) Palette() api.ShortcutRecord {
 	return api.ShortcutRecord{ActionID: "palette", Accelerator: "Command+Alt+K", Source: "user"}
@@ -87,7 +106,12 @@ func newDesktopHost(t *testing.T, caps ...platform.Capability) (desktopHost, Dep
 func desktopHandler(t *testing.T, deps Deps, capabilities ...api.Capability) *Handler {
 	t.Helper()
 	deps.DataRoot = t.TempDir()
-	deps.Files = fake.NewFS()
+	if deps.Files == nil {
+		deps.Files = fake.NewFS()
+	}
+	if deps.Clock == nil {
+		deps.Clock = fake.NewClock()
+	}
 	deps.Logs = nil
 	handler := New(deps, manifestFor("acme.desktop", capabilities...))
 	t.Cleanup(func() { _ = handler.Close() })
@@ -233,6 +257,17 @@ func TestOCRReadsImagesAndIsRateLimited(t *testing.T) {
 	requireCode(t, serve(t, h, protocol.ServiceOCR, protocol.OpImage, protocol.OCRImageArgs{Input: api.OCRInput{Source: image}}), api.CodeQuota, "rate limited")
 }
 
+// TestHasCapabilityAnswersSelectionCopy checks the name the AI commands built-in asks before it offers its fix: an answer
+// of false there hides the command, so the name must be one the host maps.
+func TestHasCapabilityAnswersSelectionCopy(t *testing.T) {
+	_, deps := newDesktopHost(t, platform.CapabilitySelectionCopy)
+	h := desktopHandler(t, deps)
+	var supported bool
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceSystem, protocol.OpHasCapability, protocol.CapabilityArgs{Name: "selection.copy"})), &supported); err != nil || !supported {
+		t.Fatalf("selection.copy %v (%v)", supported, err)
+	}
+}
+
 func TestSystemAndShortcutsNeedOnlyTheirDeclarations(t *testing.T) {
 	_, deps := newDesktopHost(t, platform.CapabilityWindowManagement)
 	bare := desktopHandler(t, deps)
@@ -283,4 +318,29 @@ func TestHostileExtensionWithNoDeclarationsReachesNoDesktopService(t *testing.T)
 	if len(host.shell.Calls()) != 0 || len(host.windows.placed) != 0 {
 		t.Fatalf("an undeclared call reached the host: shell %+v", host.shell.Calls())
 	}
+}
+
+func TestWindowLayoutsAndNeighborFocusReachTheEngine(t *testing.T) {
+	host, deps := newDesktopHost(t, platform.CapabilityWindowManagement)
+	h := desktopHandler(t, deps, api.CapabilityWindowManagement)
+	layout := api.WindowLayout{Kind: api.LayoutCenter}
+	var applied api.ApplyResult
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopWindows, protocol.OpApply, protocol.ApplyArgs{Layout: layout})), &applied); err != nil || !applied.OK {
+		t.Fatalf("apply = %+v (%v), want OK", applied, err)
+	}
+	if len(host.windows.applied) != 1 || host.windows.applied[0] != api.LayoutCenter {
+		t.Fatalf("applied %v, want the center layout", host.windows.applied)
+	}
+	var moved api.FocusResult
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopWindows, protocol.OpFocusNeighbor, protocol.FocusNeighborArgs{Direction: "right"})), &moved); err != nil || !moved.OK {
+		t.Fatalf("focus-neighbor = %+v (%v), want OK", moved, err)
+	}
+	var missed api.FocusResult
+	if err := jsonInto(mustOK(t, serve(t, h, protocol.ServiceDesktopWindows, protocol.OpFocusNeighbor, protocol.FocusNeighborArgs{Direction: "down"})), &missed); err != nil || missed.OK || missed.Reason != "no-neighbor" {
+		t.Fatalf("focus-neighbor down = %+v (%v), want no-neighbor as a result", missed, err)
+	}
+	if len(host.windows.neighbors) != 2 || host.windows.neighbors[0] != "right" {
+		t.Fatalf("neighbors %v", host.windows.neighbors)
+	}
+	requireCode(t, serve(t, h, protocol.ServiceDesktopWindows, protocol.OpApply, protocol.ApplyArgs{Layout: api.WindowLayout{Kind: "bogus"}}), api.CodeInvalid, "")
 }

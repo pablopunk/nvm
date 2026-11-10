@@ -28,6 +28,7 @@ func (e *extension) answer(req protocol.Request) (response protocol.Response) {
 		failure := api.FailureOf(err)
 		failure.Message = truncate(failure.Message)
 		response.Failure = &failure
+		response.Data = data
 		return response
 	}
 	response.Data = data
@@ -51,6 +52,8 @@ func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
 		return e.encode(protocol.MethodMenuBars, e.contextArgument(api.LaunchContext{}))
 	case protocol.MethodMenuBarTriggers:
 		return e.encode(protocol.MethodMenuBarTriggers)
+	case protocol.MethodRestoreWindow:
+		return e.restoreWindow(req.Invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", req.Method, api.ErrInvalidInput)
 }
@@ -73,13 +76,23 @@ func (e *extension) loadItems(invocation *api.Invocation) (json.RawMessage, erro
 	return e.encode(protocol.MethodLoad, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(loader))
 }
 
+// restoreWindow passes the restore key of the invocation to RestoreWindow, which returns the window's fresh view.
+func (e *extension) restoreWindow(invocation *api.Invocation) (json.RawMessage, error) {
+	key := ""
+	if invocation != nil {
+		key = invocation.Ref.ID
+	}
+	return e.encode(protocol.MethodRestoreWindow, e.contextArgument(api.LaunchContext{}), reflect.ValueOf(key))
+}
+
 // encode calls an entry point and marshals its first result. Results are JSON before they leave the child, so
 // the host validates wire data and never sees interpreter values.
 func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessage, error) {
 	out, err := e.invoke(method, args...)
-	if err != nil {
+	if err != nil && (method != protocol.MethodRun || len(out) == 0) {
 		return nil, err
 	}
+	callErr := err
 	if len(out) == 0 {
 		return json.RawMessage("null"), nil
 	}
@@ -87,7 +100,7 @@ func (e *extension) encode(method string, args ...reflect.Value) (json.RawMessag
 	if err != nil {
 		return nil, fmt.Errorf("%s returned data that cannot be encoded: %w", method, err)
 	}
-	return data, nil
+	return data, callErr
 }
 
 // PanicFailure reports a recovered panic. The message names the panic and never the arguments; the reference

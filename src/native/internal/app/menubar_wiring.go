@@ -16,7 +16,13 @@ import (
 // status item. A platform without a tray host runs the app without an item; the palette still opens by its shortcut.
 func (p *App) setUpMenubar() {
 	p.menubarJobs = menubar.NewScheduler(p.ports.Clock, p.onUI)
-	item, err := menubar.New(menubar.Options{Host: p.ports.Tray, OnUI: p.onUI, Actions: p.menubarActions()})
+	item, err := menubar.New(menubar.Options{
+		Host:      p.ports.Tray,
+		OnUI:      p.onUI,
+		Actions:   p.menubarActions(),
+		IconStyle: p.menuBarIconStyle(),
+		Menu:      p.menubarMenu(),
+	})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
 	} else {
@@ -37,6 +43,7 @@ func (p *App) startExtensionItems() {
 			OpenURL:        func(url string) { _ = mygo.Shell.OpenExternal(url) },
 			CopyText:       func(text string) { mygo.Clipboard.WriteText(text) },
 			ShowExtensions: func(string) { p.Open(p.extensionsView()); p.focusPanel() },
+			Popover:        popoverHost{p: p},
 		},
 	})
 	p.menubarItems.Store(service)
@@ -77,7 +84,9 @@ func (e extensionMenuBars) MenuBarExtensions() []extitems.Extension {
 	}
 	var listed []extitems.Extension
 	for _, ext := range m.MenuBarExtensions() {
-		listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		if e.p.visibility.shown(ext.ID) {
+			listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		}
 	}
 	return listed
 }
@@ -107,9 +116,9 @@ func (e extensionMenuBars) Run(ctx context.Context, id string, in api.Invocation
 func (p *App) menubarActions() menubar.Actions {
 	return menubar.Actions{
 		Open:            func() { p.Show(); p.focusPanel() },
-		CheckForUpdates: func() { p.checkForUpdates(p.notifyUpdate) },
-		Settings:        func() { p.Open(p.settingsView()); p.focusPanel() },
-		Quit:            func() { mygo.App.Quit() },
+		CheckForUpdates: p.openUpdatesAndCheck,
+		Settings:        func() { p.Open(p.settingsPage()); p.focusPanel() },
+		Quit:            p.requestQuit,
 	}
 }
 
@@ -119,9 +128,4 @@ func (p *App) focusPanel() {
 	if p.panel != nil {
 		p.panel.Focus()
 	}
-}
-
-// setTrayTitle shows text next to the app's menu bar icon, as the running timer does. An empty title shows only the icon.
-func (p *App) setTrayTitle(s string) {
-	p.menubar.SetTitle(s)
 }

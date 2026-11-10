@@ -71,7 +71,9 @@ func TestJourneyJ01SummonAndDismiss(t *testing.T) {
 	started := time.Now()
 	must(t, app.SummonPalette())
 	t.Logf("summon took %s", time.Since(started).Round(time.Millisecond))
-	_, err := app.WaitFor("Clipboard History", elementWait)
+	// Lock Screen stands for the root. 1.x shows it in the first visible rows; Fix Selected Text with AI scores lower
+	// there and sits below the fold.
+	_, err := app.WaitFor("Lock Screen", elementWait)
 	must(t, err)
 	shoot(t, app, "j01-1-summoned")
 
@@ -92,17 +94,18 @@ func TestJourneyJ01SummonAndDismiss(t *testing.T) {
 	must(t, app.DismissWithEscape())
 }
 
-// TestJourneyJ02SearchAndOpenClipboardHistory is the J02 smoke: typing "cl" shows the Clipboard
-// History row, and Enter opens it. The frecency part of J02 (the intended app becomes the top hit
-// after three launches) is not covered yet.
+// TestJourneyJ02SearchAndOpenClipboardHistory is the J02 smoke: typing "clip" shows the Clipboard
+// History row first, and Enter opens it. "cl" is not used: as in 1.x, Classify Image with AI and
+// Triage Selected Text with AI match it by prefix too, and Enter would run the first of those. The
+// frecency part of J02 (the intended app becomes the top hit after three launches) is not covered yet.
 func TestJourneyJ02SearchAndOpenClipboardHistory(t *testing.T) {
 	app := Launch(t, Options{})
 	must(t, app.SummonPalette())
 
-	must(t, app.Type("cl"))
+	must(t, app.Type("clip"))
 	_, err := app.WaitFor("Clipboard History", elementWait)
 	must(t, err)
-	shoot(t, app, "j02-1-typed-cl")
+	shoot(t, app, "j02-1-typed-clip")
 
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Search Clipboard History", elementWait)
@@ -144,7 +147,7 @@ func TestJourneyJ06ConcealedCopyNeverAppearsInHistory(t *testing.T) {
 		t.Fatal("the app log holds the concealed text")
 	}
 
-	must(t, app.Key("Escape"))
+	clearSearch(t, app)
 	_, err = app.WaitFor(nonce, clipWait)
 	must(t, err)
 	shoot(t, app, "j06-2-normal-copy-present")
@@ -210,7 +213,7 @@ func TestJourneyJ03CalculatorCopiesTheResult(t *testing.T) {
 }
 
 // TestJourneyJ08EmojiCopiesAGlyph is the J08 smoke: "emoji" opens Emoji & Symbols, "fire" finds the fire character,
-// and Enter copies it. Skin tones, Unicode values, the keyboard grid and recents of J08 are not covered yet.
+// and Enter copies it. Skin tones, Unicode values and the keyboard grid of J08 are not covered yet.
 func TestJourneyJ08EmojiCopiesAGlyph(t *testing.T) {
 	app := Launch(t, Options{})
 	nonce := fmt.Sprintf("rig-emoji-%d", time.Now().UnixNano())

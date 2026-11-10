@@ -30,24 +30,30 @@ type Pagination struct {
 	Next     *ActionRef `json:"next,omitempty"`
 }
 
-// SearchAccessory is a small filter control at the end of the search bar, such as a category
-// picker. Its selection arrives as Invocation.Value through OnChange.
-type SearchAccessory struct {
-	ID       string                  `json:"id,omitempty"`
-	Tooltip  string                  `json:"tooltip,omitempty"`
-	Value    string                  `json:"value,omitempty"`
-	Options  []SearchAccessoryOption `json:"options"`
-	OnChange *ActionRef              `json:"onChange,omitempty"`
+// ViewFilter narrows a view's rows by one choice, such as a category or a kind of file. The host shows it as a button in
+// the footer bar, where the current option is named and a press opens a menu of Options with a check mark on Value, and
+// in the action menu as Next and Previous actions, which bind no key. A view has no control in its search field:
+// nothing an extension declares can place one there. A chosen option becomes Value and arrives as Invocation.Value
+// through OnChange.
+type ViewFilter struct {
+	ID       string             `json:"id,omitempty"`
+	Tooltip  string             `json:"tooltip,omitempty"`
+	Value    string             `json:"value,omitempty"`
+	Options  []ViewFilterOption `json:"options"`
+	OnChange *ActionRef         `json:"onChange,omitempty"`
+	// CycleOnTab makes Tab choose the next option, wrapping, and run OnChange.
+	CycleOnTab bool `json:"cycleOnTab,omitempty"`
 }
 
-// SearchAccessoryOption is one value of a SearchAccessory.
-type SearchAccessoryOption struct {
+// ViewFilterOption is one value of a ViewFilter.
+type ViewFilterOption struct {
 	Title string `json:"title"`
 	Value string `json:"value"`
 }
 
 // Refresh asks the host to re-run a handler while the view is visible. Immediate paints the
 // cached snapshot first and refreshes after paint. The host owns the timer and the cancellation.
+// A refreshed list or grid may return a patch or a matching view; its rows update in place.
 type Refresh struct {
 	IntervalMs int64      `json:"intervalMs,omitempty"`
 	Mode       PatchMode  `json:"mode,omitempty"`

@@ -14,6 +14,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
@@ -49,6 +50,10 @@ func newServicesRig(t *testing.T) servicesRig {
 // servicedRuntime starts the fixture named name with the services of manifest on top of the rig. Budgets are wide
 // because the fixtures make many round trips to the host.
 func servicedRuntime(t *testing.T, name string, rig servicesRig, manifest api.Manifest) *Runtime {
+	return servicedRuntimeWithWorker(t, name, rig, manifest, real.NewWorker())
+}
+
+func servicedRuntimeWithWorker(t *testing.T, name string, rig servicesRig, manifest api.Manifest, worker platform.Worker) *Runtime {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
@@ -57,7 +62,7 @@ func servicedRuntime(t *testing.T, name string, rig servicesRig, manifest api.Ma
 	handler := services.New(rig.deps, manifest)
 	t.Cleanup(func() { _ = handler.Close() })
 	cfg := Config{
-		Worker:       real.NewWorker(),
+		Worker:       worker,
 		Clock:        real.NewPorts().Clock,
 		Executable:   exe,
 		StartTimeout: 10 * time.Second,

@@ -23,7 +23,13 @@ type exchange struct {
 // arrived or the request could not be built. It updates the offline tracker and logs one line per attempt.
 func (c *Client) send(ctx context.Context, spec requestSpec) (exchange, error) {
 	started := c.clock.Now()
-	reqCtx, stop, timedOut := c.bindTimeout(ctx, spec.timeout)
+	watchCtx, watch := c.watchProgress(ctx, spec.idleTimeout)
+	reqCtx, stopDeadline, deadlinePassed := c.bindTimeout(watchCtx, spec.timeout)
+	stop := func() {
+		stopDeadline()
+		watch.stop()
+	}
+	timedOut := func() bool { return deadlinePassed() || watch.stalled() }
 	req, err := c.buildRequest(reqCtx, spec)
 	if err != nil {
 		stop()
@@ -44,7 +50,7 @@ func (c *Client) send(ctx context.Context, spec requestSpec) (exchange, error) {
 	return exchange{
 		status:     resp.StatusCode,
 		retryAfter: resp.Header.Get("Retry-After"),
-		body:       resp.Body,
+		body:       watch.track(resp.Body),
 		timedOut:   timedOut,
 		release: func() {
 			_ = resp.Body.Close()
@@ -99,8 +105,8 @@ func (c *Client) noteFailure(kind Kind) {
 	}
 }
 
-// logAttempt writes one debug line per attempt. It logs the method, the route without its query and the
-// outcome. It never logs headers, so the token cannot appear here.
+// logAttempt writes one line per attempt to the app log: info for an answer, warn for a refusal or a failure. It logs
+// the method, the route without its query and the outcome. It never logs headers, so the token cannot appear here.
 func (c *Client) logAttempt(spec requestSpec, status int, started time.Time, failure *Error) {
 	fields := logx.F{
 		"method":      spec.method,
@@ -108,8 +114,13 @@ func (c *Client) logAttempt(spec requestSpec, status int, started time.Time, fai
 		"status":      status,
 		"duration_ms": c.clock.Now().Sub(started).Milliseconds(),
 	}
-	if failure != nil {
+	switch {
+	case failure != nil:
 		fields["kind"] = string(failure.Kind)
+		c.logger.Warn("backend request failed", fields)
+	case status >= 400:
+		c.logger.Warn("backend request refused", fields)
+	default:
+		c.logger.Info("backend request", fields)
 	}
-	c.logger.Debug("backend request", fields)
 }

@@ -1,6 +1,7 @@
 package extview
 
 import (
+	"strings"
 	"sync"
 	"time"
 
@@ -9,8 +10,12 @@ import (
 
 // CacheEntry is the last items a data source loaded, and when it loaded them.
 type CacheEntry struct {
-	Items []api.Item
-	At    time.Time
+	Items           []api.Item
+	PictureEvidence *api.SnapshotEvidence
+	PictureIdentity any
+	PictureLoader   string
+	PictureVersion  *byte
+	At              time.Time
 }
 
 // Cache keeps data-source snapshots so a view shows the last items at once and refreshes them in place.
@@ -36,6 +41,19 @@ func (c *MemoryCache) Get(key string) (CacheEntry, bool) {
 	defer c.mu.Unlock()
 	entry, ok := c.entries[key]
 	return entry, ok
+}
+
+// InvalidateExtension drops every snapshot an extension's views stored, and only those: keys are the extension id, a slash
+// and the source's cache key, so an extension whose id is a prefix of another's keeps its entries.
+func (c *MemoryCache) InvalidateExtension(extensionID string) {
+	prefix := extensionID + "/"
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for key := range c.entries {
+		if strings.HasPrefix(key, prefix) {
+			delete(c.entries, key)
+		}
+	}
 }
 
 // Put stores a snapshot under key, replacing the previous one.

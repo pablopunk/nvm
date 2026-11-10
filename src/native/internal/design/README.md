@@ -75,11 +75,11 @@ context. The doc comment of each says what it draws and when to use it.
 | `section.go` | `Section` | a group header |
 | `keycap.go` | `Keycap` | a key label, already spelled for the platform |
 | `chip.go` | `Chip` | `ChipData` (icon, bold word, text) |
+| `select.go` | `Select` | `SelectData`, returns the chosen option index or -1; opens the platform's menu (a select) |
 | `popover.go` | `Popover`, `Placement`, `ActionPlacement` | a raised surface at a placement |
 | `action_menu.go` | `ActionMenu` | `[]MenuRow` |
 | `footer.go` | `Footer` | `FooterData` (name, primary and secondary key hints, or a hint) |
 | `empty_state.go` | `EmptyState` | `EmptyData` |
-| `toast.go` | `Toast` | a message; a thin wrapper of the window's toast |
 | `form.go` | `FormField`, `FormError` | `FieldData` |
 | `user_bubble.go` | `UserBubble` | a chat message |
 | `icons.go`, `lucide.go` | `Icon(name)` | the Lucide table, parsed once |
@@ -125,7 +125,6 @@ Documented, not hidden. Each item is a place where the code does not yet meet th
   component constant when its view is next changed.
 - Contrast: the known failures in `tokens_contrast_test.go` (11 pairs) carry over unchanged.
 - Disabled state: no component has one yet (the palette has no disabled control); the gallery does not show it.
-- `Toast` is not in the gallery: it draws through the window, not the view.
 - Hover is implemented for rows only; other controls show none.
 - Material: the tester's backdrop is opaque, so `states-material` shows the difference in the pane's fill, not the
   real glass. The macOS material is verified only on a macOS runner (L5), not here.

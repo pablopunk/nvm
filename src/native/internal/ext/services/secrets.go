@@ -96,7 +96,10 @@ func (h *Handler) secretSet(args json.RawMessage) error {
 	if err != nil {
 		return err
 	}
-	index, _ := docs.secrets.Load()
+	index, err := docs.secrets.Load()
+	if err != nil {
+		return unavailable("the secret index cannot be read")
+	}
 	if !slices.Contains(index.Names, request.Key) && len(index.Names) >= maxSecretNames {
 		return quota(fmt.Errorf("an extension may keep at most %d secrets", maxSecretNames))
 	}
@@ -131,7 +134,10 @@ func (h *Handler) secretClear() error {
 	if err != nil {
 		return err
 	}
-	index, _ := docs.secrets.Load()
+	index, err := docs.secrets.Load()
+	if err != nil {
+		return unavailable("the secret index cannot be read")
+	}
 	for _, name := range index.Names {
 		if err := h.deps.Keychain.Delete(h.serviceFor(), name); err != nil {
 			return keychainFailure(err)
@@ -157,7 +163,7 @@ func forgetSecretName(docs *documents, name string) error {
 	})
 }
 
-// secretIndexUpdate changes the index and saves it at once, so a secret is never stored without its name.
+// secretIndexUpdate changes and saves the index.
 func secretIndexUpdate(docs *documents, change func(*secretIndexDoc)) error {
 	if err := docs.secrets.Update(change); err != nil {
 		return unavailable("the secret index cannot be saved: %v", err)

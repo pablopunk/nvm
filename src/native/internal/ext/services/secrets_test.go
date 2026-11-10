@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 const canary = "canary-token-7f3a9c"
@@ -76,4 +78,69 @@ func TestSecretNameAndCountQuotas(t *testing.T) {
 		mustOK(t, serve(t, h, protocol.ServiceSecrets, protocol.OpSet, protocol.KeyValueArgs{Key: keyName(i), Value: []byte(`"v"`)}))
 	}
 	requireCode(t, serve(t, h, protocol.ServiceSecrets, protocol.OpSet, protocol.KeyValueArgs{Key: "extra", Value: []byte(`"v"`)}), api.CodeQuota, "secrets")
+}
+
+// countingKeychain records calls even when the underlying operation fails.
+type countingKeychain struct {
+	*fake.Keychain
+	sets, deletes int
+}
+
+func (k *countingKeychain) Set(service, account string, value []byte) error {
+	k.sets++
+	return k.Keychain.Set(service, account, value)
+}
+
+func (k *countingKeychain) Delete(service, account string) error {
+	k.deletes++
+	return k.Keychain.Delete(service, account)
+}
+
+func TestUnreadableSecretIndexBlocksKeychainChanges(t *testing.T) {
+	for _, op := range []string{protocol.OpSet, protocol.OpClear} {
+		t.Run(op, func(t *testing.T) {
+			files := fake.NewFS()
+			clock := fake.NewClock()
+			keychain := &countingKeychain{Keychain: fake.NewKeychain()}
+			deps := Deps{Files: files, Clock: clock, DataRoot: testpath.Abs("data"), Keychain: keychain}
+			first := New(deps, secretsManifest("acme.one"))
+			mustOK(t, serve(t, first, protocol.ServiceSecrets, protocol.OpSet, protocol.KeyValueArgs{Key: "TOKEN", Value: []byte(`"original"`)}))
+			if err := first.Close(); err != nil {
+				t.Fatal(err)
+			}
+			h := New(deps, secretsManifest("acme.one"))
+			t.Cleanup(func() { _ = h.Close() })
+			docs, err := h.openedDocuments()
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := docs.secrets.Path()
+			before, err := files.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			keychain.sets, keychain.deletes = 0, 0
+			files.FailNext(fake.OpReadFile, errors.New("private disk detail"))
+			var args any
+			if op == protocol.OpSet {
+				args = protocol.KeyValueArgs{Key: "TOKEN", Value: []byte(`"replacement"`)}
+			}
+			reply := serve(t, h, protocol.ServiceSecrets, op, args)
+			requireCode(t, reply, api.CodeUnavailable, "secret index")
+			if strings.Contains(reply.Failure.Message, "private disk detail") {
+				t.Fatal("read error leaked")
+			}
+			if keychain.sets != 0 || keychain.deletes != 0 {
+				t.Fatalf("keychain calls: set=%d delete=%d", keychain.sets, keychain.deletes)
+			}
+			value, err := keychain.Get("nevermind.extension.acme.one", "TOKEN")
+			if err != nil || string(value) != "original" {
+				t.Fatalf("secret changed: %q, %v", value, err)
+			}
+			after, err := files.ReadFile(path)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatalf("index changed: %v", err)
+			}
+		})
+	}
 }

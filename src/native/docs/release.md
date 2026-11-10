@@ -10,8 +10,8 @@ and the first release waits for the owner actions below.
    or give the run a `version` input (for example `2.0.0-next.1`). The run stamps it
    into the packages and does not commit it.
 3. Run **Native packages** (workflow_dispatch) with `release` set to true. Signing
-   and notarization run only when their secrets exist. Notarization needs this
-   dispatch run, so a pull request never submits to the notary service.
+   and notarization run whenever their secrets exist, pull requests included. The
+   `release` flag alone decides whether the release flags are linked.
 4. Read each job's summary. It says signed, notarized or UNSIGNED. Read the
    `--build-flags` output in the Linux and macOS logs: it must read
    `packaged=true release=true`.

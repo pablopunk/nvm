@@ -31,6 +31,7 @@ var x11OnlyCapabilities = []platform.Capability{
 	platform.CapabilityClipboardPaste,
 	platform.CapabilitySelectionCopy,
 	platform.CapabilityFocusReturn,
+	platform.CapabilityFrontmostApp,
 	platform.CapabilityWindowPlacement,
 	platform.CapabilityWindowManagement,
 }
@@ -107,5 +108,27 @@ func TestPasteAndSelectionNeedXdotoolOnX11(t *testing.T) {
 	}
 	if !pasteCapable("linux", x11, allLinuxToolsInstalled) || !selectionCopySupported("linux", x11, allLinuxToolsInstalled) {
 		t.Fatal("paste or selection copy is omitted on X11 with xdotool")
+	}
+}
+
+// TestFrontmostAppIsOfferedOnMacOSWithoutX11Tools keeps the Launch Services path independent of the X11 tool check.
+func TestFrontmostAppIsOfferedOnMacOSWithoutX11Tools(t *testing.T) {
+	set := capabilitiesFor("darwin", environment(map[string]string{}), func(string) bool { return false })
+	if !set.Supported(platform.CapabilityFrontmostApp) {
+		t.Fatal("the frontmost app is omitted on macOS")
+	}
+}
+
+// TestMacOSOffersTypingAndAppLifecycle keeps the 1.x macOS-only intents on macOS, and off every Linux session.
+func TestMacOSOffersTypingAndAppLifecycle(t *testing.T) {
+	mac := capabilitiesFor("darwin", environment(map[string]string{}), allLinuxToolsInstalled)
+	for _, capability := range []platform.Capability{platform.CapabilityKeyboardTypeText, platform.CapabilityAppHide, platform.CapabilityAppQuit, platform.CapabilityAppRunning} {
+		if !mac.Supported(capability) {
+			t.Fatalf("%s is omitted on macOS", capability)
+		}
+	}
+	linux := capabilitiesFor("linux", environment(map[string]string{"XDG_SESSION_TYPE": "x11", "DISPLAY": ":0"}), allLinuxToolsInstalled)
+	if linux.Supported(platform.CapabilityKeyboardTypeText) || linux.Supported(platform.CapabilityAppHide) {
+		t.Fatal("typing or hiding an app is offered on Linux")
 	}
 }

@@ -1,0 +1,399 @@
+# 1.x extension API names and their Go replacements
+
+Names not listed keep their name in Go.
+
+- Action.cancelLabel -> Confirmation.CancelLabel
+- Action.confirmLabel -> Confirmation.ConfirmLabel
+- Action.confirmMessage -> Confirmation.Message
+- Action.dismissAfterRun='auto' -> Action.DismissAfterRun (A bool replaces the single auto value)
+- Action.draftConflict -> Invocation.DraftConflict
+- Action.editorContent -> Invocation.EditorContent
+- Action.fields -> FormSpec.Fields
+- Action.formValues -> Invocation.Form
+- Action.previewIntent -> func:PreviewFile (The host offers preview itself on rows with preview content)
+- Action.promptMessage -> PromptSpec.Message
+- Action.requiresConfirmation -> Action.Confirm
+- Action.selectedItemId -> Invocation.SelectedItemID
+- Action.shortcutScope -> gone (Deprecated in 1.x; Command.GlobalShortcut replaces it)
+- Action.submitTitle -> FormSpec.SubmitTitle
+- Action.type -> Action.Kind
+- Action.value -> Invocation.Value
+- ActionContribution.action -> Command (A command runs its own handler)
+- ActionContribution.background -> Action.Background
+- ActionContribution.dismissAfterRun='auto' -> Command.DismissAfterRun
+- ActionContribution.image -> Item.Image
+- ActionContribution.run -> ActionHandler.RunAction
+- ActionResult.action -> Result.Next
+- ActionResult.navigation -> Result.Navigation
+- ActionResult.patch -> Result.Patch
+- ActionResult.view -> Result.View
+- ActionSection.isLoading -> gone (Declared in 1.x but never read by its palette)
+- ActionSection.lazyActions -> ActionSection.Actions (1.x appends these to actions)
+- Ai.attachments.clipboard -> AttachmentBuilder.Clipboard
+- Ai.attachments.file -> AttachmentBuilder.File
+- Ai.attachments.image -> AttachmentBuilder.Image
+- Ai.attachments.ocrImage -> AttachmentBuilder.OCRImage
+- Ai.attachments.selectedFiles -> AttachmentBuilder.SelectedFiles
+- Ai.attachments.selectedText -> AttachmentBuilder.SelectedText
+- Ai.attachments.text -> AttachmentBuilder.Text
+- AiAttachment#type=file.as -> Attachment.As
+- AiAttachment#type=file.file -> Attachment.File
+- AiAttachment#type=file.filePath -> Attachment.File
+- AiAttachment#type=file.ocr -> Attachment.OCR
+- AiAttachment#type=file.path -> Attachment.Path
+- AiAttachment#type=file.title -> Attachment.Title
+- AiAttachment#type=file.type -> Attachment.Kind
+- AiAttachment#type=image.data -> Attachment.DataURL
+- AiAttachment#type=image.dataUrl -> Attachment.DataURL
+- AiAttachment#type=image.filePath -> Attachment.File
+- AiAttachment#type=image.imageDataUrl -> Attachment.DataURL
+- AiAttachment#type=image.mimeType -> Attachment.MimeType
+- AiAttachment#type=image.ocr -> Attachment.OCR
+- AiAttachment#type=image.path -> Attachment.Path
+- AiAttachment#type=image.title -> Attachment.Title
+- AiAttachment#type=image.type -> Attachment.Kind
+- AiAttachment#type=text.text -> Attachment.Text
+- AiAttachment#type=text.title -> Attachment.Title
+- AiAttachment#type=text.type -> Attachment.Kind
+- AiOptions.onDelta -> AIStream.Events (Stream events replace callbacks)
+- AiOptions.onEvent -> AIStream.Events (Stream events replace callbacks)
+- AiOptions.signal -> Context.Std
+- AiStream.abort -> AIStream.Abort
+- AiStream.result -> AIStream.Result
+- AiStreamEvent#type=aborted.type -> AIStreamEvent.Type
+- AiStreamEvent#type=delta.text -> AIStreamEvent.Text
+- AiStreamEvent#type=delta.type -> AIStreamEvent.Type
+- AiStreamEvent#type=done.type -> AIStreamEvent.Type
+- AiStreamEvent#type=error.data -> gone (Errors reach extensions as Message; raw provider payloads stay in the host)
+- AiStreamEvent#type=error.message -> AIStreamEvent.Message
+- AiStreamEvent#type=error.type -> AIStreamEvent.Type
+- AiStreamEvent#type=start.type -> AIStreamEvent.Type
+- AiStreamEvent.isError -> AIStreamEvent.IsError
+- AiStreamEvent.name -> AIStreamEvent.Name
+- AiStreamEvent.type -> AIStreamEvent.Type
+- App.firstSeenAt -> App.FirstSeenMs
+- BackgroundTrigger#type=files.changed.kind -> FileKindFilter
+- ClipboardContent#type=image.image -> ClipboardContent
+- ClipboardContent#type=image.path -> ClipboardContent
+- ClipboardEntry.createdAt -> ClipboardEntry.CreatedAtMs
+- ClipboardHistory.search -> ClipboardHistory.List
+- ClipboardReadOptions.formats -> SystemClipboard.Read
+- ClipboardReadResult#type=empty.type -> ClipboardContent
+- Command.background -> Action.Background
+- Command.dismissAfterRun='auto' -> Command.DismissAfterRun
+- Command.run -> ActionHandler.RunAction
+- Command.shortcut -> Action.Shortcut
+- Command.shortcutScope -> gone (Deprecated in 1.x; Command.GlobalShortcut replaces it)
+- ctx.action -> Command (Durable actions are Commands)
+- ctx.actions -> Action (Constructors and action kinds replace the actions namespace)
+- ctx.actions.background -> const:ModeBackground
+- ctx.actions.camera -> const:ActionCamera
+- ctx.actions.copyImage -> func:CopyImage
+- ctx.actions.copyText -> func:CopyText
+- ctx.actions.native -> gone (Replaced by named actions and built-in-only host actions)
+- ctx.actions.openPalette -> const:ActionOpenPalette
+- ctx.actions.openPath -> func:OpenPath
+- ctx.actions.openUrl -> func:OpenURL
+- ctx.actions.openWith -> func:OpenWith
+- ctx.actions.paste -> func:Paste
+- ctx.actions.pasteText -> func:PasteText
+- ctx.actions.pop -> const:ActionPop
+- ctx.actions.push -> func:PushView
+- ctx.actions.quickLook -> func:QuickLook
+- ctx.actions.recordShortcut -> const:ActionShortcut
+- ctx.actions.ref -> Action.Ref
+- ctx.actions.refreshContributions -> Views.InvalidateRoot (InvalidateRoot also revalidates the commands of the calling extension)
+- ctx.actions.removeShortcut -> const:ActionShortcut
+- ctx.actions.replace -> const:ActionReplaceView
+- ctx.actions.revealPath -> func:RevealPath
+- ctx.actions.root -> func:RootView
+- ctx.actions.run -> func:Run
+- ctx.actions.setPaletteShortcut -> const:ActionRecordPaletteShortcut
+- ctx.actions.shellExec -> const:ActionShellExec
+- ctx.actions.shellScript -> Shell.Script (Run a handler that calls Shell.Script)
+- ctx.actions.system -> func:SystemOp
+- ctx.actions.toggleSetting -> const:ActionToggleSetting
+- ctx.actions.trash -> func:Trash
+- ctx.actions.typeText -> func:TypeText
+- ctx.actions.updates -> const:ActionUpdate
+- ctx.clipboard -> ClipboardHistory
+- ctx.command -> LaunchContext
+- ctx.desktop.files.preview -> Files.QuickLook
+- ctx.desktop.files.toFileUrl -> Files.FileURL
+- ctx.extension -> Identity
+- ctx.extensions -> Ownership
+- ctx.launch -> LaunchContext
+- ctx.menuBar -> Views
+- ctx.menuBar.refresh -> Views.RefreshMenuBar
+- ctx.signal -> Context.Std
+- ctx.state -> Cache (View state arrives in the invocation; package variables hold per-process state; Cache holds shared state)
+- ctx.ui -> View (Constructors in the api package replace the ui namespace)
+- ctx.ui.actions -> Action (Plain slice, no helper needed)
+- ctx.ui.camera -> const:ViewCamera
+- ctx.ui.chat -> const:ViewChat
+- ctx.ui.collection -> func:CollectionView
+- ctx.ui.confirm -> func:WithConfirmation
+- ctx.ui.editor -> func:EditorView
+- ctx.ui.empty -> EmptyState
+- ctx.ui.error -> func:ErrorView
+- ctx.ui.form -> func:FormView
+- ctx.ui.grid -> func:GridView
+- ctx.ui.indicator -> Indicators
+- ctx.ui.indicator.hide -> Indicators.Hide
+- ctx.ui.indicator.show -> Indicators.Show
+- ctx.ui.indicator.update -> Indicators.Update
+- ctx.ui.item -> Item (Plain struct literal, no helper needed)
+- ctx.ui.list -> func:ListView
+- ctx.ui.loading -> View.IsLoading
+- ctx.ui.preview -> func:PreviewView
+- ctx.ui.previewAction -> func:PreviewFile
+- ctx.ui.previewFile -> func:PreviewFileView
+- ctx.ui.previewView -> func:PreviewView
+- ctx.ui.progress -> func:ProgressView
+- ctx.ui.webview -> const:ViewWebview
+- ctx.updates.getState -> Updates.State
+- ContributionRefreshResult.error -> Views.InvalidateRoot (The refresh is asynchronous; failures appear in the extension row)
+- ContributionRefreshResult.ok -> Views.InvalidateRoot (The refresh is asynchronous; failures appear in the extension row)
+- CrudCollection.emptyView -> View.EmptyView
+- CrudCollection.emptyView.subtitle -> View.Subtitle
+- CrudCollection.emptyView.title -> View.Title
+- CrudCollection.id -> View.ID
+- CrudCollection.searchBarPlaceholder -> View.Placeholder
+- CrudCollection.subtitle -> View.Subtitle
+- CrudCollection.title -> View.Title
+- DataLoaderHandle._loader -> DataSource.Loader
+- DecisionAnswer#type=choice.value -> DecisionResult.Answers
+- DecisionAnswer#type=predicate.value -> DecisionResult.Answers
+- DecisionAnswer#type=score.value -> DecisionResult.Answers
+- DecisionOptions.signal -> Context.Std
+- DetailLink.description -> LinkCard.Description
+- DetailLink.image -> LinkCard.Image
+- DetailLink.siteName -> LinkCard.SiteName
+- DetailLink.status -> LinkCard.Status
+- DetailLink.title -> LinkCard.Title
+- DetailLink.url -> LinkCard.URL
+- DisplayInfo.frame.height -> Rect.Height
+- DisplayInfo.frame.width -> Rect.Width
+- DisplayInfo.frame.x -> Rect.X
+- DisplayInfo.frame.y -> Rect.Y
+- DisplayInfo.isPrimary -> DisplayInfo.Primary
+- DisplayInfo.workArea.height -> Rect.Height
+- DisplayInfo.workArea.width -> Rect.Width
+- DisplayInfo.workArea.x -> Rect.X
+- DisplayInfo.workArea.y -> Rect.Y
+- DraftResolutionFollowUp.navigation -> DraftResolution.Navigation
+- DraftResolutionFollowUp.view -> DraftResolution.View
+- EditorDraftOptions.autosave -> DraftOptions.Autosave
+- EditorDraftOptions.autosave.action -> DraftOptions.Autosave
+- EditorDraftOptions.autosave.debounceMs -> DraftOptions.DebounceMs
+- EditorDraftOptions.key -> DraftOptions.Key
+- EditorDraftOptions.onConflict -> DraftOptions.OnConflict
+- EditorDraftOptions.version -> DraftOptions.Version
+- File.birthtime -> FileRef.BirthtimeMs
+- File.dateAdded -> FileRef.DateAddedMs
+- File.mtime -> FileRef.MtimeMs
+- FindFilesOptions.pattern -> FindOptions.Patterns
+- FormField.canCreateDirectories -> Field.DisableDirectoryCreation (Inverted: true in 1.x is false here)
+- FormOption.title -> Option.Title
+- FormOption.value -> Option.Value
+- Item.actionId -> Command.ActionID
+- Item.background -> Action.Background
+- Item.customizable -> Command.Customizable
+- Item.dismissAfterRun -> Action.DismissAfterRun
+- Item.dismissAfterRun='auto' -> Action.DismissAfterRun
+- Item.filePath -> Item.File
+- Item.fileUrl -> Item.File
+- Item.globalShortcut -> Command.GlobalShortcut
+- Item.lastUsed -> Item.LastUsedMs
+- Item.path -> Action.Path
+- Item.primaryAction -> Item.Primary
+- Item.shortcutScope -> gone (Deprecated in 1.x)
+- Item.text -> Action.Text
+- Item.videoUrl -> Item.Video
+- ItemAccessory.icon -> Accessory.Icon
+- ItemAccessory.text -> Accessory.Text
+- ItemAccessory.tone -> Accessory.Tone
+- ItemAccessory.tooltip -> Accessory.Tooltip
+- ItemAppearance.background -> Appearance.Background
+- ItemAppearance.foreground -> Appearance.Foreground
+- ItemAppearance.prominence -> Appearance.Prominence
+- LaunchContext.startedAt -> LaunchContext.StartedAtMs
+- MenuBar.popover.height -> Popover.Height
+- MenuBar.popover.view -> Popover.View
+- MenuBar.popover.width -> Popover.Width
+- MenuBar.sections.items -> MenuSection.Rows
+- MenuBarContribution.render -> MenuBarProvider
+- MenuBarContribution.triggers -> MenuBarProvider
+- MetadataItem#type=link.label -> Metadata.Label
+- MetadataItem#type=link.type -> Metadata.Kind
+- MetadataItem#type=link.url -> Metadata.URL
+- MetadataItem#type=link.value -> Metadata.Value
+- MetadataItem#type=separator.type -> Metadata.Kind
+- MetadataItem#type=tag.label -> Metadata.Label
+- MetadataItem#type=tag.tone -> Metadata.Tone
+- MetadataItem#type=tag.type -> Metadata.Kind
+- MetadataItem#type=tag.value -> Metadata.Value
+- MetadataItem#type=text.copyable -> Metadata.Copyable
+- MetadataItem#type=text.label -> Metadata.Label
+- MetadataItem#type=text.type -> Metadata.Kind
+- MetadataItem#type=text.value -> Metadata.Value
+- OcrBlock.boundingBox -> Rect
+- OcrBlock.boundingBox.height -> Rect.Height
+- OcrBlock.boundingBox.width -> Rect.Width
+- OcrBlock.boundingBox.x -> Rect.X
+- OcrBlock.boundingBox.y -> Rect.Y
+- Ownership.claim -> gone (Host-only in 1.x; the host enforces ownership)
+- Ownership.reload -> gone (Host-only in 1.x; the host enforces ownership)
+- Ownership.remove -> gone (Host-only in 1.x; the host enforces ownership)
+- Pagination.onLoadMore -> Pagination.Next
+- PaletteShortcut.accelerator -> ShortcutRecord.Accelerator
+- PaletteShortcut.scope -> ShortcutRecord.Scope
+- PaletteShortcut.scope='palette' -> Shortcuts.Palette
+- PaletteShortcut.title -> ShortcutRecord.Title
+- PasteTextOptions.expectedFrontmostAppId -> PasteOptions.ExpectedFrontmostID
+- PasteTextOptions.plainText -> PasteOptions.PlainTextOnly
+- PreviewItemDescriptor.clipboardType -> View.Subtitle (1.x only showed it as the preview subtitle)
+- PreviewItemDescriptor.filePath -> FilePreview.File
+- PreviewItemDescriptor.imageDataUrl -> Item.Image
+- PreviewItemDescriptor.imagePath -> PreviewSpec.Image
+- PreviewItemDescriptor.kind -> FileRef.Kind
+- PreviewItemDescriptor.shortcut -> Item.Shortcut
+- PreviewItemDescriptor.text -> PreviewSpec.Text
+- PreviewItemDescriptor.thumbnailUrl -> FileRef.ThumbnailURL
+- PreviewItemDescriptor.title -> Item.Title
+- PreviewItemDescriptor.videoUrl -> PreviewSpec.Video
+- RuntimeCache.getStale -> Cache.Stale
+- SearchAccessory.id -> ViewFilter.ID
+- SearchAccessory.items -> ViewFilter.Options
+- SearchAccessory.items.title -> ViewFilterOption.Title
+- SearchAccessory.items.value -> ViewFilter.Value
+- SearchAccessory.onChange -> ViewFilter.OnChange
+- SearchAccessory.tooltip -> ViewFilter.Tooltip
+- SearchAccessory.value -> ViewFilter.Value
+- ShellOptions.timeout -> ShellOptions.TimeoutMs
+- System.capabilities -> System.HasCapability
+- System.capabilities.has -> System.HasCapability
+- System.labels.keyboardSettings -> SystemLabels.KeyboardSettings
+- System.labels.openSystemSettings -> SystemLabels.OpenSystemSettings
+- System.labels.previewFile -> SystemLabels.PreviewFile
+- System.labels.revealInFileManager -> SystemLabels.RevealInFileManager
+- TemplateOptions.returnCursor -> Text.Template (Template always returns the cursor)
+- TemplateOptions.returnResult -> Text.Template (Template always returns the result)
+- TemplateResult.missingVariables -> TemplateResult.Missing
+- View.actionPanelPresentation -> gone (Deprecated and ignored in 1.x)
+- View.actionPanelPresentation='compact' -> gone (Deprecated and ignored in 1.x)
+- View.aspectRatio -> GridSpec.AspectRatio
+- View.columns -> GridSpec.Columns
+- View.content -> EditorSpec.Content
+- View.controls -> CameraSpec.Controls
+- View.detail.placement -> DetailPane.Placement
+- View.detail.visible -> DetailPane.Visible
+- View.deviceId -> CameraSpec.DeviceID
+- View.draft -> EditorSpec.Draft
+- View.fields -> FormSpec.Fields
+- View.format -> EditorSpec.Format
+- View.framing -> CameraSpec.Framing
+- View.html -> WebviewSpec.HTML
+- View.image -> PreviewSpec.Image
+- View.label -> ProgressSpec.Label
+- View.language -> EditorSpec.Language
+- View.layout -> GridSpec.Layout
+- View.messages -> ChatSpec.Messages
+- View.messages.content -> EditorSpec.Content
+- View.messages.role -> ChatMessage.Role
+- View.mirrored -> CameraSpec.Mirrored
+- View.muted -> CameraSpec.Muted
+- View.readOnly -> EditorSpec.ReadOnly
+- View.refresh.action -> Refresh.Ref
+- View.refresh.immediate -> Refresh.Immediate
+- View.refresh.intervalMs -> Refresh.IntervalMs
+- View.refresh.mode -> Refresh.Mode
+- View.searchAccessory -> View.Filter
+- View.searchBarPlaceholder -> View.Placeholder
+- View.showDeviceSwitcher -> CameraSpec.ShowDeviceSwitcher
+- View.steps -> ProgressSpec.Steps
+- View.submitAction -> FormSpec.Submit
+- View.titleFromContent -> EditorSpec.TitleFromLine
+- View.total -> ProgressSpec.Total
+- View.type -> View.Kind
+- View.value -> ProgressSpec.Value
+- View.video -> PreviewSpec.Video
+- View.videoUrl -> PreviewSpec.Video
+- View.webviewPermissions -> WebviewSpec.Permissions
+- View.windowPresentation -> View.WindowCompact
+- View.windowPresentation='compact' -> View.WindowCompact
+- ViewPatch.items.id -> Item.ID
+- WindowApplyResult.changed -> ApplyResult.Changed
+- WindowApplyResult.frame -> ApplyResult.Frame
+- WindowApplyResult.frame.height -> Rect.Height
+- WindowApplyResult.frame.width -> Rect.Width
+- WindowApplyResult.frame.x -> Rect.X
+- WindowApplyResult.frame.y -> Rect.Y
+- WindowApplyResult.message -> ApplyResult.Message
+- WindowApplyResult.ok -> ApplyResult.OK
+- WindowApplyResult.outcome -> ApplyResult.Outcome
+- WindowApplyResult.reason -> ApplyResult.Reason
+- WindowApplyResult.reason='not-resizable' -> value:unapplied (A window that cannot resize reports unapplied, with less specific copy)
+- WindowDimension.unit -> Dimension.Unit
+- WindowDimension.value -> Dimension.Value
+- WindowHandle.id -> WindowHandle
+- WindowInfo.frame.height -> Rect.Height
+- WindowInfo.frame.width -> Rect.Width
+- WindowInfo.frame.x -> Rect.X
+- WindowInfo.frame.y -> Rect.Y
+- WindowInfo.isFullScreen -> WindowInfo.FullScreen
+- WindowInfo.isMinimized -> WindowInfo.Minimized
+- WindowLayoutSpec#kind=center.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=display.direction -> WindowLayout.Direction
+- WindowLayoutSpec#kind=display.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=edge.edge -> WindowLayout.Edge
+- WindowLayoutSpec#kind=edge.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=exact.height -> ExactFrame.Height
+- WindowLayoutSpec#kind=exact.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=exact.width -> ExactFrame.Width
+- WindowLayoutSpec#kind=exact.x -> ExactFrame.X
+- WindowLayoutSpec#kind=exact.y -> ExactFrame.Y
+- WindowLayoutSpec#kind=fraction.cycleGroup -> WindowLayout.CycleGroup
+- WindowLayoutSpec#kind=fraction.height -> Rect.Height
+- WindowLayoutSpec#kind=fraction.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=fraction.width -> Rect.Width
+- WindowLayoutSpec#kind=fraction.x -> Rect.X
+- WindowLayoutSpec#kind=fraction.y -> Rect.Y
+- WindowLayoutSpec#kind=maximize-height.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=maximize-width.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=resize-step.direction -> WindowLayout.Direction
+- WindowLayoutSpec#kind=resize-step.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=resize-step.step -> WindowLayout.Step
+- WindowLayoutSpec#kind=restore.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=scaled-center.heightFraction -> WindowLayout.HeightFraction
+- WindowLayoutSpec#kind=scaled-center.kind -> WindowLayout.Kind
+- WindowLayoutSpec#kind=scaled-center.maxHeight -> WindowLayout.MaxHeight
+- WindowLayoutSpec#kind=scaled-center.maxWidth -> WindowLayout.MaxWidth
+- WindowLayoutSpec#kind=scaled-center.widthFraction -> WindowLayout.WidthFraction
+- WindowLayoutSpec#kind=toggle-full-screen.kind -> WindowLayout.Kind
+- WindowManagementOptions.outerGap.bottom -> Edges
+- WindowManagementOptions.outerGap.left -> Edges
+- WindowManagementOptions.outerGap.right -> Edges
+- WindowManagementOptions.outerGap.top -> Edges
+- WindowRestoreDescriptor.options -> WindowRestore.Options
+- WindowRestoreDescriptor.view -> WindowRestore.View
+- LogEntry.timestamp -> LogEntry.TimestampMs
+- LogSource='main' -> gone (Go has one host process)
+- LogSource='renderer' -> gone (Go has no renderer process)
+- NevermindExtension.actions -> CommandProvider.Commands (Dynamic durable actions are Commands)
+- NevermindExtension.commands -> CommandProvider.Commands
+- NevermindExtension.id -> Identity.ID
+- NevermindExtension.menuBar -> MenuBarProvider
+- NevermindExtension.permissions -> Manifest.Capabilities
+- NevermindExtension.restoreWindow -> WindowRestorer.RestoreWindow
+- NevermindExtension.rootItems -> RootProvider.RootItems
+- NevermindExtension.searchItems -> SearchProvider.SearchItems
+- NevermindExtension.title -> Identity.Title
+- RecentLogOptions.extensionId -> LogQuery.ExtensionID
+- RecentLogOptions.level -> LogQuery.Level
+- RecentLogOptions.limit -> LogQuery.Limit
+- RecentLogOptions.query -> LogQuery.Query
+- RecentLogOptions.sinceMs -> LogQuery.SinceMs
+- RecentLogOptions.source -> LogQuery.Source
+- ShortcutScope='global' -> gone (Deprecated in 1.x)
+- ShortcutScope='local' -> gone (Deprecated in 1.x)

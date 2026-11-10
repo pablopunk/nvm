@@ -4,6 +4,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -35,7 +36,7 @@ func extensionRowActions(p *App, ctl extensionController, l manager.Listing) []s
 	}})
 	if p.ownedByBuilder(l.ID) {
 		actions = append(actions, search.Action{Title: "Edit with AI", Run: func(h search.Host) {
-			h.Push(p.builderEditView(l.ID))
+			h.Push(p.startedChatView("builder", "", l.ID))
 		}})
 	}
 	if l.Enabled {
@@ -43,12 +44,15 @@ func extensionRowActions(p *App, ctl extensionController, l manager.Listing) []s
 			setExtensionEnabled(ctl, l.ID, false, h)
 		}})
 	}
+	if l.Enabled && p.declaresMenuBar(l.ID) {
+		actions = append(actions, p.menuBarVisibilityAction(l.ID))
+	}
 	return append(actions,
-		search.Action{Title: "Show in Folder", Label: "⌃↵", Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
+		search.Action{Title: "Show in Folder", Label: palette.KeyLabel("⌃↵"), Mods: mod, Key: ui.KeyEnter, Run: func(h search.Host) {
 			h.Hide()
 			mygo.Shell.ShowItemInFolder(l.Dir)
 		}},
-		search.Action{Title: "Delete", Label: "⌃⌫", Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
+		search.Action{Title: "Delete", Label: palette.KeyLabel("⌃⌫"), Mods: mod, Key: ui.KeyBackspace, Dismiss: search.DismissNever, Run: func(h search.Host) {
 			deleteExtension(ctl, l.ID, h)
 		}},
 	)

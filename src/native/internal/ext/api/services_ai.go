@@ -3,7 +3,7 @@ package api
 import "encoding/json"
 
 // ModelTier selects a route by intent. The backend maps tiers to models and applies the user's
-// entitlement. Extension code never names a model.
+// entitlement. Extension code never names a model. The empty tier means smart.
 type ModelTier string
 
 const (
@@ -11,8 +11,8 @@ const (
 	ModelFast  ModelTier = "fast"
 )
 
-// Attachment is context added to a prompt. Kind is text, image or file; As selects how a file
-// is read: text, image, metadata or ocr.
+// Attachment is context added to a prompt. Kind is text, image or file. Path names a file on disk and must be
+// absolute; DataURL carries an image inline. As selects how a file is read: text, image, metadata or ocr.
 type Attachment struct {
 	Kind     string   `json:"kind"`
 	Title    string   `json:"title,omitempty"`
@@ -32,8 +32,20 @@ type AIOptions struct {
 	Attachments []Attachment `json:"attachments,omitempty"`
 }
 
-// AIStreamEvent is one streaming event. Type is start, delta, tool-start, tool-end, done,
-// aborted or error.
+// Stream event types. They carry the names the 1.x extension API uses, so an extension ported from 1.x
+// keeps its switch statements. The host never sends a tool event: extensions cannot run tools.
+const (
+	AIEventStart     = "start"
+	AIEventDelta     = "delta"
+	AIEventToolStart = "tool_start"
+	AIEventToolEnd   = "tool_end"
+	AIEventDone      = "done"
+	AIEventAborted   = "aborted"
+	AIEventError     = "error"
+)
+
+// AIStreamEvent is one streaming event. Type is one of the AIEvent constants. Text is set on delta events,
+// Message on error events.
 type AIStreamEvent struct {
 	Type    string `json:"type"`
 	Text    string `json:"text,omitempty"`
@@ -42,8 +54,10 @@ type AIStreamEvent struct {
 	Message string `json:"message,omitempty"`
 }
 
-// AIStream delivers events on Events and the full text from Result. Events is closed when the
-// stream ends. Cancelling the Context's Std() aborts the stream.
+// AIStream delivers events on Events and the full reply from Result. Events starts with an AIEventStart and
+// ends with exactly one terminal event (done, aborted or error), then the channel is closed. The channel is
+// buffered; a consumer that falls far behind loses deltas, but Result still holds the whole reply. Result
+// blocks until the stream ends and returns an error for a failed or aborted reply. Abort ends the stream.
 type AIStream interface {
 	Events() <-chan AIStreamEvent
 	Result() (string, error)
@@ -56,13 +70,16 @@ type AttachmentBuilder interface {
 	Text(text, title string) Attachment
 	Image(pathOrDataURL string, title string, ocr bool) Attachment
 	File(path string, as string, title string) Attachment
+	// SelectedText uses desktop.selection; no selected text returns ErrNotAvailable.
 	SelectedText(title string) (Attachment, error)
+	// SelectedFiles uses desktop.files; no selected files returns an empty list. No file contents are read here.
 	SelectedFiles(as string) ([]Attachment, error)
 	Clipboard(as string) ([]Attachment, error)
 	OCRImage(path string, title string) (Attachment, error)
 }
 
-// AISession is a conversation scoped to one extension. Session ids are local to the extension.
+// AISession is a conversation scoped to one extension. Session ids are local to the extension. The session
+// keeps its last turns; Reset forgets them.
 type AISession interface {
 	Ask(prompt string, options AIOptions) (string, error)
 	Stream(prompt string, options AIOptions) (AIStream, error)
@@ -85,13 +102,14 @@ type DecisionQuestion struct {
 	Question string               `json:"question"`
 	// Options has two to 32 distinct values for choice questions.
 	Options []string `json:"options,omitempty"`
-	// Min and Max bound score questions; at most ten levels. Labels name levels inside the range.
-	Min    int               `json:"min,omitempty"`
-	Max    int               `json:"max,omitempty"`
+	// Min and Max bound score questions; at most ten levels. Pointers, so a minimum of zero is sent.
+	Min    *int              `json:"min,omitempty"`
+	Max    *int              `json:"max,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
 }
 
-// DecisionRequest carries the shared input (JSON text, object or array) and the questions.
+// DecisionRequest carries the shared input (a JSON string, object or array) and the questions. Images in
+// Attachments are never dropped: an unreadable or unsupported one fails the call.
 type DecisionRequest struct {
 	Input       json.RawMessage    `json:"input"`
 	Attachments []Attachment       `json:"attachments,omitempty"`
@@ -121,23 +139,72 @@ type DecisionResult struct {
 	} `json:"usage"`
 }
 
-// AI is the model access surface. Calls are quota-limited per extension and need the ai capability
-// for review. Images are never silently dropped: an unsupported image route fails the call.
+// AI is the model access surface. Calls are quota-limited per extension (30 calls a minute: ask, stream,
+// decide and session calls) and need the ai capability for review. Images are never silently dropped: an
+// unsupported image route fails the call.
 type AI interface {
 	IsAvailable() (bool, error)
 	Decide(request DecisionRequest) (DecisionResult, error)
 	Ask(prompt string, options AIOptions) (string, error)
+	// Fast sends a one-shot prompt through the host's fast route. System instructions stay separate from the prompt.
+	Fast(prompt, system string) (string, error)
 	Stream(prompt string, options AIOptions) (AIStream, error)
 	// Prepare warms the model route before latency-sensitive work.
 	Prepare(options AIOptions) error
 	Attachments() AttachmentBuilder
 	Session(id string, options AIOptions) (AISession, error)
+	// Chats reads and opens the host's chats: the conversations the AI Chats page lists. Each is kept by the host.
+	Chats() AIChats
+}
+
+// ChatAction is the payload of an ActionChat. ChatID names the chat; Message and Images are what a Continue sends; Prompt
+// is the first message of a New chat; Tier is the tier a Tier change selects.
+type ChatAction struct {
+	ChatID  string      `json:"chatId,omitempty"`
+	Message string      `json:"message,omitempty"`
+	Images  []ChatImage `json:"images,omitempty"`
+	Prompt  string      `json:"prompt,omitempty"`
+	Tier    ModelTier   `json:"tier,omitempty"`
+	// Replace, on a New, shows the new chat in place of the page the action runs from.
+	Replace bool `json:"replace,omitempty"`
+}
+
+// BuilderAction is the payload of an ActionBuilder. ChatID names a builder chat, Prompt starts or seeds one, and
+// ExtensionID names the extension a tweak changes.
+type BuilderAction struct {
+	ChatID      string `json:"chatId,omitempty"`
+	Prompt      string `json:"prompt,omitempty"`
+	ExtensionID string `json:"extensionId,omitempty"`
+}
+
+// ChatDetail is one chat with its transcript, as the host keeps it.
+type ChatDetail struct {
+	ChatSummary
+	Messages []ChatMessage `json:"messages"`
+}
+
+// AIChats lists chats and returns the actions that open, start, continue, stop, re-tier or remove them. Reads are answered
+// by the host; the actions run when the user picks them, on the palette.
+type AIChats interface {
+	List() []ChatSummary
+	Get(chatID string) (ChatDetail, bool)
+	New(prompt string) Action
+	Open(chatID string) Action
+	Continue(chatID, message string) Action
+	Stop(chatID string) Action
+	Tier(chatID string, tier ModelTier) Action
+	Remove(chatID string) Action
 }
 
 // ChatSummary is one builder conversation. Only built-in extensions may call AIBuilder.
 type ChatSummary struct {
-	ID             string   `json:"id"`
-	Title          string   `json:"title,omitempty"`
+	ID string `json:"id"`
+	// Kind is conversation, builder or proofread.
+	Kind  string    `json:"kind,omitempty"`
+	Tier  ModelTier `json:"tier,omitempty"`
+	Title string    `json:"title,omitempty"`
+	// ExtensionID is the extension a builder chat wrote or was bound to, empty for other chats.
+	ExtensionID    string   `json:"extensionId,omitempty"`
 	Query          string   `json:"query,omitempty"`
 	Status         string   `json:"status,omitempty"`
 	CreatedAtMs    int64    `json:"createdAtMs,omitempty"`
@@ -163,6 +230,11 @@ type AIBuilder interface {
 	OpenChatsList(title string) Action
 	ListChats() []ChatSummary
 	CleanupExpiredConversations() (removed int, err error)
+	GetChat(chatID string) (ChatDetail, bool)
+	// ExtensionPreview is what the extension shows now: its root rows and its commands, as a list view with the
+	// side-preview presentation. It is the Side of a builder chat's transcript, and false when the extension is not
+	// installed.
+	ExtensionPreview(extensionID string) (View, bool)
 }
 
 // Ownership says which builder conversation wrote which extension file. It is host-only, and it is

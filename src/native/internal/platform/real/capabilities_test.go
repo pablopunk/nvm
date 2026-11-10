@@ -61,20 +61,37 @@ func TestFocusReturnNeedsAnX11SessionAndXdotool(t *testing.T) {
 	}
 }
 
-func TestTextRecognitionIsOnMacOSAndLinuxWithTesseractOnly(t *testing.T) {
+func TestTextCapabilitiesFollowTheAssetsAndTheScreenTool(t *testing.T) {
+	recognize, capture := platform.CapabilityTextRecognize, platform.CapabilityScreenCapture
+	cases := []struct {
+		hasOCR, canCapture bool
+		want               []platform.Capability
+	}{
+		{false, false, nil},
+		{true, false, []platform.Capability{recognize}},
+		{false, true, []platform.Capability{capture}},
+		{true, true, []platform.Capability{recognize, capture}},
+	}
+	for _, test := range cases {
+		if got := textCapabilities(test.hasOCR, test.canCapture); !reflect.DeepEqual(got, test.want) {
+			t.Fatalf("assets=%t capture=%t: got %v, want %v", test.hasOCR, test.canCapture, got, test.want)
+		}
+	}
+}
+
+func TestScreenCaptureIsOnMacOSAndOnLinuxWithATool(t *testing.T) {
 	none := func(string) bool { return false }
-	withTesseract := func(name string) bool { return name == tesseractBinary }
-	if got := textCapabilities("windows", withTesseract); len(got) != 0 {
-		t.Fatalf("windows = %v, want no text capabilities", got)
+	scrot := func(name string) bool { return name == "scrot" }
+	x11 := func(name string) string {
+		if name == "DISPLAY" {
+			return ":0"
+		}
+		return ""
 	}
-	if got := textCapabilities("linux", none); len(got) != 0 {
-		t.Fatalf("linux without tesseract = %v", got)
+	if !screenCaptureCapable("darwin", x11, none) || screenCaptureCapable("windows", x11, scrot) {
+		t.Fatal("macOS always captures and Windows never does")
 	}
-	if got := textCapabilities("linux", withTesseract); !reflect.DeepEqual(got, []platform.Capability{platform.CapabilityTextRecognize}) {
-		t.Fatalf("linux with tesseract = %v, want text recognition only", got)
-	}
-	want := []platform.Capability{platform.CapabilityTextRecognize, platform.CapabilityScreenCapture}
-	if got := textCapabilities("darwin", none); !reflect.DeepEqual(got, want) {
-		t.Fatalf("darwin = %v, want %v", got, want)
+	if screenCaptureCapable("linux", x11, none) || !screenCaptureCapable("linux", x11, scrot) {
+		t.Fatal("Linux captures only with a tool")
 	}
 }

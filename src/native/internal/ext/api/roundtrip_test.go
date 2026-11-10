@@ -31,7 +31,7 @@ func wireSamples() []namedSample {
 	list.Sections = []ItemSection{{Title: "Cities", Items: []Item{{ID: "london", Title: "London"}}}}
 	list.Refresh = &Refresh{IntervalMs: 60000, Mode: PatchMerge, Immediate: true, Ref: &ActionRef{ID: "tick"}}
 	list.Pagination = &Pagination{HasMore: true, PageSize: 50, Next: &ActionRef{ID: "more"}}
-	list.SearchAccessory = &SearchAccessory{ID: "zone", Options: []SearchAccessoryOption{{Title: "All", Value: "all"}}}
+	list.Filter = &ViewFilter{ID: "zone", Options: []ViewFilterOption{{Title: "All", Value: "all"}}}
 	list.Detail = &DetailPane{Placement: "side", Visible: boolPtr(true)}
 	list.ActionPanel = Panel(Section("Clock", Run("settings", "Settings", nil)))
 
@@ -117,7 +117,7 @@ func wireSamples() []namedSample {
 		{"shell-result", ShellResult{Stdout: "up 3 days", ExitCode: 0}},
 		{"ocr-result", OCRResult{Text: "Invoice 42", Confidence: 0.93, Blocks: []OCRBlock{{Text: "Invoice", Box: &Rect{Width: 10, Height: 4}}}}},
 		{"ai-options", AIOptions{Model: ModelFast, System: "Be brief.", Attachments: []Attachment{{Kind: "text", Text: "ctx", Title: "Selection"}}}},
-		{"decision-request", DecisionRequest{Input: json.RawMessage(`"hello"`), Questions: []DecisionQuestion{{ID: "q1", Type: DecisionScore, Question: "Urgency?", Min: 1, Max: 5}}}},
+		{"decision-request", DecisionRequest{Input: json.RawMessage(`"hello"`), Questions: []DecisionQuestion{{ID: "q1", Type: DecisionScore, Question: "Urgency?", Min: intPtr(1), Max: intPtr(5)}}}},
 		{"decision-result", DecisionResult{ID: "d1", Model: "route", Answers: map[string]DecisionAnswer{"q1": {Type: DecisionPredicate, Flag: true, Probability: 0.8}}}},
 		{"chat-summary", ChatSummary{ID: "c1", Title: "Build clock", ExtensionFiles: []string{"clock.go"}}},
 	}

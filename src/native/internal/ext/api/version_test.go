@@ -39,7 +39,7 @@ func TestCheckCompatibilityAcceptsSameMajorAndOlderMinor(t *testing.T) {
 }
 
 func TestCurrentVersionIsStableAndFormats(t *testing.T) {
-	if Current.String() != "1.0" {
-		t.Fatalf("Current = %s, want 1.0 for the first design", Current)
+	if Current.String() != "1.1" {
+		t.Fatalf("Current = %s, want 1.1 for operation requirements", Current)
 	}
 }

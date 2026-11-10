@@ -80,8 +80,8 @@ func TestRootTableWithRecordedUsageMatchesExpected(t *testing.T) {
 
 // TestRecordedUsageReordersTheRoot checks the reordering the second table is meant to show, against the first
 // table: Calendar and Calculator both start with "cal", so they tie on the match and the usage decides. Chosen for
-// "cal", Calendar moves above Calculator, which the golden order lists first. A row chosen at the root is listed
-// there, and an app never chosen is not.
+// "cal", Calendar moves above Calculator, which the golden order lists first. At the empty root every app is listed,
+// and an app chosen there ranks above one never chosen.
 func TestRecordedUsageReordersTheRoot(t *testing.T) {
 	calendar := indexOfRow(t, learnedUsageFixture(t), "cal", "Calendar")
 	calculator := indexOfRow(t, learnedUsageFixture(t), "cal", "Calculator")
@@ -91,11 +91,10 @@ func TestRecordedUsageReordersTheRoot(t *testing.T) {
 	if plain := indexOfRow(t, rootTableFixture(t), "cal", "Calendar"); plain < indexOfRow(t, rootTableFixture(t), "cal", "Calculator") {
 		t.Fatalf("without usage Calculator should come first: calendar %d", plain)
 	}
-	if indexOfRow(t, learnedUsageFixture(t), "", "Terminal") < 0 {
-		t.Fatal("Terminal was chosen and should be listed at the root")
-	}
-	if indexOfRow(t, learnedUsageFixture(t), "", "Firefox") >= 0 {
-		t.Fatal("Firefox was not chosen in this learner and should not be listed at the root")
+	terminal := indexOfRow(t, learnedUsageFixture(t), "", "Terminal")
+	firefox := indexOfRow(t, learnedUsageFixture(t), "", "Firefox")
+	if terminal < 0 || firefox < 0 || terminal >= firefox {
+		t.Fatalf("Terminal was chosen and should rank above Firefox, which was not: terminal %d, firefox %d", terminal, firefox)
 	}
 }
 

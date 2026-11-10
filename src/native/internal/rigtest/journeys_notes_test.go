@@ -37,7 +37,7 @@ func waitClipboardEquals(t *testing.T, app *App, want string) {
 
 // TestJourneyJ09SnippetCreateFindAndCopy is the J09 smoke: a snippet is created through the snippets form (name,
 // keyword, content), found at the root by its keyword, and Enter puts its text on the clipboard. The rig has no
-// paste gesture (the real paster reports ErrUnsupported), so the text is copied, and the copy is what is asserted.
+// paste gesture into another app, so the snippet's Copy to Clipboard row is what is asserted.
 // Editing and deleting, and the paste into another app, are not covered yet.
 func TestJourneyJ09SnippetCreateFindAndCopy(t *testing.T) {
 	app := Launch(t, Options{})
@@ -54,11 +54,29 @@ func TestJourneyJ09SnippetCreateFindAndCopy(t *testing.T) {
 	must(t, app.Key("Return")) // the first row creates a snippet
 	_, err = app.WaitFor("Create Snippet", elementWait)
 	must(t, err)
+	must(t, app.Key("Return")) // edit Name, the first row: the field is typed in the search field
 	must(t, app.Type(name))
-	must(t, app.Key("Tab"))
+	_, err = app.WaitFor(name, elementWait)
+	must(t, err)
+	must(t, app.Key("Return")) // set Name
+	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.Key("Down")) // Keyword
+	must(t, app.Key("Return"))
 	must(t, app.Type(";rig"))
-	must(t, app.Key("Tab"))
+	_, err = app.WaitFor(";rig", elementWait)
+	must(t, err)
+	must(t, app.Key("Return")) // set Keyword
+	must(t, app.WaitForTogether(elementWait, "Name", "Keyword (optional", "Content"))
+	must(t, app.Key("Down")) // Content opens the text editor
+	must(t, app.Key("Return"))
+	_, err = app.WaitFor("Save   esc Back", elementWait)
+	must(t, err)
 	must(t, app.Type(nonce))
+	_, err = app.WaitFor(nonce, elementWait)
+	must(t, err)
+	must(t, app.Key("ctrl+Return")) // the editor's save returns to the form
+	_, err = app.WaitFor("Create Snippet", elementWait)
+	must(t, err)
 	must(t, app.Key("ctrl+Return")) // save: the form closes back to the list
 	_, err = app.WaitFor(name, elementWait)
 	must(t, err)
@@ -70,7 +88,11 @@ func TestJourneyJ09SnippetCreateFindAndCopy(t *testing.T) {
 	must(t, err)
 	shoot(t, app, "j09-2-found-by-keyword")
 
-	must(t, app.Key("Return")) // the first action: copy, since the rig has no paste gesture
+	// Enter pastes where the platform can send the paste gesture, and the rig's X11 has xdotool, so the copy is the
+	// menu's Copy to Clipboard row, the second action after Paste.
+	must(t, app.Key(actionMenuKey))
+	must(t, app.Key("Down"))
+	must(t, app.Key("Return"))
 	waitClipboardEquals(t, app, nonce)
 }
 
@@ -84,11 +106,11 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 	nonce := fmt.Sprintf("Rig note %d", time.Now().UnixNano())
 
 	must(t, app.SummonPalette())
-	must(t, app.Type("Quick Notes"))
-	_, err := app.WaitFor("Quick Notes", elementWait)
+	must(t, app.Type("Floating Notes"))
+	_, err := app.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Search Quick Notes", elementWait)
+	_, err = app.WaitFor("Find a note", elementWait)
 	must(t, err)
 	must(t, app.Key("Return")) // the first row starts a note
 	_, err = app.WaitFor("Untitled note", elementWait)
@@ -106,11 +128,11 @@ func TestJourneyJ10NoteSurvivesKillAndRelaunch(t *testing.T) {
 
 	relaunched := Launch(t, Options{Home: home, Run: "relaunch"})
 	must(t, relaunched.SummonPalette())
-	must(t, relaunched.Type("Quick Notes"))
-	_, err = relaunched.WaitFor("Quick Notes", elementWait)
+	must(t, relaunched.Type("Floating Notes"))
+	_, err = relaunched.WaitFor("Floating Notes", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Return"))
-	_, err = relaunched.WaitFor("Search Quick Notes", elementWait)
+	_, err = relaunched.WaitFor("Find a note", elementWait)
 	must(t, err)
 	must(t, relaunched.Key("Down")) // the newest note is the row after "New Note"
 	must(t, relaunched.Key("Return"))

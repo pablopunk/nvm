@@ -8,9 +8,16 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
+// SavedRecordingNotice follows a failure whose recording was kept, so the user knows where to retry it.
+const SavedRecordingNotice = "Your recording was saved. Open Dictation History to retry."
+
 // FailureMessage says what went wrong in a dictation, in words the user can act on. It is the single copy source
 // for dictation failures, so the indicator, the toast and the account notice agree.
 func FailureMessage(err error) string {
+	var saved *SavedError
+	if errors.As(err, &saved) {
+		return FailureMessage(saved.Err) + " " + SavedRecordingNotice
+	}
 	if errors.Is(err, ErrCancelled) {
 		return ""
 	}
@@ -23,6 +30,9 @@ func FailureMessage(err error) string {
 	if notice, ok := auth.SpendCapNoticeFromError(err); ok {
 		return notice.Message
 	}
+	if errors.Is(err, ErrNotReady) {
+		return "The microphone did not start picking up sound. Check that it is connected, then try again."
+	}
 	if message, ok := microphoneFailureMessage(err); ok {
 		return message
 	}
@@ -34,7 +44,7 @@ func microphoneFailureMessage(err error) (string, bool) {
 	case errors.Is(err, platform.ErrNotFound):
 		return "No microphone was found. Connect one, or choose another in Dictation settings.", true
 	case errors.Is(err, platform.ErrDenied):
-		return "Allow Nevermind to use the microphone in System Settings to dictate.", true
+		return "Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.", true
 	case errors.Is(err, platform.ErrUnsupported):
 		return "Dictation is not available on this system yet.", true
 	}

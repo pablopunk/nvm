@@ -12,17 +12,22 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/diag/analytics"
+	"github.com/pablopunk/nvm/native/internal/diag/timing"
 	"github.com/pablopunk/nvm/native/internal/logx"
-	"github.com/pablopunk/nvm/native/internal/palette"
-	paldiag "github.com/pablopunk/nvm/native/internal/palette/diagnostics"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// releaseBuild is "true" in release builds, the only builds with an analytics endpoint. It is set at link time, so a
-// development build never sends.
+// releaseBuild is the legacy link-time release marker. Packaged builds also send from preview packaging; unpackaged
+// development builds remain endpoint-free.
 var releaseBuild = "false"
+
+// analyticsAppVersion is linked to the packaged MyGo version; development uses the backend client version.
+var analyticsAppVersion = nativeClientVersion
+
+// analyticsSourceCommit is linked from packaging provenance; development builds omit it.
+var analyticsSourceCommit = ""
 
 // quitFlushTimeout bounds the diagnostics sent while the app quits, so an unreachable endpoint cannot hold the quit.
 const quitFlushTimeout = 2 * time.Second
@@ -35,36 +40,55 @@ const logDirectoryName = "logs"
 func (p *App) openDiagnostics(ports platform.Ports) {
 	openLogFile(ports)
 	p.recorder = diag.NewRecorder(searchClock, logx.NewRedactor())
+	osRelease := availableOSRelease(ports.OSRelease)
 	p.analytics = analytics.New(analytics.Config{
-		Endpoint:  analyticsEndpoint(),
+		Endpoint:  analyticsEndpoint(packagedBuild()),
 		APIKey:    analytics.IngestKey,
 		Transport: ports.HTTP,
 		FS:        ports.FS,
 		Clock:     ports.Clock,
-		Dir:       configDir(),
-		Version:   nativeClientVersion,
+		Dir:       dataDir(),
+		Version:   analyticsAppVersion,
+		Release:   analyticsReleaseIdentity(analyticsAppVersion, analyticsSourceCommit, runtime.GOOS),
 		OS:        runtime.GOOS,
+		OSRelease: osRelease,
 		Arch:      runtime.GOARCH,
-		Consent:   !p.S.DiagnosticsOff,
+		Consent:   !p.diagnosticsOff(),
 	})
+	p.commandTiming = timing.New(ports.Clock, p.analytics)
 	p.failures = analytics.NewFailureReporter(diag.NewReporter(logx.Default(), p.recorder), p.analytics, p.recorder)
 	p.startAnalytics()
 }
 
+// availableOSRelease omits the optional kernel release when the platform does not provide it or cannot read it.
+func availableOSRelease(source platform.OSRelease) string {
+	if source == nil {
+		return ""
+	}
+	release, err := source.KernelRelease()
+	if err != nil {
+		return ""
+	}
+	return release
+}
+
 // openLogFile writes the log to a size-rotated file under the config directory and mirrors it to stderr, so a
-// development run still shows it in the terminal.
+// development run still shows it in the terminal. The standard library's log lines go to the same file at warn, so
+// an app launched from Finder, whose stderr goes nowhere, keeps them.
 func openLogFile(ports platform.Ports) {
-	logger, err := logx.New(ports.FS, ports.Clock, filepath.Join(configDir(), logDirectoryName), logx.Options{Stderr: os.Stderr})
+	logger, err := logx.New(ports.FS, ports.Clock, filepath.Join(dataDir(), logDirectoryName), logx.Options{Stderr: os.Stderr})
 	if err != nil {
 		log.Println("log file unavailable:", err)
 		return
 	}
 	logx.SetDefault(logger)
+	log.SetFlags(0)
+	log.SetOutput(logger.Writer(logx.Warn))
 }
 
-// analyticsEndpoint is the ingest route in release builds, and nowhere otherwise.
-func analyticsEndpoint() string {
-	if releaseBuild == "true" {
+// analyticsEndpoint enables ingest for packaged builds and legacy release builds only.
+func analyticsEndpoint(packaged bool) string {
+	if packaged || releaseBuild == "true" {
 		return analytics.IngestEndpoint
 	}
 	return ""
@@ -102,19 +126,17 @@ func (p *App) installFailureReporting(flushOnPanic func()) {
 // that set is counted without an id.
 func (p *App) trackedRun(cmd command) func(h search.Host) {
 	return func(h search.Host) {
+		if cmd.Complete != nil {
+			variant, _ := analytics.CommandVariant(cmd.Title)
+			trackedNativeRun(p.commandTiming, variant, func(ctx context.Context, complete func(analytics.OperationOutcome)) {
+				cmd.Complete(ctx, h, complete)
+			})(context.Background())
+			return
+		}
 		id, _ := analytics.CommandVariant(cmd.Title)
 		p.analytics.FeatureUsed(analytics.FeatureCommandRun, id)
 		cmd.Run(h)
 	}
-}
-
-// diagnosticsView is the Recent Errors page over the app's recorder.
-func (p *App) diagnosticsView() *palette.View {
-	var records paldiag.Records = paldiag.Static{}
-	if p.recorder != nil {
-		records = p.recorder
-	}
-	return paldiag.View(records, p.reportingState, p.copyText)
 }
 
 // reportingState says how records are reported now, for the page's labels.
@@ -122,25 +144,23 @@ func (p *App) reportingState() analytics.Reporting {
 	return p.analytics.Reporting()
 }
 
-// reportProblem records a problem report, shows its reference, and lists the recent errors where it appears.
-func (p *App) reportProblem(h search.Host) {
-	ref := analytics.ReportProblem(p.recorder, p.analytics)
-	h.Toast("Problem report " + ref + " recorded")
-	h.Push(p.diagnosticsView())
-}
-
 // toggleDiagnostics flips "Send Technical Diagnostics". The client gets the new consent at once, so a withdrawal drops
 // what is queued before the next batch goes out.
 func (p *App) toggleDiagnostics() {
-	p.S.DiagnosticsOff = !p.S.DiagnosticsOff
-	p.S.save()
-	p.analytics.SetConsent(!p.S.DiagnosticsOff)
+	off := !p.diagnosticsOff()
+	if err := p.setDiagnosticsOff(off); err != nil {
+		log.Println("diagnostics setting not saved:", err)
+	}
+	p.updateAnalyticsConsent(!off)
 }
 
-// diagnosticsLabel is the Settings accessory for the consent switch.
-func diagnosticsLabel(off bool) string {
-	if off {
-		return "Off"
+// updateAnalyticsConsent applies a user-facing consent change and identifies the current owner on opt-in.
+func (p *App) updateAnalyticsConsent(on bool) {
+	if p.analytics == nil {
+		return
 	}
-	return "On"
+	p.analytics.SetConsent(on)
+	if on {
+		p.observeAnalyticsOwner()
+	}
 }

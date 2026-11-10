@@ -27,14 +27,14 @@ type SearchProvider interface {
 	SearchItems(ctx Context, query string) ([]Item, error)
 }
 
-// ActionHandler runs ActionRun actions, command bodies, form submits, editor saves, refreshes and
-// pagination. Dispatch is by Invocation.Ref.ID, so one extension has one switch statement.
+// ActionHandler runs actions. Return Source-backed views before slow I/O;
+// DataLoader fills them after paint. Dispatch uses Invocation.Ref.ID for commands, forms, saves and refreshes.
 type ActionHandler interface {
 	RunAction(ctx Context, in Invocation) (Result, error)
 }
 
-// DataLoader fills a view whose Source names a loader. It is called in the background; the host
-// patches the visible view when it returns.
+// DataLoader fills Source-backed views after paint. The host shows loading feedback and promotes successful results
+// into the Source snapshot; return the view immediately from RunAction and perform slow I/O here.
 type DataLoader interface {
 	LoadItems(ctx Context, loader string) ([]Item, error)
 }
@@ -58,6 +58,37 @@ type MenuBarProvider interface {
 	MenuBars(ctx Context) ([]MenuBar, error)
 }
 
+// RowActionProvider adds actions to the menu of an installed extension's row, such as Tweak with AI. The host asks each
+// built-in that implements it, after the actions it lists itself. Only built-in extensions may implement it.
+type RowActionProvider interface {
+	RowActions(ctx Context, row ExtensionRow) ([]Action, error)
+}
+
+// ExtensionRow names the row a RowActionProvider adds actions to: an extension's own row, with an empty CommandID, or
+// one of its commands.
+type ExtensionRow struct {
+	ExtensionID string `json:"extensionId"`
+	CommandID   string `json:"commandId,omitempty"`
+	Title       string `json:"title"`
+}
+
+// Keys of the Ref.Args that carry an ExtensionRow in a row-actions invocation.
+const (
+	rowArgExtensionID = "extensionId"
+	rowArgCommandID   = "commandId"
+	rowArgTitle       = "title"
+)
+
+// Args encodes the row as the arguments of the invocation a host sends a RowActionProvider.
+func (r ExtensionRow) Args() map[string]string {
+	return map[string]string{rowArgExtensionID: r.ExtensionID, rowArgCommandID: r.CommandID, rowArgTitle: r.Title}
+}
+
+// RowFromArgs decodes the row a host sent in the arguments of a row-actions invocation.
+func RowFromArgs(args map[string]string) ExtensionRow {
+	return ExtensionRow{ExtensionID: args[rowArgExtensionID], CommandID: args[rowArgCommandID], Title: args[rowArgTitle]}
+}
+
 // Context is the single argument of every handler. It is not serializable: it is the host's
 // in-process service surface. Every accessor is cheap and never blocks on decoration work.
 type Context interface {
@@ -66,6 +97,7 @@ type Context interface {
 	Std() context.Context
 	Launch() LaunchContext
 	Identity() Identity
+	Self() Self
 	Clock() Clock
 
 	Storage() Storage
@@ -77,14 +109,19 @@ type Context interface {
 	Data() Data
 	Network() Network
 	Drafts() Drafts
+	Notes() Notes
 	Clipboard() ClipboardHistory
 	Desktop() Desktop
 	OCR() OCR
 	Dictation() Dictation
 	Shortcuts() Shortcuts
+	Account() Account
 	Indicators() Indicators
+	Scheduler() Scheduler
 	System() System
 	Updates() Updates
+	Diagnostics() Diagnostics
+	Jobs() Jobs
 	AI() AI
 	AIBuilder() AIBuilder
 	Ownership() Ownership
@@ -96,12 +133,21 @@ type Context interface {
 
 // Views refreshes or invalidates the view that is currently visible.
 type Views interface {
-	// Refresh returns an action that re-runs the visible view's Refresh handler.
+	// Refresh returns an action for lists or grids without Search: reload the source or run the Refresh handler. Other views report refresh unavailable.
 	Refresh() Action
 	// Invalidate drops the visible view's data source snapshot so the next open is fresh.
 	Invalidate()
 	// RefreshMenuBar re-renders this extension's menu bar items.
 	RefreshMenuBar()
+	// InvalidateRoot runs this extension's root rows again, so rows it changed show without a new query. Other extensions
+	// keep their rows. It does nothing while the root is not on top; the next time the root shows, these rows run again.
+	// Calls are limited to five at once and 150 a minute per extension; a call over the limit is ignored, so a RootItems
+	// that calls it cannot loop.
+	InvalidateRoot()
+	// RefreshSearch asks the host to search again for query when the palette still shows it; an empty query is the
+	// root. The call returns at once. The host shares one search among the requests that arrive together, and does
+	// nothing for a query the palette no longer shows, so a background source can call it whenever its data arrives.
+	RefreshSearch(query string)
 }
 
 // Navigation builds results that change the palette stack. The host implements them so that tests

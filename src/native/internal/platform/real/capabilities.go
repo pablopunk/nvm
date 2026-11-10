@@ -50,7 +50,10 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 		platform.CapabilityTrayMenu,
 	}
 	if goos == "linux" {
-		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal)
+		supported = append(supported, platform.CapabilityProcessList, platform.CapabilityProcessSignal, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppUninstall)
+	}
+	if goos == "darwin" {
+		supported = append(supported, platform.CapabilityShellQuickLook, platform.CapabilityKeyboardTypeText, platform.CapabilityAppRunning, platform.CapabilityAppQuit, platform.CapabilityAppHide, platform.CapabilityAppUninstall)
 	}
 	if notificationsCapable(goos) {
 		supported = append(supported, platform.CapabilityNotifications)
@@ -61,14 +64,21 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if selectionCopySupported(goos, getenv, hasTool) {
 		supported = append(supported, platform.CapabilitySelectionCopy)
 	}
+	supported = append(supported, platform.CapabilityWindowAlwaysOnTop)
+	if goos != "windows" {
+		supported = append(supported, platform.CapabilityWindowAllSpaces)
+	}
 	if !isWaylandSession(goos, getenv) {
-		supported = append(supported, platform.CapabilityWindowPlacement)
+		supported = append(supported, platform.CapabilityWindowPlacement, platform.CapabilityWindowFrameRestore, platform.CapabilityWindowDisplayRecovery)
 	}
 	if windowManagementCapable(goos, getenv, hasTool) {
 		supported = append(supported, platform.CapabilityWindowManagement)
 	}
 	if isX11FocusSession(goos, getenv) && hasTool("xdotool") {
 		supported = append(supported, platform.CapabilityFocusReturn)
+	}
+	if frontmostAppCapable(goos, getenv, hasTool) {
+		supported = append(supported, platform.CapabilityFrontmostApp)
 	}
 	env := processSystemEnvironment()
 	env.goos = goos
@@ -77,18 +87,17 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
 		supported = append(supported, platform.CapabilityMicrophone)
 	}
-	supported = append(supported, textCapabilities(goos, hasTool)...)
+	supported = append(supported, textCapabilities(ocrAssetsAvailable(), screenCaptureCapable(goos, getenv, hasTool))...)
 	return platform.NewCapabilities(supported...)
 }
 
-// textCapabilities lists the text intents of an OS. Reading text is on macOS (the Vision framework) and on Linux when
-// Tesseract is installed; the screen can be captured only on macOS, so screen text is macOS only.
-func textCapabilities(goos string, hasTool func(string) bool) []platform.Capability {
+// textCapabilities advertises recognition only when its bundled runtime and models are available.
+func textCapabilities(hasOCR, canCaptureScreen bool) []platform.Capability {
 	var supported []platform.Capability
-	if goos == "darwin" || (goos == "linux" && hasTool(tesseractBinary)) {
+	if hasOCR {
 		supported = append(supported, platform.CapabilityTextRecognize)
 	}
-	if goos == "darwin" {
+	if canCaptureScreen {
 		supported = append(supported, platform.CapabilityScreenCapture)
 	}
 	return supported
@@ -121,6 +130,18 @@ func windowManagementCapable(goos string, getenv func(string) string, hasTool fu
 		return true
 	case "linux":
 		return isX11FocusSession(goos, getenv) && hasAllTools(hasTool, x11WindowTools)
+	}
+	return false
+}
+
+// frontmostAppCapable reports whether the app in front can be named: Launch Services on macOS, and on Linux the same
+// X11 tools the window port reads the active window with. Windows has no port for it in this build.
+func frontmostAppCapable(goos string, getenv func(string) string, hasTool func(string) bool) bool {
+	switch goos {
+	case "darwin":
+		return true
+	case "linux":
+		return windowManagementCapable(goos, getenv, hasTool)
 	}
 	return false
 }

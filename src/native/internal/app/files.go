@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"path/filepath"
-	"strconv"
 	"sync"
 	"time"
 
@@ -16,15 +15,13 @@ import (
 	"github.com/pablopunk/nvm/native/internal/safego"
 )
 
-// Sizes of the file service's caches and pools. Icons and thumbnails are small pictures and may be many; previews
-// hold decoded pictures of up to 1024 pixels, so there are few of them.
+// Sizes of the file service's caches and pools. Icons and thumbnails are small pictures and may be many.
 const (
-	fileIconEntries    = 400
-	fileThumbEntries   = 400
-	filePreviewEntries = 8
-	fileWorkers        = 2
-	fileQueue          = 256
-	fileProgressTick   = time.Second
+	fileIconEntries  = 400
+	fileThumbEntries = 400
+	fileWorkers      = 2
+	fileQueue        = 256
+	fileProgressTick = time.Second
 )
 
 // fileDeps are what the file service is built from. The composition root fills it with the real ports; tests fill it
@@ -41,29 +38,35 @@ type fileDeps struct {
 	Redraw     func()
 	Background context.Context
 	Logger     *logx.Logger
+	// Labels are the names of the OS actions the rows offer, such as Show in Finder.
+	Labels platform.ShellLabels
 }
 
 // fileService is the Files feature of the app: the index of file names, the pictures the rows and the preview pane
 // draw, and the desktop actions on a file. The index is served from memory and read without locks; everything that
 // costs I/O or decoding runs on the caches' worker pools, so a view never waits for it.
 type fileService struct {
-	ix         *files.Index
-	fsys       platform.FS
-	shell      platform.Shell
-	clock      platform.Clock
-	clipboard  platform.Clipboard
-	copyFiles  func(paths ...string) error
-	home       string
-	thumbDir   string
-	thumbOnce  sync.Once
-	thumbCache *thumbs.Cache
-	thumbErr   error
-	icons      *asyncCache[*ui.Bitmap]
-	thumbs     *asyncCache[*ui.Bitmap]
-	previews   *asyncCache[*filePreview]
-	redraw     func()
-	ctx        context.Context
-	log        *logx.Logger
+	ix           *files.Index
+	fsys         platform.FS
+	shell        platform.Shell
+	clock        platform.Clock
+	clipboard    platform.Clipboard
+	copyFiles    func(paths ...string) error
+	home         string
+	labels       platform.ShellLabels
+	quickLook    bool
+	thumbDir     string
+	thumbOnce    sync.Once
+	thumbCache   *thumbs.Cache
+	thumbErr     error
+	icons        *asyncCache[*ui.Bitmap]
+	thumbs       *asyncCache[*ui.Bitmap]
+	gridPictures *asyncCache[*ui.Bitmap]
+	gridWarmups  *asyncCache[bool]
+	pictures     platform.FilePictures
+	redraw       func()
+	ctx          context.Context
+	log          *logx.Logger
 }
 
 // newFileService builds the service without starting anything. Start begins the index and the progress ticker.
@@ -94,20 +97,24 @@ func newFileService(d fileDeps) (*fileService, error) {
 		return nil, err
 	}
 	return &fileService{
-		ix:        ix,
-		fsys:      d.Ports.FS,
-		shell:     d.Ports.Shell,
-		clock:     d.Ports.Clock,
-		clipboard: d.Clipboard,
-		copyFiles: d.CopyFiles,
-		home:      d.Home,
-		thumbDir:  d.ThumbDir,
-		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
-		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
-		previews:  newAsyncCache[*filePreview](ctx, fileWorkers, fileQueue, filePreviewEntries, redraw),
-		redraw:    redraw,
-		ctx:       ctx,
-		log:       logger,
+		ix:           ix,
+		fsys:         d.Ports.FS,
+		shell:        d.Ports.Shell,
+		clock:        d.Ports.Clock,
+		clipboard:    d.Clipboard,
+		copyFiles:    d.CopyFiles,
+		home:         d.Home,
+		labels:       d.Labels,
+		quickLook:    d.Ports.Capabilities.Supported(platform.CapabilityShellQuickLook),
+		thumbDir:     d.ThumbDir,
+		icons:        newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, redraw),
+		thumbs:       newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, redraw),
+		gridPictures: newAsyncCache[*ui.Bitmap](ctx, 0, 1, gridPictureEntries, nil),
+		gridWarmups:  newAsyncCache[bool](ctx, gridWarmWorkers, fileQueue, gridWarmEntries, nil),
+		pictures:     d.Ports.FilePictures,
+		redraw:       redraw,
+		ctx:          ctx,
+		log:          logger,
 	}, nil
 }
 
@@ -155,28 +162,6 @@ func (s *fileService) start() {
 // stop closes the index, which saves the latest snapshot. The app calls it when it quits.
 func (s *fileService) stop() {
 	_ = s.ix.Close()
-}
-
-// statusLabel describes the index in the words of the Files view footer.
-func (s *fileService) statusLabel() string {
-	st := s.ix.Status()
-	switch {
-	case !st.Ready:
-		return "Indexing…"
-	case st.Scanning:
-		return "Indexing… " + strconv.Itoa(int(st.ScannedFiles)) + " files"
-	default:
-		return strconv.Itoa(st.Entries) + " files indexed"
-	}
-}
-
-// emptyTitle is the empty state of the Files view: while the first index is still loading, it says so instead of
-// claiming there are no files.
-func (s *fileService) emptyTitle() string {
-	if !s.ix.Status().Ready {
-		return "Indexing…"
-	}
-	return "No files found."
 }
 
 // systemIconKey names the icon a path shares with others: files of one extension share an icon, while folders,

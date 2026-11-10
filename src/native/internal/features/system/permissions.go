@@ -6,8 +6,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// macPrivacyPane is the Privacy & Security settings pane that lists the permissions below.
-const macPrivacyPane = "com.apple.settings.PrivacySecurity.extension"
+// PrivacyPaneID is the Privacy & Security settings pane that lists the permissions below.
+const PrivacyPaneID = "com.apple.settings.PrivacySecurity.extension"
 
 // PermissionRow is one OS permission as the settings view lists it.
 type PermissionRow struct {
@@ -45,7 +45,7 @@ func PermissionRows(goos string, ports platform.Permissions) []PermissionRow {
 		row := entry.row
 		row.State = readState(ports, row.Kind)
 		if goos == "darwin" {
-			row.Pane = macPrivacyPane
+			row.Pane = PrivacyPaneID
 		}
 		rows = append(rows, row)
 	}

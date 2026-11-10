@@ -18,6 +18,10 @@ type DecisionAnswer struct {
 	Choice string
 	// Score is the integer level for a score question.
 	Score float64
+	// Probabilities maps each option of a choice or score answer to its probability, when the model reported them.
+	Probabilities map[string]float64
+	// Confidence is the model's overall confidence in a choice or score answer, when it reported one.
+	Confidence *float64
 }
 
 // decisionWire is the response body of the decision route.
@@ -36,9 +40,11 @@ type decisionUsageWire struct {
 
 // answerWire is one answer before its value is checked against its type.
 type answerWire struct {
-	Type        string          `json:"type"`
-	Value       json.RawMessage `json:"value"`
-	Probability *float64        `json:"probability"`
+	Type          string             `json:"type"`
+	Value         json.RawMessage    `json:"value"`
+	Probability   *float64           `json:"probability"`
+	Probabilities map[string]float64 `json:"probabilities"`
+	Confidence    *float64           `json:"confidence"`
 }
 
 // result checks the response shape the way the desktop app does before trusting the answers, and converts it.
@@ -80,13 +86,13 @@ func (w answerWire) answer() (DecisionAnswer, error) {
 		if err := json.Unmarshal(w.Value, &value); err != nil {
 			return DecisionAnswer{}, fmt.Errorf("choice value is not a string")
 		}
-		return DecisionAnswer{Type: w.Type, Choice: value}, nil
+		return DecisionAnswer{Type: w.Type, Choice: value, Probabilities: w.Probabilities, Confidence: w.Confidence}, nil
 	case "score":
 		var value float64
 		if err := json.Unmarshal(w.Value, &value); err != nil {
 			return DecisionAnswer{}, fmt.Errorf("score value is not a number")
 		}
-		return DecisionAnswer{Type: w.Type, Score: value}, nil
+		return DecisionAnswer{Type: w.Type, Score: value, Probabilities: w.Probabilities, Confidence: w.Confidence}, nil
 	default:
 		return DecisionAnswer{}, fmt.Errorf("unknown answer type %q", w.Type)
 	}

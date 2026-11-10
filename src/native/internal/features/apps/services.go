@@ -73,6 +73,7 @@ func NewServices(o ServicesOptions) *Services {
 		Changed:    o.Changed,
 		Platform:   goos,
 		GUIPIDs:    guiWindowPIDs(goos, o.Ports.Windows),
+		Detect:     macRunningDetect(goos, o.Ports.Helper),
 	})
 	s.Quitter = &Quitter{Processes: o.Ports.Processes, Clock: o.Ports.Clock, Self: os.Getpid()}
 	s.Uninstaller = NewUninstaller(s.uninstallDeps(o))
@@ -128,6 +129,7 @@ func (s *Services) uninstallDeps(o ServicesOptions) UninstallDeps {
 		Home:              s.home,
 		UID:               o.UID,
 		Files:             files,
+		DirectoryAccess:   s.ports.DirectoryAccess,
 		Clock:             s.ports.Clock,
 		Trash:             s.ports.Shell.Trash,
 		NevermindAppPath:  o.NevermindAppPath,

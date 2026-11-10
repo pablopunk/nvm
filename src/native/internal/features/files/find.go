@@ -12,7 +12,7 @@ type FindOptions struct {
 	Query
 	// Home expands "~" in roots and abbreviates display paths.
 	Home string
-	// Depth is how many folder levels below a root are read; zero means 2.
+	// Depth is how many folder levels below a root are read; zero reads only the root's own items.
 	Depth int
 	// ScanLimit caps the files one walk keeps before sorting; zero means MaxLimit.
 	ScanLimit          int
@@ -32,10 +32,7 @@ type FindResult struct {
 func Find(ctx context.Context, fsys platform.FS, roots []string, opts FindOptions) (FindResult, error) {
 	clean := NormalizeRoots(opts.Home, roots)
 	existing, missing := PartitionRoots(fsys, clean)
-	depth := opts.Depth
-	if depth <= 0 {
-		depth = defaultMaxDepth
-	}
+	depth := max(opts.Depth, 0)
 	scanLimit := opts.ScanLimit
 	if scanLimit <= 0 || scanLimit > MaxLimit {
 		scanLimit = MaxLimit

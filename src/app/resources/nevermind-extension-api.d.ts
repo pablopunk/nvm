@@ -43,6 +43,37 @@
  * ```
  */
 
+/**
+ * Go extension API 1.1 mapping (not an Electron TypeScript runtime field).
+ * Go api.Command, api.Item and api.Action expose Requires []api.Operation as JSON `requires`.
+ * All named operations must be structurally supported. Unknown names are unsupported;
+ * missing declarations retain legacy behavior. This grants no permissions and does not
+ * hide rows for unknown permission/login readiness. Named Go system-settings actions keep their
+ * pane through confirmation and installation-bound dispatch; only host-offered panes can execute.
+ * Go Network.Fetch uses the public-address HTTP port; network.fetch describes wiring, does not replace the network declaration,
+ * and does not probe connectivity. Expired caller/runtime/host admission stops future hops and late results;
+ * an already-admitted external request may finish and is never automatically replayed.
+ * A content row remains visible when
+ * only an attached action is unsupported; row-level Requires explicitly omits the row.
+ * Declare Go Manifest.APIVersion "1.1" when relying on this field. Existing 1.0 extensions
+ * remain supported. Saved shortcuts explain unavailability; background runs skip without prompts.
+ */
+export type GoExtensionOperation =
+  | 'ocr'
+  | 'ocr.screen'
+  | 'network.fetch'
+  | 'shell.exec'
+  | 'shell.script'
+  | 'files.preview'
+  | 'windows.switch-desktop'
+  | 'system.lock'
+  | 'system.sleep'
+  | 'system.restart'
+  | 'system.shutDown'
+  | 'system.logOut'
+  | 'system.emptyTrash'
+  | 'system.settings';
+
 /** Fractions are of the display work area (menu bar and Dock excluded), origin top-left. `x` and `y` are 0..1, `width` and `height` are above 0 and at most 1, and `x + width` and `y + height` are at most 1. */
 export type ExtensionWindowLayoutSpec =
   | {
@@ -625,6 +656,13 @@ export type ExtensionViewPatch = {
   items?: Array<Partial<Omit<ExtensionItem, 'id'>> & { id: string }>;
   /** Stable item ids to remove from the current view. */
   removeItemIds?: string[];
+  /**
+   * Only read from an `onSearchChange` result. Ids of items already in the view's `items`,
+   * best first. The host shows them after the instant local matches, exempt from local
+   * filtering and without repeating local matches, and drops them as soon as the search text
+   * changes. Return `[]` for no extra matches.
+   */
+  searchResultIds?: string[];
   /** Loading state; renders the host's perimeter loading sweep. */
   isLoading?: boolean;
   /** Only set when intentionally moving focus to a visible item id; host otherwise preserves selection. */
@@ -675,7 +713,7 @@ export type ExtensionAction = {
   draftConflict?: ExtensionDraftConflict;
   /** Id of the focused item injected by the host when a view's `onSelectionChange` runs. */
   selectedItemId?: string;
-  /** Selected accessory value injected by the host when a search accessory's `onChange` runs. */
+  /** Selected accessory value injected by the host when a search accessory's `onChange` runs, or the trimmed search text when a view's `onSearchChange` runs. */
   value?: string;
   /** Legacy payload carrier for selection id / accessory value. Prefer `selectedItemId` or `value`. */
   text?: string;
@@ -959,6 +997,15 @@ export type ExtensionView = {
   /** Maximum filtered items rendered at once for an item-backed grid. Keep the complete item set searchable while bounding large grid DOM work; use search or category filters to reach items beyond the visible cap. */
   maxVisibleItems?: number;
   onSelectionChange?: ExtensionAction;
+  /**
+   * List and grid views. Local filtering stays instant and owns the first results; this action
+   * adds a second batch. The host runs it after the user pauses typing (about 350ms), never for
+   * empty search text, with the trimmed text as `action.value`. Return
+   * `{ patch: { searchResultIds } }` naming items of the view's `items`. A result for text the
+   * user has since changed is discarded, and failures are silent, so keep it for enrichment
+   * such as AI-ranked matches, never for the only way to find something.
+   */
+  onSearchChange?: ExtensionAction;
   pagination?: ExtensionPagination;
   searchAccessory?: ExtensionSearchAccessory;
   /** Host-owned visible-view refresh. Use `immediate: true` to render a cheap persisted/snapshot cache first, then refresh after paint and update that cache for the next open; the renderer receives an opaque host handle, never an executable action. */
@@ -1096,6 +1143,7 @@ export type ExtensionOcrResult = {
   language?: string | null;
   blocks?: ExtensionOcrBlock[];
 };
+/** Language values are optional hints; hosts may use a multilingual recognizer that ignores them. The Go host bundles Latin-script recognition on macOS, Linux, and Windows. */
 export type ExtensionOcrOptions = {
   language?: string;
   languages?: string[];
@@ -1513,7 +1561,9 @@ export type ExtensionAi = {
         ocr?: boolean;
       },
     ): ExtensionAiAttachment;
+    /** Go hosts use the existing desktop.selection declaration and selection permission/admission checks; no selected text returns unavailable. Construction does not contact AI. */
     selectedText(title?: string): Promise<ExtensionAiAttachment>;
+    /** Go hosts use desktop.files selection checks; no selection returns an empty list. File contents are read only when the attachment is consumed. */
     selectedFiles(options?: {
       title?: string;
       as?: 'text' | 'image' | 'metadata' | 'ocr';
@@ -1696,6 +1746,7 @@ export type ExtensionClipboardHistory = {
 export type ExtensionSystem = {
   /** Display label for the host OS, e.g. `macOS`. */
   os: string;
+  /** Cheap support probe; never requests permission. Go API additionally exposes `windows.switch-desktop` separately from the `window-management` family. Support does not imply permission or configured OS shortcuts. */
   capabilities: { has(id: ExtensionWindowCapability | string): boolean };
   labels: {
     revealInFileManager: string;
@@ -1829,6 +1880,7 @@ export type ExtensionContext = {
       title?: string,
       options?: Record<string, unknown>,
     ): ExtensionAction;
+    /** Native system file preview. The Go host omits this action when unsupported; saved invocations fail safely. Content rows and their other actions remain visible. */
     quickLook(
       filePath: string,
       title?: string,
@@ -1933,14 +1985,14 @@ export type ExtensionContext = {
       ) => ExtensionActionResult | Promise<ExtensionActionResult>,
       options?: Record<string, unknown>,
     ): ExtensionAction;
-    /** Run a shell command. Declare the `system` capability for review. */
+    /** Run a shell command. Declare `system`. Go maps this to ActionShellExec with ShellCommand: host confirmation, installation-bound dispatch, quota/time/output limits and plain-text exit/stdout/stderr result; direct Shell.Exec keeps its service policy. */
     shellExec(
       title: string,
       command: string,
       args?: string[],
       options?: ExtensionShellOptions,
     ): ExtensionAction;
-    /** Run a shell script through `/bin/bash -lc` by default. Declare the `system` capability for review. */
+    /** Run a shell script through `/bin/bash -lc` by default. Declare `system`. Go login scripts require `shell.script` support (macOS/Linux); Windows supports argv execution via `shell.exec`. */
     shellScript(
       title: string,
       script: string,
@@ -2018,7 +2070,10 @@ export type ExtensionContext = {
     ): ExtensionAction;
   };
 
-  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return declarative actions. */
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return declarative actions.
+   * Go dispatch retains the originating installation through confirmation and rechecks enabled identity and host lifetime.
+   * Palette dismissal does not cancel an admitted window action; stale actions cannot revive a disabled/replaced installation.
+   */
   windows: {
     /** Open or update, show, and focus an independent window rendering the given host-owned view. The action title is `options.title`, then `view.title`, then `Open Window`. */
     create(
@@ -2069,7 +2124,12 @@ export type ExtensionContext = {
   /** Clipboard history. Enabled trusted extensions receive this API regardless of declarations. */
   clipboard: { history?: ExtensionClipboardHistory };
 
-  /** OCR helpers. Declarations do not gate this API; check `ctx.system.capabilities.has('ocr')` for OS support. */
+  /** OCR helpers. Electron declarations do not gate this API. Go hosts enforce the `ocr` declaration.
+   * On Go, probe `ocr` for images or `ocr.screen` for captures: probes intersect platform support
+   * with the wired recognizer/capture ports, without checking permission or temporary-folder readiness.
+   * Calls check cancellation before capture/recognition and between staging and recognition; already-admitted
+   * native work may finish. Permission denial remains distinct from unsupported and empty text.
+   */
   ocr?: {
     /** Recognize text in an image path, file URL, data URL, or `ExtensionFile`. */
     image(
@@ -2112,7 +2172,11 @@ export type ExtensionContext = {
     run(action: ExtensionAction): { action: ExtensionAction };
   };
 
-  /** Desktop APIs for enabled trusted extensions. Capability declarations are review metadata and do not gate namespaces. */
+  /**
+   * Desktop APIs for enabled trusted extensions. Electron treats capability declarations as review metadata; the Go host enforces its manifest declarations.
+   * Go selection, keyboard typing, paste and basic app lifecycle operations report OS permission denials as permission errors and unsupported operations as unavailable.
+   * Cancellation prevents a selection, keyboard, paste, launch, quit or hide effect that has not started; a synchronous native effect already started may finish.
+   */
   desktop: {
     keyboard: {
       /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */

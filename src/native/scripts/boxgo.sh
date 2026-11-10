@@ -7,7 +7,7 @@
 # To copy a file produced in the box back (e.g. after `gofmt -w` or `-update` goldens):
 #   scripts/boxgo.sh --get <slot> <relative/path> [local/path]
 set -euo pipefail
-BOX=9101
+BOX=${BOXGO_BOX:-9101}
 root=$(git rev-parse --show-toplevel)
 # box_retry reruns a box call that lost the race on the box CLI's own jump-host file, which concurrent agents rewrite
 # (`mv: rename .../jump.sh.new`); any other failure is the command's own and is returned as is.
@@ -35,6 +35,7 @@ if [ "${1:-}" = "--get" ]; then
 fi
 slot=$1; shift
 tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/src.tgz" -C "$root/src/native" --exclude=.git --exclude="._*" .
 # The route contract test reads the backend's pages/api tree (internal/backend/route_contract_test.go); the box copies it per slot.
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/api.tgz" -C "$root/src/backend/src/pages" api
@@ -46,5 +47,4 @@ box_retry cp "$root/src/app/extensions/emoji-symbol-data.ts" "$BOX:/root/wp/app/
 box_retry cp "$tmp/src.tgz" "$BOX:/root/wp/$slot.tgz" >/dev/null
 box_retry cp "$tmp/api.tgz" "$BOX:/root/wp/$slot-api.tgz" >/dev/null
 box_retry exec "$BOX" -- "rm -rf /root/wp/$slot-backend && mkdir -p /root/wp/$slot-backend && tar xzf /root/wp/$slot-api.tgz -C /root/wp/$slot-backend && rm -f /root/wp/$slot-api.tgz" >/dev/null
-box_retry exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && export NVM_BACKEND_API_DIR=/root/wp/$slot-backend/api PATH=\$PATH:/usr/local/go/bin GOCACHE=/root/.cache/go-build GOMODCACHE=/root/go/pkg/mod && $*"
-rm -rf "$tmp"
+box_retry exec "$BOX" -- "rm -rf /root/wp/$slot && mkdir -p /root/wp/$slot && cd /root/wp/$slot && tar xzf /root/wp/$slot.tgz && rm -f /root/wp/$slot.tgz && export NVM_BACKEND_API_DIR=/root/wp/$slot-backend/api PATH=\$PATH:/usr/local/go/bin GOCACHE=/root/.cache/go-build GOMODCACHE=/root/go/pkg/mod && $*"

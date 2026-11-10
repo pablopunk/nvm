@@ -45,7 +45,7 @@ test('exposes a searchable grid with emoji and Unicode symbols', async () => {
   assert.equal(view.columns, 8);
   assert.equal(view.maxVisibleItems, 160);
   assert.equal(view.searchAccessory.value, 'all');
-  assert.ok(view.items.length > 2_000);
+  assert.ok(view.items.length > 2000);
   assert.equal(grinning.title, 'Grinning Face');
   assert.equal(grinning.subtitle, undefined);
   assert.ok(grinning.keywords.includes('smile'));
@@ -125,4 +125,66 @@ test('skin tones precede variation selectors in canonical emoji sequences', asyn
 
   assert.equal(skinTone.submenu.sections[0].actions[1].title, 'Light ☝🏻');
   assert.equal(skinTone.submenu.sections[0].actions[1].skinTone, 1);
+});
+
+test('adds a meaning-based second batch of existing catalog ids', async () => {
+  const context: any = {
+    ...pickerContext(),
+    ai: {
+      decide: async (options: any) => ({
+        id: 'd',
+        model: 'test',
+        usage: { inputTokens: 0, outputTokens: 0 },
+        answers: Object.fromEntries(
+          options.questions.map((question: any) => [
+            question.id,
+            question.type === 'choice'
+              ? {
+                  type: 'choice',
+                  value: question.options[0],
+                  probabilities: { [question.options[0]]: 0.9 },
+                }
+              : { type: 'predicate', value: true, probability: 0.9 },
+          ]),
+        ),
+      }),
+    },
+    logs: { warn: () => {} },
+  };
+  const view = await pickerView(context);
+  const result = await view.onSearchChange.__handler(context, {
+    value: 'happy face',
+  });
+  const itemIds = new Set(view.items.map((item: any) => item.id));
+
+  assert.ok(result.patch.searchResultIds.length > 0);
+  assert.ok(
+    result.patch.searchResultIds.every((id: string) => itemIds.has(id)),
+  );
+});
+
+test('a failing or unavailable decision model leaves the second batch empty', async () => {
+  const warnings: unknown[] = [];
+  const failing: any = {
+    ...pickerContext(),
+    ai: {
+      decide: async () => {
+        throw new Error('rate limited');
+      },
+    },
+    logs: { warn: (...args: unknown[]) => warnings.push(args) },
+  };
+  const view = await pickerView(failing);
+
+  assert.deepEqual(
+    await view.onSearchChange.__handler(failing, { value: 'frowning gloomy' }),
+    { patch: { searchResultIds: [] } },
+  );
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(
+    await view.onSearchChange.__handler(pickerContext(), {
+      value: 'frowning gloomy',
+    }),
+    { patch: { searchResultIds: [] } },
+  );
 });

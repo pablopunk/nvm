@@ -35,7 +35,7 @@ func TestPermissionRowsOnMacOSAddTheSystemAccesses(t *testing.T) {
 		t.Fatalf("rows = %d, want 5", len(rows))
 	}
 	for _, row := range rows {
-		if row.Pane != macPrivacyPane {
+		if row.Pane != PrivacyPaneID {
 			t.Errorf("%s opens pane %q, want the Privacy pane", row.Kind, row.Pane)
 		}
 	}

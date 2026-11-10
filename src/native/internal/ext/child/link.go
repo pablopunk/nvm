@@ -1,6 +1,7 @@
 package child
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,6 +38,31 @@ func (l *hostLink) send(v any) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	writeLineLocked(l.out, v)
+}
+
+// sendResponse frames large responses without changing the data visible to extension code.
+func (l *hostLink) sendResponse(response protocol.Response, method string) {
+	if method != protocol.MethodRun {
+		l.send(response)
+		return
+	}
+	data, err := json.Marshal(response)
+	if err != nil || len(data) > protocol.MaxResponseBytes {
+		l.send(protocol.Response{ID: response.ID, Failure: &api.Failure{Code: api.CodeQuota, Message: "response exceeds protocol limit"}})
+		return
+	}
+	if len(data) < protocol.MaxLineBytes {
+		l.send(response)
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	const chunkSize = 256 << 10
+	for sequence, offset := 0, 0; offset < len(data); sequence++ {
+		end := min(offset+chunkSize, len(data))
+		writeLineLocked(l.out, protocol.ResponseChunk{ID: response.ID, Sequence: sequence, Last: end == len(data), Chunk: data[offset:end]})
+		offset = end
+	}
 }
 
 // Call runs one host operation and decodes its result into into, which may be nil. A host failure comes back as
@@ -139,6 +165,10 @@ func failureError(failure *api.Failure) error {
 
 func sentinelFor(code api.ErrorCode) error {
 	switch code {
+	case api.CodeCancelled:
+		return context.Canceled
+	case api.CodeTimeout:
+		return context.DeadlineExceeded
 	case api.CodeUnavailable:
 		return api.ErrNotAvailable
 	case api.CodePermission:

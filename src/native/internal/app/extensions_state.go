@@ -27,7 +27,7 @@ func extensionStateLabel(l manager.Listing) string {
 		return stateDisabled
 	}
 	switch l.Runtime.State {
-	case supervisor.StateRunning:
+	case supervisor.StateRunning, supervisor.StateDormant:
 		return stateRunning
 	case supervisor.StateBroken:
 		return stateBroken

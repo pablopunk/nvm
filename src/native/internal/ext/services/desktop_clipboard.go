@@ -21,8 +21,12 @@ func (h *Handler) serveDesktopClipboard(call protocol.ServiceCall) (any, error) 
 		return h.readClipboardText()
 	case protocol.OpWriteText:
 		return nil, h.writeClipboardText(call.Args)
+	case protocol.OpReadImage:
+		return h.readClipboardImage()
+	case protocol.OpWriteImage:
+		return nil, h.writeClipboardImage(call.Args)
 	}
-	return nil, invalid("desktop.clipboard has no operation %q", call.Op)
+	return h.serveClipboardFormats(call)
 }
 
 func (h *Handler) readClipboardText() (string, error) {
@@ -41,7 +45,12 @@ func (h *Handler) writeClipboardText(raw json.RawMessage) error {
 	if err := decodeArgs(raw, &args); err != nil {
 		return err
 	}
-	if len(args.Text) > maxClipboardText {
+	return h.putText(args.Text, args.Concealed)
+}
+
+// putText writes plain text, refusing a concealed write the clipboard cannot mark.
+func (h *Handler) putText(text string, concealed bool) error {
+	if len(text) > maxClipboardText {
 		return invalid("clipboard text is longer than %d bytes", maxClipboardText)
 	}
 	if h.deps.Clipboard == nil {
@@ -50,10 +59,10 @@ func (h *Handler) writeClipboardText(raw json.RawMessage) error {
 	if !h.actions.allow() {
 		return rateExceeded("clipboard writes")
 	}
-	if !args.Concealed {
-		return h.deps.Clipboard.WriteText(args.Text)
+	if !concealed {
+		return h.deps.Clipboard.WriteText(text)
 	}
-	return writeConcealed(h.deps.Clipboard, args.Text)
+	return writeConcealed(h.deps.Clipboard, text)
 }
 
 // writeConcealed writes text that clipboard history must not record. A clipboard that cannot mark content as concealed

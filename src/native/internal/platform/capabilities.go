@@ -13,6 +13,7 @@ const (
 	CapabilityClipboardChanged Capability = "clipboard.changed"
 	CapabilityClipboardPaste   Capability = "clipboard.paste"
 	CapabilityShellReveal      Capability = "shell.reveal"
+	CapabilityShellQuickLook   Capability = "shell.quickLook"
 	CapabilityShellTrash       Capability = "shell.trash"
 	CapabilityShellApps        Capability = "shell.installedApps"
 	CapabilityShellAppIcons    Capability = "shell.appIcons"
@@ -36,27 +37,40 @@ const (
 	CapabilitySystemSettings   Capability = "system.settings"
 	CapabilityWindowPlacement  Capability = "window.placement"
 	CapabilityWindowManagement Capability = "windows.manage"
-	CapabilityFocusReturn      Capability = "focus.return"
-	CapabilityMicrophone       Capability = "microphone.capture"
-	CapabilityTextRecognize    Capability = "text.recognize"
-	CapabilityScreenCapture    Capability = "screen.capture"
-	CapabilitySelectionCopy    Capability = "selection.copy"
-	CapabilityWebView          Capability = "webview.embedded"
-	CapabilityCameraPreview    Capability = "camera.preview"
+	// The extension window capabilities, named as the extension API reports them.
+	CapabilityWindowAlwaysOnTop     Capability = "windows.always-on-top"
+	CapabilityWindowAllSpaces       Capability = "windows.all-spaces"
+	CapabilityWindowFrameRestore    Capability = "windows.frame-restore"
+	CapabilityWindowDisplayRecovery Capability = "windows.display-recovery"
+	CapabilityFocusReturn           Capability = "focus.return"
+	CapabilityFrontmostApp          Capability = "apps.frontmost"
+	CapabilityMicrophone            Capability = "microphone.capture"
+	CapabilityTextRecognize         Capability = "text.recognize"
+	CapabilityScreenCapture         Capability = "screen.capture"
+	CapabilitySelectionCopy         Capability = "selection.copy"
+	CapabilityWebView               Capability = "webview.embedded"
+	CapabilityCameraPreview         Capability = "camera.preview"
+	CapabilityKeyboardTypeText      Capability = "keyboard.type-text"
+	CapabilityAppRunning            Capability = "apps.running"
+	CapabilityAppQuit               Capability = "apps.quit"
+	CapabilityAppHide               Capability = "apps.hide"
+	CapabilityAppUninstall          Capability = "apps.uninstall"
 )
 
 // AllCapabilities lists every capability, sorted by name.
 func AllCapabilities() []Capability {
 	list := []Capability{
 		CapabilityAutostart, CapabilityClipboardChanged, CapabilityClipboardImage, CapabilityClipboardPaste,
-		CapabilityFileWatch, CapabilityFocusReturn, CapabilityGlobalHotkeys, CapabilityHelperRun,
+		CapabilityFileWatch, CapabilityFocusReturn, CapabilityFrontmostApp, CapabilityGlobalHotkeys, CapabilityHelperRun,
 		CapabilityKeychain, CapabilityMicrophone, CapabilityNotifications, CapabilityProcessList,
 		CapabilityProcessSignal, CapabilityScreensDisplays, CapabilityShellAppIcons, CapabilityShellApps,
-		CapabilityShellBeep, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
+		CapabilityShellBeep, CapabilityShellQuickLook, CapabilityShellReveal, CapabilityShellTrash, CapabilitySelectionCopy, CapabilitySystemEmptyTrash,
 		CapabilitySystemLock, CapabilitySystemLogOut, CapabilitySystemRestart, CapabilitySystemSettings,
 		CapabilitySystemShutDown, CapabilitySystemSleep, CapabilityTrayMenu, CapabilityWindowManagement,
 		CapabilityWindowPlacement, CapabilityTextRecognize, CapabilityScreenCapture,
-		CapabilityWebView, CapabilityCameraPreview,
+		CapabilityWebView, CapabilityCameraPreview, CapabilityKeyboardTypeText, CapabilityAppRunning, CapabilityAppQuit, CapabilityAppHide,
+		CapabilityAppUninstall, CapabilityWindowAlwaysOnTop, CapabilityWindowAllSpaces, CapabilityWindowFrameRestore,
+		CapabilityWindowDisplayRecovery,
 	}
 	slices.Sort(list)
 	return list

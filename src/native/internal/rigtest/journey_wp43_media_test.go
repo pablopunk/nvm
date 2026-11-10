@@ -30,23 +30,24 @@ func TestJourneyWP43CameraFailsWithAReasonAndWebviewOpens(t *testing.T) {
 	enableThroughReview(t, app, "media", "Media fixture")
 	hidePalette(t, app)
 
-	must(t, app.SummonPalette())
-	must(t, app.Type("Camera fixture"))
-	openRootFixtureRow(t, app, "Camera fixture")
-	must(t, app.Key("Return"))
-	_, err := app.WaitFor("Camera Issue", elementWait)
-	must(t, err)
-	_, err = app.WaitFor("Camera unavailable", elementWait)
-	must(t, err)
-	shoot(t, app, "wp43-1-camera-failed")
-	must(t, app.Key("Escape"))
-	hidePalette(t, app)
+	for _, title := range []string{"Camera fixture", "Camera contain fixture"} {
+		must(t, app.SummonPalette())
+		must(t, app.Type(title))
+		openRootFixtureRowExactly(t, app, title)
+		_, err := app.WaitFor("Camera Issue", elementWait)
+		must(t, err)
+		_, err = app.WaitFor("Camera unavailable", elementWait)
+		must(t, err)
+		shoot(t, app, "wp43-1-"+strings.ReplaceAll(strings.ToLower(title), " ", "-")+"-failed")
+		must(t, app.Key("Escape"))
+		hidePalette(t, app)
+	}
 
 	must(t, app.SummonPalette())
 	must(t, app.Type("Webview fixture"))
-	openRootFixtureRow(t, app, "Webview fixture")
+	openRootFixtureRowExactly(t, app, "Webview fixture")
 	must(t, app.Key("Return"))
-	_, err = app.WaitFor("Webview fixture", elementWait)
+	_, err := app.WaitFor("Webview fixture", elementWait)
 	must(t, err)
 	tree, err := app.Tree()
 	must(t, err)
@@ -56,6 +57,34 @@ func TestJourneyWP43CameraFailsWithAReasonAndWebviewOpens(t *testing.T) {
 	waitForPageInk(t, app, "wp43-2-webview-painted")
 	shoot(t, app, "wp43-2-webview-open")
 	hidePalette(t, app)
+}
+
+// openRootFixtureRowExactly chooses the root row whose label is label, not the first row a query matches. Rows that
+// score alike are ordered by title, as 1.x orders them, so a longer title can sort above the exact one.
+func openRootFixtureRowExactly(t *testing.T, app *App, label string) {
+	t.Helper()
+	waitForRow(t, app, label, elementWait)
+	tree, err := app.Tree()
+	must(t, err)
+	index := -1
+	rows := 0
+	for _, node := range tree.Nodes {
+		if node.Role != "listItem" {
+			continue
+		}
+		if node.Label == label {
+			index = rows
+			break
+		}
+		rows++
+	}
+	if index < 0 {
+		t.Fatalf("no root row labelled %q among the listed rows: %v", label, treeLabels(tree))
+	}
+	for range index {
+		must(t, app.Key("Down"))
+	}
+	must(t, app.Key("Return"))
 }
 
 // waitForPageInk polls the desktop until the web page has painted dark text under the palette's header. The page is a

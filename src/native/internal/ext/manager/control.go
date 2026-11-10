@@ -9,6 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/install"
+	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 )
 
@@ -99,11 +100,16 @@ func (m *Manager) Enable(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
+	wasEnabled := m.isEnabled(id)
 	if err := m.enabled.SetEnabled(id, true); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	if e.runtime == nil {
 		return fmt.Errorf("extension %s does not load: %s", id, joinProblems(e.bundle.Problems))
+	}
+	if !wasEnabled {
+		m.replaceLocked(filepath.Base(e.bundle.Dir), e.bundle)
+		return nil
 	}
 	e.runtime.Reset()
 	e.runtime.Start()
@@ -124,6 +130,8 @@ func (m *Manager) Disable(id string) error {
 	if err := m.enabled.SetEnabled(id, false); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
+	e.snapshotIdentity = nil
+	m.commands.forget(id)
 	stopEntry(e)
 	return nil
 }
@@ -143,14 +151,18 @@ func (m *Manager) Install(id string, contents map[string][]byte, enable bool) er
 }
 
 // Check runs the candidate files the way a child would load them, without publishing anything. It returns the
-// protocol methods the source implements, or why it does not load, including the Yaegi compile errors. The
-// staging folder is removed on every path.
+// protocol methods the source implements, or why it does not load, including the Yaegi compile errors. A source
+// that calls a service its manifest does not declare is refused before it loads, since the host would refuse
+// that call at run time. The staging folder is removed on every path.
 func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error) {
 	staging, staged, err := install.Stage(m.ports.Files, m.ports.Clock, m.root, id, contents)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = install.Discard(m.ports.Files, staging) }()
+	if missing := sourcecheck.UndeclaredUses(staged.Manifest, contents); len(missing) > 0 {
+		return nil, errors.New(sourcecheck.Explain(missing))
+	}
 	identity := api.Identity{ID: id, Title: staged.Manifest.Title}
 	return supervisor.ProbeSource(m.config, identity, filepath.Join(staging, bundle.SourceFile))
 }
@@ -166,6 +178,7 @@ func (m *Manager) Uninstall(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
+	m.commands.forget(id)
 	stopEntry(e)
 	if err := install.Uninstall(m.ports.Files, m.ports.Clock, m.root, filepath.Base(e.bundle.Dir)); err != nil {
 		return err

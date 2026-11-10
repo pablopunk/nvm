@@ -10,8 +10,9 @@ type queryCache struct {
 }
 
 type cachedRows struct {
-	items   []Item
-	settled bool
+	items     []Item
+	providers map[string][]Item
+	settled   bool
 }
 
 func newQueryCache(limit int) *queryCache {

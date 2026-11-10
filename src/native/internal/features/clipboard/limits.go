@@ -4,13 +4,13 @@ import "time"
 
 // Default retention and capture limits. They bound memory and disk for a history of thousands of items.
 const (
-	// DefaultMaxEntries is how many unpinned entries are kept. Pinned entries do not count.
+	// DefaultMaxEntries is how many entries are kept.
 	DefaultMaxEntries = 300
-	// DefaultMaxAge expires unpinned entries older than this.
+	// DefaultMaxAge expires entries older than this.
 	DefaultMaxAge = 30 * 24 * time.Hour
-	// DefaultMaxImageBytes caps the PNG bytes of unpinned image entries on disk.
+	// DefaultMaxImageBytes caps the PNG bytes of image entries on disk.
 	DefaultMaxImageBytes = 256 << 20
-	// DefaultMaxMemoryBytes caps the text and markup held in memory by unpinned entries.
+	// DefaultMaxMemoryBytes caps the text and markup held in memory by entries.
 	DefaultMaxMemoryBytes = 32 << 20
 	// DefaultLimit is how many rows a query returns when the caller sets no limit.
 	DefaultLimit = 300

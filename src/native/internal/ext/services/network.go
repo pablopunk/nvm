@@ -57,7 +57,24 @@ func (h *Handler) fetch(ctx context.Context, request api.FetchRequest) (api.Fetc
 	}
 	ctx, cancel := context.WithTimeout(ctx, plan.timeout)
 	defer cancel()
-	result, err := platform.FetchExchange(ctx, h.deps.Network, plan.exchange())
+	stopLifetime := context.AfterFunc(protocol.LifetimeOf(ctx), cancel)
+	defer stopLifetime()
+	exchange := plan.exchange()
+	var admissionErr error
+	exchange.Check = func(target *url.URL) error {
+		if err := checkFetchTarget(target); err != nil {
+			return err
+		}
+		admissionErr = h.admitDesktopEffect(ctx)
+		return admissionErr
+	}
+	result, err := platform.FetchExchange(ctx, h.deps.Network, exchange)
+	if admissionErr != nil {
+		return api.FetchResponse{}, transportFailure(ctx, admissionErr, plan)
+	}
+	if admissionErr = h.admitDesktopEffect(ctx); admissionErr != nil {
+		return api.FetchResponse{}, transportFailure(ctx, admissionErr, plan)
+	}
 	if err != nil {
 		return api.FetchResponse{}, transportFailure(ctx, err, plan)
 	}
@@ -78,6 +95,8 @@ func fetchResponseOf(result platform.ExchangeResult) api.FetchResponse {
 // address, and an address can carry a secret in its query.
 func transportFailure(ctx context.Context, err error, plan fetchPlan) error {
 	switch {
+	case errors.Is(err, errHandlerClosed):
+		return errHandlerClosed
 	case errors.Is(err, platform.ErrNonPublicAddress):
 		return serviceError{
 			failure: api.Failure{Code: api.CodePermission, Message: "the address is not public; extensions cannot reach private, loopback or local addresses"},
@@ -89,12 +108,12 @@ func transportFailure(ctx context.Context, err error, plan fetchPlan) error {
 		return unavailable("the address redirected more than %d times", maxFetchRedirects)
 	case errors.Is(err, errRefusedTarget):
 		return unavailable("the redirect target is refused: %s", err.Error())
-	case errors.Is(ctx.Err(), context.DeadlineExceeded):
+	case errors.Is(ctx.Err(), context.DeadlineExceeded), errors.Is(err, context.DeadlineExceeded):
 		return serviceError{
 			failure: api.Failure{Code: api.CodeTimeout, Message: fmt.Sprintf("the request did not finish within %s", plan.timeout)},
 			cause:   context.DeadlineExceeded,
 		}
-	case errors.Is(ctx.Err(), context.Canceled):
+	case errors.Is(ctx.Err(), context.Canceled), errors.Is(err, context.Canceled):
 		return serviceError{failure: api.Failure{Code: api.CodeCancelled, Message: "the request was cancelled"}, cause: context.Canceled}
 	}
 	return unavailable("the request failed; the address may be offline or unreachable")

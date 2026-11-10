@@ -74,7 +74,6 @@ Not run: the rig (L4), macOS and Windows runs (L5, L6). Nothing was run on a des
 | `ActionMenu` (`action_menu.go`) | `clipboard-actions`, `gallery.controls` | selection, key and return glyph |
 | `Footer` (`footer.go`) | every palette view; `gallery.controls` (actions, hint) | key hints and hint text |
 | `EmptyState` (`empty_state.go`) | `clipboard-empty`, `no-results`, `gallery.states` | glyph, title, subtitle |
-| `Toast` (`toast.go`) | not captured: it draws through the window | wrapper only |
 | `FormField`, `FormError` (`form.go`) | `snippet-form`, `quicklink-form`, `gallery.states` | label, input, focus, error |
 | `UserBubble` (`user_bubble.go`) | `chat-transcript`, `chat-streaming`, `gallery.states` | right alignment, wrap at 520 |
 | `Icon`, `lucide.go` (`icons.go`) | every view with an icon | Lucide only |

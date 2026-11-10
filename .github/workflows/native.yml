@@ -13,6 +13,11 @@ on:
       - 'src/backend/src/pages/api/**'
       - '.github/workflows/native.yml'
   workflow_dispatch:
+    inputs:
+      refresh_indicator_assets:
+        description: Generate recording goldens and the API reference as reviewable artifacts
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -38,7 +43,7 @@ jobs:
           # MyGo draws text through Pango and GTK, loaded at run time with purego, so the goldens need the same
           # runtime libraries as the rig image (scripts/rig/Dockerfile) and the test box, not only the fonts.
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            ca-certificates git curl tar gcc libc6-dev fontconfig \
+            ca-certificates git curl tar jq gcc libc6-dev fontconfig \
             fonts-dejavu fonts-liberation fonts-noto-color-emoji fonts-urw-base35 \
             libgtk-3-0t64 libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 libatk1.0-0t64 \
             libepoxy0 libgdk-pixbuf-2.0-0 librsvg2-2 libsecret-1-0 libayatana-appindicator3-1 \
@@ -69,11 +74,33 @@ jobs:
             exit 1
           fi
 
+      - name: Generate indicator review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_indicator_assets
+        run: |
+          (cd internal/ai/builder && go generate)
+          (cd internal/palette/aicommands && go test -run '^(TestIndicatorGoldens|TestRecordingReducedMotionGoldens)$' -update .)
+
+      - name: Upload indicator review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_indicator_assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: indicator-review-assets
+          path: |
+            src/native/internal/ai/builder/reference_gen.go
+            src/native/internal/palette/aicommands/testdata/golden/aicommands/indicator-dictation-*.png
+          if-no-files-found: error
+
+      - name: Extension operation contract smoke
+        run: go test -race -count=1 -timeout 5m ./internal/ai/builder ./internal/ai/builder/apiref ./internal/platform ./internal/platform/real ./internal/features/system ./internal/features/ocr ./internal/ext/builtins/systemcommands ./internal/ext/api ./internal/ext/child ./internal/ext/services ./internal/ext/manager ./internal/palette/extview ./internal/palette/extwindow ./internal/jobs/... ./internal/diag/timing ./internal/app -run '^(TestWindowAction|TestWindowRow|TestWindowPage|TestDismissedCommandCompletesWindow|TestPermission|TestRequestNeeds|TestOpenPaneNeeds|TestRequestAndPane|TestRequestRefuses|TestRequestFailure|TestRequestWithout|TestNotify|TestNotes|TestUnreadableSecretIndex|TestSecret|TestStorage|TestAttachmentSelection|TestNetworkAdmission|TestFetch|TestRedirect|TestNonPublicDestination|TestOversizeBody|TestBinaryBody|TestRequestsThatBreak|TestOCRAvailability|TestOCRAdmission|TestOCRContract|TestProcessAvailability|TestShellAction|TestAPIContractInventory|TestPreview|TestUnsupportedPrimary|TestUnsupportedSecondary|TestUnknownSupport|TestCancelledPreview|TestDesktopSwitch|TestNextDesktop|TestPreviousDesktop|TestRefusedKeys|TestSwitchDesktop|TestUnknownDesktop|TestOperation|TestSelectionPermission|TestCancelledSelection|TestCancelledPaste|TestCancellationDuringImage|TestKeyboardAndPasteDenial|TestClosedHostDuringImage|TestStoppedLifetimeDoesNotAdmitPaste|TestSystemSettingsPane|TestOpenSystemSettingsAction|TestSystemActionWithout|TestSystemBinding|TestSystemActionRequires|TestSystemConfirmation|TestSystemDeclaration|TestSystemRowsDeclare|TestRunCallsTheMatching|TestRunWithoutSystem|TestRestartComputerRunsAtOnceAsIn1x|TestGeneratedReference|TestReference|TestInstructions|TestCompact|TestBuilderTurn|TestRootResultsMatchRecordedTable|TestRootTableWithRecordedUsageMatchesExpected|TestAppAdmission|TestAppAvailability|TestAppPermissionAndUnsupported|TestCancelledLifecycleHasNoEffect)'
+
       - name: Vet
         run: go vet ./...
 
       - name: Staticcheck
         run: go run honnef.co/go/tools/cmd/staticcheck@v0.8.2 ./...
+
+      - name: Fetch OCR runtime and models
+        run: bash scripts/natives/fetch-ocr.sh linux amd64
 
       - name: Test with race detector
         run: go test -race -count=1 -timeout 25m ./...
@@ -119,5 +146,17 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      - name: Fetch OCR runtime and models
+        shell: bash
+        run: |
+          goos=$(go env GOOS | tr -d '\r')
+          goarch=$(go env GOARCH | tr -d '\r')
+          bash scripts/natives/fetch-ocr.sh "$goos" "$goarch"
+
       - name: Test
         run: go test -count=1 -timeout 40m ./...
+
+      - name: macOS clipboard preservation smoke
+        if: runner.os == 'macOS'
+        timeout-minutes: 2
+        run: go run ./cmd/clipboardcheck

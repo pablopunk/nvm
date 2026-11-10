@@ -20,7 +20,8 @@ func TestMessageNamesTheVersionOrTheReason(t *testing.T) {
 		state State
 		want  string
 	}{
-		{"up to date", State{Status: StatusIdle}, "Nevermind is up to date"},
+		{"up to date", State{Status: StatusCurrent}, "Nevermind is up to date"},
+		{"not checked", State{Status: StatusIdle}, "Updates have not been checked yet"},
 		{"available", State{Status: StatusAvailable, LatestVersion: "2.1.0"}, "Nevermind 2.1.0 is available"},
 		{"failed", State{Status: StatusFailed, Message: "offline"}, "Update check failed: offline"},
 		{"unsupported", State{Status: StatusUnsupported}, "Updates are not available in this build yet"},

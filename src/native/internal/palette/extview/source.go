@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -39,7 +40,7 @@ func (s *Session) loadSource() {
 	source := s.view.Source
 	if key := s.snapshotKey(); key != "" {
 		if entry, ok := s.deps.Cache.Get(key); ok {
-			s.items = entry.Items
+			s.restoreLoadedSnapshot(entry)
 			age := s.deps.Clock.Now().Sub(entry.At)
 			if age < durationMs(source.TTLMs, defaultFreshMs) {
 				s.afterFirstLoad()
@@ -62,9 +63,11 @@ func (s *Session) reload() {
 		s.failure = &api.Failure{Code: api.CodeUnavailable, Message: "Data loading is not available in this build."}
 		return
 	}
+	s.itemsRevision++
+	revision := s.itemsRevision
 	s.loading, s.failure = true, nil
-	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, failure *api.Failure) {
-		if s.dismissed {
+	s.deps.Load(s.extID, s.view.Source.Loader, func(items []api.Item, evidence *api.SnapshotEvidence, failure *api.Failure) {
+		if s.dismissed || revision != s.itemsRevision {
 			return
 		}
 		s.loading = false
@@ -73,7 +76,7 @@ func (s *Session) reload() {
 			s.refreshHost()
 			return
 		}
-		s.items = items
+		s.installLoadedItems(items, evidence)
 		s.putSnapshot(items)
 		s.refreshHost()
 		s.afterFirstLoad()
@@ -88,36 +91,129 @@ func (s *Session) afterFirstLoad() {
 	}
 }
 
-// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result.
+func (s *Session) revalidateMutation() {
+	for origin := s; origin != nil; origin = origin.parent {
+		origin.refreshAfterMutation()
+	}
+}
+
+// refreshAfterMutation coalesces mutations behind an in-flight refresh.
+func (s *Session) refreshAfterMutation() {
+	if s.dismissed {
+		return
+	}
+	if s.refreshing {
+		s.refreshPending = true
+		return
+	}
+	s.refreshNow()
+}
+
+// refreshNow runs the view's refresh handler when none is in flight, and patches the view with its result. A chat view
+// takes a whole new view instead, since its transcript, tier and side page change together while a reply streams.
 func (s *Session) refreshNow() {
 	refresh := s.view.Refresh
 	if refresh == nil || refresh.Ref == nil || s.refreshing || s.dismissed {
 		return
 	}
 	s.refreshing = true
-	s.invokeRaw(*refresh.Ref, "", func(result api.Result, failure *api.Failure) {
+	revision := s.itemsRevision
+	var snapshotVersion uint64
+	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+		snapshotVersion = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
+	}
+	s.invokeRefresh(*refresh.Ref, func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
-		if failure != nil || result.Patch == nil {
+		if s.dismissed {
+			return
+		}
+		if revision != s.itemsRevision {
+			s.runPendingRefreshAfterStaleResult()
+			return
+		}
+		if failure != nil && s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+			s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
+		}
+		if s.snapshotRef != nil && s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
+			return
+		}
+		if s.refreshPending && failure == nil {
+			s.refreshPending = false
+			s.refreshNow()
+			return
+		}
+		manualHost := s.manualRefreshHost
+		s.manualRefreshHost = nil
+		if failure != nil && manualHost != nil {
+			manualHost.Toast(failure.Message)
+		}
+		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat && result.View.Chat != nil {
+			s.view = *result.View
+			s.refreshHost()
+			return
+		}
+		if failure != nil {
+			s.refreshPending = false
+			if failure.Code == api.CodePermission && snapshotEvidenceDeniesPaths(result.SnapshotEvidence, s.snapshotSourcePaths) {
+				s.applyImageEvidenceDenial(snapshotVersion, result.SnapshotEvidence, failure)
+			}
+			return
+		}
+		if len(s.snapshotSourcePaths) > 0 {
+			filterSnapshotDenied(&result, s.snapshotStaleHashes)
+		}
+		s.snapshotStaleHashes = nil
+		s.restoreSnapshotPresentation(result)
+		if result.View != nil {
+			s.snapshotSourcePaths = verifiedSnapshotPaths(result.View.Items, result.SnapshotEvidence)
+		}
+		if result.Patch == nil && result.View != nil && result.View.Kind == s.view.Kind && len(s.sections) == 0 && len(result.View.Sections) == 0 && (s.view.Kind == api.ViewGrid || s.view.Kind == api.ViewList) {
+			v := result.View
+			mode := refresh.Mode
+			if mode == "" {
+				mode = api.PatchReplace
+			}
+			result.Patch = &api.ViewPatch{Mode: mode, Items: v.Items, IsLoading: &v.IsLoading, EmptyView: v.EmptyView, Status: v.Status}
+		}
+		if result.Patch == nil {
+			if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+				s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
+			}
 			return
 		}
 		patch := *result.Patch
 		if patch.Mode == "" {
 			patch.Mode = refresh.Mode
 		}
-		s.Apply(patch)
+		if patch.Mode == api.PatchReplace {
+			s.itemsRevision++
+			s.loading, s.failure = false, nil
+		}
+		s.applyPicturePatch(patch, result.SnapshotEvidence)
+		s.rememberVerifiedSnapshot(result.SnapshotEvidence)
+		s.cacheRefreshPatch(patch)
 		s.refreshHost()
 	})
 }
 
+// runPendingRefreshAfterStaleResult drops a result that predates a mutation, and still runs the refresh that mutation
+// queued behind it, so the page does not keep the rows the mutation removed.
+func (s *Session) runPendingRefreshAfterStaleResult() {
+	if s.refreshPending {
+		s.refreshPending = false
+		s.refreshNow()
+	}
+}
+
 // startInterval runs the refresh every IntervalMs while the view is open, on the UI thread.
 func (s *Session) startInterval() {
-	refresh := s.view.Refresh
-	if refresh == nil || refresh.IntervalMs <= 0 || s.deps.Clock == nil {
+	interval := s.refreshInterval()
+	if interval <= 0 || s.deps.Clock == nil {
 		return
 	}
 	stop := make(chan struct{})
 	s.stopInterval = stop
-	ticker := s.deps.Clock.NewTicker(time.Duration(refresh.IntervalMs) * time.Millisecond)
+	ticker := s.deps.Clock.NewTicker(interval)
 	go func() {
 		defer ticker.Stop()
 		for {
@@ -137,6 +233,12 @@ func (s *Session) close() {
 		return
 	}
 	s.dismissed = true
+	if s.cancelImages != nil {
+		s.cancelImages()
+	}
+	if s.cancelWork != nil {
+		s.cancelWork()
+	}
 	if s.stopInterval != nil {
 		close(s.stopInterval)
 	}
@@ -153,7 +255,11 @@ func (s *Session) loadMoreRow() search.Item {
 
 // loadMore appends the next page. An empty page, or one without a patch, is the end of the list.
 func (s *Session) loadMore(h search.Host, next api.ActionRef) {
+	revision := s.itemsRevision
 	s.invokeRaw(next, "", func(result api.Result, failure *api.Failure) {
+		if s.dismissed || revision != s.itemsRevision {
+			return
+		}
 		if failure != nil {
 			h.Toast(failure.Message)
 			return
@@ -167,7 +273,7 @@ func (s *Session) loadMore(h search.Host, next api.ActionRef) {
 		if patch.Mode == "" {
 			patch.Mode = api.PatchAppend
 		}
-		s.Apply(patch)
+		s.applyPicturePatch(patch, result.SnapshotEvidence)
 		h.Refresh()
 	})
 }
@@ -208,7 +314,11 @@ func (s *Session) invokeInPlace(ref api.ActionRef, value string) {
 			return
 		}
 		if result.Patch != nil {
-			s.Apply(*result.Patch)
+			s.applyPicturePatch(*result.Patch, result.SnapshotEvidence)
+		}
+		if view := result.View; view != nil && result.Navigation == api.NavReplace && view.Kind == s.view.Kind {
+			s.replaceInPlace(*view)
+			s.pictureEvidence = copyPictureEvidence(result.SnapshotEvidence)
 		}
 		s.refreshHost()
 	})
@@ -221,9 +331,17 @@ func (s *Session) toast(message string) {
 }
 
 func (s *Session) refreshHost() {
-	if s.host != nil {
-		s.host.Refresh()
+	if s.host == nil {
+		return
 	}
+	if host, ok := s.host.(interface {
+		RefreshTop(func(*palette.View) bool)
+	}); ok {
+		page := s.palettePage
+		host.RefreshTop(func(current *palette.View) bool { return current == page })
+		return
+	}
+	s.host.Refresh()
 }
 
 // onUI runs fn on the UI thread through the host's hook, or in place when there is none.
@@ -244,15 +362,25 @@ func (s *Session) snapshotKey() string {
 	return s.extID + "/" + source.CacheKey
 }
 
-func (s *Session) putSnapshot(items []api.Item) {
-	if key := s.snapshotKey(); key != "" {
-		s.deps.Cache.Put(key, CacheEntry{Items: items, At: s.deps.Clock.Now()})
-	}
-}
-
 func durationMs(ms, fallback int64) time.Duration {
 	if ms <= 0 {
 		ms = fallback
 	}
 	return time.Duration(ms) * time.Millisecond
+}
+
+// chatTickInterval is how often a chat view checks for a new transcript. It runs whenever the chat is open, so a reply
+// that starts after the view opened shows its words; a view with no refresh does nothing on a tick.
+const chatTickInterval = 150 * time.Millisecond
+
+// refreshInterval is the period of the view's refresh ticks: a chat view ticks at chatTickInterval, and any other view
+// at its own IntervalMs, or not at all when it has no refresh.
+func (s *Session) refreshInterval() time.Duration {
+	if s.view.Kind == api.ViewChat {
+		return chatTickInterval
+	}
+	if s.view.Refresh == nil || s.view.Refresh.IntervalMs <= 0 {
+		return 0
+	}
+	return time.Duration(s.view.Refresh.IntervalMs) * time.Millisecond
 }

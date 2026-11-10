@@ -37,7 +37,7 @@ func TestFollowUpRunsItsActionAndAppliesItsResult(t *testing.T) {
 	list := api.ListView("Next list")
 	r := newFollowUpRig(t, map[string]api.Result{"list": {View: &list}})
 
-	r.session.finish(r.host, "acme.follow", api.Result{Next: runRef("list")}, nil)
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: runRef("list")}, nil)
 
 	if len(r.asked) != 1 || r.asked[0] != "list" {
 		t.Fatalf("asked = %v; want the follow-up action once", r.asked)
@@ -52,7 +52,7 @@ func TestFollowUpTakesPrecedenceOverTheResultsOwnView(t *testing.T) {
 	r := newFollowUpRig(t, nil)
 	pop := api.Action{Kind: api.ActionPop}
 
-	r.session.finish(r.host, "acme.follow", api.Result{Next: &pop, View: &view}, nil)
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: &pop, View: &view}, nil)
 
 	if r.host.pops != 1 || len(r.host.pushed) != 0 {
 		t.Fatalf("pops = %d, pushed = %d; want the pop only, as Electron runs the action instead of the view", r.host.pops, len(r.host.pushed))
@@ -61,7 +61,7 @@ func TestFollowUpTakesPrecedenceOverTheResultsOwnView(t *testing.T) {
 
 func TestFollowUpDeclarativeActionRunsOnTheHost(t *testing.T) {
 	r := newFollowUpRig(t, nil)
-	r.session.finish(r.host, "acme.follow", api.Result{Next: &api.Action{Kind: api.ActionPop}}, nil)
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: &api.Action{Kind: api.ActionPop}}, nil)
 	if r.host.pops != 1 || len(r.asked) != 0 {
 		t.Fatalf("pops = %d, asked = %v; want a host pop and no extension call", r.host.pops, r.asked)
 	}
@@ -71,7 +71,7 @@ func TestFollowUpWithConfirmationAsksFirst(t *testing.T) {
 	r := newFollowUpRig(t, nil)
 	action := api.Action{Kind: api.ActionRun, Ref: &api.ActionRef{ID: "delete"}, Confirm: &api.Confirmation{Title: "Delete?", ConfirmLabel: "Delete"}}
 
-	r.session.finish(r.host, "acme.follow", api.Result{Next: &action}, nil)
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: &action}, nil)
 
 	if len(r.asked) != 0 || len(r.host.pushed) != 1 || r.host.pushed[0].Title != "Confirm" {
 		t.Fatalf("asked = %v, pushed = %d; want the confirmation page and no run", r.asked, len(r.host.pushed))
@@ -81,7 +81,7 @@ func TestFollowUpWithConfirmationAsksFirst(t *testing.T) {
 func TestFollowUpChainIsBounded(t *testing.T) {
 	r := newFollowUpRig(t, map[string]api.Result{"loop": {Next: runRef("loop")}})
 
-	r.session.finish(r.host, "acme.follow", api.Result{Next: runRef("loop")}, nil)
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: runRef("loop")}, nil)
 
 	if len(r.asked) != maxFollowUps || len(r.host.toasts) != 1 {
 		t.Fatalf("asked %d times, toasts = %v; want %d runs and one notice", len(r.asked), r.host.toasts, maxFollowUps)
@@ -90,7 +90,7 @@ func TestFollowUpChainIsBounded(t *testing.T) {
 
 func TestFailedResultIgnoresItsFollowUp(t *testing.T) {
 	r := newFollowUpRig(t, nil)
-	r.session.finish(r.host, "acme.follow", api.Result{Next: runRef("list")}, &api.Failure{Code: api.CodeInternal, Message: "boom"})
+	r.session.finish(r.host, "acme.follow", "", api.Result{Next: runRef("list")}, &api.Failure{Code: api.CodeInternal, Message: "boom"})
 	if len(r.asked) != 0 || len(r.host.toasts) != 1 || r.host.toasts[0] != "boom" {
 		t.Fatalf("asked = %v, toasts = %v; want the failure shown and no follow-up", r.asked, r.host.toasts)
 	}

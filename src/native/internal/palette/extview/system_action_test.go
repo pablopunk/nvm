@@ -17,7 +17,14 @@ func (h *hideRecorder) Hide() { h.hidden = true }
 
 func TestOpenSystemSettingsActionHidesThePaletteAndOpensThePane(t *testing.T) {
 	var opened []string
-	deps := Deps{OpenSettingsPane: func(id string) { opened = append(opened, id) }}
+	identity := new(byte)
+	deps := Deps{CommandSnapshotIdentity: func(string) any { return identity }, SystemCommand: func(id, op, pane string, got any, done func(string)) {
+		if id != "nevermind.system-settings" || op != "open-system-settings" || got != identity {
+			t.Fatal("pane escaped originating system route")
+		}
+		opened = append(opened, pane)
+		done("")
+	}}
 	action := ActionFor(deps, "nevermind.system-settings", api.Action{Kind: api.ActionSystem, Op: "open-system-settings", Setting: "com.apple.Sound-Settings.extension", Title: "Open"})
 	host := &hideRecorder{}
 	action.Run(host)
@@ -42,3 +49,29 @@ type toastRecorder struct {
 }
 
 func (h *toastRecorder) Toast(msg string) { *h.toasts = append(*h.toasts, msg) }
+
+func TestSystemSettingsPaneConfirmationPreservesTargetAndInstallation(t *testing.T) {
+	identity := new(byte)
+	calls := 0
+	deps := Deps{CommandSnapshotIdentity: func(string) any { return identity }, SystemCommand: func(id, op, pane string, actor any, done func(string)) {
+		calls++
+		if id != "acme.settings" || op != "open-system-settings" || pane != "original-pane" || actor != identity {
+			t.Fatal("confirmation changed originating settings request")
+		}
+		done("")
+	}}
+	session := NewSession(deps, "acme.settings", api.ListView("Settings"))
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionSystem, Op: "open-system-settings", Setting: "original-pane", Confirm: &api.Confirmation{}}
+	session.action(action, "settings").Run(host)
+	if calls != 0 || len(host.pushed) != 1 || host.hidden {
+		t.Fatal("settings pane bypassed confirmation")
+	}
+	action.Setting = "changed-pane"
+	confirm := host.pushed[0].Search("")[0].Actions[0]
+	confirm.Run(host)
+	confirm.Run(host)
+	if calls != 1 || !host.hidden {
+		t.Fatal("settings confirmation was not a single-use host route")
+	}
+}

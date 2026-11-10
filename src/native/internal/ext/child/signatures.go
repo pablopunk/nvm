@@ -19,6 +19,7 @@ var entryPointSignatures = map[string]reflect.Type{
 	protocol.MethodLoad:            interfaceMethodType((*api.DataLoader)(nil), "LoadItems"),
 	protocol.MethodMenuBars:        interfaceMethodType((*api.MenuBarProvider)(nil), "MenuBars"),
 	protocol.MethodMenuBarTriggers: interfaceMethodType((*api.MenuBarProvider)(nil), "MenuBarTriggers"),
+	protocol.MethodRestoreWindow:   interfaceMethodType((*api.WindowRestorer)(nil), "RestoreWindow"),
 }
 
 // interfaceMethodType returns the function type of method name in the api interface that pointer points to. It

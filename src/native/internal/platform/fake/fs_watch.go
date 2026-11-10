@@ -1,6 +1,7 @@
 package fake
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 
@@ -15,7 +16,9 @@ const watcherBuffer = 64
 type fsWatcher struct {
 	prefix string
 	root   string
-	out    chan platform.Event
+	// skip drops the entries and folders WatchFiltered was asked to leave out; nil keeps everything.
+	skip func(rel string, isDir bool) bool
+	out  chan platform.Event
 	// closed is set once out is closed, by BreakWatches or by the watch's context ending; the other one skips it.
 	closed bool
 }
@@ -45,7 +48,7 @@ func (f *FS) BreakWatches(name string) {
 // buffer drops the event. The caller holds f.mu.
 func (f *FS) notifyLocked(event platform.Event) {
 	for _, w := range f.watchers {
-		if !isUnder(event.Path, w.prefix) {
+		if !isUnder(event.Path, w.prefix) || w.skipped(event.Path, event.IsDir) {
 			continue
 		}
 		select {
@@ -53,6 +56,83 @@ func (f *FS) notifyLocked(event platform.Event) {
 		default:
 		}
 	}
+}
+
+// Watch reports changes at or under name until ctx is done, then closes the channel. Events that do not fit the
+// buffer are dropped, as the port allows.
+func (f *FS) Watch(ctx context.Context, name string) (<-chan platform.Event, error) {
+	return f.WatchFiltered(ctx, name, nil)
+}
+
+// WatchFiltered is Watch without the entries skip returns true for. A watch whose entries exceed the limit set by
+// SetWatchEntryLimit fails with platform.ErrWatchLimit, as the real port does.
+func (f *FS) WatchFiltered(ctx context.Context, name string, skip func(rel string, isDir bool) bool) (<-chan platform.Event, error) {
+	if err := f.faults.take(OpWatch); err != nil {
+		return nil, pathError("watch", name, err)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	key := cleanKey(name)
+	if _, err := f.lookupLocked(key); err != nil {
+		return nil, pathError("watch", name, err)
+	}
+	if f.watchEntryLimit > 0 && f.watchEntriesLocked(key, skip) > f.watchEntryLimit {
+		return nil, pathError("watch", name, platform.ErrWatchLimit)
+	}
+	w := &fsWatcher{prefix: key, root: watchSpelling(name, key), skip: skip, out: make(chan platform.Event, watcherBuffer)}
+	f.watchers = append(f.watchers, w)
+	go f.unwatchOnDone(ctx, w)
+	return w.out, nil
+}
+
+// SetWatchEntryLimit makes a watch fail with platform.ErrWatchLimit when more entries than limit lie under its folder
+// after its skip filter. Zero removes the limit.
+func (f *FS) SetWatchEntryLimit(limit int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.watchEntryLimit = limit
+}
+
+// watchEntriesLocked counts the entries a watch of key would enroll: every file and folder beneath key that skip keeps,
+// and nothing beneath a folder it drops. The caller holds f.mu.
+func (f *FS) watchEntriesLocked(key string, skip func(rel string, isDir bool) bool) int {
+	count := 0
+	folders := []string{key}
+	for len(folders) > 0 {
+		dir := folders[len(folders)-1]
+		folders = folders[:len(folders)-1]
+		for _, child := range f.childrenLocked(dir) {
+			isDir := f.nodes[child].dir
+			if skip != nil && skip(keyRelativeTo(key, child), isDir) {
+				continue
+			}
+			count++
+			if isDir {
+				folders = append(folders, child)
+			}
+		}
+	}
+	return count
+}
+
+// keyRelativeTo returns the slash-separated path of key under root, for a key beneath root.
+func keyRelativeTo(root, key string) string {
+	return strings.TrimPrefix(key, strings.TrimSuffix(root, "/")+"/")
+}
+
+// skipped reports whether an event at path is dropped by the watch's skip filter: the entry itself, or a folder above
+// it on the way from the watched folder.
+func (w *fsWatcher) skipped(path string, isDir bool) bool {
+	if w.skip == nil || path == w.prefix {
+		return false
+	}
+	parts := strings.Split(keyRelativeTo(w.prefix, path), "/")
+	for i := 1; i < len(parts); i++ {
+		if w.skip(strings.Join(parts[:i], "/"), true) {
+			return true
+		}
+	}
+	return w.skip(strings.Join(parts, "/"), isDir)
 }
 
 // watchSpelling is the folder name a watch reports under: the caller's name when it is absolute on this OS, and the

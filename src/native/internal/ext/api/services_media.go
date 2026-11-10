@@ -1,12 +1,13 @@
 package api
 
-// OCRInput names an image: a path, a file URL, a data URL, or a file reference.
+// OCRInput names an image: a path (a leading "~" is the home folder), a file: URL, an image data URL (for example from
+// ReadImage), or a file reference.
 type OCRInput struct {
 	Source string   `json:"source,omitempty"`
 	File   *FileRef `json:"file,omitempty"`
 }
 
-// OCROptions selects recognition languages. Empty means the host default.
+// OCROptions supplies language hints. The bundled recognizer reads Latin scripts together and does not require hints.
 type OCROptions struct {
 	Language  string   `json:"language,omitempty"`
 	Languages []string `json:"languages,omitempty"`
@@ -28,7 +29,9 @@ type OCRResult struct {
 	Blocks     []OCRBlock `json:"blocks,omitempty"`
 }
 
-// OCR recognises text. Declare the ocr capability for review; check System().HasCapability("ocr").
+// OCR recognises text. Declare ocr; the host enforces that declaration.
+// Probe System().HasCapability("ocr") for images or "ocr.screen" for captures.
+// Probes describe wired implementations, independently of permission and temporary-folder readiness.
 // Screen and Region need screen-recording permission from the OS.
 type OCR interface {
 	Image(input OCRInput, options OCROptions) (OCRResult, error)
@@ -55,21 +58,40 @@ type DictationDevice struct {
 	IsDefault bool   `json:"isDefault"`
 }
 
-// DictationStartOptions chooses a microphone and whether system audio is muted while recording.
+// DictationStartOptions chooses a microphone and whether system audio is muted while recording. An empty DeviceID
+// is the system default microphone.
 type DictationStartOptions struct {
+	// IndicatorID binds host-owned microphone levels to this extension’s recording indicator.
+	// Show that indicator with IndicatorRecording first. Levels never cross into extension code;
+	// a replacement indicator or a new recording starts a fresh trace. Empty disables the binding.
+	IndicatorID                string `json:"indicatorId,omitempty"`
 	DeviceID                   string `json:"deviceId,omitempty"`
 	MuteSystemAudioWhileRecord bool   `json:"muteSystemAudioWhileRecording,omitempty"`
 }
 
-// Dictation records speech and returns the hosted transcript. Audio is never exposed to extension
-// code. The recording-recovery helpers of the TypeScript API are built-in only and omitted here.
+// SavedDictation is a saved dictation whose transcript did not complete. Its audio stays on this device and is
+// only sent again by Retry.
+type SavedDictation struct {
+	ID           string `json:"id"`
+	CreatedAtMs  int64  `json:"createdAtMs"`
+	SegmentCount int    `json:"segmentCount"`
+}
+
+// Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves
+// once the microphone delivers stable audio, and Stop is the call that waits for the hosted transcription, so an
+// action that runs it should declare Background. Recordings, Retry and DeleteRecording recover a dictation whose
+// transcription failed; a saved recording is deleted once its text is saved.
 type Dictation interface {
 	Status() (DictationStatus, error)
+	// APIAvailable reports whether authenticated hosted transcription is available for this client.
 	APIAvailable() (bool, error)
 	Devices() ([]DictationDevice, error)
-	// Start resolves once the microphone delivers stable audio.
 	Start(options DictationStartOptions) error
-	// Stop ends capture and returns the transcript.
+	// Stop ends capture and returns the hosted transcript.
 	Stop() (transcript string, err error)
 	Cancel() error
+	Recordings() ([]SavedDictation, error)
+	// Retry transcribes a saved recording again. Each retry is a new, billable request.
+	Retry(id string) (transcript string, err error)
+	DeleteRecording(id string) error
 }

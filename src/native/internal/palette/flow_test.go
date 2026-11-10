@@ -47,7 +47,7 @@ func TestKeyboardOnlySession(t *testing.T) {
 
 	h.key(0, ui.KeyEscape)
 	if h.p.Top() != root || !h.win.visible {
-		t.Fatal("Escape with a query should clear the query and stay on the root")
+		t.Fatal("Escape in an opened view should go back to the root and stay open")
 	}
 	h.key(0, ui.KeyEscape)
 	if h.win.visible {

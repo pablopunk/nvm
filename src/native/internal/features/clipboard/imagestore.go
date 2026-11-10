@@ -89,6 +89,11 @@ func (s *ImageStore) Read(name string) ([]byte, error) {
 	return s.deps.Files.ReadFile(path)
 }
 
+// FilePath returns the full path of a stored image, so a drag can hand the picture to another application as a file.
+func (s *ImageStore) FilePath(name string) (string, error) {
+	return s.path(name)
+}
+
 // path returns the full path of a stored image after checking its name.
 func (s *ImageStore) path(name string) (string, error) {
 	if !imageNamePattern.MatchString(name) {

@@ -28,7 +28,7 @@ function ocrUnavailableView(ctx: ExtensionContext) {
   return ctx.ui.previewView({
     title: 'OCR Unavailable',
     content:
-      '# OCR Unavailable\n\nDeclare the `ocr` capability for review and check `ctx.system.capabilities.has("ocr")` before using OCR helpers.',
+      '# OCR Unavailable\n\nDeclare the `ocr` capability and check `ctx.system.capabilities.has("ocr")` before using OCR helpers. Go hosts enforce the declaration and expose a separate `ocr.screen` probe for captures; permission denial remains distinct from missing support.',
   });
 }
 

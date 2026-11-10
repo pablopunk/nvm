@@ -8,10 +8,14 @@
 package manager
 
 import (
+	"github.com/pablopunk/nvm/native/internal/ext/bundled"
+	systemfeat "github.com/pablopunk/nvm/native/internal/features/system"
 	"path/filepath"
 	"sort"
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ai/extai"
+	"github.com/pablopunk/nvm/native/internal/ai/quota"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
@@ -19,6 +23,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
+	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -28,27 +33,67 @@ import (
 // substitute fakes. Keychain, Network (the public-address port), Clipboard and Logs feed the context services;
 // nil ones make the services that need them unavailable.
 type Ports struct {
-	Files     platform.FS
-	Clock     platform.Clock
-	Worker    platform.Worker
-	Processes platform.Processes
-	Keychain  platform.Keychain
-	Network   platform.HTTP
-	Clipboard platform.Clipboard
-	Logs      *logx.Logger
+	Files platform.FS
+	// FilePictures and PrepareFilePicture are the file pictures the services offer.
+	FilePictures       platform.FilePictures
+	PrepareFilePicture func(path string)
+	FileIndex          services.FileIndex
+	Clock              platform.Clock
+	Worker             platform.Worker
+	Processes          platform.Processes
+	Keychain           platform.Keychain
+	Network            platform.HTTP
+	Clipboard          platform.Clipboard
+	Logs               *logx.Logger
 	// The desktop services. Each one is optional: a nil port answers unavailable for the services that need it.
-	Shell        platform.Shell
-	Capabilities platform.Capabilities
-	OS           string
-	Windows      services.WindowEngine
-	Shortcuts    services.ShortcutTable
-	OCR          *ocr.Service
-	History      func() *clipboard.History
-	Confirm      services.ConfirmFunc
+	Shell          platform.Shell
+	Commands       platform.Commands
+	Capabilities   platform.Capabilities
+	OS             string
+	Windows        services.WindowEngine
+	Desktops       platform.DesktopSwitcher
+	SystemCommands *systemfeat.Services
+	// Frontmost names the app in front for the apps service. Nil answers unavailable.
+	Frontmost services.FrontmostSource
+	Menus     services.MenuPort
+	// Notifier shows the notifications of the system service. Nil answers unavailable.
+	Notifier platform.Notifier
+	// Permissions reads and acts on the OS permissions of the system service. Nil lists none.
+	Permissions services.PermissionSurface
+	// Updates reads the state of the app's updater for the updates service. Nil answers unavailable.
+	Updates services.UpdateSurface
+	// Diagnostics reads the support records and files problem reports. Nil keeps none.
+	Diagnostics services.DiagnosticsSurface
+	// Jobs lists the background jobs and changes them for the jobs service. Nil lists none.
+	Jobs      services.JobsSurface
+	Shortcuts services.ShortcutTable
+	Account   services.AccountState
+	Chats     services.ChatReader
+	Builder   services.BuilderPort
+	OCR       *ocr.Service
+	History   func() *clipboard.History
+	// ClipboardImages makes the files and thumbnails of clipboard pictures for the desktop.clipboard and history services.
+	ClipboardImages services.ClipboardImages
+	Confirm         services.ConfirmFunc
+	Notes           func() *notes.Store
 	// SettingsPanes lists the operating system's settings panes for the system service.
 	SettingsPanes func() []api.SettingsPane
 	// Places lists the standard folders of the home folder for the system service.
 	Places func() []api.Place
+	// Indicators draws the passive indicators of extensions.
+	Indicators services.IndicatorSurface
+	// Dictation records speech for extensions. Nil makes ctx.dictation unavailable.
+	Dictation services.DictationEngine
+	// AI makes the model calls of extensions. Nil makes ctx.AI unavailable.
+	AI *extai.Service
+	// Selection reads, replaces and undoes the selected text of extensions. Nil makes ctx.desktop.selection unavailable.
+	Selection services.SelectionEngine
+	// Apps quits, force quits, hides and reports the running state of the indexed apps. Nil makes them unavailable.
+	Apps services.AppLifecycle
+	// Paste sends the paste and typing actions of extensions to the app in front. Nil makes them unavailable.
+	Paste services.PasteEngine
+	// Notify shows a failure of an extension's action to the user, such as a refused AppleScript. Nil logs only.
+	Notify services.NotifyFunc
 }
 
 // Options tune the child processes of every extension.
@@ -60,13 +105,35 @@ type Options struct {
 	Budgets       map[string]supervisor.Budget
 	// DataRoot holds one data folder per extension, named after its id.
 	DataRoot string
+	// Home is the user's home folder, which "~" in shell arguments stands for.
+	Home string
 	// OnChange runs after any extension's runtime changes state, so a view showing it can redraw. It runs on its
 	// own goroutine and must not block.
 	OnChange func()
+	// CommandsChange runs when a durable command snapshot changes, without implying a runtime lifecycle change.
+	CommandsChange func()
 	// MenuBarRefresh receives an extension's RefreshMenuBar calls. It must not block.
 	MenuBarRefresh func(extensionID string)
+	// RootRefresh receives an extension's InvalidateRoot calls. It must not block.
+	RootRefresh func(extensionID string)
+	// ViewsInvalidate receives an extension's Views.Invalidate calls. It must not block.
+	ViewsInvalidate func(extensionID string)
+	// AIQuota shares each extension's model-call count with the app's other callers of the same owner.
+	AIQuota *quota.Registry
+	// SearchRefresh receives an extension's RefreshSearch calls. It must not block.
+	SearchRefresh func(extensionID, query string)
+	// Rename receives an extension's Self().Rename calls. It must not block on the extension's own call.
+	Rename func(extensionID string, change api.ExtensionRename) error
 	// BuiltIns are the extensions compiled into the app. They run in the host and are always on.
 	BuiltIns []api.Extension
+	// BuiltInSettings returns the host's store for a built-in's settings, such as config.json, or nil when the built-in
+	// keeps its settings in its own file.
+	BuiltInSettings func(id string) services.SettingsHost
+	// LegacyStatePath is the 1.x state file. A folder that names a 1.x source file takes its enabled state from it on
+	// its first scan. Empty means no 1.x state is read.
+	LegacyStatePath string
+	// RunObserver optionally observes extension run lifecycle outcomes.
+	RunObserver RunObserver
 }
 
 // Manager owns the extensions folder root. It is safe for concurrent use.
@@ -76,16 +143,27 @@ type Manager struct {
 	enabled     *enablement.Set
 	config      supervisor.Config
 	serviceDeps services.Deps
-	mu          sync.Mutex
-	entries     map[string]*entry
+	// builtInSettings is Options.BuiltInSettings.
+	builtInSettings func(id string) services.SettingsHost
+	mu              sync.Mutex
+	closed          bool // set by Close under mu; nothing is remembered or written afterwards
+	entries         map[string]*entry
+	// commands keeps each extension's durable commands once they are known; see CachedCommands.
+	commands       commandCache
+	snapshots      *commandSnapshots
+	commandsChange func()
+	runObserver    RunObserver
+	// legacyStatePath is the 1.x state file read by inheritLocked.
+	legacyStatePath string
 }
 
 // entry is one extension folder: the version on disk, the runtime that runs it when it can run, and the host
 // services that runtime calls.
 type entry struct {
-	bundle  bundle.Bundle
-	runtime runner
-	host    *services.Handler
+	snapshotIdentity *byte
+	bundle           bundle.Bundle
+	runtime          runner
+	host             *services.Handler
 	// builtin marks an entry compiled into the app: it has no folder, no review and no enabled state.
 	builtin bool
 }
@@ -97,9 +175,13 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 		return nil, err
 	}
 	m := &Manager{
-		ports:   ports,
-		root:    root,
-		enabled: enabled,
+		ports:           ports,
+		root:            root,
+		enabled:         enabled,
+		builtInSettings: opts.BuiltInSettings,
+		commandsChange:  opts.CommandsChange,
+		snapshots:       openCommandSnapshots(ports.Files, opts.DataRoot),
+		runObserver:     opts.RunObserver,
 		config: supervisor.Config{
 			Worker:        ports.Worker,
 			Clock:         ports.Clock,
@@ -112,29 +194,64 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			Log:           ports.Logs,
 		},
 		serviceDeps: services.Deps{
-			Files:          ports.Files,
-			Clock:          ports.Clock,
-			DataRoot:       opts.DataRoot,
-			Keychain:       ports.Keychain,
-			Network:        ports.Network,
-			Clipboard:      ports.Clipboard,
-			Logs:           ports.Logs,
-			MenuBarRefresh: opts.MenuBarRefresh,
+			Files:              ports.Files,
+			FilePictures:       ports.FilePictures,
+			PrepareFilePicture: ports.PrepareFilePicture,
+			FileIndex:          ports.FileIndex,
+			Clock:              ports.Clock,
+			DataRoot:           opts.DataRoot,
+			Keychain:           ports.Keychain,
+			Network:            ports.Network,
+			Clipboard:          ports.Clipboard,
+			Logs:               ports.Logs,
+			MenuBarRefresh:     opts.MenuBarRefresh,
+			RootRefresh:        opts.RootRefresh,
+			AIQuota:            opts.AIQuota,
+			SearchRefresh:      opts.SearchRefresh,
+			Rename:             opts.Rename,
+			Bundles:            bundled.Shipped(),
+			Notes:              ports.Notes,
+			Displays:           services.NewSharedDisplays(),
 
-			Shell:        ports.Shell,
-			Capabilities: ports.Capabilities,
-			OS:           ports.OS,
-			Windows:      ports.Windows,
-			Shortcuts:    ports.Shortcuts,
-			OCR:          ports.OCR,
-			History:      ports.History,
-			Confirm:      ports.Confirm,
+			Shell:           ports.Shell,
+			ViewsInvalidate: opts.ViewsInvalidate,
+			Commands:        ports.Commands,
+			Home:            opts.Home,
+			Capabilities:    ports.Capabilities,
+			OS:              ports.OS,
+			Windows:         ports.Windows,
+			Desktops:        ports.Desktops,
+			SystemCommands:  ports.SystemCommands,
+			Frontmost:       ports.Frontmost,
+			Menus:           ports.Menus,
+			Notifier:        ports.Notifier,
+			Permissions:     ports.Permissions,
+			Updates:         ports.Updates,
+			Diagnostics:     ports.Diagnostics,
+			Jobs:            ports.Jobs,
+			Shortcuts:       ports.Shortcuts,
+			Account:         ports.Account,
+			OCR:             ports.OCR,
+			Indicators:      ports.Indicators,
+			Dictation:       ports.Dictation,
+			AI:              ports.AI,
+			Chats:           ports.Chats,
+			Builder:         ports.Builder,
+			Selection:       ports.Selection,
+			Paste:           ports.Paste,
+			Apps:            ports.Apps,
+			History:         ports.History,
+			ClipboardImages: ports.ClipboardImages,
+			Confirm:         ports.Confirm,
+			Notify:          ports.Notify,
 
 			SettingsPanes: ports.SettingsPanes,
 			Places:        ports.Places,
 		},
-		entries: map[string]*entry{},
+		entries:         map[string]*entry{},
+		legacyStatePath: opts.LegacyStatePath,
 	}
+	m.serviceDeps.RunScheduled = m.runScheduled
 	m.registerBuiltIns(opts.BuiltIns)
 	if err := m.Refresh(); err != nil {
 		return nil, err
@@ -156,6 +273,7 @@ func (m *Manager) Refresh() error {
 }
 
 func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
+	m.inheritLocked(bundles)
 	seen := map[string]bool{}
 	for _, loaded := range bundles {
 		key := filepath.Base(loaded.Dir)
@@ -168,6 +286,7 @@ func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
 	for key, current := range m.entries {
 		if !seen[key] && !current.builtin {
 			stopEntry(current)
+			m.commands.forget(current.bundle.Manifest.ID)
 			delete(m.entries, key)
 		}
 	}
@@ -178,13 +297,15 @@ func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
 func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 	if old, ok := m.entries[key]; ok {
 		stopEntry(old)
+		m.commands.forget(old.bundle.Manifest.ID)
 	}
+	m.commands.forget(loaded.Manifest.ID)
 	next := &entry{bundle: loaded}
 	if loaded.Runnable() {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
 		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
 		if m.isEnabled(loaded.Manifest.ID) {
-			next.runtime.Start()
+			m.startEntry(next)
 		}
 	}
 	m.entries[key] = next
@@ -220,7 +341,9 @@ func (m *Manager) sortedKeysLocked() []string {
 func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.closed = true
 	for _, e := range m.entries {
+		m.commands.forget(e.bundle.Manifest.ID)
 		stopEntry(e)
 	}
 }

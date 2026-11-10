@@ -81,6 +81,29 @@ func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	return &harness{t: t, m: m, root: root, files: ports.FS, enabled: set}
 }
 
+func TestNewRunObserverObservesRun(t *testing.T) {
+	var outcomes []RunOutcome
+	observer := recordingRunObserver{record: func(outcome RunOutcome) { outcomes = append(outcomes, outcome) }}
+	h := newHarness(t, func(opts *Options) { opts.RunObserver = observer })
+	if err := h.m.Install("acme.settings", fixtureContents(t, "acme.settings"), true); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	h.waitRunning("acme.settings")
+	_, failure, err := h.m.Run(context.Background(), "acme.settings", api.Invocation{Ref: api.ActionRef{ID: "open"}})
+	if err != nil || failure != nil {
+		t.Fatalf("Run: err %v failure %+v", err, failure)
+	}
+	if len(outcomes) != 1 || outcomes[0] != RunOutcomeSuccess {
+		t.Fatalf("observed outcomes = %v, want [success]", outcomes)
+	}
+}
+
+type recordingRunObserver struct{ record func(RunOutcome) }
+
+func (o recordingRunObserver) BeginRun(ctx context.Context) (context.Context, func(RunOutcome)) {
+	return ctx, o.record
+}
+
 // fixtureContents reads a fixture folder from testdata, optionally with a different main.go.
 func fixtureContents(t *testing.T, name string, source ...string) map[string][]byte {
 	t.Helper()

@@ -40,6 +40,7 @@ type Notice struct {
 var (
 	ErrEmpty            = errors.New("chat: the message is empty")
 	ErrBusy             = errors.New("chat: this chat is still answering")
+	ErrExtensionHasChat = errors.New("chat: this extension already has its chat")
 	ErrNotFound         = errors.New("chat: no such chat")
 	ErrNothingToAsk     = errors.New("chat: there is no message to ask again")
 	ErrNotSignedIn      = errors.New("chat: not signed in")
@@ -56,6 +57,8 @@ const (
 	copyFailed           = "The reply failed. Ask again, or try later."
 	copyEmptyReply       = "The model sent no text. Ask again."
 	copyStepLimit        = "The reply used every step without a final answer. Ask again to keep going."
+	copyTurnDeadline     = "The reply ran past 10 minutes, so it was stopped. Ask again to get a new reply."
+	copyPricing          = "Nevermind cannot price the selected AI model right now, so this request was not sent. Try again later or choose another model."
 )
 
 // SignInNotice is the notice shown when a turn starts without a connected account.
@@ -71,6 +74,9 @@ func NoticeFor(err error, partial string) Notice {
 	}
 	if errors.Is(err, ErrEmptyReply) {
 		return Notice{Kind: NoticeFailed, Title: "No reply", Message: copyEmptyReply}
+	}
+	if errors.Is(err, agent.ErrTurnDeadline) {
+		return Notice{Kind: NoticeTimeout, Title: "Reply took too long", Message: copyTurnDeadline}
 	}
 	if errors.Is(err, agent.ErrStepLimit) {
 		return Notice{Kind: NoticeStepLimit, Title: "Step limit reached", Message: copyStepLimit}
@@ -98,7 +104,9 @@ func noticeForCode(typed *backend.Error, partial string) (Notice, bool) {
 		return Notice{Kind: NoticeTooLarge, Title: "Chat too long", Message: copyTooLarge}, true
 	case "unsupported_request_shape":
 		return Notice{Kind: NoticeRequestShape, Title: "Request not supported", Message: backend.UserMessage(typed)}, true
-	case "pricing_unavailable", "model_not_configured":
+	case "pricing_unavailable":
+		return Notice{Kind: NoticeModelUnavailable, Title: "AI model unavailable", Message: copyPricing}, true
+	case "model_not_configured":
 		return Notice{Kind: NoticeModelUnavailable, Title: "Model unavailable", Message: backend.UserMessage(typed)}, true
 	}
 	return Notice{}, false

@@ -5,11 +5,11 @@ import "context"
 // startDownloadLocked starts the download of offer in the background and returns the state that shows it. The
 // download is cancelled by a channel switch, and its result is dropped when the channel changed while it ran (epoch).
 // The caller holds s.mu.
-func (s *Service) startDownloadLocked(ctx context.Context, epoch int, offer Offer) State {
+func (s *Service) startDownloadLocked(ctx context.Context, epoch int, offer Offer) (State, func()) {
 	downloadCtx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	go s.runDownload(downloadCtx, epoch, offer)
-	return State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version}
+	begin := func() { go s.runDownload(downloadCtx, epoch, offer) }
+	return State{Status: StatusDownloading, CurrentVersion: s.state.CurrentVersion, LatestVersion: offer.Version}, begin
 }
 
 func (s *Service) cancelDownloadLocked() {

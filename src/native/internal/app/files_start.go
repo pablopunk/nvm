@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/egoist/mygo"
+
+	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
 // startFiles builds the Files feature from the settings and starts it. The index loads its saved copy and scans the
@@ -19,11 +21,12 @@ func (p *App) startFiles() {
 		Home:      home,
 		Roots:     p.S.FileRoots,
 		Ignore:    p.S.FileIgnore,
-		IndexPath: filepath.Join(configDir(), "files-index.bin"),
-		ThumbDir:  filepath.Join(userCacheDir(home), "nvm-native", "files-thumbs"),
+		IndexPath: filepath.Join(dataDir(), "files-index.bin"),
+		ThumbDir:  filepath.Join(userCacheDir(home), appFolderSlug, "files-thumbs"),
 		Clipboard: ports.Clipboard,
 		CopyFiles: func(paths ...string) error { return mygo.Clipboard.WriteFiles(paths...) },
 		Redraw:    p.redrawPanel,
+		Labels:    platform.ShellLabelsFor(p.goos),
 	})
 	if err != nil {
 		log.Println("files:", err)

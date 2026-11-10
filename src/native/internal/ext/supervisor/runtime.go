@@ -15,21 +15,23 @@ import (
 // Runtime owns the child process of one extension. Calls are serialized: a child answers one request at a
 // time. Every method is safe for concurrent use; Call never blocks past its context.
 type Runtime struct {
-	cfg         Config
-	sourcePath  string
-	identity    api.Identity
-	services    ServiceHandler
-	slots       chan struct{}
-	mu          sync.Mutex
-	state       State
-	reason      string
-	generation  uint64
-	child       *childProcess
-	failures    []time.Time
-	retryAt     time.Time
-	diagnostics []string
-	nextRequest uint64
-	changed     chan struct{}
+	cfg          Config
+	sourcePath   string
+	identity     api.Identity
+	services     ServiceHandler
+	slots        chan struct{}
+	viewServices chan struct{}
+	mu           sync.Mutex
+	state        State
+	reason       string
+	generation   uint64
+	child        *childProcess
+	declared     []string
+	failures     []time.Time
+	retryAt      time.Time
+	diagnostics  []string
+	nextRequest  uint64
+	changed      chan struct{}
 	// lifetime ends when the extension stops; host waits on behalf of a call end with it.
 	lifetime       context.Context
 	cancelLifetime context.CancelFunc
@@ -39,16 +41,30 @@ type Runtime struct {
 // extension's service calls; nil refuses them.
 func New(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
 	r := &Runtime{
-		cfg:        cfg,
-		sourcePath: sourcePath,
-		identity:   identity,
-		services:   services,
-		slots:      make(chan struct{}, 1),
-		state:      StateIdle,
-		changed:    make(chan struct{}),
+		cfg:          cfg,
+		sourcePath:   sourcePath,
+		identity:     identity,
+		services:     services,
+		slots:        make(chan struct{}, 1),
+		viewServices: make(chan struct{}, 4),
+		state:        StateIdle,
+		changed:      make(chan struct{}),
 	}
 	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
 	return r
+}
+
+// StartDormant marks the extension ready to start on its first call. declared lists the methods its source implements,
+// which is what Provides answers until a child reports its own.
+func (r *Runtime) StartDormant(declared []string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.state != StateIdle {
+		return
+	}
+	r.declared = declared
+	r.state = StateDormant
+	r.notifyLocked()
 }
 
 // Start launches the child in the background and returns at once. It does nothing while the extension is
@@ -94,7 +110,7 @@ func (r *Runtime) Provides(method string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.child == nil {
-		return false
+		return r.state == StateDormant && slices.Contains(r.declared, method)
 	}
 	return slices.Contains(r.child.methods, method)
 }
@@ -153,25 +169,48 @@ func (r *Runtime) Call(ctx context.Context, method, query string, invocation *ap
 
 // Do sends a prepared request, assigning its id, and returns the child's response. The rules of Call apply.
 func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Response, error) {
-	if err := r.checkRunnable(); err != nil {
+	r.mu.Lock()
+	lifetime := r.lifetime
+	r.mu.Unlock()
+	if _, _, err := r.childForCall(ctx, lifetime, req.Method); err != nil {
 		return protocol.Response{}, err
 	}
+	queued := r.cfg.Clock.Now()
 	select {
 	case r.slots <- struct{}{}:
+		r.noteSlowSlot(req.Method, r.cfg.Clock.Now().Sub(queued), "waited")
 	case <-ctx.Done():
+		r.noteSlowSlot(req.Method, r.cfg.Clock.Now().Sub(queued), "gave up")
 		return protocol.Response{}, ctx.Err()
+	case <-lifetime.Done():
+		return protocol.Response{}, unavailable("stopped")
+	}
+	if err := ctx.Err(); err != nil {
+		<-r.slots
+		return protocol.Response{}, err
 	}
 	req.ID = r.newRequestID()
 	result := make(chan callResult, 1)
+	gate := &dispatchGate{}
+	onDenied := func(failure *api.SnapshotDenial) {
+		if req.Invocation != nil && req.Invocation.ProtectSnapshot && req.Invocation.OnSnapshotDenied != nil {
+			req.Invocation.OnSnapshotDenied(failure)
+		}
+	}
 	go func() {
 		defer func() { <-r.slots }()
-		response, err := r.exchange(req)
+		exchangeCtx := context.Background()
+		if req.Invocation != nil && req.Invocation.AwaitInitialView {
+			exchangeCtx = ctx
+		}
+		response, err := r.exchange(ctx, exchangeCtx, lifetime, gate, req, onDenied)
 		result <- callResult{response: response, err: err}
 	}()
 	select {
 	case outcome := <-result:
 		return outcome.response, outcome.err
 	case <-ctx.Done():
+		gate.cancel()
 		return protocol.Response{}, ctx.Err()
 	}
 }
@@ -196,32 +235,6 @@ func (r *Runtime) Load(ctx context.Context, loader string) ([]api.Item, error) {
 type callResult struct {
 	response protocol.Response
 	err      error
-}
-
-// checkRunnable returns the reason a call cannot run now, or nil when a running child exists. An expired
-// backoff starts a new child in the background; the call still fails fast so the palette never waits on it.
-func (r *Runtime) checkRunnable() error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	switch r.state {
-	case StateRunning:
-		return nil
-	case StateFailed:
-		if r.cfg.Clock.Now().Before(r.retryAt) {
-			return unavailable("restarting after a failure: " + r.reason)
-		}
-		r.startLocked()
-		return unavailable("restarting after a failure: " + r.reason)
-	case StateIdle:
-		return unavailable("stopped")
-	case StateStarting:
-		return unavailable("starting")
-	case StateBroken:
-		return unavailable("does not load: " + r.reason)
-	case StateDisabled:
-		return unavailable("disabled: " + r.reason)
-	}
-	return unavailable("not available")
 }
 
 func (r *Runtime) newRequestID() uint64 {

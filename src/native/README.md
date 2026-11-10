@@ -28,7 +28,7 @@ Working on Linux in the rig. macOS and Windows have compiled but not been run (s
 
 ## Extensions
 
-An extension is a folder under `~/.config/nvm-native/extensions/` with `extension.json` (the manifest the host reviews:
+An extension is a folder under `~/.config/nevermind/extensions/` with `extension.json` (the manifest the host reviews:
 capabilities, commands, triggers) and `main.go` (`package main`, importing the `api` package). Dropped-in extensions stay
 disabled until reviewed. The API design is in [docs/extension-api.md](docs/extension-api.md); the Go types are in
 `internal/ext/api`.

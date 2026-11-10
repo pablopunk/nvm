@@ -1,16 +1,16 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
-	"github.com/pablopunk/nvm/native/internal/features/ocr"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// serveSystem answers read-only host metadata. It needs no declaration: it reveals nothing an extension could misuse.
-func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
+// serveSystem exposes host metadata and routes system effects through their declaration checks.
+func (h *Handler) serveSystem(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Op {
 	case protocol.OpOS:
 		return h.deps.OS, nil
@@ -22,6 +22,14 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 		return h.settingsPanes(), nil
 	case protocol.OpPlaces:
 		return h.places(), nil
+	case protocol.OpNotify:
+		return nil, h.notify(ctx, call.Args)
+	case protocol.OpPermissions:
+		return h.permissionStatuses(), nil
+	case protocol.OpRequestPermission:
+		return nil, h.requestPermission(ctx, call.Args)
+	case protocol.OpOpenPermissionPane:
+		return nil, h.openPermissionPane(ctx, call.Args)
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }
@@ -38,14 +46,30 @@ func (h *Handler) hasCapability(raw json.RawMessage) (bool, error) {
 // that asks about a feature this host lacks omits it.
 func (h *Handler) publicCapability(name string) bool {
 	switch name {
+	case "network.fetch":
+		return h.deps.Network != nil
 	case "ocr":
-		return ocr.Availability(h.deps.Capabilities).Image
+		return h.deps.OCR.Availability(h.deps.Capabilities).Image
 	case "ocr.screen":
-		return ocr.Availability(h.deps.Capabilities).Screen
+		return h.deps.OCR.Availability(h.deps.Capabilities).Screen
+	case "shell.exec":
+		return platform.ProcessAvailability(h.deps.Commands, h.deps.OS).Exec
+	case "shell.script":
+		return platform.ProcessAvailability(h.deps.Commands, h.deps.OS).LoginScript
+	case "quick-look":
+		return h.filePreview().Supported()
+	case "windows.switch-desktop":
+		return h.deps.Windows != nil && h.deps.Desktops != nil && h.deps.Desktops.Supported()
+	case "system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
+		return h.deps.SystemCommands.SupportsCapability(platform.Capability(name))
+	case "apps.running", "apps.quit", "apps.hide", "apps.uninstall":
+		return h.appLifecycleSupported(platform.Capability(name))
 	case "window-management":
 		return h.deps.Capabilities.Supported(platform.CapabilityWindowManagement)
-	case "shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed",
-		"system.lock", "system.sleep", "system.restart", "system.shutDown", "system.logOut", "system.emptyTrash", "system.settings":
+	case "apps.frontmost", "notifications.show",
+		"shell.reveal", "shell.installedApps", "shell.appIcons", "clipboard.image", "clipboard.changed", "clipboard.paste", "selection.copy",
+		"keyboard.type-text", "autostart.signIn",
+		"windows.always-on-top", "windows.all-spaces", "windows.frame-restore", "windows.display-recovery":
 		return h.deps.Capabilities.Supported(platform.Capability(name))
 	case "clipboard.concealed":
 		_, ok := h.deps.Clipboard.(platform.ConcealedClipboard)

@@ -29,23 +29,21 @@ func (h *Handler) serveSettings(call protocol.ServiceCall) (any, error) {
 		return h.settingSet(call.Args)
 	case protocol.OpToggle:
 		return h.settingToggle(call.Args)
+	case protocol.OpPublishDisplay:
+		return nil, h.publishDisplay(call.Args)
 	}
 	return nil, invalid("settings has no operation %q", call.Op)
 }
 
 // settingDefinitions returns the declared settings with their current values.
 func (h *Handler) settingDefinitions() ([]api.SettingDefinition, error) {
-	docs, err := h.openedDocuments()
-	if err != nil {
-		return nil, err
-	}
-	values, err := docs.settings.Load()
-	if err != nil {
-		return nil, unavailable("the extension's settings cannot be read: %v", err)
-	}
 	definitions := make([]api.SettingDefinition, 0, len(h.manifest.Settings))
 	for _, definition := range h.manifest.Settings {
-		definition.Value = currentValue(values, definition)
+		value, err := h.currentSetting(definition)
+		if err != nil {
+			return nil, err
+		}
+		definition.Value = value
 		definitions = append(definitions, definition)
 	}
 	return definitions, nil
@@ -60,20 +58,18 @@ func (h *Handler) settingGet(args json.RawMessage) (protocol.GetResult, error) {
 	if !found {
 		return protocol.GetResult{}, nil
 	}
-	docs, err := h.openedDocuments()
+	value, err := h.currentSetting(definition)
 	if err != nil {
 		return protocol.GetResult{}, err
 	}
-	values, err := docs.settings.Load()
-	if err != nil {
-		return protocol.GetResult{}, unavailable("the extension's settings cannot be read: %v", err)
-	}
-	return protocol.GetResult{Found: true, Value: currentValue(values, definition)}, nil
+	return protocol.GetResult{Found: true, Value: value}, nil
 }
 
 // settingSet stores a value after the capability check and the type check. It is saved before it returns, so
 // the caller sees the value persisted.
 func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
+	h.settingsMu.Lock()
+	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
 		return nil, err
 	}
@@ -93,6 +89,8 @@ func (h *Handler) settingSet(args json.RawMessage) (json.RawMessage, error) {
 
 // settingToggle flips a boolean setting and returns the new value.
 func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
+	h.settingsMu.Lock()
+	defer h.settingsMu.Unlock()
 	if err := h.require(api.CapabilitySettingsWrite); err != nil {
 		return nil, err
 	}
@@ -107,6 +105,27 @@ func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
 	if definition.Type != api.SettingBoolean {
 		return nil, invalid("setting %q is not a boolean and cannot be toggled", request.Key)
 	}
+	value, err := h.currentSetting(definition)
+	if err != nil {
+		return nil, err
+	}
+	var current bool
+	if err := json.Unmarshal(value, &current); err != nil {
+		return nil, invalid("setting %q does not hold a boolean", request.Key)
+	}
+	next, _ := json.Marshal(!current)
+	return next, h.saveSetting(request.Key, next)
+}
+
+// currentSetting is the stored value of a declared setting, or its default. A built-in whose settings the host keeps
+// reads them from the host's store; every other extension reads its settings file.
+func (h *Handler) currentSetting(definition api.SettingDefinition) (json.RawMessage, error) {
+	if h.hostSettings != nil {
+		if stored, found := h.hostSettings.Load(definition.ID); found {
+			return stored, nil
+		}
+		return defaultValue(definition), nil
+	}
 	docs, err := h.openedDocuments()
 	if err != nil {
 		return nil, err
@@ -115,15 +134,18 @@ func (h *Handler) settingToggle(args json.RawMessage) (json.RawMessage, error) {
 	if err != nil {
 		return nil, unavailable("the extension's settings cannot be read: %v", err)
 	}
-	var current bool
-	if err := json.Unmarshal(currentValue(values, definition), &current); err != nil {
-		return nil, invalid("setting %q does not hold a boolean", request.Key)
-	}
-	next, _ := json.Marshal(!current)
-	return next, h.saveSetting(request.Key, next)
+	return currentValue(values, definition), nil
 }
 
+// saveSetting stores a value where the extension's settings live: in the host's store for a built-in that has one,
+// else in the extension's settings file.
 func (h *Handler) saveSetting(id string, value json.RawMessage) error {
+	if h.hostSettings != nil {
+		if err := h.hostSettings.Save(id, value); err != nil {
+			return unavailable("the setting cannot be saved: %v", err)
+		}
+		return nil
+	}
 	docs, err := h.openedDocuments()
 	if err != nil {
 		return err
@@ -153,6 +175,11 @@ func currentValue(values settingValuesDoc, definition api.SettingDefinition) jso
 	if stored, ok := values.Values[definition.ID]; ok {
 		return stored
 	}
+	return defaultValue(definition)
+}
+
+// defaultValue is the declared default of a setting, or null when it declares none.
+func defaultValue(definition api.SettingDefinition) json.RawMessage {
 	if len(definition.Value) == 0 {
 		return json.RawMessage("null")
 	}

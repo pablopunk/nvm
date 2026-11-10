@@ -22,21 +22,6 @@ func BenchmarkRootSearchKeystroke(b *testing.B) {
 	}
 }
 
-// BenchmarkClipboardHistoryFilter runs the Clipboard History view's search over the 5k-item data
-// set. Text matches build full rows, which is most of the cost; images are skipped by a text query.
-func BenchmarkClipboardHistoryFilter(b *testing.B) {
-	p := newBenchPalette(b)
-	view := p.clipboardView()
-	for _, query := range benchQueries {
-		b.Run("query="+query, func(b *testing.B) {
-			b.ReportAllocs()
-			for range b.N {
-				benchItems = view.Search(query)
-			}
-		})
-	}
-}
-
 // BenchmarkFileIndexSearch searches the 50k-path file index as the root view (4 results) and the
 // Search Files view (40 results) do. Matching is by base name, prefix matches first.
 func BenchmarkFileIndexSearch(b *testing.B) {

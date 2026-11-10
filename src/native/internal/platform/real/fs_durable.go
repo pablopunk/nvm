@@ -13,9 +13,14 @@ func (osFS) CreateExclusive(name string, data []byte, perm fs.FileMode) error {
 	}
 	if _, err := file.Write(data); err != nil {
 		_ = file.Close()
+		_ = os.Remove(name)
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		_ = os.Remove(name)
+		return err
+	}
+	return nil
 }
 
 // Sync flushes a file or folder to stable storage. It opens read-write when it can and falls back to a

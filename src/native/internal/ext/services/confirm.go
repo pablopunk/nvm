@@ -35,6 +35,12 @@ type waitMark struct {
 // and when the user does not confirm. The wait ends with the extension's lifetime, not the request budget, which is
 // far shorter than a person's answer.
 func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
+	if h.closed.Load() {
+		return errHandlerClosed
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if h.deps.Confirm == nil {
 		return unavailable("this host cannot ask for confirmation, so %s did not run", action)
 	}
@@ -44,7 +50,10 @@ func (h *Handler) confirmDestructive(ctx context.Context, action string) error {
 	waitCtx, cancel := context.WithTimeout(protocol.LifetimeOf(ctx), ConfirmWait)
 	defer cancel()
 	confirmed, err := h.deps.Confirm(waitCtx, Question{Extension: h.manifest.Identity.Title, Action: action})
-	if err != nil {
+	if h.closed.Load() {
+		return errHandlerClosed
+	}
+	if err != nil || waitCtx.Err() != nil {
 		return serviceError{failure: api.Failure{Code: api.CodeCancelled, Message: action + " was not confirmed in time"}, cause: api.ErrPermission}
 	}
 	if !confirmed {

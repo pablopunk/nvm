@@ -1,7 +1,8 @@
 // Package api defines the Nevermind extension API v1 as Go types: the data that crosses from
 // extension code to the host, the author-side behaviour interfaces, and the context services.
 //
-// This is design-stage code. Nothing in the app imports it yet; the host runtime (WP3.2) will.
+// The host and supervised extension children share this contract. Author callbacks stay in the child;
+// host operations cross the typed protocol and retain their installation-scoped authority.
 //
 // Rules for every type in this package:
 //   - Data types are JSON-serializable with stable field names and contain no func, chan or

@@ -23,6 +23,10 @@ const (
 	ColorRed    Color = "red"
 	ColorOrange Color = "orange"
 	ColorPink   Color = "pink"
+	ColorTeal   Color = "teal"
+	// ColorNone is the neutral foreground: the row's tile takes no accent, as the native rows of the palette had.
+	// An extension's rows are tinted by default.
+	ColorNone Color = "none"
 )
 
 // PanelVisibility controls whether an action panel is shown, menu-only, or hidden while its
@@ -54,7 +58,7 @@ const (
 	ModeBackground BackgroundMode = "background"
 )
 
-// Placement says where a command appears when the palette opens.
+// Placement says where a command's row appears: root and search by default, search for a typed query only, hidden nowhere.
 type Placement string
 
 const (

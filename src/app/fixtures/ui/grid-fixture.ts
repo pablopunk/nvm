@@ -135,3 +135,56 @@ export async function gridView(ctx: ExtensionContext) {
     ],
   });
 }
+
+const SEARCH_FIXTURE_WORDS = [
+  ['Apple', '🍎'],
+  ['Banana', '🍌'],
+  ['Cherry', '🍒'],
+  ['Grapes', '🍇'],
+  ['Lemon', '🍋'],
+] as const;
+
+function searchFixtureItem(
+  ctx: ExtensionContext,
+  title: string,
+  glyph: string,
+) {
+  return ctx.ui.item({
+    id: `fruit-${title}`,
+    title,
+    glyph,
+    primaryAction: ctx.actions.copyText(glyph, `Copy ${title}`),
+  });
+}
+
+/** Local matches appear instantly; the delayed second batch follows them for the same search text. */
+export function searchResultsGridView(ctx: ExtensionContext) {
+  return ctx.ui.grid({
+    id: 'dev-ui-grid-search-results',
+    title: 'Dev UI · Grid Search Results',
+    subtitle:
+      'Type "yellow": local matches stay instant, then a second batch arrives about a second later',
+    searchBarPlaceholder: 'Search fruit',
+    layout: 'compact',
+    columns: 8,
+    items: SEARCH_FIXTURE_WORDS.map(([title, glyph]) =>
+      searchFixtureItem(ctx, title, glyph),
+    ),
+    onSearchChange: ctx.actions.run(
+      'Search by Meaning',
+      async function searchFixtureByMeaning(_innerCtx, action) {
+        await new Promise((resolve) => setTimeout(resolve, 800));
+        const searchText = String(action.value ?? '');
+        const meaningMatches = /yellow/i.test(searchText)
+          ? [SEARCH_FIXTURE_WORDS[1], SEARCH_FIXTURE_WORDS[4]]
+          : [];
+        return {
+          patch: {
+            searchResultIds: meaningMatches.map(([title]) => `fruit-${title}`),
+          },
+        };
+      },
+    ),
+    emptyView: { title: 'No fruit found', subtitle: 'Try "yellow".' },
+  });
+}

@@ -3,14 +3,18 @@
 package rigtest
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/pablopunk/nvm/native/internal/platform/folders"
 )
 
 const (
@@ -25,8 +29,9 @@ const (
 type Options struct {
 	// Theme is NVM_THEME ("dark" forces the dark palette). Empty keeps the light default.
 	Theme string
-	// Hotkey is written to the isolated settings.json, for a rig that must not share a grab with
-	// another app on the display. Empty keeps the app default, Alt+Shift+Space.
+	// Hotkey is written to the isolated config.json, for a rig that must not share a grab with
+	// another app on the display. Empty writes DefaultHotkey when the HOME holds no palette shortcut
+	// yet, and keeps the one a previous launch of that HOME left.
 	Hotkey string
 	// Home is the HOME of this launch, kept by the caller. A second launch with the same Home runs
 	// the app over the state the first one left (J10). Empty gives the launch a fresh HOME.
@@ -108,8 +113,8 @@ func Launch(t *testing.T, opts Options) *App {
 			t.Fatal(err)
 		}
 	}
-	if opts.Hotkey != "" {
-		if err := writeHotkeySettings(home, opts.Hotkey); err != nil {
+	if opts.Hotkey != "" || paletteHotkeyMissing(home) {
+		if err := writeHotkeySettings(home, hotkey); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -169,7 +174,7 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 	for _, kv := range parent {
 		key, _, _ := strings.Cut(kv, "=")
 		switch key {
-		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID", "NVM_RIG_BACKEND":
+		case "HOME", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME", "MYGO_AUTOMATION", "NVM_THEME", "XDG_ACTIVATION_TOKEN", "DESKTOP_STARTUP_ID", "NVM_RIG_BACKEND":
 			continue
 		}
 		env = append(env, kv)
@@ -180,6 +185,8 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 		"HOME="+home,
 		"XDG_CONFIG_HOME="+filepath.Join(home, ".config"),
 		"XDG_DATA_HOME="+filepath.Join(home, ".local", "share"),
+		"XDG_CACHE_HOME="+filepath.Join(home, ".cache"),
+		"XDG_STATE_HOME="+filepath.Join(home, ".local", "state"),
 		"XDG_RUNTIME_DIR="+runtimeDir,
 		"MYGO_AUTOMATION="+socket,
 		"NVM_RIG_BACKEND="+backend,
@@ -190,13 +197,19 @@ func launchEnvironment(parent []string, home, runtimeDir, socket, theme, backend
 	return env
 }
 
+// rigDataDir is the machine-local folder under home: the Linux user-data folder, which the rig reaches through XDG_DATA_HOME.
+func rigDataDir(home string) string {
+	return filepath.Join(home, ".local", "share", "nevermind-next")
+}
+
+// writeHotkeySettings writes the palette shortcut to the isolated config.json, the file 2.0 reads it from.
 func writeHotkeySettings(home, hotkey string) error {
-	dir := filepath.Join(home, ".config", "nvm-native")
+	dir := folders.Shared(home)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
-	data := fmt.Sprintf("{\"Hotkey\": %q}\n", hotkey)
-	return os.WriteFile(filepath.Join(dir, "settings.json"), []byte(data), 0o600)
+	data := fmt.Sprintf("{\n  \"version\": 1,\n  \"settings\": {\n    \"paletteHotkey\": %q\n  }\n}\n", hotkey)
+	return os.WriteFile(filepath.Join(dir, folders.PortableConfigName), []byte(data), 0o600)
 }
 
 // waitReady polls the app log for the "ready" line and fails early on a hotkey registration error
@@ -224,19 +237,21 @@ func (a *App) waitReady(t *testing.T) {
 	}
 }
 
-// Stop asks the app to quit (SIGTERM to its pid only), escalates to SIGKILL after a grace period
-// and removes its socket. It is idempotent and runs at test cleanup.
+// Stop asks the app to quit and escalates to SIGKILL after a grace period. Launch makes the app its own session
+// and process group, so the signals reach the helpers it started too (the extension host, WebKit's processes), and
+// a helper still alive after the app exits is killed with the group. It is idempotent and runs at test cleanup.
 func (a *App) Stop() {
 	if a.pid == 0 || a.isExited() {
 		return
 	}
-	_ = syscall.Kill(a.pid, syscall.SIGTERM)
+	_ = syscall.Kill(-a.pid, syscall.SIGTERM)
 	select {
 	case <-a.done:
 	case <-time.After(stopTimeout):
-		_ = syscall.Kill(a.pid, syscall.SIGKILL)
+		_ = syscall.Kill(-a.pid, syscall.SIGKILL)
 		<-a.done
 	}
+	_ = syscall.Kill(-a.pid, syscall.SIGKILL)
 	_ = os.Remove(a.socket)
 }
 
@@ -282,12 +297,15 @@ func (a *App) isExited() bool {
 }
 
 // ArtifactsDir is the per-test directory for screenshots and logs. NVM_RIG_ARTIFACTS selects the
-// root; CI uploads it.
+// root; CI uploads it. Without it, each test binary gets its own root, so two runs on one machine never share logs.
 func ArtifactsDir(t *testing.T) string {
 	t.Helper()
 	root := os.Getenv("NVM_RIG_ARTIFACTS")
 	if root == "" {
-		root = filepath.Join(os.TempDir(), "nvm-rig-artifacts")
+		var err error
+		if root, err = processArtifactsRoot(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	dir := filepath.Join(root, sanitizeName(t.Name()))
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -295,6 +313,11 @@ func ArtifactsDir(t *testing.T) string {
 	}
 	return dir
 }
+
+// processArtifactsRoot is the temp folder this test binary writes to when NVM_RIG_ARTIFACTS is unset.
+var processArtifactsRoot = sync.OnceValues(func() (string, error) {
+	return os.MkdirTemp(os.TempDir(), "nvm-rig-artifacts-")
+})
 
 func sanitizeName(name string) string {
 	var b strings.Builder
@@ -312,11 +335,24 @@ func sanitizeName(name string) string {
 // hasLine reports whether a log line is exactly message, after the timestamp log.Print adds.
 func hasLine(log, message string) bool {
 	for _, got := range strings.Split(log, "\n") {
-		if strings.TrimSpace(got) == message || strings.HasSuffix(got, " "+message) {
+		if strings.TrimSpace(got) == message || strings.HasSuffix(got, " "+message) || logxMessageIs(got, message) {
 			return true
 		}
 	}
 	return false
+}
+
+// logxMessageIs reports whether line is a logx record whose msg is message. The app logs its standard lines as
+// records, so the plain-line match alone never sees them.
+func logxMessageIs(line, message string) bool {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, "{") {
+		return false
+	}
+	var record struct {
+		Msg string `json:"msg"`
+	}
+	return json.Unmarshal([]byte(trimmed), &record) == nil && record.Msg == message
 }
 
 func tail(s string, lines int) string {

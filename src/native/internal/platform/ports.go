@@ -5,9 +5,10 @@ package platform
 // they use, through narrow parameters; this struct exists for the composition root and for tests that
 // need the whole platform at once.
 type Ports struct {
-	Clock Clock
-	FS    FS
-	HTTP  HTTP
+	Clock     Clock
+	OSRelease OSRelease
+	FS        FS
+	HTTP      HTTP
 	// PublicHTTP fetches public web pages and images for link previews. It refuses every destination that
 	// is not a public address at connect time (see HTTP and netpolicy.go); HTTP stays unrestricted for the
 	// backend and its local development servers.
@@ -24,6 +25,8 @@ type Ports struct {
 	DeepLinks    DeepLinks
 	Processes    Processes
 	Helper       Helper
+	// Commands runs the programs extensions ask the shell helpers to run.
+	Commands     Commands
 	Hotkeys      Hotkeys
 	Focus        Focus
 	Tray         TrayHost
@@ -31,6 +34,7 @@ type Ports struct {
 	System       System
 	Permissions  Permissions
 	Windows      WindowManager
+	Desktops     DesktopSwitcher
 	Capabilities Capabilities
 	// Microphone records PCM for dictation; Opus encodes it. Both are used only by the dictation service.
 	Microphone Microphone
@@ -38,6 +42,14 @@ type Ports struct {
 	// FileDialog shows the operating system's file and folder choosers for extension form fields.
 	FileDialog FileDialog
 	// Text reads the text of image files and Capture saves screenshots for the screen OCR. Only the OCR service uses them.
-	Text    TextRecognizer
-	Capture ScreenCapturer
+	Text TextRecognizer
+	// FilePictures draws a picture of any file. It is nil where the platform has no such service.
+	FilePictures FilePictures
+	Capture      ScreenCapturer
+	// OutputMute mutes the speakers while a dictation records. Only the dictation's audio mute uses it.
+	OutputMute OutputMuter
+	// FileDrag carries files out of the palette to other applications as a native drag.
+	FileDrag FileDrag
+	// DirectoryAccess reports whether the current process can write directory entries there, including group and ACL grants.
+	DirectoryAccess DirectoryAccess
 }

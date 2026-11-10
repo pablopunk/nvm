@@ -82,7 +82,10 @@ import {
 } from './extension-view/form-fields';
 import { usePaletteForm } from './extension-view/palette-form';
 import { useExtensionNavigation } from './extension-view/use-extension-navigation';
-import { patchCommandView } from './extension-view/view-patches';
+import {
+  patchCommandView,
+  selectionAfterViewPatch,
+} from './extension-view/view-patches';
 import { ExtensionWindowFooter } from './extension-window-footer';
 import { extensionWindowShellClassName } from './extension-window-shell';
 import { feedbackView } from './feedback';
@@ -163,6 +166,10 @@ import {
 import { useSearchResults } from './use-search-results';
 import { useSessionState } from './use-session-state';
 import { useShortcutReveal } from './use-shortcut-reveal';
+import {
+  mergeViewSearchResults,
+  useViewSearchResults,
+} from './use-view-search-results';
 
 type ActionKind =
   | 'open-url'
@@ -1740,6 +1747,7 @@ export function App() {
     extensionNavigation.activeFrame?.primary,
   );
   const childQuery = extensionNavigation.activeEntry?.query || '';
+  const viewSearchResults = useViewSearchResults(extensionView, childQuery);
   const setChildQuery = extensionNavigation.setQuery;
   const [actionQuery, setActionQuery] = useState('');
   const [shortcutFor, setShortcutFor] = useState<Action | null>(null);
@@ -3204,32 +3212,6 @@ export function App() {
     extensionNavigation.popView();
   }
 
-  function selectionAfterPatch(
-    current: ExtensionView,
-    next: ExtensionView,
-    patch: CommandViewPatch,
-  ) {
-    const nextItems = allViewItems(next);
-    if (nextItems.length === 0) return '';
-    if (patch.selectedItemId !== undefined)
-      return nextItems.some((item) => item.id === patch.selectedItemId)
-        ? patch.selectedItemId
-        : nextItems[0].id;
-    if (
-      next.selectedItemId &&
-      nextItems.some((item) => item.id === next.selectedItemId)
-    )
-      return next.selectedItemId;
-    const selected = selectedValueRef.current;
-    if (selected && nextItems.some((item) => item.id === selected))
-      return selected;
-    const currentItems = allViewItems(current);
-    const currentIndex = currentItems.findIndex((item) => item.id === selected);
-    const fallbackIndex =
-      currentIndex < 0 ? 0 : Math.min(currentIndex, nextItems.length - 1);
-    return nextItems[fallbackIndex]?.id || '';
-  }
-
   function viewIdentity(view: ExtensionView | null) {
     return view ? `${view.id || ''}:${view.type}:${view.title}` : '';
   }
@@ -3264,7 +3246,12 @@ export function App() {
         if (!current) return;
         const scrollTop = resultsListRef.current?.scrollTop;
         const next = patchCommandView(current, patch);
-        const nextSelected = selectionAfterPatch(current, next, patch);
+        const nextSelected = selectionAfterViewPatch(
+          current,
+          next,
+          patch,
+          selectedValueRef.current,
+        );
         extensionViewRef.current = next;
         extensionNavigation.setView(next);
         selectValue(nextSelected);
@@ -4207,10 +4194,16 @@ export function App() {
       'view.filter-items',
       { childQueryLength: childQuery.length, itemCount: items.length },
       () =>
-        filterCommandItems(
+        mergeViewSearchResults(
+          filterCommandItems(
+            items,
+            filterQuery,
+            minScore ? { minScore } : undefined,
+          ),
           items,
+          viewSearchResults,
+          view,
           filterQuery,
-          minScore ? { minScore } : undefined,
         ),
     );
   }

@@ -32,7 +32,9 @@ the packages as run artifacts. It publishes nothing; see [release.md](release.md
 MyGo signs both with the app's identity (its resources rule): the hardened runtime
 and a timestamp for Developer ID, ad hoc otherwise. The Go loader tries the bundled
 libopus before the system one. Tesseract is not bundled: Linux users install it,
-and the app reports text recognition only when it finds it.
+and the app reports text recognition only when it finds it. The macOS job fails when
+the window helper is missing from the bundle or has the wrong architecture, because the
+window commands look for it in `Contents/Resources` and fail without it.
 
 Entitlements (`packaging/entitlements.mac.plist`): audio input, camera and Apple
 events, which the paste and copy keystrokes need. No JIT entitlement: the app does
@@ -59,9 +61,12 @@ Existing secrets, the same names as the Electron release workflows:
 `MACOS_CERT_P12_BASE64`, `MACOS_CERT_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID`,
 `APPLE_APP_SPECIFIC_PASSWORD`.
 
-- macOS: a run signs when the certificate secrets exist. It notarizes only in a
-  `workflow_dispatch` run that also has the Apple ID secrets. A pull request signs
-  (same-repository pull requests only) and never notarizes.
+- macOS: a run signs when the certificate secrets exist. It also notarizes when the
+  Apple ID secrets exist, on pull requests and dispatch runs alike. Notarization
+  waits for Apple's verdict (`notarytool --wait`), then MyGo staples the DMG and the
+  app, and the job checks the DMG with `stapler validate` and `spctl`. Same-repository
+  pull requests get the secrets; forks do not, so their builds are unsigned.
+  The job timeout (90 minutes) covers the build and that wait.
 - Windows: `WINDOWS_CERTIFICATE` (base64 `.pfx`) and `WINDOWS_CERTIFICATE_PASSWORD`.
   These secrets do not exist yet, so Windows packages are unsigned.
 - Linux: no signing.

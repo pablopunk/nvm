@@ -26,6 +26,10 @@ func (r *Runner) dispatch(ctx context.Context, method, query string, invocation 
 		return r.menuBars(ctx)
 	case protocol.MethodMenuBarTriggers:
 		return r.menuBarTriggers()
+	case protocol.MethodRestoreWindow:
+		return r.restoreWindow(ctx, invocation)
+	case protocol.MethodRowActions:
+		return r.rowActions(ctx, invocation)
 	}
 	return nil, fmt.Errorf("unknown method %q: %w", method, api.ErrInvalidInput)
 }
@@ -67,7 +71,11 @@ func (r *Runner) run(ctx context.Context, invocation *api.Invocation) (json.RawM
 		in = *invocation
 	}
 	out, err := handler.RunAction(r.context.For(ctx, in.Launch), in)
-	return encode(protocol.MethodRun, out, err)
+	data, marshalErr := encode(protocol.MethodRun, out, nil)
+	if marshalErr != nil {
+		return nil, marshalErr
+	}
+	return data, err
 }
 
 func (r *Runner) load(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
@@ -92,12 +100,38 @@ func (r *Runner) menuBars(ctx context.Context) (json.RawMessage, error) {
 	return encode(protocol.MethodMenuBars, out, err)
 }
 
+func (r *Runner) rowActions(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	provider, ok := r.ext.(api.RowActionProvider)
+	if !ok {
+		return nil, notImplemented(protocol.MethodRowActions)
+	}
+	var args map[string]string
+	if invocation != nil {
+		args = invocation.Ref.Args
+	}
+	out, err := provider.RowActions(r.context.For(ctx, api.LaunchContext{}), api.RowFromArgs(args))
+	return encode(protocol.MethodRowActions, out, err)
+}
+
 func (r *Runner) menuBarTriggers() (json.RawMessage, error) {
 	provider, ok := r.ext.(api.MenuBarProvider)
 	if !ok {
 		return nil, notImplemented(protocol.MethodMenuBarTriggers)
 	}
 	return encode(protocol.MethodMenuBarTriggers, provider.MenuBarTriggers(), nil)
+}
+
+func (r *Runner) restoreWindow(ctx context.Context, invocation *api.Invocation) (json.RawMessage, error) {
+	restorer, ok := r.ext.(api.WindowRestorer)
+	if !ok {
+		return nil, notImplemented(protocol.MethodRestoreWindow)
+	}
+	key := ""
+	if invocation != nil {
+		key = invocation.Ref.ID
+	}
+	out, err := restorer.RestoreWindow(r.context.For(ctx, api.LaunchContext{}), key)
+	return encode(protocol.MethodRestoreWindow, out, err)
 }
 
 // encode marshals a result, or returns the entry point's error. A nil result encodes as null, as a child's does.

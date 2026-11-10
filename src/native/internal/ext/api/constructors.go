@@ -29,9 +29,15 @@ func CopyText(title, text string, concealed bool) Action {
 	return Action{Kind: ActionCopyText, Title: title, Text: text, Paste: &PasteOptions{Concealed: concealed}}
 }
 
-// PasteText pastes text into the frontmost app and restores the clipboard afterwards.
+// CopyImage copies an image file to the clipboard and closes the palette. File paths require the desktop.files
+// capability; supported formats and size limits follow the host image decoder.
+func CopyImage(title, path string) Action {
+	return Action{Kind: ActionCopyImage, Title: title, Path: path}
+}
+
+// PasteText pastes text into the frontmost app. The host does not restore the clipboard afterwards, so the text stays on it.
 func PasteText(title, text string) Action {
-	return Action{Kind: ActionPasteText, Title: title, Text: text, Paste: &PasteOptions{RestoreClipboard: true}}
+	return Action{Kind: ActionPasteText, Title: title, Text: text}
 }
 
 // SetQuery replaces the palette's search text and searches again, keeping the palette open.
@@ -87,9 +93,9 @@ func FormView(title string, fields []Field, submit Action) View {
 	return View{Kind: ViewForm, Title: title, Form: &FormSpec{Fields: fields, Submit: &submit}}
 }
 
-// EditorView builds an editable text or Markdown surface.
+// EditorView builds an editable plain-text surface, as ui.editor does; set Editor.Format to "markdown" for Markdown.
 func EditorView(title, content string, submit Action) View {
-	return View{Kind: ViewEditor, Title: title, Editor: &EditorSpec{Content: content, Format: "markdown", Submit: &submit}}
+	return View{Kind: ViewEditor, Title: title, Editor: &EditorSpec{Content: content, Submit: &submit}}
 }
 
 // PreviewView builds a read-only Markdown preview.
@@ -120,4 +126,22 @@ func Section(title string, actions ...Action) ActionSection {
 // Panel builds an action panel from sections.
 func Panel(sections ...ActionSection) *ActionPanel {
 	return &ActionPanel{Sections: sections}
+}
+
+// ErrorView is the failure or invalid-input view with a title and the corrective message the user must read. The
+// message is one contextual item, which the palette draws at full contrast and wraps.
+func ErrorView(title, message string) View {
+	return ListView(title, Item{ID: "error", Title: title, Subtitle: message, Disabled: true, Contextual: true})
+}
+
+// Paste puts content on the clipboard and sends the paste gesture to the app in front. The palette hides first. Options
+// follow ctx.actions.paste: RestoreClipboard puts the clipboard back afterwards, and Concealed keeps it out of history.
+func Paste(title string, content ClipboardContent, options PasteOptions) Action {
+	return Action{Kind: ActionPaste, Title: title, Content: &content, Paste: &options}
+}
+
+// TypeText types text into the app in front as key presses, so the clipboard is left alone. It needs the
+// keyboard.type-text system capability, which only macOS offers.
+func TypeText(title, text string, options TypeOptions) Action {
+	return Action{Kind: ActionTypeText, Title: title, Text: text, Typing: &options}
 }

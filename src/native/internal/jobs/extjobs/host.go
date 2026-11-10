@@ -14,7 +14,7 @@ import (
 // Host is the part of the extension manager the adapter uses. *manager.Manager satisfies it.
 type Host interface {
 	Commands(ctx context.Context) []manager.CommandResult
-	Run(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error)
+	RunCommand(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error)
 }
 
 // Registry is the part of the scheduler the adapter uses. *jobs.Scheduler satisfies it.

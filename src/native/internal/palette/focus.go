@@ -36,10 +36,10 @@ func (p *Palette) returnFocus() {
 }
 
 // hideAfterAction dismisses the palette for an action that chose where the keyboard goes: the app it opens, or
-// the one it pastes into. The palette does not send the keyboard back over that choice.
+// the one it pastes into. Its pending completion remains valid; this automatic hide does not abandon the action.
 func (p *Palette) hideAfterAction() {
 	p.returnTo = nil
-	p.Hide()
+	p.hide()
 }
 
 // hideAfterFocusMovedAway dismisses the palette after another window took the keyboard, as a click on it does. The

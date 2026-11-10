@@ -4,67 +4,13 @@ package real
 
 import (
 	"context"
-	_ "embed"
 	"errors"
-	"os"
+	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
-
-// visionScript is the Vision recognizer, run by the system Swift interpreter as Electron's OCR does. It prints one JSON
-// object: the text, the mean confidence, the first language and one block per recognized line with its box in pixels.
-//
-//go:embed vision_text.swift
-var visionScript string
-
-// swiftInterpreter is the Swift that ships with the Command Line Tools; the recognizer needs no compile step.
-const swiftInterpreter = "/usr/bin/swift"
-
-// visionText reads text with the Vision framework through the Swift interpreter.
-type visionText struct {
-	helper platform.Helper
-}
-
-func newTextRecognizer(helper platform.Helper) platform.TextRecognizer {
-	return visionText{helper: helper}
-}
-
-// Recognize writes the script to a private temporary file, runs it on path and parses what it prints.
-func (v visionText) Recognize(ctx context.Context, path string, languages []string) (platform.TextResult, error) {
-	checked, err := checkLanguages(languages)
-	if err != nil {
-		return platform.TextResult{}, err
-	}
-	script, err := writeTemporaryScript(visionScript)
-	if err != nil {
-		return platform.TextResult{}, err
-	}
-	defer os.Remove(script)
-	result, err := v.helper.Run(ctx, swiftInterpreter, append([]string{script, path}, checked...), nil)
-	if err != nil {
-		return platform.TextResult{}, err
-	}
-	if result.ExitCode != 0 {
-		return platform.TextResult{}, errors.New(recognitionFailure(result.Stderr))
-	}
-	return parseVisionOutput(result.Stdout)
-}
-
-// writeTemporaryScript writes source to a new file that only this user can read, and returns its path.
-func writeTemporaryScript(source string) (string, error) {
-	file, err := os.CreateTemp("", "nvm-vision-*.swift")
-	if err != nil {
-		return "", err
-	}
-	defer file.Close()
-	if _, err := file.WriteString(source); err != nil {
-		os.Remove(file.Name())
-		return "", err
-	}
-	return file.Name(), nil
-}
 
 // screencapture is the system screenshot tool; -x keeps it silent.
 const screencapture = "/usr/sbin/screencapture"
@@ -90,6 +36,9 @@ func (s screenCaptureMac) Capture(ctx context.Context, dst string, region *platf
 		return err
 	}
 	if result.ExitCode != 0 {
+		if strings.Contains(string(result.Stderr), "could not create image from display") {
+			return fmt.Errorf("screen recording is not allowed: %w", platform.ErrDenied)
+		}
 		return errors.New(recognitionFailure(result.Stderr))
 	}
 	return nil

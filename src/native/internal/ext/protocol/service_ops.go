@@ -2,9 +2,13 @@ package protocol
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
+
+// OpPublishDisplay sets the display text of a setting a built-in publishes for other built-ins to show.
+const OpPublishDisplay = "publish-display"
 
 // Operations of the host services. Each service has the operations listed here; anything else is an invalid
 // input. Arguments and results are the JSON shapes below, shared by the child and the host.
@@ -22,13 +26,97 @@ const (
 	OpSave        = "save"
 	OpCommit      = "commit"
 	OpDiscard     = "discard"
+	OpCreate      = "create"
 
-	OpRefreshMenuBar = "refreshMenuBar"
+	OpRecords = "records"
+
+	OpRefreshMenuBar  = "refreshMenuBar"
+	OpInvalidateRoot  = "invalidateRoot"
+	OpRename          = "rename"
+	OpInvalidateViews = "invalidateViews"
+
+	OpReadImage      = "read-image"
+	OpWriteImage     = "write-image"
+	OpReadImageFile  = "read-image-file"
+	OpWriteImageFile = "write-image-file"
+	OpReadHTML       = "read-html"
+	OpWriteHTML      = "write-html"
+	OpReadRTF        = "read-rtf"
+	OpReadFiles      = "read-files"
+	OpWriteFiles     = "write-files"
+	OpReadFormats    = "read-formats"
+	OpWriteContent   = "write-content"
+
+	OpShow          = "show"
+	OpUpdate        = "update"
+	OpHide          = "hide"
+	OpRefreshSearch = "refreshSearch"
+	OpOnce          = "once"
+	OpCancel        = "cancel"
+	OpPending       = "pending"
+
+	OpStatus          = "status"
+	OpAPIAvailable    = "api-available"
+	OpDevices         = "devices"
+	OpStart           = "start"
+	OpStop            = "stop"
+	OpRecordings      = "recordings"
+	OpRetry           = "retry"
+	OpDeleteRecording = "delete-recording"
 )
+
+// OnceArgs schedules one run of the handler Ref names, at At, under Key.
+type OnceArgs struct {
+	Key string        `json:"key"`
+	At  time.Time     `json:"at"`
+	Ref api.ActionRef `json:"ref"`
+}
+
+// ScheduleKeyArgs names the scheduled run to cancel or ask about.
+type ScheduleKeyArgs struct {
+	Key string `json:"key"`
+}
+
+// PendingReply says whether a run is pending under the key, and when it runs.
+type PendingReply struct {
+	At      time.Time `json:"at"`
+	Pending bool      `json:"pending"`
+}
+
+// JobArgs names the job an operation acts on.
+type JobArgs struct {
+	ID string `json:"id"`
+}
+
+// JobEnabledArgs names the job to enable or disable.
+type JobEnabledArgs struct {
+	ID      string `json:"id"`
+	Enabled bool   `json:"enabled"`
+}
+
+// ExportArgs names the record whose safe text is read.
+type ExportArgs struct {
+	Ref string `json:"ref"`
+}
+
+// IndicatorHideArgs names the indicator to hide. An empty ID is the extension's default indicator.
+type IndicatorHideArgs struct {
+	ID string `json:"id,omitempty"`
+}
+
+// BundleArgs names one bundled dataset the app ships.
+type BundleArgs struct {
+	Name string `json:"name"`
+}
 
 // KeyArgs names one entry: a storage key, a secret name, or a setting id.
 type KeyArgs struct {
 	Key string `json:"key"`
+}
+
+// SearchRefreshArgs names the search query a refresh is for.
+type SearchRefreshArgs struct {
+	Query string `json:"query"`
 }
 
 // KeyValueArgs stores one JSON value under a key, secret name or setting id.
@@ -81,4 +169,9 @@ type DraftRecord struct {
 type DraftLookup struct {
 	Found bool        `json:"found"`
 	Draft DraftRecord `json:"draft"`
+}
+
+// DictationRecordingArgs names the saved dictation a retry or a delete acts on.
+type DictationRecordingArgs struct {
+	ID string `json:"id"`
 }

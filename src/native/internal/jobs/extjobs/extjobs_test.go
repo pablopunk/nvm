@@ -46,7 +46,7 @@ func (h *fakeHost) setCommands(results ...manager.CommandResult) {
 	h.commands = results
 }
 
-func (h *fakeHost) Run(_ context.Context, _ string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+func (h *fakeHost) RunCommand(_ context.Context, _ string, invocation api.Invocation) (api.Result, *api.Failure, error) {
 	h.invocations <- invocation
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -288,8 +288,8 @@ func TestSyncJobDoesNothingWhileExtensionsLoad(t *testing.T) {
 	defer sched.Close()
 	adapter := New(context.Background(), Config{Host: func() Host { return nil }, Registry: sched, Files: fake.NewFS()})
 	defer adapter.Close()
-	if err := adapter.reconcile(context.Background()); err != nil {
-		t.Fatal(err)
+	if _, ok := adapter.reconcile(context.Background()).(jobs.Skipped); !ok {
+		t.Fatal("loading host was not recorded as a skip")
 	}
 	if len(sched.Snapshot()) != 0 {
 		t.Fatal("jobs appeared before the extensions loaded")

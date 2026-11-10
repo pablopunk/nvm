@@ -1,7 +1,7 @@
 package app
 
 import (
-	"strings"
+	"runtime"
 
 	"github.com/egoist/mygo/ui"
 
@@ -19,7 +19,13 @@ type FormField struct {
 	Multiline   bool
 }
 
-// formView is a palette sub-view with stacked fields; Ctrl+Enter submits. onSubmit returns an error text or "".
+// formFooterHintOn is the form's footer on goos: the submit key is the palette's modifier with Enter, and Escape cancels.
+func formFooterHintOn(goos string) string {
+	return palette.KeyLabelOn("⌃↵", goos) + " Save   esc Cancel"
+}
+
+// formView is a palette sub-view with stacked fields; the palette's modifier with Enter submits. onSubmit returns an
+// error text or "".
 func (p *App) formView(title string, fields []*FormField, onSubmit func(vals []string) string) *palette.View {
 	errText := ""
 	submit := func() {
@@ -32,7 +38,7 @@ func (p *App) formView(title string, fields []*FormField, onSubmit func(vals []s
 		}
 	}
 	return &palette.View{
-		Title: title, HideInput: true, Hint: "⌃↵ Save   esc Cancel",
+		Title: title, HideInput: true, Hint: formFooterHintOn(runtime.GOOS),
 		OnKey: func(c *ui.Context, h search.Host) bool {
 			if c.Shortcut(mod, ui.KeyEnter) {
 				submit()
@@ -51,22 +57,4 @@ func (p *App) formView(title string, fields []*FormField, onSubmit func(vals []s
 			})
 		},
 	}
-}
-
-// ---- quicklinks ----
-
-func (p *App) quicklinkForm() *palette.View {
-	fields := []*FormField{
-		{Label: "Name", Placeholder: "Hacker News"},
-		{Label: "Keyword", Placeholder: "hn"},
-		{Label: "URL (use {query} for the search text)", Placeholder: "https://hn.algolia.com/?q={query}"},
-	}
-	return p.formView("Create Quicklink", fields, func(v []string) string {
-		if strings.TrimSpace(v[0]) == "" || strings.TrimSpace(v[1]) == "" || !strings.HasPrefix(v[2], "http") {
-			return "Name, keyword and an http(s) URL are required."
-		}
-		p.S.Quicklinks = append(p.S.Quicklinks, Quicklink{Name: strings.TrimSpace(v[0]), Keyword: strings.TrimSpace(v[1]), URL: strings.TrimSpace(v[2])})
-		p.S.save()
-		return ""
-	})
 }

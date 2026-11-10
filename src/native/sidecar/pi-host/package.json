@@ -1,0 +1,14 @@
+{
+  "name": "nevermind-pi-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The pi agent runtime the Nevermind app starts as a child process: it runs the conversation, the web tools and the host's tools over JSON lines on stdio.",
+  "license": "UNLICENSED",
+  "engines": { "node": ">=22" },
+  "dependencies": {
+    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "pi-web-access": "0.24.0"
+  }
+}

@@ -87,6 +87,7 @@ func newDarwinFixture(t *testing.T, opts fixtureOpts) *darwinFixture {
 		Home:              testHome,
 		UID:               testUID,
 		Files:             tree,
+		DirectoryAccess:   fakeDirectoryAccess{tree: tree},
 		Trash:             tree.trash,
 		ReadBundleID:      f.readBundleID,
 		FindApps:          opts.findApps,

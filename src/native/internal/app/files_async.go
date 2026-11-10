@@ -67,6 +67,14 @@ func (c *asyncCache[V]) Get(key string, load func() V) (V, bool) {
 	return zero, false
 }
 
+// Peek returns the stored value for key and queues nothing.
+func (c *asyncCache[V]) Peek(key string) (V, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	v, ok := c.values[key]
+	return v, ok
+}
+
 // Put stores a value directly, without a load. Fixtures use it to show a cached icon.
 func (c *asyncCache[V]) Put(key string, v V) {
 	c.mu.Lock()

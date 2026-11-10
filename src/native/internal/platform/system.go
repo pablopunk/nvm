@@ -1,9 +1,15 @@
 package platform
 
-// System is the intent "end the session or power state, open the system settings, or empty the Trash". Each
-// method is one user intent. A method whose intent the current system cannot fulfill returns ErrUnsupported;
-// features omit those rows through the system.* capabilities before they are ever shown.
+// System is the intent "end the session or power state, open the system settings, empty the Trash, or quit the
+// app". Each method is one user intent. A method whose intent the current system cannot fulfill returns
+// ErrUnsupported; features omit those rows through the system.* capabilities before they are ever shown. Quit never
+// returns ErrUnsupported: the extension API lists quit with the other system operations, so it is a method here too.
 type System interface {
+	// Quit asks the app to quit: its windows close, its stores flush and its menu bar items go, then the event loop
+	// stops. It returns at once; the quit runs on the main thread.
+	Quit()
+	// Relaunch restarts the app through its normal quit lifecycle.
+	Relaunch()
 	// LockScreen locks the computer and asks for the user's password to continue.
 	LockScreen() error
 	// Sleep puts the computer to sleep.

@@ -11,7 +11,7 @@ type TextBlock struct {
 }
 
 // TextResult is the text recognized in one image. Confidence is the mean of the blocks' confidences and is meaningful
-// only when Blocks is not empty. Language is the first language asked for, or "" when none was.
+// only when Blocks is not empty. Language is the detected language when the engine can identify it, otherwise "".
 type TextResult struct {
 	Text       string
 	Confidence float64

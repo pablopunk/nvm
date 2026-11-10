@@ -90,6 +90,7 @@ func TestGuardRefusesAppInReadOnlyFolder(t *testing.T) {
 	f.tree.remove("/Applications")
 	f.tree.dir("/Applications", 0)
 	f.tree.dir(testApp, testUID)
+	f.u.deps.DirectoryAccess = &accessDecision{allowed: false}
 	d := f.u.Discover(testApp)
 	if d.Ready || d.ReasonCode != "app-parent-not-writable" {
 		t.Fatalf("discovery = %+v, want the parent refusal", d)

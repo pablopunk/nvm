@@ -11,7 +11,7 @@
 # Environment:
 #   RIG_DISPLAY     X display to start (default :99)
 #   RIG_SCREEN      Xvfb screen (default 1280x800x24)
-#   RIG_WALLPAPER   wallpaper image (default assets/wall.png next to this script)
+#   RIG_WALLPAPER   wallpaper image (default box wallpaper when present, otherwise assets/wall.png)
 #   RIG_ARTIFACTS   directory for service logs (optional)
 #   RIG_STATE       state directory (default: a new temp directory, removed on exit unless kept)
 set -euo pipefail
@@ -19,7 +19,11 @@ set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RIG_DISPLAY="${RIG_DISPLAY:-:99}"
 RIG_SCREEN="${RIG_SCREEN:-1280x800x24}"
-RIG_WALLPAPER="${RIG_WALLPAPER:-$script_dir/assets/wall.png}"
+default_wallpaper="$script_dir/assets/wall.png"
+if [ -f /root/nevermind-rig-landscape.jpg ]; then
+  default_wallpaper=/root/nevermind-rig-landscape.jpg
+fi
+RIG_WALLPAPER="${RIG_WALLPAPER:-$default_wallpaper}"
 state="${RIG_STATE:-$(mktemp -d "${TMPDIR:-/tmp}/rig-state.XXXXXX")}"
 logs="${RIG_ARTIFACTS:-$state}"
 mkdir -p "$state" "$logs" "$state/xdg" "$state/pulse"
@@ -85,7 +89,7 @@ start_desktop() {
   printf 'export DBUS_SESSION_BUS_ADDRESS=%q\nexport DISPLAY=%q\n' "$DBUS_SESSION_BUS_ADDRESS" "$DISPLAY" >"$state/env.sh"
 
   start_service openbox openbox
-  start_service picom picom --backend xrender --no-fading-openclose
+  start_service picom picom --backend xrender --no-fading-openclose --blur-background --blur-method gaussian --blur-size 15
 
   if [ -f "$RIG_WALLPAPER" ]; then
     feh --no-fehbg --bg-fill "$RIG_WALLPAPER" >"$logs/wallpaper.log" 2>&1 </dev/null || echo "rig: wallpaper not set" >&2

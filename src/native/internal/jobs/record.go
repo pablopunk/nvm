@@ -64,6 +64,9 @@ func newRecord(def Definition, saved JobState) *record {
 
 // restoreLastRun copies the newest run that executed (skipped runs never did) into the last-run fields.
 func (r *record) restoreLastRun() {
+	r.lastReason, r.lastError = "", ""
+	r.lastStarted, r.lastFinished = time.Time{}, time.Time{}
+	r.lastDuration, r.lastOutcome = 0, ""
 	for _, entry := range r.history {
 		if entry.Outcome == OutcomeSkipped {
 			continue

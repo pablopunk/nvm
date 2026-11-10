@@ -36,7 +36,7 @@ func (p *App) summonChanged(st shortcuts.Status) {
 // showSummonNotice shows the banner for st, or clears it when the shortcut works. Its action opens the palette
 // shortcut recorder, the one place the shortcut is changed.
 func (p *App) showSummonNotice(st shortcuts.Status) {
-	copy, show := shortcuts.SummonNotice(st, shortcutLabelOf)
+	copy, show := shortcuts.SummonNotice(st, p.shortcutLabelOf)
 	if !show {
 		p.SetNotice(nil)
 		return

@@ -12,6 +12,8 @@ const (
 	OpShellOpenPath  = "OpenPath"
 	OpShellOpenURL   = "OpenURL"
 	OpShellReveal    = "Reveal"
+	OpShellQuickLook = "QuickLook"
+	OpShellOpenWith  = "OpenWith"
 	OpShellTrash     = "Trash"
 	OpShellApps      = "InstalledApps"
 	OpShellAppIcon   = "AppIcon"
@@ -83,6 +85,16 @@ func (s *Shell) OpenURL(url string) error {
 // Reveal records the call.
 func (s *Shell) Reveal(path string) error {
 	return s.record(OpShellReveal, path)
+}
+
+// OpenWith records the call.
+func (s *Shell) OpenWith(path string, app platform.App) error {
+	return s.record(OpShellOpenWith, path+" "+app.Path)
+}
+
+// QuickLook records the call.
+func (s *Shell) QuickLook(path string) error {
+	return s.record(OpShellQuickLook, path)
 }
 
 // Trash records the call; the fake does not remove anything, so tests pair it with FS when they need that.

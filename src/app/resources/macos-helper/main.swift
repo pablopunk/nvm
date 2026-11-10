@@ -5,6 +5,21 @@ import Foundation
 if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "window" {
   runWindowCommand(Array(CommandLine.arguments.dropFirst(2)))
 }
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "microphone" {
+  runMicrophoneCommand(Array(CommandLine.arguments.dropFirst(2)))
+}
+
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "ocr" {
+  runOCRCommand(Array(CommandLine.arguments.dropFirst(2)))
+}
+
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "thumbnail" {
+  runThumbnailCommand(Array(CommandLine.arguments.dropFirst(2)))
+}
+
+if CommandLine.arguments.count >= 2 && CommandLine.arguments[1] == "menus" {
+  runMenusCommand(Array(CommandLine.arguments.dropFirst(2)))
+}
 
 guard AXIsProcessTrusted() else {
   fail("Nevermind does not have Accessibility access", code: 2)

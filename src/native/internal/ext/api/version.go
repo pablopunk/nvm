@@ -14,7 +14,7 @@ type Version struct {
 }
 
 // Current is the API version implemented by this build of the host.
-var Current = Version{Major: 1, Minor: 0}
+var Current = Version{Major: 1, Minor: 1}
 
 // ParseVersion reads a "major.minor" string.
 func ParseVersion(text string) (Version, error) {

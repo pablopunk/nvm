@@ -1,8 +1,14 @@
 package design
 
-import "github.com/egoist/mygo/ui"
+import (
+	"unicode/utf8"
 
-// SearchData is the field at the top of the palette: an icon, then either the view's title or a text input.
+	"github.com/egoist/mygo/ui"
+)
+
+// SearchData is the field at the top of the palette: an icon, then either the view's title or a text input. The row
+// never shows progress: anything that appears or disappears beside the input moves the text the user is typing, so
+// loading is shown in the footer and in the rows.
 type SearchData struct {
 	// Title is shown in place of the input when HideInput is set.
 	Title     string
@@ -13,18 +19,22 @@ type SearchData struct {
 	Placeholder string
 	Query       *string
 	Input       *ui.Handle
-	// Accessory is the label of the picker at the end of the field; "" draws none.
-	Accessory string
 	// AIHint shows the "Tab to ask AI" chip beside the input.
 	AIHint bool
 	// Concealed masks the text while a secret is typed; the query still holds the real text.
 	Concealed bool
+	// CaretAtEnd puts the caret after the last rune of Query in this frame, for a text the app just set.
+	CaretAtEnd bool
+	// OnKey sees the keys the input would take before it takes them, and reports whether it took one. Nil leaves
+	// every key to the input.
+	OnKey func(k ui.TextKey) bool
 }
 
 // SearchEvents reports what the user did in the search row this frame. The caller acts on them.
 type SearchEvents struct {
 	Back, Changed, Submitted bool
-	Accessory                bool
+	// Selection is the start and end, in characters, of the input's selection as this frame built it; start <= end.
+	Selection [2]int
 }
 
 // SearchRow draws the search field and reports its events. It draws no state of its own: the query and the
@@ -39,16 +49,22 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 			ui.Text(c, d.Title).FontSize(21).TextColor(k.Strong).Grow(1).SingleLine()
 			return
 		}
-		in := ui.TextInputBase(c, d.Query).Bind(d.Input).Grow(1).FontSize(21).TextColor(k.Strong).
+		in := ui.TextInputBase(c.Key("search-input"), d.Query).Bind(d.Input).Grow(1).FontSize(21).TextColor(k.Strong).
 			Placeholder(d.Placeholder).PlaceholderColor(k.Faint).Label("Search")
 		if d.Concealed {
 			in = in.Password()
 		}
+		if d.CaretAtEnd {
+			end := utf8.RuneCountInString(*d.Query)
+			in = in.SetTextSelection(end, end)
+		}
+		if d.OnKey != nil {
+			in = in.OnTextKey(d.OnKey)
+		}
+		anchor, caret := in.TextAnchorCaret()
+		events.Selection = [2]int{min(anchor, caret), max(anchor, caret)}
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
-		if d.Accessory != "" {
-			events.Accessory = ui.Text(c, d.Accessory+" ⌄").FontSize(12).TextColor(k.Secondary).SingleLine().Clicked()
-		}
 		if d.AIHint {
 			Chip(c, ChipData{Icon: "sparkles", Bold: "Tab", Text: "to ask AI"})
 		}

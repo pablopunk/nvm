@@ -3,7 +3,7 @@ package menubar
 import (
 	"bytes"
 	"errors"
-	"image/png"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -40,7 +40,7 @@ func labels(items []platform.MenuItem) []string {
 
 func TestMenuKeepsTheOneXOrder(t *testing.T) {
 	want := []string{"Open Nevermind", "-", "Check for Updates…", "Settings…", "-", "Quit Nevermind"}
-	got := labels(Rows(Actions{}, nil))
+	got := labels(Rows(Actions{}, nil, Menu{}))
 	if !slices.Equal(got, want) {
 		t.Fatalf("menu = %q, want %q", got, want)
 	}
@@ -61,8 +61,9 @@ func TestNewCreatesTheItemWithIconTooltipAndMenu(t *testing.T) {
 	if opts.ToolTip != Tooltip || opts.ID != "nevermind" {
 		t.Fatalf("options = %+v", opts)
 	}
-	if _, err := png.Decode(bytes.NewReader(opts.Icon)); err != nil {
-		t.Fatalf("icon is not PNG: %v", err)
+	wantIcon := ChooseIcon(DefaultIconStyle, runtime.GOOS, false)
+	if icon, template := trays[0].Icon(); !bytes.Equal(icon, wantIcon.PNG) || template != wantIcon.Template {
+		t.Fatalf("icon = %d bytes template=%v, want %q template=%v", len(icon), template, wantIcon.Asset, wantIcon.Template)
 	}
 	if got := labels(trays[0].Items()); len(got) != 6 {
 		t.Fatalf("menu rows = %q", got)
@@ -98,7 +99,7 @@ func TestRowsRunThroughTheUIThreadDispatcher(t *testing.T) {
 		fn()
 	}
 	rec := &recorder{}
-	rows := Rows(rec.actions(), onUI)
+	rows := Rows(rec.actions(), onUI, Menu{})
 	for _, row := range rows {
 		if row.Separator {
 			continue
@@ -111,7 +112,7 @@ func TestRowsRunThroughTheUIThreadDispatcher(t *testing.T) {
 }
 
 func TestNilActionsLeaveRowsWithoutAnAction(t *testing.T) {
-	for _, row := range Rows(Actions{}, func(fn func()) { fn() }) {
+	for _, row := range Rows(Actions{}, func(fn func()) { fn() }, Menu{}) {
 		if !row.Separator && row.Action != nil {
 			t.Fatalf("row %q has an action without one being set", row.Label)
 		}

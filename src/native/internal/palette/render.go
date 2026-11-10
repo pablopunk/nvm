@@ -15,51 +15,72 @@ var rootPlaceholders = []string{"Watcha gonna do?", "I cannot do that... Oh, nev
 
 // View draws the palette in the window. It is the content of the window the host creates.
 func (p *Palette) View(c *ui.Context) {
+	frame := navigationFrame{}
+	if p.opts.OnNavigation != nil {
+		frame = p.captureNavigationFrame()
+	}
 	theme := design.WindowTheme(os.Getenv("NVM_THEME") == "dark" || c.Theme().Dark)
 	theme.Background = ui.Transparent
 	ui.Themed(c, theme).Fill().Children(func() { p.viewThemed(c) })
+	p.revealRenderedWindow()
+	if p.opts.OnNavigation != nil {
+		p.reportNavigationFrame(frame)
+	}
 }
 
 func (p *Palette) viewThemed(c *ui.Context) {
 	v := p.cur()
-	if p.toastsStale {
-		c.CloseToast("")
-		p.toastsStale = false
-	}
-	if p.toastMsg != "" {
-		design.Toast(c, p.toastMsg)
-		p.toastMsg = ""
-	}
 	p.keys(c, v)
 	c.Root().Background(ui.Transparent)
-	design.Pane(c, func() {
-		p.searchRow(c, v)
-		p.noticeRow(c)
-		design.Etched(c)
+	design.PalettePane(c, func() {
+		if p.drawsWindowHeader() {
+			p.windowHeader(c, v)
+		}
+		p.header(c, v)
 		ui.Column(c).Grow(1).MinHeight(0).Clip().Children(func() {
-			if v.Body != nil {
-				v.Body(c, p)
-			} else {
-				p.listBody(c)
-			}
+			p.splitBody(c, v, func() {
+				if v.Body != nil {
+					v.Body(c, p)
+				} else {
+					p.listBody(c)
+				}
+			})
 		})
-		design.Etched(c)
+		if v.Body != nil || v.sideNow() != nil {
+			ui.Box(c).Height(design.FooterClearance)
+		}
 		p.footer(c, v)
 	})
-	if p.actionsOpen {
+	if side := v.sideNow(); side.Focused() && side.shell != nil && side.shell.actionsOpen {
+		side.shell.actionPanel(c)
+	} else if p.actionsOpen {
 		p.actionPanel(c)
 	}
+}
+
+// header is the top of the pane: the search field and the notices under it. A page that draws its own input has no
+// search field, only the notices, unless it also hides its field and keeps its title row.
+func (p *Palette) header(c *ui.Context, v *View) {
+	if (v.Input != nil && !v.HideInput) || (p.drawsWindowHeader() && v.HideInput) {
+		p.noticeRow(c)
+		return
+	}
+	p.searchRow(c, v)
+	p.noticeRow(c)
+	design.Etched(c)
 }
 
 // searchRow is the field at the top of the pane; the design package draws it and reports what happened.
 func (p *Palette) searchRow(c *ui.Context, v *View) {
 	data := design.SearchData{
-		HideInput: v.HideInput,
-		Back:      len(p.stack) > 1,
-		Query:     &p.query,
-		Input:     &p.input,
-		AIHint:    len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
-		Concealed: v.Concealed,
+		HideInput:  v.HideInput,
+		Back:       len(p.stack) > 1,
+		Query:      &p.query,
+		Input:      &p.input,
+		CaretAtEnd: p.takeCaretToEnd(),
+		AIHint:     len(p.stack) == 1 && strings.TrimSpace(p.query) != "",
+		Concealed:  v.Concealed,
+		OnKey:      p.onSearchInputKey,
 	}
 	if v.HideInput {
 		data.Title = v.Title
@@ -72,13 +93,8 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 			data.Placeholder = rootPlaceholders[p.phIndex%len(rootPlaceholders)]
 		}
 	}
-	data.Accessory = accessoryLabel(v)
 	events := design.SearchRow(c, data)
-	if events.Accessory {
-		v.Accessory.Value = v.Accessory.Next()
-		v.Accessory.OnChange(v.Accessory.Value)
-		p.search()
-	}
+	p.searchSpan = events.Selection
 	if events.Back {
 		p.Pop()
 	}
@@ -89,15 +105,25 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	if events.Submitted {
 		p.onEnter()
 	}
+	// SearchRow has committed this frame's text and dispatched its change/submit events.
+	// Only now can a deferred Enter safely use the selected row for that query.
+	p.resolveDefaultEnter(v, strings.TrimSpace(p.query), p.shownView == v && p.shownQuery == strings.TrimSpace(p.query) && p.settled)
 }
 
 func (p *Palette) listBody(c *ui.Context) {
+	p.interact.pressing, p.interact.pressingNow = p.interact.pressingNow, false
+	p.interact.clickedThisFrame = false
 	v := p.cur()
-	if len(p.results) == 0 {
+	loading := p.loadingMore()
+	if len(p.results) == 0 && loading {
+		p.coldLoading(c, v.Grid)
+		return
+	}
+	if len(p.results) == 0 && !loading {
 		if !p.settled {
 			return
 		}
-		title, sub := v.EmptyTitle, v.EmptySub
+		title, sub := emptyText(v)
 		if title == "" {
 			title, sub = "No Results", "Try a different search."
 		}
@@ -109,8 +135,17 @@ func (p *Palette) listBody(c *ui.Context) {
 		return
 	}
 	p.list.Selected = &p.chosen
-	p.list.Key = func(i int) any { return fmt.Sprint(i, p.results[i].ID, p.results[i].Title) }
-	p.list.Label = func(i int) string { return p.results[i].Title }
+	// A controlled single selection tells the list when ranking chose a new item at the same index.
+	p.listChoice.Clear()
+	if p.chosen >= 0 && p.chosen < len(p.results) {
+		p.listChoice.Add(listRowKey(p.results, p.chosen).(string))
+	}
+	p.list.Selection = &p.listChoice
+	if len(p.results) == 0 {
+		p.list.Selected = nil
+	}
+	p.list.Key = func(i int) any { return listRowKey(p.results, i) }
+	p.list.Label = func(i int) string { return listRowLabel(p.results, i) }
 	if p.chosen < 0 {
 		p.chosen = 0
 	}
@@ -123,24 +158,81 @@ func (p *Palette) listBody(c *ui.Context) {
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
+		previousChoice := p.chosen
 		var list ui.Element
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
-			list = ui.List(c, &p.list, len(p.results), func(i int) { p.row(c, i) }).Grow(1).FillHeight().Padding(6)
+			list = ui.List(c, &p.list, len(p.results), func(i int) { p.drawListRow(c, i) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
+			p.prepareFooterReveal(c, list, v)
 		})
-		if list.Submitted() {
+		if p.chosen != previousChoice {
+			p.choicePinned = true
+		}
+		p.focusListIfRequested(c)
+		if list.Submitted() && !p.interact.clickedThisFrame {
 			p.runDefault()
 		}
 		if p.chosen < 0 && len(p.results) > 0 {
 			p.chosen = 0
 		}
-		if it != nil && it.Detail != nil {
-			ui.Column(c).Width(320).FillHeight().Padding(8, 8, 8, 2).Children(func() {
+		if p.showDetail(v, it) {
+			detailColumn(c, v).FillHeight().Padding(8, 8, 8+p.footerOverlayClearance(), 2).Children(func() {
 				ui.Column(c).Grow(1).Padding(14).Radius(12).Background(k.Wash).Border(1, k.Lo.Alpha(0.5)).InsetShadow(0, 1, 4, 0, k.Lo).Children(func() {
 					it.Detail(c, p)
 				})
 			})
 		}
 	})
+}
+
+// listRowKey keeps an identified result mounted when its title or rank changes. Anonymous rows use their position
+// with a learning key or title; the loading row after the results has a key of its own.
+func listRowKey(results []search.Item, i int) any {
+	if i >= len(results) {
+		return "loading"
+	}
+	item := results[i]
+	if item.ID != "" {
+		return fmt.Sprintf("id:%q:%q", item.Kind, item.ID)
+	}
+	if item.LearnKey != "" {
+		return fmt.Sprintf("learn:%d:%q:%q", i, item.Kind, item.LearnKey)
+	}
+	return fmt.Sprint(i, item.Kind, item.Title)
+}
+
+// listRowLabel is the assistive name of list row i. The loading row names what it waits for.
+func listRowLabel(results []search.Item, i int) string {
+	if i >= len(results) {
+		return "Loading more results"
+	}
+	return results[i].Title
+}
+
+// drawListRow draws result i, or the loading row after the results while a batch arrives. The loading row is not a
+// result: no choice or click reaches it.
+func (p *Palette) drawListRow(c *ui.Context, i int) {
+	if i >= len(p.results) {
+		design.LoadingRow(c)
+		return
+	}
+	p.row(c, i)
+}
+
+// sidePreviewMinWidth and sidePreviewWidthPercent size the detail of a side-preview list, as 1.x's side-preview card
+// does: at least 300 points, and 40% of the pane when that is wider.
+const (
+	sidePreviewMinWidth     = 300
+	sidePreviewWidthPercent = 40
+	narrowDetailWidth       = 320
+)
+
+// detailColumn is the column of a chosen row's detail. A side-preview list sizes the detail beside its rows, and any
+// other list keeps the detail at its narrow width.
+func detailColumn(c *ui.Context, v *View) ui.Element {
+	if v.Presentation == SidePreview {
+		return ui.Column(c).WidthPercent(sidePreviewWidthPercent).MinWidth(sidePreviewMinWidth)
+	}
+	return ui.Column(c).Width(narrowDetailWidth)
 }
 
 // selection identifies the row a keyboard user is on: the view, the query it came from, and the cursor.
@@ -176,22 +268,22 @@ func (p *Palette) row(c *ui.Context, i int) {
 		Selected:   sel,
 		Disabled:   it.Disabled,
 		Contextual: it.Contextual,
-		ShowEnter:  sel && len(it.Actions) > 0 && !it.Disabled,
+		ShowEnter:  sel && hasDefaultAction(it) && !it.Disabled,
 	}
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section
 	}
-	if len(it.DragPaths) > 0 && p.opts.DragRow != nil {
-		p.opts.DragRow(c, it.DragPaths, func() { design.Row(c, data) })
-		return
+	row := ui.Column(c)
+	row.Children(func() { p.listRow(c, i, func() { design.Row(c, data) }) })
+	if sel {
+		p.revealFooterRow(c, row)
 	}
-	design.Row(c, data)
 }
 
 // tileData resolves a result's icon: a preview image, else the system icon of its file, else the Lucide icon
 // or letters the design tile draws.
 func (p *Palette) tileData(it search.Item) design.TileData {
-	data := design.TileData{Image: it.Image, Icon: it.Icon, Glyph: it.Glyph}
+	data := design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Glyph: it.Glyph}
 	if it.Image == nil && it.IconPath != "" && p.opts.Icon != nil {
 		data.FileIcon = p.opts.Icon(it.IconPath)
 	}
@@ -201,47 +293,12 @@ func (p *Palette) tileData(it search.Item) design.TileData {
 	return data
 }
 
-// footer is the status bar: where you are, and what Enter and the action menu do.
-func (p *Palette) footer(c *ui.Context, v *View) {
-	name := v.Title
-	if v.TitleFn != nil {
-		name = v.TitleFn()
+// emptyText is the empty state's title and subtitle of a view: its EmptyFn when it has one, its fixed texts otherwise.
+func emptyText(v *View) (string, string) {
+	if v.EmptyFn != nil {
+		return v.EmptyFn()
 	}
-	if v.Footer != nil {
-		name = v.Footer(p.chosenItem())
-	}
-	if len(p.stack) == 1 {
-		name = "Nevermind"
-	}
-	data := design.FooterData{Name: name}
-	if it := p.chosenItem(); it != nil && len(it.Actions) > 0 {
-		data.Primary = &design.KeyHint{Title: it.Actions[0].Title, Key: KeyLabel("↵")}
-		if len(it.Actions) > 1 {
-			data.Secondary = &design.KeyHint{Title: "Actions", Key: KeyLabel("⌃K")}
-		}
-	} else if hint := viewHint(v); hint != "" {
-		data.Hint = KeyLabel(hint)
-	}
-	design.Footer(c, data)
-}
-
-// actionPanel is the action menu, a popover over the pane.
-func (p *Palette) actionPanel(c *ui.Context) {
-	acts := p.actions()
-	p.actList.Selected = &p.actChosen
-	rows := make([]design.MenuRow, len(acts))
-	for i, a := range acts {
-		rows[i] = design.MenuRow{Title: a.Title, Key: KeyLabel(a.Label), Enter: a.Label == "" && i == 0, Selected: i == p.actChosen}
-	}
-	design.ActionMenu(c, rows)
-}
-
-// accessoryLabel is the picker's text, or "" when the view has no picker.
-func accessoryLabel(v *View) string {
-	if v.Accessory == nil {
-		return ""
-	}
-	return v.Accessory.Label()
+	return v.EmptyTitle, v.EmptySub
 }
 
 // viewHint is the right footer text of a view: its HintFn when it has one, its fixed Hint otherwise.
@@ -250,4 +307,22 @@ func viewHint(v *View) string {
 		return v.HintFn()
 	}
 	return v.Hint
+}
+
+// openActionsFromFooter is a click on the footer's Actions hint: it opens the menu as the action-menu key does.
+func (p *Palette) openActionsFromFooter() {
+	if !p.actionsOpen && len(p.menuActions()) > 0 {
+		p.openActionMenu(0)
+	}
+}
+
+// showDetail reports whether the chosen row's side pane is drawn. A view that streams rows from providers decides it
+// only when the list is settled or the user chose the row; in between it keeps the last decision, so rows that
+// arrive while the user types cannot open or close the pane.
+func (p *Palette) showDetail(v *View, it *search.Item) bool {
+	has := it != nil && it.Detail != nil
+	if v.Providers == nil || p.settled || p.choicePinned {
+		p.detailOpen = has
+	}
+	return has && p.detailOpen
 }

@@ -75,11 +75,12 @@ func TestJourneyTrayAppItemSettingsRowOpensSettings(t *testing.T) {
 	must(t, err)
 	rows := waitForMenuRows(t, app, item, menuPath, "Settings…")
 	must(t, app.clickMenuRow(item, menuPath, rows["Settings…"]))
-	_, err = app.WaitFor("Palette Hotkey", trayWait)
+	_, err = app.WaitFor("Open Nevermind Shortcut", trayWait)
 	must(t, err)
 }
 
-// waitForTrayItemTitled returns the status notifier item whose title is title, polling the watcher until it registers.
+// waitForTrayItemTitled returns the status notifier item whose title starts with title, polling the watcher until it
+// registers. A status item's hover text carries its ticking title after the name, so the name is what identifies it.
 func waitForTrayItemTitled(t *testing.T, app *App, title string) trayItem {
 	t.Helper()
 	deadline := time.Now().Add(trayWait)
@@ -87,7 +88,7 @@ func waitForTrayItemTitled(t *testing.T, app *App, title string) trayItem {
 		items, err := app.trayItemsWithTitles()
 		if err == nil {
 			for _, item := range items {
-				if item.title == title {
+				if strings.HasPrefix(item.title, title) {
 					return item.trayItem
 				}
 			}

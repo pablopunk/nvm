@@ -39,6 +39,27 @@ function previewFileFixtureAction(
   );
 }
 
+function templateFixtureAction(ctx: ExtensionContext) {
+  return ctx.actions.run('Expand Template', async (innerCtx) => {
+    const output = await innerCtx.text.template(
+      'Today is {date} at {time}. 6 * 7 = {calculator:6*7}. Selection: {selectedText}',
+      { name: 'Nevermind' },
+    );
+    const cursor = await innerCtx.text.template(
+      'Snippet for {name}: {cursor}done. Missing {argument:topic}',
+      {
+        variables: { name: 'Nevermind' },
+        returnCursor: true,
+        promptMissing: true,
+      },
+    );
+    return innerCtx.ui.previewView({
+      title: 'Template Output',
+      content: `# Template Output\n\n${output}\n\nCursor-aware result:\n\n\`\`\`json\n${JSON.stringify(cursor, null, 2)}\n\`\`\``,
+    });
+  });
+}
+
 export function previewView(ctx: ExtensionContext) {
   const legacyPreviewAction = ctx.actions.run(
     'Preview with legacy API',
@@ -48,42 +69,43 @@ export function previewView(ctx: ExtensionContext) {
         content: 'Existing extensions can still open preview views.',
       }),
   );
-  const templateAction = ctx.actions.run(
-    'Expand Template',
-    async (innerCtx) => {
-      const output = await innerCtx.text.template(
-        'Today is {date} at {time}. 6 * 7 = {calculator:6*7}. Selection: {selectedText}',
-        { name: 'Nevermind' },
-      );
-      const cursor = await innerCtx.text.template(
-        'Snippet for {name}: {cursor}done. Missing {argument:topic}',
-        {
-          variables: { name: 'Nevermind' },
-          returnCursor: true,
-          promptMissing: true,
-        },
-      );
-      return innerCtx.ui.previewView({
-        title: 'Template Output',
-        content: `# Template Output\n\n${output}\n\nCursor-aware result:\n\n\`\`\`json\n${JSON.stringify(cursor, null, 2)}\n\`\`\``,
-      });
-    },
-  );
+  const templateAction = templateFixtureAction(ctx);
   const fileActions = (
     Object.keys(TEXT_PREVIEW_FIXTURES) as Array<
       keyof typeof TEXT_PREVIEW_FIXTURES
     >
   ).map((name) => previewFileFixtureAction(ctx, name));
+  const nativePreviewAction = ctx.actions.quickLook(
+    writeTextPreviewFixture('short-notes.md'),
+    'Preview File in System',
+  );
+  const shellActions = [
+    ctx.actions.shellExec('Run argv fixture', 'printf', [
+      '%s\\n',
+      'Nevermind argv fixture',
+    ]),
+    ctx.actions.shellScript(
+      'Run script fixture',
+      "printf '%s\\n' 'Nevermind script fixture'; printf '%s\\n' 'Example stderr' >&2; exit 7",
+    ),
+  ];
   return ctx.ui.previewView({
     id: 'dev-ui-preview',
     title: 'Dev UI · Preview',
     content:
       '# Preview Fixture\n\nThis exercises `ctx.ui.previewView`, bounded text/binary `ctx.ui.previewFile`, action panels, and `ctx.text.template(...)`.',
-    actions: [templateAction, legacyPreviewAction, ...fileActions],
+    actions: [
+      templateAction,
+      legacyPreviewAction,
+      nativePreviewAction,
+      ...fileActions,
+      ...shellActions,
+    ],
     actionPanel: {
       sections: [
-        { actions: [templateAction, legacyPreviewAction] },
+        { actions: [templateAction, legacyPreviewAction, nativePreviewAction] },
         { title: 'ctx.ui.previewFile', actions: fileActions },
+        { title: 'Shell confirmation and output', actions: shellActions },
       ],
     },
   });

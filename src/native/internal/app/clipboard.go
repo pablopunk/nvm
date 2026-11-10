@@ -11,7 +11,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/store"
 )
 
-// clipImageDirName is the folder, under the app's config folder, that holds the copied pictures.
+// clipImageDirName is the folder, under the app's local data folder, that holds the copied pictures.
 const (
 	clipImageDirName = "clipboard-images"
 	clipDefaultLimit = 300
@@ -23,11 +23,11 @@ const (
 type clipEngine struct {
 	history  *clipboard.History
 	images   *clipboard.ImageStore
+	files    *clipImageFiles
 	watcher  *clipboard.Watcher
 	actions  *clipboard.Actions
 	links    *clipboard.LinkService
 	linksOn  bool
-	pics     *clipPictures
 	caps     platform.Capabilities
 	clock    platform.Clock
 	log      *logx.Logger
@@ -39,7 +39,7 @@ type clipEngine struct {
 }
 
 // clipDeps are what a clipboard engine is built from. Ports come from the composition root (the real set at
-// launch, the fakes in tests). Dir is the app's config folder, where the picture files go. Store is the app's one
+// launch, the fakes in tests). Dir is the app's local data folder, where the picture files go. Store is the app's one
 // store (nil keeps the history in memory). Redraw runs a function on the palette's UI thread and redraws.
 type clipDeps struct {
 	ports   platform.Ports
@@ -76,20 +76,21 @@ func newClipEngine(deps clipDeps) *clipEngine {
 		Fetcher: clipboard.NewLinkFetcher(ports.PublicHTTP, ports.Resolver), Images: images, Store: history,
 		Clock: ports.Clock, OnSettled: func(string) { deps.redraw(func() {}) },
 	})
-	return &clipEngine{
+	engine := &clipEngine{
 		history: history,
 		images:  images,
 		watcher: watcher,
 		actions: clipboard.NewActions(ports.Clipboard, ports.Paster, images, history, watcher),
 		links:   links,
 		linksOn: !deps.noLinks,
-		pics:    newClipPictures(images, deps.redraw, decodePicture),
 		caps:    ports.Capabilities,
 		clock:   ports.Clock,
 		log:     deps.log,
 		store:   deps.store,
 		redraw:  deps.redraw,
 	}
+	engine.files = newClipImageFiles(engine, deps.dir)
+	return engine
 }
 
 // clipRetention is the policy of the history for a limit of unpinned entries. Entries never expire by age, as
@@ -148,22 +149,6 @@ func (e *clipEngine) flush() {
 	_ = e.log.Flush()
 }
 
-// copy puts an entry on the clipboard and records the use.
-func (e *clipEngine) copy(entry clipboard.Entry) error {
-	return e.actions.Copy(entry)
-}
-
-// paste puts an entry on the clipboard and sends the paste gesture to the app that had focus.
-func (e *clipEngine) paste(entry clipboard.Entry) error {
-	return e.actions.Paste(entry, "")
-}
-
-// textEntry describes plain text that did not come from the history, such as a calculation result, so it can be
-// pasted through the same path. Its copy is suppressed from the history, as any copy the app makes is.
-func textEntry(text string) clipboard.Entry {
-	return clipboard.Entry{ID: clipboard.TextID(text), Kind: clipboard.KindText, Text: text}
-}
-
 // openClipboard builds the engine over the app's one store, which ready opened with the directory's lease. Without
 // the lease the history stays in memory for the session and nothing is watched: a second instance must not write
 // pictures into a folder another instance owns. The watcher starts unless the user turned clipboard history off.
@@ -174,7 +159,7 @@ func (p *App) openClipboard() *clipEngine {
 	}
 	e := newClipEngine(clipDeps{
 		ports:   p.ports,
-		dir:     configDir(),
+		dir:     dataDir(),
 		limit:   p.S.ClipLimit,
 		store:   st,
 		redraw:  p.redraw,

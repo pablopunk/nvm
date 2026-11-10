@@ -13,7 +13,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
-	"io/fs"
+	"io"
 
 	_ "image/gif"  // registers the GIF decoder with image.Decode
 	_ "image/jpeg" // registers the JPEG decoder with image.Decode
@@ -30,6 +30,9 @@ const (
 // MaxSourceBytes is the largest image rendered. A larger file reports ErrTooLarge and gets no picture.
 const MaxSourceBytes = 25 << 20
 
+// MaxSourcePixels bounds allocations during decoding.
+const MaxSourcePixels = 32_000_000
+
 // Errors a render reports. A caller treats each as "no picture" and says nothing to the user.
 var (
 	ErrUnsupported = errors.New("thumbs: the file is not an image this build decodes")
@@ -40,29 +43,61 @@ var (
 // Render decodes the image at path, scales it to fit an edge-by-edge square and returns it as PNG. It reads the path
 // without following a final symbolic link, and it never reads more than MaxSourceBytes.
 func Render(fsys platform.FS, path string, edge int) ([]byte, error) {
-	info, err := fsys.Lstat(path)
+	reader, ok := fsys.(interface {
+		ReadFileNoFollow(string, int64) ([]byte, error)
+	})
+	if !ok {
+		return nil, ErrUnsupported
+	}
+	data, err := reader.ReadFileNoFollow(path, MaxSourceBytes)
+	if errors.Is(err, platform.ErrFileSymlink) {
+		return nil, ErrSymlink
+	}
+	if errors.Is(err, platform.ErrFileTooLarge) {
+		return nil, ErrTooLarge
+	}
 	if err != nil {
 		return nil, err
 	}
-	if info.Mode()&fs.ModeSymlink != 0 {
-		return nil, ErrSymlink
-	}
-	if !info.Mode().IsRegular() {
-		return nil, ErrUnsupported
+	return renderBytes(data, edge)
+}
+
+// RenderSource decodes the bounded bytes of a source the caller already authorized.
+func RenderSource(source platform.ReadSource, edge int) ([]byte, error) {
+	info, err := source.Stat()
+	if err != nil {
+		return nil, err
 	}
 	if info.Size() > MaxSourceBytes {
 		return nil, ErrTooLarge
 	}
-	data, err := fsys.ReadFile(path)
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(source, MaxSourceBytes+1))
 	if err != nil {
 		return nil, err
+	}
+	if len(data) > MaxSourceBytes {
+		return nil, ErrTooLarge
+	}
+	return renderBytes(data, edge)
+}
+
+func renderBytes(data []byte, edge int) ([]byte, error) {
+	config, _, err := image.DecodeConfig(bytes.NewReader(data))
+	if err != nil || config.Width <= 0 || config.Height <= 0 {
+		return nil, ErrUnsupported
+	}
+	if config.Width > MaxSourcePixels/config.Height {
+		return nil, ErrTooLarge
 	}
 	src, _, err := image.Decode(bytes.NewReader(data))
 	if err != nil {
 		return nil, ErrUnsupported
 	}
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, fitInside(src, edge)); err != nil {
+	if err := png.Encode(&buf, orientThumbnail(fitInside(src, edge), jpegOrientation(data))); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil

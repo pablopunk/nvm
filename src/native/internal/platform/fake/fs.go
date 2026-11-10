@@ -58,6 +58,8 @@ type FS struct {
 	faults     faultSet
 	afterWrite func(name string) error
 	watchers   []*fsWatcher
+	// watchEntryLimit is how many entries a watch may enroll; zero means no limit. See SetWatchEntryLimit.
+	watchEntryLimit int
 	// kids indexes the direct children of every folder; nil means it must be rebuilt before use.
 	kids map[string][]string
 }
@@ -360,24 +362,6 @@ func (f *FS) Chmod(name string, mode fs.FileMode) error {
 	return nil
 }
 
-// Watch reports changes at or under name until ctx is done, then closes the channel. Events that do not
-// fit the buffer are dropped, as the port allows.
-func (f *FS) Watch(ctx context.Context, name string) (<-chan platform.Event, error) {
-	if err := f.faults.take(OpWatch); err != nil {
-		return nil, pathError("watch", name, err)
-	}
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	key := cleanKey(name)
-	if _, err := f.lookupLocked(key); err != nil {
-		return nil, pathError("watch", name, err)
-	}
-	w := &fsWatcher{prefix: key, root: watchSpelling(name, key), out: make(chan platform.Event, watcherBuffer)}
-	f.watchers = append(f.watchers, w)
-	go f.unwatchOnDone(ctx, w)
-	return w.out, nil
-}
-
 // unwatchOnDone detaches a watcher and closes its channel when ctx ends.
 func (f *FS) unwatchOnDone(ctx context.Context, w *fsWatcher) {
 	<-ctx.Done()
@@ -393,4 +377,24 @@ func (f *FS) unwatchOnDone(ctx context.Context, w *fsWatcher) {
 // pathError wraps err the way os does, so callers can inspect Op, Path and Err.
 func pathError(op, name string, err error) error {
 	return &fs.PathError{Op: op, Path: name, Err: err}
+}
+
+// ReadFileNoFollow reads a bounded regular file without resolving its final link.
+func (f *FS) ReadFileNoFollow(name string, max int64) ([]byte, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	n, ok := f.nodes[cleanKey(name)]
+	if !ok {
+		return nil, fs.ErrNotExist
+	}
+	if n.link != "" {
+		return nil, platform.ErrFileSymlink
+	}
+	if int64(len(n.data)) > max {
+		return nil, platform.ErrFileTooLarge
+	}
+	if n.dir || !n.mode.IsRegular() {
+		return nil, fs.ErrInvalid
+	}
+	return bytes.Clone(n.data), nil
 }

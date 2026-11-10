@@ -53,6 +53,13 @@ func TestRunUnknownCommandIsUnsupported(t *testing.T) {
 	}
 }
 
+func TestRunWithoutSystemPortIsUnsupported(t *testing.T) {
+	service := NewServices(Options{})
+	if err := service.Run(CommandSleep); !errors.Is(err, platform.ErrUnsupported) {
+		t.Fatalf("Run = %v, want ErrUnsupported", err)
+	}
+}
+
 // TestRunPropagatesThePortError reports the port's failure rather than hiding it.
 func TestRunPropagatesThePortError(t *testing.T) {
 	set := fake.NewSet()

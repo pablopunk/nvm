@@ -80,11 +80,17 @@ func (l *indexLoop) scanFolder(path, rel string) ([]record, error) {
 	return result.records, nil
 }
 
-// admit reports whether an entry at the relative path rel belongs in the index: every segment passes the hidden and
-// ignore rules and the depth limit allows it. Folders may be read up to MaxDepth segments deep and files one more.
+// admit reports whether an entry at the relative path rel belongs in the index at the configured depth.
 func (ix *Index) admit(rel string, isDir bool) bool {
+	return ix.admitWithin(rel, isDir, ix.cfg.MaxDepth)
+}
+
+// admitWithin reports whether an entry at the relative path rel belongs in the index when folders are read depth levels
+// deep: every segment passes the hidden and ignore rules and the depth limit allows it. Folders may be read up to depth
+// segments deep and files one more.
+func (ix *Index) admitWithin(rel string, isDir bool, depth int) bool {
 	segments := strings.Split(rel, "/")
-	if (isDir && len(segments) > ix.cfg.MaxDepth) || (!isDir && len(segments) > ix.cfg.MaxDepth+1) {
+	if (isDir && len(segments) > depth) || (!isDir && len(segments) > depth+1) {
 		return false
 	}
 	parent := ""

@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 // TestStopEndsTheLifetimeThatHostWaitsUse checks that stopping an extension cancels the context its host waits, such
 // as a confirmation, run under. A later Start gets a fresh lifetime.
 func TestStopEndsTheLifetimeThatHostWaitsUse(t *testing.T) {
-	r := New(Config{}, api.Identity{ID: "acme.lifetime", Title: "Lifetime"}, "", nil)
+	r := New(Config{Clock: fake.NewClock()}, api.Identity{ID: "acme.lifetime", Title: "Lifetime"}, "", nil)
 	before := r.lifetimeContext()
 	select {
 	case <-before.Done():

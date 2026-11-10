@@ -42,5 +42,22 @@ func (e builderExtensions) Install(id string, files map[string][]byte, enable bo
 	if err != nil {
 		return err
 	}
-	return m.Install(id, files, enable)
+	if err := m.Install(id, files, enable); err != nil {
+		return err
+	}
+	return nil
+}
+
+// Catalog lists the installed extensions for the builder's prompt. Until the manager has started there are none to list.
+func (e builderExtensions) Catalog() []builder.Installed {
+	m := e.app.extensionManager()
+	if m == nil {
+		return nil
+	}
+	entries := m.Catalog()
+	installed := make([]builder.Installed, 0, len(entries))
+	for _, entry := range entries {
+		installed = append(installed, builder.Installed{ID: entry.ID, Title: entry.Title, Enabled: entry.Enabled, Titles: entry.Titles})
+	}
+	return installed
 }

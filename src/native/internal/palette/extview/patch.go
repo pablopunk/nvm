@@ -6,11 +6,20 @@ import "github.com/pablopunk/nvm/native/internal/ext/api"
 // same ids, an unknown id is dropped rather than appended, and replace, prepend and append change the whole list.
 // Sections take the same patch, each on its own items.
 func (s *Session) Apply(patch api.ViewPatch) {
+	if len(patch.SearchItems) > 0 || len(patch.Items) > 0 || len(patch.RemoveItemIDs) > 0 || patch.Mode == api.PatchReplace {
+		s.resetGridImages()
+	}
 	if patch.IsLoading != nil {
 		s.loading = *patch.IsLoading
 	}
 	if patch.SelectedItemID != "" {
 		s.selectID = patch.SelectedItemID
+	}
+	if patch.Status != "" {
+		s.view.Status = patch.Status
+	}
+	if patch.EmptyView != nil {
+		s.view.EmptyView = patch.EmptyView
 	}
 	if len(s.sections) > 0 {
 		for i := range s.sections {

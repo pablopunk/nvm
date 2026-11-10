@@ -6,6 +6,7 @@ set -euo pipefail
 OPUS_VERSION=1.5.2
 OPUS_SHA256=65c1d2f78b9f2fb20082c38cbe47c951ad5839345876e46941612ee87f9a7ce1
 OPUS_URL="https://downloads.xiph.org/releases/opus/opus-${OPUS_VERSION}.tar.gz"
+OPUS_RELEASE_URL="https://github.com/xiph/opus/releases/download/v${OPUS_VERSION}/opus-${OPUS_VERSION}.tar.gz"
 REQUIRED_SYMBOLS="opus_encoder_create opus_encode opus_encoder_ctl opus_encoder_destroy"
 
 root="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -32,7 +33,14 @@ digest() {
   fi
 }
 
-curl -fsSL "$OPUS_URL" -o "$work/opus.tar.gz"
+if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 "$OPUS_URL" -o "$work/opus.tar.gz"; then
+  echo "libopus $OPUS_VERSION: upstream download failed; trying the upstream GitHub release asset" >&2
+  rm -f "$work/opus.tar.gz"
+  if ! curl -fsSL --retry 3 --retry-all-errors --connect-timeout 15 --max-time 120 "$OPUS_RELEASE_URL" -o "$work/opus.tar.gz"; then
+    echo "libopus $OPUS_VERSION: both upstream downloads failed" >&2
+    exit 1
+  fi
+fi
 if [ "$(digest "$work/opus.tar.gz")" != "$OPUS_SHA256" ]; then
   echo "libopus $OPUS_VERSION: SHA-256 does not match the pinned digest" >&2
   exit 1
