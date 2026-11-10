@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"os"
 	"strings"
 	"testing"
@@ -71,7 +73,7 @@ func TestInstructionsCarryTheCompactReference(t *testing.T) {
 }
 
 func TestInstructionsNameTheCurrentAPIVersion(t *testing.T) {
-	if !strings.Contains(instructionsText, `"apiVersion":"1.0"`) || strings.Contains(instructionsText, "API_VERSION") {
+	if !strings.Contains(instructionsText, fmt.Sprintf(`"apiVersion":%q`, api.Current.String())) || strings.Contains(instructionsText, "API_VERSION") {
 		t.Fatal("the instructions do not carry the API version")
 	}
 }

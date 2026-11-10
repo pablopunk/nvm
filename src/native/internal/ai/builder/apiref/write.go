@@ -7,6 +7,8 @@ import (
 	"go/printer"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // render writes the entry point section, the wire types with their docs, the Context services as signatures, and the
@@ -92,7 +94,7 @@ func (index *pkgIndex) writeType(b *strings.Builder, name string, full bool) {
 		b.WriteString("\n")
 	}
 	if doc := index.docs[name]; full && doc != "" && !index.terse {
-		fmt.Fprintf(b, "%s\n\n", firstSentence(doc))
+		fmt.Fprintf(b, "%s\n\n", referenceDescription(name, doc))
 	}
 	switch t := spec.Type.(type) {
 	case *ast.StructType:
@@ -128,10 +130,10 @@ func (index *pkgIndex) writeFields(b *strings.Builder, st *ast.StructType, full 
 		for _, name := range field.Names {
 			line := fmt.Sprintf("- `%s` (%s)", jsonName(field.Tag, name.Name), typeText)
 			if index.terse {
-				line = fmt.Sprintf("- %s: %s", jsonName(field.Tag, name.Name), typeText)
+				line = fmt.Sprintf("%s:%s", jsonName(field.Tag, name.Name), typeText)
 			}
 			if full && doc != "" && !index.terse {
-				line += ": " + firstSentence(doc)
+				line += ": " + referenceDescription(name.Name, doc)
 			}
 			b.WriteString(line + "\n")
 		}
@@ -163,7 +165,7 @@ func (index *pkgIndex) writeFunctions(b *strings.Builder) {
 	for _, name := range names {
 		decl := index.funcs[name]
 		if doc := commentText(decl.Doc); doc != "" {
-			fmt.Fprintf(b, "- %s%s%s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), index.functionProse(doc))
+			fmt.Fprintf(b, "- %s%s%s\n", name, strings.TrimPrefix(index.exprText(decl.Type), "func"), index.functionProse(referenceDescription(name, doc)))
 		}
 	}
 }
@@ -223,4 +225,19 @@ func firstNonNil(groups ...*ast.CommentGroup) *ast.CommentGroup {
 		}
 	}
 	return nil
+}
+
+// referenceDescription omits the identifier already printed in the heading or signature, preserving its meaning.
+func referenceDescription(name, doc string) string {
+	sentence := firstSentence(doc)
+	text, found := strings.CutPrefix(sentence, name+" ")
+	if !found {
+		return sentence
+	}
+	text = strings.TrimPrefix(text, "is ")
+	first, size := utf8.DecodeRuneInString(text)
+	if size == 0 {
+		return text
+	}
+	return string(unicode.ToUpper(first)) + text[size:]
 }

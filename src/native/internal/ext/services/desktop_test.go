@@ -106,7 +106,12 @@ func newDesktopHost(t *testing.T, caps ...platform.Capability) (desktopHost, Dep
 func desktopHandler(t *testing.T, deps Deps, capabilities ...api.Capability) *Handler {
 	t.Helper()
 	deps.DataRoot = t.TempDir()
-	deps.Files = fake.NewFS()
+	if deps.Files == nil {
+		deps.Files = fake.NewFS()
+	}
+	if deps.Clock == nil {
+		deps.Clock = fake.NewClock()
+	}
 	deps.Logs = nil
 	handler := New(deps, manifestFor("acme.desktop", capabilities...))
 	t.Cleanup(func() { _ = handler.Close() })

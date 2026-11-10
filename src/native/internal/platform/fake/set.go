@@ -29,6 +29,7 @@ type Set struct {
 	System       *System
 	Permissions  *Permissions
 	Windows      *WindowManager
+	Desktops     *Desktops
 	Microphone   *Microphone
 	Opus         *OpusCodec
 	FileDialog   *FileDialog
@@ -68,6 +69,7 @@ func NewSet() *Set {
 		System:       NewSystem(),
 		Permissions:  NewPermissions(),
 		Windows:      NewWindowManager(),
+		Desktops:     NewDesktops(),
 		Microphone:   NewMicrophone(),
 		Opus:         NewOpusCodec(),
 		FileDialog:   NewFileDialog(),
@@ -107,6 +109,7 @@ func (s *Set) Ports() platform.Ports {
 		System:       s.System,
 		Permissions:  s.Permissions,
 		Windows:      s.Windows,
+		Desktops:     s.Desktops,
 		Microphone:   s.Microphone,
 		Opus:         s.Opus,
 		FileDialog:   s.FileDialog,
