@@ -2070,7 +2070,10 @@ export type ExtensionContext = {
     ): ExtensionAction;
   };
 
-  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return declarative actions. */
+  /** Independent host-owned windows for floating notes, dashboards, previews, and companions. Helpers return declarative actions.
+   * Go dispatch retains the originating installation through confirmation and rechecks enabled identity and host lifetime.
+   * Palette dismissal does not cancel an admitted window action; stale actions cannot revive a disabled/replaced installation.
+   */
   windows: {
     /** Open or update, show, and focus an independent window rendering the given host-owned view. The action title is `options.title`, then `view.title`, then `Open Window`. */
     create(

@@ -71,3 +71,29 @@ func TestWindowPageDrawsItsRowsInAPalette(t *testing.T) {
 		t.Fatalf("window page does not draw the row %q", "ACME 142.10")
 	}
 }
+
+func TestWindowActionConfirmationKeepsOriginalInstallation(t *testing.T) {
+	identity := new(byte)
+	current := identity
+	calls := 0
+	deps := Deps{CommandSnapshotIdentity: func(string) any { return current }, Window: func(id string, action api.Action, actor any) {
+		calls++
+		if id != "acme.window" || actor != identity || action.Op != "show" {
+			t.Fatal("confirmation changed original window authority")
+		}
+	}}
+	session := NewSession(deps, "acme.window", api.ListView("Window"))
+	host := &fakeHost{}
+	action := api.Action{Kind: api.ActionWindow, Op: "show", Window: &api.WindowRef{ID: "sample"}, Confirm: &api.Confirmation{}}
+	session.action(action, "window").Run(host)
+	if calls != 0 || host.hidden || len(host.pushed) != 1 {
+		t.Fatal("confirmation skipped")
+	}
+	current = new(byte)
+	confirm := host.pushed[0].Search("")[0].Actions[0]
+	confirm.Run(host)
+	confirm.Run(host)
+	if calls != 1 || !host.hidden {
+		t.Fatal("window confirmation was not single use")
+	}
+}
