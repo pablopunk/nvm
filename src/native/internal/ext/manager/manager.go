@@ -146,6 +146,7 @@ type Manager struct {
 	// builtInSettings is Options.BuiltInSettings.
 	builtInSettings func(id string) services.SettingsHost
 	mu              sync.Mutex
+	editGeneration  uint64
 	closed          bool // set by Close under mu; nothing is remembered or written afterwards
 	entries         map[string]*entry
 	// commands keeps each extension's durable commands once they are known; see CachedCommands.
@@ -273,6 +274,7 @@ func (m *Manager) Refresh() error {
 }
 
 func (m *Manager) refreshLocked(bundles []bundle.Bundle) {
+	m.editGeneration++
 	m.inheritLocked(bundles)
 	seen := map[string]bool{}
 	for _, loaded := range bundles {
@@ -342,6 +344,7 @@ func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.closed = true
+	m.editGeneration++
 	for _, e := range m.entries {
 		m.commands.forget(e.bundle.Manifest.ID)
 		stopEntry(e)

@@ -93,6 +93,7 @@ func (m *Manager) Definition(id string) (api.Manifest, string, error) {
 func (m *Manager) Enable(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.editGeneration++
 	e, err := m.findLocked(id)
 	if err != nil {
 		return err
@@ -120,6 +121,7 @@ func (m *Manager) Enable(id string) error {
 func (m *Manager) Disable(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.editGeneration++
 	e, err := m.findLocked(id)
 	if err != nil {
 		return err
@@ -141,6 +143,7 @@ func (m *Manager) Disable(id string) error {
 func (m *Manager) Install(id string, contents map[string][]byte, enable bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.editGeneration++
 	if err := install.Install(m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
 		return err
 	}
@@ -174,6 +177,7 @@ func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error)
 func (m *Manager) Uninstall(id string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.editGeneration++
 	e, err := m.findLocked(id)
 	if err != nil {
 		return err
