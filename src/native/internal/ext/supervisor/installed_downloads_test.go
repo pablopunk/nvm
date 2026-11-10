@@ -25,7 +25,7 @@ func TestDownloadsTrashRemovesTheRowAndInvalidatesItsCachedViews(t *testing.T) {
 	rig.deps.Home = t.TempDir()
 	rig.deps.Commands = commands
 	rig.deps.OS = "darwin"
-	rig.deps.ViewsInvalidate = func(id string) {
+	rig.deps.ViewsInvalidate = func(id string, _ any) {
 		mu.Lock()
 		defer mu.Unlock()
 		invalidated = append(invalidated, id)
