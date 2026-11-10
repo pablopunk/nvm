@@ -80,7 +80,7 @@ func (e Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error
 func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {
 	switch in.Ref.ID {
 	case openActionID:
-		view := guideView(ctx)
+		view := guideView(ctx, e.completed(ctx))
 		return ctx.Navigation().Push(&view), nil
 	case dismissActionID:
 		return api.Result{}, markComplete(ctx)
