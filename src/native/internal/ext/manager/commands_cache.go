@@ -52,6 +52,9 @@ func (m *Manager) learnCommands(target runtimeTarget, generation uint64) {
 func (m *Manager) rememberCommands(target runtimeTarget, generation uint64, result CommandResult) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if m.closed {
+		return false
+	}
 	entry, err := m.findLocked(target.id)
 	if err != nil || entry.runtime != target.runtime || !m.isRunnable(entry) {
 		return false

@@ -133,6 +133,8 @@ func TestScreenshotsMixedReadableAndDeniedPreservesOtherRows(t *testing.T) {
 	default:
 		t.Fatal("reopen did not immediately paint independently authorized cached rows")
 	}
-	wait()
+	for len(h.pushed) == 0 {
+		wait()
+	}
 	check((<-h.pushed).(*palette.View))
 }

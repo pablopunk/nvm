@@ -43,7 +43,7 @@ func (f *heldScreenshotFS) Lstat(path string) (fs.FileInfo, error) {
 	if path == f.target && f.denied.Load() {
 		return nil, fs.ErrPermission
 	}
-	if path == f.target && (f.held.Load() || f.heldStat.Load()) {
+	if path == f.target && f.held.Load() {
 		f.enterOnce.Do(func() { close(f.entered) })
 		<-f.release
 	}

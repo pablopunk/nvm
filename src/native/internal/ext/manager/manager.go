@@ -146,6 +146,7 @@ type Manager struct {
 	// builtInSettings is Options.BuiltInSettings.
 	builtInSettings func(id string) services.SettingsHost
 	mu              sync.Mutex
+	closed          bool // set by Close under mu; nothing is remembered or written afterwards
 	entries         map[string]*entry
 	// commands keeps each extension's durable commands once they are known; see CachedCommands.
 	commands       commandCache
@@ -340,6 +341,7 @@ func (m *Manager) sortedKeysLocked() []string {
 func (m *Manager) Close() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	m.closed = true
 	for _, e := range m.entries {
 		m.commands.forget(e.bundle.Manifest.ID)
 		stopEntry(e)
