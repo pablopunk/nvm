@@ -96,7 +96,7 @@ func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[strin
 		return err
 	}
 	m.editGeneration++
-	if err := install.Install(m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
+	if err := install.InstallContext(ctx, m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
 		return err
 	}
 	if err := m.enabled.SetEnabled(id, enable); err != nil {

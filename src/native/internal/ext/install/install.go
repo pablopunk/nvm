@@ -7,6 +7,7 @@
 package install
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -28,9 +29,21 @@ const (
 // Install writes files as the extension id under root. The files must include extension.json and main.go,
 // and the manifest must load cleanly with exactly this id. A failed install changes nothing visible.
 func Install(files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) error {
+	return InstallContext(context.Background(), files, clock, root, id, contents)
+}
+
+// InstallContext stages a candidate, then checks cancellation immediately before the first publication
+// rename. Cancellation after that admission does not roll back an admitted installation.
+func InstallContext(ctx context.Context, files platform.FS, clock platform.Clock, root, id string, contents map[string][]byte) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	staging, _, err := Stage(files, clock, root, id, contents)
 	if err != nil {
 		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return errors.Join(err, Discard(files, staging))
 	}
 	return swapIn(files, clock, root, id, staging)
 }
