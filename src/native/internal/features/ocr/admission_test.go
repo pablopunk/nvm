@@ -128,3 +128,37 @@ func TestOCRAdmissionSuppressesSuccessAfterCallerCancellation(t *testing.T) {
 		t.Fatalf("late result=%+v err=%v", result, err)
 	}
 }
+
+type partialOCRWrite struct {
+	platform.FS
+	path     string
+	writeErr error
+}
+
+func (f *partialOCRWrite) WriteFile(path string, data []byte, mode fs.FileMode) error {
+	f.path = path
+	if err := f.FS.WriteFile(path, data[:1], mode); err != nil {
+		return err
+	}
+	return f.writeErr
+}
+
+func TestOCRAdmissionRemovesPartialImageAfterFailedStaging(t *testing.T) {
+	svc, text, _, files := deskWith(t)
+	writeErr := errors.New("disk full after partial write")
+	writer := &partialOCRWrite{FS: files, writeErr: writeErr}
+	svc.deps.FS = writer
+	result, err := svc.ImagePNG(context.Background(), []byte("private image"), Options{})
+	if !errors.Is(err, writeErr) || result.Text != "" {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if writer.path == "" {
+		t.Fatal("partial-write boundary was not exercised")
+	}
+	if _, err := files.Stat(writer.path); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("partial image remains: %v", err)
+	}
+	if len(text.Calls()) != 0 {
+		t.Fatal("recognizer read a partially staged image")
+	}
+}

@@ -114,10 +114,10 @@ func (s *Service) ImagePNG(ctx context.Context, png []byte, opts Options) (platf
 	if err := ctx.Err(); err != nil {
 		return platform.TextResult{}, err
 	}
+	defer func() { _ = s.deps.FS.Remove(dst) }()
 	if err := s.deps.FS.WriteFile(dst, png, 0o600); err != nil {
 		return platform.TextResult{}, err
 	}
-	defer func() { _ = s.deps.FS.Remove(dst) }()
 	return s.recognize(ctx, dst, opts.Languages)
 }
 
