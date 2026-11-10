@@ -1,0 +1,57 @@
+package manager
+
+import (
+	"context"
+	"fmt"
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/services"
+	"github.com/pablopunk/nvm/native/internal/platform"
+)
+
+// PictureSource is a host-only read grant. Current must be checked again before publishing pixels or a denial.
+// The view owns Source and closes it on success, cancellation and failure.
+type PictureSource struct {
+	Source  platform.ReadSource
+	Current func() bool
+}
+
+// OpenPictureSource binds deferred file access to the installation that created the view.
+func (m *Manager) OpenPictureSource(ctx context.Context, id, path string, identity any) (PictureSource, error) {
+	host := m.pictureHost(id, identity)
+	if host == nil {
+		return PictureSource{}, expiredPictureAuthority()
+	}
+	source, err := host.OpenPictureSource(ctx, path)
+	if err != nil {
+		return PictureSource{}, err
+	}
+	current := func() bool { return m.pictureHost(id, identity) == host }
+	if !current() {
+		_ = source.Close()
+		return PictureSource{}, expiredPictureAuthority()
+	}
+	return PictureSource{Source: source, Current: current}, nil
+}
+
+func (m *Manager) pictureHost(id string, identity any) *services.Handler {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	if err != nil || !m.isRunnable(e) || e.host == nil {
+		return nil
+	}
+	revision, _ := identity.(*byte)
+	if !e.builtin && (e.runtime == nil || revision == nil || revision != e.snapshotIdentity) {
+		return nil
+	}
+	for _, capability := range e.bundle.Manifest.Capabilities {
+		if capability == api.CapabilityDesktopFiles {
+			return e.host
+		}
+	}
+	return nil
+}
+
+func expiredPictureAuthority() error {
+	return fmt.Errorf("%w: the picture's extension permission has changed; reopen its view", api.ErrPermission)
+}
