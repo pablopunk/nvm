@@ -26,6 +26,8 @@ type Session struct {
 	deps         Deps
 	parent       *Session
 	chatRenderer *aichat.ExtensionChat
+	chatCopies   *chatCopyState
+	chatRevision uint64
 	// chatSideSession and chatSidePage are the side page of a chat view, kept between renders.
 	chatSideSession       *Session
 	chatSidePage          *palette.View
@@ -128,7 +130,8 @@ func (s *Session) Palette() *palette.View {
 		page.OnDataChanged = s.refreshAfterMutation
 	}
 	page.Subtitle = s.view.Subtitle
-	if s.hasPageActions() {
+	// The chat renderer already merges the extension's actions with host-owned chat controls.
+	if s.hasPageActions() && s.view.Kind != api.ViewChat {
 		page.Actions = s.pageActions
 	}
 	if len(s.view.FooterHints) > 0 {

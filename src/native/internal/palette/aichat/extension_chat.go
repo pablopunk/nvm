@@ -19,17 +19,19 @@ import (
 // view has no tier picker. Attach with PickImages shows the picture control. Side returns the page drawn beside the
 // transcript, or nil for none. Actions are the view's action panel rows. Placeholder is the composer's prompt.
 type ExtensionChatSpec struct {
-	Title       string
-	Messages    []chat.Message
-	Placeholder string
-	Tier        chat.Tier
-	Attach      bool
-	PickImages  func(done func([]chat.Image))
-	Send        func(h search.Host, text string, images []chat.Image)
-	Stop        func(h search.Host)
-	ChooseTier  func(h search.Host, tier chat.Tier)
-	Actions     func() []search.Action
-	Side        func() *palette.View
+	Title        string
+	Messages     []chat.Message
+	Placeholder  string
+	Tier         chat.Tier
+	Attach       bool
+	PickImages   func(done func([]chat.Image))
+	Send         func(h search.Host, text string, images []chat.Image)
+	Stop         func(h search.Host)
+	ChooseTier   func(h search.Host, tier chat.Tier)
+	Actions      func() []search.Action
+	CopyMessage  func(h search.Host, index int)
+	CopyRevision *byte
+	Side         func() *palette.View
 	// Host receives the palette host each frame the transcript draws, so the owner can start work that needs it.
 	Host func(h search.Host)
 }
@@ -49,6 +51,8 @@ type ExtensionChat struct {
 	previewHidden bool
 	specFrom      func() ExtensionChatSpec
 	wasBusy       bool
+	copyRevision  *byte
+	copyActions   []search.Action
 }
 
 // NewExtensionChat returns the renderer. reply draws a reply's Markdown and now reads the clock for the progress rows.
@@ -227,6 +231,7 @@ func (x *ExtensionChat) actions() []search.Action {
 	if x.spec.Actions != nil {
 		out = x.spec.Actions()
 	}
+	out = append(out, x.messageCopyActions()...)
 	out = withThinkingRow(out, x.thinkingAction())
 	if x.spec.Side == nil || x.spec.Side() == nil {
 		return out

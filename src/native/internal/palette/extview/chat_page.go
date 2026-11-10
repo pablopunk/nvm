@@ -58,6 +58,10 @@ func (s *Session) chatSpec() aichat.ExtensionChatSpec {
 		Actions:     s.pageActions,
 		Attach:      spec.Attach,
 		PickImages:  s.deps.PickImages,
+		CopyMessage: s.messageCopier(),
+	}
+	if s.chatCopies != nil && out.CopyMessage != nil {
+		out.CopyRevision = s.chatCopies.identity
 	}
 	if spec.Side != nil {
 		out.Side = s.chatSide

@@ -59,6 +59,7 @@ func (s *Session) chatStep(title, id string, step func() error) search.Action {
 func (s *Session) refreshChat(h search.Host, id string) {
 	s.deps.Invoke(aichats.ID, api.Invocation{Ref: aichats.RefreshChatRef(id)}, func(result api.Result, failure *api.Failure) {
 		if failure == nil && result.View != nil && result.View.Kind == api.ViewChat {
+			s.chatRevision++
 			s.view = *result.View
 		}
 		h.Refresh()
