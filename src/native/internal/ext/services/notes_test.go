@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,8 +161,12 @@ func TestNotesAdmissionPreventsStoreEffects(t *testing.T) {
 				}
 				args := mustRaw(t, protocol.NoteUpdateArgs{ID: original.ID, Markdown: "changed", SavedAt: original.UpdatedAt})
 				reply := h.Serve(ctx, protocol.ServiceCall{CallID: 1, Service: protocol.ServiceNotes, Op: op, Args: args})
-				if reply.Failure == nil {
-					t.Fatal("cancelled call succeeded")
+				want := api.CodeCancelled
+				if strings.HasSuffix(mode, "closed") {
+					want = api.CodeUnavailable
+				}
+				if reply.Failure == nil || reply.Failure.Code != want {
+					t.Fatalf("failure=%+v want=%v", reply.Failure, want)
 				}
 				all := st.List()
 				if len(all) != 1 || all[0] != original {
