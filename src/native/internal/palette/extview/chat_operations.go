@@ -126,12 +126,18 @@ func (s *Session) removeChat(title, id string) search.Action {
 			h.Toast(err.Error())
 			return
 		}
+		if s.view.Refresh == nil || s.view.Refresh.Ref == nil {
+			if s.view.Source != nil {
+				// reload coalesces behind a held load and supersedes it itself; bumping the revision here would
+				// discard the held load's completion before it ran the coalesced reload.
+				s.reload()
+				return
+			}
+		}
 		s.itemsRevision++
 		s.loading = false
 		if s.view.Refresh != nil && s.view.Refresh.Ref != nil {
 			s.refreshAfterMutation()
-		} else if s.view.Source != nil {
-			s.reload()
 		} else {
 			h.Refresh()
 		}

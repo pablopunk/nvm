@@ -26,6 +26,7 @@ var viewsGoldens = golden.Options{Group: "views", Width: width, Height: height}
 // syncViewDeps runs extension actions on the calling goroutine, so a test reads the result it caused at once.
 func syncViewDeps(m *manager.Manager) extview.Deps {
 	return extview.Deps{
+		CommandSnapshotIdentity: m.SnapshotIdentity,
 		Invoke: func(extID string, in api.Invocation, done func(api.Result, *api.Failure)) {
 			result, failure, err := m.Run(context.Background(), extID, in)
 			if err != nil {
