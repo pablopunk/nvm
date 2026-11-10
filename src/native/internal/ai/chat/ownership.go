@@ -2,7 +2,7 @@ package chat
 
 // BuilderTurn identifies one builder toolset. Its nonzero size gives each allocation a distinct identity.
 // It contains no model-visible authority and is accepted only by the run holding this exact token.
-type BuilderTurn struct{ marker byte }
+type BuilderTurn struct{ _ byte }
 
 func NewBuilderTurn() *BuilderTurn { return &BuilderTurn{} }
 
