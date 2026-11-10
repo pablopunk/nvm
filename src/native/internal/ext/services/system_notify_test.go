@@ -114,9 +114,7 @@ func TestNotifyAdmissionThroughServe(t *testing.T) {
 			case "missing", "closed":
 				requireCode(t, reply, api.CodeUnavailable, "")
 			default:
-				if reply.Failure == nil {
-					t.Fatal("cancelled call succeeded")
-				}
+				requireCode(t, reply, api.CodeCancelled, "")
 			}
 			want := 0
 			if state == "normal" || state == "denied" {

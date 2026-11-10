@@ -9,7 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// serveSystem answers read-only host metadata. It needs no declaration: it reveals nothing an extension could misuse.
+// serveSystem exposes host metadata and routes system effects through their declaration checks.
 func (h *Handler) serveSystem(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Op {
 	case protocol.OpOS:
