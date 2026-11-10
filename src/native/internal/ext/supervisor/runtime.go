@@ -199,7 +199,7 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	}
 	go func() {
 		defer func() { <-r.slots }()
-		exchangeCtx := context.Background()
+		exchangeCtx := context.WithoutCancel(ctx)
 		if req.Invocation != nil && req.Invocation.AwaitInitialView {
 			exchangeCtx = ctx
 		}
