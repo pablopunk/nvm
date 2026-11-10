@@ -168,6 +168,7 @@ func init() {
 		"FormText":                      reflect.ValueOf(api.FormText),
 		"FormView":                      reflect.ValueOf(api.FormView),
 		"GridView":                      reflect.ValueOf(api.GridView),
+		"HostToggleMenuBar":             reflect.ValueOf(constant.MakeFromLiteral("\"toggle-menu-bar\"", token.STRING, 0)),
 		"IndicatorError":                reflect.ValueOf(api.IndicatorError),
 		"IndicatorLoading":              reflect.ValueOf(api.IndicatorLoading),
 		"IndicatorRecording":            reflect.ValueOf(api.IndicatorRecording),

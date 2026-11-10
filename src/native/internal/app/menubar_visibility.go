@@ -3,6 +3,7 @@ package app
 import (
 	"sync"
 
+	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 	"github.com/pablopunk/nvm/native/internal/search"
 	"github.com/pablopunk/nvm/native/internal/store"
@@ -117,14 +118,15 @@ func (p *App) menuBarToggleCommands() []command {
 	return rows
 }
 
-// menuBarToggleCommand is the row of one extension. Its title says what pressing it will do.
+// menuBarToggleCommand is the row of one extension. Its title stays the same whichever way it goes, so a search finds it
+// the same way, and its subtitle says which way it is.
 func (p *App) menuBarToggleCommand(extension manager.MenuBarExtension) command {
 	id, title := extension.ID, extension.Title
 	if title == "" {
 		title = id
 	}
 	row := command{
-		ID: menuBarToggleIDPrefix + id, Keywords: "menu bar menubar tray status bar", Icon: "panel-top",
+		ID: menuBarToggleIDPrefix + id, Title: menuBarToggleTitle(title), Keywords: "menu bar menubar tray status bar show hide", Icon: "panel-top",
 		PhraseMatch: true, Dismiss: search.DismissNever,
 		Run: func(h search.Host) { p.setMenuBarShown(id, !p.visibility.shown(id), h) },
 		extraActions: []search.Action{{Title: "Tweak with AI", Dismiss: search.DismissNever, Run: func(h search.Host) {
@@ -132,9 +134,50 @@ func (p *App) menuBarToggleCommand(extension manager.MenuBarExtension) command {
 		}}},
 	}
 	if p.visibility.shown(id) {
-		row.Title, row.Subtitle = "Hide "+title+" from Menu Bar", "Shown in the menu bar"
+		row.Subtitle = "Shown in the menu bar"
 	} else {
-		row.Title, row.Subtitle = "Show "+title+" in Menu Bar", "Hidden from the menu bar"
+		row.Subtitle = "Hidden from the menu bar"
 	}
 	return row
+}
+
+func menuBarToggleTitle(extensionTitle string) string {
+	return "Toggle " + extensionTitle + " in Menu Bar"
+}
+
+// menuBarTogglePreviewItems is the toggle row of extension id in its preview, for an extension with menu bar items. The
+// preview is not redrawn when it runs, so its subtitle does not name the current state.
+func (p *App) menuBarTogglePreviewItems(id string) []api.Item {
+	m := p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	for _, extension := range m.MenuBarExtensions() {
+		if extension.ID == id {
+			return []api.Item{menuBarTogglePreviewItem(extension)}
+		}
+	}
+	return nil
+}
+
+func menuBarTogglePreviewItem(extension manager.MenuBarExtension) api.Item {
+	title := extension.Title
+	if title == "" {
+		title = extension.ID
+	}
+	return api.Item{
+		ID: menuBarToggleIDPrefix + extension.ID, Title: menuBarToggleTitle(title), Subtitle: "Shows or hides it in the menu bar", Icon: "panel-top",
+		Primary: &api.Action{Kind: api.ActionHost, Op: api.HostToggleMenuBar, Title: "Toggle"},
+	}
+}
+
+// hostOperation runs the ActionHost op of a row. The toggle acts only on the extension whose row it is.
+func (p *App) hostOperation(h search.Host, extID, op string) {
+	if op == api.HostToggleMenuBar {
+		if p.declaresMenuBar(extID) {
+			p.setMenuBarShown(extID, !p.visibility.shown(extID), h)
+		}
+		return
+	}
+	p.settingsHostOperation(h, extID, op)
 }

@@ -41,6 +41,7 @@ func (b extensionBuilder) ExtensionPreview(extension string) (api.View, bool) {
 		return api.View{}, false
 	}
 	view := extensionPreviewView(m, extension)
+	view.Items = append(view.Items, b.p.menuBarTogglePreviewItems(extension)...)
 	view.Presentation = api.PresentSidePreview
 	return view, true
 }

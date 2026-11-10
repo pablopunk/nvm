@@ -6,6 +6,9 @@ import (
 	"net/url"
 )
 
+// HostToggleMenuBar is the ActionHost op that shows or hides the menu bar items of the extension whose row runs it.
+const HostToggleMenuBar = "toggle-menu-bar"
+
 // ActionKind selects what the host does when an action runs. Only ActionRun executes extension
 // code; every other kind is a declarative host operation that the host implements.
 type ActionKind string
@@ -38,7 +41,8 @@ const (
 	ActionSetQuery      ActionKind = "set-query"
 	// ActionAccount runs an account operation the host owns, such as sign-in.
 	ActionAccount ActionKind = "account"
-	// ActionHost runs a host operation a built-in may name, such as opening a host page. Op is one of hostOps.
+	// ActionHost runs a host operation, such as opening a host page. Op is one of hostOps: HostToggleMenuBar acts on the
+	// extension whose row it is, and the others are for built-ins.
 	ActionHost ActionKind = "host"
 	// ActionChat opens, starts, continues or removes a host-owned chat. Chat holds its payload.
 	ActionChat ActionKind = "chat"
@@ -93,7 +97,7 @@ var (
 	accountOps  = []string{AccountSignIn}
 	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse}
 	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
-	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page"}
+	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
 	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
 	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove}
 )

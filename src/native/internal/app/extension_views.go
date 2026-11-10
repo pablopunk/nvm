@@ -125,7 +125,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		ReadSetting:   func(extID, key string) (json.RawMessage, error) { return m.SettingValue(extID, key) },
 		RowAccessory:  p.settingRowAccessory,
 		ReadDisplay:   m.SharedDisplay,
-		HostOperation: p.settingsHostOperation,
+		HostOperation: p.hostOperation,
 		RecordSetting: p.settingRecorder,
 		WriteSetting: func(extID, key string, value json.RawMessage) error {
 			return m.WriteSetting(extID, key, value)
