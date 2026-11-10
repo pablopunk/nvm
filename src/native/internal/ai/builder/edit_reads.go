@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 )
@@ -50,6 +51,11 @@ func (r *editReads) read(ctx context.Context, id string, offset int) (agent.Resu
 		}
 		if revision == nil {
 			return agent.Result{}, errors.New("extension snapshot has no revision")
+		}
+		for name, data := range files {
+			if !utf8.ValidString(name) || !utf8.Valid(data) {
+				return agent.Result{}, errors.New("extension snapshot is not UTF-8 text")
+			}
 		}
 		data, err := json.Marshal(filesAsText(files))
 		if err != nil {
