@@ -61,14 +61,6 @@ func (p *App) extensionWindowPageBound(extID string, identity any, view api.View
 	return extview.NewSessionForIdentity(p.extensionViewDeps(m), extID, view, identity).Open(host)
 }
 
-// performExtensionWindow runs a window action an extension's view asked for. The palette has hidden already, so a
-// failure is shown as a toast on the app.
-func (p *App) performExtensionWindow(extID string, action api.Action) {
-	if err := p.extWindows.Perform(extID, action); err != nil {
-		p.Toast(err.Error())
-	}
-}
-
 // performExtensionWindowBound admits the captured installation before any window effect.
 func (p *App) performExtensionWindowBound(m *manager.Manager, extID string, identity any, action api.Action) {
 	authority, err := m.ActionAuthorityFor(extID, identity)
