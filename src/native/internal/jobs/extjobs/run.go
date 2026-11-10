@@ -34,7 +34,7 @@ func (a *Adapter) runCommand(p plan) func(context.Context, jobs.Run) error {
 		if support, ok := host.(interface{ OperationsSupported([]api.Operation) bool }); ok && !support.OperationsSupported(p.command.Requires) {
 			return jobs.Skipped{Reason: "required operation is unavailable on this system"}
 		}
-		result, failure, err := host.Run(ctx, p.extensionID, launchInvocation(p.command, run))
+		result, failure, err := host.RunCommand(ctx, p.extensionID, launchInvocation(p.command, run))
 		if err != nil {
 			return err
 		}

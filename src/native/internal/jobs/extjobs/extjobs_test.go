@@ -46,7 +46,7 @@ func (h *fakeHost) setCommands(results ...manager.CommandResult) {
 	h.commands = results
 }
 
-func (h *fakeHost) Run(_ context.Context, _ string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+func (h *fakeHost) RunCommand(_ context.Context, _ string, invocation api.Invocation) (api.Result, *api.Failure, error) {
 	h.invocations <- invocation
 	h.mu.Lock()
 	defer h.mu.Unlock()

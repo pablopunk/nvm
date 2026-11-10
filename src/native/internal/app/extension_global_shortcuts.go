@@ -124,7 +124,7 @@ func (p *App) runExtensionCommandInPlace(entry extensionCommandEntry) {
 
 // shortcutCommandRunner is the shared extension runtime and desktop paste service used by a global command.
 type shortcutCommandRunner interface {
-	Run(context.Context, string, api.Invocation) (api.Result, *api.Failure, error)
+	RunCommand(context.Context, string, api.Invocation) (api.Result, *api.Failure, error)
 	PerformPaste(string, api.Action) error
 }
 
@@ -133,7 +133,7 @@ func runShortcutCommand(ctx context.Context, runner shortcutCommandRunner, entry
 		Ref: api.ActionRef{ID: entry.command.ID}, Launch: api.LaunchContext{Reason: "manual"},
 		Background: entry.command.Mode == api.ModeBackground,
 	}
-	result, failure, err := runner.Run(ctx, entry.extID, invocation)
+	result, failure, err := runner.RunCommand(ctx, entry.extID, invocation)
 	if failure != nil || err != nil || result.View != nil || result.Next == nil {
 		return result, failure, err
 	}

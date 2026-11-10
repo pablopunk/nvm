@@ -19,7 +19,7 @@ type shortcutRunProbe struct {
 	hidden        bool
 }
 
-func (r *shortcutRunProbe) Run(_ context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+func (r *shortcutRunProbe) RunCommand(_ context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
 	r.extID, r.invocation = id, invocation
 	return r.result, r.failure, r.err
 }

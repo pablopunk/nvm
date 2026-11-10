@@ -169,7 +169,17 @@ const budgetSlack = 10 * time.Millisecond
 // Run executes one action on an enabled extension and returns its result. The invocation carries the action
 // reference and its arguments as data; nothing executable crosses the boundary.
 func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
-	if !m.commandSupported(id, invocation.Ref.ID) {
+	return m.run(ctx, id, invocation, false)
+}
+
+// RunCommand executes a host-selected durable command. Command requirements never apply to
+// an ordinary action reference, even when it shares a command's local ID.
+func (m *Manager) RunCommand(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+	return m.run(ctx, id, invocation, true)
+}
+
+func (m *Manager) run(ctx context.Context, id string, invocation api.Invocation, command bool) (api.Result, *api.Failure, error) {
+	if command && !m.commandSupported(id, invocation.Ref.ID) {
 		return api.Result{}, &api.Failure{Code: api.CodeUnavailable, Message: "This command requires an operation unavailable on this system."}, nil
 	}
 	var finish func(RunOutcome)
