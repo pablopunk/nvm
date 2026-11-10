@@ -61,19 +61,37 @@ func TestFocusReturnNeedsAnX11SessionAndXdotool(t *testing.T) {
 	}
 }
 
-func TestTextRecognitionRequiresBundledAssetsOnEveryOS(t *testing.T) {
-	for _, goos := range []string{"darwin", "linux", "windows"} {
-		for _, available := range []bool{false, true} {
-			var want []platform.Capability
-			if available {
-				want = append(want, platform.CapabilityTextRecognize)
-			}
-			if goos == "darwin" {
-				want = append(want, platform.CapabilityScreenCapture)
-			}
-			if got := textCapabilities(goos, available); !reflect.DeepEqual(got, want) {
-				t.Fatalf("%s assets=%t: got %v, want %v", goos, available, got, want)
-			}
+func TestTextCapabilitiesFollowTheAssetsAndTheScreenTool(t *testing.T) {
+	recognize, capture := platform.CapabilityTextRecognize, platform.CapabilityScreenCapture
+	cases := []struct {
+		hasOCR, canCapture bool
+		want               []platform.Capability
+	}{
+		{false, false, nil},
+		{true, false, []platform.Capability{recognize}},
+		{false, true, []platform.Capability{capture}},
+		{true, true, []platform.Capability{recognize, capture}},
+	}
+	for _, test := range cases {
+		if got := textCapabilities(test.hasOCR, test.canCapture); !reflect.DeepEqual(got, test.want) {
+			t.Fatalf("assets=%t capture=%t: got %v, want %v", test.hasOCR, test.canCapture, got, test.want)
 		}
+	}
+}
+
+func TestScreenCaptureIsOnMacOSAndOnLinuxWithATool(t *testing.T) {
+	none := func(string) bool { return false }
+	scrot := func(name string) bool { return name == "scrot" }
+	x11 := func(name string) string {
+		if name == "DISPLAY" {
+			return ":0"
+		}
+		return ""
+	}
+	if !screenCaptureCapable("darwin", x11, none) || screenCaptureCapable("windows", x11, scrot) {
+		t.Fatal("macOS always captures and Windows never does")
+	}
+	if screenCaptureCapable("linux", x11, none) || !screenCaptureCapable("linux", x11, scrot) {
+		t.Fatal("Linux captures only with a tool")
 	}
 }

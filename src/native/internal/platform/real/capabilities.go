@@ -87,17 +87,17 @@ func capabilitiesFor(goos string, getenv func(string) string, hasTool func(strin
 	if goos == "linux" && hasTool("pactl") && hasTool("parec") {
 		supported = append(supported, platform.CapabilityMicrophone)
 	}
-	supported = append(supported, textCapabilities(goos, ocrAssetsAvailable())...)
+	supported = append(supported, textCapabilities(ocrAssetsAvailable(), screenCaptureCapable(goos, getenv, hasTool))...)
 	return platform.NewCapabilities(supported...)
 }
 
 // textCapabilities advertises recognition only when its bundled runtime and models are available.
-func textCapabilities(goos string, hasOCR bool) []platform.Capability {
+func textCapabilities(hasOCR, canCaptureScreen bool) []platform.Capability {
 	var supported []platform.Capability
 	if hasOCR {
 		supported = append(supported, platform.CapabilityTextRecognize)
 	}
-	if goos == "darwin" {
+	if canCaptureScreen {
 		supported = append(supported, platform.CapabilityScreenCapture)
 	}
 	return supported
