@@ -16,7 +16,17 @@ func (h *Handler) serveNotes(ctx context.Context, call protocol.ServiceCall) (an
 	if err := h.require(api.CapabilityNotes); err != nil {
 		return nil, err
 	}
+	if call.Op != protocol.OpDelete {
+		if err := h.admitDesktopEffect(ctx); err != nil {
+			return nil, err
+		}
+	}
 	store := h.notesOrNil()
+	if call.Op != protocol.OpDelete {
+		if err := h.admitDesktopEffect(ctx); err != nil {
+			return nil, err
+		}
+	}
 	if store == nil {
 		return nil, unavailable("notes are not available yet")
 	}

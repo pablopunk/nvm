@@ -127,3 +127,47 @@ func TestNotesDeleteRunsOnlyWhenConfirmed(t *testing.T) {
 	first := decodeNote(t, serve(t, confirmed, protocol.ServiceNotes, protocol.OpCreate, nil))
 	mustOK(t, serveFromRun(t, confirmed, protocol.OpDelete, protocol.KeyArgs{Key: first.ID}))
 }
+
+func TestNotesAdmissionPreventsStoreEffects(t *testing.T) {
+	for _, op := range []string{protocol.OpList, protocol.OpGet, protocol.OpCreate, protocol.OpRecent, protocol.OpUpdate} {
+		for _, mode := range []string{"caller", "lifetime", "closed", "lookup-caller", "lookup-lifetime", "lookup-closed"} {
+			t.Run(op+"-"+mode, func(t *testing.T) {
+				h, st := notesHandler(t, newRig(t), true)
+				original, err := st.Create(h.deps.Clock.Now())
+				if err != nil {
+					t.Fatal(err)
+				}
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				lifetime, stop := context.WithCancel(context.Background())
+				defer stop()
+				ctx = protocol.WithLifetime(ctx, lifetime)
+				invalidate := func() {
+					switch mode {
+					case "caller", "lookup-caller":
+						cancel()
+					case "lifetime", "lookup-lifetime":
+						stop()
+					case "closed", "lookup-closed":
+						_ = h.Close()
+					}
+				}
+				if len(mode) >= 7 && mode[:7] == "lookup-" {
+					h.deps.Notes = func() *notes.Store { invalidate(); return st }
+				} else {
+					h.deps.Notes = func() *notes.Store { t.Fatal("lookup after cancellation"); return nil }
+					invalidate()
+				}
+				args := mustRaw(t, protocol.NoteUpdateArgs{ID: original.ID, Markdown: "changed", SavedAt: original.UpdatedAt})
+				reply := h.Serve(ctx, protocol.ServiceCall{CallID: 1, Service: protocol.ServiceNotes, Op: op, Args: args})
+				if reply.Failure == nil {
+					t.Fatal("cancelled call succeeded")
+				}
+				all := st.List()
+				if len(all) != 1 || all[0] != original {
+					t.Fatalf("store changed: %+v", all)
+				}
+			})
+		}
+	}
+}
