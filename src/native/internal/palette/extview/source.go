@@ -124,7 +124,11 @@ func (s *Session) refreshNow() {
 	}
 	s.invokeRefresh(*refresh.Ref, func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
-		if s.dismissed || revision != s.itemsRevision {
+		if s.dismissed {
+			return
+		}
+		if revision != s.itemsRevision {
+			s.runPendingRefreshAfterStaleResult()
 			return
 		}
 		if failure != nil && s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
@@ -190,6 +194,15 @@ func (s *Session) refreshNow() {
 		s.cacheRefreshPatch(patch)
 		s.refreshHost()
 	})
+}
+
+// runPendingRefreshAfterStaleResult drops a result that predates a mutation, and still runs the refresh that mutation
+// queued behind it, so the page does not keep the rows the mutation removed.
+func (s *Session) runPendingRefreshAfterStaleResult() {
+	if s.refreshPending {
+		s.refreshPending = false
+		s.refreshNow()
+	}
 }
 
 // startInterval runs the refresh every IntervalMs while the view is open, on the UI thread.

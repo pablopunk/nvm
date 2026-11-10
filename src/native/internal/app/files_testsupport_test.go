@@ -26,20 +26,21 @@ func newTestFiles(tb testing.TB, home string, paths []string) *fileService {
 		tb.Fatal(err)
 	}
 	return &fileService{
-		ix:        ix,
-		fsys:      fsys,
-		shell:     fake.NewShell(),
-		clock:     clock,
-		clipboard: fake.NewClipboard(),
-		copyFiles: func(...string) error { return nil },
-		home:      home,
-		labels:    platform.ShellLabelsFor("linux"),
-		thumbDir:  "/cache/files-thumbs",
-		icons:     newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, func() {}),
-		thumbs:    newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, func() {}),
-		redraw:    func() {},
-		ctx:       ctx,
-		log:       logx.Default(),
+		ix:           ix,
+		fsys:         fsys,
+		shell:        fake.NewShell(),
+		clock:        clock,
+		clipboard:    fake.NewClipboard(),
+		copyFiles:    func(...string) error { return nil },
+		home:         home,
+		labels:       platform.ShellLabelsFor("linux"),
+		thumbDir:     "/cache/files-thumbs",
+		icons:        newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileIconEntries, func() {}),
+		thumbs:       newAsyncCache[*ui.Bitmap](ctx, fileWorkers, fileQueue, fileThumbEntries, func() {}),
+		gridPictures: newAsyncCache[*ui.Bitmap](ctx, 0, 1, gridPictureEntries, nil),
+		redraw:       func() {},
+		ctx:          ctx,
+		log:          logx.Default(),
 	}
 }
 

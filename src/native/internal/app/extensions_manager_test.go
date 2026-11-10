@@ -71,11 +71,16 @@ type managerFakes struct {
 	jobs           services.JobsSurface
 	shortcuts      services.ShortcutTable
 	systemCommands *systemfeat.Services
+	windows        services.WindowEngine
+	desktops       platform.DesktopSwitcher
 }
 
 // paletteSurfaces are the palette's own surfaces as the app hands them to the built-ins: its settings, permissions,
 // updates, diagnostics, background jobs and shortcuts.
 func paletteSurfaces(p *App) managerFakes {
+	if p.windows == nil {
+		p.attachWindows()
+	}
 	return managerFakes{
 		settingsHost:   p.builtInSettingsStore,
 		permissions:    permissionSurface{p: p},
@@ -84,6 +89,8 @@ func paletteSurfaces(p *App) managerFakes {
 		jobs:           jobsSurface{p: p},
 		shortcuts:      p.extensionShortcuts(),
 		systemCommands: p.systemSvc,
+		windows:        p.extensionWindows(),
+		desktops:       p.ports.Desktops,
 	}
 }
 
@@ -166,6 +173,8 @@ func newManagerWithFakes(t testing.TB, fakes managerFakes, builtins []api.Extens
 		Jobs:            fakes.jobs,
 		Shortcuts:       fakes.shortcuts,
 		SystemCommands:  fakes.systemCommands,
+		Windows:         fakes.windows,
+		Desktops:        fakes.desktops,
 	}, filepath.Join(dir, "extensions"), enablement.Open(state), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dir, "extension-data"),

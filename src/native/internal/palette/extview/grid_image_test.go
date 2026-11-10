@@ -101,6 +101,7 @@ func TestPictureDenialCannotReplaceNewerOrForeignSnapshot(t *testing.T) {
 	command := api.ActionRef{ID: "grid"}
 	identity, foreign := new(byte), new(byte)
 	view := api.GridView("Files", 0, api.Item{ID: path, Image: &api.Image{Src: ref}})
+	view.Refresh = &api.Refresh{Immediate: true, Ref: &command}
 	hash := sha256.Sum256([]byte(ref))
 	evidence := &api.SnapshotEvidence{ThumbnailHashes: map[[32]byte]bool{hash: true}, ThumbnailPaths: map[[32]byte][]string{hash: {path}}}
 	snapshots := &CommandSnapshots{}
