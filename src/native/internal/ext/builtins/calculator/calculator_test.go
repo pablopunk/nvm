@@ -54,6 +54,10 @@ type fakeNetwork struct {
 	urls   chan string
 }
 
+func (n fakeNetwork) Download(api.DownloadRequest) (api.DownloadResponse, error) {
+	return api.DownloadResponse{}, nil
+}
+
 func (n fakeNetwork) Fetch(request api.FetchRequest) (api.FetchResponse, error) {
 	if n.urls != nil {
 		n.urls <- request.URL

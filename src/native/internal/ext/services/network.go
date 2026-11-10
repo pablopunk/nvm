@@ -32,6 +32,16 @@ func (h *Handler) serveNetwork(ctx context.Context, call protocol.ServiceCall) (
 	if err := h.require(api.CapabilityNetwork); err != nil {
 		return nil, err
 	}
+	if call.Op == protocol.OpDownload {
+		if err := h.require(api.CapabilityDesktopFiles); err != nil {
+			return nil, err
+		}
+		var request api.DownloadRequest
+		if err := decodeArgs(call.Args, &request); err != nil {
+			return nil, err
+		}
+		return h.download(ctx, request)
+	}
 	if call.Op != protocol.OpFetch {
 		return nil, invalid("network has no operation %q", call.Op)
 	}

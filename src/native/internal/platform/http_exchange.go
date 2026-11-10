@@ -51,30 +51,39 @@ type exchangeHop struct {
 // 303 always, and 301 and 302 for a POST, become a GET without a body; 307 and 308 keep the method and body. An
 // Authorization header is dropped when the host changes.
 func FetchExchange(ctx context.Context, h HTTP, ex Exchange) (ExchangeResult, error) {
-	target, err := url.Parse(ex.URL)
+	response, target, err := OpenExchange(ctx, h, ex, true)
 	if err != nil {
 		return ExchangeResult{}, err
+	}
+	return readExchangeResult(response, target, ex.MaxBytes)
+}
+
+// OpenExchange applies the same per-hop policy as FetchExchange. The caller owns and closes the final body.
+func OpenExchange(ctx context.Context, h HTTP, ex Exchange, follow bool) (*Response, *url.URL, error) {
+	target, err := url.Parse(ex.URL)
+	if err != nil {
+		return nil, nil, err
 	}
 	current := exchangeHop{method: ex.Method, target: target, headers: headerFrom(ex.Headers), body: ex.Body}
 	for hops := 0; ; hops++ {
 		if err := checkDestination(ex, current.target); err != nil {
-			return ExchangeResult{}, err
+			return nil, nil, err
 		}
 		response, err := sendExchangeHop(ctx, h, current)
 		if err != nil {
-			return ExchangeResult{}, err
+			return nil, nil, err
 		}
 		location := response.Header.Get("Location")
-		if !isRedirectStatus(response.StatusCode) || location == "" {
-			return readExchangeResult(response, current.target, ex.MaxBytes)
+		if !follow || !isRedirectStatus(response.StatusCode) || location == "" {
+			return response, current.target, nil
 		}
 		drainAndClose(response)
 		if hops >= ex.MaxRedirects {
-			return ExchangeResult{}, ErrTooManyRedirects
+			return nil, nil, ErrTooManyRedirects
 		}
 		next, err := redirectedHop(current, response.StatusCode, location)
 		if err != nil {
-			return ExchangeResult{}, err
+			return nil, nil, err
 		}
 		current = next
 	}

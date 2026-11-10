@@ -23,6 +23,7 @@ const (
 	OpRecent      = "recent"
 	OpTemplate    = "template"
 	OpFetch       = "fetch"
+	OpDownload    = "download"
 	OpSave        = "save"
 	OpCommit      = "commit"
 	OpDiscard     = "discard"

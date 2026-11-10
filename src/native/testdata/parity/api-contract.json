@@ -412,6 +412,7 @@
     "package": "child",
     "implementation": "remoteNetwork",
     "methods": [
+      "Download",
       "Fetch"
     ]
   },

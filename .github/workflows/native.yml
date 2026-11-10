@@ -18,6 +18,10 @@ on:
         description: Generate recording goldens and the API reference as reviewable artifacts
         type: boolean
         default: false
+      refresh_api_artifacts:
+        description: Generate extension API artifacts for review
+        type: boolean
+        default: false
       refresh_root_tables:
         description: Generate root result tables as reviewable artifacts
         type: boolean
@@ -92,6 +96,22 @@ jobs:
           path: |
             src/native/internal/ai/builder/reference_gen.go
             src/native/internal/palette/aicommands/testdata/golden/aicommands/indicator-dictation-*.png
+          if-no-files-found: error
+
+      - name: Generate extension API artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_api_artifacts
+        run: |
+          (cd internal/ext/child && go generate)
+          (cd internal/ai/builder && go generate)
+
+      - name: Upload extension API artifacts
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_api_artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-api-artifacts
+          path: |
+            src/native/internal/ext/child/api_symbols.go
+            src/native/internal/ai/builder/reference_gen.go
           if-no-files-found: error
 
       - name: Generate root table review assets

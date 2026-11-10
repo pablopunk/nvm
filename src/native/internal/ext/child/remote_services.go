@@ -121,3 +121,9 @@ func (n remoteNetwork) Fetch(request api.FetchRequest) (api.FetchResponse, error
 	err := n.link.Call(protocol.ServiceNetwork, protocol.OpFetch, request, &response)
 	return response, err
 }
+
+func (n remoteNetwork) Download(request api.DownloadRequest) (api.DownloadResponse, error) {
+	var response api.DownloadResponse
+	err := n.link.Call(protocol.ServiceNetwork, protocol.OpDownload, request, &response)
+	return response, err
+}

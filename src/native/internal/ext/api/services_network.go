@@ -8,6 +8,7 @@ package api
 // Long requests belong in a data loader (DataLoader), not in a search call, which has a 100 ms hard budget.
 type Network interface {
 	Fetch(request FetchRequest) (FetchResponse, error)
+	Download(request DownloadRequest) (DownloadResponse, error)
 }
 
 // FetchRequest describes one HTTP request. Method defaults to GET; the allowed methods are GET, HEAD, POST,
@@ -30,4 +31,29 @@ type FetchResponse struct {
 	Headers    map[string]string `json:"headers,omitempty"`
 	Body       string            `json:"body,omitempty"`
 	BodyBase64 string            `json:"bodyBase64,omitempty"`
+}
+
+// DownloadRequest streams a GET to an absolute path in an existing folder. It requires network and
+// desktop.files capabilities. MaxBytes defaults to and is capped at 64 MiB; TimeoutMs defaults to and
+// is capped at 90 seconds. Redirects and overwrites are refused unless explicitly enabled. MediaTypes,
+// when set, must match both the response Content-Type and the sniffed content. Cancellation before
+// publication removes staging; a request already admitted for publication may have an effect.
+type DownloadRequest struct {
+	URL             string            `json:"url"`
+	Path            string            `json:"path"`
+	Headers         map[string]string `json:"headers,omitempty"`
+	MaxBytes        int64             `json:"maxBytes,omitempty"`
+	TimeoutMs       int64             `json:"timeoutMs,omitempty"`
+	Overwrite       bool              `json:"overwrite,omitempty"`
+	FollowRedirects bool              `json:"followRedirects,omitempty"`
+	MediaTypes      []string          `json:"mediaTypes,omitempty"`
+}
+
+// DownloadResponse reports the final response and the published file, without buffering its body.
+type DownloadResponse struct {
+	Status   int               `json:"status"`
+	FinalURL string            `json:"finalUrl"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	Bytes    int64             `json:"bytes"`
+	File     FileRef           `json:"file"`
 }

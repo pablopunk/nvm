@@ -124,3 +124,15 @@ func TestExchangeBoundsRedirectsAndBodies(t *testing.T) {
 		t.Fatalf("big err = %v; want ErrResponseTooLarge", err)
 	}
 }
+
+func TestOpenExchangeLeavesRedirectForCallerWhenFollowingDisabled(t *testing.T) {
+	stub := &scriptedHTTP{responses: []*http.Response{redirectResponse(302, "https://other.example/next")}}
+	response, target, err := OpenExchange(context.Background(), stub, Exchange{Method: "GET", URL: "https://example.com/start", MaxRedirects: 5}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 302 || target.Host != "example.com" || len(stub.requests) != 1 {
+		t.Fatalf("unexpected redirect response: %d, %v", response.StatusCode, target)
+	}
+}

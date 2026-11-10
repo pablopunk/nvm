@@ -9,6 +9,10 @@ import (
 func (m *Manager) OperationsSupported(required []api.Operation) bool {
 	for _, operation := range required {
 		switch operation {
+		case api.OperationNetworkDownload:
+			if _, ok := m.serviceDeps.Files.(platform.StreamFiles); !ok || m.serviceDeps.Network == nil {
+				return false
+			}
 		case api.OperationNetworkFetch:
 			if m.serviceDeps.Network == nil {
 				return false

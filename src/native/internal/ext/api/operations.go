@@ -13,6 +13,7 @@ type Operation string
 
 const (
 	OperationNetworkFetch     Operation = "network.fetch"
+	OperationNetworkDownload  Operation = "network.download"
 	OperationOCRImage         Operation = "ocr"
 	OperationOCRScreen        Operation = "ocr.screen"
 	OperationShellExec        Operation = "shell.exec"

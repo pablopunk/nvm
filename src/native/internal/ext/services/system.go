@@ -46,6 +46,9 @@ func (h *Handler) hasCapability(raw json.RawMessage) (bool, error) {
 // that asks about a feature this host lacks omits it.
 func (h *Handler) publicCapability(name string) bool {
 	switch name {
+	case "network.download":
+		_, ok := h.deps.Files.(platform.StreamFiles)
+		return h.deps.Network != nil && ok
 	case "network.fetch":
 		return h.deps.Network != nil
 	case "ocr":

@@ -132,11 +132,14 @@ func downloadWallpaper(ctx api.Context, candidate wallpaper) (api.FileRef, error
 	return ctx.Desktop().Files().Metadata(path)
 }
 
-// fetchWallpaperFile downloads through curl, because the extension API cannot write binary files.
-// curl does not follow redirects, which matches the TypeScript extension's redirect "error" policy.
+// fetchWallpaperFile prefers the host streaming capability; older hosts retain the curl fallback.
 func fetchWallpaperFile(ctx api.Context, candidate wallpaper, path string) error {
 	source, err := checkedURL(candidate.Path, "image")
 	if err != nil {
+		return err
+	}
+	if ctx.System().HasCapability("network.download") {
+		_, err := ctx.Network().Download(api.DownloadRequest{URL: source, Path: path, MaxBytes: maxDownloadBytes, TimeoutMs: 90000, MediaTypes: []string{candidate.FileType}})
 		return err
 	}
 	partial := path + ".part"
