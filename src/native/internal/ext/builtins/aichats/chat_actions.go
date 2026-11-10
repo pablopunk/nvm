@@ -14,8 +14,8 @@ const (
 )
 
 // chatActions is the action menu of a transcript, in the order the desktop app lists it: the answers a waiting tool call
-// needs, then Ask Again, the copies, Stop while a reply streams, the tier, New Chat, Delete Chat, and the review of the
-// extension a builder chat wrote.
+// needs, then Ask Again, the copies, Stop while a reply streams, the tier, New Chat, Delete Chat, the review of the
+// extension a builder chat wrote, and one Retry row per earlier answer of a conversation.
 func chatActions(detail api.ChatDetail) []api.Action {
 	id := detail.ID
 	var out []api.Action
@@ -39,7 +39,7 @@ func chatActions(detail api.ChatDetail) []api.Action {
 	if detail.Kind == kindBuilder && detail.ExtensionID != "" {
 		out = append(out, reviewAction(detail.ExtensionID))
 	}
-	return out
+	return append(out, retryActions(detail, busy)...)
 }
 
 // chatOpAction is a host chat action on the chat with id, titled and bound to shortcut when it is not empty.

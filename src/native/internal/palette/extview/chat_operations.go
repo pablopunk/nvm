@@ -39,6 +39,8 @@ func (s *Session) chatOperation(action api.Action, title string) search.Action {
 		return s.chatStep(title, payload.ChatID, func() error { return s.deps.Chats.SetTier(payload.ChatID, chatTier(payload.Tier)) })
 	case api.ChatRemove:
 		return s.removeChat(title, payload.ChatID)
+	case api.ChatRetry:
+		return s.retryMessage(title, payload.ChatID, payload.Index)
 	}
 	return search.Action{Title: title, Dismiss: search.DismissNever, Run: func(h search.Host) { s.openChat(h, payload.ChatID, false) }}
 }

@@ -158,13 +158,15 @@ type AI interface {
 }
 
 // ChatAction is the payload of an ActionChat. ChatID names the chat; Message and Images are what a Continue sends; Prompt
-// is the first message of a New chat; Tier is the tier a Tier change selects.
+// is the first message of a New chat; Tier is the tier a Tier change selects; Index is the position in the chat's messages of
+// the answer a Retry runs again, which needs a request before it, so it is at least 1.
 type ChatAction struct {
 	ChatID  string      `json:"chatId,omitempty"`
 	Message string      `json:"message,omitempty"`
 	Images  []ChatImage `json:"images,omitempty"`
 	Prompt  string      `json:"prompt,omitempty"`
 	Tier    ModelTier   `json:"tier,omitempty"`
+	Index   int         `json:"index,omitempty"`
 	// Replace, on a New, shows the new chat in place of the page the action runs from.
 	Replace bool `json:"replace,omitempty"`
 }

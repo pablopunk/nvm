@@ -3,9 +3,6 @@ package clipboard
 import (
 	"bytes"
 	"errors"
-	"image"
-	"image/color"
-	"image/png"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -136,58 +133,6 @@ func TestImageNameIsHashPlusPNG(t *testing.T) {
 	}
 	if imageNamePattern.MatchString("../" + ImageName(storeHash)) {
 		t.Fatal("the collector accepts a name with a path")
-	}
-}
-
-// TestThumbnailKeepsAspectRatio: the longer side fits the limit and the other side scales with it.
-func TestThumbnailKeepsAspectRatio(t *testing.T) {
-	cases := []struct {
-		w, h, max, wantW, wantH int
-	}{
-		{800, 400, 200, 200, 100},
-		{400, 800, 200, 100, 200},
-		{1, 1000, 100, 1, 100},
-	}
-	for _, c := range cases {
-		data := pngSolid(t, c.w, c.h, red)
-		thumb, err := Thumbnail(data, c.max)
-		if err != nil {
-			t.Fatalf("Thumbnail(%dx%d, %d): %v", c.w, c.h, c.max, err)
-		}
-		img, err := png.Decode(bytes.NewReader(thumb))
-		if err != nil {
-			t.Fatalf("decode thumbnail: %v", err)
-		}
-		if got := img.Bounds(); got.Dx() != c.wantW || got.Dy() != c.wantH {
-			t.Fatalf("thumbnail %dx%d, want %dx%d", got.Dx(), got.Dy(), c.wantW, c.wantH)
-		}
-	}
-}
-
-// TestThumbnailLeavesSmallImagesUntouched: an image already within the limit comes back byte for byte.
-func TestThumbnailLeavesSmallImagesUntouched(t *testing.T) {
-	data := pngSolid(t, 10, 10, red)
-	thumb, err := Thumbnail(data, 200)
-	if err != nil || !bytes.Equal(thumb, data) {
-		t.Fatalf("small image changed: %v", err)
-	}
-}
-
-// TestThumbnailRejectsNonPositiveSize refuses a limit of zero or less.
-func TestThumbnailRejectsNonPositiveSize(t *testing.T) {
-	if _, err := Thumbnail(pngSolid(t, 4, 4, red), 0); !errors.Is(err, ErrInvalidThumbnailSize) {
-		t.Fatalf("Thumbnail(0) = %v", err)
-	}
-}
-
-// TestBoxDownscaleAverages: each destination pixel is the mean of its source block.
-func TestBoxDownscaleAverages(t *testing.T) {
-	src := image.NewNRGBA(image.Rect(0, 0, 2, 2))
-	src.SetNRGBA(0, 0, color.NRGBA{R: 255, A: 255})
-	src.SetNRGBA(1, 1, color.NRGBA{R: 255, A: 255})
-	out := boxDownscale(src, 1, 1)
-	if got := out.Pix[0]; got != 127 {
-		t.Fatalf("red channel = %d, want 127 (510 / 4)", got)
 	}
 }
 

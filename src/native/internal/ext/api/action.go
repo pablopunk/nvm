@@ -65,7 +65,8 @@ const AccountSignIn = "sign-in"
 // Ops of the chat action. Open shows a chat, New starts one with a prompt, Continue sends a message and shows the chat
 // (an empty message allows a tool call that waits), Stop ends a reply that streams, Tier changes the chat's model tier,
 // Remove deletes a chat the user asked to remove, Again drops the last reply and asks the last question again, and
-// Allow and Refuse answer a tool call that waits.
+// Allow and Refuse answer a tool call that waits. Retry leaves the chat and its later messages as they are, starts a new
+// chat from the request the answer at ChatAction.Index replied to, and shows the new chat while it regenerates that answer.
 const (
 	ChatOpen     = "open"
 	ChatNew      = "new"
@@ -76,6 +77,7 @@ const (
 	ChatAgain    = "again"
 	ChatAllow    = "allow"
 	ChatRefuse   = "refuse"
+	ChatRetry    = "retry"
 )
 
 // Ops of the builder action: Start begins a builder chat with a prompt, Open shows one, Remove deletes one, Tweak opens
@@ -95,7 +97,7 @@ var (
 	systemOps   = []string{"lock-screen", "sleep", "restart", "restart-app", "shut-down", "log-out", "empty-trash", "quit", "open-system-settings", "open-keyboard-settings"}
 	updateOps   = []string{UpdateOpCheck, UpdateOpDownload, UpdateOpInstall, UpdateOpChannel}
 	accountOps  = []string{AccountSignIn}
-	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse}
+	chatOps     = []string{ChatOpen, ChatNew, ChatContinue, ChatStop, ChatTier, ChatRemove, ChatAgain, ChatAllow, ChatRefuse, ChatRetry}
 	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
 	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
 	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
@@ -287,6 +289,9 @@ func (a Action) validateDeclarative() error {
 	case ActionChat:
 		if a.Chat == nil {
 			return fmt.Errorf("chat action %q needs its chat payload", a.Title)
+		}
+		if a.Op == ChatRetry && (a.Chat.ChatID == "" || a.Chat.Index < 1) {
+			return fmt.Errorf("chat action %q needs a chat and the position of an answer to retry", a.Title)
 		}
 		return validateOp(a.Op, chatOps)
 	case ActionBuilder:

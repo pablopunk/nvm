@@ -10,6 +10,7 @@ const (
 	streamTickMs          = 150
 	cleanupStartupDelayMs = 1000
 	kindBuilder           = "builder"
+	kindConversation      = "conversation"
 )
 
 // continueLabels are the root row's title and subtitle for a chat of kind named title. A builder chat says so, and a
