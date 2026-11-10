@@ -27,6 +27,7 @@ type Runtime struct {
 	generation   uint64
 	child        *childProcess
 	declared     []string
+	restartingSearch bool
 	failures     []time.Time
 	retryAt      time.Time
 	diagnostics  []string
@@ -83,6 +84,7 @@ func (r *Runtime) Stop() {
 	r.generation++
 	child := r.detachChildLocked()
 	r.state = StateIdle
+	r.restartingSearch = false
 	r.reason = ""
 	r.notifyLocked()
 	r.mu.Unlock()
@@ -110,7 +112,7 @@ func (r *Runtime) Provides(method string) bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.child == nil {
-		return r.state == StateDormant && slices.Contains(r.declared, method)
+		return (r.state == StateDormant || r.state == StateStarting && r.restartingSearch) && slices.Contains(r.declared, method)
 	}
 	return slices.Contains(r.child.methods, method)
 }
@@ -123,8 +125,12 @@ func (r *Runtime) Status() Status {
 }
 
 func (r *Runtime) statusLocked() Status {
+	state := r.state
+	if state == StateStarting && r.restartingSearch {
+		state = StateDormant
+	}
 	return Status{
-		State:       r.state,
+		State:       state,
 		Reason:      r.reason,
 		Failures:    len(r.failures),
 		Diagnostics: append([]string(nil), r.diagnostics...),
@@ -161,8 +167,8 @@ func (r *Runtime) notifyLocked() {
 
 // Call sends one request and returns the child's response. A child-side failure comes back inside the
 // response; a host-side failure (not running, timed out, crashed, cancelled) comes back as an error that is
-// a *CallError. The ctx bounds the wait only: a call that outlives its context still finishes inside its
-// budget, so the next call never overlaps it.
+// a *CallError. A cancelled search retires its child; other ordinary calls finish inside their budget, so the next
+// call never overlaps an exchange.
 func (r *Runtime) Call(ctx context.Context, method, query string, invocation *api.Invocation) (protocol.Response, error) {
 	return r.Do(ctx, protocol.Request{Method: method, Query: query, Invocation: invocation})
 }
@@ -199,8 +205,8 @@ func (r *Runtime) Do(ctx context.Context, req protocol.Request) (protocol.Respon
 	}
 	go func() {
 		defer func() { <-r.slots }()
-		exchangeCtx := context.Background()
-		if req.Invocation != nil && req.Invocation.AwaitInitialView {
+		exchangeCtx := context.WithoutCancel(ctx)
+		if req.Method == protocol.MethodSearch || req.Invocation != nil && req.Invocation.AwaitInitialView {
 			exchangeCtx = ctx
 		}
 		response, err := r.exchange(ctx, exchangeCtx, lifetime, gate, req, onDenied)
