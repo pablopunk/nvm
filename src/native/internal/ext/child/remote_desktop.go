@@ -41,7 +41,7 @@ func (d remoteDesktop) Shell() api.Shell {
 }
 
 func (d remoteDesktop) WindowManagement() api.WindowManagement {
-	return remoteWindowManagement{link: d.link, clock: d.clock}
+	return remoteWindowManagement(d)
 }
 
 // remoteSystemClipboard reads and writes the system clipboard. Each method is one host call; see remote_clipboard.go for the formats.

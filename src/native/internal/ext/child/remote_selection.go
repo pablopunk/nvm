@@ -49,7 +49,7 @@ func (s remoteSelection) Read() (api.SelectionSnapshot, error) {
 	if files, err := s.Files(); err == nil {
 		snapshot.Files = files
 	}
-	if app, err := (remoteApps{link: s.link}).Frontmost(); err == nil {
+	if app, err := (remoteApps(s)).Frontmost(); err == nil {
 		snapshot.SourceApp = &app
 	}
 	return snapshot, nil
