@@ -92,7 +92,7 @@ func submitFormFixture(t *testing.T, app *App) {
 	for range 3 { // Name, Bio, API token, then Email
 		must(t, app.Key("Down"))
 	}
-	must(t, app.Key("Return")) // edit Email
+	must(t, app.Key("Return"))                       // edit Email
 	_, err = app.WaitFor("Clear Email", elementWait) // the edit row must be mounted before typing
 	must(t, err)
 	must(t, app.Type("not-an-email"))
