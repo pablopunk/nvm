@@ -26,6 +26,8 @@ type harness struct {
 	files *fake.FS
 	store *store.Store
 	sched *Scheduler
+	// heartbeat overrides parkedHeartbeat for wake tests that need ordinary beats between sleeps.
+	heartbeat time.Duration
 }
 
 // newHarness starts a fresh scheduler. Its failures go to a reporter that keeps nothing, so tests stay quiet.
@@ -50,7 +52,7 @@ func (h *harness) open() {
 		Reporter:  safego.ReporterFunc(func(safego.Failure) string { return "" }),
 		State:     StateDocument(st),
 		Log:       logx.Default(),
-		Heartbeat: parkedHeartbeat,
+		Heartbeat: positiveOr(h.heartbeat, parkedHeartbeat),
 		SleepGap:  30 * time.Second,
 	})
 	if err != nil {

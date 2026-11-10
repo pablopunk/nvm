@@ -24,7 +24,8 @@ func (s *Scheduler) watchWake(heartbeat platform.Ticker, last time.Time) {
 	}
 }
 
-// slept reports whether the gap between two heartbeats is longer than the sleep threshold.
+// slept reports whether the gap between two heartbeats is longer than the sleep threshold. It compares wall clocks:
+// the monotonic reading of a time stops while the machine sleeps on macOS, so Sub would see no gap at all.
 func slept(previous, current time.Time, gap time.Duration) bool {
-	return current.Sub(previous) > gap
+	return current.Round(0).Sub(previous.Round(0)) > gap
 }

@@ -134,6 +134,34 @@ func TestWakeEventRunsWakeJobsAfterASleep(t *testing.T) {
 	h.awaitJob("onwake", succeeded)
 }
 
+// Each sleep is one wake event, however many heartbeat intervals it spans, and a sleep does not leave a second event behind.
+func TestEachSleepEmitsExactlyOneWake(t *testing.T) {
+	h := newHarness(t)
+	h.heartbeat = 10 * time.Second
+	h.closeAndSleep(0)
+	st := newStepper()
+	mustRegister(t, h, Definition{ID: "onwake", Title: "On Wake", Triggers: eventOn("wake", 0), Run: st.fn})
+	h.clock.AwaitTimers(1)
+
+	for range 3 {
+		h.clock.Jump(3 * time.Hour)
+		if run := h.nextRun(st); run.Reason != "event:wake" {
+			t.Fatalf("wake reason = %q", run.Reason)
+		}
+		h.awaitJob("onwake", succeeded)
+		noRunStarted(t, st)
+	}
+}
+
+// The monotonic reading of a time does not advance while a Mac sleeps, so a heartbeat gap must come from the wall clock.
+func TestSleepGapIgnoresTheMonotonicReading(t *testing.T) {
+	previous := time.Now()
+	current := previous.Round(0).Add(time.Hour)
+	if !slept(previous, current, DefaultSleepGap) {
+		t.Fatal("a wall-clock hour with a monotonic reading on one side was not sleep")
+	}
+}
+
 func TestHeartbeatGapsShorterThanTheThresholdAreNotSleep(t *testing.T) {
 	if slept(time.Unix(0, 0), time.Unix(0, 0).Add(DefaultSleepGap), DefaultSleepGap) {
 		t.Fatal("a gap equal to the threshold counted as sleep")
