@@ -32,6 +32,8 @@ type command struct {
 	Dismiss     search.Dismissal
 	Order       int
 	Hidden      bool
+	// extraActions follow the primary action in the row's menu.
+	extraActions []search.Action
 	// builtIn names the built-in whose rows stand here, and width is how many Order places they take; see commandSlots.
 	builtIn string
 	width   int

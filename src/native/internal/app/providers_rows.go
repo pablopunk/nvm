@@ -67,6 +67,7 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 		}
 		cmd := cmd
 		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
+		it.Actions = append(it.Actions, cmd.extraActions...)
 		if commandShortcutID(cmd) != "" {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
 		}

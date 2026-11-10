@@ -15,6 +15,10 @@ func TestMenuBarToggleRowSaysWhatItWillDo(t *testing.T) {
 		t.Fatalf("shown row = %q (%q)", row.Title, row.ID)
 	}
 
+	if len(row.extraActions) != 1 || row.extraActions[0].Title != "Tweak with AI" {
+		t.Fatalf("the toggle row's menu = %+v, want Tweak with AI", row.extraActions)
+	}
+
 	p.visibility.setShown("user.issues", false)
 	row = p.menuBarToggleCommand(extension)
 	if row.Title != "Show GitHub Issues in Menu Bar" || row.Subtitle != "Hidden from the menu bar" {

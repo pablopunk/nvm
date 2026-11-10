@@ -127,6 +127,9 @@ func (p *App) menuBarToggleCommand(extension manager.MenuBarExtension) command {
 		ID: menuBarToggleIDPrefix + id, Keywords: "menu bar menubar tray status bar", Icon: "panel-top",
 		PhraseMatch: true, Dismiss: search.DismissNever,
 		Run: func(h search.Host) { p.setMenuBarShown(id, !p.visibility.shown(id), h) },
+		extraActions: []search.Action{{Title: "Tweak with AI", Dismiss: search.DismissNever, Run: func(h search.Host) {
+			h.Push(p.startedChatView("builder", "", id))
+		}}},
 	}
 	if p.visibility.shown(id) {
 		row.Title, row.Subtitle = "Hide "+title+" from Menu Bar", "Shown in the menu bar"

@@ -163,6 +163,9 @@ func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error)
 	if missing := sourcecheck.UndeclaredUses(staged.Manifest, contents); len(missing) > 0 {
 		return nil, errors.New(sourcecheck.Explain(missing))
 	}
+	if unknown := sourcecheck.UnknownMenuBarIcons(contents); len(unknown) > 0 {
+		return nil, errors.New(sourcecheck.ExplainUnknownIcons(unknown))
+	}
 	identity := api.Identity{ID: id, Title: staged.Manifest.Title}
 	return supervisor.ProbeSource(m.config, identity, filepath.Join(staging, bundle.SourceFile))
 }
