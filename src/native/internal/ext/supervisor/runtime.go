@@ -158,11 +158,16 @@ func (r *Runtime) WaitFor(ctx context.Context, pred func(Status) bool) error {
 
 // notifyLocked wakes every WaitFor caller and the state hook. The caller holds r.mu and has changed the state.
 func (r *Runtime) notifyLocked() {
-	close(r.changed)
-	r.changed = make(chan struct{})
+	r.wakeLocked()
 	if r.cfg.OnStateChange != nil {
 		go r.cfg.OnStateChange()
 	}
+}
+
+// wakeLocked releases internal waiters without announcing an externally visible state change.
+func (r *Runtime) wakeLocked() {
+	close(r.changed)
+	r.changed = make(chan struct{})
 }
 
 // Call sends one request and returns the child's response. A child-side failure comes back inside the

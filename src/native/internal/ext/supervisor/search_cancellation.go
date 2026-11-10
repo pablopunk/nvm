@@ -15,7 +15,7 @@ func (r *Runtime) cancelRequestChild(child *childProcess, method string, err err
 		_ = child.proc.Kill()
 		r.state = StateDormant
 		r.restartingSearch = true
-		r.notifyLocked()
+		r.wakeLocked()
 	}
 	r.mu.Unlock()
 	return err

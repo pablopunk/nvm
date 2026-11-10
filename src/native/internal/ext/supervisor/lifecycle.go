@@ -3,6 +3,7 @@ package supervisor
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 	"time"
 
@@ -25,7 +26,11 @@ func (r *Runtime) startLocked() {
 	}
 	r.state = StateStarting
 	r.generation++
-	r.notifyLocked()
+	if r.restartingSearch {
+		r.wakeLocked()
+	} else {
+		r.notifyLocked()
+	}
 	go r.launch(r.generation)
 }
 
@@ -99,14 +104,26 @@ func (r *Runtime) adopt(generation uint64, child *childProcess) {
 		_ = child.proc.Kill()
 		return
 	}
+	quiet := r.restartingSearch && sameMethods(r.declared, child.methods)
 	r.child = child
 	r.state = StateRunning
 	r.restartingSearch = false
 	r.reason = ""
-	r.notifyLocked()
+	if quiet {
+		r.wakeLocked()
+	} else {
+		r.notifyLocked()
+	}
 	r.mu.Unlock()
 	r.logLifecycle(logx.Info, "extension running", nil)
 	go r.watchResident(child)
+}
+
+func sameMethods(a, b []string) bool {
+	a, b = slices.Clone(a), slices.Clone(b)
+	slices.Sort(a)
+	slices.Sort(b)
+	return slices.Equal(a, b)
 }
 
 // logLifecycle writes one lifecycle line for the extension, with its reason when it has one.
