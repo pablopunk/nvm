@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -24,7 +25,7 @@ func (h *Handler) permissionStatuses() []api.PermissionStatus {
 }
 
 // requestPermission asks the OS to show its prompt for a permission kind. It needs the system declaration.
-func (h *Handler) requestPermission(raw json.RawMessage) error {
+func (h *Handler) requestPermission(ctx context.Context, raw json.RawMessage) error {
 	if err := h.require(api.CapabilitySystem); err != nil {
 		return err
 	}
@@ -34,12 +35,15 @@ func (h *Handler) requestPermission(raw json.RawMessage) error {
 	}
 	if h.deps.Permissions == nil {
 		return unavailable("permissions are not available on this system")
+	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return err
 	}
 	return h.deps.Permissions.Request(kind)
 }
 
 // openPermissionPane opens the System Settings pane that reviews a permission kind. It needs the system declaration.
-func (h *Handler) openPermissionPane(raw json.RawMessage) error {
+func (h *Handler) openPermissionPane(ctx context.Context, raw json.RawMessage) error {
 	if err := h.require(api.CapabilitySystem); err != nil {
 		return err
 	}
@@ -49,6 +53,9 @@ func (h *Handler) openPermissionPane(raw json.RawMessage) error {
 	}
 	if h.deps.Permissions == nil {
 		return unavailable("permissions are not available on this system")
+	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return err
 	}
 	return h.deps.Permissions.OpenPane(kind)
 }

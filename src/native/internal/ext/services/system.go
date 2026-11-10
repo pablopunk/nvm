@@ -27,9 +27,9 @@ func (h *Handler) serveSystem(ctx context.Context, call protocol.ServiceCall) (a
 	case protocol.OpPermissions:
 		return h.permissionStatuses(), nil
 	case protocol.OpRequestPermission:
-		return nil, h.requestPermission(call.Args)
+		return nil, h.requestPermission(ctx, call.Args)
 	case protocol.OpOpenPermissionPane:
-		return nil, h.openPermissionPane(call.Args)
+		return nil, h.openPermissionPane(ctx, call.Args)
 	}
 	return nil, invalid("system has no operation %q", call.Op)
 }

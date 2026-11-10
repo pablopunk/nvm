@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -114,4 +115,62 @@ func TestRequestFailureReachesTheExtensionWithItsSentence(t *testing.T) {
 func TestRequestWithoutASurfaceIsUnavailable(t *testing.T) {
 	h := permissionHandler(t, nil, api.CapabilitySystem)
 	requireCode(t, permissionCall(t, h, protocol.OpRequestPermission, api.PermissionMicrophone), api.CodeUnavailable, "permissions")
+}
+
+func TestPermissionEffectAdmissionThroughServe(t *testing.T) {
+	for _, op := range []string{protocol.OpRequestPermission, protocol.OpOpenPermissionPane} {
+		for _, state := range []string{"cancelled", "stopped", "closed", "normal", "undeclared", "invalid", "missing"} {
+			t.Run(op+"-"+state, func(t *testing.T) {
+				surface := &fakePermissions{}
+				var port PermissionSurface = surface
+				if state == "missing" {
+					port = nil
+				}
+				caps := []api.Capability{api.CapabilitySystem}
+				if state == "undeclared" {
+					caps = nil
+				}
+				h := permissionHandler(t, port, caps...)
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				switch state {
+				case "cancelled":
+					cancel()
+				case "stopped":
+					lifetime, stop := context.WithCancel(context.Background())
+					stop()
+					ctx = protocol.WithLifetime(ctx, lifetime)
+				case "closed":
+					_ = h.Close()
+				}
+				kind := api.PermissionMicrophone
+				if state == "invalid" {
+					kind = "location"
+				}
+				reply := h.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSystem, Op: op, Args: mustRaw(t, protocol.PermissionArgs{Kind: kind})})
+				switch state {
+				case "normal":
+					mustOK(t, reply)
+				case "cancelled", "stopped":
+					requireCode(t, reply, api.CodeCancelled, "")
+				case "closed", "missing":
+					requireCode(t, reply, api.CodeUnavailable, "")
+				case "undeclared":
+					requireCode(t, reply, api.CodePermission, "system")
+				case "invalid":
+					requireCode(t, reply, api.CodeInvalid, "location")
+				}
+				wantRequest, wantOpen := 0, 0
+				if state == "normal" && op == protocol.OpRequestPermission {
+					wantRequest = 1
+				}
+				if state == "normal" && op == protocol.OpOpenPermissionPane {
+					wantOpen = 1
+				}
+				if len(surface.requested) != wantRequest || len(surface.opened) != wantOpen {
+					t.Fatalf("attempts: request %v, open %v", surface.requested, surface.opened)
+				}
+			})
+		}
+	}
 }
