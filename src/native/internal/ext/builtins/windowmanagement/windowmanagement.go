@@ -50,7 +50,7 @@ func New(start Settings) Extension {
 // Manifest identifies the built-in and declares its settings. Writing them needs the settings.write capability.
 func (e Extension) Manifest() api.Manifest {
 	return api.Manifest{
-		APIVersion: "1.0", Identity: api.Identity{ID: ID, Title: "Window Management"},
+		APIVersion: "1.1", Identity: api.Identity{ID: ID, Title: "Window Management"},
 		Capabilities: []api.Capability{api.CapabilityWindowManagement, api.CapabilitySystem, api.CapabilitySettingsWrite},
 		Settings:     SettingDefinitions(e.start),
 	}
@@ -91,7 +91,9 @@ func allCommands() []api.Command {
 		commands = append(commands, inPlaceCommand(layoutCommandID("focus-"+focus.direction), focus.presentation))
 	}
 	for _, move := range desktopMoves {
-		commands = append(commands, inPlaceCommand(move.id, move.presentation))
+		command := inPlaceCommand(move.id, move.presentation)
+		command.Requires = []api.Operation{api.OperationSwitchDesktop}
+		commands = append(commands, command)
 	}
 	return append(commands, viewCommands()...)
 }

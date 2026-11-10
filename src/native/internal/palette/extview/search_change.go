@@ -85,6 +85,9 @@ func (s *Session) searchChangeRows(local []search.Item, query string) []search.I
 	}
 	out := s.searchChangeIDRows(local)
 	for _, item := range s.searchChange.items {
+		if !itemSupported(s.deps, item) {
+			continue
+		}
 		out = append(out, s.row(item))
 	}
 	return out
@@ -104,6 +107,9 @@ func (s *Session) searchChangeIDRows(local []search.Item) []search.Item {
 			continue
 		}
 		shown[id] = true
+		if !itemSupported(s.deps, item) {
+			continue
+		}
 		out = append(out, s.row(item))
 	}
 	return out

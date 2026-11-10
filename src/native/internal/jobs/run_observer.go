@@ -6,6 +6,7 @@ import "context"
 type RunOutcome string
 
 const (
+	RunSkipped   RunOutcome = "skipped"
 	RunSucceeded RunOutcome = "success"
 	RunFailed    RunOutcome = "failed"
 	RunCancelled RunOutcome = "cancelled"

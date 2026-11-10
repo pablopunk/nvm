@@ -135,7 +135,7 @@ type Outcome string
 const (
 	OutcomeSucceeded Outcome = "succeeded"
 	OutcomeFailed    Outcome = "failed"
-	// OutcomeSkipped is a run the budget refused. It never ran and is not a failure.
+	// OutcomeSkipped is a run refused by a budget or prerequisite before its effect. It is not a failure.
 	OutcomeSkipped Outcome = "skipped"
 )
 

@@ -19,6 +19,9 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 	}
 	var out []search.Item
 	for _, command := range result.Commands {
+		if !m.OperationsSupported(command.Requires) {
+			continue
+		}
 		actionID := commandShortcutKey(result.ExtensionID, command)
 		score, listed := commandRowScore(m, result.ExtensionID, command, q, aliases[actionID])
 		if !listed {
@@ -54,7 +57,7 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 
 func commandMenuActions(deps extview.Deps, extID string, sections []extview.MenuSection, initial ...*api.View) []search.Action {
 	actions := extview.MenuActionsFor(deps, extID, sections)
-	if len(actions) > 0 && len(sections) > 0 && len(sections[0].Actions) > 0 {
+	if len(actions) > 0 && !actions[0].MenuOnly && len(sections) > 0 && len(sections[0].Actions) > 0 && (deps.ActionSupported == nil || deps.ActionSupported(sections[0].Actions[0])) {
 		actions[0] = extview.CommandActionFor(deps, extID, sections[0].Actions[0], initial...)
 		actions[0].Section = sections[0].Title
 	}
@@ -148,6 +151,7 @@ func builtInCommandRow(row search.Item, command api.Command) search.Item {
 // as the run is dispatched, so the handler runs over the app the palette was summoned from.
 func commandAction(command api.Command) api.Action {
 	action := api.Run(command.ID, command.Title, nil)
+	action.Requires = slices.Clone(command.Requires)
 	action.DismissAfterRun = command.DismissAfterRun
 	action.Background = command.Mode == api.ModeBackground
 	return action

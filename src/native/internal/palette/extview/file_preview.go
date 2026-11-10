@@ -18,7 +18,7 @@ func (s *Session) previewDeclaredFile(h search.Host, r route) {
 }
 
 func actionSupported(deps Deps, action api.Action) bool {
-	return deps.ActionSupported == nil || deps.ActionSupported(action)
+	return (deps.OperationsSupported == nil || deps.OperationsSupported(action.Requires)) && (deps.ActionSupported == nil || deps.ActionSupported(action))
 }
 
 func sectionsHavePrimary(sections []MenuSection) bool {

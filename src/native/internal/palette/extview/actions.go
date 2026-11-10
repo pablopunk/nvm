@@ -51,7 +51,7 @@ func (s *Session) commandAction(action api.Action, initial *api.View) search.Act
 		token := s.issue("", route{extID: s.extID, action: action, command: true, initialView: initial})
 		mapped.Run = func(h search.Host) { s.runHandle(h, token) }
 	}
-	return mapped
+	return s.withOperationGuard(mapped, action)
 }
 
 // actionAt maps the index-th action of an item to a palette action, keyed by the item so handles stay stable across
@@ -66,7 +66,7 @@ func (s *Session) action(action api.Action, key string) search.Action {
 	mapped := s.withShortcut(s.actionBody(action, key), action.Shortcut)
 	mapped.MenuOnly = action.Preview
 	mapped.Subtitle = action.Subtitle
-	return mapped
+	return s.withOperationGuard(mapped, action)
 }
 
 // withShortcut gives a palette action the keys of an accelerator, and the label the palette shows for them. An
@@ -244,14 +244,6 @@ func (s *Session) runHandle(h search.Host, token handle) {
 		return
 	}
 	s.runRoute(h, r)
-}
-
-func (s *Session) runRoute(h search.Host, r route) {
-	if r.action.Confirm != nil {
-		h.Push(s.confirmPage(r))
-		return
-	}
-	s.invoke(h, r)
 }
 
 // maxFollowUps bounds the chain of follow-up actions one run may start, so a handler that answers with itself stops.

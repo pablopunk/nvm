@@ -101,14 +101,16 @@ var (
 // Action is one declarative operation attached to an item, view, command or menu row. Helper
 // constructors in the author package fill the fields that each kind requires; Validate checks them.
 type Action struct {
-	Kind       ActionKind `json:"kind"`
-	Op         string     `json:"op,omitempty"`
-	Title      string     `json:"title,omitempty"`
-	Subtitle   string     `json:"subtitle,omitempty"`
-	Icon       string     `json:"icon,omitempty"`
-	Style      string     `json:"style,omitempty"`
-	Shortcut   string     `json:"shortcut,omitempty"`
-	Background bool       `json:"background,omitempty"`
+	// Requires lists all operations this command, row or action needs. API 1.1; grants no access.
+	Requires   []Operation `json:"requires,omitempty"`
+	Kind       ActionKind  `json:"kind"`
+	Op         string      `json:"op,omitempty"`
+	Title      string      `json:"title,omitempty"`
+	Subtitle   string      `json:"subtitle,omitempty"`
+	Icon       string      `json:"icon,omitempty"`
+	Style      string      `json:"style,omitempty"`
+	Shortcut   string      `json:"shortcut,omitempty"`
+	Background bool        `json:"background,omitempty"`
 	// Preview marks an action that previews the item's content. The menu lists it and Enter never runs it, so a row that
 	// wants Enter to preview sets its Primary. The host adds no generic Preview option beside an action marked so.
 	Preview bool `json:"preview,omitempty"`
@@ -204,6 +206,9 @@ type ShellCommand struct {
 // Validate checks the fields each action kind needs. Handler existence is checked by the host
 // when the extension is loaded, not here.
 func (a Action) Validate() error {
+	if err := validateRequirements(a.Requires); err != nil {
+		return err
+	}
 	if a.Kind == ActionRun {
 		if a.Ref == nil || a.Ref.ID == "" {
 			return errors.New("run action needs a ref with an id")

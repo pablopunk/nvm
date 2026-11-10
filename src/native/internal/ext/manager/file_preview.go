@@ -10,6 +10,9 @@ import (
 
 // ActionSupported is a cheap platform snapshot. It is discovery information, never an authorization grant.
 func (m *Manager) ActionSupported(action api.Action) bool {
+	if !m.OperationsSupported(action.Requires) {
+		return false
+	}
 	if action.Kind == api.ActionQuickLook {
 		return platform.BindFilePreview(m.serviceDeps.Shell, m.serviceDeps.Capabilities).Supported()
 	}

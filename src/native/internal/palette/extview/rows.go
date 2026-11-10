@@ -69,12 +69,12 @@ func (s *Session) row(item api.Item) search.Item {
 // menu-only, so Enter still runs the item's own first action. A hidden item panel keeps the primary and the shortcuts
 // but no menu, and a hidden view panel keeps its actions' shortcuts out of the menu.
 func (s *Session) itemActions(item api.Item) []search.Action {
-	own := MenuSections(item.Primary, item.ActionPanel, item.Actions)
+	own := ItemMenuSections(item)
 	if item.Shortcut != "" && len(own) > 0 && own[0].Actions[0].Shortcut == "" {
 		own[0].Actions[0].Shortcut = item.Shortcut
 	}
 	out := s.sectionActions(item.ID, 0, own)
-	view := []MenuSection{{Title: viewGroupTitle, Actions: s.viewActionsNotIn(flattenSections(own))}}
+	view := []MenuSection{{Title: viewGroupTitle, Actions: s.viewActionsNotIn(MenuWireActions(item.Primary, item.ActionPanel, item.Actions))}}
 	for _, mapped := range s.sectionActions(item.ID, len(flattenSections(own)), view) {
 		mapped.MenuHidden, mapped.MenuOnly = s.viewHidesMenu(), true
 		out = append(out, mapped)

@@ -182,6 +182,9 @@ func (v View) Validate() error {
 func validateItems(items []Item) error {
 	seen := make(map[string]bool, len(items))
 	for _, item := range items {
+		if err := validateRequirements(item.Requires); err != nil {
+			return err
+		}
 		if item.ID == "" {
 			return errors.New("every item needs an id")
 		}

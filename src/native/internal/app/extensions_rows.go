@@ -104,6 +104,9 @@ func searchRowsFor(p *App, m *manager.Manager, q string, result manager.SearchRe
 	}
 	var out []search.Item
 	for _, item := range result.Items {
+		if !m.OperationsSupported(item.Requires) {
+			continue
+		}
 		out = append(out, searchRow(p, m, result, item, bound))
 	}
 	return out
@@ -130,6 +133,9 @@ func rootRowsFor(p *App, m *manager.Manager, result manager.SearchResult, bound 
 	}
 	var out []search.Item
 	for _, item := range result.Items {
+		if !m.OperationsSupported(item.Requires) {
+			continue
+		}
 		row := extensionRow(p, m, result.ExtensionID, result.Title, item, bound)
 		if !m.IsBuiltIn(result.ExtensionID) {
 			row.Score = scoreRootCommand
@@ -161,7 +167,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 			}
 		}
 	}
-	row.Actions = extview.MenuActionsFor(deps, extID, extview.MenuSections(item.Primary, item.ActionPanel, item.Actions))
+	row.Actions = extview.MenuActionsFor(deps, extID, extview.ItemMenuSections(item))
 	if item.ActionPanelVisibility == api.PanelHidden {
 		row.Actions = extview.HideFromMenu(row.Actions)
 	}

@@ -74,6 +74,9 @@ func (p viewSearchProvider) rows(ctx context.Context, text string) []search.Item
 	}
 	out := make([]search.Item, 0, len(items))
 	for i, item := range items {
+		if !itemSupported(p.session.deps, item) {
+			continue
+		}
 		row := p.session.row(item)
 		row.Score = len(items) - i
 		out = append(out, row)
@@ -110,6 +113,9 @@ func (p secondBatchProvider) rowsFor(text string) []search.Item {
 	}
 	out := make([]search.Item, 0, len(p.items))
 	for _, item := range p.items {
+		if !itemSupported(p.session.deps, item) {
+			continue
+		}
 		out = append(out, p.session.row(item))
 	}
 	return out

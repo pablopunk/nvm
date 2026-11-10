@@ -169,6 +169,9 @@ const budgetSlack = 10 * time.Millisecond
 // Run executes one action on an enabled extension and returns its result. The invocation carries the action
 // reference and its arguments as data; nothing executable crosses the boundary.
 func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+	if !m.commandSupported(id, invocation.Ref.ID) {
+		return api.Result{}, &api.Failure{Code: api.CodeUnavailable, Message: "This command requires an operation unavailable on this system."}, nil
+	}
 	var finish func(RunOutcome)
 	observedCtx := ctx
 	if m.runObserver != nil {

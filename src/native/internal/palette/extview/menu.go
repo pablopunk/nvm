@@ -58,7 +58,7 @@ func flattenSections(sections []MenuSection) []api.Action {
 
 // sameWireAction is true when two wire actions do the same thing, so a repeated action is listed once.
 func sameWireAction(a, b api.Action) bool {
-	if a.Kind != b.Kind || a.Title != b.Title {
+	if a.Kind != b.Kind || a.Title != b.Title || !slices.Equal(a.Requires, b.Requires) {
 		return false
 	}
 	if a.Ref != nil && b.Ref != nil {

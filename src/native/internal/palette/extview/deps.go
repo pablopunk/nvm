@@ -74,6 +74,8 @@ type Deps struct {
 	RevealPath func(path string)
 	// ActionSupported reads cheap host support snapshots. Nil preserves legacy discovery.
 	ActionSupported func(action api.Action) bool
+	// OperationsSupported checks explicit row requirements. Nil preserves unknown/legacy presentation.
+	OperationsSupported func(required []api.Operation) bool
 	// PreviewFile runs the installation-bound preview operation asynchronously.
 	PreviewFile func(extID, path string, identity any, done func(error))
 	// OpenWith opens a file with the app at appPath, and Trash

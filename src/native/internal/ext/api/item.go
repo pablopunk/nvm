@@ -3,6 +3,8 @@ package api
 // Item is one row or tile. Items come from a view, a RootProvider or a SearchProvider. An item
 // is never a durable command: durable, shortcut-able, aliasable actions are Commands (command.go).
 type Item struct {
+	// Requires lists all operations this command, row or action needs. API 1.1; grants no access.
+	Requires []Operation `json:"requires,omitempty"`
 	// ID is stable within its view or provider. Ranking, recents, patches and focus use it.
 	ID       string   `json:"id"`
 	Title    string   `json:"title"`

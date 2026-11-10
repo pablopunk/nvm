@@ -37,6 +37,8 @@ func (o jobRunObserver) BeginRun(ctx context.Context) (context.Context, func(job
 
 func mapJobRunOutcome(outcome jobs.RunOutcome) (analytics.OperationOutcome, bool) {
 	switch outcome {
+	case jobs.RunSkipped:
+		return analytics.OutcomeBlocked, true
 	case jobs.RunSucceeded:
 		return analytics.OutcomeSuccess, true
 	case jobs.RunFailed:

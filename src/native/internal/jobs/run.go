@@ -96,14 +96,28 @@ func (s *Scheduler) execute(def Definition, run Run) {
 			finishObservation = done
 		}
 	}
+	var skippedOutcome *Skipped
 	err := safego.Run("jobs."+def.ID, func(ctx context.Context) error {
-		return def.Run(ctx, run)
+		err := def.Run(ctx, run)
+		var skipped Skipped
+		if errors.As(err, &skipped) {
+			skippedOutcome = &skipped
+			return nil
+		}
+		return err
 	}, s.safegoOptions(safego.WithContext(ctx), safego.WithClock(s.clock), safego.WithTimeout(def.Budget.timeout()))...)
+	if err == nil && skippedOutcome != nil {
+		err = *skippedOutcome
+	}
 	finishObservation(observedOutcome(err))
 	s.finish(def.ID, run, err)
 }
 
 func observedOutcome(err error) RunOutcome {
+	var skipped Skipped
+	if errors.As(err, &skipped) {
+		return RunSkipped
+	}
 	if err == nil {
 		return RunSucceeded
 	}
@@ -127,14 +141,25 @@ func (s *Scheduler) finish(id string, run Run, err error) {
 	now := s.clock.Now()
 	entry := HistoryEntry{StartedAt: run.StartedAt, FinishedAt: now, Duration: now.Sub(run.StartedAt), Reason: run.Reason, Outcome: OutcomeSucceeded}
 	r.running = false
-	if err != nil {
+	var skipped Skipped
+	if errors.As(err, &skipped) {
+		entry.Outcome, entry.Error = OutcomeSkipped, skipped.Reason
+		if count := len(r.startTimes); count > 0 && r.startTimes[count-1].Equal(run.StartedAt) {
+			r.startTimes = r.startTimes[:count-1]
+		}
+	} else if err != nil {
 		entry.Outcome, entry.Error = OutcomeFailed, err.Error()
 		s.noteFailureLocked(r, now, err)
 	} else {
 		noteSuccessLocked(r)
 	}
-	r.lastFinished, r.lastDuration = now, entry.Duration
+	if entry.Outcome != OutcomeSkipped {
+		r.lastFinished, r.lastDuration = now, entry.Duration
+	}
 	s.recordLocked(r, entry)
+	if entry.Outcome == OutcomeSkipped {
+		r.restoreLastRun()
+	}
 	queued := r.pending
 	r.pending = nil
 	halted := !r.runnable()

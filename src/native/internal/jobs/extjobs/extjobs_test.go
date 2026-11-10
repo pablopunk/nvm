@@ -288,8 +288,8 @@ func TestSyncJobDoesNothingWhileExtensionsLoad(t *testing.T) {
 	defer sched.Close()
 	adapter := New(context.Background(), Config{Host: func() Host { return nil }, Registry: sched, Files: fake.NewFS()})
 	defer adapter.Close()
-	if err := adapter.reconcile(context.Background()); err != nil {
-		t.Fatal(err)
+	if _, ok := adapter.reconcile(context.Background()).(jobs.Skipped); !ok {
+		t.Fatal("loading host was not recorded as a skip")
 	}
 	if len(sched.Snapshot()) != 0 {
 		t.Fatal("jobs appeared before the extensions loaded")

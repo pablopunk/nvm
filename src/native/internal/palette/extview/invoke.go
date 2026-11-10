@@ -8,6 +8,10 @@ import (
 // invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
 // A declarative action is performed by the host instead, with no extension call.
 func (s *Session) invoke(h search.Host, r route) {
+	if !actionSupported(s.deps, r.action) {
+		h.Toast("This action requires an operation unavailable on this system.")
+		return
+	}
 	if r.action.Kind == api.ActionQuickLook {
 		s.previewDeclaredFile(h, r)
 		return

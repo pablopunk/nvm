@@ -75,7 +75,7 @@ func (a *Adapter) SyncJob() jobs.Definition {
 func (a *Adapter) reconcile(ctx context.Context) error {
 	host := a.hostOrNil()
 	if host == nil {
-		return nil
+		return jobs.Skipped{Reason: "the extensions are still loading"}
 	}
 	wanted := map[string]bool{}
 	answering := map[string]bool{}

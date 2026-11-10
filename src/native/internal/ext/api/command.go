@@ -13,6 +13,8 @@ import (
 // by CommandProvider; an Item is produced per query or per view and never registered. Putting a
 // global shortcut on an Item is therefore not expressible, which prevents duplicate search rows.
 type Command struct {
+	// Requires lists all operations this command, row or action needs. API 1.1; grants no access.
+	Requires []Operation `json:"requires,omitempty"`
 	// ID is the local stable id. The host's global action id defaults to "extension:<extension>:<ID>".
 	ID string `json:"id"`
 	// ActionID is the key shortcuts and aliases bind to, instead of the default "extension:<extension>:<ID>". It must end
@@ -46,6 +48,9 @@ type Command struct {
 
 // Validate checks the command id, its triggers and its secondary actions.
 func (c Command) Validate() error {
+	if err := validateRequirements(c.Requires); err != nil {
+		return err
+	}
 	if c.ID == "" || c.Title == "" {
 		return errors.New("command needs an id and a title")
 	}

@@ -307,6 +307,9 @@ func (s *Session) withSecondBatch(local []search.Item, query string) []search.It
 func (s *Session) appendSectionRows(out []search.Item, title string, items []api.Item, query string) []search.Item {
 	first := true
 	for _, item := range matchingItems(items, query) {
+		if !itemSupported(s.deps, item) {
+			continue
+		}
 		row := s.row(item)
 		if first && title != "" {
 			row.Section = title
