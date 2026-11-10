@@ -1,9 +1,8 @@
 package install
 
 import (
+	"errors"
 	"fmt"
-	"io/fs"
-	"path/filepath"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/bundle"
@@ -20,15 +19,16 @@ func SourceSnapshot(files platform.FS, root, id string) (map[string][]byte, erro
 	if id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
 		return nil, fmt.Errorf("invalid extension folder name %q", id)
 	}
-	dir := filepath.Join(root, id)
-	info, err := files.Lstat(dir)
+	capability, ok := files.(platform.SourceDirectories)
+	if !ok {
+		return nil, platform.ErrUnsupported
+	}
+	dir, err := capability.OpenSourceDirectory(root, id)
 	if err != nil {
 		return nil, err
 	}
-	if !info.IsDir() || info.Mode()&fs.ModeSymlink != 0 {
-		return nil, fmt.Errorf("extension folder is not a directory")
-	}
-	entries, err := files.ReadDir(dir)
+	defer dir.Close()
+	entries, err := dir.Entries(maxSnapshotFiles)
 	if err != nil {
 		return nil, err
 	}
@@ -42,22 +42,20 @@ func SourceSnapshot(files platform.FS, root, id string) (map[string][]byte, erro
 		if name != bundle.ManifestFile && !strings.HasSuffix(name, ".go") {
 			return nil, fmt.Errorf("unsupported extension entry %q", name)
 		}
-		path := filepath.Join(dir, name)
-		info, err := files.Lstat(path)
-		if err != nil {
-			return nil, err
-		}
-		if !info.Mode().IsRegular() {
+		if entry.IsDir() {
 			return nil, fmt.Errorf("extension entry %q is not a regular file", name)
 		}
-		data, size, err := files.ReadFilePrefix(path, remaining+1)
+		data, err := dir.ReadFile(name, remaining)
 		if err != nil {
+			if errors.Is(err, platform.ErrFileTooLarge) {
+				return nil, fmt.Errorf("extension source exceeds snapshot limit")
+			}
 			return nil, fmt.Errorf("read %q: %w", name, err)
 		}
-		if size > remaining || int64(len(data)) != size {
-			return nil, fmt.Errorf("extension source exceeds snapshot limit or changed while reading")
+		if int64(len(data)) > remaining {
+			return nil, fmt.Errorf("extension source exceeds snapshot limit")
 		}
-		remaining -= size
+		remaining -= int64(len(data))
 		result[name] = data
 	}
 	if _, ok := result[bundle.ManifestFile]; !ok {

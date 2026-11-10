@@ -45,7 +45,7 @@ func TestSourceSnapshotRejectsUnsafeAndIncompleteInputs(t *testing.T) {
 	if err := files.Remove(root + "/acme.good/large.go"); err != nil {
 		t.Fatal(err)
 	}
-	files.FailNext(fake.OpReadFilePrefix, fs.ErrPermission)
+	files.FailNext(fake.OpOpenReadNoFollow, fs.ErrPermission)
 	if snapshot, err := SourceSnapshot(files, root, "acme.good"); err == nil || snapshot != nil {
 		t.Fatalf("accepted unreadable source: %v, %v", snapshot, err)
 	}
