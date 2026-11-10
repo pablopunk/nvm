@@ -44,7 +44,7 @@ func TestNewExtensionWithAnInstalledRowTitleIsRefused(t *testing.T) {
 	extensions.catalog = []Installed{systemThemeInstalled}
 	w := New(newFakeConversation(builderChat("b1")), extensions, synchronous)
 
-	_, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource))
+	_, err := writeForTest(w, context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource))
 	if err == nil || !strings.Contains(err.Error(), "system.toggle-theme") {
 		t.Fatalf("err = %v, want the row clash naming system.toggle-theme", err)
 	}
@@ -63,7 +63,7 @@ func TestChatThatEditsItsOwnExtensionKeepsItsRows(t *testing.T) {
 	extensions.catalog = []Installed{own}
 	w := New(newFakeConversation(record), extensions, synchronous)
 
-	if _, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource)); err != nil {
+	if _, err := writeForTest(w, context.Background(), "b1", writeArgsFor(t, systemThemeManifest, duplicateSource)); err != nil {
 		t.Fatalf("an edit of the chat's own extension was refused: %v", err)
 	}
 	if strings.Join(extensions.installs, ",") != "user.system-theme" {

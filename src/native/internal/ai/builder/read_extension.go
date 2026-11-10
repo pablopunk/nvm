@@ -23,19 +23,19 @@ type readExtensionArgs struct {
 
 // readExtensionTool shows the manifest and source of any installed extension, a page at a time. Reading is the only
 // thing it does: write_extension still writes only the chat's own extension.
-func (w *Workshop) readExtensionTool() agent.Tool {
+func (w *Workshop) readExtensionTool(reads *editReads) agent.Tool {
 	return agent.Tool{
 		Name:        readExtensionToolName,
-		Description: "Read the manifest and source of an installed extension, a page at a time. It is read-only: only write_extension changes an extension, and only this chat's own.",
+		Description: "Read every page of the manifest and all Go files before editing an installed extension. Continue with each returned offset in this turn. Only this chat's own extension can be changed.",
 		Label:       "Reading an extension",
 		Schema:      readExtensionSchema,
 		Summarize:   summarizeReadExtension,
-		Run: func(_ context.Context, args json.RawMessage) (agent.Result, error) {
+		Run: func(ctx context.Context, args json.RawMessage) (agent.Result, error) {
 			var in readExtensionArgs
 			if err := json.Unmarshal(args, &in); err != nil {
 				return agent.Result{}, err
 			}
-			return w.readExtension(in)
+			return reads.read(ctx, in.ID, in.Offset)
 		},
 	}
 }

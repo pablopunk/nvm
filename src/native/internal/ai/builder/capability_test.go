@@ -52,14 +52,14 @@ func TestUndeclaredCapabilityIsRefusedThenInstalledWhenDeclared(t *testing.T) {
 	extensions := newFakeExtensions()
 	w := New(newFakeConversation(builderChat("b1")), extensions, synchronous)
 
-	_, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, bare, appleScriptSource))
+	_, err := writeForTest(w, context.Background(), "b1", writeArgsFor(t, bare, appleScriptSource))
 	if err == nil || !strings.Contains(err.Error(), `"system"`) {
 		t.Fatalf("err = %v, want the missing system capability", err)
 	}
 	if len(extensions.installs) != 0 {
 		t.Fatalf("installs = %v, want none after the refusal", extensions.installs)
 	}
-	if _, err := w.writeExtension(context.Background(), "b1", writeArgsFor(t, declared, appleScriptSource)); err != nil {
+	if _, err := writeForTest(w, context.Background(), "b1", writeArgsFor(t, declared, appleScriptSource)); err != nil {
 		t.Fatalf("the declared extension should write: %v", err)
 	}
 	if strings.Join(extensions.installs, ",") != "user.system-theme" {

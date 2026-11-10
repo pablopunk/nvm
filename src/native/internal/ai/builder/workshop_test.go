@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
 
@@ -23,6 +24,16 @@ func clockArgs(t *testing.T) json.RawMessage {
 	return args
 }
 
+// writeForTest uses the same turn-scoped registered writer as a builder turn.
+func writeForTest(w *Workshop, ctx context.Context, chatID string, args json.RawMessage) (agent.Result, error) {
+	toolset := w.Toolset(chatID)
+	if fake, ok := w.chats.(*fakeConversation); ok {
+		fake.active[chatID] = toolset.BuilderTurn
+	}
+	tool, _ := toolset.Registry.Lookup(writeToolName)
+	return tool.Run(ctx, args)
+}
+
 // synchronous runs every UI call at once, as a UI thread that is free does.
 func synchronous(fn func()) { fn() }
 
@@ -34,7 +45,7 @@ func TestWriteInstallsEnabledAndBindsTheChatWhenTheTurnSettles(t *testing.T) {
 	extensions := newFakeExtensions()
 	w := New(conversation, extensions, synchronous)
 
-	result, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	result, err := writeForTest(w, context.Background(), "chat-1", clockArgs(t))
 	if err != nil {
 		t.Fatalf("writeExtension: %v", err)
 	}
@@ -64,7 +75,7 @@ func TestWriteReturnsARejectionAndInstallsNothing(t *testing.T) {
 	extensions.methods = nil
 	w := New(conversation, extensions, synchronous)
 
-	_, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	_, err := writeForTest(w, context.Background(), "chat-1", clockArgs(t))
 	if err == nil || !strings.Contains(err.Error(), "no entry point") {
 		t.Fatalf("err = %v, want the entry point rejection", err)
 	}
@@ -80,7 +91,7 @@ func TestWriteRefusesAnIdAnotherExtensionHas(t *testing.T) {
 	extensions.existing["user.clock"] = clockManifestValue(t)
 	w := New(conversation, extensions, synchronous)
 
-	_, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t))
+	_, err := writeForTest(w, context.Background(), "chat-1", clockArgs(t))
 	if err == nil || !strings.Contains(err.Error(), "already exists") {
 		t.Fatalf("err = %v, want the id refusal", err)
 	}
@@ -98,10 +109,10 @@ func TestBoundChatKeepsItsIdAndRefusesAnother(t *testing.T) {
 	w := New(conversation, extensions, synchronous)
 
 	other, _ := json.Marshal(map[string]any{"manifest": `{"apiVersion":"1.0","id":"user.other","title":"Other"}`, "source": "package main\n"})
-	if _, err := w.writeExtension(context.Background(), "chat-1", other); err == nil || !strings.Contains(err.Error(), "Keep its id") {
+	if _, err := writeForTest(w, context.Background(), "chat-1", other); err == nil || !strings.Contains(err.Error(), "Keep its id") {
 		t.Fatalf("err = %v, want the bound-id refusal", err)
 	}
-	if _, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t)); err != nil {
+	if _, err := writeForTest(w, context.Background(), "chat-1", clockArgs(t)); err != nil {
 		t.Fatalf("the bound id should write: %v", err)
 	}
 }
@@ -113,7 +124,7 @@ func TestWriteStopsWaitingWhenTheTurnEnds(t *testing.T) {
 	w := New(conversation, newFakeExtensions(), func(func()) {})
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, err := w.writeExtension(ctx, "chat-1", clockArgs(t)); err == nil {
+	if _, err := writeForTest(w, ctx, "chat-1", clockArgs(t)); err == nil {
 		t.Fatal("a write whose turn ended should fail, not wait")
 	}
 }
@@ -123,7 +134,7 @@ func TestWriteFailureFromTheInstallIsReturned(t *testing.T) {
 	extensions := newFakeExtensions()
 	extensions.installErr = errors.New("disk full")
 	w := New(newFakeConversation(builderChat("chat-1")), extensions, synchronous)
-	if _, err := w.writeExtension(context.Background(), "chat-1", clockArgs(t)); err == nil || err.Error() != "disk full" {
+	if _, err := writeForTest(w, context.Background(), "chat-1", clockArgs(t)); err == nil || err.Error() != "disk full" {
 		t.Fatalf("err = %v, want the install failure", err)
 	}
 }
@@ -134,7 +145,7 @@ func TestWriteArgumentsAreCheckedFirst(t *testing.T) {
 	conversation := newFakeConversation(builderChat("chat-1"))
 	w := New(conversation, extensions, synchronous)
 	bad, _ := json.Marshal(map[string]any{"manifest": "{", "source": "package main"})
-	if _, err := w.writeExtension(context.Background(), "chat-1", bad); err == nil || len(conversation.steps) != 0 {
+	if _, err := writeForTest(w, context.Background(), "chat-1", bad); err == nil || len(conversation.steps) != 0 {
 		t.Fatalf("err = %v, steps = %q; want a refusal before any step", err, conversation.steps)
 	}
 }

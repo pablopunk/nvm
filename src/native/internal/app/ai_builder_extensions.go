@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -37,15 +39,24 @@ func (e builderExtensions) Check(id string, files map[string][]byte) ([]string, 
 	return m.Check(id, files)
 }
 
-func (e builderExtensions) Install(id string, files map[string][]byte, enable bool) error {
+func (e builderExtensions) EditSnapshot(id string) (map[string][]byte, any, error) {
+	m, err := e.manager()
+	if err != nil {
+		return nil, nil, err
+	}
+	return m.EditSnapshot(id)
+}
+
+func (e builderExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, enable bool, revision any) error {
 	m, err := e.manager()
 	if err != nil {
 		return err
 	}
-	if err := m.Install(id, files, enable); err != nil {
-		return err
+	token, ok := revision.(*manager.EditRevision)
+	if !ok || token == nil {
+		return errors.New("invalid edit revision")
 	}
-	return nil
+	return m.InstallEdit(ctx, id, files, enable, token)
 }
 
 // Catalog lists the installed extensions for the builder's prompt. Until the manager has started there are none to list.

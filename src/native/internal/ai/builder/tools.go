@@ -8,6 +8,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
+	"github.com/pablopunk/nvm/native/internal/ai/chat"
 )
 
 // apiPageBytes bounds one page of the API reference a read returns, so a page fits one tool result.
@@ -77,7 +78,7 @@ func read1xMappingTool() agent.Tool {
 }
 
 // writeTool is write_extension for chat chatID. It shows the extension's id in the transcript, never its source.
-func (w *Workshop) writeTool(chatID string) agent.Tool {
+func (w *Workshop) writeTool(chatID string, reads *editReads, turn *chat.BuilderTurn) agent.Tool {
 	return agent.Tool{
 		Name:        writeToolName,
 		Description: "Check, install and enable an extension. It reports the result: when it fails, fix the code and call it again.",
@@ -85,7 +86,7 @@ func (w *Workshop) writeTool(chatID string) agent.Tool {
 		Schema:      writeSchema,
 		Summarize:   summarizeWrite,
 		Run: func(ctx context.Context, args json.RawMessage) (agent.Result, error) {
-			return w.writeExtension(ctx, chatID, args)
+			return w.writeWithReads(ctx, chatID, args, reads, turn)
 		},
 	}
 }

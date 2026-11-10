@@ -16,6 +16,7 @@ const rulesTemplate = `You write extensions for Nevermind, a desktop command pal
 Workflow:
 - The typed API reference follows these rules. It names every entry point, type, enum value and function. Call read_extension_api only when a name needs its explanation; it returns the reference with prose, a page at a time.
 - Call read_extension with an installed extension's id to see how it is written. You can read any installed extension, but only write your own.
+- Before modifying an existing extension call read_extension and read every page in order during this turn, including every Go file. The source in this prompt is not a complete read.
 - Then call write_extension once with the manifest as a JSON object (apiVersion, id, title, and optionally commandTitles), the complete main.go source, and any extra Go files in files.
 - write_extension checks the extension, installs it and enables it, and returns the result. If it fails, read the error, fix the code and call write_extension again in this turn.
 - When it is installed, reply with one short sentence. Never paste the manifest or the source into the chat.

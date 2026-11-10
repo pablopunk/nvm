@@ -41,12 +41,14 @@ func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *W
 // Toolset returns the tools of the builder chat chatID for one turn: the API reader, the read-only extension reader and
 // write_extension.
 func (w *Workshop) Toolset(chatID string) chat.Toolset {
-	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), listCapabilitiesTool(), w.readExtensionTool(), w.writeTool(chatID))
+	turn := chat.NewBuilderTurn()
+	reads := newEditReads(w.extensions.EditSnapshot)
+	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), listCapabilitiesTool(), w.readExtensionTool(reads), w.writeTool(chatID, reads, turn))
 	if err != nil {
 		log.Println("builder: could not register the tools:", err)
 		return chat.Toolset{}
 	}
-	return chat.Toolset{Registry: registry}
+	return chat.Toolset{Registry: registry, BuilderTurn: turn}
 }
 
 // SystemPrompt is the instruction a builder chat starts with. It lists the installed extensions, and a chat bound to an
@@ -77,9 +79,9 @@ func (w *Workshop) Settled(chatID string, _ chat.Outcome) {
 	}
 }
 
-// writeExtension is the write_extension tool of chat chatID: it checks the arguments, the ownership of the id, the
+// writeWithReads implements write_extension for chat chatID: it checks the arguments, the ownership of the id, the
 // extension in a child process, and then installs it enabled. A failure is returned as the tool's error.
-func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.RawMessage) (agent.Result, error) {
+func (w *Workshop) writeWithReads(ctx context.Context, chatID string, args json.RawMessage, reads *editReads, turn *chat.BuilderTurn) (agent.Result, error) {
 	if err := ctx.Err(); err != nil {
 		return agent.Result{}, err
 	}
@@ -91,8 +93,25 @@ func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.
 	if err != nil {
 		return agent.Result{}, err
 	}
-	if problem := w.claimProblem(ctx, chatID, candidate); problem != "" {
+	if problem := w.claimProblem(ctx, chatID, candidate, turn); problem != "" {
 		return agent.Result{}, errors.New(problem)
+	}
+	if err := reads.claimTarget(candidate.Manifest.ID); err != nil {
+		return agent.Result{}, err
+	}
+	revision, complete, attempted := reads.status(candidate.Manifest.ID)
+	if attempted && !complete {
+		return agent.Result{}, errors.New("read every page of this extension in this turn before writing")
+	}
+	if !complete {
+		files, token, err := w.extensions.EditSnapshot(candidate.Manifest.ID)
+		if err != nil {
+			return agent.Result{}, err
+		}
+		if files != nil {
+			return agent.Result{}, errors.New("read every page of this extension in this turn before writing")
+		}
+		revision = token
 	}
 	w.step(ctx, chatID, checkingStep)
 	err = ctx.Err()
@@ -103,10 +122,14 @@ func (w *Workshop) writeExtension(ctx context.Context, chatID string, args json.
 		w.step(ctx, chatID, installingStep)
 		err = ctx.Err()
 		if err == nil {
-			err = w.extensions.Install(candidate.Manifest.ID, candidate.Files(), true)
+			err = w.extensions.InstallEdit(ctx, candidate.Manifest.ID, candidate.Files(), true, revision)
 		}
 	}
-	if !w.onUI(ctx, func() { w.finishWrite(chatID, candidate, err) }) {
+	if err == nil {
+		done := make(chan struct{})
+		w.dispatch(func() { w.finishWrite(chatID, candidate, nil); close(done) })
+		<-done
+	} else if !w.onUI(ctx, func() { w.finishWrite(chatID, candidate, err) }) {
 		return agent.Result{}, errors.New("the turn was stopped before the extension was written")
 	}
 	if err != nil {
@@ -131,7 +154,7 @@ func (w *Workshop) finishWrite(chatID string, candidate Candidate, err error) {
 
 // claimProblem explains why the chat may not write the candidate on the UI thread, and returns "" when it may. It
 // returns the refusal as text, so the model can choose another id or row title.
-func (w *Workshop) claimProblem(ctx context.Context, chatID string, candidate Candidate) string {
+func (w *Workshop) claimProblem(ctx context.Context, chatID string, candidate Candidate, turn *chat.BuilderTurn) string {
 	var problem string
 	if !w.onUI(ctx, func() {
 		bound := ""
@@ -139,6 +162,11 @@ func (w *Workshop) claimProblem(ctx context.Context, chatID string, candidate Ca
 			bound = record.Extension
 		}
 		problem = w.writeProblem(bound, candidate)
+		if problem == "" {
+			if err := w.chats.ReserveExtension(chatID, candidate.Manifest.ID, turn); err != nil {
+				problem = err.Error()
+			}
+		}
 	}) {
 		return "the turn was stopped"
 	}
@@ -150,12 +178,14 @@ func (w *Workshop) claimProblem(ctx context.Context, chatID string, candidate Ca
 func (w *Workshop) onUI(ctx context.Context, fn func()) bool {
 	done := make(chan struct{})
 	w.dispatch(func() {
-		fn()
+		if ctx.Err() == nil {
+			fn()
+		}
 		close(done)
 	})
 	select {
 	case <-done:
-		return true
+		return ctx.Err() == nil
 	case <-ctx.Done():
 		return false
 	}

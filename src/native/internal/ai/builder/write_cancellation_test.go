@@ -27,7 +27,7 @@ func TestCancelledBuilderWriteDoesNotInstall(t *testing.T) {
 			if !duringCheck {
 				cancel()
 			}
-			if _, err := workshop.writeExtension(ctx, "builder", clockArgs(t)); err == nil {
+			if _, err := writeForTest(workshop, ctx, "builder", clockArgs(t)); err == nil {
 				t.Fatal("cancelled write succeeded")
 			}
 			if len(extensions.installs) != 0 {

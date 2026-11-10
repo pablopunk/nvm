@@ -17,6 +17,7 @@ type editReads struct {
 	mu      sync.Mutex
 	fetch   func(string) (map[string][]byte, any, error)
 	entries map[string]*editRead
+	target  string
 }
 
 type editRead struct {
@@ -95,4 +96,24 @@ func (r *editReads) revision(id string) (any, bool) {
 		return nil, false
 	}
 	return entry.revision, true
+}
+
+func (r *editReads) status(id string) (any, bool, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry := r.entries[id]
+	if entry == nil {
+		return nil, false, false
+	}
+	return entry.revision, entry.complete, true
+}
+
+func (r *editReads) claimTarget(id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.target != "" && r.target != id {
+		return errors.New("this turn already writes a different extension")
+	}
+	r.target = id
+	return nil
 }
