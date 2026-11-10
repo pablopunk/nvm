@@ -28,10 +28,11 @@ type Deps struct {
 	InvokeViewAction func(extID string, in api.Invocation, done func(api.Result, *api.Failure))
 	// Answer runs a handler on the calling goroutine, under ctx, and returns its result. Search rows use it, since their
 	// provider runs off the UI thread and needs the answer to build its rows. Nil leaves those rows empty.
-	Answer    func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)
-	Load      func(extID, loader string, done func([]api.Item, *api.Failure))
-	LoadImage func(ctx context.Context, ref string, done func(*ui.Bitmap))
-	OpenURL   func(url string)
+	Answer        func(ctx context.Context, extID string, in api.Invocation) (api.Result, *api.Failure)
+	Load          func(extID, loader string, done func([]api.Item, *api.Failure))
+	LoadImage     func(ctx context.Context, ref string, done func(*ui.Bitmap))
+	LoadGridImage func(context.Context, GridImageRequest, func(GridImageResult))
+	OpenURL       func(url string)
 	// CopyText writes text to the clipboard and reports a failure as a toast on h. Paste sends a paste or typing action to
 	// the app in front, through the services of extension extID, and hides the palette first. Nil makes those actions
 	// report unavailable.

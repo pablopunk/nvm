@@ -2,6 +2,7 @@ package platform
 
 import (
 	"context"
+	"errors"
 	"io"
 	"io/fs"
 )
@@ -23,3 +24,6 @@ type FileSources interface {
 type SourceFilePictures interface {
 	FilePictureFromSource(ctx context.Context, source ReadSource, name string, edge int) ([]byte, error)
 }
+
+// ErrSourceReadDenied distinguishes a permission error from the original source, not a staging/cache write.
+var ErrSourceReadDenied = errors.New("picture source read access denied")

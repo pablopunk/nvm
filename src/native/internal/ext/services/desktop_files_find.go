@@ -158,7 +158,9 @@ func (h *Handler) fileThumbnail(raw json.RawMessage) (protocol.ThumbnailResult, 
 	if h.deps.PrepareFilePicture != nil {
 		h.deps.PrepareFilePicture(path)
 	}
-	return protocol.ThumbnailResult{URL: thumbs.GridReference(fileURLFor(path)), Found: true}, nil
+	ref := thumbs.GridReference(fileURLFor(path))
+	h.pictureReferences.remember(ref, path)
+	return protocol.ThumbnailResult{URL: ref, Found: true}, nil
 }
 
 // drawsPictureOf reports whether a grid can draw this file: any file where the system draws pictures, and otherwise an

@@ -62,7 +62,7 @@ func TestSupervisedScreenshotsReportsSwallowedFileDenial(t *testing.T) {
 	}
 }
 
-func TestSupervisedScreenshotsReportsOSReadDenial(t *testing.T) {
+func TestSupervisedScreenshotsReportsOSMetadataDenial(t *testing.T) {
 	rig := newServicesRig(t)
 	rig.deps.Home = t.TempDir()
 	root := filepath.Join(rig.deps.Home, "Desktop")

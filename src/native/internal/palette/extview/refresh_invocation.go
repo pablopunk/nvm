@@ -22,13 +22,13 @@ func (s *Session) invokeRefresh(ref api.ActionRef, done func(api.Result, *api.Fa
 				if !snapshotPathsCover(paths, denial) {
 					return
 				}
-				if s.deps.CommandSnapshots != nil {
-					s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, version)
-				}
 				if s.dismissed || (s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID))) {
 					return
 				}
-				s.clearPrivateSnapshot(denial.Failure)
+				s.guard.Lock()
+				generation := s.imageGeneration
+				s.guard.Unlock()
+				s.applySnapshotImageDenial(generation, version, denial)
 			})
 		}
 	}

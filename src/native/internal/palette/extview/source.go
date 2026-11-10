@@ -150,7 +150,7 @@ func (s *Session) refreshNow() {
 		if failure != nil {
 			s.refreshPending = false
 			if failure.Code == api.CodePermission && snapshotEvidenceDeniesPaths(result.SnapshotEvidence, s.snapshotSourcePaths) {
-				s.clearPrivateSnapshot(failure)
+				s.applyImageEvidenceDenial(snapshotVersion, result.SnapshotEvidence, failure)
 			}
 			return
 		}

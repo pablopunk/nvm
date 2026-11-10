@@ -91,12 +91,13 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 			}
 			return result, failure
 		},
+		LoadGridImage: func(ctx context.Context, request extview.GridImageRequest, done func(extview.GridImageResult)) {
+			p.loadScopedGridImage(ctx, m, request, done)
+		},
 		LoadImage: func(ctx context.Context, ref string, done func(*ui.Bitmap)) {
 			go func() {
 				var bitmap *ui.Bitmap
-				if p.files != nil && thumbs.IsGridReference(ref) {
-					bitmap = p.files.gridPicture(ctx, localImagePath(ref))
-				} else {
+				if !thumbs.IsGridReference(ref) {
 					bitmap = loadExtensionBitmapContext(ctx, ports.FS, ref, ports.PublicHTTP)
 				}
 				p.onUI(func() { done(bitmap) })

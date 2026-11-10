@@ -154,30 +154,31 @@ type documents struct {
 
 // Handler answers the service calls of one extension. It is safe for concurrent use.
 type Handler struct {
-	closed           atomic.Bool
-	deps             Deps
-	manifest         api.Manifest
-	capabilities     map[api.Capability]bool
-	logger           *logx.Logger
-	fetches          *rateLimiter
-	logWrites        *rateLimiter
-	actions          *rateLimiter
-	notifications    *rateLimiter
-	processes        *rateLimiter
-	indicatorUpdates *rateLimiter
-	schedules        *scheduleBook
-	ocrReads         *rateLimiter
-	screenReads      *rateLimiter
-	rootRefreshes    *rateLimiter
-	aiCalls          *aiquota.Window
-	ai               *aiState
-	reviews          *uninstallReviews
-	openOnce         sync.Once
-	openErr          error
-	closeOnce        sync.Once
-	docs             *documents
-	secretsMu        sync.Mutex
-	settingsMu       sync.Mutex
+	pictureReferences pictureReferences
+	closed            atomic.Bool
+	deps              Deps
+	manifest          api.Manifest
+	capabilities      map[api.Capability]bool
+	logger            *logx.Logger
+	fetches           *rateLimiter
+	logWrites         *rateLimiter
+	actions           *rateLimiter
+	notifications     *rateLimiter
+	processes         *rateLimiter
+	indicatorUpdates  *rateLimiter
+	schedules         *scheduleBook
+	ocrReads          *rateLimiter
+	screenReads       *rateLimiter
+	rootRefreshes     *rateLimiter
+	aiCalls           *aiquota.Window
+	ai                *aiState
+	reviews           *uninstallReviews
+	openOnce          sync.Once
+	openErr           error
+	closeOnce         sync.Once
+	docs              *documents
+	secretsMu         sync.Mutex
+	settingsMu        sync.Mutex
 	// hostSettings keeps the settings of a built-in in the host's store. Nil means the extension's settings file.
 	hostSettings SettingsHost
 }

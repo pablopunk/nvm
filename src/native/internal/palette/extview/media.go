@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 )
 
 // imageRef picks the source an image draws from: Src, else the light variant, else the dark one, else the fallback.
@@ -40,29 +41,96 @@ func (s *Session) bitmap(image *api.Image) *ui.Bitmap {
 		return nil
 	}
 	s.guard.Lock()
-	defer s.guard.Unlock()
-	if bm, ok := s.images[ref]; ok {
+	bm, loaded := s.images[ref]
+	authorized := s.imageAuthority[ref]
+	generation := s.imageGeneration
+	version := s.imageSnapshotVersions[ref]
+	s.guard.Unlock()
+	if loaded {
+		if authorized != nil && !authorized() {
+			s.onUI(func() {
+				s.applyGridDenial(ref, generation, version, &api.SnapshotDenial{AuthorityDenied: true, Failure: &api.Failure{Code: api.CodePermission, Message: "File access was revoked."}})
+			})
+			return nil
+		}
 		return bm
 	}
 	s.requestImage(ref)
 	return nil
 }
 
-// requestImage starts the load of ref once. A failed load is remembered as nil, so it is not retried on every frame.
+// requestImage starts decoration once and binds its completion to the current view generation.
 func (s *Session) requestImage(ref string) {
-	if s.requested[ref] || s.deps.LoadImage == nil {
+	if ref == "" {
+		return
+	}
+	grid := thumbs.IsGridReference(ref)
+	s.guard.Lock()
+	if s.requested[ref] || (grid && s.deps.LoadGridImage == nil) || (!grid && s.deps.LoadImage == nil) {
+		s.guard.Unlock()
 		return
 	}
 	s.requested[ref] = true
 	ctx := s.imageContext
+	generation := s.imageGeneration
+	s.guard.Unlock()
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	s.deps.LoadImage(ctx, ref, func(bm *ui.Bitmap) {
-		if s.dismissed || ctx.Err() != nil {
-			return
+	if grid {
+		var version uint64
+		if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
+			version = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
 		}
-		s.images[ref] = bm
-		s.refreshHost()
+		request := GridImageRequest{ExtensionID: s.extID, Identity: s.installationIdentity, Source: ref, Command: s.snapshotRef, Generation: generation, SnapshotVersion: version}
+		s.deps.LoadGridImage(ctx, request, func(result GridImageResult) {
+			s.onUI(func() {
+				if s.dismissed || ctx.Err() != nil {
+					return
+				}
+				s.guard.Lock()
+				current := generation == s.imageGeneration
+				s.guard.Unlock()
+				if !current {
+					return
+				}
+				if result.Denial != nil {
+					s.applyGridDenial(ref, generation, version, result.Denial)
+					return
+				}
+				if result.Authorized != nil && !result.Authorized() {
+					s.applyGridDenial(ref, generation, version, &api.SnapshotDenial{AuthorityDenied: true, Failure: &api.Failure{Code: api.CodePermission, Message: "File access was revoked."}})
+					return
+				}
+				s.guard.Lock()
+				s.images[ref] = result.Bitmap
+				if s.imageAuthority == nil {
+					s.imageAuthority = make(map[string]func() bool)
+				}
+				s.imageAuthority[ref] = result.Authorized
+				if s.imageSnapshotVersions == nil {
+					s.imageSnapshotVersions = make(map[string]uint64)
+				}
+				s.imageSnapshotVersions[ref] = version
+				s.guard.Unlock()
+				s.refreshHost()
+			})
+		})
+		return
+	}
+	s.deps.LoadImage(ctx, ref, func(bm *ui.Bitmap) {
+		s.onUI(func() {
+			if s.dismissed || ctx.Err() != nil {
+				return
+			}
+			s.guard.Lock()
+			if generation != s.imageGeneration {
+				s.guard.Unlock()
+				return
+			}
+			s.images[ref] = bm
+			s.guard.Unlock()
+			s.refreshHost()
+		})
 	})
 }

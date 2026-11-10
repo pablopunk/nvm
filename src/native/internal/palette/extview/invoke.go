@@ -44,6 +44,8 @@ func (s *Session) invoke(h search.Host, r route) {
 			snapshotVersion = s.deps.CommandSnapshots.Version(identity, in.Ref)
 			view.Refresh = nil
 			pending = s.navigationChild(r.extID, view, "")
+			pending.snapshotRef, pending.snapshotIdentity = &in.Ref, identity
+			pending.snapshotSourcePaths = snapshotPaths
 			pending.snapshotPending = true
 			h.Push(pending.Open(h))
 			in.OnSnapshotDenied = func(denial *api.SnapshotDenial) {
@@ -51,13 +53,10 @@ func (s *Session) invoke(h search.Host, r route) {
 					if !snapshotPathsCover(snapshotPaths, denial) {
 						return
 					}
-					if s.deps.CommandSnapshots != nil {
-						s.deps.CommandSnapshots.RemoveVersion(identity, in.Ref, snapshotVersion)
-					}
-					if pending.dismissed {
-						return
-					}
-					pending.clearPrivateSnapshot(denial.Failure)
+					pending.guard.Lock()
+					generation := pending.imageGeneration
+					pending.guard.Unlock()
+					pending.applySnapshotImageDenial(generation, snapshotVersion, denial)
 				})
 			}
 		}
