@@ -112,7 +112,6 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		CopyImage:             func(h search.Host, extID, path string, identity any) { p.copyImageFile(h, m, extID, path, identity) },
 		LinkCard:              p.linkCardOf,
 		Paste:                 func(h search.Host, extID string, action api.Action) { p.pasteFromExtension(h, m, extID, action) },
-		OpenSettingsPane:      p.openSystemPaneByID,
 		RecordPaletteShortcut: func(h search.Host) { h.Push(p.paletteRecorderView()) },
 		Window:                p.performExtensionWindow,
 		ToggleSetting: func(extID, key string, identity any, done func(error)) {

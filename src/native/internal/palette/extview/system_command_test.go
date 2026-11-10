@@ -9,9 +9,9 @@ func TestSystemConfirmationIsSingleUseAndKeepsOrigin(t *testing.T) {
 	identity := new(byte)
 	current := identity
 	calls := 0
-	deps := Deps{CommandSnapshotIdentity: func(string) any { return current }, SystemCommand: func(id, op string, got any, done func(string)) {
+	deps := Deps{CommandSnapshotIdentity: func(string) any { return current }, SystemCommand: func(id, op, pane string, got any, done func(string)) {
 		calls++
-		if id != "acme.system" || op != "empty-trash" || got != identity {
+		if id != "acme.system" || op != "empty-trash" || pane != "" || got != identity {
 			t.Fatal("confirmation changed its originating invocation")
 		}
 		done("")
@@ -35,7 +35,7 @@ func TestSystemConfirmationIsSingleUseAndKeepsOrigin(t *testing.T) {
 
 func TestSystemConfirmationCannotResumeAfterHide(t *testing.T) {
 	calls := 0
-	session := NewSession(Deps{SystemCommand: func(string, string, any, func(string)) { calls++ }}, "acme.system", api.ListView("System"))
+	session := NewSession(Deps{SystemCommand: func(string, string, string, any, func(string)) { calls++ }}, "acme.system", api.ListView("System"))
 	host := &fakeHost{}
 	action := api.SystemOp("Empty Trash", "empty-trash")
 	action.Confirm = &api.Confirmation{}

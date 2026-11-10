@@ -79,6 +79,9 @@ func (s *Services) SettingsPanes() []Pane {
 
 // OpenPane opens a settings pane, at an anchor section when the OS supports one.
 func (s *Services) OpenPane(pane Pane, anchor string) error {
+	if !s.Supported(CommandSystemPanes) {
+		return platform.ErrUnsupported
+	}
 	return s.ports.System.OpenSettings(pane.ID, anchor)
 }
 

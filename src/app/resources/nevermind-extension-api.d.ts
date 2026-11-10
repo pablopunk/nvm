@@ -48,7 +48,9 @@
  * Go api.Command, api.Item and api.Action expose Requires []api.Operation as JSON `requires`.
  * All named operations must be structurally supported. Unknown names are unsupported;
  * missing declarations retain legacy behavior. This grants no permissions and does not
- * hide rows for unknown permission/login readiness. A content row remains visible when
+ * hide rows for unknown permission/login readiness. Named Go system-settings actions keep their
+ * pane through confirmation and installation-bound dispatch; only host-offered panes can execute.
+ * A content row remains visible when
  * only an attached action is unsupported; row-level Requires explicitly omits the row.
  * Declare Go Manifest.APIVersion "1.1" when relying on this field. Existing 1.0 extensions
  * remain supported. Saved shortcuts explain unavailability; background runs skip without prompts.

@@ -12,7 +12,7 @@ func (m *Manager) systemCommandSupported(op string) bool {
 }
 
 // SystemCommandAction binds confirmed dispatch to the actual enabled installation, never an author-supplied origin.
-func (m *Manager) SystemCommandAction(ctx context.Context, id, op string, identity any) error {
+func (m *Manager) SystemCommandAction(ctx context.Context, id, op, pane string, identity any) error {
 	m.mu.Lock()
 	entry, err := m.findLocked(id)
 	revision, _ := identity.(*byte)
@@ -22,5 +22,5 @@ func (m *Manager) SystemCommandAction(ctx context.Context, id, op string, identi
 	}
 	host := entry.host
 	m.mu.Unlock()
-	return host.SystemCommandAction(ctx, op)
+	return host.SystemCommandAction(ctx, op, pane)
 }

@@ -44,9 +44,6 @@ type Deps struct {
 	// no card.
 	LinkCard func(url string) api.LinkCard
 	Paste    func(h search.Host, extID string, action api.Action)
-	// OpenSettingsPane opens the operating system settings pane with the id, off the UI thread. Nil makes the
-	// system action report unavailable.
-	OpenSettingsPane func(id string)
 	// RecordPaletteShortcut pushes the recorder of the palette shortcut onto h. Nil makes the action report unavailable.
 	RecordPaletteShortcut func(h search.Host)
 	// ReadSetting returns the stored value of a declared setting of extension extID, and WriteSetting saves one (both
@@ -90,7 +87,7 @@ type Deps struct {
 	// run it, and "" when it did. Nil makes system ops report unavailable.
 	RunSystem func(op string, done func(failure string))
 	// SystemCommand dispatches an OS operation for the originating installation.
-	SystemCommand func(extID, op string, identity any, done func(failure string))
+	SystemCommand func(extID, op, pane string, identity any, done func(failure string))
 	// ShellAction runs a confirmed descriptor for its originating installation.
 	ShellAction func(context.Context, string, api.ShellCommand, any, func(api.ShellResult, error))
 	// ShortcutAction performs a shortcut operation on the action target names: record pushes the recorder onto h, and

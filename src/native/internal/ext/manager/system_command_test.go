@@ -11,6 +11,7 @@ import (
 func TestSystemActionRequiresItsOriginalEnabledInstallation(t *testing.T) {
 	h := newHarness(t)
 	set := fake.NewSet()
+	h.m.serviceDeps.SettingsPanes = func() []api.SettingsPane { return []api.SettingsPane{{ID: "known-pane"}} }
 	h.m.serviceDeps.SystemCommands = systemfeat.NewServices(systemfeat.Options{Ports: set.Ports()})
 	if err := h.m.Install("acme.good", fixtureContents(t, "acme.good"), true); err != nil {
 		t.Fatal(err)
@@ -18,7 +19,7 @@ func TestSystemActionRequiresItsOriginalEnabledInstallation(t *testing.T) {
 	h.waitRunning("acme.good")
 	identity := h.m.SnapshotIdentity("acme.good")
 	run := func(actor any) error {
-		return h.m.SystemCommandAction(context.Background(), "acme.good", "sleep", actor)
+		return h.m.SystemCommandAction(context.Background(), "acme.good", "open-system-settings", "known-pane", actor)
 	}
 	if err := run(identity); err != nil {
 		t.Fatal(err)
@@ -42,7 +43,7 @@ func TestSystemActionRequiresItsOriginalEnabledInstallation(t *testing.T) {
 	if err := run(h.m.SnapshotIdentity("acme.good")); err != nil {
 		t.Fatal(err)
 	}
-	if len(set.System.Calls()) != 2 {
+	if len(set.System.Calls()) != 2 || set.System.Calls()[0].Arg != "known-pane" || set.System.Calls()[1].Arg != "known-pane" {
 		t.Fatalf("effects=%+v", set.System.Calls())
 	}
 	if !h.m.ActionSupported(api.SystemOp("Sleep", "sleep")) || h.m.ActionSupported(api.SystemOp("Keyboard", "open-keyboard-settings")) {
