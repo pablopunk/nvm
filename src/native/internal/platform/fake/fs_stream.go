@@ -115,6 +115,7 @@ func (f *FS) WriteStream(ctx context.Context, name string, source io.Reader, max
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	current, err := f.lookupLocked(path.Dir(key))
+	// The fake has no directory handles; refuse a changed parent instead of following a replacement.
 	if err != nil || current != parent {
 		return result, fs.ErrNotExist
 	}

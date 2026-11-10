@@ -19,6 +19,10 @@ var _ platform.StreamFiles = osFS{}
 
 // WriteStream stages privately under a pinned parent and publishes only after authority is revalidated.
 func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxBytes int64, overwrite bool, admit func() error) (result platform.StreamFileResult, err error) {
+	return writeStream(ctx, name, source, maxBytes, overwrite, admit, streamFileOps{})
+}
+
+func writeStream(ctx context.Context, name string, source io.Reader, maxBytes int64, overwrite bool, admit func() error, ops streamFileOps) (result platform.StreamFileResult, err error) {
 	if !filepath.IsAbs(name) || filepath.Base(name) == "." || maxBytes < 0 || maxBytes > streamFileLimit || source == nil || admit == nil {
 		return result, fs.ErrInvalid
 	}
@@ -27,7 +31,13 @@ func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxB
 	if err != nil {
 		return result, err
 	}
-	release, err := pictureStaging.reserve(ctx, maxBytes+1, func() (int64, error) { return spaceAt(dir) })
+	parent, err := root.Open(".")
+	if err != nil {
+		_ = root.Close()
+		return result, err
+	}
+	release, err := pictureStaging.reserve(ctx, maxBytes+1, func() (int64, error) { return streamSpace(parent) })
+	_ = parent.Close()
 	if err != nil {
 		_ = root.Close()
 		return result, err
@@ -46,7 +56,7 @@ func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxB
 		return result, err
 	}
 	cleanup := &pictureCleanup{budget: pictureStaging, path: temp, release: release, remove: func(n string) error {
-		e := root.Remove(n)
+		e := ops.remove(root, n)
 		if errors.Is(e, fs.ErrNotExist) {
 			e = nil
 		}
@@ -60,9 +70,9 @@ func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxB
 			err = errors.Join(err, e)
 		}
 	}()
-	result.Bytes, err = copyStream(ctx, file, source, maxBytes)
+	result.Bytes, err = copyStream(ctx, ops.writer(file), source, maxBytes)
 	if err == nil {
-		err = file.Sync()
+		err = ops.sync(file)
 	}
 	if e := file.Close(); err == nil {
 		err = e
@@ -79,11 +89,7 @@ func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxB
 	if err = ctx.Err(); err != nil {
 		return result, err
 	}
-	if overwrite {
-		err = root.Rename(temp, base)
-	} else {
-		err = root.Link(temp, base)
-	}
+	err = ops.publish(root, temp, base, overwrite)
 	if err != nil {
 		return result, err
 	}
