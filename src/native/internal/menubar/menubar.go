@@ -137,6 +137,14 @@ func (m *Item) SetMenu(rows []platform.MenuItem) {
 	m.applyMenu()
 }
 
+// OnBar reports whether the system gave the item a place on the bar.
+func (m *Item) OnBar() bool {
+	if m == nil {
+		return true
+	}
+	return m.tray.OnBar()
+}
+
 // Tray is the platform item the menu bar item wraps, for the popovers an extension opens under it.
 func (m *Item) Tray() platform.Tray {
 	if m == nil {

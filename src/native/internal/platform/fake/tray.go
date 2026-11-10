@@ -64,6 +64,7 @@ type Tray struct {
 	icon       []byte
 	template   bool
 	dark       bool
+	offBar     bool
 	appearance []func()
 	items      []platform.MenuItem
 	closed     bool
@@ -197,6 +198,20 @@ func (t *Tray) Icon() ([]byte, bool) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return slices.Clone(t.icon), t.template
+}
+
+// OnBar reports false once SetOffBar kept the icon off the bar.
+func (t *Tray) OnBar() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return !t.offBar
+}
+
+// SetOffBar sets whether the system keeps the icon off the bar.
+func (t *Tray) SetOffBar(off bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.offBar = off
 }
 
 // Dark reports the bar's appearance set with SetDark.

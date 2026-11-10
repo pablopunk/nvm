@@ -2,6 +2,7 @@ package app
 
 import (
 	"sync"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
@@ -99,6 +100,31 @@ func (p *App) setMenuBarShown(id string, shown bool, h search.Host) {
 	p.visibility.setShown(id, shown)
 	p.syncMenuBarItems()
 	h.Refresh()
+	if shown {
+		p.warnWhenMenuBarBlocked(id, h)
+	}
+}
+
+// menuBarPlaceDelay is how long a shown item gets to render and be placed before it counts as kept off the bar.
+const menuBarPlaceDelay = 2 * time.Second
+
+// menuBarBlockedMessage names the one switch that brings back an item macOS keeps off the bar. No app can change it.
+const menuBarBlockedMessage = "macOS is blocking this icon. Allow it in System Settings, Menu Bar."
+
+// warnWhenMenuBarBlocked says so when macOS keeps the items just shown off the bar, as it does after one is dragged out
+// with Command. Toggling would otherwise look like it does nothing.
+func (p *App) warnWhenMenuBarBlocked(id string, h search.Host) {
+	service := p.menubarItems.Load()
+	if service == nil {
+		return
+	}
+	time.AfterFunc(menuBarPlaceDelay, func() {
+		p.onUI(func() {
+			if service.OffBar(id) {
+				h.Toast(menuBarBlockedMessage)
+			}
+		})
+	})
 }
 
 // menuBarToggleIDPrefix starts the command id of a menu bar toggle, the id 1.x gives the same row.

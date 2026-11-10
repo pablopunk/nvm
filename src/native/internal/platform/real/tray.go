@@ -2,6 +2,7 @@ package real
 
 import (
 	"fmt"
+	"runtime"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -51,6 +52,16 @@ func (t *nativeTray) SetIcon(png []byte, template bool) error {
 		return nil
 	}
 	return t.tray.SetIcon(png, template)
+}
+
+// OnBar reports whether the icon has a size on the bar. macOS gives one it keeps off the bar no window, and so no size.
+// The other systems place icons themselves and may report no size for one they show.
+func (t *nativeTray) OnBar() bool {
+	if runtime.GOOS != "darwin" {
+		return true
+	}
+	bounds := t.tray.Bounds()
+	return bounds.Width > 0 && bounds.Height > 0
 }
 
 // Dark reports whether the bar the icon sits on is dark.

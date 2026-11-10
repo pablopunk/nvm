@@ -76,6 +76,9 @@ type Tray interface {
 	// glyph with transparency that macOS tints to the menu bar; other icons keep their colors. An empty PNG
 	// leaves the icon as it is.
 	SetIcon(png []byte, template bool) error
+	// OnBar reports whether the system gave the icon a place on the bar. It is false when the system keeps the icon off,
+	// as macOS does for an app switched off under Allow in the Menu Bar. A place can take a moment after the icon is made.
+	OnBar() bool
 	// Dark reports whether the bar the icon sits on is dark, so a light or dark glyph can be picked.
 	Dark() bool
 	// OnAppearanceChange runs fn when the bar turns dark or light, on the platform's thread. Set the icon again there.

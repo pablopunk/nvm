@@ -165,6 +165,21 @@ func (s *Service) drop(ext *extension) {
 	s.opts.Scheduler.Cancel(jobName(ext.id))
 }
 
+// OffBar reports whether extension id has items and the system keeps every one of them off the bar. It runs on the UI
+// thread.
+func (s *Service) OffBar(id string) bool {
+	ext := s.exts[id]
+	if ext == nil || len(ext.items) == 0 {
+		return false
+	}
+	for _, bar := range ext.items {
+		if bar.item.OnBar() {
+			return false
+		}
+	}
+	return true
+}
+
 // renderer returns the render of one extension. The triggers are read on the first run; the run sets the cadence
 // when its apply lands on the UI thread, where the extension map is authoritative. The render itself runs off the UI
 // thread and never touches the scheduler.
