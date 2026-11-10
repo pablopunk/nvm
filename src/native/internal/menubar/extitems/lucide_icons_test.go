@@ -14,6 +14,9 @@ func TestAnyLucideIconCanBeUsedInTheMenuBar(t *testing.T) {
 	if api.KnownMenuBarIcon("moonshine") {
 		t.Fatal("a name that is not a Lucide icon is known")
 	}
+	if !api.KnownMenuBarIcon("github") {
+		t.Fatal("the GitHub logo is not known")
+	}
 	var issues []string
 	if got := normalizeIcon("bird", &issues); got != "bird" || len(issues) != 0 {
 		t.Fatalf("normalizeIcon = %q, issues %v", got, issues)

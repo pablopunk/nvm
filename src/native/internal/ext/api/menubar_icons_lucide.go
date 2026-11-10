@@ -1,7 +1,7 @@
 package api
 
 // lucideMenuBarIcons names the Lucide icons (ISC) embedded in internal/menubar/icons, each rendered black and white at 32
-// pixels.
+// pixels. It includes the brand logos, such as github, that Lucide 1 removed.
 var lucideMenuBarIcons = []string{
 	"a-arrow-down",
 	"a-arrow-up",
