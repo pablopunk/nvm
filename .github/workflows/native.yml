@@ -18,6 +18,10 @@ on:
         description: Generate recording goldens and the API reference as reviewable artifacts
         type: boolean
         default: false
+      refresh_root_tables:
+        description: Generate root result tables as reviewable artifacts
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -88,6 +92,22 @@ jobs:
           path: |
             src/native/internal/ai/builder/reference_gen.go
             src/native/internal/palette/aicommands/testdata/golden/aicommands/indicator-dictation-*.png
+          if-no-files-found: error
+
+      - name: Generate root table review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_root_tables
+        run: |
+          go test ./internal/app -run '^(TestRootResultsMatchRecordedTable|TestRootTableWithRecordedUsageMatchesExpected)$' -update-root-table -update-learned-table
+          go test ./internal/app -run '^(TestRootResultsMatchRecordedTable|TestRootTableWithRecordedUsageMatchesExpected)$' -count=1
+
+      - name: Upload root table review assets
+        if: github.event_name == 'workflow_dispatch' && inputs.refresh_root_tables
+        uses: actions/upload-artifact@v4
+        with:
+          name: root-table-review-assets
+          path: |
+            src/native/internal/app/testdata/queries-expected.json
+            src/native/internal/app/testdata/queries-learned-expected.json
           if-no-files-found: error
 
       - name: Extension operation contract smoke
