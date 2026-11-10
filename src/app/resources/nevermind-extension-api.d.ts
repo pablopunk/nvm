@@ -58,6 +58,7 @@
 export type GoExtensionOperation =
   | 'ocr'
   | 'ocr.screen'
+  | 'network.fetch'
   | 'shell.exec'
   | 'shell.script'
   | 'files.preview'

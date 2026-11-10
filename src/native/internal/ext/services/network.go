@@ -57,7 +57,22 @@ func (h *Handler) fetch(ctx context.Context, request api.FetchRequest) (api.Fetc
 	}
 	ctx, cancel := context.WithTimeout(ctx, plan.timeout)
 	defer cancel()
-	result, err := platform.FetchExchange(ctx, h.deps.Network, plan.exchange())
+	exchange := plan.exchange()
+	var admissionErr error
+	exchange.Check = func(target *url.URL) error {
+		if err := checkFetchTarget(target); err != nil {
+			return err
+		}
+		admissionErr = h.admitDesktopEffect(ctx)
+		return admissionErr
+	}
+	result, err := platform.FetchExchange(ctx, h.deps.Network, exchange)
+	if admissionErr != nil {
+		return api.FetchResponse{}, admissionErr
+	}
+	if admissionErr = h.admitDesktopEffect(ctx); admissionErr != nil {
+		return api.FetchResponse{}, admissionErr
+	}
 	if err != nil {
 		return api.FetchResponse{}, transportFailure(ctx, err, plan)
 	}

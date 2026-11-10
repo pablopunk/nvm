@@ -12,6 +12,7 @@ import (
 type Operation string
 
 const (
+	OperationNetworkFetch     Operation = "network.fetch"
 	OperationOCRImage         Operation = "ocr"
 	OperationOCRScreen        Operation = "ocr.screen"
 	OperationShellExec        Operation = "shell.exec"

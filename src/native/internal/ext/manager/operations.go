@@ -9,6 +9,10 @@ import (
 func (m *Manager) OperationsSupported(required []api.Operation) bool {
 	for _, operation := range required {
 		switch operation {
+		case api.OperationNetworkFetch:
+			if m.serviceDeps.Network == nil {
+				return false
+			}
 		case api.OperationOCRImage:
 			if !m.serviceDeps.OCR.Availability(m.serviceDeps.Capabilities).Image {
 				return false
