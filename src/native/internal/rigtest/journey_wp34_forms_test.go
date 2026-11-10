@@ -93,7 +93,10 @@ func submitFormFixture(t *testing.T, app *App) {
 		must(t, app.Key("Down"))
 	}
 	must(t, app.Key("Return")) // edit Email
+	_, err = app.WaitFor("Clear Email", elementWait) // the edit row must be mounted before typing
+	must(t, err)
 	must(t, app.Type("not-an-email"))
+	must(t, app.WaitForTogether(elementWait, "Set Email", "not-an-email"))
 	must(t, app.Key("Return")) // set Email
 	must(t, app.WaitForTogether(elementWait, "not-an-email", "Website"))
 	must(t, app.Key("ctrl+Return"))

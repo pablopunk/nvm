@@ -42,8 +42,15 @@ func openExtensionsView(t *testing.T, app *App) {
 	must(t, app.Type("extensions"))
 	_, err := app.WaitFor("Manage and create extensions", elementWait)
 	must(t, err)
+	before, err := app.Tree()
+	must(t, err)
 	must(t, app.Key("Return"))
 	_, err = app.WaitFor("Reload Extensions", elementWait)
+	if err != nil {
+		after, treeErr := app.Tree()
+		t.Logf("extensions root before Return: %+v", before)
+		t.Logf("extensions root after Return: %+v (tree error: %v)", after, treeErr)
+	}
 	must(t, err)
 }
 
