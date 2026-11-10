@@ -48,3 +48,17 @@ func (q quickLookPictures) FilePicture(ctx context.Context, path string, edge in
 	}
 	return os.ReadFile(output)
 }
+
+// FilePictureFromSource preserves video and document providers without reopening the original path.
+func (q quickLookPictures) FilePictureFromSource(ctx context.Context, source platform.ReadSource, name string, edge int) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, filePictureTimeout)
+	defer cancel()
+	staged, cleanup, err := stagePictureSource(ctx, source, name)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	return q.FilePicture(ctx, staged, edge)
+}
+
+var _ platform.SourceFilePictures = quickLookPictures{}

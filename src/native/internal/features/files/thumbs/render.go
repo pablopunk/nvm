@@ -13,6 +13,7 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"io"
 
 	_ "image/gif"  // registers the GIF decoder with image.Decode
 	_ "image/jpeg" // registers the JPEG decoder with image.Decode
@@ -58,6 +59,32 @@ func Render(fsys platform.FS, path string, edge int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	return renderBytes(data, edge)
+}
+
+// RenderSource decodes the bounded bytes of a source the caller already authorized.
+func RenderSource(source platform.ReadSource, edge int) ([]byte, error) {
+	info, err := source.Stat()
+	if err != nil {
+		return nil, err
+	}
+	if info.Size() > MaxSourceBytes {
+		return nil, ErrTooLarge
+	}
+	if _, err := source.Seek(0, io.SeekStart); err != nil {
+		return nil, err
+	}
+	data, err := io.ReadAll(io.LimitReader(source, MaxSourceBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > MaxSourceBytes {
+		return nil, ErrTooLarge
+	}
+	return renderBytes(data, edge)
+}
+
+func renderBytes(data []byte, edge int) ([]byte, error) {
 	config, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil || config.Width <= 0 || config.Height <= 0 {
 		return nil, ErrUnsupported
