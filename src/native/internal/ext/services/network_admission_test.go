@@ -155,8 +155,9 @@ func TestNetworkAdmissionStopsRedirectAndBodyReadOnHostOrRuntimeExpiry(t *testin
 }
 
 type networkLifetimePort struct {
-	stop  context.CancelFunc
-	calls int
+	stop                 context.CancelFunc
+	calls                int
+	observedCancellation bool
 }
 
 func (p *networkLifetimePort) Do(request *http.Request) (*http.Response, error) {
@@ -164,6 +165,7 @@ func (p *networkLifetimePort) Do(request *http.Request) (*http.Response, error) 
 	p.stop()
 	select {
 	case <-request.Context().Done():
+		p.observedCancellation = true
 		return nil, request.Context().Err()
 	case <-time.After(time.Second):
 		return nil, errors.New("runtime cancellation did not reach transport")
@@ -176,7 +178,7 @@ func TestNetworkAdmissionRuntimeCancellationReachesInflightTransport(t *testing.
 	port := &networkLifetimePort{stop: stop}
 	host := desktopHandler(t, Deps{Network: port}, api.CapabilityNetwork)
 	_, err := host.fetch(protocol.WithLifetime(context.Background(), lifetime), fetchArgs("https://example.com/"))
-	if !errors.Is(err, context.Canceled) || failureOf(err).Code != api.CodeCancelled || port.calls != 1 {
-		t.Fatalf("error=%v sends=%d", err, port.calls)
+	if !errors.Is(err, context.Canceled) || failureOf(err).Code != api.CodeCancelled || port.calls != 1 || !port.observedCancellation {
+		t.Fatalf("error=%v sends=%d cancelledTransport=%v", err, port.calls, port.observedCancellation)
 	}
 }
