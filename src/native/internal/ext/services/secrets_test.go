@@ -10,6 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
+	"github.com/pablopunk/nvm/native/internal/platform/testpath"
 )
 
 const canary = "canary-token-7f3a9c"
@@ -101,7 +102,7 @@ func TestUnreadableSecretIndexBlocksKeychainChanges(t *testing.T) {
 			files := fake.NewFS()
 			clock := fake.NewClock()
 			keychain := &countingKeychain{Keychain: fake.NewKeychain()}
-			deps := Deps{Files: files, Clock: clock, DataRoot: "/data", Keychain: keychain}
+			deps := Deps{Files: files, Clock: clock, DataRoot: testpath.Abs("data"), Keychain: keychain}
 			first := New(deps, secretsManifest("acme.one"))
 			mustOK(t, serve(t, first, protocol.ServiceSecrets, protocol.OpSet, protocol.KeyValueArgs{Key: "TOKEN", Value: []byte(`"original"`)}))
 			if err := first.Close(); err != nil {
