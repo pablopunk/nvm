@@ -5,6 +5,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/picture"
 	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 )
 
@@ -82,7 +83,13 @@ func (s *Session) requestImage(ref string) {
 		if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 			version = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
 		}
-		request := GridImageRequest{ExtensionID: s.extID, Identity: s.installationIdentity, Source: ref, Command: s.snapshotRef, Generation: generation, SnapshotVersion: version}
+		request := GridImageRequest{Session: s.imageSession, ExtensionID: s.extID, Identity: s.installationIdentity, Source: ref, Command: s.snapshotRef, Generation: generation, SnapshotVersion: version}
+		s.guard.Lock()
+		if s.gridScope == nil || !s.gridScope.Matches(request.Binding()) {
+			s.gridScope = picture.NewScope(ctx, request.Binding(), s.pictureEvidence)
+		}
+		request.Scope = s.gridScope
+		s.guard.Unlock()
 		s.deps.LoadGridImage(ctx, request, func(result GridImageResult) {
 			s.onUI(func() {
 				if s.dismissed || ctx.Err() != nil {

@@ -52,22 +52,12 @@ func (s *Session) invoke(h search.Host, r route) {
 		if view, ok := s.deps.CommandSnapshots.Get(identity, in.Ref); ok {
 			snapshotVersion = s.deps.CommandSnapshots.Version(identity, in.Ref)
 			view.Refresh = nil
-			pending = s.navigationChild(r.extID, view, "")
+			pending = s.navigationChild(r.extID, view, "", s.deps.CommandSnapshots.PictureEvidence(identity, in.Ref))
 			pending.snapshotRef, pending.snapshotIdentity = &in.Ref, identity
 			pending.snapshotSourcePaths = snapshotPaths
 			pending.snapshotPending = true
 			h.Push(pending.Open(h))
-			in.OnSnapshotDenied = func(denial *api.SnapshotDenial) {
-				s.onUI(func() {
-					if !snapshotPathsCover(snapshotPaths, denial) {
-						return
-					}
-					pending.guard.Lock()
-					generation := pending.imageGeneration
-					pending.guard.Unlock()
-					pending.applySnapshotImageDenial(generation, snapshotVersion, denial)
-				})
-			}
+			in.OnSnapshotDenied = pending.snapshotDenialHandler(snapshotPaths, snapshotVersion)
 		}
 	}
 	if pending == nil && r.command && !in.Background && !r.action.DismissAfterRun && validInitialView(r.initialView) {
@@ -122,7 +112,7 @@ func (s *Session) invoke(h search.Host, r route) {
 			popPendingPage(h)
 		}
 		if identity != nil && failure == nil && result.View != nil && result.View.Kind == api.ViewGrid && (result.Navigation == "" || result.Navigation == api.NavPush) && result.Next == nil && result.Toast == nil {
-			child := s.navigationChild(r.extID, *result.View, result.Navigation)
+			child := s.navigationChild(r.extID, *result.View, result.Navigation, result.SnapshotEvidence)
 			child.snapshotRef, child.snapshotIdentity = &in.Ref, identity
 			child.snapshotSourcePaths = verifiedSnapshotPaths(result.View.Items, result.SnapshotEvidence)
 			h.Push(child.Open(h))

@@ -46,9 +46,12 @@ func TestGridReadDenialFiltersOnlyItsViewAndRejectsOldCompletions(t *testing.T) 
 		if request.Identity != identity || request.ExtensionID != "acme.files" || request.Command.ID != command.ID {
 			t.Fatal("load lost its host scope")
 		}
+		if _, ok := request.Scope.Path(request.Binding(), request.Source); !ok {
+			t.Fatal("load has no invocation-bound provenance")
+		}
 		callbacks[request.Source] = append(callbacks[request.Source], done)
 	}}
-	s := NewSession(deps, "acme.files", view)
+	s := NewSession(deps, "acme.files", view, evidence)
 	s.snapshotIdentity, s.snapshotRef = identity, &command
 	s.bitmap(&api.Image{Src: badRef})
 	s.bitmap(&api.Image{Src: goodRef})
@@ -134,5 +137,60 @@ func TestGridFirstPaintAndTypingDoNotWaitForPictures(t *testing.T) {
 	complete(GridImageResult{Bitmap: &ui.Bitmap{}})
 	if len(s.images) != 0 {
 		t.Fatal("canceled decoration published pixels")
+	}
+}
+
+func TestPatchCannotReplayOldReferenceWithoutNewHostEvidence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "image.png")
+	ref := scopedTestPicture(path)
+	hash := sha256.Sum256([]byte(ref))
+	evidence := &api.SnapshotEvidence{ThumbnailHashes: map[[32]byte]bool{hash: true}, ThumbnailPaths: map[[32]byte][]string{hash: {path}}}
+	var requests []GridImageRequest
+	s := NewSession(Deps{LoadGridImage: func(_ context.Context, r GridImageRequest, _ func(GridImageResult)) { requests = append(requests, r) }}, "files", api.GridView("Files", 0, api.Item{ID: path, Image: &api.Image{Src: ref}}), evidence)
+	s.bitmap(&api.Image{Src: ref})
+	original := requests[0]
+	s.applyPicturePatch(api.ViewPatch{Mode: api.PatchReplace, Items: []api.Item{{ID: path, Image: &api.Image{Src: ref}}}}, nil)
+	s.bitmap(&api.Image{Src: ref})
+	replacement := requests[1]
+	if original.Scope.Current() {
+		t.Fatal("replacement did not expire original read scope")
+	}
+	if _, ok := replacement.Scope.Path(replacement.Binding(), ref); ok {
+		t.Fatal("replayed reference inherited old invocation provenance")
+	}
+	s.applyPicturePatch(api.ViewPatch{Mode: api.PatchReplace, Items: []api.Item{{ID: path, Image: &api.Image{Src: ref}}}}, evidence)
+	s.bitmap(&api.Image{Src: ref})
+	fresh := requests[2]
+	if _, ok := fresh.Scope.Path(fresh.Binding(), ref); !ok {
+		t.Fatal("fresh host evidence could not reauthorize reference")
+	}
+}
+
+func TestPathDenialReauthorizesSurvivingLoadedPictures(t *testing.T) {
+	first, second := filepath.Join(t.TempDir(), "denied.png"), filepath.Join(t.TempDir(), "allowed.png")
+	bad, good := scopedTestPicture(first), scopedTestPicture(second)
+	evidence := &api.SnapshotEvidence{ThumbnailHashes: make(map[[32]byte]bool), ThumbnailPaths: make(map[[32]byte][]string)}
+	for ref, path := range map[string]string{bad: first, good: second} {
+		hash := sha256.Sum256([]byte(ref))
+		evidence.ThumbnailHashes[hash] = true
+		evidence.ThumbnailPaths[hash] = []string{path}
+	}
+	callbacks := make(map[string]func(GridImageResult))
+	scopes := make(map[string]GridImageRequest)
+	s := NewSession(Deps{LoadGridImage: func(_ context.Context, r GridImageRequest, done func(GridImageResult)) {
+		scopes[r.Source] = r
+		callbacks[r.Source] = done
+	}}, "files", api.GridView("Files", 0, api.Item{ID: first, Image: &api.Image{Src: bad}}, api.Item{ID: second, Image: &api.Image{Src: good}}), evidence)
+	s.bitmap(&api.Image{Src: good})
+	callbacks[good](GridImageResult{Bitmap: &ui.Bitmap{}, Authorized: scopes[good].Scope.Current})
+	s.bitmap(&api.Image{Src: bad})
+	callbacks[bad](GridImageResult{Denial: &api.SnapshotDenial{Path: first}})
+	s.bitmap(&api.Image{Src: good})
+	request := scopes[good]
+	if _, ok := request.Scope.Path(request.Binding(), good); !ok {
+		t.Fatal("independent row lost its provenance")
+	}
+	if len(s.items) != 2 || s.items[1].Image == nil || s.view.Title == "Access unavailable" {
+		t.Fatal("path denial became an authority-wide denial through a stale image grant")
 	}
 }

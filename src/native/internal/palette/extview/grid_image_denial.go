@@ -10,6 +10,11 @@ import (
 )
 
 func (s *Session) resetGridImages() {
+	s.itemsRevision++
+	s.guard.Lock()
+	s.snapshotDenials = nil
+	s.pictureEvidence = nil
+	s.guard.Unlock()
 	s.advanceImages(func(ref string) bool { return thumbs.IsGridReference(ref) })
 }
 
@@ -17,10 +22,11 @@ func (s *Session) resetGridImages() {
 func (s *Session) advanceImages(remove func(string) bool) {
 	s.guard.Lock()
 	s.imageGeneration++
+	s.gridScope = nil
 	cancel := s.cancelImages
 	s.imageContext, s.cancelImages = context.WithCancel(context.Background())
 	for ref := range s.images {
-		if remove(ref) {
+		if remove(ref) || thumbs.IsGridReference(ref) {
 			delete(s.images, ref)
 			delete(s.imageAuthority, ref)
 			delete(s.imageSnapshotVersions, ref)
@@ -69,6 +75,9 @@ func (s *Session) applySnapshotImageDenial(generation, version uint64, denial *a
 		return
 	}
 	s.rememberSnapshotImages()
+	s.guard.Lock()
+	s.pictureEvidence = withoutPictureDenial(s.pictureEvidence, denial)
+	s.guard.Unlock()
 	path := filepath.Clean(denial.Path)
 	s.advanceImages(func(candidate string) bool {
 		if denial.AuthorityDenied {
@@ -116,6 +125,9 @@ func (s *Session) applyImageEvidenceDenial(version uint64, evidence *api.Snapsho
 		return
 	}
 	for _, path := range evidence.DeniedPaths {
+		if !snapshotPathsCover(s.snapshotSourcePaths, &api.SnapshotDenial{Path: path}) {
+			continue
+		}
 		s.applySnapshotImageDenial(generation, version, &api.SnapshotDenial{Path: path, Failure: failure})
 		s.guard.Lock()
 		generation = s.imageGeneration

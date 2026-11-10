@@ -26,3 +26,14 @@ func (d DirectContext) For(ctx context.Context, launch api.LaunchContext) api.Co
 	c.launch = launch
 	return c
 }
+
+// Observed preserves process-local storage and caches while observing only this call's direct service link.
+func (d DirectContext) Observed(observe func(protocol.ServiceCall, protocol.ServiceReply)) DirectContext {
+	next := d
+	next.base.link = newDirectLink(func(call protocol.ServiceCall) protocol.ServiceReply {
+		reply := d.base.link.direct(call)
+		observe(call, reply)
+		return reply
+	})
+	return next
+}

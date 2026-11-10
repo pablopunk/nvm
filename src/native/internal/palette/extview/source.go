@@ -117,17 +117,18 @@ func (s *Session) refreshNow() {
 		return
 	}
 	s.refreshing = true
+	revision := s.itemsRevision
 	var snapshotVersion uint64
 	if s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 		snapshotVersion = s.deps.CommandSnapshots.Version(s.snapshotIdentity, *s.snapshotRef)
 	}
 	s.invokeRefresh(*refresh.Ref, func(result api.Result, failure *api.Failure) {
 		s.refreshing = false
+		if s.dismissed || revision != s.itemsRevision {
+			return
+		}
 		if failure != nil && s.snapshotRef != nil && s.deps.CommandSnapshots != nil {
 			s.deps.CommandSnapshots.RemoveVersion(s.snapshotIdentity, *s.snapshotRef, snapshotVersion)
-		}
-		if s.dismissed {
-			return
 		}
 		if s.snapshotRef != nil && s.deps.CommandSnapshotIdentity != nil && !sameSnapshotIdentity(s.snapshotIdentity, s.deps.CommandSnapshotIdentity(s.extID)) {
 			return
@@ -184,7 +185,7 @@ func (s *Session) refreshNow() {
 			s.itemsRevision++
 			s.loading, s.failure = false, nil
 		}
-		s.Apply(patch)
+		s.applyPicturePatch(patch, result.SnapshotEvidence)
 		s.rememberVerifiedSnapshot(result.SnapshotEvidence)
 		s.cacheRefreshPatch(patch)
 		s.refreshHost()
@@ -259,7 +260,7 @@ func (s *Session) loadMore(h search.Host, next api.ActionRef) {
 		if patch.Mode == "" {
 			patch.Mode = api.PatchAppend
 		}
-		s.Apply(patch)
+		s.applyPicturePatch(patch, result.SnapshotEvidence)
 		h.Refresh()
 	})
 }
@@ -300,10 +301,11 @@ func (s *Session) invokeInPlace(ref api.ActionRef, value string) {
 			return
 		}
 		if result.Patch != nil {
-			s.Apply(*result.Patch)
+			s.applyPicturePatch(*result.Patch, result.SnapshotEvidence)
 		}
 		if view := result.View; view != nil && result.Navigation == api.NavReplace && view.Kind == s.view.Kind {
 			s.replaceInPlace(*view)
+			s.pictureEvidence = copyPictureEvidence(result.SnapshotEvidence)
 		}
 		s.refreshHost()
 	})

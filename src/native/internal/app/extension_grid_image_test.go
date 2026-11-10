@@ -13,17 +13,18 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/ext/picture"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
 type gridSourceStub struct {
-	open func(context.Context, string, string, any) (manager.PictureSource, error)
+	open func(context.Context, *picture.Scope, picture.Binding, string) (manager.PictureSource, error)
 }
 
-func (s gridSourceStub) OpenGridPictureSource(ctx context.Context, id, ref string, identity any) (manager.PictureSource, error) {
-	return s.open(ctx, id, ref, identity)
+func (s gridSourceStub) OpenGridPictureSource(ctx context.Context, scope *picture.Scope, binding picture.Binding, ref string) (manager.PictureSource, error) {
+	return s.open(ctx, scope, binding, ref)
 }
 
 func TestScopedGridOpenDenialsAndPublicationRevocation(t *testing.T) {
@@ -37,8 +38,8 @@ func TestScopedGridOpenDenialsAndPublicationRevocation(t *testing.T) {
 			current.Store(true)
 			identity := new(byte)
 			request := extview.GridImageRequest{ExtensionID: "files", Identity: identity, Source: "issued-reference"}
-			source := gridSourceStub{open: func(_ context.Context, id, ref string, owner any) (manager.PictureSource, error) {
-				if id != request.ExtensionID || ref != request.Source || owner != identity {
+			source := gridSourceStub{open: func(_ context.Context, _ *picture.Scope, binding picture.Binding, ref string) (manager.PictureSource, error) {
+				if binding.ExtensionID != request.ExtensionID || ref != request.Source || binding.Identity != identity {
 					panic("lost source scope")
 				}
 				grant := manager.PictureSource{Path: "/private/image.png", Current: current.Load}
@@ -126,7 +127,7 @@ func TestScopedGridSourceRendersOrReportsReadDenialAndCloses(t *testing.T) {
 				t.Fatal(err)
 			}
 			source := &observedGridSource{ReadSource: opened, denied: denied, closed: make(chan struct{})}
-			grants := gridSourceStub{open: func(context.Context, string, string, any) (manager.PictureSource, error) {
+			grants := gridSourceStub{open: func(context.Context, *picture.Scope, picture.Binding, string) (manager.PictureSource, error) {
 				return manager.PictureSource{Path: "/image.png", Source: source, Current: func() bool { return true }}, nil
 			}}
 			queue := make(completionUIQueue, 1)

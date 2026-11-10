@@ -70,3 +70,8 @@ func observeSnapshotService(e *api.SnapshotEvidence, call protocol.ServiceCall, 
 	}
 	return nil
 }
+
+// ObserveSnapshotService gives in-process built-ins the same host-observed provenance as supervised children.
+func ObserveSnapshotService(e *api.SnapshotEvidence, call protocol.ServiceCall, reply protocol.ServiceReply) *api.SnapshotDenial {
+	return observeSnapshotService(e, call, reply)
+}

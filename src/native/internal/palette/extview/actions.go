@@ -272,20 +272,20 @@ func (s *Session) finishAt(h search.Host, extID, title string, result api.Result
 		case api.NavReplace:
 			h.Pop()
 		}
-		child := s.navigationChild(extID, *result.View, result.Navigation)
+		child := s.navigationChild(extID, *result.View, result.Navigation, result.SnapshotEvidence)
 		h.Push(child.Open(h))
 	case result.Navigation == api.NavPop:
 		h.Pop()
 	case result.Patch != nil:
-		s.Apply(*result.Patch)
+		s.applyPicturePatch(*result.Patch, result.SnapshotEvidence)
 		h.Refresh()
 	default:
 		h.Hide()
 	}
 }
 
-func (s *Session) navigationChild(extID string, view api.View, navigation api.NavigationMode) *Session {
-	child := NewSession(s.deps, extID, view)
+func (s *Session) navigationChild(extID string, view api.View, navigation api.NavigationMode, evidence ...*api.SnapshotEvidence) *Session {
+	child := NewSession(s.deps, extID, view, evidence...)
 	if extID == s.extID {
 		child.installationIdentity = s.installationIdentity
 	}

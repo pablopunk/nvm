@@ -14,6 +14,7 @@ import (
 	"github.com/egoist/mygo/ui/markdown"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/picture"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -47,6 +48,10 @@ type Session struct {
 	selectID              string
 	images                map[string]*ui.Bitmap
 	imageGeneration       uint64
+	imageSession          *byte
+	gridScope             *picture.Scope
+	pictureEvidence       *api.SnapshotEvidence
+	snapshotDenials       *snapshotDenialScope
 	imageAuthority        map[string]func() bool
 	imageSnapshotVersions map[string]uint64
 	requested             map[string]bool
@@ -76,14 +81,14 @@ type Session struct {
 }
 
 // NewSession prepares view for the extension extID. Nothing runs until Open shows it.
-func NewSession(deps Deps, extID string, view api.View) *Session {
+func NewSession(deps Deps, extID string, view api.View, evidence ...*api.SnapshotEvidence) *Session {
 	if deps.Cameras == nil {
 		deps.Cameras = NewMemoryCameras()
 	}
 	imageContext, cancelImages := context.WithCancel(context.Background())
 	workContext, cancelWork := context.WithCancel(context.Background())
 	s := &Session{
-		imageContext: imageContext, cancelImages: cancelImages,
+		imageContext: imageContext, cancelImages: cancelImages, imageSession: new(byte),
 		workContext: workContext, cancelWork: cancelWork,
 		deps: deps, extID: extID, view: view, loading: view.IsLoading, viewIntent: true,
 		items: view.Items, sections: view.Sections, selectID: view.SelectedItemID,
@@ -92,6 +97,9 @@ func NewSession(deps Deps, extID string, view api.View) *Session {
 	}
 	if deps.CommandSnapshotIdentity != nil {
 		s.installationIdentity = deps.CommandSnapshotIdentity(extID)
+	}
+	if len(evidence) > 0 {
+		s.pictureEvidence = copyPictureEvidence(evidence[0])
 	}
 	s.hasMore = view.Pagination != nil && view.Pagination.HasMore && view.Pagination.Next != nil
 	return s

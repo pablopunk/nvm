@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/picture"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -58,13 +59,25 @@ func expiredPictureAuthority() error {
 }
 
 // OpenGridPictureSource validates host provenance before opening the installation's source.
-func (m *Manager) OpenGridPictureSource(ctx context.Context, id, ref string, identity any) (PictureSource, error) {
-	host := m.pictureHost(id, identity)
+func (m *Manager) OpenGridPictureSource(ctx context.Context, scope *picture.Scope, binding picture.Binding, ref string) (PictureSource, error) {
+	authorizedPath, ok := scope.Path(binding, ref)
+	if !ok {
+		return PictureSource{}, fmt.Errorf("%w: picture scope expired or reference was not issued by this invocation", api.ErrInvalidInput)
+	}
+	host := m.pictureHost(binding.ExtensionID, binding.Identity)
 	if host == nil {
 		return PictureSource{}, expiredPictureAuthority()
 	}
 	path, source, err := host.OpenGridPictureSource(ctx, ref)
-	current := func() bool { return host.PictureAccessCurrent() && m.pictureHost(id, identity) == host }
+	if path != "" && path != authorizedPath {
+		if source != nil {
+			_ = source.Close()
+		}
+		return PictureSource{}, fmt.Errorf("%w: picture source changed its provenance", api.ErrInvalidInput)
+	}
+	current := func() bool {
+		return host.PictureAccessCurrent() && scope.Current() && m.pictureHost(binding.ExtensionID, binding.Identity) == host
+	}
 	if !current() {
 		if source != nil {
 			_ = source.Close()

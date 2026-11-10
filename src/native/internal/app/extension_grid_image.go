@@ -6,6 +6,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
+	"github.com/pablopunk/nvm/native/internal/ext/picture"
 	"github.com/pablopunk/nvm/native/internal/features/files/thumbs"
 	"github.com/pablopunk/nvm/native/internal/palette/extview"
 	"github.com/pablopunk/nvm/native/internal/platform"
@@ -13,7 +14,7 @@ import (
 )
 
 type gridPictureSources interface {
-	OpenGridPictureSource(context.Context, string, string, any) (manager.PictureSource, error)
+	OpenGridPictureSource(context.Context, *picture.Scope, picture.Binding, string) (manager.PictureSource, error)
 }
 
 func (p *App) loadScopedGridImage(ctx context.Context, m gridPictureSources, request extview.GridImageRequest, done func(extview.GridImageResult)) {
@@ -24,7 +25,7 @@ func (p *App) loadScopedGridImage(ctx context.Context, m gridPictureSources, req
 			return
 		}
 		defer func() { <-gridPicturePermits }()
-		grant, err := m.OpenGridPictureSource(ctx, request.ExtensionID, request.Source, request.Identity)
+		grant, err := m.OpenGridPictureSource(ctx, request.Scope, request.Binding(), request.Source)
 		result := extview.GridImageResult{Authorized: grant.Current}
 		switch {
 		case errors.Is(err, api.ErrPermission):
