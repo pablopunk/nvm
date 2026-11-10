@@ -41,7 +41,7 @@ func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *W
 // Toolset returns the tools of the builder chat chatID for one turn: the API reader, the read-only extension reader and
 // write_extension.
 func (w *Workshop) Toolset(chatID string) chat.Toolset {
-	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), w.readExtensionTool(), w.writeTool(chatID))
+	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), listCapabilitiesTool(), w.readExtensionTool(), w.writeTool(chatID))
 	if err != nil {
 		log.Println("builder: could not register the tools:", err)
 		return chat.Toolset{}
