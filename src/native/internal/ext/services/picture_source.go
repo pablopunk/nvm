@@ -40,3 +40,8 @@ func (h *Handler) OpenPictureSource(ctx context.Context, path string) (platform.
 	}
 	return source, nil
 }
+
+// PictureAccessCurrent is a cheap host-lifetime check for deferred UI publication.
+func (h *Handler) PictureAccessCurrent() bool {
+	return !h.closed.Load() && h.capabilities[api.CapabilityDesktopFiles]
+}

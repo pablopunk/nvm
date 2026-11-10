@@ -25,7 +25,7 @@ func (m *Manager) OpenPictureSource(ctx context.Context, id, path string, identi
 	if err != nil {
 		return PictureSource{}, err
 	}
-	current := func() bool { return m.pictureHost(id, identity) == host }
+	current := func() bool { return host.PictureAccessCurrent() && m.pictureHost(id, identity) == host }
 	if !current() {
 		_ = source.Close()
 		return PictureSource{}, expiredPictureAuthority()

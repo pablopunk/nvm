@@ -59,4 +59,11 @@ func TestPictureGrantExpiresWithItsEnabledInstallation(t *testing.T) {
 	if !next.Current() {
 		t.Fatal("new enabled installation could not read")
 	}
+	host := h.m.pictureHost("acme.good", h.m.SnapshotIdentity("acme.good"))
+	if err := host.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if next.Current() {
+		t.Fatal("closed service host retained a deferred publication grant")
+	}
 }
