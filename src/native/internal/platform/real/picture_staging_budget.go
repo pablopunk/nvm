@@ -19,6 +19,7 @@ type pictureStagingBudget struct {
 	mu          sync.Mutex
 	used, limit int64
 	changed     chan struct{}
+	pending     map[*pictureCleanup]struct{}
 }
 
 func newPictureStagingBudget(limit int64) *pictureStagingBudget {
@@ -31,6 +32,10 @@ func (b *pictureStagingBudget) reserve(ctx context.Context, bytes int64, availab
 		return nil, errPictureStagingSpace
 	}
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		b.retryCleanups()
 		b.mu.Lock()
 		if err := ctx.Err(); err != nil {
 			b.mu.Unlock()

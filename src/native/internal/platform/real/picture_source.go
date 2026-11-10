@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 )
 
 // stagePictureSource gives pathname-only OS providers a private copy of the authorized handle.
@@ -23,7 +22,7 @@ func stagePictureSource(ctx context.Context, source platform.ReadSource, name st
 	if info.Size() > pictureSourceLimit {
 		return "", nil, errPictureStagingSpace
 	}
-	release, err := pictureStaging.reserve(ctx, info.Size()+1, pictureTemporarySpace)
+	release, err := pictureStaging.reserve(ctx, max(1<<20, info.Size()+1), pictureTemporarySpace)
 	if err != nil {
 		return "", nil, err
 	}
@@ -40,15 +39,7 @@ func stagePictureSource(ctx context.Context, source platform.ReadSource, name st
 	if err != nil {
 		return "", nil, err
 	}
-	var once sync.Once
-	cleanup := func() {
-		once.Do(func() {
-			// A failed removal must not free the reservation and admit more staging copies.
-			if os.RemoveAll(dir) == nil {
-				release()
-			}
-		})
-	}
+	cleanup := pictureStaging.cleanup(dir, os.RemoveAll, release)
 	reserved = false
 	target := filepath.Join(dir, "source"+filepath.Ext(name))
 	output, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
