@@ -12,6 +12,9 @@ import (
 // ask the model again, since the model cannot fix it.
 var ErrExtensionsLoading = errors.New("extensions are still loading")
 
+// ErrReferenceOnly allows reading the installed definition without authorizing folder replacement.
+var ErrReferenceOnly = errors.New("extension can be read for reference but cannot be replaced")
+
 // Conversation is what the builder reads and writes on the chat service: the chats, the owners of an extension, the
 // step a chat shows while a write runs, and the extension a chat is bound to. chat.Service satisfies it.
 type Conversation interface {

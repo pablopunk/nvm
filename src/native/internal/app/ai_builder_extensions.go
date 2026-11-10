@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/install"
 	"github.com/pablopunk/nvm/native/internal/ext/manager"
 )
 
@@ -44,7 +45,11 @@ func (e builderExtensions) EditSnapshot(id string) (map[string][]byte, any, erro
 	if err != nil {
 		return nil, nil, err
 	}
-	return m.EditSnapshot(id)
+	files, revision, err := m.EditSnapshot(id)
+	if errors.Is(err, install.ErrUnreplaceableSource) {
+		return nil, nil, builder.ErrReferenceOnly
+	}
+	return files, revision, err
 }
 
 func (e builderExtensions) InstallEdit(ctx context.Context, id string, files map[string][]byte, enable bool, revision any) (bool, error) {

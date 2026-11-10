@@ -17,10 +17,11 @@ type fakeConversation struct {
 	bound  map[string]string
 	steps  []string
 	active map[string]*chat.BuilderTurn
+	claims map[string]map[string]*chat.BuilderTurn
 }
 
 func newFakeConversation(chats ...chat.Chat) *fakeConversation {
-	c := &fakeConversation{chats: map[string]chat.Chat{}, bound: map[string]string{}, active: map[string]*chat.BuilderTurn{}}
+	c := &fakeConversation{chats: map[string]chat.Chat{}, bound: map[string]string{}, active: map[string]*chat.BuilderTurn{}, claims: map[string]map[string]*chat.BuilderTurn{}}
 	for _, record := range chats {
 		c.chats[record.ID] = record
 	}
@@ -43,6 +44,9 @@ func (c *fakeConversation) Owners(extension string) []chat.Chat {
 }
 
 func (c *fakeConversation) Bind(id, extension string) error {
+	if c.claimedElsewhere(id, extension) {
+		return chat.ErrExtensionHasChat
+	}
 	record, ok := c.chats[id]
 	if !ok {
 		return chat.ErrNotFound
@@ -61,18 +65,34 @@ func (c *fakeConversation) ReserveExtension(id, target string, turn *chat.Builde
 	if cchat.Extension != "" && cchat.Extension != target {
 		return chat.ErrExtensionHasChat
 	}
+	if c.claimedElsewhere(id, target) {
+		return chat.ErrExtensionHasChat
+	}
 	for _, owner := range c.Owners(target) {
 		if owner.ID != id {
 			return chat.ErrExtensionHasChat
 		}
 	}
+	if c.claims[id] == nil {
+		c.claims[id] = make(map[string]*chat.BuilderTurn)
+	}
+	c.claims[id][target] = turn
 	return nil
+}
+
+func (c *fakeConversation) claimedElsewhere(id, target string) bool {
+	for owner, claims := range c.claims {
+		if turn := claims[target]; owner != id && turn != nil && c.active[owner] == turn {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *fakeConversation) SetStep(_, label string) { c.steps = append(c.steps, label) }
 
 func (c *fakeConversation) CommitExtension(id, target string, turn *chat.BuilderTurn) error {
-	if turn == nil || c.active[id] != turn {
+	if turn == nil || c.active[id] != turn || c.claims[id][target] != turn {
 		return chat.ErrNotFound
 	}
 	return c.Bind(id, target)

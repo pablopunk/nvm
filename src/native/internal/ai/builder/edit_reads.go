@@ -21,10 +21,11 @@ type editReads struct {
 }
 
 type editRead struct {
-	revision any
-	text     string
-	next     int
-	complete bool
+	revision  any
+	text      string
+	next      int
+	complete  bool
+	reference bool
 }
 
 func newEditReads(fetch func(string) (map[string][]byte, any, error)) *editReads {
@@ -65,6 +66,9 @@ func (r *editReads) read(ctx context.Context, id string, offset int) (agent.Resu
 		r.entries[id] = &editRead{revision: revision, text: string(data)}
 	}
 	entry := r.entries[id]
+	if entry != nil && entry.reference {
+		return referencePage(id, entry.text, offset)
+	}
 	if entry == nil || entry.complete || offset != entry.next {
 		return agent.Result{}, errors.New("read pages in order starting at offset zero")
 	}
@@ -78,6 +82,24 @@ func (r *editReads) read(ctx context.Context, id string, offset int) (agent.Resu
 	entry.next = end
 	entry.complete = end == len(entry.text)
 	return agent.Result{Text: header + "\n\n" + entry.text[offset:end], Outcome: "Read " + id}, nil
+}
+
+func (r *editReads) reference(ctx context.Context, id, text string) (agent.Result, error) {
+	if err := ctx.Err(); err != nil {
+		return agent.Result{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.entries[id] = &editRead{text: text, reference: true}
+	return referencePage(id, text, 0)
+}
+
+func referencePage(id, text string, offset int) (agent.Result, error) {
+	result, err := extensionPage(id, text, offset)
+	if err == nil {
+		result.Text = "Reference only: these pages do not authorize replacement of this extension.\n\n" + result.Text
+	}
+	return result, err
 }
 
 func filesAsText(files map[string][]byte) map[string]string {

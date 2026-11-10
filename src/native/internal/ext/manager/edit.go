@@ -74,7 +74,7 @@ func (m *Manager) readEditTarget(id string) (map[string][]byte, bool, error) {
 // Cancellation is checked immediately before publication. Once admitted, errors may follow visible effects.
 // The boolean reports whether the candidate became visible, including when later steps fail.
 // Manager operations are serialized; an uncooperative external writer is not locked out.
-func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[string][]byte, enable bool, revision *EditRevision) (bool, error) {
+func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[string][]byte, enable bool, revision *EditRevision) (published bool, err error) {
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
@@ -83,6 +83,12 @@ func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[strin
 	if m.closed || revision == nil || revision.manager != m || revision.id != id || revision.generation != m.editGeneration {
 		return false, ErrEditConflict
 	}
+	staging, _, err := install.Stage(m.ports.Files, m.ports.Clock, m.root, id, contents)
+	if err != nil {
+		return false, err
+	}
+	defer func() { err = errors.Join(err, install.Discard(m.ports.Files, staging)) }()
+	// Revalidate after staging, so edits and new folders created during slow staging are not replaced.
 	current, exists, err := m.readEditTarget(id)
 	if err != nil {
 		return false, fmt.Errorf("revalidate extension: %w", err)
@@ -97,7 +103,7 @@ func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[strin
 		return false, err
 	}
 	m.editGeneration++
-	published, err := install.InstallContextResult(ctx, m.ports.Files, m.ports.Clock, m.root, id, contents)
+	published, err = install.Publish(ctx, m.ports.Files, m.ports.Clock, m.root, id, staging)
 	if err != nil {
 		return published, err
 	}

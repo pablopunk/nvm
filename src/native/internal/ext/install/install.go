@@ -49,6 +49,13 @@ func InstallContextResult(ctx context.Context, files platform.FS, clock platform
 	if err != nil {
 		return false, err
 	}
+	return Publish(ctx, files, clock, root, id, staging)
+}
+
+// Publish admits an already staged candidate. The caller owns the staging folder until this call,
+// allowing conditional installers to revalidate the target after all staging I/O has completed.
+// A cancelled publication discards staging; the result reports whether the candidate became visible.
+func Publish(ctx context.Context, files platform.FS, clock platform.Clock, root, id, staging string) (bool, error) {
 	if err := ctx.Err(); err != nil {
 		return false, errors.Join(err, Discard(files, staging))
 	}

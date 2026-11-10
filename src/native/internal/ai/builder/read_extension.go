@@ -26,7 +26,7 @@ type readExtensionArgs struct {
 func (w *Workshop) readExtensionTool(reads *editReads) agent.Tool {
 	return agent.Tool{
 		Name:        readExtensionToolName,
-		Description: "Read every page of the manifest and all Go files before editing an installed extension. Continue with each returned offset in this turn. Only this chat's own extension can be changed.",
+		Description: "Read an installed extension. For editing, read every snapshot page with the returned offsets in this turn. Extensions containing other assets may return reference-only pages, which cannot authorize replacement. Only this chat's own extension can be changed.",
 		Label:       "Reading an extension",
 		Schema:      readExtensionSchema,
 		Summarize:   summarizeReadExtension,
@@ -35,24 +35,40 @@ func (w *Workshop) readExtensionTool(reads *editReads) agent.Tool {
 			if err := json.Unmarshal(args, &in); err != nil {
 				return agent.Result{}, err
 			}
-			return reads.read(ctx, in.ID, in.Offset)
+			result, err := reads.read(ctx, in.ID, in.Offset)
+			if in.Offset != 0 || !errors.Is(err, ErrReferenceOnly) {
+				return result, err
+			}
+			text, err := w.referenceText(in.ID)
+			if err != nil {
+				return agent.Result{}, err
+			}
+			return reads.reference(ctx, in.ID, text)
 		},
 	}
 }
 
 func (w *Workshop) readExtension(in readExtensionArgs) (agent.Result, error) {
-	manifest, source, err := w.extensions.Definition(in.ID)
-	if err != nil {
-		return agent.Result{}, fmt.Errorf("no installed extension has the id %q", in.ID)
-	}
-	if source == "" {
-		return agent.Result{}, errors.New("this extension has no source to read: it is built into Nevermind")
-	}
-	data, err := json.MarshalIndent(manifest, "", "  ")
+	text, err := w.referenceText(in.ID)
 	if err != nil {
 		return agent.Result{}, err
 	}
-	return extensionPage(in.ID, string(data)+"\n\n"+source, in.Offset)
+	return extensionPage(in.ID, text, in.Offset)
+}
+
+func (w *Workshop) referenceText(id string) (string, error) {
+	manifest, source, err := w.extensions.Definition(id)
+	if err != nil {
+		return "", fmt.Errorf("no installed extension has the id %q", id)
+	}
+	if source == "" {
+		return "", errors.New("this extension has no source to read: it is built into Nevermind")
+	}
+	data, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(data) + "\n\n" + source, nil
 }
 
 // extensionPage returns the page of an extension's text that starts at offset, and says where the next one starts.
