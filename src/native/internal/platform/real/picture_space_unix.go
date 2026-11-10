@@ -9,8 +9,12 @@ import (
 )
 
 func pictureTemporarySpace() (int64, error) {
+	return spaceAt(os.TempDir())
+}
+
+func spaceAt(path string) (int64, error) {
 	var stat unix.Statfs_t
-	if err := unix.Statfs(os.TempDir(), &stat); err != nil {
+	if err := unix.Statfs(path, &stat); err != nil {
 		return 0, err
 	}
 	if stat.Bavail <= 0 || stat.Bsize <= 0 {

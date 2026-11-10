@@ -7,7 +7,11 @@ import (
 )
 
 func pictureTemporarySpace() (int64, error) {
-	path, err := windows.UTF16PtrFromString(os.TempDir())
+	return spaceAt(os.TempDir())
+}
+
+func spaceAt(dir string) (int64, error) {
+	path, err := windows.UTF16PtrFromString(dir)
 	if err != nil {
 		return 0, err
 	}

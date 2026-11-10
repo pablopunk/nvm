@@ -18,12 +18,16 @@ func (b *pictureStagingBudget) cleanup(path string, remove func(string) error, r
 }
 
 func (e *pictureCleanup) run() {
+	_ = e.attempt()
+}
+
+func (e *pictureCleanup) attempt() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	if e.done {
-		return
+		return nil
 	}
-	if e.remove(e.path) != nil {
+	if err := e.remove(e.path); err != nil {
 		e.budget.mu.Lock()
 		if e.budget.pending == nil {
 			e.budget.pending = make(map[*pictureCleanup]struct{})
@@ -34,13 +38,14 @@ func (e *pictureCleanup) run() {
 			e.budget.changed = make(chan struct{})
 		}
 		e.budget.mu.Unlock()
-		return
+		return err
 	}
 	e.done = true
 	e.budget.mu.Lock()
 	delete(e.budget.pending, e)
 	e.budget.mu.Unlock()
 	e.release()
+	return nil
 }
 
 func (b *pictureStagingBudget) retryCleanups() {
