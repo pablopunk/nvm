@@ -92,8 +92,8 @@ func TestScreenshotsMixedReadableAndDeniedPreservesOtherRows(t *testing.T) {
 		}
 	}
 	wait()
-	if pending.Title != "Access unavailable" {
-		t.Fatal("old pixels not cleared")
+	if pending.Title == "Access unavailable" || len(pending.Search("")) != 2 {
+		t.Fatal("path denial cleared independently authorized rows")
 	}
 	wait()
 	fresh := (<-h.pushed).(*palette.View)
@@ -113,14 +113,25 @@ func TestScreenshotsMixedReadableAndDeniedPreservesOtherRows(t *testing.T) {
 		}
 	}
 	check(fresh)
-	if _, ok := cache.Get(id, ref); ok {
-		t.Fatal("denied run left old snapshot")
+	cached, ok := cache.Get(id, ref)
+	if !ok {
+		t.Fatal("denied run discarded independently authorized snapshot rows")
+	}
+	for _, item := range cached.Items {
+		if item.ID == denied && item.Image != nil {
+			t.Fatal("denied image remained in retained snapshot")
+		}
 	}
 	action.Run(h)
 	select {
-	case <-h.pushed:
-		t.Fatal("reopen reused denied snapshot")
+	case page := <-h.pushed:
+		for _, row := range page.(*palette.View).Search("") {
+			if row.ID == denied && (row.Image != nil || len(row.Actions) != 0) {
+				t.Fatal("reopen reused denied pixels or actions")
+			}
+		}
 	default:
+		t.Fatal("reopen did not immediately paint independently authorized cached rows")
 	}
 	wait()
 	check((<-h.pushed).(*palette.View))

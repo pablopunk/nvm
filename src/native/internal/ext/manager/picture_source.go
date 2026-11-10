@@ -11,6 +11,7 @@ import (
 // PictureSource is a host-only read grant. Current must be checked again before publishing pixels or a denial.
 // The view owns Source and closes it on success, cancellation and failure.
 type PictureSource struct {
+	Path    string
 	Source  platform.ReadSource
 	Current func() bool
 }
@@ -54,4 +55,24 @@ func (m *Manager) pictureHost(id string, identity any) *services.Handler {
 
 func expiredPictureAuthority() error {
 	return fmt.Errorf("%w: the picture's extension permission has changed; reopen its view", api.ErrPermission)
+}
+
+// OpenGridPictureSource validates host provenance before opening the installation's source.
+func (m *Manager) OpenGridPictureSource(ctx context.Context, id, ref string, identity any) (PictureSource, error) {
+	host := m.pictureHost(id, identity)
+	if host == nil {
+		return PictureSource{}, expiredPictureAuthority()
+	}
+	path, source, err := host.OpenGridPictureSource(ctx, ref)
+	current := func() bool { return host.PictureAccessCurrent() && m.pictureHost(id, identity) == host }
+	if !current() {
+		if source != nil {
+			_ = source.Close()
+		}
+		return PictureSource{}, expiredPictureAuthority()
+	}
+	if err != nil {
+		return PictureSource{Path: path, Current: current}, err
+	}
+	return PictureSource{Path: path, Source: source, Current: current}, nil
 }

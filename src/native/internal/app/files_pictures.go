@@ -80,6 +80,13 @@ func (s *fileService) systemIcon(path string) *ui.Bitmap {
 // reopening a grid paints at once; after a launch it comes from the disk cache, and only a file never seen is scaled. It
 // runs on a worker and answers nil when the file has no picture.
 func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
+	select {
+	case gridPicturePermits <- struct{}{}:
+	case <-ctx.Done():
+		return nil
+	}
+	defer func() { <-gridPicturePermits }()
+
 	sources, ok := s.fsys.(platform.FileSources)
 	if !ok {
 		return nil
@@ -94,28 +101,30 @@ func (s *fileService) gridPicture(ctx context.Context, path string) *ui.Bitmap {
 
 // gridPictureFromSource renders only from the caller's already authorized source.
 func (s *fileService) gridPictureFromSource(ctx context.Context, path string, source platform.ReadSource) *ui.Bitmap {
-	select {
-	case gridPicturePermits <- struct{}{}:
-	case <-ctx.Done():
-		return nil
-	}
-	defer func() { <-gridPicturePermits }()
+	bitmap, _ := s.gridPictureResult(ctx, path, source)
+	return bitmap
+}
+
+func (s *fileService) gridPictureResult(ctx context.Context, path string, source platform.ReadSource) (*ui.Bitmap, error) {
 	if ctx.Err() != nil {
-		return nil
+		return nil, ctx.Err()
 	}
 	info, err := source.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		return nil
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		return nil, errors.New("picture source is not regular")
 	}
 	versionTime, size := info.ModTime().UnixNano(), info.Size()
 	cachePath := path + "\x00" + source.Identity()
 	key := cachePath + "\x00" + strconv.FormatInt(versionTime, 10) + "\x00" + strconv.FormatInt(size, 10)
 	if bm, ok := s.gridPictures.Peek(key); ok {
-		return bm
+		return bm, nil
 	}
 	cache, err := s.thumbnails()
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	data, err := cache.RenderedWith(cachePath, versionTime, size, thumbs.GridEdge, func() ([]byte, error) {
 		data, err := s.drawGridPicture(ctx, source, path)
@@ -135,14 +144,17 @@ func (s *fileService) gridPictureFromSource(ctx context.Context, path string, so
 		return data, nil
 	})
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	bm, err := ui.DecodeBitmap(data)
 	if err != nil {
-		return nil
+		return nil, err
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
 	}
 	s.gridPictures.Put(key, bm)
-	return bm
+	return bm, nil
 }
 
 // drawGridPicture draws a file the cache does not have: with the system's own pictures where there are any, which cover

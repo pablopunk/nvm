@@ -84,7 +84,7 @@ func screenshotsColdHost(t *testing.T, cancelNavigation bool) {
 	select {
 	case <-fsys.entered:
 	case <-time.After(5 * time.Second):
-		t.Fatal("thumbnail read was not reached")
+		t.Fatal("thumbnail metadata was not reached")
 	}
 	var initialPage *palette.View
 	select {
@@ -94,7 +94,7 @@ func screenshotsColdHost(t *testing.T, cancelNavigation bool) {
 			t.Fatal("initial grid is not loading")
 		}
 	case <-time.After(500 * time.Millisecond):
-		t.Fatal("cold command did not open a view while thumbnail read was blocked")
+		t.Fatal("cold command did not open a view while thumbnail metadata was blocked")
 	}
 	if cancelNavigation {
 		initialPage.OnLeave()

@@ -1,8 +1,10 @@
 package real
 
 import (
+	"errors"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"io"
+	"io/fs"
 	"os"
 )
 
@@ -35,4 +37,12 @@ func (f osFS) ReadFileNoFollow(name string, max int64) ([]byte, error) {
 		return nil, platform.ErrFileTooLarge
 	}
 	return data, nil
+}
+
+func (s *readSource) Read(data []byte) (int, error) {
+	n, err := s.File.Read(data)
+	if errors.Is(err, fs.ErrPermission) {
+		return n, errors.Join(err, platform.ErrSourceReadDenied)
+	}
+	return n, err
 }

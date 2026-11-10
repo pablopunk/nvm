@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -27,19 +28,23 @@ type heldScreenshotFS struct {
 	target           string
 	statTarget       string
 	entered, release chan struct{}
+	enterOnce        sync.Once
 }
 
 func (f *heldScreenshotFS) Stat(path string) (fs.FileInfo, error) {
 	if path == f.statTarget && f.heldStat.Load() {
-		close(f.entered)
+		f.enterOnce.Do(func() { close(f.entered) })
 		<-f.release
 	}
 	return f.FS.Stat(path)
 }
 
 func (f *heldScreenshotFS) Lstat(path string) (fs.FileInfo, error) {
-	if path == f.target && f.heldStat.Load() {
-		close(f.entered)
+	if path == f.target && f.denied.Load() {
+		return nil, fs.ErrPermission
+	}
+	if path == f.target && (f.held.Load() || f.heldStat.Load()) {
+		f.enterOnce.Do(func() { close(f.entered) })
 		<-f.release
 	}
 	return f.FS.Lstat(path)
@@ -49,7 +54,7 @@ func (f *heldScreenshotFS) ReadFileNoFollow(path string, max int64) ([]byte, err
 		return nil, fs.ErrPermission
 	}
 	if path == f.target && f.held.Load() {
-		close(f.entered)
+		f.enterOnce.Do(func() { close(f.entered) })
 		<-f.release
 	}
 	return f.FS.(interface {
@@ -57,20 +62,20 @@ func (f *heldScreenshotFS) ReadFileNoFollow(path string, max int64) ([]byte, err
 	}).ReadFileNoFollow(path, max)
 }
 
-// ReadFilePrefix is what the Thumbnail service reads, so a held or denied target applies to it as to a full read.
+// Reads remain independently controllable for consumers that actually request source bytes.
 func (f *heldScreenshotFS) ReadFilePrefix(path string, max int64) ([]byte, int64, error) {
 	if path == f.target && f.denied.Load() {
 		return nil, 0, fs.ErrPermission
 	}
 	if path == f.target && f.held.Load() {
-		close(f.entered)
+		f.enterOnce.Do(func() { close(f.entered) })
 		<-f.release
 	}
 	return f.FS.ReadFilePrefix(path, max)
 }
 
 func TestScreenshotsWarmHostPaintsWhileIOHeld(t *testing.T) {
-	for _, kind := range []string{"read", "stat"} {
+	for _, kind := range []string{"metadata", "stat"} {
 		t.Run(kind, func(t *testing.T) { testScreenshotsWarmHostPaintsWhileIOHeld(t, kind) })
 	}
 }
@@ -166,7 +171,7 @@ func testScreenshotsWarmHostPaintsWhileIOHeld(t *testing.T, kind string) {
 		page = v.(*palette.View)
 	case <-time.After(time.Second):
 		close(fsys.release)
-		t.Fatal("warm view waited for read")
+		t.Fatal("warm view waited for metadata")
 	}
 	rows := page.Search("")
 	if len(rows) != 1 || rows[0].Title == "" || len(rows[0].DragPaths) != 0 {
@@ -189,19 +194,19 @@ func testScreenshotsWarmHostPaintsWhileIOHeld(t *testing.T, kind string) {
 		close(fsys.release)
 		t.Fatal("fresh invocation did not reach held I/O")
 	}
-	if kind == "read" {
+	if kind == "metadata" {
 		page.OnLeave()
 		waitUI()
 	}
 	close(fsys.release)
-	if kind != "read" {
+	if kind != "metadata" {
 		waitUI()
 	}
 	got, ok := snapshots.Get(id, ref)
-	if kind == "stat" && ok {
-		t.Fatal("corrupt replacement retained a snapshot")
+	if kind == "stat" && (!ok || len(got.Items) != 1 || got.Items[0].Image == nil) {
+		t.Fatal("lazy enumeration discarded valid provenance because pixel decoding is deferred")
 	}
-	if kind == "read" && (!ok || len(got.Items) != 1 || got.Items[0].Image == nil) {
+	if kind == "metadata" && (!ok || len(got.Items) != 1 || got.Items[0].Image == nil) {
 		t.Fatal("dismissal published obsolete result")
 	}
 }
