@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -73,4 +74,39 @@ func TestStorageSurvivesReopen(t *testing.T) {
 
 func keyName(i int) string {
 	return fmt.Sprintf("key-%04d", i)
+}
+
+func TestStorageByteQuotaAllowsSameSizeAndSmallerOverwriteAtLimit(t *testing.T) {
+	host := handlerFor(t, newRig(t), manifestFor("acme.full"))
+	doc := newStorageDoc()
+	value := json.RawMessage(`"` + strings.Repeat("x", maxStorageValueBytes-66) + `"`)
+	for i := 0; i < 16; i++ {
+		doc.Values[keyName(i)] = value
+	}
+	remaining := maxStorageBytes - storageBytes(doc) - len("fill")
+	doc.Values["fill"] = json.RawMessage(`"` + strings.Repeat("x", remaining-2) + `"`)
+	if storageBytes(doc) != maxStorageBytes {
+		t.Fatal("fixture does not fill quota exactly")
+	}
+	docs, err := host.openedDocuments()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := docs.storage.Update(func(saved *storageDoc) { *saved = doc }); err != nil {
+		t.Fatal(err)
+	}
+	key := keyName(0)
+	set := func(raw json.RawMessage) protocol.ServiceReply {
+		return serve(t, host, protocol.ServiceStorage, protocol.OpSet, protocol.KeyValueArgs{Key: key, Value: raw})
+	}
+	mustOK(t, set(value))
+	larger := json.RawMessage(`"` + strings.Repeat("x", len(value)-1) + `"`)
+	requireCode(t, set(larger), api.CodeQuota, "storage would exceed")
+	got := decodeGet(t, mustOK(t, serve(t, host, protocol.ServiceStorage, protocol.OpGet, protocol.KeyArgs{Key: key})))
+	if string(got.Value) != string(value) {
+		t.Fatal("refused growth changed saved value")
+	}
+	smaller := json.RawMessage(`"` + strings.Repeat("x", len(value)-3) + `"`)
+	mustOK(t, set(smaller))
+	requireCode(t, serve(t, host, protocol.ServiceStorage, protocol.OpSet, protocol.KeyValueArgs{Key: "new-key", Value: []byte(`1`)}), api.CodeQuota, "storage would exceed")
 }

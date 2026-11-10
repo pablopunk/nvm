@@ -115,7 +115,10 @@ func checkStorageRoom(doc storageDoc, key string, valueBytes int) error {
 	if _, exists := doc.Values[key]; !exists && len(doc.Values) >= maxStorageKeys {
 		return quota(fmt.Errorf("an extension may keep at most %d storage keys", maxStorageKeys))
 	}
-	after := storageBytes(doc) - len(doc.Values[key]) + valueBytes + len(key)
+	after := storageBytes(doc) - len(doc.Values[key]) + valueBytes
+	if _, exists := doc.Values[key]; !exists {
+		after += len(key)
+	}
 	if after > maxStorageBytes {
 		return quota(fmt.Errorf("the extension's storage would exceed %d MiB", maxStorageBytes>>20))
 	}
