@@ -2143,7 +2143,11 @@ export type ExtensionContext = {
     run(action: ExtensionAction): { action: ExtensionAction };
   };
 
-  /** Desktop APIs for enabled trusted extensions. Capability declarations are review metadata and do not gate namespaces. */
+  /**
+   * Desktop APIs for enabled trusted extensions. Capability declarations are review metadata and do not gate namespaces.
+   * In the Go host, OS permission denials are reported as permission errors and unsupported operations as unavailable.
+   * Cancellation prevents a selection, keyboard, or paste effect that has not started; a synchronous native effect already started may finish.
+   */
   desktop: {
     keyboard: {
       /** Type text into the frontmost app without touching the clipboard. Check `ctx.system.capabilities.has('keyboard.type-text')` for support. */

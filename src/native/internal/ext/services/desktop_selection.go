@@ -40,9 +40,12 @@ func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.Servi
 		if !ok {
 			return nil, unavailable("selected files are not available in this build")
 		}
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		paths, err := engine.Files(ctx)
 		if errors.Is(err, platform.ErrDenied) {
-			return nil, unavailable("Allow Nevermind to access Finder in System Settings.")
+			return nil, selectionPermission("Allow Nevermind to access Finder in System Settings.")
 		}
 		if errors.Is(err, platform.ErrUnsupported) {
 			return nil, unavailable("Selected files are not available on this system yet.")
@@ -57,18 +60,21 @@ func (h *Handler) serveDesktopSelection(ctx context.Context, call protocol.Servi
 	}
 	switch call.Op {
 	case protocol.OpText:
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		text, found, err := h.deps.Selection.Text()
 		if err != nil {
 			return nil, selectionFailure(err)
 		}
 		return protocol.SelectionTextResult{Text: text, Found: found}, nil
 	case protocol.OpReplace:
-		return h.replaceSelection(call)
+		return h.replaceSelection(ctx, call)
 	}
 	return nil, invalid("desktop.selection has no operation %q", call.Op)
 }
 
-func (h *Handler) replaceSelection(call protocol.ServiceCall) (bool, error) {
+func (h *Handler) replaceSelection(ctx context.Context, call protocol.ServiceCall) (bool, error) {
 	var args protocol.ReplaceTextArgs
 	if err := decodeArgs(call.Args, &args); err != nil {
 		return false, err
@@ -78,6 +84,9 @@ func (h *Handler) replaceSelection(call protocol.ServiceCall) (bool, error) {
 	}
 	if !h.actions.allow() {
 		return false, rateExceeded("desktop actions")
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	replaced, err := h.deps.Selection.Replace(args.Text)
 	return replaced, selectionFailure(err)
@@ -92,7 +101,7 @@ func selectionFailure(err error) error {
 	case errors.Is(err, platform.ErrConflict):
 		return unavailable("The focused app changed, so nothing was pasted.")
 	case errors.Is(err, platform.ErrDenied):
-		return unavailable("Allow Nevermind to control the keyboard in System Settings.")
+		return selectionPermission("Allow Nevermind to control the keyboard in System Settings.")
 	case errors.Is(err, platform.ErrUnsupported):
 		return unavailable("Selected text is not available on this system yet.")
 	case errors.Is(err, selection.ErrSourceGone), errors.Is(err, selection.ErrFormattedClipboard),
@@ -103,33 +112,40 @@ func selectionFailure(err error) error {
 	return err
 }
 
-func (h *Handler) serveDesktopKeyboard(call protocol.ServiceCall) (any, error) {
+func (h *Handler) serveDesktopKeyboard(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	if err := h.require(api.CapabilityDesktopKeyboard); err != nil {
 		return nil, err
 	}
 	switch call.Op {
 	case protocol.OpUndo:
-		return nil, h.undoSelection()
+		return nil, h.undoSelection(ctx)
 	case protocol.OpTypeText:
-		return nil, h.typeTextCall(call.Args)
+		return nil, h.typeTextCall(ctx, call.Args)
 	}
 	return nil, invalid("desktop.keyboard has no operation %q", call.Op)
 }
 
-func (h *Handler) undoSelection() error {
+func (h *Handler) undoSelection(ctx context.Context) error {
 	if h.deps.Selection == nil {
 		return unavailable("the keyboard is not available in this build")
 	}
 	if !h.actions.allow() {
 		return rateExceeded("desktop actions")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return selectionFailure(h.deps.Selection.Undo())
 }
 
-func (h *Handler) typeTextCall(raw json.RawMessage) error {
+func (h *Handler) typeTextCall(ctx context.Context, raw json.RawMessage) error {
 	var args protocol.TypeTextArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return err
 	}
-	return h.typeText(args.Text, args.Options.DelayMs)
+	return h.typeTextContext(ctx, args.Text, args.Options.DelayMs)
+}
+
+func selectionPermission(message string) error {
+	return serviceError{failure: api.Failure{Code: api.CodePermission, Message: message}, cause: api.ErrPermission}
 }

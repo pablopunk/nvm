@@ -2,6 +2,7 @@ package services
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"path/filepath"
 	"time"
@@ -36,14 +37,18 @@ var pngSignature = []byte("\x89PNG\r\n\x1a\n")
 // desktop.keyboard capabilities, and typing needs desktop.keyboard. A refusal or failure is logged and returned with
 // the palette-ready message the HUD shows.
 func (h *Handler) PerformPaste(action api.Action) error {
-	err := h.performPaste(action)
+	return h.performPasteLogged(context.Background(), action)
+}
+
+func (h *Handler) performPasteLogged(ctx context.Context, action api.Action) error {
+	err := h.performPasteContext(ctx, action)
 	if err != nil {
 		h.logger.Warn("the paste action failed", logx.F{"action": string(action.Kind), "reason": err.Error()})
 	}
 	return err
 }
 
-func (h *Handler) servePaste(call protocol.ServiceCall) (any, error) {
+func (h *Handler) servePaste(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	if call.Op != protocol.OpPerform {
 		return nil, invalid("desktop.paste has no operation %q", call.Op)
 	}
@@ -51,10 +56,10 @@ func (h *Handler) servePaste(call protocol.ServiceCall) (any, error) {
 	if err := decodeArgs(call.Args, &action); err != nil {
 		return nil, err
 	}
-	return nil, h.PerformPaste(action)
+	return nil, h.performPasteLogged(ctx, action)
 }
 
-func (h *Handler) performPaste(action api.Action) error {
+func (h *Handler) performPasteContext(ctx context.Context, action api.Action) error {
 	switch action.Kind {
 	case api.ActionPaste, api.ActionPasteText:
 		if err := h.requireAll(api.CapabilityDesktopClipboard, api.CapabilityDesktopKeyboard); err != nil {
@@ -64,12 +69,12 @@ func (h *Handler) performPaste(action api.Action) error {
 		if err != nil {
 			return err
 		}
-		return h.paste(content, options)
+		return h.pasteContext(ctx, content, options)
 	case api.ActionTypeText:
 		if err := h.require(api.CapabilityDesktopKeyboard); err != nil {
 			return err
 		}
-		return h.typeText(action.Text, typingDelayMs(action.Typing))
+		return h.typeTextContext(ctx, action.Text, typingDelayMs(action.Typing))
 	}
 	return invalid("paste has no action %q", action.Kind)
 }
@@ -206,18 +211,21 @@ func absolutePaths(paths []string) ([]string, error) {
 }
 
 // paste sends content to the app in front, under the desktop action rate limit.
-func (h *Handler) paste(content selection.Content, options selection.PasteOptions) error {
+func (h *Handler) pasteContext(ctx context.Context, content selection.Content, options selection.PasteOptions) error {
 	if !h.actions.allow() {
 		return rateExceeded("desktop actions")
 	}
 	if h.deps.Paste == nil {
 		return unavailable("paste is not available in this build")
 	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return pasteFailure(h.deps.Paste.Paste(content, options))
 }
 
 // typeText types text into the app in front, under the desktop action rate limit.
-func (h *Handler) typeText(text string, delayMs int64) error {
+func (h *Handler) typeTextContext(ctx context.Context, text string, delayMs int64) error {
 	if len(text) > maxTypedText {
 		return invalid("the text is longer than %d bytes", maxTypedText)
 	}
@@ -228,6 +236,9 @@ func (h *Handler) typeText(text string, delayMs int64) error {
 		return unavailable("typing is not available in this build")
 	}
 	delay := time.Duration(min(max(delayMs, 0), maxTypeDelayMs)) * time.Millisecond
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	return pasteFailure(h.deps.Paste.TypeText(text, delay))
 }
 
@@ -249,7 +260,7 @@ func pasteFailure(err error) error {
 	case errors.Is(err, platform.ErrConflict):
 		return unavailable("The focused app changed, so nothing was pasted.")
 	case errors.Is(err, platform.ErrDenied):
-		return unavailable("Allow Nevermind to control the keyboard in System Settings.")
+		return selectionPermission("Allow Nevermind to control the keyboard in System Settings.")
 	case errors.Is(err, platform.ErrUnsupported):
 		return unavailable("This paste is not available on this system yet.")
 	case errors.Is(err, selection.ErrConcealedContent), errors.Is(err, selection.ErrFormattedClipboard),
