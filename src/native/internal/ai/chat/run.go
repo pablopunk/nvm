@@ -15,6 +15,8 @@ type run struct {
 	tier    Tier
 	started time.Time
 	steps   int
+	// extensionClaims reserves builder targets until this turn settles, including while cancellation drains.
+	extensionClaims map[string]bool
 	// reasoningSince is when the reasoning of the current model turn began; zero when none is open.
 	reasoningSince time.Time
 }

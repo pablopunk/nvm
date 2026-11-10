@@ -7,6 +7,9 @@ func (s *Service) Bind(id, extension string) error {
 		return ErrBusy
 	}
 	if extension != "" {
+		if s.extensionClaimedElsewhere(id, extension) {
+			return ErrExtensionHasChat
+		}
 		for _, owner := range s.Owners(extension) {
 			if owner.ID != id {
 				return ErrExtensionHasChat
@@ -14,6 +17,42 @@ func (s *Service) Bind(id, extension string) error {
 		}
 	}
 	return s.mutate(id, func(c *Chat) { c.Extension = extension })
+}
+
+// ReserveExtension reserves a builder target for the active turn. Like binding, this runs on the UI
+// thread. Other chats cannot bind or reserve it until the turn settles; Stop retains the reservation
+// while the worker drains. The tool context governs cancellation at publication admission.
+func (s *Service) ReserveExtension(id, extension string) error {
+	r, busy := s.runs[id]
+	c, known := s.Chat(id)
+	if !busy || !known || c.Kind != KindBuilder || extension == "" || s.doomed[id] {
+		return ErrNotFound
+	}
+	if c.Extension != "" && c.Extension != extension {
+		return ErrExtensionHasChat
+	}
+	if s.extensionClaimedElsewhere(id, extension) {
+		return ErrExtensionHasChat
+	}
+	for _, owner := range s.Owners(extension) {
+		if owner.ID != id {
+			return ErrExtensionHasChat
+		}
+	}
+	if r.extensionClaims == nil {
+		r.extensionClaims = make(map[string]bool)
+	}
+	r.extensionClaims[extension] = true
+	return nil
+}
+
+func (s *Service) extensionClaimedElsewhere(id, extension string) bool {
+	for owner, r := range s.runs {
+		if owner != id && r.extensionClaims[extension] {
+			return true
+		}
+	}
+	return false
 }
 
 // Owners returns the builder chats bound to the extension id: those with a transcript, most recently changed first, then
