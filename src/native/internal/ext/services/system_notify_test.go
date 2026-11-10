@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -67,4 +68,63 @@ func TestNotifyIsRateLimited(t *testing.T) {
 		mustOK(t, notifyCall(t, h, "Timer", "Done"))
 	}
 	requireCode(t, notifyCall(t, h, "Timer", "Done"), api.CodeQuota, "rate limited")
+}
+
+type countingNotifier struct {
+	calls int
+	err   error
+}
+
+func (n *countingNotifier) Show(_, _ string) error {
+	n.calls++
+	return n.err
+}
+
+func TestNotifyAdmissionThroughServe(t *testing.T) {
+	for _, state := range []string{"cancelled", "stopped", "closed", "normal", "denied", "missing"} {
+		t.Run(state, func(t *testing.T) {
+			_, deps := newDesktopHost(t, platform.CapabilityNotifications)
+			notifier := &countingNotifier{}
+			deps.Notifier = notifier
+			if state == "missing" {
+				deps.Notifier = nil
+			}
+			if state == "denied" {
+				notifier.err = platform.ErrDenied
+			}
+			h := desktopHandler(t, deps, api.CapabilitySystem)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			switch state {
+			case "cancelled":
+				cancel()
+			case "stopped":
+				lifetime, stop := context.WithCancel(context.Background())
+				stop()
+				ctx = protocol.WithLifetime(ctx, lifetime)
+			case "closed":
+				_ = h.Close()
+			}
+			reply := h.Serve(ctx, protocol.ServiceCall{Service: protocol.ServiceSystem, Op: protocol.OpNotify, Args: mustRaw(t, protocol.NotifyArgs{Title: "Timer", Body: "Done"})})
+			switch state {
+			case "normal":
+				mustOK(t, reply)
+			case "denied":
+				requireCode(t, reply, api.CodePermission, "turned off")
+			case "missing", "closed":
+				requireCode(t, reply, api.CodeUnavailable, "")
+			default:
+				if reply.Failure == nil {
+					t.Fatal("cancelled call succeeded")
+				}
+			}
+			want := 0
+			if state == "normal" || state == "denied" {
+				want = 1
+			}
+			if notifier.calls != want {
+				t.Fatalf("Show calls = %d, want %d", notifier.calls, want)
+			}
+		})
+	}
 }

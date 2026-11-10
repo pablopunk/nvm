@@ -283,7 +283,7 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 	case protocol.ServiceOCR:
 		return h.serveOCR(ctx, call)
 	case protocol.ServiceSystem:
-		return h.serveSystem(call)
+		return h.serveSystem(ctx, call)
 	case protocol.ServiceShortcuts:
 		return h.serveShortcuts(call)
 	case protocol.ServiceAccount:

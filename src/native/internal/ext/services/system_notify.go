@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 
@@ -17,7 +18,7 @@ const (
 
 // notify shows one notification. It needs the system declaration and the host's notifications capability, and it
 // shares a rate limit so an extension cannot flood the user.
-func (h *Handler) notify(raw json.RawMessage) error {
+func (h *Handler) notify(ctx context.Context, raw json.RawMessage) error {
 	if err := h.require(api.CapabilitySystem); err != nil {
 		return err
 	}
@@ -33,6 +34,9 @@ func (h *Handler) notify(raw json.RawMessage) error {
 	}
 	if !h.notifications.allow() {
 		return rateExceeded("notifications")
+	}
+	if err := h.admitDesktopEffect(ctx); err != nil {
+		return err
 	}
 	return notificationFailure(h.deps.Notifier.Show(args.Title, args.Body))
 }

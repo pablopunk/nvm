@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -9,7 +10,7 @@ import (
 )
 
 // serveSystem answers read-only host metadata. It needs no declaration: it reveals nothing an extension could misuse.
-func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
+func (h *Handler) serveSystem(ctx context.Context, call protocol.ServiceCall) (any, error) {
 	switch call.Op {
 	case protocol.OpOS:
 		return h.deps.OS, nil
@@ -22,7 +23,7 @@ func (h *Handler) serveSystem(call protocol.ServiceCall) (any, error) {
 	case protocol.OpPlaces:
 		return h.places(), nil
 	case protocol.OpNotify:
-		return nil, h.notify(call.Args)
+		return nil, h.notify(ctx, call.Args)
 	case protocol.OpPermissions:
 		return h.permissionStatuses(), nil
 	case protocol.OpRequestPermission:
