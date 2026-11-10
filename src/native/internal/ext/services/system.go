@@ -45,6 +45,8 @@ func (h *Handler) hasCapability(raw json.RawMessage) (bool, error) {
 // that asks about a feature this host lacks omits it.
 func (h *Handler) publicCapability(name string) bool {
 	switch name {
+	case "network.fetch":
+		return h.deps.Network != nil
 	case "ocr":
 		return h.deps.OCR.Availability(h.deps.Capabilities).Image
 	case "ocr.screen":

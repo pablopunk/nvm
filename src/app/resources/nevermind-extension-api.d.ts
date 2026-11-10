@@ -50,6 +50,9 @@
  * missing declarations retain legacy behavior. This grants no permissions and does not
  * hide rows for unknown permission/login readiness. Named Go system-settings actions keep their
  * pane through confirmation and installation-bound dispatch; only host-offered panes can execute.
+ * Go Network.Fetch uses the public-address HTTP port; network.fetch describes wiring, does not replace the network declaration,
+ * and does not probe connectivity. Expired caller/runtime/host admission stops future hops and late results;
+ * an already-admitted external request may finish and is never automatically replayed.
  * A content row remains visible when
  * only an attached action is unsupported; row-level Requires explicitly omits the row.
  * Declare Go Manifest.APIVersion "1.1" when relying on this field. Existing 1.0 extensions

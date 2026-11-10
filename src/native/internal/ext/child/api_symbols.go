@@ -238,6 +238,7 @@ func init() {
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
 		"OpenWith":                      reflect.ValueOf(api.OpenWith),
 		"OperationFilePreview":          reflect.ValueOf(api.OperationFilePreview),
+		"OperationNetworkFetch":         reflect.ValueOf(api.OperationNetworkFetch),
 		"OperationOCRImage":             reflect.ValueOf(api.OperationOCRImage),
 		"OperationOCRScreen":            reflect.ValueOf(api.OperationOCRScreen),
 		"OperationShellExec":            reflect.ValueOf(api.OperationShellExec),

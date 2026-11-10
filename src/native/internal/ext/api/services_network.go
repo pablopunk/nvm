@@ -2,7 +2,10 @@ package api
 
 // Network fetches web resources through the host's public-address policy. It needs the network capability.
 // Loopback, private, link-local and reserved destinations are refused, and so is every redirect that leads to
-// one. Long requests belong in a data loader (DataLoader), not in a search call, which has a 100 ms hard budget.
+// one. Probe network.fetch for a wired implementation; this grants no network declaration or readiness.
+// Calls stop future hops and suppress late results after caller/runtime cancellation or host closure.
+// Already-admitted requests may finish externally; they are never retried automatically.
+// Long requests belong in a data loader (DataLoader), not in a search call, which has a 100 ms hard budget.
 type Network interface {
 	Fetch(request FetchRequest) (FetchResponse, error)
 }
