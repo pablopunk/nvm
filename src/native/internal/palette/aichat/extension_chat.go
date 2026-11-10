@@ -29,6 +29,7 @@ type ExtensionChatSpec struct {
 	Stop        func(h search.Host)
 	ChooseTier  func(h search.Host, tier chat.Tier)
 	Actions     func() []search.Action
+	CopyMessage func(h search.Host, index int)
 	Side        func() *palette.View
 	// Host receives the palette host each frame the transcript draws, so the owner can start work that needs it.
 	Host func(h search.Host)
@@ -227,6 +228,7 @@ func (x *ExtensionChat) actions() []search.Action {
 	if x.spec.Actions != nil {
 		out = x.spec.Actions()
 	}
+	out = append(out, x.messageCopyActions()...)
 	out = withThinkingRow(out, x.thinkingAction())
 	if x.spec.Side == nil || x.spec.Side() == nil {
 		return out
