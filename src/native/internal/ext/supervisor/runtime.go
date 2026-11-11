@@ -33,6 +33,7 @@ type Runtime struct {
 	diagnostics      []string
 	nextRequest      uint64
 	changed          chan struct{}
+	dispatchChange   func(func())
 	// lifetime ends when the extension stops; host waits on behalf of a call end with it.
 	lifetime       context.Context
 	cancelLifetime context.CancelFunc
@@ -42,14 +43,15 @@ type Runtime struct {
 // extension's service calls; nil refuses them.
 func New(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
 	r := &Runtime{
-		cfg:          cfg,
-		sourcePath:   sourcePath,
-		identity:     identity,
-		services:     services,
-		slots:        make(chan struct{}, 1),
-		viewServices: make(chan struct{}, 4),
-		state:        StateIdle,
-		changed:      make(chan struct{}),
+		cfg:            cfg,
+		sourcePath:     sourcePath,
+		identity:       identity,
+		services:       services,
+		slots:          make(chan struct{}, 1),
+		viewServices:   make(chan struct{}, 4),
+		state:          StateIdle,
+		changed:        make(chan struct{}),
+		dispatchChange: func(fn func()) { go fn() },
 	}
 	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
 	return r
@@ -160,7 +162,7 @@ func (r *Runtime) WaitFor(ctx context.Context, pred func(Status) bool) error {
 func (r *Runtime) notifyLocked() {
 	r.wakeLocked()
 	if r.cfg.OnStateChange != nil {
-		go r.cfg.OnStateChange()
+		r.dispatchChange(r.cfg.OnStateChange)
 	}
 }
 
