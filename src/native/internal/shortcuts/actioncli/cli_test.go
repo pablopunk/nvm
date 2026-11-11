@@ -30,7 +30,7 @@ func (c *fakeClock) Wait(d time.Duration) { c.now = c.now.Add(d) }
 func newDeps(dial Dial) (Deps, *bytes.Buffer, *bytes.Buffer, *int) {
 	var out, errOut bytes.Buffer
 	starts := 0
-	clock := &fakeClock{now: time.Unix(0, 0)}
+	clock := &fakeClock{now: time.Now()} // socket deadlines come from this clock, so it starts at the real time
 	return Deps{
 		Program: "nevermind-next", Dial: dial,
 		Start: func() error { starts++; return nil },
