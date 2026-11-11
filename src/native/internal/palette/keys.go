@@ -81,12 +81,21 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 // runActionShortcut runs the first action whose key was pressed: the chosen row's, then the page's own, as a row's
 // shortcut does.
 func (p *Palette) runActionShortcut(c *ui.Context) {
-	for _, a := range p.shortcutActions() {
+	key, rowAction := p.chosenRowKey()
+	rowActions := 0
+	if it := p.actionableItem(); it != nil {
+		rowActions = len(it.Actions)
+	}
+	for i, a := range p.shortcutActions() {
 		if a.Key != 0 && c.Shortcut(a.Mods, a.Key) {
 			if p.actionsOpen {
 				p.closeActionMenu()
 			}
-			p.runAction(a)
+			if rowAction && i < rowActions {
+				p.runRowAction(key, a)
+			} else {
+				p.runAction(a)
+			}
 			return
 		}
 	}

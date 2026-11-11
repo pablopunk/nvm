@@ -44,10 +44,7 @@ func (s *Session) runShellAction(h search.Host, r route) {
 		h.Toast(unavailableMessage)
 		return
 	}
-	current := func() bool { return !s.dismissed }
-	if loading, ok := h.(search.ActionLoadingHost); ok {
-		current = loading.BeginAction()
-	}
+	current := beginOutcomeAction(h, func() bool { return !s.dismissed })
 	ctx := s.workContext
 	detached := r.action.Background || r.action.DismissAfterRun
 	if detached {
@@ -57,7 +54,7 @@ func (s *Session) runShellAction(h search.Host, r route) {
 		h.Hide()
 	}
 	s.deps.ShellAction(ctx, r.extID, *r.action.Shell, r.identity, func(result api.ShellResult, err error) {
-		visible := current()
+		visible := current(err == nil)
 		if s.dismissed || !visible {
 			return
 		}

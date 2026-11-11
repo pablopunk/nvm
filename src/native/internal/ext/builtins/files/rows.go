@@ -44,7 +44,7 @@ func fileItem(ctx api.Context, file api.FileRef, score float64) api.Item {
 	open := api.OpenPath("Open "+file.Name, file.Path)
 	return api.Item{
 		ID: file.Path, Title: file.Name, Subtitle: file.DisplayPath, Section: search.KindFiles,
-		File: &file, Detail: &api.Detail{File: &file}, Score: score, Primary: &open, Actions: fileActions(ctx, file),
+		File: &file, Detail: &api.Detail{File: &file}, Score: score, LearnKey: "file:" + file.Path, Primary: &open, Actions: fileActions(ctx, file),
 	}
 }
 

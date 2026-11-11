@@ -85,6 +85,7 @@ type Palette struct {
 	gridPaneWidth   float32
 	defaultEnter    *defaultEnterIntent
 	actionSequence  uint64
+	activation      *activation // the row activation whose action is running now, or nil
 	actionPending   bool
 	openingView     *View
 	actionQuery     string

@@ -61,7 +61,7 @@ func (p *Palette) actionableItem() *search.Item {
 }
 
 // runDefault runs the first action of the chosen row: what Enter does. At the root the query is remembered
-// first, and the row's learn key is recorded with the query after its action has run.
+// first, and the row is learned by runRowAction when its action succeeds.
 func (p *Palette) runDefault() {
 	it := p.actionableItem()
 	diag.ActionTrace("primary", logx.F{"has_item": it != nil, "menu_open": p.actionsOpen})
@@ -72,13 +72,8 @@ func (p *Palette) runDefault() {
 	if !ok {
 		return
 	}
-	query, key := strings.TrimSpace(p.query), it.LearnKey
-	concealed := p.cur().Concealed
-	p.rememberQuery(query)
-	p.runAction(action)
-	if key != "" && p.opts.Learner != nil && !concealed {
-		p.opts.Learner.Record(key, query)
-	}
+	p.rememberQuery(strings.TrimSpace(p.query))
+	p.runRowAction(it.LearnKey, action)
 }
 
 // RunAction runs an action the way choosing it in the palette does, dismissal policy included. A global shortcut
@@ -149,6 +144,20 @@ func (p *Palette) runMenuAction(i int) {
 		return
 	}
 	action := acts[i]
+	key, rowAction := p.chosenRowKey()
 	p.closeActionMenu()
+	if rowAction {
+		p.runRowAction(key, action)
+		return
+	}
 	p.runAction(action)
+}
+
+// chosenRowKey is the learn key of the chosen row, and whether the actions the menu and the shortcuts run belong to a
+// row: they belong to the page instead where no row is actionable.
+func (p *Palette) chosenRowKey() (key string, isRow bool) {
+	if it := p.actionableItem(); it != nil {
+		return it.LearnKey, true
+	}
+	return "", false
 }

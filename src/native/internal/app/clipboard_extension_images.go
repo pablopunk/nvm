@@ -153,9 +153,13 @@ func (p *App) copyImageFile(h search.Host, m imageCopyAuthority, extID, path str
 		h.Toast("Copy failed: this extension cannot read the picture.")
 		return
 	}
-	current := func() bool { return true }
-	if loading, ok := h.(search.ActionLoadingHost); ok {
+	current, finish := func() bool { return true }, func(bool) bool { return true }
+	if outcome, ok := h.(search.ActionOutcomeHost); ok {
+		finish = outcome.BeginActionOutcome()
+		current = outcome.ActionCurrent()
+	} else if loading, ok := h.(search.ActionLoadingHost); ok {
 		current = loading.BeginAction()
+		finish = func(bool) bool { return true }
 	}
 	p.extCalls.Add(1)
 	go func() {
@@ -166,11 +170,15 @@ func (p *App) copyImageFile(h search.Host, m imageCopyAuthority, extID, path str
 				return
 			}
 			if !allowed() {
+				finish(false)
 				h.Toast("Copy failed: this extension cannot read the picture.")
 				return
 			}
 			if err == nil {
 				err = p.ports.Clipboard.WriteImagePNG(png)
+			}
+			if !finish(err == nil) {
+				return
 			}
 			if err != nil {
 				h.Toast(copyFailureMessage(err))

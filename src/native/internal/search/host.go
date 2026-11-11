@@ -28,3 +28,14 @@ type Host interface {
 type ActionLoadingHost interface {
 	BeginAction() func() bool
 }
+
+// ActionOutcomeHost is ActionLoadingHost for an action that learns whether it worked only when it ends. The returned
+// completion takes that outcome: it reports what BeginAction's does, and a run that succeeded while still current is
+// what the palette learns the row from. A failed or obsolete run is never learned. An action that does not report an
+// outcome is learned when its run succeeds, as BeginAction's completion counts it.
+type ActionOutcomeHost interface {
+	BeginActionOutcome() func(ok bool) bool
+	// ActionCurrent returns a probe, bound to the action just begun, that reports whether it is still the latest. An
+	// action with a side effect checks it before the effect, then reports the outcome through its completion.
+	ActionCurrent() func() bool
+}

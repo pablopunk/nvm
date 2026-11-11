@@ -8,12 +8,9 @@ func (s *Session) toggleDeclaredSetting(h search.Host, r route) {
 		h.Toast(unavailableMessage)
 		return
 	}
-	current := func() bool { return !s.dismissed }
-	if loading, ok := h.(search.ActionLoadingHost); ok {
-		current = loading.BeginAction()
-	}
+	current := beginOutcomeAction(h, func() bool { return !s.dismissed })
 	s.deps.ToggleSetting(r.extID, r.action.Setting, r.identity, func(err error) {
-		if !current() || s.dismissed {
+		if !current(err == nil) || s.dismissed {
 			return
 		}
 		if err != nil {

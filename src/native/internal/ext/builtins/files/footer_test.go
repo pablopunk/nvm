@@ -87,6 +87,16 @@ func TestFileRowDeclaresPreviewActionsWithoutPlatformBranches(t *testing.T) {
 	}
 }
 
+// TestFileRowsLearnByTheirPath checks a file row has a stable learn key, so the files the user opens rank higher.
+func TestFileRowsLearnByTheirPath(t *testing.T) {
+	ctx := fakeContext{files: &fakeFiles{}}
+	file := api.FileRef{Path: "/h/a.pdf", Name: "a.pdf", Kind: "file"}
+	first, second := fileItem(ctx, file, 1), fileItem(ctx, file, 9)
+	if first.LearnKey != "file:/h/a.pdf" || second.LearnKey != first.LearnKey {
+		t.Fatalf("learn keys = %q and %q, want the path's, whatever the score", first.LearnKey, second.LearnKey)
+	}
+}
+
 // TestMeaningFailureSaysWhy checks a failed decision explains itself in the list, with the reason the backend gave.
 func TestMeaningFailureSaysWhy(t *testing.T) {
 	row := failureRow(errors.New("not enough credits"))
