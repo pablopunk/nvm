@@ -10,7 +10,7 @@ import (
 // invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
 // A declarative action is performed by the host instead, with no extension call.
 func (s *Session) invoke(h search.Host, r route) {
-	diag.ActionTrace("extension-enter", logx.F{"kind": string(r.action.Kind), "dismissed": s.dismissed})
+	diag.ActionTrace("extension-enter", logx.F{"extension_run": r.action.Kind == api.ActionRun, "dismissed": s.dismissed})
 	if !actionSupported(s.deps, r.action) {
 		h.Toast("This action requires an operation unavailable on this system.")
 		return
@@ -94,7 +94,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	done := func(result api.Result, failure *api.Failure) {
-		diag.ActionTrace("extension-complete", logx.F{"failed": failure != nil, "has_view": result.View != nil, "navigation": string(result.Navigation), "dismissed": s.dismissed})
+		diag.ActionTrace("extension-complete", logx.F{"failed": failure != nil, "has_view": result.View != nil, "push": result.Navigation == api.NavPush, "replace": result.Navigation == api.NavReplace, "dismissed": s.dismissed})
 		if in.ProtectSnapshot {
 			filterSnapshotDenied(&result, staleHashes)
 		}

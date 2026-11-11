@@ -1,4 +1,4 @@
-//go:build !rig
+//go:build !automation
 
 package diag
 
