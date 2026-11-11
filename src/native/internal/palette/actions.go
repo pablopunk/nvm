@@ -103,6 +103,14 @@ func (p *Palette) onEnter() {
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
 	diag.ActionTrace("enter", logx.F{"menu_open": p.actionsOpen, "same_view": p.shownView == v, "same_query": p.shownQuery == q, "body": v.Body != nil})
+	if v.Body == nil && !p.actionsOpen && p.shownView == v && p.shownQuery == q && !p.settled && len(p.results) == 0 {
+		// The rows for this query have not arrived: Enter waits for them instead of running on an empty list.
+		p.defaultEnter = &defaultEnterIntent{view: v, query: q, shows: p.shows}
+		if v.Providers != nil {
+			p.defaultEnter.gen = p.coordinator(v).Gen()
+		}
+		return
+	}
 	if v.Body == nil && !p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
 		p.defaultEnter = &defaultEnterIntent{view: v, query: q, shows: p.shows}
 		if v.Providers != nil {

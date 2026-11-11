@@ -69,9 +69,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil
 	}
-	// An empty partial answer is still loading, not evidence that the previous list is obsolete.
-	// Keep its query attribution so Enter and row shortcuts cannot act on it for the new query.
-	if p.shownView == v && len(p.results) > 0 && len(rows) == 0 && !settled {
+	// An empty partial answer for the query already on screen is still loading, not evidence that the list is
+	// obsolete. For a different query the rows on screen belong to the superseded search, so they are cleared.
+	if p.shownView == v && p.shownQuery == q && len(p.results) > 0 && len(rows) == 0 && !settled {
 		p.settled, p.pending = false, true
 		return
 	}
@@ -89,7 +89,7 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 		p.chosen = 0
 	}
 	p.shownView, p.shownQuery = v, q
-	p.results, p.settled, p.pending = rows, settled, pending
+	p.results, p.settled, p.pending = rows, settled, pending || (len(rows) == 0 && !settled)
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
 	if p.actionsOpen && p.menuOwner != p.menuOwnerKey() {

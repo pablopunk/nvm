@@ -26,8 +26,8 @@ func TestEmptyPartialSearchKeepsRowsWithoutRunningStaleActions(t *testing.T) {
 	}
 	h.p.applySnapshot(root, search.Snapshot{Gen: root.coord.Gen(), Query: "new"})
 	h.frame()
-	if rows := h.p.Results(); len(rows) != 1 || rows[0].ID != "old" || !h.p.loadingMore() {
-		t.Fatalf("empty partial discarded useful rows or loading feedback: rows=%v pending=%v", h.titles(), h.p.loadingMore())
+	if rows := h.p.Results(); len(rows) != 0 || !h.p.loadingMore() {
+		t.Fatalf("an empty partial kept the superseded query's rows or lost loading feedback: rows=%v pending=%v", h.titles(), h.p.loadingMore())
 	}
 	if len(h.p.menuActions()) != 0 {
 		t.Fatal("stale row offered its action menu for the new query")
@@ -53,8 +53,13 @@ func TestSettledEmptySearchReplacesRetainedRows(t *testing.T) {
 	h := newHarness(t, rowsView("Root", nil, "Old result"), true)
 	h.p.query = "no match"
 	h.p.showRows(h.p.cur(), "no match", nil, false, false)
+	if len(h.p.Results()) != 0 {
+		t.Fatal("a partial empty result for a new query kept the superseded query's rows")
+	}
+	h.p.showRows(h.p.cur(), "no match", []search.Item{{ID: "old", Title: "Old result"}}, false, true)
+	h.p.showRows(h.p.cur(), "no match", nil, false, false)
 	if len(h.p.Results()) != 1 {
-		t.Fatal("partial empty result removed the old list")
+		t.Fatal("a partial empty refresh of the same query removed its list")
 	}
 	h.p.showRows(h.p.cur(), "no match", nil, true, false)
 	if len(h.p.Results()) != 0 || h.p.shownQuery != "no match" || !h.p.Settled() {
@@ -65,5 +70,17 @@ func TestSettledEmptySearchReplacesRetainedRows(t *testing.T) {
 	h.p.showRows(other, "", nil, false, false)
 	if h.p.shownView != other || len(h.p.Results()) != 0 {
 		t.Fatal("a new view retained another view's rows")
+	}
+}
+
+// A slow or broken provider leaves the first snapshot of a new query empty and unsettled. The rows of the previous
+// query must not stay on screen for it (J15 typed "alphazzz" after "alpha").
+func TestSupersededQueryRowsAreClearedByAnEmptyUnsettledSnapshot(t *testing.T) {
+	h := newHarness(t, rowsView("Root", nil, "alpha"), true)
+	h.p.showRows(h.p.cur(), "alpha", []search.Item{{ID: "alpha", Title: "alpha"}}, true, false)
+	h.p.query = "alphazzz"
+	h.p.showRows(h.p.cur(), "alphazzz", nil, false, false)
+	if len(h.p.Results()) != 0 || h.p.shownQuery != "alphazzz" || !h.p.loadingMore() {
+		t.Fatalf("rows of the superseded query remained: rows=%v shown=%q", h.titles(), h.p.shownQuery)
 	}
 }
