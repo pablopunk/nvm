@@ -721,6 +721,33 @@
       },
       {
         "kind": "Commands",
+        "title": "AI Learnings",
+        "subtitle": "Rules the AI builder learned from you",
+        "section": "",
+        "id": "ext:nevermind.ai-learnings:command:ai-learnings",
+        "icon": "brain",
+        "tone": "purple",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "AI Learnings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Background Tasks",
         "subtitle": "Run, pause, and inspect background work",
         "section": "",
@@ -765,33 +792,6 @@
           },
           {
             "title": "Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictation History",
-        "subtitle": "Browse and copy previous dictations",
-        "section": "",
-        "id": "ext:nevermind.dictation:command:dictation-history",
-        "icon": "history",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Dictation History",
             "label": ""
           },
           {

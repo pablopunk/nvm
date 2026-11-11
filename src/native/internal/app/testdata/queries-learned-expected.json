@@ -748,19 +748,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Background Tasks",
-        "subtitle": "Run, pause, and inspect background work",
+        "title": "AI Learnings",
+        "subtitle": "Rules the AI builder learned from you",
         "section": "",
-        "id": "",
-        "icon": "activity",
-        "tone": "",
+        "id": "ext:nevermind.ai-learnings:command:ai-learnings",
+        "icon": "brain",
+        "tone": "purple",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Background Tasks",
+            "title": "AI Learnings",
             "label": ""
           },
           {
@@ -775,11 +775,11 @@
       },
       {
         "kind": "Commands",
-        "title": "Dictate",
-        "subtitle": "Start or stop cloud voice dictation",
+        "title": "Background Tasks",
+        "subtitle": "Run, pause, and inspect background work",
         "section": "",
-        "id": "ext:nevermind.dictation:command:dictate",
-        "icon": "mic",
+        "id": "",
+        "icon": "activity",
         "tone": "",
         "accessory": "",
         "prominent": false,
@@ -787,11 +787,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Dictate",
-            "label": ""
-          },
-          {
-            "title": "Settings",
+            "title": "Background Tasks",
             "label": ""
           },
           {
