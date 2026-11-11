@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
@@ -16,7 +15,6 @@ type warmupHarness struct {
 	warmups  int
 	err      error
 	queued   []func(ctx context.Context)
-	mu       sync.Mutex
 	warmup   *aiWarmup
 }
 
