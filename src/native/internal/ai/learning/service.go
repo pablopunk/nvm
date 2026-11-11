@@ -53,6 +53,9 @@ func (s *Service) Outcome(id, outcome string) {
 // Epoch is the current deletion/removal generation, read without waiting for durable I/O.
 func (s *Service) Epoch() uint64 { return s.epoch.Load() }
 
+// Invalidate immediately prevents a not-yet-admitted review from committing after chat removal.
+func (s *Service) Invalidate() { s.epoch.Add(1) }
+
 // CaptureEpoch excludes a turn captured before a deletion even if the mailbox was delayed.
 func (s *Service) CaptureEpoch(id string, epoch uint64, messages []Message, outcomes []string) {
 	s.mu.Lock()

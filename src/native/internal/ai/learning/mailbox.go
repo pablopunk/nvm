@@ -116,6 +116,12 @@ func (m *Mailbox) Settled(id string) {
 	})
 }
 func (m *Mailbox) Remove(id string) {
+	if id == "" {
+		return
+	}
+	if invalidator, ok := m.sink.(interface{ Invalidate() }); ok {
+		invalidator.Invalidate()
+	}
 	m.enqueue(id, func(e *mailboxEvent) { *e = mailboxEvent{removed: true} })
 }
 func (m *Mailbox) Close() { m.once.Do(func() { close(m.stop) }) }
