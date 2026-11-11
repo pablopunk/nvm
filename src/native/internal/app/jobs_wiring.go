@@ -30,6 +30,7 @@ func (p *App) startJobs() {
 		return
 	}
 	p.background = sched
+	p.registerHostJob(p.builderLearningJob())
 	if p.clip != nil {
 		p.registerHostJob(hostjobs.ClipboardImageCleanup(p.clip.images, p.clip.history))
 	}

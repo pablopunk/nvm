@@ -58,6 +58,7 @@ func (p *App) extensionViewDeps(m *manager.Manager) extview.Deps {
 		}()
 	}
 	return extview.Deps{
+		ChatExited:              p.builderLearningExit,
 		CommandSnapshots:        &p.commandSnapshots,
 		CommandSnapshotIdentity: m.SnapshotIdentity,
 		InvokeRefresh: func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure)) {

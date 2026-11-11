@@ -14,6 +14,7 @@ import (
 // removeExtensionOfChat deletes the extension of a deleted builder chat. An extension that another chat still owns stays,
 // which only older data can have. The removal runs off the UI thread because it stops the extension's process.
 func (p *App) removeExtensionOfChat(record chat.Chat) {
+	p.removeBuilderLearning(record.ID)
 	if record.Kind != chat.KindBuilder || record.Extension == "" || len(p.chats.Owners(record.Extension)) > 0 {
 		return
 	}

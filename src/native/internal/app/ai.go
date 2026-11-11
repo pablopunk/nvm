@@ -23,6 +23,7 @@ func (p *App) attachChats() {
 		log.Println("chats: unavailable, the store did not open")
 		return
 	}
+	p.startBuilderLearning(p.userStore)
 	p.chats = newChatService(p.userStore, p)
 	p.builder = p.newBuilder()
 	p.chats.RefreshModels()
@@ -92,7 +93,7 @@ func (p *App) systemPromptFor(c chat.Chat) string {
 	switch c.Kind {
 	case chat.KindBuilder:
 		if p.builder != nil {
-			return p.builder.SystemPrompt(c)
+			return p.builderPromptWithLearning(c)
 		}
 	case chat.KindProofread:
 		return commands.FixSystemPrompt
@@ -112,6 +113,7 @@ func (p *App) chatSettled(id string, outcome chat.Outcome) {
 	if p.builder != nil {
 		p.builder.Settled(id, outcome)
 	}
+	p.captureBuilderLearning(record)
 	if record.Extension != "" {
 	}
 }

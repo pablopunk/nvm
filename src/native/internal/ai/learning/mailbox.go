@@ -14,6 +14,8 @@ type mailboxEvent struct {
 	messages                     []Message
 	outcomes                     []string
 	exit, busy, settled, removed bool
+	epoch                        uint64
+	guarded                      bool
 }
 
 // Mailbox coalesces lifecycle events by chat. Its lock protects only bounded memory, never disk or model work.
@@ -57,6 +59,14 @@ func (m *Mailbox) enqueue(id string, update func(*mailboxEvent)) {
 
 // Capture accepts only already-sanitized data. Invalid or unsafe messages are dropped before enqueue.
 func (m *Mailbox) Capture(id string, messages []Message, outcomes []string) {
+	m.capture(id, 0, false, messages, outcomes)
+}
+
+// CaptureAt associates retained text with the turn's deletion generation.
+func (m *Mailbox) CaptureAt(id string, epoch uint64, messages []Message, outcomes []string) {
+	m.capture(id, epoch, true, messages, outcomes)
+}
+func (m *Mailbox) capture(id string, epoch uint64, guarded bool, messages []Message, outcomes []string) {
 	safe := make([]Message, 0, len(messages))
 	for _, message := range messages {
 		if text, ok := sanitizedMessage(message.Role, message.Text); ok {
@@ -67,6 +77,15 @@ func (m *Mailbox) Capture(id string, messages []Message, outcomes []string) {
 		if e.removed {
 			return
 		}
+		if guarded && e.guarded && epoch < e.epoch {
+			return
+		}
+		if guarded && (!e.guarded || epoch > e.epoch) {
+			e.messages = nil
+			e.outcomes = nil
+		}
+		e.guarded = guarded
+		e.epoch = epoch
 		e.messages = append(e.messages, safe...)
 		if len(e.messages) > maxMessages {
 			e.messages = e.messages[len(e.messages)-maxMessages:]
@@ -122,11 +141,19 @@ func (m *Mailbox) run() {
 				m.sink.Remove(id)
 				continue
 			}
-			for _, message := range event.messages {
-				m.sink.Message(id, message.Role, message.Text)
-			}
-			for _, outcome := range event.outcomes {
-				m.sink.Outcome(id, outcome)
+			if event.guarded {
+				if guarded, ok := m.sink.(interface {
+					CaptureEpoch(string, uint64, []Message, []string)
+				}); ok {
+					guarded.CaptureEpoch(id, event.epoch, event.messages, event.outcomes)
+				}
+			} else {
+				for _, message := range event.messages {
+					m.sink.Message(id, message.Role, message.Text)
+				}
+				for _, outcome := range event.outcomes {
+					m.sink.Outcome(id, outcome)
+				}
 			}
 			if event.exit {
 				m.sink.Exit(id, event.busy)

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
 	"sync"
 	"sync/atomic"
 )
@@ -15,18 +16,20 @@ const maxReviewBytes = 16 << 10
 // Service serializes trace invalidation, user mutations and publication of model proposals.
 // Wake schedules Run on the existing host job runner; it must not block on model work.
 type Service struct {
-	mu        sync.Mutex
-	committed atomic.Pointer[Document]
-	rules     *Rules
-	traces    *Traces
-	ask       func(context.Context, string) (string, error)
-	newID     func() (string, error)
-	wake      func()
-	pending   map[string]bool
-	waiting   map[string]bool
-	inflight  map[string]bool
-	tracked   map[string]bool
-	epoch     uint64
+	mu           sync.Mutex
+	committed    atomic.Pointer[Document]
+	rules        *Rules
+	traces       *Traces
+	ask          func(context.Context, string) (string, error)
+	newID        func() (string, error)
+	wake         func()
+	pending      map[string]bool
+	waiting      map[string]bool
+	inflight     map[string]bool
+	tracked      map[string]bool
+	trackedOrder []string
+	overflow     atomic.Bool
+	epoch        atomic.Uint64
 }
 
 func NewService(rules *Rules, ask func(context.Context, string) (string, error), newID func() (string, error), wake func()) *Service {
@@ -47,6 +50,24 @@ func (s *Service) Outcome(id, outcome string) {
 	s.traces.Outcome(id, outcome)
 }
 
+// Epoch is the current deletion/removal generation, read without waiting for durable I/O.
+func (s *Service) Epoch() uint64 { return s.epoch.Load() }
+
+// CaptureEpoch excludes a turn captured before a deletion even if the mailbox was delayed.
+func (s *Service) CaptureEpoch(id string, epoch uint64, messages []Message, outcomes []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.epoch.Load() != epoch {
+		return
+	}
+	for _, message := range messages {
+		s.traces.Message(id, message.Role, message.Text)
+	}
+	for _, outcome := range outcomes {
+		s.traces.Outcome(id, outcome)
+	}
+}
+
 // Exit waits for an active turn to settle before queuing its review.
 func (s *Service) Exit(id string, busy bool) {
 	if id == "" {
@@ -55,10 +76,27 @@ func (s *Service) Exit(id string, busy bool) {
 	s.mu.Lock()
 	if !s.tracked[id] {
 		if len(s.tracked) >= maxTraces {
-			s.mu.Unlock()
-			return
+			evicted := ""
+			for _, old := range s.trackedOrder {
+				if !s.inflight[old] {
+					evicted = old
+					break
+				}
+			}
+			if evicted == "" {
+				if s.overflow.CompareAndSwap(false, true) {
+					log.Print("builder learnings: review capacity reached")
+				}
+				s.mu.Unlock()
+				return
+			}
+			delete(s.pending, evicted)
+			delete(s.waiting, evicted)
+			s.traces.Remove(evicted)
+			s.forgetTracked(evicted)
 		}
 		s.tracked[id] = true
+		s.trackedOrder = append(s.trackedOrder, id)
 	}
 	if busy {
 		s.waiting[id] = true
@@ -67,7 +105,7 @@ func (s *Service) Exit(id string, busy bool) {
 	}
 	_, eligible := s.traces.Snapshot(id)
 	if !eligible && !s.inflight[id] {
-		delete(s.tracked, id)
+		s.forgetTracked(id)
 	}
 	if eligible {
 		if len(s.pending) >= maxTraces && !s.pending[id] {
@@ -99,10 +137,10 @@ func (s *Service) Remove(id string) {
 	delete(s.pending, id)
 	delete(s.waiting, id)
 	if !s.inflight[id] {
-		delete(s.tracked, id)
+		s.forgetTracked(id)
 	}
 	s.traces.Remove(id)
-	s.epoch++
+	s.epoch.Add(1)
 }
 func (s *Service) Snapshot() (Document, error) {
 	doc := s.committed.Load()
@@ -139,16 +177,27 @@ func (s *Service) Delete(expected uint64, id string, revision uint64) error {
 	if err := s.publish(); err != nil {
 		return err
 	}
-	s.epoch++
+	s.epoch.Add(1)
 	s.traces.Clear()
 	s.pending = map[string]bool{}
 	s.waiting = map[string]bool{}
 	for id := range s.tracked {
 		if !s.inflight[id] {
-			delete(s.tracked, id)
+			s.forgetTracked(id)
 		}
 	}
 	return nil
+}
+
+// forgetTracked runs under mu and keeps the bounded eviction order in step with tracking.
+func (s *Service) forgetTracked(id string) {
+	delete(s.tracked, id)
+	for i, entry := range s.trackedOrder {
+		if entry == id {
+			s.trackedOrder = append(s.trackedOrder[:i], s.trackedOrder[i+1:]...)
+			break
+		}
+	}
 }
 
 // Run processes a bounded pending snapshot. Stale traces or user changes discard model output.
@@ -158,7 +207,7 @@ func (s *Service) finishReview(id string) {
 	s.mu.Lock()
 	delete(s.inflight, id)
 	if !s.pending[id] && !s.waiting[id] {
-		delete(s.tracked, id)
+		s.forgetTracked(id)
 	}
 	pending := len(s.pending) > 0
 	wake := s.wake
@@ -188,7 +237,7 @@ func (s *Service) runOne(ctx context.Context) error {
 	s.inflight[id] = true
 	trace, ok := s.traces.Snapshot(id)
 	snapshot, err := s.Snapshot()
-	epoch := s.epoch
+	epoch := s.epoch.Load()
 	s.mu.Unlock()
 	defer s.finishReview(id)
 	if !ok || err != nil {
@@ -209,7 +258,7 @@ func (s *Service) runOne(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	current, eligible := s.traces.Snapshot(id)
-	if s.epoch != epoch || !eligible || current.Sequence != trace.Sequence {
+	if s.epoch.Load() != epoch || !eligible || current.Sequence != trace.Sequence {
 		return ErrConflict
 	}
 	if err := ctx.Err(); err != nil {

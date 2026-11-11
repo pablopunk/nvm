@@ -27,3 +27,13 @@ func TestTraceDropsSensitiveAndBoundsInputs(t *testing.T) {
 		t.Fatal("clear retained trace")
 	}
 }
+
+func TestTraceDropsUnfencedSource(t *testing.T) {
+	traces := NewTraces()
+	traces.Message("chat", "assistant", "package main\nfunc Run() {}")
+	traces.Outcome("chat", "success")
+	snapshot, _ := traces.Snapshot("chat")
+	if len(snapshot.Messages) != 0 {
+		t.Fatal("source text was retained")
+	}
+}

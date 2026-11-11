@@ -19,6 +19,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
+	"github.com/pablopunk/nvm/native/internal/ai/learning"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
@@ -98,15 +99,20 @@ type App struct {
 	github         *githubProbe
 	shortcutTitles shortcutTitles
 	// globalShortcuts is the extension commands the shortcut manager binds and runs by key. The UI thread owns it.
-	globalShortcuts globalShortcutTable
-	legacySnips     []snippetsbuiltin.Snippet
-	legacyDictation dictbuiltin.Legacy
-	notes           *notes.Store
-	files           *fileService
-	chats           *chat.Service
-	builder         *builder.Workshop
-	learn           *usage.Learner
-	history         *palette.QueryHistory
+	globalShortcuts        globalShortcutTable
+	legacySnips            []snippetsbuiltin.Snippet
+	legacyDictation        dictbuiltin.Legacy
+	notes                  *notes.Store
+	files                  *fileService
+	chats                  *chat.Service
+	builder                *builder.Workshop
+	builderLearning        atomic.Pointer[builderLearningRuntime]
+	builderLearningStopped atomic.Bool
+	builderLearningSeen    map[string]int
+	builderLearningEpoch   map[string]uint64
+	builderLearningOrder   []string
+	learn                  *usage.Learner
+	history                *palette.QueryHistory
 
 	ports   platform.Ports
 	account *auth.Session

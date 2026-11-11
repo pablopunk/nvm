@@ -112,3 +112,10 @@ func TestCompleteReportsAStreamErrorAndAReplyWithoutItsEndMarker(t *testing.T) {
 		t.Fatalf("a reply without its end marker = %v, want errIncompleteReply", err)
 	}
 }
+
+func TestCompleteBoundedRejectsOverlongStreamingAnswer(t *testing.T) {
+	stream := &scriptedEvents{events: []backend.Event{{Type: backend.EventContent, Text: "abc"}, {Type: backend.EventContent, Text: "def"}, {Type: backend.EventDone}}}
+	if _, err := readCompletion(stream, 5); err == nil {
+		t.Fatal("accepted overlong completion")
+	}
+}

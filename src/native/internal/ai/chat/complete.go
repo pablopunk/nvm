@@ -29,6 +29,17 @@ var errIncompleteReply = errors.New("chat: the fast model's reply ended early")
 // one-shot task such as dictation cleanup never shows up in AI Chats. The route is checked first: a route the spend
 // cap paused or this version cannot read is refused before any text is sent.
 func Complete(ctx context.Context, source CompletionSource, system, user string) (string, error) {
+	return completeBounded(ctx, source, system, user, 0)
+}
+
+// CompleteBounded refuses a streamed answer above maxBytes, before retaining it in memory.
+func CompleteBounded(ctx context.Context, source CompletionSource, system, user string, maxBytes int) (string, error) {
+	if maxBytes <= 0 {
+		return "", errors.New("chat: completion limit must be positive")
+	}
+	return completeBounded(ctx, source, system, user, maxBytes)
+}
+func completeBounded(ctx context.Context, source CompletionSource, system, user string, maxBytes int) (string, error) {
 	descriptor, err := source.ActiveModel(ctx, backend.ActiveModelQuery{Role: backend.RoleFast, Chars: len(system) + len(user)})
 	if err != nil {
 		return "", err
@@ -50,12 +61,12 @@ func Complete(ctx context.Context, source CompletionSource, system, user string)
 		return "", err
 	}
 	defer func() { _ = stream.Close() }()
-	return readCompletion(stream)
+	return readCompletion(stream, maxBytes)
 }
 
 // readCompletion joins the content pieces of a reply. Only the end marker completes a reply: a stream that closes
 // without one is a broken reply, and an error event ends it with the backend's error.
-func readCompletion(stream EventStream) (string, error) {
+func readCompletion(stream EventStream, maxBytes int) (string, error) {
 	var text strings.Builder
 	for {
 		event, err := stream.Next()
@@ -67,6 +78,9 @@ func readCompletion(stream EventStream) (string, error) {
 		}
 		switch event.Type {
 		case backend.EventContent:
+			if maxBytes > 0 && len(event.Text) > maxBytes-text.Len() {
+				return "", errors.New("chat: completion exceeds limit")
+			}
 			text.WriteString(event.Text)
 		case backend.EventDone:
 			return text.String(), nil
