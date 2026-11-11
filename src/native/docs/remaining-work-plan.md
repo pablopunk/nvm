@@ -101,8 +101,10 @@ AI owner. Primitives alone do not establish automatic learning.
 P10 candidate `9112aa2f` integrates bounded real/fake stream staging, pinned-volume space checks
 and the host network download operation with Online Wallpapers dogfooding. Generated API symbols
 and reference, independent review, CI and packaged completion/cancellation/cleanup are outstanding.
-Older hosts that lack the new API types are not covered by the capability fallback. Byte progress
-is also outstanding; current indicators provide qualitative status only.
+Byte progress is a host primitive: `DownloadRequest.IndicatorID` makes the host throttle updates of the
+extension's indicator (bytes of total, or bytes only without a length) and hide it on failure or cancellation.
+A host that answers `network.download` as an unknown operation is mapped to `ErrNotAvailable` in the child.
+A host lacking the new API types still fails at compile time in the interpreter; that case is not covered.
 
 P5 implementation checkpoint (2026-11-10): the rooted bounded snapshot and manager revision prerequisites
 are integrated on `followup/native-source-snapshot`. Static review found no source-snapshot defect and

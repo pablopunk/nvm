@@ -139,8 +139,10 @@ func fetchWallpaperFile(ctx api.Context, candidate wallpaper, path string) error
 		return err
 	}
 	if ctx.System().HasCapability("network.download") {
-		_, err := ctx.Network().Download(api.DownloadRequest{URL: source, Path: path, MaxBytes: maxDownloadBytes, TimeoutMs: 90000, MediaTypes: []string{candidate.FileType}})
-		return err
+		_, err := ctx.Network().Download(api.DownloadRequest{URL: source, Path: path, MaxBytes: maxDownloadBytes, TimeoutMs: 90000, MediaTypes: []string{candidate.FileType}, IndicatorID: indicatorID, IndicatorTitle: "Downloading wallpaper…"})
+		if !errors.Is(err, api.ErrNotAvailable) {
+			return err
+		}
 	}
 	partial := path + ".part"
 	result, err := ctx.Desktop().Shell().Exec("/usr/bin/curl", []string{
