@@ -17,6 +17,8 @@ import (
 // host owns the timeouts and the processes. A nil Clock or Cache disables snapshots, and a nil OnUI runs callbacks in
 // place (tests).
 type Deps struct {
+	// ChatExited notifies the host when a built-in AI chat page leaves or hides.
+	ChatExited              func(id string)
 	CommandSnapshots        *CommandSnapshots
 	CommandSnapshotIdentity func(extID string) any
 	InvokeRefresh           func(ctx context.Context, extID string, in api.Invocation, done func(api.Result, *api.Failure))

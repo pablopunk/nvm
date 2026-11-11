@@ -147,3 +147,25 @@ func TestChatSideRunsInTheExtensionItPreviews(t *testing.T) {
 		t.Fatalf("an extension's side runs in %q, want its own extension", other.chatSideSession.extID)
 	}
 }
+
+func TestChatExitNotifiesOnlyBuiltinChatReferences(t *testing.T) {
+	var exits []string
+	deps := Deps{ChatExited: func(id string) { exits = append(exits, id) }}
+	view := aichats.LoadingChatView("builder-1")
+	page := NewSession(deps, aichats.ID, view).Palette()
+	page.OnHide()
+	page.OnLeave()
+	if len(exits) != 2 || exits[0] != "builder-1" || exits[1] != "builder-1" {
+		t.Fatalf("exits: %v", exits)
+	}
+	other := NewSession(deps, "user.untrusted", view).Palette()
+	if other.OnHide != nil {
+		other.OnHide()
+	}
+	if other.OnLeave != nil {
+		other.OnLeave()
+	}
+	if len(exits) != 2 {
+		t.Fatalf("untrusted extension triggered exit: %v", exits)
+	}
+}

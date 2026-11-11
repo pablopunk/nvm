@@ -27,3 +27,11 @@ func LoadingChatView(chatID string) api.View {
 func RefreshChatRef(chatID string) api.ActionRef {
 	return api.ActionRef{ID: opRefreshChat, Args: map[string]string{argChatID: chatID}}
 }
+
+// SubmitChatID resolves only this built-in's own submit reference.
+func SubmitChatID(ref *api.ActionRef) (string, bool) {
+	if ref == nil || ref.ID != opSubmit || ref.Args[argChatID] == "" {
+		return "", false
+	}
+	return ref.Args[argChatID], true
+}

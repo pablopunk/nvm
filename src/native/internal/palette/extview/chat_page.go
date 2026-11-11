@@ -8,6 +8,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/aichats"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/palette/aichat"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -23,6 +24,23 @@ func (s *Session) chatPage() *palette.View {
 	s.chatRenderer.SetSpec(s.chatSpec())
 	page := s.chatRenderer.View()
 	page.TitleFn = s.currentViewTitle
+	if s.extID == aichats.ID && s.deps.ChatExited != nil {
+		if id, ok := aichats.SubmitChatID(s.view.Chat.Submit); ok {
+			leave, hide := page.OnLeave, page.OnHide
+			page.OnLeave = func() {
+				if leave != nil {
+					leave()
+				}
+				s.deps.ChatExited(id)
+			}
+			page.OnHide = func() {
+				if hide != nil {
+					hide()
+				}
+				s.deps.ChatExited(id)
+			}
+		}
+	}
 	return page
 }
 
