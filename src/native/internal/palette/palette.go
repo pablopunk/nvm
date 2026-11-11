@@ -36,8 +36,9 @@ type Options struct {
 	Synchronous bool
 	// Position returns where the window's top left corner goes for a window of w by h.
 	Position func(w, h int) (x, y int)
-	// Icon returns the decoded system icon of a file, or nil when it has none.
-	Icon func(path string) *ui.Bitmap
+	// Icon returns the decoded picture a row shows for a file, or nil when it has none. picture is true for a thumbnail of
+	// the file's content, which fills the row's tile like an image; otherwise the bitmap is the file's system icon.
+	Icon func(path string) (bitmap *ui.Bitmap, picture bool)
 	// AskAI returns the view that Tab opens at the root for the query. Nil disables Tab.
 	AskAI func(q string) *View
 	// OnShow runs each time the palette is shown, after its state is reset; the host loads what its rows need.

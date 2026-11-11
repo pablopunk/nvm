@@ -285,7 +285,11 @@ func (p *Palette) row(c *ui.Context, i int) {
 func (p *Palette) tileData(it search.Item) design.TileData {
 	data := design.TileData{Image: it.Image, ImageShape: it.ImageShape, Icon: it.Icon, Glyph: it.Glyph}
 	if it.Image == nil && it.IconPath != "" && p.opts.Icon != nil {
-		data.FileIcon = p.opts.Icon(it.IconPath)
+		if bitmap, picture := p.opts.Icon(it.IconPath); picture {
+			data.Image = bitmap
+		} else {
+			data.FileIcon = bitmap
+		}
 	}
 	if data.Icon == "" {
 		data.Icon = it.IconFallback

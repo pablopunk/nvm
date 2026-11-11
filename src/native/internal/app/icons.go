@@ -11,6 +11,6 @@ const iconSize = design.FileIconSize
 
 // fileIcon returns the picture a row shows for path: a thumbnail for an image once it is ready, otherwise the system
 // icon of the path's kind. It never blocks; a miss queues the load and the redraw that follows shows the result.
-func (p *App) fileIcon(path string) *ui.Bitmap {
+func (p *App) fileIcon(path string) (*ui.Bitmap, bool) {
 	return p.files.rowPicture(path)
 }

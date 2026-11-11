@@ -27,18 +27,19 @@ var gridPicturePermits = make(chan struct{}, 4)
 // rowPicture returns the bitmap a row draws for path. For an image it is the thumbnail, and while that is being made
 // the row shows no picture rather than the generic icon, so the tile does not change twice. Any other path shows the
 // system icon of its kind. Both come from the caches: the call never decodes or asks the OS on the UI thread.
-func (s *fileService) rowPicture(path string) *ui.Bitmap {
+// picture is true for a thumbnail, which the row draws in its tile like an image, and false for a system icon.
+func (s *fileService) rowPicture(path string) (bitmap *ui.Bitmap, picture bool) {
 	if isPictureName(path) {
 		bm, ready := s.thumbs.Get(path, func() *ui.Bitmap { return s.thumbnailFor(path) })
 		if !ready {
-			return nil
+			return nil, true
 		}
 		if bm != nil {
-			return bm
+			return bm, true
 		}
 	}
 	bm, _ := s.icons.Get(systemIconKey(path), func() *ui.Bitmap { return s.systemIcon(path) })
-	return bm
+	return bm, false
 }
 
 // thumbnailFor makes the list thumbnail of an image. It runs on a worker: it stats the file for its version, reads or
