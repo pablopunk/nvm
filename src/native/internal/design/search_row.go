@@ -35,6 +35,8 @@ type SearchEvents struct {
 	Back, Changed, Submitted bool
 	// Selection is the start and end, in characters, of the input's selection as this frame built it; start <= end.
 	Selection [2]int
+	// Focused reports whether the input has the keyboard focus.
+	Focused bool
 }
 
 // SearchRow draws the search field and reports its events. It draws no state of its own: the query and the
@@ -66,6 +68,7 @@ func SearchRow(c *ui.Context, d SearchData) SearchEvents {
 		}
 		anchor, caret := in.TextAnchorCaret()
 		events.Selection = [2]int{min(anchor, caret), max(anchor, caret)}
+		events.Focused = in.Focused()
 		events.Changed = in.Changed()
 		events.Submitted = in.Submitted()
 		if d.AIHint {

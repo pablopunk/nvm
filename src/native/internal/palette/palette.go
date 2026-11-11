@@ -158,7 +158,10 @@ type Palette struct {
 	// searchSpan is the search field's selection as the last frame drew it, and edge the arrow the field let go of
 	// at its end, which the next frame acts on (keys_arrows.go).
 	searchSpan [2]int
-	edge       searchEdge
+	// searchFocused is whether the search field has the keyboard focus in the frame being built, and searchFocusedLast
+	// whether it had it in the frame before.
+	searchFocused, searchFocusedLast bool
+	edge                             searchEdge
 	// blurred is set from a focus loss until its grace passes (blur.go). dialogs counts the native dialogs that have the
 	// keyboard for the palette (dialog.go); the palette stays open while one does.
 	blurred bool
