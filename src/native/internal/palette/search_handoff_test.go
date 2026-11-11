@@ -24,7 +24,7 @@ func TestEmptyPartialSearchKeepsRowsWithoutRunningStaleActions(t *testing.T) {
 	if h.p.actionsOpen {
 		t.Fatal("the previous query's action menu remained executable")
 	}
-	h.p.applySnapshot(root, search.Snapshot{Gen: root.coord.Gen(), Query: "new"})
+	h.p.applySnapshot(root, search.Snapshot{Gen: root.coord.Gen(), Query: "new", Carried: []search.Item{old}})
 	h.frame()
 	if rows := h.p.Results(); len(rows) != 1 || rows[0].ID != "old" || !h.p.loadingMore() {
 		t.Fatalf("empty partial discarded useful rows or loading feedback: rows=%v pending=%v", h.titles(), h.p.loadingMore())
@@ -65,5 +65,24 @@ func TestSettledEmptySearchReplacesRetainedRows(t *testing.T) {
 	h.p.showRows(other, "", nil, false, false)
 	if h.p.shownView != other || len(h.p.Results()) != 0 {
 		t.Fatal("a new view retained another view's rows")
+	}
+}
+
+// J15 typed "alphazzz" after "alpha" while one provider never finishes: the rows of "alpha" whose provider answered
+// must go, and only the rows of the provider still working stay, so typing does not blank the list.
+func TestSupersededQueryKeepsOnlyRowsOfProvidersStillWorking(t *testing.T) {
+	h := newHarness(t, rowsView("Root", nil, "alpha"), true)
+	v := h.p.cur()
+	h.p.showRows(v, "alpha", []search.Item{{ID: "alpha", Title: "alpha"}, {ID: "slow", Title: "slow row"}}, true, false)
+	h.p.query = "alphazzz"
+	h.p.coordinator(v).Cancel()
+	gen := v.coord.Gen()
+	h.p.applySnapshot(v, search.Snapshot{Gen: gen, Query: "alphazzz", Pending: true, Carried: []search.Item{{ID: "slow", Title: "slow row"}}})
+	if rows := h.titles(); len(rows) != 1 || rows[0] != "slow row" {
+		t.Fatalf("expected only the row of the provider still working: %v", rows)
+	}
+	h.p.applySnapshot(v, search.Snapshot{Gen: gen, Query: "alphazzz", Pending: true})
+	if len(h.p.Results()) != 0 || !h.p.loadingMore() {
+		t.Fatalf("rows of the superseded query remained: rows=%v", h.titles())
 	}
 }

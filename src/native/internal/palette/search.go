@@ -60,7 +60,19 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	if v != p.cur() || s.Gen != v.coord.Gen() {
 		return
 	}
+	if len(s.Items) == 0 && !s.Settled {
+		p.carrySupersededRows(v, s)
+	}
 	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
+}
+
+// carrySupersededRows keeps on screen, for an empty unsettled snapshot of a new query, only the previous query's
+// rows whose provider is still working on it, so typing does not blank the list. A provider that already answered
+// has no row for this query, so its rows are cleared; showRows would otherwise keep the whole old list.
+func (p *Palette) carrySupersededRows(v *View, s search.Snapshot) {
+	if p.shownView == v && p.shownQuery != s.Query {
+		p.results = s.Carried
+	}
 }
 
 // showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;

@@ -34,6 +34,9 @@ type Snapshot struct {
 	Items    []Item
 	Settled  bool
 	Pending  bool
+	// Carried holds, while Items is empty and the query is unsettled, the rows the superseded query showed that
+	// came from providers still working on this one. Rows of a provider that already answered are never carried.
+	Carried []Item
 }
 
 // Options configures a Coordinator.
@@ -84,6 +87,8 @@ type Coordinator struct {
 	warmSettled       bool               // this query had a complete snapshot before refresh
 	cache             *queryCache
 	stats             map[string]*ProviderStats
+	shown             map[string][]Item // rows of the last snapshot, by provider
+	superseded        map[string][]Item // rows of the snapshot the previous query ended on
 }
 
 // slot is one provider's part of the current generation.
@@ -132,6 +137,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	}
 	c.pending = len(providers)
 	c.emitted = false
+	c.superseded = c.shown
 	remembered, hit := c.cache.get(q)
 	c.warmSettled = hit && remembered.settled
 	var warm Snapshot
@@ -280,6 +286,10 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled), Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
 	providerRows := c.providerCache(snap.Items)
+	c.shown = providerRows
+	if len(snap.Items) == 0 && !settled {
+		snap.Carried = c.carriedLocked()
+	}
 	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled || c.warmSettled})
 	return snap
 }
@@ -343,4 +353,16 @@ func (c *Coordinator) statsLocked(id string) *ProviderStats {
 func ownsCallBudgets(p Provider) bool {
 	_, ok := p.(SelfBudgetedProvider)
 	return ok
+}
+
+// carriedLocked returns the superseded query's rows whose provider has not finished the current one. The caller
+// holds c.mu.
+func (c *Coordinator) carriedLocked() []Item {
+	var rows []Item
+	for _, s := range c.slots {
+		if !s.finished {
+			rows = append(rows, c.superseded[s.id]...)
+		}
+	}
+	return rows
 }
