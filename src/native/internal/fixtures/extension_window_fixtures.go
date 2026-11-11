@@ -11,7 +11,8 @@ type ExtensionWindowFixture struct {
 }
 
 // ExtensionWindowFixtures returns the windows the window tests and dev-only fixtures use: a floating window that
-// remembers its frame and survives a relaunch, and a plain window with the default options.
+// remembers its frame and survives a relaunch, a plain window with the default options, and an undecorated floating
+// window (Chrome none) like the floating notes.
 func ExtensionWindowFixtures() []ExtensionWindowFixture {
 	alwaysOnTop := true
 	return []ExtensionWindowFixture{
@@ -28,6 +29,12 @@ func ExtensionWindowFixtures() []ExtensionWindowFixture {
 			Name: "plain-ticker",
 			View: api.View{ID: "ticker-plain", Kind: api.ViewList, Title: "Plain",
 				Items: []api.Item{{ID: "plain-row", Title: "Plain row"}}},
+		},
+		{
+			Name: "undecorated-ticker",
+			View: api.View{ID: "ticker-undecorated", Kind: api.ViewList, Title: "Undecorated",
+				Items: []api.Item{{ID: "undecorated-row", Title: "No frame, border or shadow"}}},
+			Options: api.WindowOptions{AlwaysOnTop: &alwaysOnTop, TitleBar: "hidden", Chrome: "none"},
 		},
 	}
 }

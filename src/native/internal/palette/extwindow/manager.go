@@ -172,6 +172,10 @@ func specFor(view api.View, options api.WindowOptions) Spec {
 		AlwaysOnTop:        options.AlwaysOnTop == nil || *options.AlwaysOnTop,
 		VisibleOnAllSpaces: options.VisibleOnAllSpaces,
 		TitleBarHidden:     options.TitleBar == "hidden",
-		Frameless:          options.Chrome == "none",
+		// Chrome none removes the frame and the shadow, which on Wayland is the border GTK draws around an undecorated
+		// window. A hidden title bar keeps the window buttons the OS draws inside the content (macOS), so the window
+		// still closes from them.
+		Frameless: options.Chrome == "none" && options.TitleBar != "hidden",
+		NoShadow:  options.Chrome == "none",
 	}
 }

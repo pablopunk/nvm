@@ -20,13 +20,16 @@ type WindowOptions struct {
 	// ID is local to the extension. It defaults to the view id, then a deterministic hash.
 	ID string `json:"id,omitempty"`
 	// RestoreKey is handed back to RestoreWindow after relaunch. It does not identify the live window.
-	RestoreKey string   `json:"restoreKey,omitempty"`
-	Title      string   `json:"title,omitempty"`
-	TitleBar   string   `json:"titleBar,omitempty"` // default or hidden
-	Chrome     string   `json:"chrome,omitempty"`   // default or none
-	Width      int      `json:"width,omitempty"`    // clamped to 320..1600
-	Height     int      `json:"height,omitempty"`   // clamped to 240..1200
-	Size       ViewSize `json:"size,omitempty"`
+	RestoreKey string `json:"restoreKey,omitempty"`
+	Title      string `json:"title,omitempty"`
+	TitleBar   string `json:"titleBar,omitempty"` // default or hidden
+	// Chrome is default or none. None draws no window frame, border or shadow, from the app or (on Linux) GTK; with
+	// TitleBar hidden the window keeps the buttons the OS draws inside its content (macOS). The window still moves,
+	// resizes from its edges and closes. Compositor decorations follow the user's compositor setup (Hyprland page).
+	Chrome string   `json:"chrome,omitempty"`
+	Width  int      `json:"width,omitempty"`  // clamped to 320..1600
+	Height int      `json:"height,omitempty"` // clamped to 240..1200
+	Size   ViewSize `json:"size,omitempty"`
 	// AlwaysOnTop defaults to true.
 	AlwaysOnTop *bool `json:"alwaysOnTop,omitempty"`
 	// VisibleOnAllSpaces defaults to false.
