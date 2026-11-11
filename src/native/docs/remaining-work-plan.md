@@ -87,8 +87,9 @@ capture is not the accepted design, and no opt-in or feature flag is planned.
 
 Integration checkpoint (2026-11-11): follow-ups are consolidated into PR 280 on
 `t3/investigate-mygo-docs`; local integration uses `t3/native-integration`. At remote `3300794d`,
-the complete Native Go, general CI, selected-text helper and package workflows succeeded. The rig
-failed; the separate diagnostic run on `6b97dae9` is still in progress. These results do not validate
+the complete Native Go, general CI, selected-text helper and package workflows succeeded. Screenshots
+preview and J15 broken-extension journeys passed; WP34 form submit/draft persistence failed. The separate
+diagnostic run on `6b97dae9` is still in progress. These results do not validate
 later local commits or packaged Mac journeys.
 
 P6 remains implementing. Local prerequisites provide durable conditional writes, bounded trace
