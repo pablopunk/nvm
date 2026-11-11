@@ -1,0 +1,29 @@
+package learning
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestTraceDropsSensitiveAndBoundsInputs(t *testing.T) {
+	traces := NewTraces()
+	for _, text := range []string{"password is hunter2", "see https://example.test/?token=abc", "read /tmp/private", "```secret```", strings.Repeat("x", 1001)} {
+		traces.Message("chat", "user", text)
+	}
+	traces.Outcome("chat", "success")
+	snapshot, ok := traces.Snapshot("chat")
+	if !ok || len(snapshot.Messages) != 0 || len(snapshot.ToolOutcomes) != 1 {
+		t.Fatalf("unsafe trace retained: %+v", snapshot)
+	}
+	for i := 0; i < 25; i++ {
+		traces.Message("chat", "user", "Prefer clear labels")
+	}
+	snapshot, _ = traces.Snapshot("chat")
+	if len(snapshot.Messages) != 20 {
+		t.Fatalf("messages: %d", len(snapshot.Messages))
+	}
+	traces.Clear()
+	if _, ok := traces.Snapshot("chat"); ok {
+		t.Fatal("clear retained trace")
+	}
+}
