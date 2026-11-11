@@ -1,13 +1,16 @@
 package extview
 
 import (
+	"github.com/pablopunk/nvm/native/internal/diag"
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // invoke starts the extension's action. The palette stays open while it runs; finish decides what the result does.
 // A declarative action is performed by the host instead, with no extension call.
 func (s *Session) invoke(h search.Host, r route) {
+	diag.ActionTrace("extension-enter", logx.F{"kind": string(r.action.Kind), "dismissed": s.dismissed})
 	if !actionSupported(s.deps, r.action) {
 		h.Toast("This action requires an operation unavailable on this system.")
 		return
@@ -91,6 +94,7 @@ func (s *Session) invoke(h search.Host, r route) {
 		return
 	}
 	done := func(result api.Result, failure *api.Failure) {
+		diag.ActionTrace("extension-complete", logx.F{"failed": failure != nil, "has_view": result.View != nil, "navigation": string(result.Navigation), "dismissed": s.dismissed})
 		if in.ProtectSnapshot {
 			filterSnapshotDenied(&result, staleHashes)
 		}

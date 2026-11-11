@@ -4,6 +4,8 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/pablopunk/nvm/native/internal/design"
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -22,6 +24,7 @@ func (p *Palette) openActionMenu(chosen int) {
 }
 
 func (p *Palette) closeActionMenu() {
+	diag.ActionTrace("menu-close", logx.F{"was_open": p.actionsOpen})
 	p.resetActionMenu()
 	p.focusInput()
 }

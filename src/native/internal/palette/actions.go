@@ -3,6 +3,8 @@ package palette
 import (
 	"strings"
 
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -62,6 +64,7 @@ func (p *Palette) actionableItem() *search.Item {
 // first, and the row's learn key is recorded with the query after its action has run.
 func (p *Palette) runDefault() {
 	it := p.actionableItem()
+	diag.ActionTrace("primary", logx.F{"has_item": it != nil, "menu_open": p.actionsOpen})
 	if it == nil {
 		return
 	}
@@ -104,6 +107,7 @@ func (p *Palette) runAction(a search.Action) {
 func (p *Palette) onEnter() {
 	v := p.cur()
 	q := strings.TrimSpace(p.query)
+	diag.ActionTrace("enter", logx.F{"menu_open": p.actionsOpen, "same_view": p.shownView == v, "same_query": p.shownQuery == q, "body": v.Body != nil})
 	if v.Body == nil && !p.actionsOpen && (p.shownView != v || p.shownQuery != q) {
 		p.defaultEnter = &defaultEnterIntent{view: v, query: q, shows: p.shows}
 		if v.Providers != nil {
