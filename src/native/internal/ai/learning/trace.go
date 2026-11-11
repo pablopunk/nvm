@@ -12,8 +12,10 @@ const maxMessages = 20
 const maxMessageBytes = 1000
 const maxTraces = 32
 
-// Unsafe text is dropped, never retained in raw or partially sanitized form.
-var unsafeText = regexp.MustCompile(`(?i)(https?://|[a-z]+://|(^|\s)[~/][^\s]*|[a-z]:\\|\x60\x60\x60|\b(password|passwd|secret|token|api[_ -]?key|authorization|bearer|private[_ -]?key)\b|\b(package|import|func|class|interface)\s+[a-z_]|[{};]|=>`)
+// Unsafe text is dropped, never retained in raw or partially sanitized form. Besides credential words, paths and code,
+// it matches credential shapes a user may paste without naming them (cloud, payment and chat-service key prefixes) and
+// any unbroken run of 24 or more key-like characters, which plain guidance text does not contain.
+var unsafeText = regexp.MustCompile(`(?i)(\b(akia|asia)[0-9a-z]{12,}|\b(sk|pk|rk)[-_][a-z0-9_-]{12,}|\bgh[pousr]_[a-z0-9]{16,}|\bxox[abprs]-|[a-z0-9_+/=-]{24,}|https?://|[a-z]+://|(^|\s)[~/][^\s]*|[a-z]:\\|\x60\x60\x60|\b(password|passwd|secret|token|api[_ -]?key|authorization|bearer|private[_ -]?key)\b|\b(package|import|func|class|interface)\s+[a-z_]|[{};]|=>`)
 
 type Message struct {
 	Role string `json:"role"`

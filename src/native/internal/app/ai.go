@@ -69,6 +69,8 @@ func newChatService(st *store.Store, p *App) *chat.Service {
 		BuilderTools: p.builderToolset,
 		Engine:       p.chatEngine,
 		OnRemoved:    p.removeExtensionOfChat,
+		// Learning forgets a chat when its deletion is asked for, not when a busy turn later settles.
+		OnDeleteRequested: p.removeBuilderLearning,
 	})
 }
 

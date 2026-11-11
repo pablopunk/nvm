@@ -7,7 +7,8 @@ import (
 
 func TestTraceDropsSensitiveAndBoundsInputs(t *testing.T) {
 	traces := NewTraces()
-	for _, text := range []string{"password is hunter2", "see https://example.test/?token=abc", "read /tmp/private", "```secret```", strings.Repeat("x", 1001)} {
+	for _, text := range []string{"password is hunter2", "see https://example.test/?token=abc", "read /tmp/private", "```secret```", strings.Repeat("x", 1001),
+		"use AKIAABCDEFGHIJKLMNOP for the deploy", "the key is sk-live-0123456789abcdef", "paste 9f8e7d6c5b4a39281706f5e4d3c2b1a0 there"} {
 		traces.Message("chat", "user", text)
 	}
 	traces.Outcome("chat", "success")

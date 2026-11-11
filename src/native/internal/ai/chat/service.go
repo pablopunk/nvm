@@ -46,6 +46,9 @@ type Options struct {
 	// OnRemoved runs on the UI thread after a recorded chat is deleted. A chat that expires or was never recorded does
 	// not count. Nil does nothing.
 	OnRemoved func(chat Chat)
+	// OnDeleteRequested runs on the UI thread as soon as the deletion of a recorded chat is asked for, before a chat
+	// still answering settles and is removed, so work derived from the chat stops at once. Nil does nothing.
+	OnDeleteRequested func(id string)
 	// Logger receives the turns that fail. Nil means the process logger.
 	Logger *logx.Logger
 	// Engine returns the engine that drives the replies of a chat, or nil for the native loop. It runs on the UI thread
@@ -158,6 +161,9 @@ func (s *Service) Delete(id string) error {
 	if _, ok := s.cache.draft(id); ok {
 		s.cache.dropDraft(id)
 		return nil
+	}
+	if s.opts.OnDeleteRequested != nil {
+		s.opts.OnDeleteRequested(id)
 	}
 	if s.Busy(id) {
 		s.doomed[id] = true

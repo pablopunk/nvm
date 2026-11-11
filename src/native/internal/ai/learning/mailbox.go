@@ -42,8 +42,7 @@ func (m *Mailbox) enqueue(id string, update func(*mailboxEvent)) {
 	event := m.items[id]
 	if event == nil {
 		if len(m.order) >= maxTraces {
-			delete(m.items, m.order[0])
-			m.order = m.order[1:]
+			m.evictOldestCaptureLocked()
 		}
 		event = &mailboxEvent{}
 		m.items[id] = event
@@ -54,6 +53,19 @@ func (m *Mailbox) enqueue(id string, update func(*mailboxEvent)) {
 	select {
 	case m.signal <- struct{}{}:
 	default:
+	}
+}
+
+// evictOldestCaptureLocked forgets the oldest pending capture to bound memory. A pending removal is never evicted,
+// because losing it would leave a deleted chat's trace eligible for review; removals carry no text and stay bounded by
+// the chats the user deletes.
+func (m *Mailbox) evictOldestCaptureLocked() {
+	for i, id := range m.order {
+		if !m.items[id].removed {
+			delete(m.items, id)
+			m.order = append(m.order[:i], m.order[i+1:]...)
+			return
+		}
 	}
 }
 

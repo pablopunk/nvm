@@ -55,3 +55,23 @@ func TestMailboxEnqueueDoesNotWaitForBusySink(t *testing.T) {
 	mailbox.mu.Unlock()
 	close(sink.release)
 }
+
+func TestMailboxNeverEvictsAPendingRemoval(t *testing.T) {
+	sink := &heldMailboxSink{entered: make(chan struct{}), release: make(chan struct{})}
+	mailbox := NewMailbox(sink)
+	defer mailbox.Close()
+	mailbox.Exit("busy", true)
+	<-sink.entered
+	mailbox.Remove("gone")
+	for i := 0; i < maxTraces+4; i++ {
+		mailbox.Capture(string(rune('a'+i%26))+string(rune('A'+i/26)), []Message{{Role: "user", Text: "Prefer short labels"}}, nil)
+	}
+	mailbox.mu.Lock()
+	event := mailbox.items["gone"]
+	kept := event != nil && event.removed
+	mailbox.mu.Unlock()
+	close(sink.release)
+	if !kept {
+		t.Fatal("a burst of captures evicted the pending removal of a deleted chat")
+	}
+}
