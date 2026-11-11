@@ -83,7 +83,7 @@ func TestRenderConfBindsAndRule(t *testing.T) {
 	text := string(out)
 	for _, want := range []string{
 		"bind = CTRL ALT, K, exec, /usr/bin/nevermind-next run palette-toggle\n",
-		"windowrule = match:class ^(nevermind-next|nvm)$, border_size 0, rounding 0, no_shadow on, no_blur on, decorate off\n",
+		"windowrule = match:class (nevermind-next|nvm), border_size 0, rounding 0, no_shadow on, no_blur on, decorate off\n",
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %q in\n%s", want, text)
@@ -108,7 +108,7 @@ func TestRenderLuaQuotesEverything(t *testing.T) {
 	}
 	for _, want := range []string{
 		`hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("/usr/bin/nevermind-next run 'a\"b\\c$d#e'"))`,
-		`hl.window_rule({ name = "nevermind-undecorated", match = { class = "^(nevermind-next)$" }, border_size = 0, rounding = 0, no_shadow = true, no_blur = true, decorate = false })`,
+		`hl.window_rule({ name = "nevermind-undecorated", match = { class = "(nevermind-next)" }, border_size = 0, rounding = 0, no_shadow = true, no_blur = true, decorate = false })`,
 	} {
 		if !strings.Contains(text, want) {
 			t.Errorf("missing %s in\n%s", want, text)

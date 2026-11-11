@@ -136,7 +136,8 @@ func renderUndecoratedRule(f Format, support Support, classes []string) (string,
 	return fmt.Sprintf("windowrule = match:class %s, %s", pattern, strings.Join(effects, ", ")), nil
 }
 
-// classPattern matches exactly one of the app IDs.
+// classPattern matches exactly one of the app IDs. Hyprland matches rule patterns against the whole class, so the
+// pattern carries no anchors: a $ anchor would read as a variable in hyprland.conf.
 func classPattern(classes []string) (string, error) {
 	var quoted []string
 	for _, c := range classes {
@@ -147,7 +148,7 @@ func classPattern(classes []string) (string, error) {
 	if len(quoted) == 0 {
 		return "", fmt.Errorf("the app ID of Nevermind's windows is unknown")
 	}
-	return "^(" + strings.Join(quoted, "|") + ")$", nil
+	return "(" + strings.Join(quoted, "|") + ")", nil
 }
 
 // luaQuote spells s as a Lua string literal. Bytes outside printable ASCII other than UTF-8 text are escaped in

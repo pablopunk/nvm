@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -148,7 +149,7 @@ func TestApplyWritesModuleAndIncludeThenReloadsAndConfirms(t *testing.T) {
 	if !strings.HasPrefix(entry, user) || !strings.Contains(entry, "source = "+s.ModulePath) {
 		t.Fatalf("entry:\n%s", entry)
 	}
-	if info, _ := os.Stat(filepath.Join(f.dir, "hyprland.conf")); info.Mode().Perm() != 0o640 {
+	if info, _ := os.Stat(filepath.Join(f.dir, "hyprland.conf")); runtime.GOOS != "windows" && info.Mode().Perm() != 0o640 {
 		t.Errorf("entry mode became %v", info.Mode().Perm())
 	}
 	if !slices.Contains(f.fake.calls, "Hyprland --verify-config --config "+s.Entry) {

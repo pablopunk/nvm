@@ -71,7 +71,7 @@ func (p *App) serveActionCommands() {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	mygo.App.OnQuit(cancel)
-	safego.Go("actioncli.serve", func(context.Context) { actioncli.Serve(ctx, ln, p.dispatchActionCommand) })
+	safego.Go("actioncli.serve", func(context.Context) { actioncli.Serve(ctx, ln, searchClock.Now, p.dispatchActionCommand) })
 }
 
 // dispatchActionCommand runs one requested action under a panic guard.

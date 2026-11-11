@@ -55,7 +55,7 @@ func TestConcurrentRequestsRunOnceEach(t *testing.T) {
 	var mu sync.Mutex
 	counts := map[string]int{}
 	var total atomic.Int32
-	go Serve(ctx, ln, func(_ context.Context, id string) Response {
+	go Serve(ctx, ln, time.Now, func(_ context.Context, id string) Response {
 		mu.Lock()
 		counts[id]++
 		mu.Unlock()
@@ -68,7 +68,7 @@ func TestConcurrentRequestsRunOnceEach(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if r, err := Forward(dial, "action-"+string(rune('a'+i))); err != nil || r.Outcome != Completed {
+			if r, err := Forward(dial, time.Now, "action-"+string(rune('a'+i))); err != nil || r.Outcome != Completed {
 				t.Errorf("forward: %v %v", r, err)
 			}
 		}()

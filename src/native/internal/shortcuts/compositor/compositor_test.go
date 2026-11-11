@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -80,7 +81,7 @@ func TestStateSurvivesARestart(t *testing.T) {
 	if !again.State().Undecorated {
 		t.Fatal("the appearance choice was lost")
 	}
-	if info, err := os.Stat(s.statePath); err != nil || info.Mode().Perm() != 0o600 {
+	if info, err := os.Stat(s.statePath); err != nil || (runtime.GOOS != "windows" && info.Mode().Perm() != 0o600) {
 		t.Fatalf("state file: %v %v", info, err)
 	}
 }

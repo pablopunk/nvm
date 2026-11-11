@@ -15,7 +15,7 @@ import (
 func pipeServer(dispatch Dispatcher) Dial {
 	return func(time.Duration) (net.Conn, error) {
 		client, server := net.Pipe()
-		go serveOne(context.Background(), server, dispatch)
+		go serveOne(context.Background(), server, time.Now, dispatch)
 		return client, nil
 	}
 }

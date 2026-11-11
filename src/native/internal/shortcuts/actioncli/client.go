@@ -28,13 +28,13 @@ const (
 
 // Forward sends one request to the running instance and waits for its answer. A dial failure is ErrNoInstance and is
 // safe to retry; any later failure is ErrUnknownOutcome and is not.
-func Forward(dial Dial, actionID string) (Response, error) {
+func Forward(dial Dial, now func() time.Time, actionID string) (Response, error) {
 	conn, err := dial(dialTimeout)
 	if err != nil {
 		return Response{}, fmt.Errorf("%w: %v", ErrNoInstance, err)
 	}
 	defer conn.Close()
-	_ = conn.SetDeadline(time.Now().Add(answerTimeout))
+	_ = conn.SetDeadline(now().Add(answerTimeout))
 	if err := json.NewEncoder(conn).Encode(Request{Version: protocolVersion, Action: actionID}); err != nil {
 		return Response{}, fmt.Errorf("%w: %v", ErrUnknownOutcome, err)
 	}

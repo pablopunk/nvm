@@ -21,8 +21,9 @@ const (
 	DispatchTimeout = 20 * time.Second
 )
 
-// Serve answers requests on ln until it is closed or ctx ends. Each connection carries one request and one response.
-func Serve(ctx context.Context, ln net.Listener, dispatch Dispatcher) {
+// Serve answers requests on ln until it is closed or ctx ends. Each connection carries one request and one response;
+// now sets the connection deadlines.
+func Serve(ctx context.Context, ln net.Listener, now func() time.Time, dispatch Dispatcher) {
 	go func() {
 		<-ctx.Done()
 		ln.Close()
@@ -35,15 +36,15 @@ func Serve(ctx context.Context, ln net.Listener, dispatch Dispatcher) {
 			}
 			continue
 		}
-		go serveOne(ctx, conn, dispatch)
+		go serveOne(ctx, conn, now, dispatch)
 	}
 }
 
-func serveOne(ctx context.Context, conn net.Conn, dispatch Dispatcher) {
+func serveOne(ctx context.Context, conn net.Conn, now func() time.Time, dispatch Dispatcher) {
 	defer conn.Close()
-	_ = conn.SetReadDeadline(time.Now().Add(readTimeout))
+	_ = conn.SetReadDeadline(now().Add(readTimeout))
 	response := answer(ctx, conn, dispatch)
-	_ = conn.SetWriteDeadline(time.Now().Add(readTimeout))
+	_ = conn.SetWriteDeadline(now().Add(readTimeout))
 	_ = json.NewEncoder(conn).Encode(response)
 }
 

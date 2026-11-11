@@ -101,7 +101,7 @@ func Main(args []string, deps Deps) int {
 // forwardOrStart forwards to a running instance, or starts one and forwards once it answers. The request is written at
 // most once, so a slow or lost answer never runs the action twice.
 func forwardOrStart(actionID string, deps Deps) (Response, error) {
-	response, err := Forward(deps.Dial, actionID)
+	response, err := Forward(deps.Dial, deps.Now, actionID)
 	if !errors.Is(err, ErrNoInstance) {
 		return response, err
 	}
@@ -110,7 +110,7 @@ func forwardOrStart(actionID string, deps Deps) (Response, error) {
 	}
 	deadline := deps.Now().Add(ReadinessTimeout)
 	for {
-		response, err = Forward(deps.Dial, actionID)
+		response, err = Forward(deps.Dial, deps.Now, actionID)
 		if !errors.Is(err, ErrNoInstance) {
 			return response, err
 		}
