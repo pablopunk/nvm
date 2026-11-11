@@ -47,7 +47,6 @@ func (f *fakeCompositor) run(_ context.Context, name string, args ...string) ([]
 }
 
 type fixture struct {
-	t    *testing.T
 	home string
 	dir  string
 	fake *fakeCompositor
@@ -75,7 +74,7 @@ func newFixture(t *testing.T, version string, files map[string]string) *fixture 
 		},
 		Home: home, Run: fake.run, UndoFile: filepath.Join(home, "undo.json"),
 	}
-	return &fixture{t: t, home: home, dir: dir, fake: fake, env: env}
+	return &fixture{home: home, dir: dir, fake: fake, env: env}
 }
 
 func (f *fixture) read(name string) string {
