@@ -45,6 +45,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/portable"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
+	"github.com/pablopunk/nvm/native/internal/shortcuts/compositor"
 	"github.com/pablopunk/nvm/native/internal/store"
 	"github.com/pablopunk/nvm/native/internal/update"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt"
@@ -167,6 +168,9 @@ type App struct {
 	// extensionStateRefresh runs the redraw of extension state once for a burst of state changes.
 	extensionStateRefresh   coalescer
 	extensionCommandRefresh coalescer
+	// compositor keeps the Hyprland module in step with the shortcuts; compositorSync coalesces its updates.
+	compositor     *compositor.Service
+	compositorSync coalescer
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render

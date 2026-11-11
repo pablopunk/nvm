@@ -86,6 +86,7 @@ func trailingCommands(p *App) []command {
 		{ID: shortcuts.CommandOSPermissions, Title: "OS Permissions", Keywords: "os permissions permissions microphone camera privacy", Icon: "shield-check", Subtitle: "Review microphone, camera, and system access", Hidden: true, Run: func(h search.Host) { h.Push(p.permissionsPage()) }},
 	}
 	cmds = append(cmds, p.accountCommands()...)
+	cmds = append(cmds, p.hyprlandCommands()...)
 	cmds = append(cmds, builtInSlot(placesbuiltin.ID, len(p.systemPlaces())))
 	cmds = append(cmds, p.classifyImageSlot()...)
 	cmds = append(cmds, p.menuBarToggleCommands()...)
