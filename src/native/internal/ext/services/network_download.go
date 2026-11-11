@@ -116,7 +116,9 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 		source = io.MultiReader(bytes.NewReader(prefix), response.Body)
 	}
 	result, err := stream.WriteStream(ctx, path, source, maxBytes, request.Overwrite, func() error { return h.admitDesktopEffect(ctx) })
-	if err != nil {
+	// A published file is the download: a failure to remove the staging copy afterwards is retried by the platform and
+	// must not report the finished download as failed, or a retry without overwrite would refuse the file it made.
+	if err != nil && !result.Published {
 		if errors.Is(err, platform.ErrFileTooLarge) {
 			err = platform.ErrResponseTooLarge
 		}

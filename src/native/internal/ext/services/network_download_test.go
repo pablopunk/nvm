@@ -19,6 +19,9 @@ import (
 type downloadTestFiles struct {
 	platform.FS
 	beforeAdmit func()
+
+	// afterPublish is returned with a published result, as a staging cleanup failure is.
+	afterPublish error
 }
 
 func (f downloadTestFiles) WriteStream(ctx context.Context, path string, source io.Reader, max int64, overwrite bool, admit func() error) (platform.StreamFileResult, error) {
@@ -45,7 +48,21 @@ func (f downloadTestFiles) WriteStream(ctx context.Context, path string, source 
 	} else if err := f.FS.WriteFile(path, data, 0600); err != nil {
 		return platform.StreamFileResult{}, err
 	}
-	return platform.StreamFileResult{Bytes: int64(len(data)), Published: true}, nil
+	return platform.StreamFileResult{Bytes: int64(len(data)), Published: true}, f.afterPublish
+}
+
+func TestDownloadPublishedBeforeACleanupFailureSucceeds(t *testing.T) {
+	port := fake.NewHTTP()
+	data := append([]byte{0x89, 'P', 'N', 'G', 13, 10, 26, 10}, bytes.Repeat([]byte{0}, 64)...)
+	port.Script(fake.Response{Status: 200, Header: http.Header{"Content-Type": {"image/png"}}, Body: data})
+	files := downloadTestFiles{FS: real.NewPorts().FS, afterPublish: errors.New("staging cleanup")}
+	path := filepath.Join(t.TempDir(), "image.png")
+	h := desktopHandler(t, Deps{Files: files, Network: port}, api.CapabilityNetwork, api.CapabilityDesktopFiles)
+	var got api.DownloadResponse
+	raw := mustOK(t, serve(t, h, protocol.ServiceNetwork, protocol.OpDownload, api.DownloadRequest{URL: "https://example.com/image", Path: path, MediaTypes: []string{"image/png"}}))
+	if err := jsonInto(raw, &got); err != nil || got.Bytes != int64(len(data)) || got.File.Path != path {
+		t.Fatalf("a published download was reported as: %+v, %v", got, err)
+	}
 }
 
 func TestDownloadStreamsAndEnforcesDeclarations(t *testing.T) {
