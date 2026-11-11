@@ -35,17 +35,23 @@ func (w *Workshop) readExtensionTool(reads *editReads) agent.Tool {
 			if err := json.Unmarshal(args, &in); err != nil {
 				return agent.Result{}, err
 			}
-			result, err := reads.read(ctx, in.ID, in.Offset)
-			if in.Offset != 0 || !errors.Is(err, ErrReferenceOnly) {
-				return result, err
-			}
-			text, err := w.referenceText(in.ID)
-			if err != nil {
-				return agent.Result{}, err
-			}
-			return reads.reference(ctx, in.ID, text)
+			return w.readInstalled(ctx, reads, in.ID, in.Offset)
 		},
 	}
+}
+
+// readInstalled reads extension id page by page through the turn's snapshot reads. A reference-only extension falls
+// back to its read-only definition, which never authorizes a replacement.
+func (w *Workshop) readInstalled(ctx context.Context, reads *editReads, id string, offset int) (agent.Result, error) {
+	result, err := reads.read(ctx, id, offset)
+	if offset != 0 || !errors.Is(err, ErrReferenceOnly) {
+		return result, err
+	}
+	text, err := w.referenceText(id)
+	if err != nil {
+		return agent.Result{}, err
+	}
+	return reads.reference(ctx, id, text)
 }
 
 func (w *Workshop) readExtension(in readExtensionArgs) (agent.Result, error) {
