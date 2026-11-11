@@ -40,7 +40,7 @@ func TestDispatchHasADeadline(t *testing.T) {
 
 // Concurrent clients over a real socket each run exactly once.
 func TestConcurrentRequestsRunOnceEach(t *testing.T) {
-	dir, err := os.MkdirTemp("/tmp", "nvc")
+	dir, err := os.MkdirTemp("", "nvc")
 	if err != nil {
 		t.Fatal(err)
 	}
