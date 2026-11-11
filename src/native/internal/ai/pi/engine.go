@@ -165,16 +165,26 @@ func (e *Engine) prompt(history []backend.Message) (promptMessage, error) {
 		return promptMessage{}, errors.New("a reply needs a message from the user")
 	}
 	text, images := userContent(history[len(history)-1])
-	e.nextID++
-	message := promptMessage{
-		Type: "prompt", ID: fmt.Sprintf("reply-%d", e.nextID), BaseURL: access.BaseURL, Token: access.Token, Headers: access.Headers,
-		Role: e.opts.Role, System: e.system(), Text: text, Images: images, Tools: definitions(e.opts.Tools),
-		WorkspaceDir: e.opts.WorkspaceDir, AgentDir: e.opts.AgentDir,
-	}
+	message := e.message("prompt", fmt.Sprintf("reply-%d", e.nextIDLocked()), access)
+	message.Text, message.Images = text, images
 	if !e.hasState {
 		message.History = transcript(history[:len(history)-1])
 	}
 	return message, nil
+}
+
+func (e *Engine) nextIDLocked() int {
+	e.nextID++
+	return e.nextID
+}
+
+// message is a request to the host with everything but the user's text: the access, the instruction and the tools.
+func (e *Engine) message(kind, id string, access Access) promptMessage {
+	return promptMessage{
+		Type: kind, ID: id, BaseURL: access.BaseURL, Token: access.Token, Headers: access.Headers,
+		Role: e.opts.Role, System: e.system(), Tools: definitions(e.opts.Tools),
+		WorkspaceDir: e.opts.WorkspaceDir, AgentDir: e.opts.AgentDir,
+	}
 }
 
 func (e *Engine) system() string {
