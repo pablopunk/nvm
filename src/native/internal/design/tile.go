@@ -46,7 +46,12 @@ func Tile(c *ui.Context, d TileData) {
 	case d.Image != nil:
 		ui.Image(c, d.Image).Size(TileSize, TileSize).Fit(ui.Cover).Radius(ImageRadius(d.ImageShape, TileSize)).Clip()
 	case d.FileIcon != nil:
-		ui.Row(c).Size(TileSize, TileSize).Center().Children(func() { ui.Image(c, d.FileIcon).Size(FileIconSize, FileIconSize) })
+		// The icon is larger than the tile; negative margins keep its layout box at the tile's size, so it stays centred
+		// on the keys above and below instead of spilling right and down.
+		bleed := float32(FileIconSize-TileSize) / -2
+		ui.Row(c).Size(TileSize, TileSize).Center().Children(func() {
+			ui.Image(c, d.FileIcon).Size(FileIconSize, FileIconSize).Margin(bleed)
+		})
 	default:
 		fg := k.Secondary
 		if col, ok := k.Tones[d.Tone]; ok {
