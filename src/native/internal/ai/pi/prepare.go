@@ -26,6 +26,7 @@ func (e *Engine) Prepare(ctx context.Context) error {
 		return err
 	}
 	message := e.message("prepare", fmt.Sprintf("prepare-%d", e.nextIDLocked()), access)
+	message.Chars = e.requestChars(message)
 	if err := e.send(message); err != nil {
 		e.stopLocked()
 		return fmt.Errorf("the assistant could not start: %w", err)

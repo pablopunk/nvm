@@ -55,10 +55,12 @@ function normalizeThinkingLevel(value) {
   return THINKING_LEVELS.has(value) ? value : 'off';
 }
 
-async function fetchActiveModel(baseUrl, token, headers, role) {
+// The backend reads the role from `model` and the prompt size from `chars`, as the desktop app sends them.
+async function fetchActiveModel(baseUrl, token, headers, role, chars) {
   const trimmed = baseUrl.replace(/\/$/, '');
   const query = new URLSearchParams();
   if (role) query.set('model', role);
+  if (Number.isFinite(chars) && chars > 0) query.set('chars', String(Math.floor(chars)));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ACTIVE_MODEL_TIMEOUT_MS);
   try {
@@ -72,10 +74,20 @@ async function fetchActiveModel(baseUrl, token, headers, role) {
       throw error;
     }
     if (!response.ok) throw new Error(`The model request failed (${response.status}).`);
-    return await response.json();
+    return refuseBlockedRoute(await response.json());
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// A route the backend marks as blocked by the free spend cap is refused before any request, as the app's own chat does.
+function refuseBlockedRoute(descriptor) {
+  if (descriptor?.notice === 'blocked' && descriptor?.noticeReason === 'free_spend_cap_reached') {
+    const error = new Error('The route is paused by the free spend cap.');
+    error.code = 'free_spend_cap_reached';
+    throw error;
+  }
+  return descriptor;
 }
 
 function modelFor(descriptor, headers, role) {
@@ -185,7 +197,7 @@ async function createSession(prompt) {
   const { agentDir, workspaceDir } = prompt;
   await fs.mkdir(agentDir, { recursive: true });
   await fs.mkdir(workspaceDir, { recursive: true });
-  const descriptor = await fetchActiveModel(prompt.baseUrl, prompt.token, prompt.headers, prompt.role);
+  const descriptor = await fetchActiveModel(prompt.baseUrl, prompt.token, prompt.headers, prompt.role, prompt.chars);
   const model = modelFor(descriptor, prompt.headers, prompt.role);
   const modelRuntime = await pi.ModelRuntime.create({
     authPath: path.join(agentDir, 'auth.json'),
@@ -248,8 +260,8 @@ function images(list) {
   return (list || []).map((image) => ({ type: 'image', data: image.data, mimeType: image.mimeType }));
 }
 
-// ensureSession makes the session of a request ready. A session that already exists is kept when this
-// request's key matches.
+// ensureSession makes the session of a request ready. A session that already exists is kept, after the route of this
+// request's size is checked, so a blocked route is refused on every turn.
 async function ensureSession(prompt) {
   const key = sessionKeyOf(prompt);
   if (!session || sessionKey !== key) {
@@ -260,6 +272,7 @@ async function ensureSession(prompt) {
     sessionKey = key;
     return;
   }
+  await fetchActiveModel(prompt.baseUrl, prompt.token, prompt.headers, prompt.role, prompt.chars);
   await runtime.modelRuntime.setRuntimeApiKey(PROVIDER_ID, prompt.token);
 }
 

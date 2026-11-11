@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pablopunk/nvm/native/internal/ai/agent"
+	"github.com/pablopunk/nvm/native/internal/backend"
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
@@ -90,6 +92,9 @@ func TestPrepareReadiesTheSessionWithoutAPrompt(t *testing.T) {
 	if len(sent) != 1 || sent[0].Type != "prepare" || sent[0].Text != "" || sent[0].Role != "fast" || sent[0].System != "be brief" {
 		t.Fatalf("sent %+v, want one prepare message with the role and instruction and no text", sent)
 	}
+	if sent[0].Chars != len("be brief") {
+		t.Fatalf("chars = %d, want the size of the instruction", sent[0].Chars)
+	}
 }
 
 func TestPrepareDoesNothingWhileAReplyRuns(t *testing.T) {
@@ -137,5 +142,50 @@ func TestPrepareStopsWhenCancelled(t *testing.T) {
 	}
 	if engine.proc != nil {
 		t.Fatal("the host kept running after a cancelled prepare")
+	}
+}
+
+func TestBlockedRouteIsTheSpendCapRefusal(t *testing.T) {
+	worker := &scriptedWorker{respond: func(string) []string {
+		return []string{`{"type":"error","code":"free_spend_cap_reached","message":"The route is paused by the free spend cap."}`}
+	}}
+	err := newTestEngine(worker, signedIn).Prepare(context.Background())
+	var refused *backend.Error
+	if !errors.As(err, &refused) || refused.Code != "free_spend_cap_reached" || refused.Status != 402 || refused.Kind != backend.KindRejected {
+		t.Fatalf("error = %#v, want the free spend cap refusal", err)
+	}
+}
+
+type quietRun struct{ agent.ExternalRun }
+
+func (quietRun) Delta(string)                                        {}
+func (quietRun) AddUsage(agent.Usage)                                {}
+func (quietRun) RunCall(backend.ToolCall) (string, agent.CallStatus) { return "", "" }
+
+func userMessage(text string) backend.Message {
+	return backend.Message{Role: backend.RoleUser, Content: backend.TextContent(text)}
+}
+
+func TestRepliesSendTheSizeOfTheWholeConversation(t *testing.T) {
+	worker := &scriptedWorker{respond: func(string) []string {
+		return []string{`{"type":"delta","text":"12345"}`, `{"type":"done"}`}
+	}}
+	engine := newTestEngine(worker, signedIn)
+	if err := engine.Run(context.Background(), quietRun{}, []backend.Message{userMessage("hello")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := engine.Run(context.Background(), quietRun{}, []backend.Message{userMessage("hello"), userMessage("again")}); err != nil {
+		t.Fatal(err)
+	}
+	sent := worker.messages()
+	first, second := len("be brief")+len("hello"), len("be brief")+len("hello")+5+len("again")
+	if sent[0].Chars != first || sent[1].Chars != second {
+		t.Fatalf("chars = %d, %d; want %d, %d", sent[0].Chars, sent[1].Chars, first, second)
+	}
+}
+
+func TestRouteSizeIsBounded(t *testing.T) {
+	if got := boundChars(maxRouteChars * 3); got != maxRouteChars {
+		t.Fatalf("boundChars = %d, want %d", got, maxRouteChars)
 	}
 }

@@ -20,6 +20,13 @@ const maxLineBytes = 8 << 20
 // abortGrace is how long a stopped reply waits for the host to say it stopped before the process is killed.
 const abortGrace = 5 * time.Second
 
+// freeSpendCapCode is the reason the backend gives for pausing the free pool; the chat shows its notice for it. The host
+// reports it when the route is blocked, and paymentRequired is the status the backend refuses such a request with.
+const (
+	freeSpendCapCode = "free_spend_cap_reached"
+	paymentRequired  = 402
+)
+
 // maxHistoryRunes bounds the earlier conversation sent to a host that has no context.
 const maxHistoryRunes = 40_000
 
@@ -61,7 +68,9 @@ type Engine struct {
 	proc     platform.WorkerProcess
 	lines    chan []byte
 	hasState bool
-	nextID   int
+	// held is the characters the host's session already holds besides the instruction: earlier prompts and replies.
+	held   int
+	nextID int
 }
 
 // New returns an engine that starts its host on the first reply.
@@ -79,7 +88,7 @@ func (e *Engine) Close() {
 func (e *Engine) stopLocked() {
 	if e.proc != nil {
 		_ = e.proc.Kill()
-		e.proc, e.lines, e.hasState = nil, nil, false
+		e.proc, e.lines, e.hasState, e.held = nil, nil, false, 0
 	}
 }
 
@@ -99,6 +108,7 @@ func (e *Engine) Run(ctx context.Context, run agent.ExternalRun, history []backe
 		return fmt.Errorf("the assistant could not start: %w", err)
 	}
 	e.hasState = true
+	e.held = boundChars(e.held + len(prompt.History) + len(prompt.Text))
 	return e.relay(ctx, run)
 }
 
@@ -170,6 +180,7 @@ func (e *Engine) prompt(history []backend.Message) (promptMessage, error) {
 	if !e.hasState {
 		message.History = transcript(history[:len(history)-1])
 	}
+	message.Chars = e.requestChars(message)
 	return message, nil
 }
 
@@ -246,6 +257,7 @@ func (e *Engine) handle(line []byte, run agent.ExternalRun, step *int) (bool, er
 	}
 	switch event.Type {
 	case "delta":
+		e.held = boundChars(e.held + len(event.Text))
 		run.Delta(event.Text)
 	case "reasoning":
 		run.Reasoning(event.Text)
@@ -278,6 +290,7 @@ func (e *Engine) handle(line []byte, run agent.ExternalRun, step *int) (bool, er
 func (e *Engine) answer(run agent.ExternalRun, event hostEvent) {
 	call := backend.ToolCall{ID: event.CallID, Type: "function", Function: backend.ToolFunction{Name: event.Name, Arguments: string(event.Arguments)}}
 	text, status := run.RunCall(call)
+	e.held = boundChars(e.held + len(text))
 	_ = e.send(toolResultMessage{Type: "tool_result", CallID: event.CallID, Text: text, Status: string(status)})
 }
 
@@ -323,6 +336,9 @@ func summarize(args json.RawMessage) string {
 func hostError(event hostEvent) error {
 	if event.Code == "auth_required" {
 		return &backend.Error{Kind: backend.KindUnauthorized, Message: event.Message}
+	}
+	if event.Code == freeSpendCapCode {
+		return &backend.Error{Kind: backend.KindRejected, Status: paymentRequired, Code: freeSpendCapCode, Message: "the route is paused by the free spend cap"}
 	}
 	if event.Message == "" {
 		return errors.New("the assistant failed")
