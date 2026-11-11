@@ -101,7 +101,7 @@ var (
 	builderOps  = []string{BuilderStart, BuilderOpen, BuilderRemove, BuilderTweak, BuilderList, BuilderReview}
 	hostOps     = []string{"config-folder", "dictation-settings", "updates", "account-page", HostToggleMenuBar}
 	cameraOps   = []string{"switch-device", "next-device", "previous-device", "toggle-muted", "toggle-controls"}
-	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove}
+	shortcutOps = []string{ShortcutOpRecord, ShortcutOpRemove, ShortcutOpCopyCommand}
 )
 
 // Action is one declarative operation attached to an item, view, command or menu row. Helper

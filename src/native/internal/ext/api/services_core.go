@@ -379,9 +379,11 @@ func DataSourceFrom(loader string) DataSource {
 	return DataSource{Loader: loader}
 }
 
-// Operations of an ActionShortcut action. Record opens the recorder for the action's shortcut, and remove drops the
-// shortcut the user chose for it.
+// Operations of an ActionShortcut action. Record opens the recorder for the action's shortcut, remove drops the
+// shortcut the user chose for it, and copy-command copies the command line that runs the action from a terminal or a
+// compositor binding ("<program> run <action-id>").
 const (
-	ShortcutOpRecord = "record"
-	ShortcutOpRemove = "remove"
+	ShortcutOpRecord      = "record"
+	ShortcutOpRemove      = "remove"
+	ShortcutOpCopyCommand = "copy-command"
 )

@@ -17,12 +17,13 @@ const (
 	windowHeight = 460
 )
 
-// floatingWindowOptions are the options of the floating window: always on top, with a hidden title bar, a remembered
-// frame, a persistent restore key, and the title given.
+// floatingWindowOptions are the options of the floating window: always on top, without decorations (Chrome none, so no
+// frame, border or shadow) but with the OS window buttons in the hidden title bar, a remembered frame, a persistent
+// restore key, and the title given.
 func floatingWindowOptions(title string) api.WindowOptions {
 	alwaysOnTop := true
 	return api.WindowOptions{
-		ID: windowID, RestoreKey: windowID, Title: title, TitleBar: "hidden",
+		ID: windowID, RestoreKey: windowID, Title: title, TitleBar: "hidden", Chrome: "none",
 		Width: windowWidth, Height: windowHeight, AlwaysOnTop: &alwaysOnTop,
 		Persistent: true, RemembersFrame: true,
 	}

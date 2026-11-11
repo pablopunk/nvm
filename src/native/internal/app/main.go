@@ -7,6 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/menushost"
 	"log"
 	"runtime"
+	"slices"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -39,10 +40,12 @@ import (
 	"github.com/pablopunk/nvm/native/internal/palette/extwindow"
 	"github.com/pablopunk/nvm/native/internal/palette/feedback"
 	"github.com/pablopunk/nvm/native/internal/platform"
+	"github.com/pablopunk/nvm/native/internal/platform/instance"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
 	"github.com/pablopunk/nvm/native/internal/portable"
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
+	"github.com/pablopunk/nvm/native/internal/shortcuts/compositor"
 	"github.com/pablopunk/nvm/native/internal/store"
 	"github.com/pablopunk/nvm/native/internal/update"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt"
@@ -170,6 +173,9 @@ type App struct {
 	// extensionStateRefresh runs the redraw of extension state once for a burst of state changes.
 	extensionStateRefresh   coalescer
 	extensionCommandRefresh coalescer
+	// compositor keeps the Hyprland module in step with the shortcuts; compositorSync coalesces its updates.
+	compositor     *compositor.Service
+	compositorSync coalescer
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -265,6 +271,7 @@ func (p *App) ready() {
 	p.syncCompatibilityAccount()
 	p.runMenubarScheduler()
 	p.startFiles()
+	p.serveActionCommands()
 	log.Println("ready")
 }
 
@@ -280,6 +287,9 @@ func Run() {
 	mygo.App.SetActivationPolicy(mygo.ActivationPolicyAccessory)
 	mygo.App.OnWindowAllClosed(func() {})
 	mygo.App.OnSecondInstance(func(args []string, _ string) {
+		if slices.Contains(args, instance.BackgroundFlag) {
+			return // a background start for the action command line lost the race to this instance
+		}
 		p.panel.Update(func() {
 			p.Show()
 			p.receiveSecondInstanceLink(args)

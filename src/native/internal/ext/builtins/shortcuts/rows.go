@@ -12,6 +12,7 @@ func shortcutRow(record api.ShortcutRecord) api.Item {
 	if record.Source == sourceUser {
 		actions = append(actions, removeAction(record.ActionID))
 	}
+	actions = append(actions, copyCommandAction(record.ActionID))
 	return api.Item{
 		ID: "shortcut:" + record.ActionID, Title: record.Title, Subtitle: record.Subtitle, Icon: "keyboard",
 		Accessories: []api.Accessory{{Text: record.Label}},
@@ -27,4 +28,9 @@ func recordAction(actionID string) api.Action {
 // removeAction drops the shortcut the user chose for the action.
 func removeAction(actionID string) api.Action {
 	return api.Action{Kind: api.ActionShortcut, Op: api.ShortcutOpRemove, Target: actionID, Title: "Remove shortcut"}
+}
+
+// copyCommandAction copies the command line that runs the action, for a terminal or a compositor binding.
+func copyCommandAction(actionID string) api.Action {
+	return api.Action{Kind: api.ActionShortcut, Op: api.ShortcutOpCopyCommand, Target: actionID, Title: "Copy Command Line"}
 }

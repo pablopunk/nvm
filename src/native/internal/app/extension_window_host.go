@@ -91,7 +91,7 @@ func (o extWindowOpener) Open(spec extwindow.Spec) extwindow.Surface {
 	options := mygo.WindowOptions{
 		Title: spec.Title, Width: frame.Width, Height: frame.Height, X: frame.X, Y: frame.Y,
 		MinWidth: 320, MinHeight: 240, AlwaysOnTop: spec.AlwaysOnTop, Hidden: true, Frameless: spec.Frameless,
-		Content: ui.View(pal.View),
+		DisableShadow: spec.NoShadow, Content: ui.View(pal.View),
 	}
 	if spec.TitleBarHidden {
 		options.TitleBarStyle = mygo.TitleBarHiddenInset

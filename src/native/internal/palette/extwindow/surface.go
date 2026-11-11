@@ -16,6 +16,8 @@ type Spec struct {
 	VisibleOnAllSpaces bool
 	TitleBarHidden     bool
 	Frameless          bool
+	// NoShadow drops the window's shadow, and with it the client-side border and shadow GTK draws on Wayland.
+	NoShadow bool
 }
 
 // Surface is one open window. It is used on the UI thread only. Show and Hide keep the palette page's state, as a

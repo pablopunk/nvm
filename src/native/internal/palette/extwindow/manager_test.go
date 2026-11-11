@@ -37,7 +37,7 @@ func TestLargeFloatingWindowOptionsReachTheSpec(t *testing.T) {
 	if err := m.Create("ticker", noteView("note"), options); err != nil {
 		t.Fatal(err)
 	}
-	want := Spec{Title: "Note", Width: 900, Height: 680, AlwaysOnTop: false, VisibleOnAllSpaces: true, TitleBarHidden: true, Frameless: true}
+	want := Spec{Title: "Note", Width: 900, Height: 680, AlwaysOnTop: false, VisibleOnAllSpaces: true, TitleBarHidden: true, NoShadow: true}
 	if got := opener.surfaces[0].spec; got != want {
 		t.Fatalf("spec = %+v, want %+v", got, want)
 	}
@@ -250,5 +250,24 @@ func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Chrome none is a window without a frame or a shadow; a hidden title bar keeps the OS window buttons in the content.
+func TestChromeNoneDropsFrameAndShadow(t *testing.T) {
+	cases := []struct {
+		options api.WindowOptions
+		want    [3]bool // Frameless, NoShadow, TitleBarHidden
+	}{
+		{api.WindowOptions{}, [3]bool{false, false, false}},
+		{api.WindowOptions{Chrome: "none"}, [3]bool{true, true, false}},
+		{api.WindowOptions{Chrome: "none", TitleBar: "hidden"}, [3]bool{false, true, true}},
+		{api.WindowOptions{TitleBar: "hidden"}, [3]bool{false, false, true}},
+	}
+	for _, c := range cases {
+		spec := specFor(noteView("x"), c.options)
+		if got := [3]bool{spec.Frameless, spec.NoShadow, spec.TitleBarHidden}; got != c.want {
+			t.Errorf("%+v: %v, want %v", c.options, got, c.want)
+		}
 	}
 }

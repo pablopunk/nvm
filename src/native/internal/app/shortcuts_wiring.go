@@ -18,7 +18,7 @@ func (p *App) shortcutsManager() *shortcuts.Manager {
 func (p *App) shortcutsSetup() shortcuts.Setup {
 	return shortcuts.Setup{
 		Doc:       p.shortcutsDocument(),
-		Hotkeys:   p.ports.Hotkeys,
+		Hotkeys:   p.shortcutHotkeys(),
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),
