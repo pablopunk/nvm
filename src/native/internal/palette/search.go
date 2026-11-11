@@ -60,18 +60,18 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	if v != p.cur() || s.Gen != v.coord.Gen() {
 		return
 	}
-	if s.Answered && len(s.Items) == 0 && !s.Settled {
-		p.dropSupersededRows(v, s.Query)
+	if len(s.Items) == 0 && !s.Settled {
+		p.carrySupersededRows(v, s)
 	}
 	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
 }
 
-// dropSupersededRows clears the rows of another query once a provider has answered the new one without rows. Before
-// any provider answers, the old rows stay so typing does not blank the list; after, they are known not to be this
-// query's, and showRows would otherwise keep them while the slower providers finish.
-func (p *Palette) dropSupersededRows(v *View, q string) {
-	if p.shownView == v && p.shownQuery != q {
-		p.results = nil
+// carrySupersededRows keeps on screen, for an empty unsettled snapshot of a new query, only the previous query's
+// rows whose provider is still working on it, so typing does not blank the list. A provider that already answered
+// has no row for this query, so its rows are cleared; showRows would otherwise keep the whole old list.
+func (p *Palette) carrySupersededRows(v *View, s search.Snapshot) {
+	if p.shownView == v && p.shownQuery != s.Query {
+		p.results = s.Carried
 	}
 }
 
