@@ -76,8 +76,6 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 		return
 	}
 	newQuery := p.shownView != v || p.shownQuery != q
-	chosenBefore := p.chosen
-	defer func() { p.traceRows(newQuery, p.shownView == v, chosenBefore, len(rows)) }()
 	if newQuery {
 		p.chosen, p.choicePinned = 0, false
 	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {

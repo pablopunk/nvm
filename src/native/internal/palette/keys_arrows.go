@@ -96,8 +96,6 @@ func (p *Palette) stepWithArrow(key ui.Key) bool {
 	if key == ui.KeyUp {
 		delta = -1
 	}
-	before := p.chosen
-	defer func() { traceArrow("step", before, p.chosen) }()
 	switch {
 	case p.actionsOpen:
 		p.moveMenuChoice(delta)

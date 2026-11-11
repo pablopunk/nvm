@@ -229,10 +229,8 @@ func (p *Palette) Results() []search.Item { return p.results }
 func (p *Palette) Chosen() int { return p.chosen }
 
 func (p *Palette) choose(i int) {
-	before := p.chosen
 	p.choicePinned = true
 	p.clampChoice(i)
-	p.traceChoose(i, before)
 }
 
 func (p *Palette) clampChoice(i int) {

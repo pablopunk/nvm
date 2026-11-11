@@ -71,7 +71,6 @@ func (p *Palette) hoverChoose(el ui.Element, i int) {
 	at := pointerAt{x: b.X + x, y: b.Y + y, known: true}
 	moved := p.interact.pointer.known && (at.x != p.interact.pointer.x || at.y != p.interact.pointer.y)
 	if moved && !p.interact.pressing && !el.Pressed() {
-		traceHoverChoose(i, at, p.interact.pointer, b.X, b.Y, x, y)
 		p.choose(i)
 	}
 	p.interact.pointer = at
