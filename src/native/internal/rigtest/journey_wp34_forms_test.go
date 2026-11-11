@@ -3,6 +3,7 @@
 package rigtest
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -88,9 +89,11 @@ func submitFormFixture(t *testing.T, app *App) {
 	must(t, app.Key("Return")) // set Name
 	// The rows are back only after the edit closes; a Down sent before that is lost and the next edit hits the wrong field.
 	must(t, app.WaitForTogether(elementWait, "Ada Lovelace", "Bio"))
+	logFormNavigation(t, app, "before Down")
 
-	for range 3 { // Name, Bio, API token, then Email
+	for i := range 3 { // Name, Bio, API token, then Email
 		must(t, app.Key("Down"))
+		logFormNavigation(t, app, fmt.Sprintf("after Down %d", i+1))
 	}
 	must(t, app.Key("Return"))                       // edit Email
 	_, err = app.WaitFor("Clear Email", elementWait) // the edit row must be mounted before typing
@@ -124,6 +127,13 @@ func submitFormFixture(t *testing.T, app *App) {
 	must(t, err)
 	_, err = app.WaitFor("email: ada@example.test", elementWait)
 	must(t, err)
+}
+
+func logFormNavigation(t *testing.T, app *App, phase string) {
+	t.Helper()
+	tree, err := app.Tree()
+	must(t, err)
+	t.Logf("form navigation %s: %+v", phase, tree)
 }
 
 // openRootFixtureRow waits for the fixture's root row, which ranks first for its own title, and opens it.

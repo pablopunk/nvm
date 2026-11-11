@@ -3,6 +3,8 @@ package palette
 import (
 	"strings"
 
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
@@ -66,6 +68,7 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 // showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
 // changing the view or query resets that choice.
 func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pending bool) {
+	previous := p.chosen
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil
 	}
@@ -92,6 +95,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
+	if previous != p.chosen {
+		diag.ActionTrace("rows-choice", logx.F{"before": previous, "after": p.chosen, "new_query": newQuery, "rows": len(rows)})
+	}
 	if p.actionsOpen && p.menuOwner != p.menuOwnerKey() {
 		p.closeActionMenu()
 	}

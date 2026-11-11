@@ -4,6 +4,8 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/logx"
 )
 
 // keys routes the keyboard for the view on top, in the order the contract fixes: the action menu first, then the
@@ -66,6 +68,9 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 		return false
 	}
 	down, up := c.Shortcut(0, ui.KeyDown), c.Shortcut(0, ui.KeyUp)
+	if down || up {
+		diag.ActionTrace("arrow-frame", logx.F{"down": down, "up": up, "chosen": p.chosen, "rows": len(p.results)})
+	}
 	if p.stepRootHistory(up, down) {
 		return true
 	}
@@ -74,6 +79,9 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 	}
 	if up {
 		p.choose(p.chosen - 1)
+	}
+	if down || up {
+		diag.ActionTrace("arrow-frame-applied", logx.F{"chosen": p.chosen})
 	}
 	return false
 }

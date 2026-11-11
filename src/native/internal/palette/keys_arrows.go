@@ -4,6 +4,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/pablopunk/nvm/native/internal/diag"
+	"github.com/pablopunk/nvm/native/internal/logx"
 )
 
 // searchEdge is an arrow the search field let go of at its edge, where the caret cannot move any further, or an
@@ -35,6 +37,9 @@ func (p *Palette) onSearchKey(k ui.TextKey) bool {
 		p.syncSearchField(k, text)
 		return true
 	}
+	if k.Key == ui.KeyDown || k.Key == ui.KeyUp {
+		diag.ActionTrace("arrow-input", logx.F{"down": k.Key == ui.KeyDown, "text_matches": k.Text() == p.query, "chosen": p.chosen, "rows": len(p.results)})
+	}
 	if k.Text() != p.query {
 		return false
 	}
@@ -42,6 +47,7 @@ func (p *Palette) onSearchKey(k ui.TextKey) bool {
 		if !p.stepWithArrow(k.Key) {
 			return false
 		}
+		diag.ActionTrace("arrow-input-applied", logx.F{"chosen": p.chosen})
 		p.syncSearchField(k, k.Text())
 		return true
 	}
