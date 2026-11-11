@@ -43,7 +43,7 @@ func New(chats Conversation, extensions Extensions, dispatch func(fn func())) *W
 func (w *Workshop) Toolset(chatID string) chat.Toolset {
 	turn := chat.NewBuilderTurn()
 	reads := newEditReads(w.extensions.EditSnapshot)
-	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), listCapabilitiesTool(), w.readExtensionTool(reads), w.writeTool(chatID, reads, turn))
+	registry, err := agent.NewRegistry(readAPITool(), read1xMappingTool(), listCapabilitiesTool(), listExtensionsTool(w.extensions), w.readExtensionTool(reads), w.readCurrentExtensionTool(chatID, reads), w.writeTool(chatID, reads, turn))
 	if err != nil {
 		log.Println("builder: could not register the tools:", err)
 		return chat.Toolset{}
