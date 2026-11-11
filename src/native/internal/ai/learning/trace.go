@@ -37,11 +37,12 @@ func NewTraces() *Traces { return &Traces{entries: map[string]Trace{}} }
 
 // Message records bounded safe builder text. Inputs with likely credentials, paths or code are dropped.
 func (t *Traces) Message(chatID, role, text string) {
-	if chatID == "" || (role != "user" && role != "assistant") || !utf8.ValidString(text) || unsafeText.MatchString(text) {
+	if chatID == "" {
 		return
 	}
-	text = strings.TrimSpace(text)
-	if text == "" || len(text) > maxMessageBytes || strings.ContainsAny(text, "\x00\r") {
+	var ok bool
+	text, ok = sanitizedMessage(role, text)
+	if !ok {
 		return
 	}
 	t.mu.Lock()
@@ -123,4 +124,15 @@ func (t *Traces) markReviewed(id string, sequence uint64) {
 		trace.reviewed = sequence
 		t.entries[id] = trace
 	}
+}
+
+func sanitizedMessage(role, text string) (string, bool) {
+	if (role != "user" && role != "assistant") || !utf8.ValidString(text) || unsafeText.MatchString(text) {
+		return "", false
+	}
+	text = strings.TrimSpace(text)
+	if text == "" || len(text) > maxMessageBytes || strings.ContainsAny(text, "\x00\r") {
+		return "", false
+	}
+	return text, true
 }
