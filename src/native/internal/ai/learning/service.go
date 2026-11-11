@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"sync"
+	"sync/atomic"
 )
 
 const maxReviewBytes = 16 << 10
@@ -14,19 +15,24 @@ const maxReviewBytes = 16 << 10
 // Service serializes trace invalidation, user mutations and publication of model proposals.
 // Wake schedules Run on the existing host job runner; it must not block on model work.
 type Service struct {
-	mu      sync.Mutex
-	rules   *Rules
-	traces  *Traces
-	ask     func(context.Context, string) (string, error)
-	newID   func() (string, error)
-	wake    func()
-	pending map[string]bool
-	waiting map[string]bool
-	epoch   uint64
+	mu        sync.Mutex
+	committed atomic.Pointer[Document]
+	rules     *Rules
+	traces    *Traces
+	ask       func(context.Context, string) (string, error)
+	newID     func() (string, error)
+	wake      func()
+	pending   map[string]bool
+	waiting   map[string]bool
+	epoch     uint64
 }
 
 func NewService(rules *Rules, ask func(context.Context, string) (string, error), newID func() (string, error), wake func()) *Service {
-	return &Service{rules: rules, traces: NewTraces(), ask: ask, newID: newID, wake: wake, pending: map[string]bool{}, waiting: map[string]bool{}}
+	s := &Service{rules: rules, traces: NewTraces(), ask: ask, newID: newID, wake: wake, pending: map[string]bool{}, waiting: map[string]bool{}}
+	if doc, err := rules.Snapshot(); err == nil {
+		s.committed.Store(&doc)
+	}
+	return s
 }
 func (s *Service) Message(id, role, text string) {
 	s.mu.Lock()
@@ -80,16 +86,39 @@ func (s *Service) Remove(id string) {
 	s.traces.Remove(id)
 	s.epoch++
 }
-func (s *Service) Snapshot() (Document, error) { return s.rules.Snapshot() }
+func (s *Service) Snapshot() (Document, error) {
+	doc := s.committed.Load()
+	if doc == nil {
+		return Document{}, errors.New("learning: committed snapshot unavailable")
+	}
+	copy := *doc
+	copy.Rules = append([]Rule(nil), doc.Rules...)
+	copy.Tombstones = append([]string(nil), doc.Tombstones...)
+	return copy, nil
+}
+func (s *Service) publish() error {
+	doc, err := s.rules.Snapshot()
+	if err != nil {
+		return err
+	}
+	s.committed.Store(&doc)
+	return nil
+}
 func (s *Service) Edit(expected uint64, rule Rule) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.rules.Edit(expected, rule)
+	if err := s.rules.Edit(expected, rule); err != nil {
+		return err
+	}
+	return s.publish()
 }
 func (s *Service) Delete(expected uint64, id string, revision uint64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.rules.Delete(expected, id, revision); err != nil {
+		return err
+	}
+	if err := s.publish(); err != nil {
 		return err
 	}
 	s.epoch++
@@ -128,7 +157,7 @@ func (s *Service) runOne(ctx context.Context) error {
 	}
 	delete(s.pending, id)
 	trace, ok := s.traces.Snapshot(id)
-	snapshot, err := s.rules.Snapshot()
+	snapshot, err := s.Snapshot()
 	epoch := s.epoch
 	s.mu.Unlock()
 	if !ok || err != nil {
@@ -156,6 +185,9 @@ func (s *Service) runOne(ctx context.Context) error {
 		return err
 	}
 	if err := s.rules.ApplyReview(snapshot.Revision, proposals, s.newID); err != nil {
+		return err
+	}
+	if err := s.publish(); err != nil {
 		return err
 	}
 	s.traces.markReviewed(id, trace.Sequence)
