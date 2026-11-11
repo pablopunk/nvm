@@ -34,6 +34,9 @@ type Snapshot struct {
 	Items    []Item
 	Settled  bool
 	Pending  bool
+	// Answered is true once a provider has finished its call for this query: a snapshot that is still empty then
+	// says the query has no rows yet, not that nothing has been heard.
+	Answered bool
 }
 
 // Options configures a Coordinator.
@@ -277,7 +280,7 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
-	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled), Settled: settled, Pending: c.pendingCallsLocked()}
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled), Settled: settled, Pending: c.pendingCallsLocked(), Answered: c.answeredLocked()}
 	c.emitted = true
 	providerRows := c.providerCache(snap.Items)
 	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled || c.warmSettled})
@@ -343,4 +346,14 @@ func (c *Coordinator) statsLocked(id string) *ProviderStats {
 func ownsCallBudgets(p Provider) bool {
 	_, ok := p.(SelfBudgetedProvider)
 	return ok
+}
+
+// answeredLocked reports whether any provider of the current generation has finished. The caller holds c.mu.
+func (c *Coordinator) answeredLocked() bool {
+	for _, s := range c.slots {
+		if s.finished {
+			return true
+		}
+	}
+	return false
 }

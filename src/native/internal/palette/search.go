@@ -60,7 +60,19 @@ func (p *Palette) applySnapshot(v *View, s search.Snapshot) {
 	if v != p.cur() || s.Gen != v.coord.Gen() {
 		return
 	}
+	if s.Answered && len(s.Items) == 0 && !s.Settled {
+		p.dropSupersededRows(v, s.Query)
+	}
 	p.showRows(v, s.Query, s.Items, s.Settled, s.Pending)
+}
+
+// dropSupersededRows clears the rows of another query once a provider has answered the new one without rows. Before
+// any provider answers, the old rows stay so typing does not blank the list; after, they are known not to be this
+// query's, and showRows would otherwise keep them while the slower providers finish.
+func (p *Palette) dropSupersededRows(v *View, q string) {
+	if p.shownView == v && p.shownQuery != q {
+		p.results = nil
+	}
 }
 
 // showRows follows ranking until the user chooses a row. An explicit choice survives refresh by identity;
@@ -69,9 +81,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	if i := p.defaultEnter; i != nil && (i.view != v || i.query != q || i.shows != p.shows) {
 		p.defaultEnter = nil
 	}
-	// An empty partial answer for the query already on screen is still loading, not evidence that the list is
-	// obsolete. For a different query the rows on screen belong to the superseded search, so they are cleared.
-	if p.shownView == v && p.shownQuery == q && len(p.results) > 0 && len(rows) == 0 && !settled {
+	// An empty partial answer is still loading, not evidence that the previous list is obsolete.
+	// Keep its query attribution so Enter and row shortcuts cannot act on it for the new query.
+	if p.shownView == v && len(p.results) > 0 && len(rows) == 0 && !settled {
 		p.settled, p.pending = false, true
 		return
 	}
@@ -89,7 +101,7 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 		p.chosen = 0
 	}
 	p.shownView, p.shownQuery = v, q
-	p.results, p.settled, p.pending = rows, settled, pending || (len(rows) == 0 && !settled)
+	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
 	if p.actionsOpen && p.menuOwner != p.menuOwnerKey() {
