@@ -19,7 +19,9 @@ import (
 var piHosts = struct {
 	sync.Mutex
 	engines map[string]*pi.Engine
-}{engines: map[string]*pi.Engine{}}
+	// spare holds the prepared host of the next conversation of each tier, which the first conversation to start takes.
+	spare map[chat.Tier]*pi.Engine
+}{engines: map[string]*pi.Engine{}, spare: map[chat.Tier]*pi.Engine{}}
 
 // chatEngine is the engine that drives a conversation: the pi host, when this build ships it. Without it, and for the
 // builder until its tools move over, the replies run on the native loop.
@@ -34,9 +36,29 @@ func (p *App) chatEngine(c chat.Chat) agent.Engine {
 	defer piHosts.Unlock()
 	engine, ok := piHosts.engines[c.ID]
 	if !ok {
-		engine = pi.New(p.piOptions(c))
-		piHosts.engines[c.ID] = engine
+		engine = piHosts.spare[c.Tier]
+		delete(piHosts.spare, c.Tier)
 	}
+	if engine == nil {
+		engine = pi.New(p.piOptions(c))
+	}
+	piHosts.engines[c.ID] = engine
+	return engine
+}
+
+// spareConversationEngine is the engine the next conversation of tier will use, kept so it can be prepared before the
+// conversation exists. It is nil when this build does not ship the pi host.
+func (p *App) spareConversationEngine(tier chat.Tier) *pi.Engine {
+	if _, err := piRuntime(); err != nil {
+		return nil
+	}
+	piHosts.Lock()
+	defer piHosts.Unlock()
+	if engine, ok := piHosts.spare[tier]; ok {
+		return engine
+	}
+	engine := pi.New(p.piOptions(chat.Chat{Kind: chat.KindConversation, Tier: tier}))
+	piHosts.spare[tier] = engine
 	return engine
 }
 

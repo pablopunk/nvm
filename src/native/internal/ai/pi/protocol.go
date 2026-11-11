@@ -19,19 +19,21 @@ type image struct {
 // promptMessage starts one reply. History is the earlier conversation as text, sent only to a host that has no
 // context yet, such as the first reply after a restart.
 type promptMessage struct {
-	Type         string            `json:"type"`
-	ID           string            `json:"id"`
-	BaseURL      string            `json:"baseUrl"`
-	Token        string            `json:"token"`
-	Headers      map[string]string `json:"headers"`
-	Role         string            `json:"role,omitempty"`
-	System       string            `json:"system"`
-	Text         string            `json:"text"`
-	Images       []image           `json:"images"`
-	History      string            `json:"history,omitempty"`
-	Tools        []toolDefinition  `json:"tools"`
-	WorkspaceDir string            `json:"workspaceDir"`
-	AgentDir     string            `json:"agentDir"`
+	Type    string            `json:"type"`
+	ID      string            `json:"id"`
+	BaseURL string            `json:"baseUrl"`
+	Token   string            `json:"token"`
+	Headers map[string]string `json:"headers"`
+	Role    string            `json:"role,omitempty"`
+	System  string            `json:"system"`
+	Text    string            `json:"text"`
+	Images  []image           `json:"images"`
+	History string            `json:"history,omitempty"`
+	// Chars is the bounded size of the request in characters, which the backend prices the route by. Zero omits it.
+	Chars        int              `json:"chars,omitempty"`
+	Tools        []toolDefinition `json:"tools"`
+	WorkspaceDir string           `json:"workspaceDir"`
+	AgentDir     string           `json:"agentDir"`
 }
 
 // toolResultMessage answers a tool_call of the host. Status is the agent package's call status.
