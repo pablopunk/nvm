@@ -194,6 +194,7 @@
       "Input",
       "Jobs",
       "Launch",
+      "Learnings",
       "Logs",
       "Navigation",
       "Network",
@@ -482,6 +483,17 @@
     "kind": "extension-callback",
     "methods": [
       "SearchItems"
+    ]
+  },
+  {
+    "interface": "Learnings",
+    "kind": "service",
+    "package": "child",
+    "implementation": "remoteLearnings",
+    "methods": [
+      "Delete",
+      "Edit",
+      "List"
     ]
   },
   {
