@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"mime"
-	"net/http"
 	"net/url"
 	"path/filepath"
 	"strings"
@@ -87,7 +86,7 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 		return empty, transportFailure(ctx, err, plan)
 	}
 	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode != platform.StatusOK {
 		return empty, unavailable("download returned HTTP %d", response.StatusCode)
 	}
 	if response.ContentLength > maxBytes {
@@ -108,7 +107,7 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 			return empty, transportFailure(ctx, platform.ErrResponseTooLarge, plan)
 		}
 		prefix = prefix[:n]
-		sniffed := strings.ToLower(http.DetectContentType(prefix))
+		sniffed := platform.DetectContentType(prefix)
 		sniffed, _, _ = mime.ParseMediaType(sniffed)
 		if sniffed != declared || !types[sniffed] {
 			return empty, invalid("download content does not match its media type")
