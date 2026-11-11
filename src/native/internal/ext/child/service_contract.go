@@ -6,6 +6,7 @@ import "github.com/pablopunk/nvm/native/internal/ext/api"
 var (
 	_ api.AI                = (*remoteAI)(nil)
 	_ api.AIBuilder         = (*remoteBuilder)(nil)
+	_ api.Learnings         = (*remoteLearnings)(nil)
 	_ api.AIChats           = (*remoteChats)(nil)
 	_ api.AISession         = (*remoteSession)(nil)
 	_ api.AIStream          = (*remoteStream)(nil)

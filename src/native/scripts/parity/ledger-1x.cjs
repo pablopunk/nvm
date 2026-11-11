@@ -81,6 +81,7 @@ const CONTEXT_NAMESPACES = {
   data: 'Data',
   ai: 'AI',
   aiBuilder: 'AIBuilder',
+  learnings: 'Learnings',
   system: 'System',
   text: 'Text',
   'extensions.ownership': 'Ownership',

@@ -1703,6 +1703,41 @@ export type ExtensionAiBuilder = {
   } | null;
 };
 
+/** One rule the AI builder learned from the user's builder chats. `revision` is its saved version. */
+export type ExtensionLearningRule = {
+  id: string;
+  kind: string;
+  text: string;
+  appliesWhen?: string;
+  revision: number;
+};
+
+/** The stored rules and the revision of the whole list, which `edit` and `delete` expect back. */
+export type ExtensionLearningList = {
+  revision: number;
+  rules: ExtensionLearningRule[];
+};
+
+/** `saved` stored the change; `stale` means the rules changed since they were read (nothing written); `invalid` means the text is not allowed in a rule (nothing written). */
+export type ExtensionLearningOutcome = 'saved' | 'stale' | 'invalid';
+
+export type ExtensionLearnings = {
+  /** Host-only surface: available to the built-in `nevermind.ai-learnings` extension. */
+  list(): Promise<ExtensionLearningList>;
+  /** Replaces a rule's text when the list and the rule are still at the revisions read. A deleted rule is not learned again. */
+  edit(
+    listRevision: number,
+    ruleId: string,
+    ruleRevision: number,
+    text: string,
+  ): Promise<ExtensionLearningOutcome>;
+  delete(
+    listRevision: number,
+    ruleId: string,
+    ruleRevision: number,
+  ): Promise<ExtensionLearningOutcome>;
+};
+
 /** A clipboard history entry returned by `ctx.clipboard.history.list/search`. */
 export type ExtensionClipboardEntry = {
   id: string;
@@ -2413,6 +2448,7 @@ export type ExtensionContext = {
   data: ExtensionData;
   ai?: ExtensionAi;
   aiBuilder?: ExtensionAiBuilder;
+  learnings?: ExtensionLearnings;
   extensions: { ownership?: ExtensionOwnership };
 };
 

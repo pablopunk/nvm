@@ -70,6 +70,7 @@ type Ports struct {
 	Account   services.AccountState
 	Chats     services.ChatReader
 	Builder   services.BuilderPort
+	Learnings services.LearningsPort
 	OCR       *ocr.Service
 	History   func() *clipboard.History
 	// ClipboardImages makes the files and thumbnails of clipboard pictures for the desktop.clipboard and history services.
@@ -238,6 +239,7 @@ func New(ports Ports, root string, enabled *enablement.Set, opts Options) (*Mana
 			AI:              ports.AI,
 			Chats:           ports.Chats,
 			Builder:         ports.Builder,
+			Learnings:       ports.Learnings,
 			Selection:       ports.Selection,
 			Paste:           ports.Paste,
 			Apps:            ports.Apps,

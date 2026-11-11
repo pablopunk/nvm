@@ -100,6 +100,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		AI:              p.extensionAI(textReader),
 		Chats:           extensionChats{p: p},
 		Builder:         extensionBuilder{p: p},
+		Learnings:       extensionLearnings{p: p},
 		History:         p.extensionHistory,
 		ClipboardImages: p.extensionClipboardImages(),
 		Confirm:         p.askExtensionConfirmation,
