@@ -79,9 +79,29 @@ P8 checkpoint (2026-11-10): individual message copying is implemented on
 `followup/native-message-copy`, pending independent review, CI and packaged interaction validation.
 Copy actions retain the displayed transcript revision and exact text; the chat action menu preserves
 both extension and host actions. Copy metadata is cached per view revision, and preview work is
-bounded. Targeted retry remains open pending the user's choice for later conversation history.
-The separate P6 choice between automatic learning and explicitly saved rules is also pending;
-the proposed manual-only design is not an accepted product change.
+bounded. The user chose targeted retry in a separate conversation, preserving the original and its
+later messages. The integrated action follows that policy for ordinary chats; builder forks remain
+unavailable because extension ownership is not transferable. Packaged validation remains outstanding.
+The user chose automatic builder learning, with a list to inspect, edit and delete rules. Manual-only
+capture is not the accepted design, and no opt-in or feature flag is planned.
+
+Integration checkpoint (2026-11-11): follow-ups are consolidated into PR 280 on
+`t3/investigate-mygo-docs`; local integration uses `t3/native-integration`. At remote `3300794d`,
+the complete Native Go, general CI, selected-text helper and package workflows succeeded. The rig
+failed; the separate diagnostic run on `6b97dae9` is still in progress. These results do not validate
+later local commits or packaged Mac journeys.
+
+P6 remains implementing. Local prerequisites provide durable conditional writes, bounded trace
+capture, revision-checked rules, deletion fingerprints, immutable context snapshots and review
+coordination. Review of `9f502330` found duplicate per-chat requests and an unbounded busy-chat
+queue. Those repairs and nonblocking automatic model, prompt and palette wiring remain with the
+AI owner. Primitives alone do not establish automatic learning.
+
+P10 candidate `9112aa2f` integrates bounded real/fake stream staging, pinned-volume space checks
+and the host network download operation with Online Wallpapers dogfooding. Generated API symbols
+and reference, independent review, CI and packaged completion/cancellation/cleanup are outstanding.
+Older hosts that lack the new API types are not covered by the capability fallback. Byte progress
+is also outstanding; current indicators provide qualitative status only.
 
 P5 implementation checkpoint (2026-11-10): the rooted bounded snapshot and manager revision prerequisites
 are integrated on `followup/native-source-snapshot`. Static review found no source-snapshot defect and
