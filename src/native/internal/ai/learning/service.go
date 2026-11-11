@@ -24,11 +24,13 @@ type Service struct {
 	wake      func()
 	pending   map[string]bool
 	waiting   map[string]bool
+	inflight  map[string]bool
+	tracked   map[string]bool
 	epoch     uint64
 }
 
 func NewService(rules *Rules, ask func(context.Context, string) (string, error), newID func() (string, error), wake func()) *Service {
-	s := &Service{rules: rules, traces: NewTraces(), ask: ask, newID: newID, wake: wake, pending: map[string]bool{}, waiting: map[string]bool{}}
+	s := &Service{rules: rules, traces: NewTraces(), ask: ask, newID: newID, wake: wake, pending: map[string]bool{}, waiting: map[string]bool{}, inflight: map[string]bool{}, tracked: map[string]bool{}}
 	if doc, err := rules.Snapshot(); err == nil {
 		s.committed.Store(&doc)
 	}
@@ -47,13 +49,26 @@ func (s *Service) Outcome(id, outcome string) {
 
 // Exit waits for an active turn to settle before queuing its review.
 func (s *Service) Exit(id string, busy bool) {
+	if id == "" {
+		return
+	}
 	s.mu.Lock()
+	if !s.tracked[id] {
+		if len(s.tracked) >= maxTraces {
+			s.mu.Unlock()
+			return
+		}
+		s.tracked[id] = true
+	}
 	if busy {
 		s.waiting[id] = true
 		s.mu.Unlock()
 		return
 	}
 	_, eligible := s.traces.Snapshot(id)
+	if !eligible && !s.inflight[id] {
+		delete(s.tracked, id)
+	}
 	if eligible {
 		if len(s.pending) >= maxTraces && !s.pending[id] {
 			for old := range s.pending {
@@ -83,6 +98,9 @@ func (s *Service) Remove(id string) {
 	defer s.mu.Unlock()
 	delete(s.pending, id)
 	delete(s.waiting, id)
+	if !s.inflight[id] {
+		delete(s.tracked, id)
+	}
 	s.traces.Remove(id)
 	s.epoch++
 }
@@ -125,20 +143,29 @@ func (s *Service) Delete(expected uint64, id string, revision uint64) error {
 	s.traces.Clear()
 	s.pending = map[string]bool{}
 	s.waiting = map[string]bool{}
+	for id := range s.tracked {
+		if !s.inflight[id] {
+			delete(s.tracked, id)
+		}
+	}
 	return nil
 }
 
 // Run processes a bounded pending snapshot. Stale traces or user changes discard model output.
-func (s *Service) Run(ctx context.Context) error {
-	defer func() {
-		s.mu.Lock()
-		pending, wake := len(s.pending) > 0, s.wake
-		s.mu.Unlock()
-		if pending && wake != nil && ctx.Err() == nil {
-			wake()
-		}
-	}()
-	return s.runOne(ctx)
+func (s *Service) Run(ctx context.Context) error { return s.runOne(ctx) }
+
+func (s *Service) finishReview(id string) {
+	s.mu.Lock()
+	delete(s.inflight, id)
+	if !s.pending[id] && !s.waiting[id] {
+		delete(s.tracked, id)
+	}
+	pending := len(s.pending) > 0
+	wake := s.wake
+	s.mu.Unlock()
+	if pending && wake != nil {
+		wake()
+	}
 }
 
 func (s *Service) runOne(ctx context.Context) error {
@@ -148,18 +175,22 @@ func (s *Service) runOne(ctx context.Context) error {
 	s.mu.Lock()
 	id := ""
 	for candidate := range s.pending {
-		id = candidate
-		break
+		if !s.inflight[candidate] {
+			id = candidate
+			break
+		}
 	}
 	if id == "" {
 		s.mu.Unlock()
 		return nil
 	}
 	delete(s.pending, id)
+	s.inflight[id] = true
 	trace, ok := s.traces.Snapshot(id)
 	snapshot, err := s.Snapshot()
 	epoch := s.epoch
 	s.mu.Unlock()
+	defer s.finishReview(id)
 	if !ok || err != nil {
 		return err
 	}
