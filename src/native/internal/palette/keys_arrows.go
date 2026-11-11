@@ -35,15 +35,15 @@ func (p *Palette) onSearchKey(k ui.TextKey) bool {
 		p.syncSearchField(k, text)
 		return true
 	}
+	if k.Key == ui.KeyDown || k.Key == ui.KeyUp {
+		handled, syncField := p.arrowOnArrival(k.Key, k.Text())
+		if syncField {
+			p.syncSearchField(k, k.Text())
+		}
+		return handled
+	}
 	if k.Text() != p.query {
 		return false
-	}
-	if k.Key == ui.KeyDown || k.Key == ui.KeyUp {
-		if !p.stepWithArrow(k.Key) {
-			return false
-		}
-		p.syncSearchField(k, k.Text())
-		return true
 	}
 	start := p.searchSpan[0]
 	switch {
@@ -71,6 +71,18 @@ func (p *Palette) syncSearchField(k ui.TextKey, text string) {
 	} else if text != p.query {
 		k.SetText(p.query)
 	}
+}
+
+// arrowOnArrival moves the choice for ArrowUp or ArrowDown as the key arrives, whatever the field holds. Enter acts on
+// arrival too, so an arrow left for the next frame would run after an Enter pressed behind it: when a host replaced the
+// query (a form leaving a field edit), the field keeps its old text until a frame, and Down, Down, Down, Enter would
+// open the row after the second Down. The field is synced only when its text is the palette's query, so text typed
+// ahead of the frame is not overwritten.
+func (p *Palette) arrowOnArrival(key ui.Key, fieldText string) (handled, syncField bool) {
+	if !p.stepWithArrow(key) {
+		return false, false
+	}
+	return true, fieldText == p.query
 }
 
 // stepWithArrow moves the choice for ArrowUp or ArrowDown as the key arrives. Enter acts as it arrives too, so keys
