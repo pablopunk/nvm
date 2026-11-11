@@ -124,6 +124,7 @@ type Context interface {
 	Jobs() Jobs
 	AI() AI
 	AIBuilder() AIBuilder
+	Learnings() Learnings
 	Ownership() Ownership
 	Windows() Windows
 	Navigation() Navigation

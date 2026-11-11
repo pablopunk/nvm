@@ -141,6 +141,10 @@ func (c hostContext) AIBuilder() api.AIBuilder {
 	return remoteBuilder{link: c.link}
 }
 
+func (c hostContext) Learnings() api.Learnings {
+	return remoteLearnings{link: c.link}
+}
+
 func (c hostContext) Ownership() api.Ownership {
 	return remoteOwnership{link: c.link}
 }

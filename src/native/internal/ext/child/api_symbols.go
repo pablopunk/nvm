@@ -225,6 +225,9 @@ func init() {
 		"ModeNoView":                    reflect.ValueOf(api.ModeNoView),
 		"ModeView":                      reflect.ValueOf(api.ModeView),
 		"ModelFast":                     reflect.ValueOf(api.ModelFast),
+		"LearningSaved":                 reflect.ValueOf(api.LearningSaved),
+		"LearningStale":                 reflect.ValueOf(api.LearningStale),
+		"LearningInvalid":               reflect.ValueOf(api.LearningInvalid),
 		"ModelSmart":                    reflect.ValueOf(api.ModelSmart),
 		"NavPop":                        reflect.ValueOf(api.NavPop),
 		"NavPush":                       reflect.ValueOf(api.NavPush),
@@ -520,6 +523,10 @@ func init() {
 		"Navigation":              reflect.ValueOf((*api.Navigation)(nil)),
 		"NavigationMode":          reflect.ValueOf((*api.NavigationMode)(nil)),
 		"Network":                 reflect.ValueOf((*api.Network)(nil)),
+		"Learnings":               reflect.ValueOf((*api.Learnings)(nil)),
+		"LearningRule":            reflect.ValueOf((*api.LearningRule)(nil)),
+		"LearningList":            reflect.ValueOf((*api.LearningList)(nil)),
+		"LearningOutcome":         reflect.ValueOf((*api.LearningOutcome)(nil)),
 		"Note":                    reflect.ValueOf((*api.Note)(nil)),
 		"Notes":                   reflect.ValueOf((*api.Notes)(nil)),
 		"OCR":                     reflect.ValueOf((*api.OCR)(nil)),
@@ -619,6 +626,7 @@ func init() {
 
 		// interface wrapper definitions
 		"_AI":                reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AI)(nil)),
+		"_Learnings":       reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_Learnings)(nil)),
 		"_AIBuilder":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder)(nil)),
 		"_AIChats":           reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AIChats)(nil)),
 		"_AISession":         reflect.ValueOf((*_github_com_pablopunk_nvm_native_internal_ext_api_AISession)(nil)),
@@ -715,6 +723,24 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Session(id string,
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_AI) Stream(prompt string, options api.AIOptions) (api.AIStream, error) {
 	return W.WStream(prompt, options)
+}
+
+// _github_com_pablopunk_nvm_native_internal_ext_api_Learnings is an interface wrapper for Learnings type
+type _github_com_pablopunk_nvm_native_internal_ext_api_Learnings struct {
+	IValue  interface{}
+	WDelete func(listRevision uint64, ruleID string, ruleRevision uint64) (api.LearningOutcome, error)
+	WEdit   func(listRevision uint64, ruleID string, ruleRevision uint64, text string) (api.LearningOutcome, error)
+	WList   func() (api.LearningList, error)
+}
+
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Learnings) Delete(listRevision uint64, ruleID string, ruleRevision uint64) (api.LearningOutcome, error) {
+	return W.WDelete(listRevision, ruleID, ruleRevision)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Learnings) Edit(listRevision uint64, ruleID string, ruleRevision uint64, text string) (api.LearningOutcome, error) {
+	return W.WEdit(listRevision, ruleID, ruleRevision, text)
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Learnings) List() (api.LearningList, error) {
+	return W.WList()
 }
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_AIBuilder is an interface wrapper for AIBuilder type
@@ -1024,6 +1050,7 @@ type _github_com_pablopunk_nvm_native_internal_ext_api_Context struct {
 	IValue       interface{}
 	WAI          func() api.AI
 	WAIBuilder   func() api.AIBuilder
+	WLearnings   func() api.Learnings
 	WAccount     func() api.Account
 	WCache       func() api.Cache
 	WClipboard   func() api.ClipboardHistory
@@ -1063,6 +1090,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AI() api.AI {
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) AIBuilder() api.AIBuilder {
 	return W.WAIBuilder()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Learnings() api.Learnings {
+	return W.WLearnings()
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Context) Account() api.Account {
 	return W.WAccount()

@@ -2199,6 +2199,12 @@
   "target": "LaunchContext"
  },
  {
+  "member": "ExtensionContext.learnings",
+  "status": "same",
+  "target": "Learnings",
+  "verified": "name"
+ },
+ {
   "member": "ExtensionContext.logs",
   "status": "same",
   "target": "Logs",
@@ -4346,6 +4352,84 @@
   "member": "ExtensionLaunchContext.trigger",
   "status": "same",
   "target": "LaunchContext.Trigger",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningList.revision",
+  "status": "same",
+  "target": "LearningList.Revision",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningList.rules",
+  "status": "same",
+  "target": "LearningList.Rules",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningOutcome='invalid'",
+  "status": "same",
+  "target": "value:invalid",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningOutcome='saved'",
+  "status": "same",
+  "target": "value:saved",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningOutcome='stale'",
+  "status": "same",
+  "target": "value:stale",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningRule.appliesWhen",
+  "status": "same",
+  "target": "LearningRule.AppliesWhen",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningRule.id",
+  "status": "same",
+  "target": "LearningRule.ID",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningRule.kind",
+  "status": "same",
+  "target": "LearningRule.Kind",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningRule.revision",
+  "status": "same",
+  "target": "LearningRule.Revision",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearningRule.text",
+  "status": "same",
+  "target": "LearningRule.Text",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearnings.delete",
+  "status": "same",
+  "target": "Learnings.Delete",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearnings.edit",
+  "status": "same",
+  "target": "Learnings.Edit",
+  "verified": "name"
+ },
+ {
+  "member": "ExtensionLearnings.list",
+  "status": "same",
+  "target": "Learnings.List",
   "verified": "name"
  },
  {
@@ -7307,6 +7391,90 @@
   "member": "ForegroundColor='yellow'",
   "status": "same",
   "target": "value:yellow",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='files.preview'",
+  "status": "same",
+  "target": "value:files.preview",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='network.fetch'",
+  "status": "same",
+  "target": "value:network.fetch",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='ocr'",
+  "status": "same",
+  "target": "value:ocr",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='ocr.screen'",
+  "status": "same",
+  "target": "value:ocr.screen",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='shell.exec'",
+  "status": "same",
+  "target": "value:shell.exec",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='shell.script'",
+  "status": "same",
+  "target": "value:shell.script",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.emptyTrash'",
+  "status": "same",
+  "target": "value:system.emptyTrash",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.lock'",
+  "status": "same",
+  "target": "value:system.lock",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.logOut'",
+  "status": "same",
+  "target": "value:system.logOut",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.restart'",
+  "status": "same",
+  "target": "value:system.restart",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.settings'",
+  "status": "same",
+  "target": "value:system.settings",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.shutDown'",
+  "status": "same",
+  "target": "value:system.shutDown",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='system.sleep'",
+  "status": "same",
+  "target": "value:system.sleep",
+  "verified": "name"
+ },
+ {
+  "member": "GoExtensionOperation='windows.switch-desktop'",
+  "status": "same",
+  "target": "value:windows.switch-desktop",
   "verified": "name"
  },
  {

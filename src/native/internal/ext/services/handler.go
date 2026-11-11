@@ -122,6 +122,8 @@ type Deps struct {
 	Chats ChatReader
 	// Builder serves ctx.AIBuilder and ctx.Ownership to built-in extensions. Nil answers unavailable.
 	Builder BuilderPort
+	// Learnings serves ctx.Learnings to built-in extensions. Nil answers unavailable.
+	Learnings LearningsPort
 	// Notify shows a failure the user must see, such as a refused AppleScript. Nil leaves it to the log.
 	Notify NotifyFunc
 	// AIQuota shares each extension's model-call count with the app's other callers of the same owner. Nil counts
@@ -304,6 +306,8 @@ func (h *Handler) dispatch(ctx context.Context, call protocol.ServiceCall) (any,
 		return h.serveAI(ctx, call)
 	case protocol.ServiceBuilder:
 		return h.serveBuilder(call)
+	case protocol.ServiceLearnings:
+		return h.serveLearnings(call)
 	case protocol.ServiceExtension:
 		return h.serveExtension(call)
 	case protocol.ServiceDictation:
