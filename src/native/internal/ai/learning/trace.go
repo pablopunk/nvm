@@ -23,12 +23,14 @@ type Trace struct {
 	Sequence     uint64    `json:"sequence"`
 	Messages     []Message `json:"messages"`
 	ToolOutcomes []string  `json:"toolOutcomes"`
+	reviewed     uint64
 }
 
 type Traces struct {
 	mu      sync.Mutex
 	entries map[string]Trace
 	order   []string
+	next    uint64
 }
 
 func NewTraces() *Traces { return &Traces{entries: map[string]Trace{}} }
@@ -45,7 +47,8 @@ func (t *Traces) Message(chatID, role, text string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	trace := t.get(chatID)
-	trace.Sequence++
+	t.next++
+	trace.Sequence = t.next
 	trace.Messages = append(trace.Messages, Message{Role: role, Text: text})
 	if len(trace.Messages) > maxMessages {
 		trace.Messages = trace.Messages[len(trace.Messages)-maxMessages:]
@@ -61,7 +64,8 @@ func (t *Traces) Outcome(chatID, outcome string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	trace := t.get(chatID)
-	trace.Sequence++
+	t.next++
+	trace.Sequence = t.next
 	trace.ToolOutcomes = append(trace.ToolOutcomes, outcome)
 	if len(trace.ToolOutcomes) > 20 {
 		trace.ToolOutcomes = trace.ToolOutcomes[len(trace.ToolOutcomes)-20:]
@@ -89,11 +93,34 @@ func (t *Traces) Snapshot(id string) (Trace, bool) {
 	}
 	trace.Messages = append([]Message(nil), trace.Messages...)
 	trace.ToolOutcomes = append([]string(nil), trace.ToolOutcomes...)
-	return trace, len(trace.Messages) > 2 || len(trace.ToolOutcomes) > 0
+	return trace, trace.Sequence > trace.reviewed && (len(trace.Messages) > 2 || len(trace.ToolOutcomes) > 0)
 }
 func (t *Traces) Clear() {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.entries = map[string]Trace{}
 	t.order = nil
+}
+
+// Remove discards a chat's retained trace and its eviction-order entry.
+func (t *Traces) Remove(id string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.entries, id)
+	for i, entry := range t.order {
+		if entry == id {
+			t.order = append(t.order[:i], t.order[i+1:]...)
+			break
+		}
+	}
+}
+
+func (t *Traces) markReviewed(id string, sequence uint64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	trace, ok := t.entries[id]
+	if ok && trace.Sequence == sequence {
+		trace.reviewed = sequence
+		t.entries[id] = trace
+	}
 }
