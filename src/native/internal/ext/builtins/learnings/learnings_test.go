@@ -80,7 +80,7 @@ func openList(t *testing.T, ctx fakeContext) api.View {
 
 func TestRootCommandOpensListOfRules(t *testing.T) {
 	commands, _ := Extension{}.Commands(nil)
-	if len(commands) != 1 || commands[0].Title != "AI Learnings" || commands[0].Shortcut != "" {
+	if len(commands) != 1 || commands[0].Title != "AI Learnings" || commands[0].GlobalShortcut != "" {
 		t.Fatalf("commands = %+v", commands)
 	}
 	view := openList(t, contextWith(rule("a", "Prefer clear labels"), rule("b", "Use metric units")))
