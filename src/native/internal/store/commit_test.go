@@ -9,25 +9,60 @@ import (
 )
 
 func TestCommitFailureDoesNotPublishOrRetry(t *testing.T) {
+	for _, operation := range []string{fake.OpWriteFile, fake.OpChmod, fake.OpSync, fake.OpRename} {
+		t.Run(operation, func(t *testing.T) {
+			s, files, _ := newFixture(t, WithKeepBackups(0))
+			doc := settingsDocument(s)
+			if err := doc.Commit(func(v *settingsDoc) error { v.Title = "before"; return nil }); err != nil {
+				t.Fatal(err)
+			}
+			before := string(mustRead(t, files, doc.Path()))
+			files.FailNext(operation, fs.ErrPermission)
+			if err := doc.Commit(func(v *settingsDoc) error { v.Title = "rejected"; v.Items[0] = "rejected"; return nil }); err == nil {
+				t.Fatal("commit succeeded")
+			}
+			if err := doc.Flush(); err != nil {
+				t.Fatal(err)
+			}
+			got, err := doc.Load()
+			if err != nil || got.Title != "before" || got.Items[0] != "alpha" {
+				t.Fatalf("rejected state published: %+v %v", got, err)
+			}
+			if after := string(mustRead(t, files, doc.Path())); after != before {
+				t.Fatal("failed commit or later flush changed persisted state")
+			}
+		})
+	}
+}
+
+func TestCommitIsolatesRetainedReferencesAndRejectedMutations(t *testing.T) {
 	s, files, _ := newFixture(t, WithKeepBackups(0))
 	doc := settingsDocument(s)
-	if err := doc.Commit(func(v *settingsDoc) error { v.Title = "before"; return nil }); err != nil {
+	var retained *settingsDoc
+	if err := doc.Commit(func(v *settingsDoc) error {
+		v.Title = "committed"
+		v.Items = []string{"original"}
+		retained = v
+		return nil
+	}); err != nil {
 		t.Fatal(err)
 	}
-	files.FailNext(fake.OpRename, fs.ErrPermission)
-	if err := doc.Commit(func(v *settingsDoc) error { v.Title = "rejected"; return nil }); err == nil {
-		t.Fatal("commit succeeded")
+	before := string(mustRead(t, files, doc.Path()))
+	retained.Title = "mutated outside lock"
+	retained.Items[0] = "mutated retained slice"
+	refusal := errors.New("reject nested change")
+	if err := doc.Commit(func(v *settingsDoc) error { v.Items[0] = "rejected"; return refusal }); !errors.Is(err, refusal) {
+		t.Fatal(err)
 	}
 	got, err := doc.Load()
-	if err != nil || got.Title != "before" {
-		t.Fatalf("load: %+v %v", got, err)
+	if err != nil || got.Title != "committed" || got.Items[0] != "original" {
+		t.Fatalf("retained reference changed committed state: %+v %v", got, err)
 	}
 	if err := doc.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	got, err = doc.Load()
-	if err != nil || got.Title != "before" {
-		t.Fatalf("flush published rejected value: %+v %v", got, err)
+	if after := string(mustRead(t, files, doc.Path())); after != before {
+		t.Fatal("retained reference or rejected callback changed disk")
 	}
 }
 
