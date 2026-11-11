@@ -43,13 +43,15 @@ type settledSignal struct {
 	ch            chan struct{}
 }
 
-func (s *settledSignal) wait() <-chan struct{} {
+func (s *settledSignal) channel() chan struct{} {
 	s.create.Do(func() { s.ch = make(chan struct{}) })
 	return s.ch
 }
 
+func (s *settledSignal) wait() <-chan struct{} { return s.channel() }
+
 func (s *settledSignal) settle() {
-	ch := s.wait()
+	ch := s.channel()
 	s.close.Do(func() { close(ch) })
 }
 
