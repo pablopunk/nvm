@@ -92,14 +92,22 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 	if response.ContentLength > maxBytes {
 		return empty, transportFailure(ctx, platform.ErrResponseTooLarge, plan)
 	}
-	source := io.Reader(response.Body)
+	progress := h.newDownloadProgress(ctx, request, response.ContentLength)
+	finished := false
+	defer func() {
+		if !finished {
+			progress.abandon()
+		}
+	}()
+	body := progress.wrap(response.Body)
+	source := body
 	if len(types) > 0 {
 		declared, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 		if err != nil || !types[declared] {
 			return empty, invalid("download has an unexpected content type")
 		}
 		prefix := make([]byte, min(int64(512), maxBytes+1))
-		n, err := io.ReadFull(response.Body, prefix)
+		n, err := io.ReadFull(body, prefix)
 		if err != nil && !errors.Is(err, io.EOF) && !errors.Is(err, io.ErrUnexpectedEOF) {
 			return empty, transportFailure(ctx, err, plan)
 		}
@@ -112,7 +120,7 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 		if sniffed != declared || !types[sniffed] {
 			return empty, invalid("download content does not match its media type")
 		}
-		source = io.MultiReader(bytes.NewReader(prefix), response.Body)
+		source = io.MultiReader(bytes.NewReader(prefix), body)
 	}
 	result, err := stream.WriteStream(ctx, path, source, maxBytes, request.Overwrite, func() error { return h.admitDesktopEffect(ctx) })
 	// A published file is the download: a failure to remove the staging copy afterwards is retried by the platform and
@@ -134,5 +142,6 @@ func (h *Handler) download(ctx context.Context, request api.DownloadRequest) (ap
 	for name, values := range response.Header {
 		flattened[strings.ToLower(name)] = strings.Join(values, ", ")
 	}
+	finished = true
 	return api.DownloadResponse{Status: response.StatusCode, FinalURL: finalURL.String(), Headers: flattened, Bytes: result.Bytes, File: fileRefOf(path, h.deps.Home, result.Bytes, modified, time.Time{})}, nil
 }

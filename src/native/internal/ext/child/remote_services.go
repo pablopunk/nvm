@@ -2,6 +2,9 @@ package child
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
@@ -125,5 +128,15 @@ func (n remoteNetwork) Fetch(request api.FetchRequest) (api.FetchResponse, error
 func (n remoteNetwork) Download(request api.DownloadRequest) (api.DownloadResponse, error) {
 	var response api.DownloadResponse
 	err := n.link.Call(protocol.ServiceNetwork, protocol.OpDownload, request, &response)
-	return response, err
+	return response, downloadUnavailableOnOlderHosts(err)
+}
+
+// downloadUnavailableOnOlderHosts turns an older host's "network has no operation" refusal of network.download into
+// the capability-unavailable error, so an extension built for this API can probe or fall back instead of failing as if
+// it had sent bad input.
+func downloadUnavailableOnOlderHosts(err error) error {
+	if err != nil && errors.Is(err, api.ErrInvalidInput) && strings.Contains(err.Error(), "has no operation") {
+		return fmt.Errorf("network.download: this host cannot stream downloads: %w", api.ErrNotAvailable)
+	}
+	return err
 }

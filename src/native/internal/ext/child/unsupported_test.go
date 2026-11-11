@@ -109,3 +109,21 @@ func TestHostContextNeverHandsOutANilService(t *testing.T) {
 		}
 	}
 }
+
+// TestDownloadOnAHostWithoutTheOperationIsUnavailable covers an older host that answers network.download as an unknown
+// operation: the extension must see the capability-unavailable error, not invalid input.
+func TestDownloadOnAHostWithoutTheOperationIsUnavailable(t *testing.T) {
+	older := newDirectLink(func(call protocol.ServiceCall) protocol.ServiceReply {
+		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInvalid, Message: `network has no operation "download": invalid input`}}
+	})
+	_, err := remoteNetwork{link: older}.Download(api.DownloadRequest{URL: "https://example.com", Path: "/tmp/x"})
+	if !errors.Is(err, api.ErrNotAvailable) || errors.Is(err, api.ErrInvalidInput) {
+		t.Fatalf("download on an older host = %v; want ErrNotAvailable", err)
+	}
+	other := newDirectLink(func(protocol.ServiceCall) protocol.ServiceReply {
+		return protocol.ServiceReply{Failure: &api.Failure{Code: api.CodeInvalid, Message: "a file path must be absolute"}}
+	})
+	if _, err := (remoteNetwork{link: other}).Download(api.DownloadRequest{}); !errors.Is(err, api.ErrInvalidInput) {
+		t.Fatalf("a genuine invalid input = %v; want it kept", err)
+	}
+}

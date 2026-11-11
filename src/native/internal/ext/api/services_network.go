@@ -38,6 +38,12 @@ type FetchResponse struct {
 // is capped at 90 seconds. Redirects and overwrites are refused unless explicitly enabled. MediaTypes,
 // when set, must match both the response Content-Type and the sniffed content. Cancellation before
 // publication removes staging; a request already admitted for publication may have an effect.
+//
+// IndicatorID, when set, makes the host show byte progress on the extension's own indicator of that id: a loading
+// indicator titled IndicatorTitle (default "Downloading…") whose subtitle reads "3.2 MB of 8.0 MB", with Value and
+// Total set when the server sends a length and only the bytes received otherwise. Updates are throttled to a few per
+// second. When the download fails or is cancelled the host hides that indicator; on success it stays for the
+// extension to replace with its result. A host that draws no indicators downloads without progress.
 type DownloadRequest struct {
 	URL             string            `json:"url"`
 	Path            string            `json:"path"`
@@ -47,6 +53,8 @@ type DownloadRequest struct {
 	Overwrite       bool              `json:"overwrite,omitempty"`
 	FollowRedirects bool              `json:"followRedirects,omitempty"`
 	MediaTypes      []string          `json:"mediaTypes,omitempty"`
+	IndicatorID     string            `json:"indicatorId,omitempty"`
+	IndicatorTitle  string            `json:"indicatorTitle,omitempty"`
 }
 
 // DownloadResponse reports the final response and the published file, without buffering its body.
