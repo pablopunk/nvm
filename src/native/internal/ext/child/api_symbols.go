@@ -317,6 +317,7 @@ func init() {
 		"ShapeCircle":                   reflect.ValueOf(api.ShapeCircle),
 		"ShapeRounded":                  reflect.ValueOf(api.ShapeRounded),
 		"ShapeSquare":                   reflect.ValueOf(api.ShapeSquare),
+		"ShortcutOpCopyCommand":         reflect.ValueOf(constant.MakeFromLiteral("\"copy-command\"", token.STRING, 0)),
 		"ShortcutOpRecord":              reflect.ValueOf(constant.MakeFromLiteral("\"record\"", token.STRING, 0)),
 		"ShortcutOpRemove":              reflect.ValueOf(constant.MakeFromLiteral("\"remove\"", token.STRING, 0)),
 		"SizeDefault":                   reflect.ValueOf(api.SizeDefault),

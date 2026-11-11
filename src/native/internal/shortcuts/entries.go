@@ -9,6 +9,10 @@ import (
 // PaletteID is the action ID of the palette hotkey, the row that changes the shortcut that opens Nevermind.
 const PaletteID = "palette"
 
+// PaletteToggleID is the action ID the command line and compositor bindings use for the palette key: it shows the
+// palette, or hides it when it is showing, as the summon shortcut does. PaletteID opens it.
+const PaletteToggleID = "palette-toggle"
+
 // PaletteTitle names the palette hotkey in its recorder, as 1.x does. The palette hotkey is not a row of the list: it
 // changes in Settings.
 const PaletteTitle = "Set Nevermind shortcut"

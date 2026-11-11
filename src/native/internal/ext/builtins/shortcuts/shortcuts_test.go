@@ -61,11 +61,12 @@ func TestEnterChangesAShortcutAndOnlyTheUsersChoicesCanBeRemoved(t *testing.T) {
 	if user.Primary == nil || user.Primary.Kind != api.ActionShortcut || user.Primary.Op != api.ShortcutOpRecord || user.Primary.Target != "command:dictate" {
 		t.Fatalf("primary = %+v", user.Primary)
 	}
-	if len(user.Actions) != 2 || user.Actions[1].Op != api.ShortcutOpRemove || user.Actions[1].Title != "Remove shortcut" {
+	if len(user.Actions) != 3 || user.Actions[1].Op != api.ShortcutOpRemove || user.Actions[1].Title != "Remove shortcut" ||
+		user.Actions[2].Op != api.ShortcutOpCopyCommand || user.Actions[2].Target != "command:dictate" {
 		t.Fatalf("user actions = %+v", user.Actions)
 	}
 	declared := view.Items[1]
-	if len(declared.Actions) != 1 || declared.Actions[0].Op != api.ShortcutOpRecord {
+	if len(declared.Actions) != 2 || declared.Actions[0].Op != api.ShortcutOpRecord || declared.Actions[1].Op != api.ShortcutOpCopyCommand {
 		t.Fatalf("declared actions = %+v", declared.Actions)
 	}
 }

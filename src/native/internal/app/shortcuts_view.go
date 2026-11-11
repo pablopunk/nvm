@@ -30,6 +30,8 @@ func (p *App) runShortcutAction(h search.Host, op, target string) {
 		h.Push(p.shortcutRecorderView(p.shortcutEntry(target)))
 	case api.ShortcutOpRemove:
 		p.removeShortcut(h, target)
+	case api.ShortcutOpCopyCommand:
+		p.copyActionCommandLine(h, target)
 	}
 }
 

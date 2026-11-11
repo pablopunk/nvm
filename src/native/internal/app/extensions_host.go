@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 
 	"github.com/egoist/mygo"
@@ -32,6 +33,24 @@ import (
 // and published atomically, so searches read nil until it exists and then the live manager.
 type extensionHost struct {
 	mgr atomic.Pointer[manager.Manager]
+	// settled closes once loading the extensions has finished, whether or not it worked.
+	settled settledSignal
+}
+
+// settledSignal is a channel closed once, created on first use.
+type settledSignal struct {
+	create, close sync.Once
+	ch            chan struct{}
+}
+
+func (s *settledSignal) wait() <-chan struct{} {
+	s.create.Do(func() { s.ch = make(chan struct{}) })
+	return s.ch
+}
+
+func (s *settledSignal) settle() {
+	ch := s.wait()
+	s.close.Do(func() { close(ch) })
 }
 
 // extensionManager returns the running manager, or nil while extensions are still loading.
@@ -42,6 +61,7 @@ func (p *App) extensionManager() *manager.Manager {
 // startExtensions builds the manager from the extensions folder and publishes it. It runs on its own goroutine:
 // scanning the folder and starting enabled children never waits the palette's first paint.
 func (p *App) startExtensions() {
+	defer p.exts.settled.settle()
 	m, err := p.newExtensionManager()
 	if err != nil {
 		log.Println("extensions:", err)
