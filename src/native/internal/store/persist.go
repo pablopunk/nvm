@@ -89,7 +89,7 @@ func (c *Collection[T]) discard(tmp string) {
 // rotateBackups shifts name.json.bak.1 through .bak.N up by one and stores previous as .bak.1, so the
 // newest good copies are always the lowest numbers. A copy past the window is dropped.
 func (c *Collection[T]) rotateBackups(previous []byte) error {
-	keep := c.store.cfg.keepBackups
+	keep := c.keepBackups
 	if keep == 0 || previous == nil {
 		return nil
 	}

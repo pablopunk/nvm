@@ -83,3 +83,23 @@ func TestCommitRejectsConflictPendingAndSecrets(t *testing.T) {
 		t.Fatalf("pending: %v", err)
 	}
 }
+
+func TestWithoutBackupsAppliesOnlyToSelectedDocument(t *testing.T) {
+	s, files, _ := newFixture(t)
+	private := Doc(s, "private.json", 1, freshSettingsDoc).WithoutBackups()
+	ordinary := Doc(s, "ordinary.json", 1, freshSettingsDoc)
+	for _, doc := range []*Collection[settingsDoc]{private, ordinary} {
+		if err := doc.Commit(func(v *settingsDoc) error { v.Title = "first"; return nil }); err != nil {
+			t.Fatal(err)
+		}
+		if err := doc.Commit(func(v *settingsDoc) error { v.Title = "second"; return nil }); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := files.Stat(private.Path() + ".bak.1"); err == nil {
+		t.Fatal("private document made a backup")
+	}
+	if _, err := files.Stat(ordinary.Path() + ".bak.1"); err != nil {
+		t.Fatal("ordinary document lost backup policy")
+	}
+}

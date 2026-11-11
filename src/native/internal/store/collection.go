@@ -14,14 +14,15 @@ import (
 // its lock, and writes are debounced. A Collection is safe for concurrent use. T must round-trip through
 // encoding/json; its unexported fields are not persisted.
 type Collection[T any] struct {
-	store      *Store
-	name       string
-	path       string
-	tmpPath    string
-	version    int
-	defaults   func() T
-	migrations []Migration
-	secrets    []int
+	store       *Store
+	name        string
+	path        string
+	tmpPath     string
+	version     int
+	defaults    func() T
+	migrations  []Migration
+	secrets     []int
+	keepBackups int
 
 	mu          sync.Mutex
 	value       T
@@ -50,17 +51,30 @@ func Doc[T any](s *Store, name string, schemaVersion int, defaults func() T, mig
 	}
 	validateMigrations(name, schemaVersion, migrations)
 	collection := &Collection[T]{
-		store:      s,
-		name:       name,
-		path:       filepath.Join(s.dir, name),
-		tmpPath:    filepath.Join(s.dir, "."+name+".tmp"),
-		version:    schemaVersion,
-		defaults:   defaults,
-		migrations: slices.Clone(migrations),
-		secrets:    secretFieldIndexes[T](),
+		store:       s,
+		name:        name,
+		path:        filepath.Join(s.dir, name),
+		tmpPath:     filepath.Join(s.dir, "."+name+".tmp"),
+		version:     schemaVersion,
+		defaults:    defaults,
+		migrations:  slices.Clone(migrations),
+		secrets:     secretFieldIndexes[T](),
+		keepBackups: s.cfg.keepBackups,
 	}
 	s.attach(name, collection)
 	return collection
+}
+
+// WithoutBackups disables new backup copies for this document. Call immediately after Doc,
+// before the document is loaded or used. Existing copies are never deleted.
+func (c *Collection[T]) WithoutBackups() *Collection[T] {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.loaded {
+		panic("store: backup policy must be set before loading")
+	}
+	c.keepBackups = 0
+	return c
 }
 
 // validateDocumentName panics unless name is a plain file name.
