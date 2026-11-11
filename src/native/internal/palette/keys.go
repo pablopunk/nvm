@@ -65,6 +65,11 @@ func (p *Palette) navigateRows(c *ui.Context, v *View) bool {
 		p.moveGridChoice(c, v.Grid)
 		return false
 	}
+	if p.searchFocused && p.searchFocusedLast {
+		// The field, focused for a frame already, hands the arrows to onSearchKey as they arrive, in order with Enter. A shortcut for them
+		// would claim them, and they would wait for the next frame behind an Enter that acts at once.
+		return false
+	}
 	down, up := c.Shortcut(0, ui.KeyDown), c.Shortcut(0, ui.KeyUp)
 	if p.stepRootHistory(up, down) {
 		return true

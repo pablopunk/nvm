@@ -61,6 +61,7 @@ func (p *Palette) viewThemed(c *ui.Context) {
 // header is the top of the pane: the search field and the notices under it. A page that draws its own input has no
 // search field, only the notices, unless it also hides its field and keeps its title row.
 func (p *Palette) header(c *ui.Context, v *View) {
+	p.searchFocusedLast, p.searchFocused = p.searchFocused, false
 	if (v.Input != nil && !v.HideInput) || (p.drawsWindowHeader() && v.HideInput) {
 		p.noticeRow(c)
 		return
@@ -95,6 +96,7 @@ func (p *Palette) searchRow(c *ui.Context, v *View) {
 	}
 	events := design.SearchRow(c, data)
 	p.searchSpan = events.Selection
+	p.searchFocused = events.Focused
 	if events.Back {
 		p.Pop()
 	}
