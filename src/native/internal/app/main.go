@@ -19,7 +19,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/builder"
 	"github.com/pablopunk/nvm/native/internal/ai/chat"
-	"github.com/pablopunk/nvm/native/internal/ai/learning"
 	"github.com/pablopunk/nvm/native/internal/backend/auth"
 	"github.com/pablopunk/nvm/native/internal/design"
 	"github.com/pablopunk/nvm/native/internal/diag"
