@@ -49,7 +49,7 @@ type fakeContext struct {
 	store *fakeLearnings
 }
 
-func (c fakeContext) Learnings() api.Learnings     { return c.store }
+func (c fakeContext) Learnings() api.Learnings   { return c.store }
 func (c fakeContext) Navigation() api.Navigation { return fakeNavigation{} }
 
 func contextWith(rules ...api.LearningRule) fakeContext {
