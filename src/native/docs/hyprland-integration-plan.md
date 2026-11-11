@@ -1,6 +1,6 @@
 # Hyprland integration: shortcuts, action dispatch and window appearance
 
-Status: planned; implementation and live configuration changes are not authorized by this plan. Companion to WP1.11, WP3.8, WP4.1c and WP5.4 in `../PLAN.md`.
+Status: H1-H5 implemented in repository code (see "Implementation"); the packaged-app journey on a real Hyprland session is outstanding. Live configuration changes are not authorized by this plan. Companion to WP1.11, WP3.8, WP4.1c and WP5.4 in `../PLAN.md`.
 
 ## Intended experience
 
@@ -70,6 +70,14 @@ Use version-supported Hyprland rules for compositor decoration/effect preference
 Niri and Umbriel can reuse detection, managed output and palette setup, but do not block Hyprland delivery. Establish separate syntax, identity, reload and conflict contracts before enabling either adapter.
 
 Niri's explicit `on` decoration rules can override `off` across matching rules, so file order alone cannot resolve conflicts. Its inspected public IPC provided no arbitrary decoration-rule setter. Umbriel exposes decoration config and some runtime effect actions, but a full runtime override is unproven. Do not generalize Hyprland's mechanisms to either compositor.
+
+## Implementation
+
+- H2: `internal/shortcuts/actioncli` (command line, protocol, exactly-once forwarding) over `internal/platform/instance` (private per-user socket, background start). Exit statuses: 0 completed/started/opened, 2 usage, 3 rejected, 4 failed, 5 unreachable or result lost. `palette` opens the palette and `palette-toggle` toggles it as the summon key does. Keyboard Shortcuts rows copy an action's command line.
+- H1, H3, H4: `internal/platform/hyprland` owns detection, the version table (package doc), rendering, include setup and the apply/undo/remove lifecycle; `internal/shortcuts/compositor` owns desired state, kept state and portal ownership; the Hyprland Integration page appears in Command-K only in a Hyprland session.
+- H5: `Chrome: "none"` maps to no frame and no shadow (no GTK client-side border on Wayland); a hidden title bar keeps the OS window buttons. Floating notes use it. Compositor rules for Nevermind's ordinary windows are a user choice on the Hyprland page; the palette is a layer surface and gets no window rule.
+
+Assumptions still to confirm on a real session: `Hyprland --verify-config --config <file>`, the `hyprctl binds -j` fields (`modmask`, `key`, `arg`), hyprlang `on`/`off` rule values, Lua `pcall(require, "nevermind")` beside the entry, `exec_cmd` running `sh -c`, and the Wayland app ID being the executable's basename (or the packaged command name).
 
 ## Evidence and open questions
 

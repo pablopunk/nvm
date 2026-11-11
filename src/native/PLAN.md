@@ -488,7 +488,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 
 ### WP1.11 Keyboard shortcuts manager and view  `[M-L]`
 - **Goal:** global and local shortcut ownership with a recorder.
-- **Planned follow-up:** public CLI action dispatch (cold start and running-instance forwarding) and compositor-managed shortcuts, coordinated with window appearance in [the Hyprland integration plan](docs/hyprland-integration-plan.md). This follow-up is not implemented or covered by earlier WP1.11 evidence.
+- **Follow-up:** public CLI action dispatch (cold start and running-instance forwarding) and compositor-managed shortcuts, coordinated with window appearance in [the Hyprland integration plan](docs/hyprland-integration-plan.md). Implemented in repository code with unit coverage; the real Hyprland session and packaged-app journey are outstanding and not covered by earlier WP1.11 evidence.
 - **Depends on:** WP1.1, WP1.3, WP0.6.
 - **Read first:** `electron/shortcuts/*.ts`, `extensions/keyboard-shortcuts.ts`, `palette/shortcut-manager.tsx`, `shortcut-label.test.ts`, `shared/shortcut-utils.ts`.
 - **Build:** canonical storage format (`Command+Alt+K`) and symbol display, binding plan with conflicts and ownership, per-action customization, OS-reserved list, recorder view, registration lifecycle, extension shortcuts.
