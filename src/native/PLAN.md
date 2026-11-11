@@ -488,6 +488,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 
 ### WP1.11 Keyboard shortcuts manager and view  `[M-L]`
 - **Goal:** global and local shortcut ownership with a recorder.
+- **Planned follow-up:** public CLI action dispatch (cold start and running-instance forwarding) and compositor-managed shortcuts, coordinated with window appearance in [the Hyprland integration plan](docs/hyprland-integration-plan.md). This follow-up is not implemented or covered by earlier WP1.11 evidence.
 - **Depends on:** WP1.1, WP1.3, WP0.6.
 - **Read first:** `electron/shortcuts/*.ts`, `extensions/keyboard-shortcuts.ts`, `palette/shortcut-manager.tsx`, `shortcut-label.test.ts`, `shared/shortcut-utils.ts`.
 - **Build:** canonical storage format (`Command+Alt+K`) and symbol display, binding plan with conflicts and ownership, per-action customization, OS-reserved list, recorder view, registration lifecycle, extension shortcuts.
@@ -695,6 +696,7 @@ WP3.11 to WP3.17 (extension API parity with 1.x: ledger, gaps, ignored fields, r
 
 ### WP5.4 Linux matrix  `[L]`
 - **Depends on:** M1-M3.
+- **Planned Hyprland integration:** [shortcuts, CLI action dispatch and window appearance](docs/hyprland-integration-plan.md), sharing managed compositor config and palette setup while keeping the capabilities separate. Niri and Umbriel are follow-on adapters. Implementation and the real packaged-app Hyprland journey remain outstanding.
 - **Build/validate:** GNOME, KDE, Wayland and X11 matrix for hotkeys (portal or fallbacks), clipboard, tray hosts (AppIndicator), layer-shell panel, transparency without compositor, autostart; documented limitations; `linux-desktop-session.ts` behaviors ported.
 - **Acceptance:** rig variants per DE (VM images) for J01, J05, J11, J26; sign-off sheet.
 
