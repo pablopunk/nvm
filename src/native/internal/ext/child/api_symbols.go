@@ -240,6 +240,7 @@ func init() {
 		"OpenURL":                       reflect.ValueOf(api.OpenURL),
 		"OpenWith":                      reflect.ValueOf(api.OpenWith),
 		"OperationFilePreview":          reflect.ValueOf(api.OperationFilePreview),
+		"OperationNetworkDownload":      reflect.ValueOf(api.OperationNetworkDownload),
 		"OperationNetworkFetch":         reflect.ValueOf(api.OperationNetworkFetch),
 		"OperationOCRImage":             reflect.ValueOf(api.OperationOCRImage),
 		"OperationOCRScreen":            reflect.ValueOf(api.OperationOCRScreen),
@@ -447,6 +448,8 @@ func init() {
 		"DictationStatus":         reflect.ValueOf((*api.DictationStatus)(nil)),
 		"Dimension":               reflect.ValueOf((*api.Dimension)(nil)),
 		"DisplayInfo":             reflect.ValueOf((*api.DisplayInfo)(nil)),
+		"DownloadRequest":         reflect.ValueOf((*api.DownloadRequest)(nil)),
+		"DownloadResponse":        reflect.ValueOf((*api.DownloadResponse)(nil)),
 		"DraftConflict":           reflect.ValueOf((*api.DraftConflict)(nil)),
 		"DraftOptions":            reflect.ValueOf((*api.DraftOptions)(nil)),
 		"DraftResolution":         reflect.ValueOf((*api.DraftResolution)(nil)),
@@ -1539,10 +1542,14 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Navigation) Run(action
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Network is an interface wrapper for Network type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Network struct {
-	IValue interface{}
-	WFetch func(request api.FetchRequest) (api.FetchResponse, error)
+	IValue    interface{}
+	WDownload func(request api.DownloadRequest) (api.DownloadResponse, error)
+	WFetch    func(request api.FetchRequest) (api.FetchResponse, error)
 }
 
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Network) Download(request api.DownloadRequest) (api.DownloadResponse, error) {
+	return W.WDownload(request)
+}
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Network) Fetch(request api.FetchRequest) (api.FetchResponse, error) {
 	return W.WFetch(request)
 }

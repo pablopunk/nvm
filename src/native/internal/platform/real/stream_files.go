@@ -18,6 +18,10 @@ const streamFileLimit int64 = 64 << 20
 var _ platform.StreamFiles = osFS{}
 
 // WriteStream stages privately under a pinned parent and publishes only after authority is revalidated.
+// The pin differs by OS but the guarantee is the same: a download never lands in a directory that replaced
+// the one it was admitted for. Unix keeps writing into the original directory through its open handle even if
+// the path is renamed away; Windows refuses to rename or delete a directory while that handle is open, so the
+// replacement cannot happen at all until the write ends.
 func (osFS) WriteStream(ctx context.Context, name string, source io.Reader, maxBytes int64, overwrite bool, admit func() error) (result platform.StreamFileResult, err error) {
 	return writeStream(ctx, name, source, maxBytes, overwrite, admit, streamFileOps{})
 }

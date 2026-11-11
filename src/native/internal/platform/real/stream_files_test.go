@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -90,21 +91,31 @@ func TestStreamPinsParentAcrossRename(t *testing.T) {
 		done <- outcome{result, err}
 	}()
 	<-reader.entered
-	if err := os.Rename(dir, moved); err != nil {
-		t.Fatal(err)
+	renamed := os.Rename(dir, moved) == nil
+	if !renamed && runtime.GOOS != "windows" {
+		t.Fatal("renaming the parent of an in-flight write failed")
 	}
-	if err := os.Mkdir(dir, 0700); err != nil {
-		t.Fatal(err)
+	if renamed {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	close(reader.release)
 	got := <-done
 	if got.err != nil || !got.result.Published {
 		t.Fatalf("result=%+v err=%v", got.result, got.err)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "file")); !errors.Is(err, fs.ErrNotExist) {
-		t.Fatalf("published to replacement: %v", err)
+	// Where the rename succeeded the write must follow the handle to the moved directory and leave the
+	// replacement empty; where the OS refuses the rename (Windows) the original directory is the only place
+	// the file can be.
+	published, other := dir, moved
+	if renamed {
+		published, other = moved, dir
 	}
-	data, err := os.ReadFile(filepath.Join(moved, "file"))
+	if _, err := os.Stat(filepath.Join(other, "file")); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("published to the wrong directory: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(published, "file"))
 	if err != nil || string(data) != "ok" {
 		t.Fatalf("data=%q err=%v", data, err)
 	}
