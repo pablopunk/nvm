@@ -424,10 +424,12 @@
     "implementation": "remoteNotes",
     "methods": [
       "Create",
+      "CreateWith",
       "Delete",
       "Get",
       "List",
       "Recent",
+      "Search",
       "Update"
     ]
   },

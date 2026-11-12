@@ -84,13 +84,18 @@ func (s *Store) MostRecentOrCreate(now time.Time) (Note, error) {
 
 // Create adds an empty note created at now and returns it.
 func (s *Store) Create(now time.Time) (Note, error) {
+	return s.CreateWith(now, "")
+}
+
+// CreateWith adds a note created at now that holds markdown, cut to MaxTextBytes, and returns it.
+func (s *Store) CreateWith(now time.Time, markdown string) (Note, error) {
 	if s.readOnly {
 		return Note{}, store.ErrReadOnly
 	}
 	if len(s.usableNotes()) >= MaxNotes {
 		return Note{}, ErrLimit
 	}
-	note := Note{ID: s.nextID(now), CreatedAt: now, UpdatedAt: now}
+	note := Note{ID: s.nextID(now), Markdown: truncateText(markdown), CreatedAt: now, UpdatedAt: now}
 	if err := s.notes.Update(func(d *notesDocument) { d.Notes = append([]Note{note}, d.Notes...) }); err != nil {
 		return Note{}, err
 	}

@@ -30,6 +30,18 @@ func (n remoteNotes) Create() (api.Note, error) {
 	return note, err
 }
 
+func (n remoteNotes) Search(query string, limit int) ([]api.NoteMatch, error) {
+	var matches []api.NoteMatch
+	err := n.link.Call(protocol.ServiceNotes, protocol.OpSearch, protocol.NoteSearchArgs{Query: query, Limit: limit}, &matches)
+	return matches, err
+}
+
+func (n remoteNotes) CreateWith(markdown string) (api.Note, error) {
+	var note api.Note
+	err := n.link.Call(protocol.ServiceNotes, protocol.OpCreateWith, protocol.NoteCreateWithArgs{Markdown: markdown}, &note)
+	return note, err
+}
+
 func (n remoteNotes) Recent() (api.Note, error) {
 	var note api.Note
 	err := n.link.Call(protocol.ServiceNotes, protocol.OpRecent, nil, &note)

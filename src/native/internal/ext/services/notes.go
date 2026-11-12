@@ -37,6 +37,10 @@ func (h *Handler) serveNotes(ctx context.Context, call protocol.ServiceCall) (an
 		return h.noteGet(store, call.Args)
 	case protocol.OpCreate:
 		return h.noteCreate(store)
+	case protocol.OpCreateWith:
+		return h.noteCreateWith(store, call.Args)
+	case protocol.OpSearch:
+		return h.noteSearch(store, call.Args)
 	case protocol.OpRecent:
 		return h.noteRecent(store)
 	case protocol.OpUpdate:
@@ -66,6 +70,28 @@ func (h *Handler) noteGet(store *notes.Store, raw json.RawMessage) (protocol.Not
 func (h *Handler) noteCreate(store *notes.Store) (api.Note, error) {
 	n, err := store.Create(h.deps.Clock.Now())
 	return noteValue(n), noteError(err)
+}
+
+func (h *Handler) noteCreateWith(store *notes.Store, raw json.RawMessage) (api.Note, error) {
+	var args protocol.NoteCreateWithArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return api.Note{}, err
+	}
+	n, err := store.CreateWith(h.deps.Clock.Now(), args.Markdown)
+	return noteValue(n), noteError(err)
+}
+
+func (h *Handler) noteSearch(store *notes.Store, raw json.RawMessage) ([]api.NoteMatch, error) {
+	var args protocol.NoteSearchArgs
+	if err := decodeArgs(raw, &args); err != nil {
+		return nil, err
+	}
+	found := store.Search(args.Query, args.Limit)
+	out := make([]api.NoteMatch, 0, len(found))
+	for _, match := range found {
+		out = append(out, api.NoteMatch{ID: match.Note.ID, Title: match.Title, Snippet: match.Snippet, UpdatedAt: match.Note.UpdatedAt})
+	}
+	return out, nil
 }
 
 func (h *Handler) noteRecent(store *notes.Store) (api.Note, error) {

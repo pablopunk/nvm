@@ -21,6 +21,13 @@ type Notes interface {
 	Create() (Note, error)
 	// Recent returns the most recent note, creating one when there is none.
 	Recent() (Note, error)
+	// Search finds the notes whose text holds every word of query, ignoring case, best matches first: notes whose title
+	// holds the words come before the others, and newer before older. An empty query lists the most recent notes. limit
+	// is at most 50 and 20 when it is zero. A match carries a title and a snippet, never the whole text: read it with
+	// Get.
+	Search(query string, limit int) ([]NoteMatch, error)
+	// CreateWith creates a note that holds markdown. Prefer it to Create followed by Update.
+	CreateWith(markdown string) (Note, error)
 	// Update saves markdown when the saved version is still updatedAt. A newer one is a conflict: nothing is written,
 	// and the saved note comes back with true.
 	Update(id, markdown string, updatedAt time.Time) (Note, bool, error)
@@ -32,6 +39,15 @@ type Notes interface {
 type Note struct {
 	ID        string    `json:"id"`
 	Markdown  string    `json:"markdown"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// NoteMatch is one note a search found: its id, title (the first line, without heading marks), a snippet of the text
+// around the first hit, and its saved version.
+type NoteMatch struct {
+	ID        string    `json:"id"`
+	Title     string    `json:"title"`
+	Snippet   string    `json:"snippet"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
