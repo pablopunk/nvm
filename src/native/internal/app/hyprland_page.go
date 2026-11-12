@@ -80,6 +80,7 @@ func (s *hyprlandPageState) rows() []search.Item {
 	}
 	if plan := s.plan.Load(); plan != nil && session.Ready() {
 		rows = append(rows, s.applyRow(*plan))
+		rows = append(rows, skippedRows(plan.Skipped)...)
 	} else if msg := s.planErr.Load(); msg != nil && session.Ready() {
 		rows = append(rows, search.Item{Title: *msg, Contextual: true, Icon: "circle-alert"})
 	}
@@ -240,7 +241,7 @@ func (s *hyprlandPageState) copyRows(session hyprland.Session) []search.Item {
 	return rows
 }
 
-// reportRows show what the last step found: its error, conflicting binds, and what the module could not hold.
+// reportRows show what the last step found: its error and conflicting binds.
 func reportRows(last *compositor.Report) []search.Item {
 	if last == nil {
 		return nil
@@ -252,11 +253,17 @@ func reportRows(last *compositor.Report) []search.Item {
 	for _, c := range last.Result.Conflicts {
 		rows = append(rows, search.Item{Title: c, Icon: "triangle-alert", Contextual: true})
 	}
-	for _, skipped := range last.Result.Skipped {
-		rows = append(rows, search.Item{Title: "Not written: " + skipped.What + ": " + skipped.Reason, Icon: "triangle-alert", Contextual: true})
-	}
 	if last.Err == nil && last.Result.Loaded == hyprland.LoadedUnverified && last.Step == "apply" {
 		rows = append(rows, search.Item{Title: "Hyprland's bind list could not confirm the shortcuts", Icon: "info", Contextual: true})
+	}
+	return rows
+}
+
+// skippedRows list each shortcut or rule the module leaves out and why, such as the user's own bind in its way.
+func skippedRows(skipped []hyprland.Skipped) []search.Item {
+	var rows []search.Item
+	for _, s := range skipped {
+		rows = append(rows, search.Item{Title: "Not written: " + s.What + ": " + s.Reason, Icon: "triangle-alert", Contextual: true})
 	}
 	return rows
 }
