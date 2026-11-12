@@ -133,10 +133,10 @@ func TestCommandsKeepTheOneXShortcutIDsAndRunInTheBackground(t *testing.T) {
 	if len(commands) != 2 || commands[0].ID != DictateCommandID || commands[1].ID != HistoryCommandID {
 		t.Fatalf("commands %+v; want Dictate and Dictation History", commands)
 	}
-	if !commands[0].Customizable || commands[0].Mode != api.ModeBackground || !commands[0].DismissAfterRun {
+	if !commands[0].TakesCustomization() || commands[0].Mode != api.ModeBackground || !commands[0].DismissAfterRun {
 		t.Fatalf("Dictate %+v; want a customizable background command that dismisses", commands[0])
 	}
-	if !commands[1].Customizable {
+	if !commands[1].TakesCustomization() {
 		t.Fatalf("Dictation History %+v; want it customizable", commands[1])
 	}
 }

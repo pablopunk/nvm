@@ -991,6 +991,14 @@
           {
             "title": "Create Quicklink",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -1609,6 +1617,14 @@
           {
             "title": "Start Timer",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       }
@@ -1687,6 +1703,14 @@
           {
             "title": "Window Management Settings",
             "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
           }
         ]
       },
@@ -1705,6 +1729,14 @@
         "actions": [
           {
             "title": "Move Window…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -1800,6 +1832,14 @@
         "actions": [
           {
             "title": "Create Snippet",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]

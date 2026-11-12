@@ -37,13 +37,19 @@ type Command struct {
 	Placement       []Placement    `json:"placement,omitempty"`
 	Triggers        []Trigger      `json:"triggers,omitempty"`
 	DismissAfterRun bool           `json:"dismissAfterRun,omitempty"`
-	// Customizable enables the shortcut and alias actions for a built-in.
-	Customizable bool `json:"customizable,omitempty"`
+	// Customizable is on unless false: the row offers shortcut and alias actions. Set it to a pointer to false to opt out.
+	Customizable *bool `json:"customizable,omitempty"`
 	// Section and LearnKey are built-in presentation metadata.
 	Section     string       `json:"section,omitempty"`
 	LearnKey    string       `json:"learnKey,omitempty"`
 	Actions     []Action     `json:"actions,omitempty"`
 	ActionPanel *ActionPanel `json:"actionPanel,omitempty"`
+}
+
+// TakesCustomization reports whether the command's row offers the shortcut and alias actions: every command does unless
+// it opts out.
+func (c Command) TakesCustomization() bool {
+	return c.Customizable == nil || *c.Customizable
 }
 
 // Validate checks the command id, its triggers and its secondary actions.

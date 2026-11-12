@@ -55,7 +55,7 @@ func (Extension) Commands(api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID: CommandID, Title: listTitle, Subtitle: "Rules the AI builder learned from you", Icon: "brain", Score: scoreRoot,
 		Keywords: []string{"ai", "learnings", "rules", "memory", "builder", "preferences"}, Section: search.KindCommands,
-		Appearance: &api.Appearance{Foreground: api.ColorPurple}, Customizable: true, LearnKey: "cmd:" + listTitle,
+		Appearance: &api.Appearance{Foreground: api.ColorPurple}, LearnKey: "cmd:" + listTitle,
 	}}, nil
 }
 

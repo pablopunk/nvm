@@ -95,7 +95,7 @@ func triageCommand() api.Command {
 		Keywords:        []string{"triage classify decide reply urgency selected text ai"},
 		Mode:            api.ModeBackground,
 		DismissAfterRun: true,
-		Customizable:    true,
-		Placement:       []api.Placement{api.PlacementRoot, api.PlacementSearch},
+
+		Placement: []api.Placement{api.PlacementRoot, api.PlacementSearch},
 	}
 }

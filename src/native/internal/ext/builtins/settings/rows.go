@@ -32,7 +32,7 @@ var updateChannels = []api.SettingChoice{{Value: "stable", Title: "Stable"}, {Va
 var menuBarStyles = []api.SettingChoice{
 	{Value: "bolt-filled", Title: "Filled Bolt"}, {Value: "bolt-outline", Title: "Bolt Outline"}, {Value: "emoji", Title: "Emoji ⚡"},
 	{Value: "app-icon", Title: "App Icon"}, {Value: "gold-outline", Title: "Gold Bolt Outline"}, {Value: "gold-filled", Title: "Gold Bolt"},
-	{Value: "gold-glossy", Title: "Glossy Gold Bolt"},
+	{Value: "gold-glossy", Title: "Glossy Gold Bolt"}, {Value: "none", Title: "None"},
 }
 
 // pageRows are the rows of the settings page, in the order the native page showed them. The Launch at Login row is
@@ -67,7 +67,7 @@ func pageRows(launchAtLoginSupported bool) []api.SettingRow {
 		api.SettingRow{ID: SettingUpdateChannel, Kind: api.SettingRowChoice, Setting: SettingUpdateChannel, Title: "Update Channel", Icon: "shield-check",
 			ActionTitle: "Switch", Choices: updateChannels},
 		api.SettingRow{ID: SettingMenuBarIconStyle, Kind: api.SettingRowChoice, Setting: SettingMenuBarIconStyle, Title: "Menu Bar Icon Style",
-			Subtitle: "How the Nevermind icon looks in the menu bar", Icon: "zap", ActionTitle: "Next", Choices: menuBarStyles},
+			Subtitle: "How the Nevermind icon looks in the menu bar, or None to hide it", Icon: "zap", ActionTitle: "Next", Choices: menuBarStyles},
 		api.SettingRow{ID: RowAccount, Kind: api.SettingRowAction, Title: "Account", Icon: "user", Action: hostAction(opAccountPage, "Open")},
 		api.SettingRow{ID: RowConfigFolder, Kind: api.SettingRowAction, Title: "Open Config Folder", Icon: "folder", Action: hostAction(opConfigFolder, "Open")},
 	)

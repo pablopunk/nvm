@@ -75,7 +75,7 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 func ShortcutCommands() []api.Command {
 	var out []api.Command
 	for _, command := range allCommands() {
-		if command.Customizable {
+		if command.Mode == api.ModeNoView {
 			out = append(out, command)
 		}
 	}
@@ -104,7 +104,7 @@ func allCommands() []api.Command {
 func inPlaceCommand(id string, p presentation) api.Command {
 	return api.Command{
 		ID: id, ActionID: actionKey(id), Title: p.title, Subtitle: WindowManagementSubtitle, Icon: p.icon, Keywords: p.keywords,
-		Mode: api.ModeNoView, DismissAfterRun: true, Placement: []api.Placement{api.PlacementSearch}, Customizable: true,
+		Mode: api.ModeNoView, DismissAfterRun: true, Placement: []api.Placement{api.PlacementSearch},
 		Appearance: neutralAppearance, Section: search.KindCommands,
 		LearnKey: "cmd:" + p.title,
 		Actions:  []api.Action{api.Run(settingsCommandID, "Window Management Settings", nil)},

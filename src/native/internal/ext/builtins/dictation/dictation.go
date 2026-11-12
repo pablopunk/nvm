@@ -95,7 +95,7 @@ func dictateCommand() api.Command {
 	return api.Command{
 		ID: DictateCommandID, Title: dictateTitle, Subtitle: dictateSubtitle, Icon: "mic", Score: scoreRootCommand,
 		Aliases: []string{"dictate", "dictation", "voice dictation"}, Keywords: []string{"dictate dictation voice speech transcribe"},
-		Mode: api.ModeBackground, DismissAfterRun: true, Customizable: true, Appearance: &api.Appearance{Foreground: api.ColorNone},
+		Mode: api.ModeBackground, DismissAfterRun: true, Appearance: &api.Appearance{Foreground: api.ColorNone},
 		Section: search.KindCommands, LearnKey: "cmd:" + dictateTitle,
 		ActionPanel: api.Panel(api.Section("", api.Run(RefOpenSettings, "Settings", nil))),
 	}
@@ -106,7 +106,7 @@ func historyCommand() api.Command {
 	return api.Command{
 		ID: HistoryCommandID, Title: historyTitle, Subtitle: historySubtitle, Icon: "history", Score: scoreRootCommand,
 		Aliases: []string{"dictation history", "transcripts", "voice history"}, Keywords: []string{"dictation history transcripts voice history"},
-		Customizable: true, Appearance: &api.Appearance{Foreground: api.ColorNone}, Section: search.KindCommands, LearnKey: "cmd:" + historyTitle,
+		Appearance: &api.Appearance{Foreground: api.ColorNone}, Section: search.KindCommands, LearnKey: "cmd:" + historyTitle,
 	}
 }
 

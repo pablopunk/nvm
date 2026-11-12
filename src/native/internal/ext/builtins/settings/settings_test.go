@@ -39,8 +39,8 @@ func TestPageRowsAreValidAndKeepTheirOrder(t *testing.T) {
 }
 
 func TestMenuBarStylesAreTheSevenOneXStyles(t *testing.T) {
-	if len(menuBarStyles) != 7 || menuBarStyles[0].Value != "bolt-filled" {
-		t.Fatalf("menu bar styles = %v; want the seven 1.x styles starting with bolt-filled", menuBarStyles)
+	if len(menuBarStyles) != 8 || menuBarStyles[0].Value != "bolt-filled" || menuBarStyles[7].Value != "none" {
+		t.Fatalf("menu bar styles = %v; want the seven 1.x styles starting with bolt-filled, then none", menuBarStyles)
 	}
 }
 

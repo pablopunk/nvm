@@ -34,13 +34,13 @@ func (Extension) Commands(api.Context) ([]api.Command, error) {
 	return []api.Command{
 		{
 			ID: ForceQuitCommandID, Title: forceQuitTitle, Subtitle: forceQuitSubtitle, Icon: "stop-circle",
-			Keywords: splitWords(forceQuitKeywords), Score: forceQuitScore, Customizable: true,
+			Keywords: splitWords(forceQuitKeywords), Score: forceQuitScore,
 			Appearance: &api.Appearance{Foreground: api.ColorRed},
 			Section:    search.KindCommands, LearnKey: "cmd:" + forceQuitTitle,
 		},
 		{
 			ID: QuitAllCommandID, Title: quitAllTitle, Subtitle: quitAllSubtitle, Icon: "power",
-			Keywords: splitWords(quitAllKeywords), Score: quitAllScore, Customizable: true,
+			Keywords: splitWords(quitAllKeywords), Score: quitAllScore,
 			Appearance: &api.Appearance{Foreground: api.ColorRed},
 			Section:    search.KindCommands, LearnKey: "cmd:" + quitAllTitle,
 		},

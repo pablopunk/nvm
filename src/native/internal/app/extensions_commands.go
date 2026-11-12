@@ -29,7 +29,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		}
 		p.shortcutTitles.remember(actionID, command.Title)
 		row := commandRow(p, m, result, command, score)
-		if commandTakesShortcuts(m, result.ExtensionID, command) {
+		if commandTakesShortcuts(command) {
 			row = p.withShortcutActions(row, actionID, bound)
 		}
 		out = append(out, p.withAuthoringActions(row, result.ExtensionID, command.ID))
@@ -118,10 +118,10 @@ func commandPlacedInSearch(command api.Command) bool {
 	return slices.Contains(command.Placement, api.PlacementRoot) || slices.Contains(command.Placement, api.PlacementSearch)
 }
 
-// commandTakesShortcuts reports whether a command's row offers the shortcut and alias actions. Folder extensions keep
-// them; a built-in's command offers them only when it is Customizable.
-func commandTakesShortcuts(m *manager.Manager, extID string, command api.Command) bool {
-	return !m.IsBuiltIn(extID) || command.Customizable
+// commandTakesShortcuts reports whether a command's row offers the shortcut and alias actions. Every command does, built-in
+// or folder extension, unless it opts out with Customizable set to false.
+func commandTakesShortcuts(command api.Command) bool {
+	return command.TakesCustomization()
 }
 
 // commandTone is the tone of a command's row: the foreground the command names, else the extension tone. The neutral

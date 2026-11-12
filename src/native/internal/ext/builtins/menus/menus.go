@@ -28,7 +28,7 @@ func (e Extension) Commands(api.Context) ([]api.Command, error) {
 	if !e.available {
 		return nil, nil
 	}
-	return []api.Command{{ID: CommandID, Title: "Search Menu Items", Keywords: []string{"app", "menu", "current", "application"}, Customizable: true, Section: search.KindCommands}}, nil
+	return []api.Command{{ID: CommandID, Title: "Search Menu Items", Keywords: []string{"app", "menu", "current", "application"}, Section: search.KindCommands}}, nil
 }
 
 func (e Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {

@@ -11,8 +11,11 @@ type UpdateSurface interface {
 	State() api.UpdateState
 }
 
-// serveUpdates answers the state of the app's updater. Without a surface the host has no updater to report.
+// serveUpdates answers the state of the app's updater to an extension that declared the updates capability. Without a surface the host has no updater to report.
 func (h *Handler) serveUpdates(call protocol.ServiceCall) (any, error) {
+	if err := h.require(api.CapabilityUpdates); err != nil {
+		return nil, err
+	}
 	if h.deps.Updates == nil {
 		return nil, unavailable("updates are not available in this build")
 	}

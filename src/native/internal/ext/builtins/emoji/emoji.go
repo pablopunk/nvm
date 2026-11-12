@@ -96,7 +96,7 @@ func (e *Extension) Manifest() api.Manifest {
 func (e *Extension) Commands(api.Context) ([]api.Command, error) {
 	return []api.Command{{
 		ID: CommandID, Title: Title, Keywords: []string{"emoji", "symbols", "unicode", "smiley"}, Icon: "smile",
-		Subtitle: "Search and paste emoji", Customizable: true, Section: search.KindCommands, LearnKey: "cmd:" + Title,
+		Subtitle: "Search and paste emoji", Section: search.KindCommands, LearnKey: "cmd:" + Title,
 		Appearance: &api.Appearance{Foreground: api.ColorYellow}, Placement: []api.Placement{api.PlacementSearch},
 		Actions: []api.Action{api.Run(openAction, Title, nil)},
 	}}, nil
