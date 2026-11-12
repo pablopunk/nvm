@@ -12,7 +12,6 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ai/agent"
 	"github.com/pablopunk/nvm/native/internal/ext/child"
-	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
@@ -162,8 +161,6 @@ func (c *fakeCall) End(status agent.CallStatus, outcome, _ string) {
 
 func allow(*fakeRow, context.Context) (bool, error)   { return true, nil }
 func decline(*fakeRow, context.Context) (bool, error) { return false, nil }
-
-var _ = protocol.MethodProgram
 
 // childProcesses counts the live children of the test process. Only Linux can say, so other systems skip the check.
 func childProcesses(t *testing.T) int {

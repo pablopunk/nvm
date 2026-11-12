@@ -7,6 +7,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -63,7 +64,32 @@ func Prepare(body string) (Prepared, error) {
 	if err != nil {
 		return Prepared{}, err
 	}
-	return Prepared{Source: header(imports) + body + "\n}\n", Imports: imports}, nil
+	prepared := Prepared{Source: header(imports) + body + "\n}\n", Imports: imports}
+	return prepared, checkFinalSource(prepared)
+}
+
+// checkFinalSource parses the file the child will load, not the one the checks ran on, and checks it again: the host
+// never trusts that the two headers parse the body the same way.
+func checkFinalSource(prepared Prepared) error {
+	file, err := parser.ParseFile(token.NewFileSet(), "program.go", prepared.Source, parser.AllErrors)
+	if err != nil {
+		return reject("the program does not parse: %v", err)
+	}
+	fn, err := mainFunction(file)
+	if err != nil {
+		return err
+	}
+	if err := refuseConstructs(fn.Body); err != nil {
+		return err
+	}
+	allowed := allowedByName()
+	for _, spec := range file.Imports {
+		path, _ := strconv.Unquote(spec.Path.Value)
+		if _, standard := allowed[PackageName(path)]; path != APIImportPath && !(standard && allowed[PackageName(path)] == path) {
+			return reject("the program imports %s, which programs may not use", path)
+		}
+	}
+	return nil
 }
 
 // header is everything before the body, on one line.
