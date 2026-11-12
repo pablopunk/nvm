@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -59,6 +60,9 @@ func (p *App) captureWindowFocus() int {
 	if p.ports.Windows == nil || (p.menus == nil && p.focusOption() != nil) {
 		return 0
 	}
+	if p.Palette != nil && p.Presented() {
+		return p.windowFocus.load().target.PID // already summoned over that app; the front app may be the palette's own
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), focusCaptureTimeout)
 	defer cancel()
 	app, found, err := p.ports.Windows.Frontmost(ctx)
@@ -68,6 +72,10 @@ func (p *App) captureWindowFocus() int {
 	if err != nil || !found {
 		p.windowFocus.store(summonRecord{})
 		return 0
+	}
+	if app.PID == os.Getpid() {
+		p.windowFocus.store(summonRecord{})
+		return 0 // Nevermind in front is not an app to act on: nothing was in front before it
 	}
 	p.windowFocus.store(summonRecord{target: windowmgmt.Target{PID: app.PID, BundleID: app.BundleID}, known: true})
 	return app.PID
