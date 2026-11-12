@@ -82,13 +82,14 @@ func (s *Service) SetUndecorated(on bool) error {
 	return s.saveState(next)
 }
 
-// Preview prepares a change for the cached session, detecting first when nothing is cached.
+// Preview prepares a change for the cached session, detecting first when nothing is cached. Shortcuts the user's own
+// binds already use are left out and listed as skipped.
 func (s *Service) Preview(ctx context.Context, d hyprland.Desired) (hyprland.Plan, error) {
 	session, ok := s.Session()
 	if !ok {
 		session = s.Detect(ctx)
 	}
-	return hyprland.Prepare(session, d)
+	return hyprland.PrepareAgainstBinds(ctx, s.env, session, d)
 }
 
 // Apply writes a previewed plan and records whether the compositor now owns the shortcuts.
