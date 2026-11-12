@@ -21,3 +21,8 @@ func NewSelectedText(helper platform.Helper) platform.SelectedText {
 func (s selectedText) CopySelection(expectedAppID string) error {
 	return copyGesture(context.Background(), s.helper, expectedAppID)
 }
+
+// ReadAccessibleSelection reads the selection of the frontmost app through the OS accessibility API.
+func (s selectedText) ReadAccessibleSelection() (string, error) {
+	return accessibleSelection(context.Background(), s.helper)
+}

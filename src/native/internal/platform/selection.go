@@ -13,3 +13,14 @@ type SelectedText interface {
 	// expectedAppID is "".
 	CopySelection(expectedAppID string) error
 }
+
+// AccessibleSelection is the optional second way to read the selection: the OS accessibility API, which returns the
+// text without a keystroke or a clipboard change. A SelectedText that also implements it is asked first; an empty
+// answer (many Electron apps do not expose their selection) falls back to the copy gesture.
+//
+// ReadAccessibleSelection returns "" with a nil error when the focused element has no selection or does not expose
+// one. It reports ErrUnsupported where the OS has no such API, ErrDenied without the permission, and ErrConflict when
+// the frontmost app is Nevermind itself.
+type AccessibleSelection interface {
+	ReadAccessibleSelection() (string, error)
+}
