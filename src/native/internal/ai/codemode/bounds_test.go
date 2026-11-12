@@ -77,14 +77,16 @@ func TestSourceOverTheLimitIsRefusedBeforeAnythingIsStaged(t *testing.T) {
 
 func TestRefusedProgramsNeverStartAProcess(t *testing.T) {
 	f := newFixture(t)
+	// Children of earlier tests in this package may still be exiting, so compare against the count before these runs.
+	before := childProcesses(t)
 	for _, body := range []string{"data, _ := os.ReadFile(\"/etc/hostname\")\nreturn string(data), nil", "go func() {}()\nreturn nil, nil", "import \"os\"\nreturn nil, nil"} {
 		result := f.run(body)
 		if !result.Failed || !strings.HasPrefix(result.Text, "The program was not run: ") {
 			t.Fatalf("%q: result = %+v", body, result)
 		}
 	}
-	if childProcesses(t) != 0 {
-		t.Fatal("a refused program started a child")
+	if after := childProcesses(t); after > before {
+		t.Fatalf("a refused program started a child: %d children before, %d after", before, after)
 	}
 	f.noStagedPrograms()
 }
