@@ -85,7 +85,7 @@ func (r *Runtime) exchange(admission, ctx, lifetime context.Context, gate *dispa
 // childForCall binds a request to a particular child after any in-progress startup. Stop ends the captured lifetime,
 // so a request cannot follow an installation across disable, replacement, or an explicit restart.
 func (r *Runtime) childForCall(ctx, lifetime context.Context, method string) (*childProcess, Budget, error) {
-	waitStarting := method == protocol.MethodRun || method == protocol.MethodLoad || method == protocol.MethodSearch
+	waitStarting := method == protocol.MethodRun || method == protocol.MethodLoad || method == protocol.MethodSearch || method == protocol.MethodProgram
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, Budget{}, err

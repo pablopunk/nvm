@@ -64,11 +64,14 @@ const (
 // ToolRun describes one tool call in the transcript: what it is for, its arguments in short form, and the line that
 // says how it ended. The text of its message is the result the model read.
 type ToolRun struct {
-	CallID  string `json:"callId"`
-	Name    string `json:"name"`
-	Label   string `json:"label"`
-	Input   string `json:"input,omitempty"`
-	Outcome string `json:"outcome,omitempty"`
+	CallID string `json:"callId"`
+	// ParentID is the call this row is nested under: a program's actions show under the program row. Empty for a call
+	// the model made.
+	ParentID string `json:"parentId,omitempty"`
+	Name     string `json:"name"`
+	Label    string `json:"label"`
+	Input    string `json:"input,omitempty"`
+	Outcome  string `json:"outcome,omitempty"`
 }
 
 // Message is one entry of a transcript. Notice is set for AuthorNotice messages only. Calls are the tool calls an

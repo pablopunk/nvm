@@ -39,6 +39,23 @@ func RenderCompact(sources fs.FS) (string, error) {
 	return render(sources, true)
 }
 
+// RenderSubset returns the terse reference of only the listed Context accessors, such as "Notes", and the types they
+// reach. A program that uses a few services reads this instead of the whole reference. An accessor the Context does not
+// declare is an error, so a rename in the api cannot silently empty the text.
+func RenderSubset(sources fs.FS, accessors []string) (string, error) {
+	fset := token.NewFileSet()
+	files, err := parseAPIFiles(fset, sources)
+	if err != nil {
+		return "", err
+	}
+	if len(files) == 0 {
+		return "", fmt.Errorf("no api package source files")
+	}
+	index := indexPackage(fset, files)
+	index.terse = true
+	return index.renderSubset(accessors)
+}
+
 func render(sources fs.FS, terse bool) (string, error) {
 	fset := token.NewFileSet()
 	files, err := parseAPIFiles(fset, sources)

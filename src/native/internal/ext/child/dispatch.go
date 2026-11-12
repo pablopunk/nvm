@@ -37,7 +37,12 @@ func (e *extension) answer(req protocol.Request) (response protocol.Response) {
 
 // dispatch maps a method to its entry point and returns the JSON of the result.
 func (e *extension) dispatch(req protocol.Request) (json.RawMessage, error) {
+	if e.program != (req.Method == protocol.MethodProgram) {
+		return nil, fmt.Errorf("this child does not serve %q: %w", req.Method, api.ErrInvalidInput)
+	}
 	switch req.Method {
+	case protocol.MethodProgram:
+		return e.runProgram()
 	case protocol.MethodCommands:
 		return e.encode(protocol.MethodCommands, e.contextArgument(api.LaunchContext{}))
 	case protocol.MethodRoot:

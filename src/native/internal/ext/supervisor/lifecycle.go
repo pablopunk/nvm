@@ -213,10 +213,14 @@ func backoffFor(n int) time.Duration {
 // childArgs are the arguments that make this binary serve as the extension child.
 func (r *Runtime) childArgs() []string {
 	identity, _ := json.Marshal(r.identity)
-	return []string{
+	args := []string{
 		protocol.ChildFlag,
 		r.sourcePath,
 		strconv.FormatUint(r.cfg.MemoryLimit, 10),
 		string(identity),
 	}
+	if r.program {
+		args = append(args, protocol.ProgramArg)
+	}
+	return args
 }

@@ -40,10 +40,13 @@ const (
 
 // CallInfo identifies a tool call on the event stream. Input is the tool's one-line summary of the arguments.
 type CallInfo struct {
-	ID    string
-	Name  string
-	Label string
-	Input string
+	ID string
+	// ParentID is the call this one belongs to: a tool that acts on the user's behalf reports each action as a call
+	// nested under its own. It is empty for a call the model made.
+	ParentID string
+	Name     string
+	Label    string
+	Input    string
 }
 
 // Event is one item of a turn's stream. Only the fields of its Kind are set.

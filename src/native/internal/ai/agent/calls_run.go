@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -74,8 +75,8 @@ func (r *turnRun) decideAndRun(call backend.ToolCall, tool Tool, known bool, inf
 	}
 	if tool.Confirm {
 		asked := r.setup.Clock.Now()
-		allowed, cancelled := r.await(call.ID, info)
-		r.waited += r.setup.Clock.Now().Sub(asked)
+		allowed, cancelled := r.await(r.ctx, call.ID, info)
+		r.waited.Add(int64(r.setup.Clock.Now().Sub(asked)))
 		switch {
 		case cancelled:
 			return callResult{status: CallCancelled, result: abandonedResult, outcome: "Stopped before it ran"}
@@ -83,11 +84,12 @@ func (r *turnRun) decideAndRun(call backend.ToolCall, tool Tool, known bool, inf
 			return callResult{status: CallRefused, result: "The user did not allow this tool call.", outcome: "Refused by you"}
 		}
 	}
-	return r.run(tool, json.RawMessage(arguments))
+	return r.run(tool, json.RawMessage(arguments), info)
 }
 
-// await asks the user to allow a call and waits for the answer or the cancellation of the turn.
-func (r *turnRun) await(callID string, info CallInfo) (allowed, cancelled bool) {
+// await asks the user to allow a call and waits for the answer or the end of ctx, which is the turn's context or one
+// derived from it.
+func (r *turnRun) await(ctx context.Context, callID string, info CallInfo) (allowed, cancelled bool) {
 	answer := make(chan bool, 1)
 	r.turn.mu.Lock()
 	r.turn.waiting[callID] = answer
@@ -96,7 +98,7 @@ func (r *turnRun) await(callID string, info CallInfo) (allowed, cancelled bool) 
 	select {
 	case allowed := <-answer:
 		return allowed, false
-	case <-r.ctx.Done():
+	case <-ctx.Done():
 		r.turn.mu.Lock()
 		delete(r.turn.waiting, callID)
 		r.turn.mu.Unlock()

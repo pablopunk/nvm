@@ -24,6 +24,8 @@ const (
 	// MethodRestoreWindow asks for the fresh view of a persistent window, with Invocation.Ref.ID as the restore key.
 	MethodRestoreWindow = "restore-window" // WindowRestorer.RestoreWindow
 	MethodRowActions    = "row-actions"    // RowActionProvider.RowActions, with the row in Invocation.Ref.Args
+	// MethodProgram runs the program of an AI conversation: the child was started in program mode and calls its Main.
+	MethodProgram = "program"
 )
 
 // Host services an extension may call while a request runs. The child sends a ServiceCall and blocks until the
@@ -51,6 +53,14 @@ const (
 // ChildFlag is the first argument that makes the binary an extension child. The arguments that follow are the
 // extension source path, the address-space limit in bytes (0 for none) and the identity as JSON.
 const ChildFlag = "--nvm-ext-child"
+
+// ProgramArg is the child's sixth argument when it runs one AI conversation program instead of an extension. The child
+// then loads only the program package's symbols and answers MethodProgram only.
+const ProgramArg = "program"
+
+// MaxProgramResultBytes bounds the JSON a program returns. A larger result is a failure the model can read, so it
+// returns less instead of the child failing on the protocol line limit.
+const MaxProgramResultBytes = 64 << 10
 
 // MaxLineBytes bounds one protocol line in either direction. A longer line is a failed call, not a
 // partial read: the host kills the child.

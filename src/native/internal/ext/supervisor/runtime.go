@@ -15,9 +15,11 @@ import (
 // Runtime owns the child process of one extension. Calls are serialized: a child answers one request at a
 // time. Every method is safe for concurrent use; Call never blocks past its context.
 type Runtime struct {
-	cfg              Config
-	sourcePath       string
-	identity         api.Identity
+	cfg        Config
+	sourcePath string
+	identity   api.Identity
+	// program makes the child run one AI conversation program: it serves MethodProgram only.
+	program          bool
 	services         ServiceHandler
 	slots            chan struct{}
 	viewServices     chan struct{}
@@ -54,6 +56,15 @@ func New(cfg Config, identity api.Identity, sourcePath string, services ServiceH
 		dispatchChange: func(fn func()) { go fn() },
 	}
 	r.lifetime, r.cancelLifetime = context.WithCancel(context.Background())
+	return r
+}
+
+// NewProgram prepares a runtime for one program of an AI conversation, staged at sourcePath. It is a throwaway: it is
+// never registered with the extension manager, serves MethodProgram only, and the caller stops it when the run ends.
+// services answers the program's service calls; it is the gate, so nil refuses every call.
+func NewProgram(cfg Config, identity api.Identity, sourcePath string, services ServiceHandler) *Runtime {
+	r := New(cfg, identity, sourcePath, services)
+	r.program = true
 	return r
 }
 

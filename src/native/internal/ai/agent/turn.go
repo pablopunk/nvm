@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/pablopunk/nvm/native/internal/backend"
@@ -98,7 +99,9 @@ type turnRun struct {
 	usage    Usage
 	finished bool
 	started  time.Time
-	waited   time.Duration
+	// waited is the time the turn spent waiting for the user's answers, in nanoseconds. A running tool adds to it from
+	// its own goroutine when it asks for an approval.
+	waited atomic.Int64
 }
 
 func (r *turnRun) emit(event Event) {
@@ -107,7 +110,7 @@ func (r *turnRun) emit(event Event) {
 
 // activeTime is how long the turn has run, not counting the time it waited for the user's answers.
 func (r *turnRun) activeTime() time.Duration {
-	return r.setup.Clock.Now().Sub(r.started) - r.waited
+	return r.setup.Clock.Now().Sub(r.started) - time.Duration(r.waited.Load())
 }
 
 // pastDeadline ends the turn with ErrTurnDeadline once its active time passes the limit. It reports whether it did.

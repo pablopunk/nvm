@@ -41,7 +41,7 @@ func Main(args []string) (exitCode int, handled bool) {
 	}
 	protocolOut := os.Stdout
 	os.Stdout = os.Stderr
-	return serve(args[2], limit, identity, os.Stdin, protocolOut), true
+	return serveIn(modeOf(args), args[2], limit, identity, os.Stdin, protocolOut), true
 }
 
 func argOr(args []string, index int) string {
@@ -49,6 +49,14 @@ func argOr(args []string, index int) string {
 		return args[index]
 	}
 	return "{}"
+}
+
+// modeOf says whether the child runs an extension or one AI conversation program.
+func modeOf(args []string) mode {
+	if len(args) > 5 && args[5] == protocol.ProgramArg {
+		return modeProgram
+	}
+	return modeExtension
 }
 
 func parseIdentity(text string) (api.Identity, error) {
@@ -59,13 +67,18 @@ func parseIdentity(text string) (api.Identity, error) {
 
 // serve applies the memory limit, loads the extension, announces it, and answers requests until stdin ends.
 func serve(sourcePath string, memoryLimit uint64, identity api.Identity, in io.Reader, out io.Writer) int {
+	return serveIn(modeExtension, sourcePath, memoryLimit, identity, in, out)
+}
+
+// serveIn is serve for either kind of child.
+func serveIn(m mode, sourcePath string, memoryLimit uint64, identity api.Identity, in io.Reader, out io.Writer) int {
 	if memoryLimit > 0 {
 		if err := applyMemoryLimit(memoryLimit); err != nil {
 			fmt.Fprintf(os.Stderr, "extension child: memory limit not applied: %v\n", err)
 		}
 	}
 	link := newHostLink(out)
-	ext, err := load(sourcePath, identity, real.NewPorts().Clock, link)
+	ext, err := loadIn(m, sourcePath, identity, real.NewPorts().Clock, link)
 	if err != nil {
 		failure := api.FailureOf(err)
 		failure.Message = truncate(failure.Message)
