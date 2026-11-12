@@ -53,7 +53,7 @@ func newFixture(t *testing.T, tweak ...fixtureOption) *fixture {
 	opts := Options{
 		Supervisor: supervisor.Config{
 			Worker: real.NewWorker(), Clock: ports.Clock, Processes: ports.Processes, Executable: exe,
-			StartTimeout: 15 * time.Second, MemoryLimit: 2 << 30,
+			StartTimeout: 15 * time.Second, MemoryLimit: testMemoryLimit,
 		},
 		Files: ports.FS, StageRoot: t.TempDir(), Notes: func() *notes.Store { return store },
 	}
