@@ -111,10 +111,10 @@ func TestCommandsAreTheTwoQuitCommandsWithTheirNativeKeys(t *testing.T) {
 		t.Fatalf("commands = %+v", commands)
 	}
 	force, quitAll := commands[0], commands[1]
-	if force.ID != "force-quit-apps" || force.Title != "Force Quit Apps" || force.Score != 14 || !force.Customizable {
+	if force.ID != "force-quit-apps" || force.Title != "Force Quit Apps" || force.Score != 14 || !force.TakesCustomization() {
 		t.Fatalf("force quit = %+v", force)
 	}
-	if quitAll.ID != "quit-all-apps" || quitAll.Title != "Quit All Apps" || quitAll.Score != 12 || !quitAll.Customizable {
+	if quitAll.ID != "quit-all-apps" || quitAll.Title != "Quit All Apps" || quitAll.Score != 12 || !quitAll.TakesCustomization() {
 		t.Fatalf("quit all = %+v", quitAll)
 	}
 }

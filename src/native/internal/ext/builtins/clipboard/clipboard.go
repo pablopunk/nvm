@@ -101,7 +101,7 @@ func (Extension) Commands(api.Context) ([]api.Command, error) {
 		ID: ListCommandID, Title: listTitle, Subtitle: "Browse and paste what you copied", Icon: "clipboard",
 		Keywords: []string{"clipboard", "paste", "copy", "history"}, Score: scoreRootCommand,
 		Appearance: &api.Appearance{Foreground: api.ColorBlue}, Section: search.KindCommands,
-		LearnKey: "cmd:" + listTitle, Customizable: true,
+		LearnKey: "cmd:" + listTitle,
 	}}, nil
 }
 

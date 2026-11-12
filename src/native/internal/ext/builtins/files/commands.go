@@ -18,13 +18,13 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 	commands := []api.Command{{
 		ID: searchCommandID, Title: searchTitle, Subtitle: "Find files in your home folder", Icon: "folder",
 		Keywords: []string{"files", "find", "documents", "locate"}, Score: rootCommandScore, Appearance: &api.Appearance{Foreground: api.ColorBlue},
-		Customizable: true, Section: search.KindCommands, LearnKey: "cmd:" + searchTitle,
+		Section: search.KindCommands, LearnKey: "cmd:" + searchTitle,
 	}}
 	if ctx.Account().SignedIn() {
 		commands = append(commands, api.Command{
 			ID: meaningCommandID, Title: meaningTitle, Subtitle: "Describe a file to find it with AI", Icon: "sparkles",
 			Keywords: []string{"files", "find", "meaning", "describe", "semantic", "ai", "locate"}, Score: rootCommandScore,
-			Customizable: true, Section: search.KindCommands, LearnKey: "cmd:" + meaningTitle,
+			Section: search.KindCommands, LearnKey: "cmd:" + meaningTitle,
 		})
 	}
 	return commands, nil

@@ -46,7 +46,7 @@ func (Extension) Manifest() api.Manifest {
 
 // Commands declares the searchable report command and its portable shortcut target.
 func (Extension) Commands(api.Context) ([]api.Command, error) {
-	return []api.Command{{ID: ReportAction, Title: "Report a Problem", Subtitle: "Record a problem reference without screen content", Icon: "message-circle", Keywords: []string{"report", "problem", "bug", "issue", "support", "feedback"}, Placement: []api.Placement{api.PlacementSearch}, Customizable: true}}, nil
+	return []api.Command{{ID: ReportAction, Title: "Report a Problem", Subtitle: "Record a problem reference without screen content", Icon: "message-circle", Keywords: []string{"report", "problem", "bug", "issue", "support", "feedback"}, Placement: []api.Placement{api.PlacementSearch}}}, nil
 }
 
 // RunAction opens the page, or files a problem report and shows the page with its reference.

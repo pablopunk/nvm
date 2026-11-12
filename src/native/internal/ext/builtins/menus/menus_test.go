@@ -43,7 +43,7 @@ func TestCommandAvailability(t *testing.T) {
 		if err != nil || len(commands) != map[bool]int{false: 0, true: 1}[available] {
 			t.Fatalf("commands: %+v %v", commands, err)
 		}
-		if available && (commands[0].ID != CommandID || !commands[0].Customizable) {
+		if available && (commands[0].ID != CommandID || !commands[0].TakesCustomization()) {
 			t.Fatalf("command: %+v", commands[0])
 		}
 	}

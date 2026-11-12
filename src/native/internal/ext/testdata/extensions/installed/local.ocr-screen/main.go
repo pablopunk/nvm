@@ -27,7 +27,6 @@ func Commands(ctx api.Context) ([]api.Command, error) {
 		Icon:            "scan-text",
 		Mode:            api.ModeBackground,
 		DismissAfterRun: true,
-		Customizable:    true,
 	}}, nil
 }
 

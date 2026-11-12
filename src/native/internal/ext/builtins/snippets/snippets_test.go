@@ -137,7 +137,7 @@ func TestCommandsAreListedAsBefore(t *testing.T) {
 		t.Fatalf("commands = %d, %v", len(cmds), err)
 	}
 	list, create := cmds[0], cmds[1]
-	if list.Title != "Snippets" || len(list.Placement) != 0 || !list.Customizable || list.Appearance.Foreground != api.ColorTeal {
+	if list.Title != "Snippets" || len(list.Placement) != 0 || !list.TakesCustomization() || list.Appearance.Foreground != api.ColorTeal {
 		t.Fatalf("Snippets command = %+v", list)
 	}
 	if create.Title != "Create Snippet" || len(create.Placement) != 1 || create.Placement[0] != api.PlacementSearch {

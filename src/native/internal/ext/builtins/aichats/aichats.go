@@ -202,12 +202,15 @@ func continueAction(id string, in api.Invocation) api.Action {
 	}}
 }
 
+// noCustomization is the opt-out of the shortcut and alias actions.
+var noCustomization = false
+
 // cleanupCommand is the hidden background job that removes expired conversations.
 func cleanupCommand() api.Command {
 	return api.Command{
 		ID: cleanupCommandID, Title: "Clean Up Expired AI Conversations", Mode: api.ModeBackground,
-		Placement: []api.Placement{api.PlacementHidden},
-		Triggers:  []api.Trigger{{Type: api.TriggerStartup, DelayMs: cleanupStartupDelayMs}, {Type: api.TriggerInterval, Every: "1h"}},
+		Placement: []api.Placement{api.PlacementHidden}, Customizable: &noCustomization, // a background job with no row
+		Triggers: []api.Trigger{{Type: api.TriggerStartup, DelayMs: cleanupStartupDelayMs}, {Type: api.TriggerInterval, Every: "1h"}},
 	}
 }
 
@@ -215,7 +218,7 @@ func cleanupCommand() api.Command {
 func aiChatsCommand(count int) api.Command {
 	return api.Command{
 		ID: CommandAIChats, Title: "AI Chats", Subtitle: chatsSubtitle(count), Icon: "sparkles", Score: scoreAIChatsCommand,
-		Section: search.KindCommands, Customizable: true,
+		Section:    search.KindCommands,
 		Keywords:   strings.Fields("ai chat assistant gpt llm ask conversations history"),
 		Appearance: &api.Appearance{Foreground: "purple"},
 	}

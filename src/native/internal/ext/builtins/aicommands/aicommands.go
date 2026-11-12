@@ -66,8 +66,8 @@ func (Extension) Commands(ctx api.Context) ([]api.Command, error) {
 		Keywords:        []string{"fix grammar correct proofread spelling selected text ai"},
 		Mode:            api.ModeBackground,
 		DismissAfterRun: true,
-		Customizable:    true,
-		Placement:       []api.Placement{api.PlacementRoot, api.PlacementSearch},
+
+		Placement: []api.Placement{api.PlacementRoot, api.PlacementSearch},
 	}, triageCommand()}, nil
 }
 

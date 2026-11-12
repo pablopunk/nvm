@@ -185,7 +185,7 @@ func TestShortcutCommandsAreTheLayoutsFocusMovesAndDesktopMoves(t *testing.T) {
 		t.Fatalf("shortcut commands = %d, want %d", got, want)
 	}
 	for _, command := range ShortcutCommands() {
-		if !command.Customizable || command.Mode != api.ModeNoView {
+		if !command.TakesCustomization() || command.Mode != api.ModeNoView {
 			t.Fatalf("shortcut command %q is not an in-place customizable command", command.ID)
 		}
 	}

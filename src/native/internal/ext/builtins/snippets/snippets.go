@@ -82,7 +82,7 @@ func (Extension) Commands(api.Context) ([]api.Command, error) {
 		{
 			ID: ListCommandID, Title: listTitle, Subtitle: "Saved text you paste often", Icon: "type", Score: scoreRootCommand,
 			Keywords: []string{"snippets", "text", "expand", "template"}, Appearance: &api.Appearance{Foreground: api.ColorTeal},
-			Section: search.KindCommands, LearnKey: "cmd:" + listTitle, Customizable: true,
+			Section: search.KindCommands, LearnKey: "cmd:" + listTitle,
 		},
 		{
 			ID: CreateCommandID, Title: createTitle, Icon: "plus",
