@@ -16,19 +16,34 @@ import (
 // status item. A platform without a tray host runs the app without an item; the palette still opens by its shortcut.
 func (p *App) setUpMenubar() {
 	p.menubarJobs = menubar.NewScheduler(p.ports.Clock, p.onUI)
+	p.applyMenuBarIconStyle(p.menuBarIconStyle())
+	p.startExtensionItems()
+}
+
+// applyMenuBarIconStyle makes the app's item match the menuBarIconStyle setting: None removes the item, another style
+// draws it, creating the item again when it was removed. It runs on the UI thread.
+func (p *App) applyMenuBarIconStyle(style string) {
+	if menubar.IconHidden(style) {
+		p.menubar.Close()
+		p.menubar = nil
+		return
+	}
+	if p.menubar != nil {
+		_ = p.menubar.SetIconStyle(style)
+		return
+	}
 	item, err := menubar.New(menubar.Options{
 		Host:      p.ports.Tray,
 		OnUI:      p.onUI,
 		Actions:   p.menubarActions(),
-		IconStyle: p.menuBarIconStyle(),
+		IconStyle: style,
 		Menu:      p.menubarMenu(),
 	})
 	if err != nil {
 		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
-	} else {
-		p.menubar = item
+		return
 	}
-	p.startExtensionItems()
+	p.menubar = item
 }
 
 // startExtensionItems starts the service that shows the menu bar items of extensions. It runs with the scheduler, so

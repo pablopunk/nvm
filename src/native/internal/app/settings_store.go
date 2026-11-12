@@ -181,9 +181,7 @@ func (s *settingsStore) saveMenuBarIconStyle(raw json.RawMessage) error {
 	}); err != nil {
 		return err
 	}
-	if s.p.menubar != nil {
-		_ = s.p.menubar.SetIconStyle(style)
-	}
+	s.p.onUI(func() { s.p.applyMenuBarIconStyle(style) })
 	return nil
 }
 

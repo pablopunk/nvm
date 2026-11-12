@@ -3,6 +3,15 @@ package menubar
 // DefaultIconStyle is the menuBarIconStyle an item draws when the setting is empty or unknown. It is 1.x's default.
 const DefaultIconStyle = "bolt-filled"
 
+// IconStyleNone is the menuBarIconStyle value that shows no Nevermind item in the bar. The item is not drawn in any
+// style: the app removes it, and creates it again when another style is chosen.
+const IconStyleNone = "none"
+
+// IconHidden reports whether the menuBarIconStyle setting asks for no item.
+func IconHidden(style string) bool {
+	return style == IconStyleNone
+}
+
 // iconStyle is one menuBarIconStyle value: the glyph it draws, whether macOS tints it to the bar, and whether
 // macOS shows it as the emoji title instead of an image.
 type iconStyle struct {
