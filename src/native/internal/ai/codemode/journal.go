@@ -88,14 +88,3 @@ func plural(n int, one, many string) string {
 	}
 	return many
 }
-
-// changed counts the calls that ran and changed data.
-func changed(entries []entry) int {
-	n := 0
-	for _, e := range entries {
-		if e.outcome == outcomeRan && e.class.changesData() {
-			n++
-		}
-	}
-	return n
-}
