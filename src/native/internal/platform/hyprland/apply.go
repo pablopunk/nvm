@@ -9,6 +9,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -105,10 +106,16 @@ func rollback(plan Plan) {
 	_ = writeAtomic(s.Entry, plan.entryBefore)
 }
 
+// verifyCrashed records that this Hyprland's --verify-config crashed instead of answering. Some versions segfault on
+// exit even for a valid config; every crash also shows the user a crash notification, so it is not run again in this
+// process, and the reload check below stands in for it.
+var verifyCrashed atomic.Bool
+
 // validate checks the generated config with Hyprland --verify-config when this Hyprland has it: the entry when it
-// loads the module, else the module alone.
+// loads the module, else the module alone. A check that crashes, rather than rejecting the config, counts as no
+// check; reloadChecked still undoes a change the compositor reports errors for.
 func validate(ctx context.Context, env Env, s Session, loaded bool) error {
-	if !s.VerifyConfig {
+	if !s.VerifyConfig || verifyCrashed.Load() {
 		return nil
 	}
 	target := s.ModulePath
@@ -120,6 +127,10 @@ func validate(ctx context.Context, env Env, s Session, loaded bool) error {
 	out, code, err := env.Run(ctx, "Hyprland", "--verify-config", "--config", target)
 	if err != nil {
 		return fmt.Errorf("could not check the config with Hyprland: %w", err)
+	}
+	if code < 0 || code >= 128 {
+		verifyCrashed.Store(true)
+		return nil
 	}
 	if code != 0 {
 		return fmt.Errorf("the config was rejected by Hyprland, so nothing changed: %s", firstLines(out, 4))
