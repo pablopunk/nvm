@@ -189,3 +189,15 @@ func TestMatchBinds(t *testing.T) {
 		t.Fatalf("%s", loaded)
 	}
 }
+
+func TestMatchLuaBindsWithOpaqueArgs(t *testing.T) {
+	c, _ := parseAccelerator("Control+Alt+K")
+	ours := []renderedBind{{combo: c, command: exe + " run palette-toggle"}}
+	lua := compositorBind{Modmask: 12, Key: "K", Dispatcher: "HL.Dispatcher(exec_cmd)", Arg: "153"}
+	if loaded, conflicts := matchBinds(ours, []compositorBind{lua}); loaded != LoadedConfirmed || len(conflicts) != 0 {
+		t.Fatalf("a single Lua bind on the key was not taken for ours: %s %v", loaded, conflicts)
+	}
+	if loaded, conflicts := matchBinds(ours, []compositorBind{lua, lua}); loaded != LoadedMissing || len(conflicts) != 1 {
+		t.Fatalf("two Lua binds cannot be told apart: %s %v", loaded, conflicts)
+	}
+}
