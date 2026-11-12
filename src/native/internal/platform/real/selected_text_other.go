@@ -12,3 +12,8 @@ import (
 func copyGesture(context.Context, platform.Helper, string) error {
 	return platform.ErrUnsupported
 }
+
+// accessibleSelection reports that no accessibility read exists on this OS.
+func accessibleSelection(context.Context, platform.Helper) (string, error) {
+	return "", platform.ErrUnsupported
+}

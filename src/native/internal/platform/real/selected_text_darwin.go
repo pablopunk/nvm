@@ -2,23 +2,16 @@ package real
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
 
-// UNTESTED: like the paste gesture, this has never run on macOS. It sends Command+C through System Events, which
-// needs the Accessibility permission for the process that runs osascript. expectedAppID is not checked on macOS.
-const macCopyScript = `tell application "System Events" to keystroke "c" using command down`
-
-// copyGesture runs the osascript copy. A refused keystroke is reported as ErrDenied, as the paste gesture does.
+// UNTESTED on a Mac: the helper operations are the ones 1.x ships (selected-text.swift); the Go side is covered with
+// a scripted helper. expectedAppID is not checked on macOS: the helper acts on the app in front.
 func copyGesture(ctx context.Context, helper platform.Helper, _ string) error {
-	result, err := helper.Run(ctx, "osascript", []string{"-e", macCopyScript}, nil)
-	if err != nil {
-		return err
-	}
-	if result.ExitCode != 0 {
-		return fmt.Errorf("copy keystroke refused (Accessibility permission?): %w", platform.ErrDenied)
-	}
-	return nil
+	return macCopySelection(ctx, helper, macosHelperPath())
+}
+
+func accessibleSelection(ctx context.Context, helper platform.Helper) (string, error) {
+	return macAccessibleSelection(ctx, helper, macosHelperPath())
 }

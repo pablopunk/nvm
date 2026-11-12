@@ -232,12 +232,33 @@ func readSelection(pid: pid_t) -> Never {
   exit(noSelectionExitCode)
 }
 
+private let copyModifiers: CGEventFlags = [
+  .maskCommand, .maskControl, .maskAlternate, .maskShift,
+]
+
+/// A global shortcut's modifiers are still down when its handler runs; a copy
+/// sent with them is Command+Control+Alt+C, not Command+C. Wait for the user to
+/// let go, bounded, and report 5 if they never do.
+private func waitForModifiersReleased() -> Bool {
+  let deadline = Date().addingTimeInterval(1.5)
+  while !CGEventSource.flagsState(.combinedSessionState)
+    .intersection(copyModifiers).isEmpty
+  {
+    if Date() >= deadline { return false }
+    Thread.sleep(forTimeInterval: 0.02)
+  }
+  return true
+}
+
 func copySelection(pid: pid_t) -> Never {
   guard CGPreflightPostEventAccess() else {
     fail("Accessibility access for keyboard events is blocked", code: 2)
   }
   guard NSWorkspace.shared.frontmostApplication?.processIdentifier == pid else {
     fail("Selection target is not frontmost", code: 4)
+  }
+  guard waitForModifiersReleased() else {
+    fail("Shortcut modifier keys are still held", code: 5)
   }
   guard let source = CGEventSource(stateID: .hidSystemState) else {
     fail("Could not create keyboard event source")
