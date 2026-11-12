@@ -102,10 +102,30 @@ type turnRun struct {
 	// waited is the time the turn spent waiting for the user's answers, in nanoseconds. A running tool adds to it from
 	// its own goroutine when it asks for an approval.
 	waited atomic.Int64
+	// emitMu orders sends against the close of the event channel. A tool's own goroutine can report after the loop
+	// ended, as a code mode program's late call does; that report is dropped instead of sent on a closed channel.
+	emitMu sync.Mutex
+	closed bool
+	// ended is set once the terminal event is sent; the reader may stop reading then, so later reports are dropped
+	// rather than left blocking.
+	ended bool
 }
 
 func (r *turnRun) emit(event Event) {
+	r.emitMu.Lock()
+	defer r.emitMu.Unlock()
+	if r.closed || r.ended {
+		return
+	}
 	r.turn.events <- event
+}
+
+// closeEvents ends the event stream once; later emits are dropped.
+func (r *turnRun) closeEvents() {
+	r.emitMu.Lock()
+	defer r.emitMu.Unlock()
+	r.closed = true
+	close(r.turn.events)
 }
 
 // activeTime is how long the turn has run, not counting the time it waited for the user's answers.
@@ -138,12 +158,15 @@ func (r *turnRun) finish(event Event) {
 	r.finished = true
 	event.Usage = r.usage
 	r.emit(event)
+	r.emitMu.Lock()
+	r.ended = true
+	r.emitMu.Unlock()
 }
 
 // execute runs the loop: a model turn, then the calls it asked for, until the model answers without calls or the step
 // limit is reached. The events channel closes when it returns, even on a panic.
 func (r *turnRun) execute() {
-	defer close(r.turn.events)
+	defer r.closeEvents()
 	r.started = r.setup.Clock.Now()
 	r.emit(Event{Kind: EventStart})
 	for step := 1; step <= r.setup.MaxSteps; step++ {
