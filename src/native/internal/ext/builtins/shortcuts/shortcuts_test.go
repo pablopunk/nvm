@@ -2,6 +2,7 @@ package shortcuts
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -82,5 +83,24 @@ func TestUnknownActionIsRefused(t *testing.T) {
 	_, err := New().RunAction(fakeContext{shortcuts: fixtureShortcuts()}, api.Invocation{Ref: api.ActionRef{ID: "bind"}})
 	if !errors.Is(err, api.ErrInvalidInput) {
 		t.Fatalf("err = %v, want ErrInvalidInput", err)
+	}
+}
+
+// TestRowsShowTheRecordLabelOnlyAndNeverTheStoredAccelerator checks that no row text spells the stored form.
+func TestRowsShowTheRecordLabelOnlyAndNeverTheStoredAccelerator(t *testing.T) {
+	table := fakeShortcuts{records: []api.ShortcutRecord{
+		{ActionID: "command:mute", Title: "Mute", Accelerator: "Command+Control+Alt+M", Label: "⌘⌃⌥M", Scope: "global", Source: "user"},
+		{ActionID: "command:dictate", Title: "Dictate", Accelerator: "Command+Control+Alt+Shift+V", Label: "✦V", Scope: "global", Source: "user"},
+	}}
+	for i, want := range []string{"⌘⌃⌥M", "✦V"} {
+		row := openPage(t, table).Items[i]
+		if row.Accessories[0].Text != want {
+			t.Errorf("row %d accessory = %q, want %q", i, row.Accessories[0].Text, want)
+		}
+		for _, text := range []string{row.Title, row.Subtitle, row.Accessories[0].Text} {
+			if strings.Contains(text, "Command+") {
+				t.Errorf("row %d shows the stored accelerator: %q", i, text)
+			}
+		}
 	}
 }

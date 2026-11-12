@@ -109,6 +109,29 @@ func TestKeyboardShortcutsRowShowsTheHyperSparkle(t *testing.T) {
 	t.Fatalf("no dictation row in %d rows", len(rows))
 }
 
+// TestKeyboardShortcutsRowsNeverShowTheStoredForm checks a full Hyper chord reads as the Hyper symbol, a chord that only
+// partly overlaps it reads as symbols, and neither row text spells the stored accelerator.
+func TestKeyboardShortcutsRowsNeverShowTheStoredForm(t *testing.T) {
+	p, files := sharedConfigApp(t)
+	if err := files.WriteFile(sharedFixtureConfig, []byte(oneXSharedConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	p.exts.mgr.Store(newFixtureManagerWithApps(t, p))
+	p.globalShortcuts = globalShortcutTableOf(p.exts.mgr.Load().Commands(context.Background()))
+	mustSetShortcut(t, p.shortcutsManager(), shortcuts.CommandClipboardHistory, "Command+Control+Alt+M")
+	p.shortcutsManager().Refresh()
+	for _, row := range p.keyboardShortcutsPage().Search("") {
+		for _, text := range []string{row.Subtitle, row.Accessory} {
+			if strings.Contains(text, "Command+") || strings.Contains(text, "Control+") {
+				t.Fatalf("%q row shows the stored form: %q", row.Title, text)
+			}
+		}
+		if row.Title == "Clipboard History" && row.Accessory != p.shortcutLabelOf("Command+Control+Alt+M") {
+			t.Fatalf("partial-overlap row = %q, want its own symbols", row.Accessory)
+		}
+	}
+}
+
 // TestSettingsShortcutRowsMatchOneX checks the two shortcut settings: 1.x copy, and no accessory, as 1.x shows none.
 func TestSettingsShortcutRowsMatchOneX(t *testing.T) {
 	p := goldenPalette(t)

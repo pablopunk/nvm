@@ -1332,14 +1332,20 @@ export type ExtensionShortcutRecord = {
   actionId: string;
   title: string;
   subtitle?: string;
+  /** Canonical stored form, such as `Command+Control+Alt+K`. Use it to match or store, never to show. */
   accelerator: string;
+  /** The accelerator as the user reads it on this platform, with their Hyper key shown as ✦ (for example `⌘⌥K` or `✦K`). Show this. The host also spells any canonical accelerator written into a row's subtitle or accessory. */
+  label?: string;
   scope: 'global';
   source: 'user' | 'extension';
 };
 
 export type ExtensionPaletteShortcut = {
   title: string;
+  /** Canonical stored form. Use `label` to show it. */
   accelerator: string;
+  /** The accelerator as the user reads it on this platform, with their Hyper key shown as ✦. */
+  label?: string;
   scope: 'palette';
 };
 

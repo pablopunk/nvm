@@ -200,11 +200,13 @@ type ClipboardHistory interface {
 
 // ShortcutRecord is one active global shortcut.
 type ShortcutRecord struct {
-	ActionID    string `json:"actionId"`
-	Title       string `json:"title"`
-	Subtitle    string `json:"subtitle,omitempty"`
+	ActionID string `json:"actionId"`
+	Title    string `json:"title"`
+	Subtitle string `json:"subtitle,omitempty"`
+	// Accelerator is the canonical stored form, such as Command+Alt+K. Match or store it; never show it.
 	Accelerator string `json:"accelerator"`
-	// Label is the accelerator as the platform spells it, such as ⌘⌥K; empty when none is bound.
+	// Label is the accelerator as the user reads it on this platform, such as ⌘⌥K, with their Hyper key shown as ✦K.
+	// Show this; empty when none is bound.
 	Label  string `json:"label,omitempty"`
 	Scope  string `json:"scope"`
 	Source string `json:"source"` // user or extension
