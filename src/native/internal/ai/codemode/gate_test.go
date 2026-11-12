@@ -2,6 +2,7 @@ package codemode
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/protocol"
@@ -95,5 +96,72 @@ func TestGateRefusesUnlistedCallsWithoutTouchingTheServices(t *testing.T) {
 	}
 	if entries := g.journal(); len(entries) != 1 || entries[0].outcome != outcomeRefused {
 		t.Fatalf("journal = %+v", entries)
+	}
+}
+
+// stubServices counts the calls the gate lets through.
+type stubServices struct {
+	mu    sync.Mutex
+	calls []string
+}
+
+func (s *stubServices) Serve(_ context.Context, call protocol.ServiceCall) protocol.ServiceReply {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.calls = append(s.calls, call.Op)
+	return protocol.ServiceReply{Data: []byte(`{}`)}
+}
+
+func (s *stubServices) count() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return len(s.calls)
+}
+
+// The classes the notes slice does not use still decide the same way: a sensitive read asks once per service and a
+// decline is not remembered, a command asks every time, a read never asks.
+func TestGateAsksAccordingToTheClassOfTheRule(t *testing.T) {
+	text := func(string) func(*gate, protocol.ServiceCall) string {
+		return func(*gate, protocol.ServiceCall) string { return "the host's words" }
+	}
+	rules := map[key]rule{
+		{"fake", "look"}: {class: ClassRead, label: "Looking", describe: text("look"), journal: journalNone},
+		{"fake", "peek"}: {class: ClassSensitiveRead, label: "Reading private data", describe: text("peek"), journal: journalNone},
+		{"fake", "run"}:  {class: ClassExternal, label: "Running a command", describe: text("run"), journal: journalNone},
+	}
+	steps := &fakeSteps{}
+	inner := &stubServices{}
+	g := newGate(gateConfig{rules: rules, runCtx: context.Background(), steps: steps})
+	g.inner = inner
+	serve := func(op string) protocol.ServiceReply {
+		return g.Serve(context.Background(), protocol.ServiceCall{Service: "fake", Op: op})
+	}
+	asked := func() int {
+		n := 0
+		for _, row := range steps.snapshot() {
+			if row.asked {
+				n++
+			}
+		}
+		return n
+	}
+	steps.decide = decline
+	if reply := serve("peek"); reply.Failure == nil || inner.count() != 0 {
+		t.Fatal("a declined sensitive read ran")
+	}
+	steps.decide = allow
+	serve("peek")
+	serve("peek")
+	if asked() != 2 || inner.count() != 2 {
+		t.Fatalf("sensitive reads asked %d times for 2 allowed runs (inner %d); want a decline asked, then one allow covering the second", asked(), inner.count())
+	}
+	serve("look")
+	if asked() != 2 {
+		t.Fatal("a read asked")
+	}
+	serve("run")
+	serve("run")
+	if asked() != 4 || inner.count() != 5 {
+		t.Fatalf("asked %d, ran %d; want every command asked", asked(), inner.count())
 	}
 }

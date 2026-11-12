@@ -1,5 +1,7 @@
 // Smoke test of the pi host against a fake backend: one turn that calls a host tool and then answers.
-// Run by hand: node test/smoke.mjs (after npm ci). It needs no network and no account. PI_NODE and PI_HOST point it at a
+// Run by hand: node test/smoke.mjs (after npm ci). SMOKE_TOOL=run_program runs the same turn with the conversation's
+// program tool: its name, its argument shape and a description as long as the app sends, to show the host forwards it
+// like any other host tool. It needs no network and no account. PI_NODE and PI_HOST point it at a
 // packaged runtime instead, such as the one inside the app.
 import { spawn } from 'node:child_process';
 import http from 'node:http';
@@ -9,6 +11,25 @@ import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+// The host tool the fake model calls, and the app's answer to it.
+const scenarios = {
+  echo_host: {
+    arguments: { text: 'hello' },
+    parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false },
+    description: 'Echoes text back.',
+    answer: (args) => 'echo: ' + args.text,
+  },
+  run_program: {
+    arguments: { code: 'n, err := ctx.Notes().CreateWith("# Packing list")\nif err != nil { return nil, err }\nreturn n.ID, nil' },
+    parameters: { type: 'object', properties: { code: { type: 'string', minLength: 1, maxLength: 8192 } }, required: ['code'], additionalProperties: false },
+    description: 'Runs a short Go program that reads or changes the user\'s notes. '.repeat(40),
+    answer: (args) => 'Result: "note-1"\nWhat happened (written by the host, not by the program):\n- created note note-1 “Packing list” for ' + args.code.length + ' bytes of code',
+  },
+};
+const toolName = process.env.SMOKE_TOOL || 'echo_host';
+const scenario = scenarios[toolName];
+if (!scenario) throw new Error('unknown SMOKE_TOOL ' + toolName);
 
 function sse(response, chunks) {
   response.writeHead(200, { 'Content-Type': 'text/event-stream' });
@@ -44,7 +65,7 @@ const server = http.createServer((request, response) => {
       return sse(response, [chunk({ role: 'assistant', content: 'The host said ' }), chunk({ content: 'hello back' }), chunk({}, 'stop')]);
     }
     sse(response, [
-      chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'echo_host', arguments: '{"text":"hello"}' } }] }),
+      chunk({ role: 'assistant', tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: toolName, arguments: JSON.stringify(scenario.arguments) } }] }),
       chunk({}, 'tool_calls'),
     ]);
   });
@@ -63,12 +84,12 @@ const done = new Promise((resolve, reject) => {
     if (event.type === 'ready') {
       child.stdin.write(JSON.stringify({
         type: 'prompt', id: 't1', baseUrl: `http://127.0.0.1:${port}`, token: 'test-token', headers: {}, role: '', system: 'Be brief.',
-        text: 'say hello via the tool', images: [], tools: [{ name: 'echo_host', label: 'Echo', description: 'Echoes text back.', parameters: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false } }],
+        text: 'say hello via the tool', images: [], tools: [{ name: toolName, label: 'Host tool', description: scenario.description, parameters: scenario.parameters }],
         workspaceDir: path.join(os.tmpdir(), 'pi-host-smoke', 'work'), agentDir: path.join(os.tmpdir(), 'pi-host-smoke', 'agent'),
       }) + '\n');
     }
     if (event.type === 'tool_call') {
-      child.stdin.write(JSON.stringify({ type: 'tool_result', callId: event.callId, text: 'echo: ' + event.arguments.text, status: 'ran' }) + '\n');
+      child.stdin.write(JSON.stringify({ type: 'tool_result', callId: event.callId, text: scenario.answer(event.arguments), status: 'ran' }) + '\n');
     }
     if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') {
       clearTimeout(timer);
@@ -79,7 +100,7 @@ const done = new Promise((resolve, reject) => {
 try {
   const last = await done;
   const text = events.filter((e) => e.type === 'delta').map((e) => e.text).join('');
-  const called = events.some((e) => e.type === 'tool_call' && e.name === 'echo_host');
+  const called = events.some((e) => e.type === 'tool_call' && e.name === toolName);
   console.log(JSON.stringify({ last: last.type, message: last.message, called, text }));
   if (last.type !== 'done' || !called || !text.includes('hello back')) process.exitCode = 1;
 } finally {

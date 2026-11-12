@@ -44,6 +44,9 @@ type gate struct {
 	allowed *key
 	asked   map[string]bool
 	entries []entry
+	// titles are the note titles the gate read from the store to describe a call, kept so the journal can name a note
+	// the call then removed.
+	titles map[string]string
 }
 
 type gateConfig struct {
@@ -64,7 +67,7 @@ func newGate(cfg gateConfig) *gate {
 		cfg.approvalWait = DefaultApprovalWait
 	}
 	return &gate{rules: cfg.rules, notes: cfg.notes, clock: cfg.clock, runCtx: cfg.runCtx, steps: cfg.steps,
-		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}}
+		maxCalls: cfg.maxCalls, approvalWait: cfg.approvalWait, asked: map[string]bool{}, titles: map[string]string{}}
 }
 
 // Serve is the supervisor's service handler for the program.
@@ -130,7 +133,9 @@ func (g *gate) ask(step agent.SubCall) outcome {
 	switch {
 	case g.runCtx.Err() != nil:
 		return outcomeCancelled
-	case err != nil || !allowed:
+	case err != nil:
+		return outcomeUnanswered
+	case !allowed:
 		return outcomeDeclined
 	}
 	return outcomeRan
@@ -219,6 +224,10 @@ func (g *gate) finishWithoutRunning(r rule, call protocol.ServiceCall, step agen
 		step.End(agent.CallRefused, "Refused by you", "The user did not allow this.")
 		e = entry{r.class, why, fmt.Sprintf("%s: the user declined, so it was not done", lowerFirst(what))}
 		reply = failure(api.CodePermission, "the user declined this action, so it was not done; do not try it again")
+	case outcomeUnanswered:
+		step.End(agent.CallRefused, "No answer in time", "The user did not answer in time.")
+		e = entry{r.class, why, fmt.Sprintf("%s: the user did not answer in time, so it was not done", lowerFirst(what))}
+		reply = failure(api.CodePermission, "the user did not answer in time, so it was not done")
 	case outcomeRefused:
 		step.End(agent.CallRefused, "Needs your answer", "This chat cannot ask you, so it was not run.")
 		e = entry{r.class, why, fmt.Sprintf("%s: this chat cannot ask the user, so it was not done", lowerFirst(what))}
@@ -270,3 +279,17 @@ type silentStep struct{}
 
 func (silentStep) Ask(context.Context) (bool, error)    { return false, nil }
 func (silentStep) End(agent.CallStatus, string, string) {}
+
+// remember keeps the title the gate read for a note id.
+func (g *gate) remember(id, title string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.titles[id] = title
+}
+
+// remembered returns the title the gate read for a note id, or "" when it read none.
+func (g *gate) remembered(id string) string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.titles[id]
+}

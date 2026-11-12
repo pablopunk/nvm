@@ -23,6 +23,7 @@ func (p *App) chatToolset() chat.Toolset {
 		Shell:        p.ports.Shell,
 		Clipboard:    p.ports.Clipboard,
 		Canonicalize: filepath.EvalSymlinks,
+		Extra:        p.conversationProgramTools(),
 	})
 	if err != nil {
 		log.Println("chat tools: could not register them:", err)

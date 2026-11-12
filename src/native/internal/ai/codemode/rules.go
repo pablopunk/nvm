@@ -84,7 +84,9 @@ func describeDelete(g *gate, call protocol.ServiceCall) string {
 	if !found {
 		return fmt.Sprintf("Delete note %s, which no longer exists", clip(args.Key, 40))
 	}
-	return fmt.Sprintf("Delete note “%s”, edited %s. This cannot be undone.", notes.Title(note.Markdown), ago(g.clock.Now(), note.UpdatedAt))
+	title := notes.Title(note.Markdown)
+	g.remember(note.ID, title)
+	return fmt.Sprintf("Delete note “%s”, edited %s. This cannot be undone.", title, ago(g.clock.Now(), note.UpdatedAt))
 }
 
 func journalCreated(_ *gate, _ protocol.ServiceCall, reply protocol.ServiceReply) string {
@@ -117,6 +119,9 @@ func journalUpdated(_ *gate, _ protocol.ServiceCall, reply protocol.ServiceReply
 func journalDeleted(g *gate, call protocol.ServiceCall, _ protocol.ServiceReply) string {
 	var args protocol.KeyArgs
 	_ = json.Unmarshal(call.Args, &args)
+	if title := g.remembered(args.Key); title != "" {
+		return fmt.Sprintf("deleted note %s “%s” (the user allowed it)", args.Key, title)
+	}
 	return fmt.Sprintf("deleted note %s (the user allowed it)", args.Key)
 }
 

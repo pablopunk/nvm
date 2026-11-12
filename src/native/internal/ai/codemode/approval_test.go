@@ -32,7 +32,7 @@ func TestDeleteAsksFirstWithAHostBuiltQuestionAndRunsAfterAllow(t *testing.T) {
 	if _, found := f.notes.Get(doomed.ID); found {
 		t.Fatal("the note survived an allowed delete")
 	}
-	contains(t, result.Text, `Result: "deleted"`, "deleted note "+doomed.ID+" (the user allowed it)")
+	contains(t, result.Text, `Result: "deleted"`, "deleted note "+doomed.ID+" “Old ideas” (the user allowed it)")
 	var asked fakeRow
 	for _, row := range f.steps.snapshot() {
 		if row.asked {
@@ -88,7 +88,10 @@ func TestUnansweredApprovalTimesOutAsARefusal(t *testing.T) {
 	if _, found := f.notes.Get(kept.ID); !found {
 		t.Fatal("an unanswered approval deleted the note")
 	}
-	contains(t, result.Text, "declined")
+	contains(t, result.Text, "did not answer in time")
+	if rows := f.steps.snapshot(); rows[len(rows)-1].outcome != "No answer in time" {
+		t.Fatalf("rows = %+v", rows)
+	}
 }
 
 // Second line of defence: the extension services behind the gate refuse a delete the gate did not allow.

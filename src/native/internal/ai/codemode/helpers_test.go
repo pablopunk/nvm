@@ -3,6 +3,8 @@ package codemode
 import (
 	"context"
 	"os"
+	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -31,7 +33,7 @@ type fixture struct {
 	notes  *notes.Store
 	runner *Runner
 	steps  *fakeSteps
-	budget supervisor.Budget
+	stage  string
 }
 
 type fixtureOption func(*Options)
@@ -59,7 +61,7 @@ func newFixture(t *testing.T, tweak ...fixtureOption) *fixture {
 	for _, change := range tweak {
 		change(&opts)
 	}
-	return &fixture{t: t, notes: store, runner: NewRunner(opts), steps: &fakeSteps{}}
+	return &fixture{t: t, notes: store, runner: NewRunner(opts), steps: &fakeSteps{}, stage: opts.StageRoot}
 }
 
 // run runs a program with the fixture's fake chat.
@@ -162,3 +164,50 @@ func allow(*fakeRow, context.Context) (bool, error)   { return true, nil }
 func decline(*fakeRow, context.Context) (bool, error) { return false, nil }
 
 var _ = protocol.MethodProgram
+
+// childProcesses counts the live children of the test process. Only Linux can say, so other systems skip the check.
+func childProcesses(t *testing.T) int {
+	t.Helper()
+	if runtime.GOOS != "linux" {
+		t.Skip("child processes are counted on Linux only")
+	}
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		t.Skip("no /proc")
+	}
+	count := 0
+	for _, entry := range entries {
+		raw, err := os.ReadFile("/proc/" + entry.Name() + "/stat")
+		if err != nil {
+			continue
+		}
+		// pid (comm) state ppid ...: comm may hold spaces, so read after the last parenthesis.
+		text := string(raw)
+		fields := strings.Fields(text[strings.LastIndex(text, ")")+1:])
+		if len(fields) > 1 && fields[1] == strconv.Itoa(os.Getpid()) && fields[0] != "Z" {
+			count++
+		}
+	}
+	return count
+}
+
+// noChildren waits for the children of the test process to be reaped, which follows a stop within moments.
+func noChildren(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for childProcesses(t) > 0 {
+		if time.Now().After(deadline) {
+			t.Fatalf("%d child processes are still running", childProcesses(t))
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}
+
+// noStagedPrograms fails when a run left its folder behind.
+func (f *fixture) noStagedPrograms() {
+	f.t.Helper()
+	entries, _ := os.ReadDir(f.stage)
+	if len(entries) != 0 {
+		f.t.Fatalf("a run left %d staged folders behind", len(entries))
+	}
+}

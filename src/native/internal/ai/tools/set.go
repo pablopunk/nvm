@@ -14,6 +14,8 @@ type Deps struct {
 	Shell        platform.Shell
 	Clipboard    platform.Clipboard
 	Canonicalize func(path string) (string, error)
+	// Extra are tools built elsewhere that the conversation offers after the standard ones, such as run_program.
+	Extra []agent.Tool
 }
 
 // Set is the conversation's tools with the policy every call passes before it runs.
@@ -35,7 +37,7 @@ func Standard(deps Deps) (Set, error) {
 // allTools lists every tool the conversation offers, in the order the model sees them.
 func allTools(deps Deps, pathGuard *guard.Guard) []agent.Tool {
 	files := fileTools{deps: deps, guard: pathGuard}
-	return []agent.Tool{
+	standard := []agent.Tool{
 		files.search(),
 		files.read(),
 		files.list(),
@@ -46,4 +48,5 @@ func allTools(deps Deps, pathGuard *guard.Guard) []agent.Tool {
 		clipboardTools{deps: deps}.copy(),
 		files.trash(),
 	}
+	return append(standard, deps.Extra...)
 }

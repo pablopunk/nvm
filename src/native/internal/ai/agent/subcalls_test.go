@@ -122,3 +122,63 @@ func TestToolWithoutATurnHasNoSubCalls(t *testing.T) {
 		t.Fatal("a bare context carries sub calls")
 	}
 }
+
+// A tool that sets its own Timeout is held to it, not to the turn's default; a negative Timeout sets none.
+func TestToolTimeoutOverridesTheTurnDefault(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	waiting := Tool{Name: "slow", Label: "Slow", Schema: json.RawMessage(`{"type":"object"}`), Timeout: -1,
+		Run: func(ctx context.Context, _ json.RawMessage) (Result, error) {
+			started <- struct{}{}
+			select {
+			case <-release:
+				return Result{Text: "finished"}, nil
+			case <-ctx.Done():
+				return Result{}, ctx.Err()
+			}
+		}}
+	clock := fake.NewClock()
+	model := NewScriptedModel(callChunks(call(0, "s", "slow", `{}`)), textTurn("ok"))
+	s := setup(model, registry(t, waiting), clock)
+	s.ToolTimeout = 5 * time.Second
+	s.TurnTimeout = 24 * time.Hour
+	turn := Start(context.Background(), s, user("x"))
+	drained := make(chan []Event, 1)
+	go func() { drained <- drain(t, turn) }()
+	<-started
+	clock.Advance(time.Hour)
+	close(release)
+	end := eventsOf(<-drained, EventToolEnd)[0]
+	if end.Status != CallRan || end.Result != "finished" {
+		t.Fatalf("a tool without a timeout ended %+v", end)
+	}
+}
+
+func TestToolWithItsOwnTimeoutIsNotStoppedAtTheDefault(t *testing.T) {
+	started := make(chan struct{}, 1)
+	release := make(chan struct{})
+	patient := Tool{Name: "patient", Label: "Patient", Schema: json.RawMessage(`{"type":"object"}`), Timeout: time.Minute,
+		Run: func(ctx context.Context, _ json.RawMessage) (Result, error) {
+			started <- struct{}{}
+			select {
+			case <-release:
+				return Result{Text: "finished"}, nil
+			case <-ctx.Done():
+				return Result{}, ctx.Err()
+			}
+		}}
+	clock := fake.NewClock()
+	model := NewScriptedModel(callChunks(call(0, "p", "patient", `{}`)), textTurn("ok"))
+	s := setup(model, registry(t, patient), clock)
+	s.ToolTimeout = 5 * time.Second
+	turn := Start(context.Background(), s, user("x"))
+	drained := make(chan []Event, 1)
+	go func() { drained <- drain(t, turn) }()
+	<-started
+	clock.AwaitTimerDueIn(time.Minute)
+	clock.Advance(10 * time.Second)
+	close(release)
+	if end := eventsOf(<-drained, EventToolEnd)[0]; end.Status != CallRan {
+		t.Fatalf("a tool with a longer timeout ended %+v", end)
+	}
+}

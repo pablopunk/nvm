@@ -3,6 +3,8 @@ package child
 import (
 	"strings"
 	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
 )
 
 // The program table is the second line behind the host's checks: even a source that names a package the host would
@@ -37,5 +39,19 @@ func TestProgramInterpreterRunsAllowedPackages(t *testing.T) {
 	}
 	if !strings.Contains(main.Type().String(), "api.Context") {
 		t.Fatalf("type = %s", main.Type())
+	}
+}
+
+// A child serves one kind of request. A program child never runs an extension method, and an extension child never runs
+// a program, so neither can be steered into the other's role.
+func TestProgramChildAndExtensionChildServeOnlyTheirOwnMethods(t *testing.T) {
+	program := &extension{program: true}
+	for _, method := range []string{protocol.MethodRun, protocol.MethodSearch, protocol.MethodRoot, protocol.MethodLoad} {
+		if _, err := program.dispatch(protocol.Request{Method: method}); err == nil {
+			t.Errorf("a program child served %q", method)
+		}
+	}
+	if _, err := (&extension{}).dispatch(protocol.Request{Method: protocol.MethodProgram}); err == nil {
+		t.Error("an extension child served a program")
 	}
 }

@@ -9,11 +9,13 @@ import (
 type outcome string
 
 const (
-	outcomeRan       outcome = "ran"
-	outcomeFailed    outcome = "failed"
-	outcomeDeclined  outcome = "declined"
-	outcomeRefused   outcome = "refused"
-	outcomeCancelled outcome = "cancelled"
+	outcomeRan      outcome = "ran"
+	outcomeFailed   outcome = "failed"
+	outcomeDeclined outcome = "declined"
+	// outcomeUnanswered is a question the user did not answer in time. It is a refusal: nothing runs without an answer.
+	outcomeUnanswered outcome = "unanswered"
+	outcomeRefused    outcome = "refused"
+	outcomeCancelled  outcome = "cancelled"
 )
 
 // entry is one gated call as the journal keeps it. Only the gate writes entries, from what it decided and what the host
@@ -55,7 +57,7 @@ func summary(entries []entry) string {
 			changes++
 		case e.outcome == outcomeDeclined:
 			declined++
-		case e.outcome == outcomeRefused:
+		case e.outcome == outcomeRefused || e.outcome == outcomeUnanswered:
 			refused++
 		case e.outcome == outcomeFailed:
 			failed++
