@@ -1,6 +1,7 @@
 package shortcuts
 
 import (
+	"fmt"
 	"maps"
 	"slices"
 
@@ -22,6 +23,9 @@ type Setup struct {
 	Run       func(actionID string)
 	OnPalette func()
 	OnSummon  func(Status)
+	// System lists the shortcuts the OS has turned on, or is nil where it has no live source. A recorded shortcut the
+	// OS uses is refused; one the user turned off in the system settings is allowed.
+	System platform.SystemShortcuts
 }
 
 // Manager answers the Keyboard Shortcuts list and the recorder, saves their changes, and keeps the bound shortcuts in
@@ -34,6 +38,7 @@ type Manager struct {
 	bindings  *Bindings
 	inactive  map[string]string
 	suspended bool
+	system    *systemOwners
 }
 
 // PaletteChange reports a palette shortcut change that was saved. SystemOwner names a system feature that already owns
@@ -57,11 +62,13 @@ func NewManager(setup Setup) *Manager {
 		}),
 		bindings: NewBindings(setup.Hotkeys, setup.Run),
 		inactive: map[string]string{},
+		system:   newSystemOwners(setup.System, setup.Clock),
 	}
 }
 
 // Start binds the palette shortcut from the document and the actions. It returns the palette shortcut's status.
 func (m *Manager) Start() Status {
+	m.system.Refresh()
 	status := m.summon.Start(m.load().Palette)
 	m.applyActions()
 	return status
@@ -135,6 +142,9 @@ func (m *Manager) Refresh() {
 
 // SetAction saves accelerator as actionID's shortcut and binds it.
 func (m *Manager) SetAction(actionID, accelerator string) error {
+	if err := m.refuseSystemShortcut(accelerator); err != nil {
+		return err
+	}
 	next, err := m.load().WithAction(actionID, accelerator, m.Reserved, m.titleOf)
 	if err != nil {
 		return err
@@ -143,6 +153,19 @@ func (m *Manager) SetAction(actionID, accelerator string) error {
 		return err
 	}
 	m.applyActions()
+	return nil
+}
+
+// refuseSystemShortcut fails when the OS has accelerator turned on. The palette's own shortcut is left to the document,
+// which words that refusal.
+func (m *Manager) refuseSystemShortcut(accelerator string) error {
+	accelerator = Normalize(accelerator)
+	if accelerator == "" || m.Reserved(accelerator) {
+		return nil
+	}
+	if owner := m.system.Owner(accelerator); owner != "" {
+		return fmt.Errorf("%s is used by macOS for %s. Turn it off in System Settings > Keyboard > Keyboard Shortcuts to use it here", accelerator, owner)
+	}
 	return nil
 }
 

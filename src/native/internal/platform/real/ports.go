@@ -48,5 +48,6 @@ func NewPorts() platform.Ports {
 		OutputMute:      newOutputMute(helper{}),
 		FileDrag:        fileDrag{},
 		DirectoryAccess: directoryAccess{},
+		SystemShortcuts: newSystemShortcuts(helper{}),
 	}
 }

@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
@@ -57,5 +58,38 @@ func TestMenuPortNilWhenUnsupported(t *testing.T) {
 	p := &App{}
 	if p.menuPort() != nil {
 		t.Fatal("unsupported menu port is available")
+	}
+}
+
+func TestMenuCaptureKeepsTheSummonedAppWhenTheFrontAppIsNevermindOrThePaletteIsAlreadyUp(t *testing.T) {
+	p := goldenPalette(t)
+	p.ports.Capabilities = platform.NewCapabilities()
+	windows := p.ports.Windows.(*fake.WindowManager)
+	original := windows.AddWindow(fake.SimWindow{PID: 42, BundleID: "original"})
+	windows.Focus(original)
+	source := &menuCapture{make(chan int, 4), make(chan struct{}, 4)}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	p.menus = menushost.New(ctx, source, time.Minute, nil)
+	defer p.menus.Close()
+	p.captureMenusOnShow()
+	if pid := <-source.calls; pid != 42 {
+		t.Fatalf("captured PID %d, want the app summoned over", pid)
+	}
+
+	p.Attach(&shownWindow{visible: true})
+	windows.Focus(windows.AddWindow(fake.SimWindow{PID: 77, BundleID: "finder"}))
+	p.captureMenusOnShow()
+	if pid := <-source.calls; pid != 42 {
+		t.Fatalf("a re-presented palette captured PID %d, want 42", pid)
+	}
+
+	p.Attach(&shownWindow{})
+	windows.Focus(windows.AddWindow(fake.SimWindow{PID: os.Getpid(), BundleID: "nevermind"}))
+	p.captureMenusOnShow()
+	select {
+	case pid := <-source.calls:
+		t.Fatalf("captured PID %d although Nevermind itself was in front", pid)
+	case <-time.After(50 * time.Millisecond):
 	}
 }

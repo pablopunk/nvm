@@ -141,3 +141,42 @@ func TestCheckRefusesAScriptWhoseCapabilityIsUndeclared(t *testing.T) {
 		t.Fatalf("methods = %v; want the commands and run entry points", methods)
 	}
 }
+
+// TestCheckRefusesAGenericStdlibCallTheInterpreterCannotRun: slices.SortFunc is a generic standard-library function
+// that the interpreter has no symbol for. The real load finds it, so the model reads the error before anything is
+// installed, with no rule about the function in the source checks.
+func TestCheckRefusesAGenericStdlibCallTheInterpreterCannotRun(t *testing.T) {
+	h := newHarness(t)
+	source := `package main
+
+import (
+	"slices"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+)
+
+func RootItems(ctx api.Context) ([]api.Item, error) {
+	names := []string{"b", "a"}
+	slices.SortFunc(names, func(a, b string) int { return len(a) - len(b) })
+	return nil, nil
+}
+`
+	_, err := h.m.Check("acme.good", fixtureContents(t, "acme.good", source))
+	if err == nil || !strings.Contains(err.Error(), "slices.SortFunc") {
+		t.Fatalf("Check error = %v; want the interpreter's error naming slices.SortFunc", err)
+	}
+	if entries, _ := h.files.ReadDir(h.root); len(entries) != 0 {
+		t.Fatalf("a failed check left %d entries behind", len(entries))
+	}
+}
+
+// TestCheckRefusesCandidateFilesTooLargeToLoadSafely: the interpreter compiles in the host's budget, so a candidate over
+// the size bound is refused before it loads.
+func TestCheckRefusesCandidateFilesTooLargeToLoadSafely(t *testing.T) {
+	h := newHarness(t)
+	big := goodSource + "\n// " + strings.Repeat("x", maxCheckedBytes) + "\n"
+	_, err := h.m.Check("acme.good", fixtureContents(t, "acme.good", big))
+	if err == nil || !strings.Contains(err.Error(), "keep them under") {
+		t.Fatalf("Check error = %v; want the size refusal", err)
+	}
+}

@@ -187,6 +187,11 @@ func (p *Palette) RunChosenAction() bool {
 // Visible reports whether the palette window is shown.
 func (p *Palette) Visible() bool { return p.win.IsVisible() }
 
+// Presented reports whether the palette is shown and has the keyboard, so a show now re-presents it rather than coming
+// from another app. OnShow runs before the window is shown, so there it tells whether the app in front is still the one
+// the palette was summoned over.
+func (p *Palette) Presented() bool { return p.win != nil && p.win.IsVisible() && p.win.IsFocused() }
+
 // PopIf goes back from v when v is the page on top, and reports whether it did. It never removes the root.
 func (p *Palette) PopIf(v *View) bool {
 	if len(p.stack) < 2 || p.cur() != v {

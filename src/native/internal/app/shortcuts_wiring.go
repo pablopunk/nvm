@@ -19,6 +19,7 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 	return shortcuts.Setup{
 		Doc:       p.shortcutsDocument(),
 		Hotkeys:   p.shortcutHotkeys(),
+		System:    p.ports.SystemShortcuts,
 		Clock:     p.ports.Clock,
 		GOOS:      runtime.GOOS,
 		Commands:  p.shortcutCommands(),

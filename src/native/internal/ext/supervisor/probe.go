@@ -3,10 +3,15 @@ package supervisor
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
+	"time"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
 )
+
+// probeGrace is how long past the child's start timeout the probe waits for the runtime to report that timeout.
+const probeGrace = time.Second
 
 // ProbeSource loads the extension source at sourcePath in a child process, waits until the child is ready or has
 // failed, and stops it. It returns the protocol methods the source implements, or the reason it does not load. The
@@ -15,7 +20,11 @@ func ProbeSource(cfg Config, identity api.Identity, sourcePath string) ([]string
 	r := New(cfg, identity, sourcePath, nil)
 	defer r.Stop()
 	r.Start()
-	_ = r.WaitFor(context.Background(), probeSettled)
+	ctx, cancel := context.WithTimeout(context.Background(), cfg.startTimeout()+probeGrace)
+	defer cancel()
+	if err := r.WaitFor(ctx, probeSettled); err != nil {
+		return nil, fmt.Errorf("the extension did not finish loading within %s", cfg.startTimeout())
+	}
 	return r.probedMethods()
 }
 

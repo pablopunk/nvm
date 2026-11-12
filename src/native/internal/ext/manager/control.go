@@ -158,6 +158,9 @@ func (m *Manager) Install(id string, contents map[string][]byte, enable bool) er
 // that calls a service its manifest does not declare is refused before it loads, since the host would refuse
 // that call at run time. The staging folder is removed on every path.
 func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error) {
+	if size := candidateBytes(contents); size > maxCheckedBytes {
+		return nil, fmt.Errorf("the extension files total %d bytes; keep them under %d bytes", size, maxCheckedBytes)
+	}
 	staging, staged, err := install.Stage(m.ports.Files, m.ports.Clock, m.root, id, contents)
 	if err != nil {
 		return nil, err
@@ -171,6 +174,18 @@ func (m *Manager) Check(id string, contents map[string][]byte) ([]string, error)
 	}
 	identity := api.Identity{ID: id, Title: staged.Manifest.Title}
 	return supervisor.ProbeSource(m.config, identity, filepath.Join(staging, bundle.SourceFile))
+}
+
+// maxCheckedBytes bounds the files Check loads in the interpreter, so a candidate cannot use a large amount of memory
+// while it compiles.
+const maxCheckedBytes = 1 << 20
+
+func candidateBytes(contents map[string][]byte) int {
+	total := 0
+	for _, data := range contents {
+		total += len(data)
+	}
+	return total
 }
 
 // Uninstall stops the extension, removes its folder and forgets its enabled state.
