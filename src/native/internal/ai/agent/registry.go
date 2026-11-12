@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // RunFunc runs one tool call. args is the JSON object the model sent, already checked against the tool's schema. It
@@ -14,6 +15,9 @@ type RunFunc func(ctx context.Context, args json.RawMessage) (Result, error)
 type Result struct {
 	Text    string
 	Outcome string
+	// Failed ends the call as failed while the model still reads Text. A tool uses it for a failure the model can act on,
+	// such as a program that did not compile.
+	Failed bool
 }
 
 // Tool is one capability the model may call. Its name is what the model sees, so it names an intent, not a mechanism.
@@ -24,6 +28,9 @@ type Tool struct {
 	Label string
 	// Schema is the JSON Schema of the arguments: an object with properties, required names and additionalProperties.
 	Schema json.RawMessage
+	// Timeout is the wall-clock limit of one run. Zero selects the turn's tool timeout; a negative value sets none, for a
+	// tool that bounds its own active time and asks the user inside the call, where waiting must not count.
+	Timeout time.Duration
 	// Confirm makes every call wait for the user's allow before it runs.
 	Confirm bool
 	// PathArgs names the arguments that hold a file path. A path policy checks them before the call runs.

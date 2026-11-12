@@ -66,7 +66,7 @@ var toolActivityLabels = map[string]string{
 	"validate_extension": "Validating the extension", "install_extension": "Installing the extension",
 	"read_file": "Reading a file", "search_files": "Searching files", "list_folder": "Listing files", "list_apps": "Finding apps",
 	"read_clipboard": "Reading the clipboard", "open_url": "Opening a link", "open_app": "Opening an app",
-	"copy_text": "Copying text", "trash_file": "Moving a file to Trash",
+	"copy_text": "Copying text", "trash_file": "Moving a file to Trash", "run_program": "Running a program",
 }
 
 func humanToolLabel(label, name string) string {

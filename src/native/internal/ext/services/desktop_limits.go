@@ -20,10 +20,11 @@ const (
 	notificationsPerMinute  = budget.NotificationsPerMinute
 )
 
-// requireRun refuses a destructive call that does not run under a palette action. A search or a root listing has
-// no confirmation step, so it cannot remove the user's data.
+// requireRun refuses a destructive call that does not run under a palette action, or under an AI conversation's
+// program, whose gate asks the user in the chat. A search or a root listing has no confirmation step, so it cannot
+// remove the user's data.
 func requireRun(ctxMethod, what string) error {
-	if ctxMethod == protocol.MethodRun {
+	if ctxMethod == protocol.MethodRun || ctxMethod == protocol.MethodProgram {
 		return nil
 	}
 	return serviceError{

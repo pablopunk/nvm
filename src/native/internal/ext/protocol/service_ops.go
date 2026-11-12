@@ -13,6 +13,7 @@ const OpPublishDisplay = "publish-display"
 // Operations of the host services. Each service has the operations listed here; anything else is an invalid
 // input. Arguments and results are the JSON shapes below, shared by the child and the host.
 const (
+	OpCreateWith  = "create-with"
 	OpGet         = "get"
 	OpSet         = "set"
 	OpDelete      = "delete"

@@ -241,3 +241,35 @@ func referenceDescription(name, doc string) string {
 	}
 	return string(unicode.ToUpper(first)) + text[size:]
 }
+
+// renderSubset writes one line per accessor, "ctx.Notes() Notes", then the types the accessors reach.
+func (index *pkgIndex) renderSubset(accessors []string) (string, error) {
+	context, ok := index.types[contextType].Type.(*ast.InterfaceType)
+	if !ok {
+		return "", fmt.Errorf("the api has no %s interface", contextType)
+	}
+	returns := map[string]ast.Expr{}
+	for _, field := range context.Methods.List {
+		if signature, ok := field.Type.(*ast.FuncType); ok && signature.Results != nil && len(signature.Results.List) == 1 {
+			for _, name := range field.Names {
+				returns[name.Name] = signature.Results.List[0].Type
+			}
+		}
+	}
+	var b strings.Builder
+	var roots []string
+	for _, accessor := range accessors {
+		result, ok := returns[accessor]
+		if !ok {
+			return "", fmt.Errorf("the api Context has no accessor %s", accessor)
+		}
+		fmt.Fprintf(&b, "ctx.%s() %s\n", accessor, index.exprText(result))
+		roots = append(roots, index.exprText(result))
+	}
+	for _, name := range index.reach(roots, nil) {
+		if _, declared := index.types[name]; declared {
+			index.writeType(&b, name, true)
+		}
+	}
+	return b.String(), nil
+}

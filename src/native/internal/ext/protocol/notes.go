@@ -24,3 +24,14 @@ type NoteUpdateArgs struct {
 	Markdown string    `json:"markdown"`
 	SavedAt  time.Time `json:"savedAt"`
 }
+
+// NoteSearchArgs asks for the notes that hold every word of Query, at most Limit of them.
+type NoteSearchArgs struct {
+	Query string `json:"query"`
+	Limit int    `json:"limit"`
+}
+
+// NoteCreateWithArgs creates a note that holds Markdown.
+type NoteCreateWithArgs struct {
+	Markdown string `json:"markdown"`
+}

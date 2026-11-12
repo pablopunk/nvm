@@ -25,6 +25,8 @@ var entryPoints = protocol.EntryPoints
 type extension struct {
 	functions map[string]reflect.Value
 	base      hostContext
+	// program marks the child of an AI conversation program, which answers MethodProgram and nothing else.
+	program bool
 }
 
 // load interprets the extension source at path. Extension code runs here, at load, inside the child; the host

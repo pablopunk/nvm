@@ -1,6 +1,6 @@
 # AI code mode: conversations drive Nevermind through the Extension API
 
-Status: design for review. Nothing here is implemented. Written against the head of PR #280 (`src/native`).
+Status: phases 0 and 1 (the sandbox, the gate and notes) are built; later phases are still design. Written against the head of PR #280 (`src/native`). The section "As built (phases 0 and 1)" at the end records where the code differs from the text above it.
 
 Idea (Pablo): instead of one hand-written tool per feature, a conversation gets one tool. The model writes a short program against the typed API extensions already use (`ctx.Notes()`, timers, clipboard history, commands). The host runs it in a sandbox and returns the result to the model. First wish list: notes, timers, clipboard, and running any command, including user extensions.
 
@@ -287,3 +287,29 @@ Open questions for Pablo:
 5. **Notes and clipboard text going to the model.** Notes are read without a prompt (files already are); clipboard history prompts. Is that the right line for notes?
 6. **Where do chats live?** Builder chats run on the native loop. Should builder chats get `run_program` too, or conversations only?
 7. **Which host consumer migrates onto `Commands.Run` first** (shortcut or alias runner, other)?
+
+## 9. As built (phases 0 and 1)
+
+Decisions Pablo approved: programs are Go, run in a throwaway child of the extension runtime through one `run_program` tool that conversations get (builder chats keep their own tools). Only deletes, and later running commands, ask in the chat. Creating, appending, editing and reading notes run without asking. There is no "always allow" yet.
+
+Where the code is:
+
+| Piece | Where |
+|---|---|
+| Program check, import allowlist, symbol table | `internal/ext/program` (`Prepare`, `Packages`, `Symbols`). Imports are generated from the qualifiers the body uses; `os`, `net`, `exec`, `syscall`, `unsafe`, `reflect`, `runtime` and every other package are refused by name before anything is staged. |
+| Program child | `internal/ext/child/program.go`. The child gets a sixth argument (`protocol.ProgramArg`), loads only the allowed standard library packages plus the api, has an empty source tree (so the interpreter cannot find a package by its source) and serves `protocol.MethodProgram` only. An extension child refuses that method. |
+| Throwaway runtime | `supervisor.NewProgram`, budget `protocol.MethodProgram` = 20 s of the program's own computing. The supervisor already adds back the time the host spends on service calls, so an approval wait does not count. |
+| Gate | `internal/ai/codemode` (`gate.go`, `rules.go`, `class.go`, `journal.go`). A fixed table of `(service, op)` rules with a class; an unlisted pair is refused and journaled, including the services the extension handler leaves open to every extension (`storage`, `logs`, `text`). Fifty calls per run. |
+| Second line | The program's `services.Handler` is built with a `Confirm` that answers yes only while the gate has allowed the call being served, once. `requireRun` accepts `MethodProgram`. A bug in the gate therefore fails closed at `confirmDestructive`. |
+| In-run approval | `agent.SubCalls` (`internal/ai/agent/subcalls.go`): a running tool begins nested calls (`CallInfo.ParentID`), asks the user through the same approval channel as a tool's own confirmation, and ends them. `Tool.Timeout < 0` removes the wall-clock timeout for a tool that bounds its own active time. `Result.Failed` ends a call failed while the model still reads its text. |
+| Transcript | `chat.ToolRun.ParentID`; the program row's `Input` is the code, its text the result the model read, its outcome "2 changes, 1 declined by you". The palette shows only the live activity row, as it does for every tool (completed tool entries are not conversation rows), so the nested approval shows there with its host-built question. |
+| Guidance | `codemode.guidance()`: the contract, the generated reference subset (`apiref.RenderSubset`, `reference_gen.go`, drift test) and three examples that the tests run. About 2.2 KB. |
+| Notes API | `Notes.Search` and `Notes.CreateWith`, added for this slice because `List` returns every note in full. |
+
+Differences from the text above:
+
+- The program's printing is discarded; only the returned value comes back (the plan did not decide this).
+- A 64 KiB cap on the returned JSON (`protocol.MaxProgramResultBytes`) fails in the child with a message that tells the model to return less; the agent loop's 16 KiB cap still applies to what the model reads.
+- The memory test allocates 6 GiB (the 2 GiB `RLIMIT_AS` makes it a fatal runtime error) and 250 MB against a 120 MB resident limit, not 64 MiB: a 64 MiB allocation is within both limits.
+- The interpreter panics when a computed bool is returned directly (`return a < b, nil`). The guidance says to assign it first, and a failure of that kind carries the same hint.
+- The pi session key still hashes tool names only. The guidance is static for a build and a pi host lives no longer than the app process, so a changed text reaches the next host.

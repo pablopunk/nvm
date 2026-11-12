@@ -45,6 +45,10 @@ var DefaultBudgets = map[string]Budget{
 	protocol.MethodMenuBars:        {Soft: 50 * time.Millisecond, Hard: time.Second},
 	protocol.MethodMenuBarTriggers: {Soft: 20 * time.Millisecond, Hard: 500 * time.Millisecond},
 	protocol.MethodRestoreWindow:   {Hard: 10 * time.Second},
+
+	// MethodProgram counts the program's own computing: the time the host spends answering its service calls, such as
+	// waiting for the user to allow a delete, is added back.
+	protocol.MethodProgram: {Hard: 20 * time.Second},
 }
 
 // Config is everything a Runtime needs from the composition root. Ports are injected so tests can fake them.

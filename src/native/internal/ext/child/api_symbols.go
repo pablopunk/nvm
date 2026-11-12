@@ -532,6 +532,7 @@ func init() {
 		"NavigationMode":          reflect.ValueOf((*api.NavigationMode)(nil)),
 		"Network":                 reflect.ValueOf((*api.Network)(nil)),
 		"Note":                    reflect.ValueOf((*api.Note)(nil)),
+		"NoteMatch":               reflect.ValueOf((*api.NoteMatch)(nil)),
 		"Notes":                   reflect.ValueOf((*api.Notes)(nil)),
 		"OCR":                     reflect.ValueOf((*api.OCR)(nil)),
 		"OCRBlock":                reflect.ValueOf((*api.OCRBlock)(nil)),
@@ -1587,17 +1588,22 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Network) Fetch(request
 
 // _github_com_pablopunk_nvm_native_internal_ext_api_Notes is an interface wrapper for Notes type
 type _github_com_pablopunk_nvm_native_internal_ext_api_Notes struct {
-	IValue  interface{}
-	WCreate func() (api.Note, error)
-	WDelete func(id string) error
-	WGet    func(id string) (api.Note, bool, error)
-	WList   func() ([]api.Note, error)
-	WRecent func() (api.Note, error)
-	WUpdate func(id string, markdown string, updatedAt time.Time) (api.Note, bool, error)
+	IValue      interface{}
+	WCreate     func() (api.Note, error)
+	WCreateWith func(markdown string) (api.Note, error)
+	WDelete     func(id string) error
+	WGet        func(id string) (api.Note, bool, error)
+	WList       func() ([]api.Note, error)
+	WRecent     func() (api.Note, error)
+	WSearch     func(query string, limit int) ([]api.NoteMatch, error)
+	WUpdate     func(id string, markdown string, updatedAt time.Time) (api.Note, bool, error)
 }
 
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Create() (api.Note, error) {
 	return W.WCreate()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) CreateWith(markdown string) (api.Note, error) {
+	return W.WCreateWith(markdown)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Delete(id string) error {
 	return W.WDelete(id)
@@ -1610,6 +1616,9 @@ func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) List() ([]api.N
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Recent() (api.Note, error) {
 	return W.WRecent()
+}
+func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Search(query string, limit int) ([]api.NoteMatch, error) {
+	return W.WSearch(query, limit)
 }
 func (W _github_com_pablopunk_nvm_native_internal_ext_api_Notes) Update(id string, markdown string, updatedAt time.Time) (api.Note, bool, error) {
 	return W.WUpdate(id, markdown, updatedAt)

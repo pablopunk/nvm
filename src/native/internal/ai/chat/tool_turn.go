@@ -57,7 +57,7 @@ func (s *Service) endToolRun(id string, event agent.Event) {
 
 // toolRunOf is the transcript description of a call.
 func toolRunOf(call agent.CallInfo) *ToolRun {
-	return &ToolRun{CallID: call.ID, Name: call.Name, Label: call.Label, Input: call.Input}
+	return &ToolRun{CallID: call.ID, ParentID: call.ParentID, Name: call.Name, Label: call.Label, Input: call.Input}
 }
 
 // toolIndex returns the position of the tool entry of a call, or -1.
