@@ -26,6 +26,7 @@ type EngineConfig struct {
 	Codec      platform.OpusCodec
 	Account    Account
 	Recordings *recordings.Store
+	Retry      RetryPolicy
 	Muter      *audiomute.Muter
 	OnLevel    func(level float64, current func() bool)
 	Background func(name string, fn func())
@@ -50,6 +51,7 @@ func NewEngine(cfg EngineConfig) *Engine {
 		OnLevel:    cfg.OnLevel,
 		Background: cfg.Background,
 		Warn:       cfg.Warn,
+		Retry:      cfg.Retry,
 	}
 	if cfg.Account != nil {
 		serviceConfig.Transcriber = cfg.Account.Transcriber()
@@ -143,7 +145,7 @@ func (e *Engine) Recordings() ([]api.SavedDictation, error) {
 	}
 	out := make([]api.SavedDictation, 0, len(saved))
 	for _, recording := range saved {
-		out = append(out, api.SavedDictation{ID: recording.ID, CreatedAtMs: recording.CreatedAt, SegmentCount: recording.SegmentCount})
+		out = append(out, api.SavedDictation{ID: recording.ID, CreatedAtMs: recording.CreatedAt, SegmentCount: recording.SegmentCount, Failure: recording.Failure})
 	}
 	return out, nil
 }

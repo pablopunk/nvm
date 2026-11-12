@@ -3,6 +3,7 @@ package dictation
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -169,3 +170,48 @@ func hasCapability(manifest api.Manifest, want api.Capability) bool {
 }
 
 // storedHistory returns the transcripts the built-in saved.
+
+func TestAFailedDictationShowsItsReasonAndRetryReplacesItWithTheText(t *testing.T) {
+	ctx := newContext()
+	spoken := testNow.Add(-time.Minute).UnixMilli()
+	ctx.dictation.recordings = []api.SavedDictation{{ID: "dictation-bad", CreatedAtMs: spoken, SegmentCount: 1, Failure: "Cloud transcription timed out."}}
+	ctx.dictation.retryText = "recovered words"
+	ext := New(Legacy{})
+
+	view := run(t, ext, ctx, HistoryCommandID, nil, nil).View
+	row := view.Items[0]
+	if row.Title != failedRecordingTitle || !strings.Contains(row.Subtitle, "Cloud transcription timed out.") {
+		t.Fatalf("row %+v; want a failed dictation that says why", row)
+	}
+	if row.Primary == nil || row.Primary.Ref.ID != refRetry || len(row.Actions) != 1 || row.Actions[0].Ref.ID != refDeleteRecording {
+		t.Fatalf("row actions %+v %+v; want Retry on Enter and Delete in the menu", row.Primary, row.Actions)
+	}
+	run(t, ext, ctx, refRetry, map[string]string{argID: "dictation-bad"}, nil)
+	entries := storedHistory(t, ctx)
+	if len(entries) != 1 || entries[0].ID != "dictation-bad" || entries[0].CreatedAt != spoken || entries[0].Text != "recovered words" {
+		t.Fatalf("history %+v; want the text in the failed entry's place, dated when it was spoken", entries)
+	}
+	if len(ctx.dictation.deleted) != 1 {
+		t.Fatalf("deleted %v; want the audio gone", ctx.dictation.deleted)
+	}
+}
+
+func TestAFailedRetryKeepsTheAudioAndSaysWhy(t *testing.T) {
+	ctx := newContext()
+	ctx.dictation.retryErr = errors.New("Sign in to use API dictation.")
+	result := run(t, New(Legacy{}), ctx, refRetry, map[string]string{argID: "dictation-bad"}, nil)
+	if len(ctx.dictation.deleted) != 0 || len(storedHistory(t, ctx)) != 0 {
+		t.Fatal("a failed retry changed the history or dropped the audio")
+	}
+	if result.Toast == nil || result.Toast.Tone != "error" || result.Toast.Message != "Sign in to use API dictation." {
+		t.Fatalf("toast %+v; want the reason as an error", result.Toast)
+	}
+}
+
+func TestDeleteRecordingDropsTheAudioOfAFailedDictation(t *testing.T) {
+	ctx := newContext()
+	run(t, New(Legacy{}), ctx, refDeleteRecording, map[string]string{argID: "dictation-bad"}, nil)
+	if len(ctx.dictation.deleted) != 1 || ctx.dictation.deleted[0] != "dictation-bad" {
+		t.Fatalf("deleted %v; want the failed dictation's audio", ctx.dictation.deleted)
+	}
+}

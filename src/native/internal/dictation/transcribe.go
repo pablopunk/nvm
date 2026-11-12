@@ -31,6 +31,8 @@ type Transcriber interface {
 // confirmed; Load returns the saved segments of one dictation.
 type Recorder interface {
 	Save(id string, segments [][]byte) error
+	// MarkFailed records why the transcription failed, so the history can say so after a restart.
+	MarkFailed(id, failure string) error
 	Remove(id string) error
 	Load(id string) ([][]byte, error)
 }
@@ -56,11 +58,12 @@ func segmentFiles(op *operation) [][]byte {
 }
 
 // transcribeFiles sends every segment file in order and joins the texts with spaces, as the desktop app does. The
-// first segment is the one a preparation covers when prepared is set. A failed segment fails the dictation.
-func transcribeFiles(ctx context.Context, transcriber Transcriber, operationID string, prepared bool, files [][]byte) (string, error) {
+// first segment is the one a preparation covers when prepared is set. A segment that fails for a transient reason is retried
+// under policy; any other failure fails the dictation.
+func transcribeFiles(ctx context.Context, transcriber Transcriber, policy RetryPolicy, operationID string, prepared bool, files [][]byte) (string, error) {
 	var texts []string
 	for index, file := range files {
-		text, err := transcriber.Transcribe(ctx, Segment{
+		text, err := transcribeSegment(ctx, transcriber, policy, Segment{
 			OperationID:    segmentOperationID(operationID, index),
 			CancellationID: operationID,
 			Prepared:       index == 0 && prepared,
