@@ -52,4 +52,6 @@ type Ports struct {
 	FileDrag FileDrag
 	// DirectoryAccess reports whether the current process can write directory entries there, including group and ACL grants.
 	DirectoryAccess DirectoryAccess
+	// SystemShortcuts lists the shortcuts the OS has turned on. It is nil where the OS has no live source for them.
+	SystemShortcuts SystemShortcuts
 }
