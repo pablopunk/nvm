@@ -52,6 +52,10 @@ func (p *Palette) menuTextKey(key ui.TextKey) bool {
 		p.onEnter() // the menu closed before this key arrived, while its field still held focus: the key is the page's
 		return true
 	}
+	if p.actionsOpen && (key.Mods == 0 && key.Key == ui.KeyEscape || key.Mods == Mod && key.Key == ui.KeyK) {
+		p.closeActionMenu() // as it arrives: a shortcut would wait for the frame, behind a key typed right after it
+		return true
+	}
 	if key.Mods == 0 && key.Key == ui.KeyLeft && key.Text() == "" {
 		p.closeActionMenu()
 		return true
