@@ -15,10 +15,11 @@ type fakeRecorder struct {
 	saved   map[string][][]byte
 	removed []string
 	saveErr error
+	failed  map[string]string
 }
 
 func newFakeRecorder() *fakeRecorder {
-	return &fakeRecorder{saved: map[string][][]byte{}}
+	return &fakeRecorder{saved: map[string][][]byte{}, failed: map[string]string{}}
 }
 
 func (r *fakeRecorder) Save(id string, segments [][]byte) error {
@@ -28,6 +29,13 @@ func (r *fakeRecorder) Save(id string, segments [][]byte) error {
 		return r.saveErr
 	}
 	r.saved[id] = segments
+	return nil
+}
+
+func (r *fakeRecorder) MarkFailed(id, failure string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.failed[id] = failure
 	return nil
 }
 

@@ -51,6 +51,8 @@ type Config struct {
 	Warn        func(event string, fields map[string]any)
 	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
 	Recorder Recorder
+	// Retry bounds the automatic retries of a transient transcription failure; the zero value is the default policy.
+	Retry RetryPolicy
 	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
 	ReadyTimeout time.Duration
 }
@@ -253,42 +255,20 @@ func (s *Service) finish(op *operation) (string, error) {
 	}
 	files := segmentFiles(op)
 	saved := s.keepRecording(op.id, files)
-	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, op.id, op.preparedOK, files)
+	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, s.cfg.Retry, op.id, op.preparedOK, files)
 	if op.ctx.Err() != nil {
 		s.discardRecording(op.id, saved)
 		return "", ErrCancelled
 	}
 	if err != nil {
 		if saved {
+			s.markFailed(op.id, err)
 			return "", &SavedError{Err: err}
 		}
 		return "", err
 	}
 	s.discardRecording(op.id, saved)
 	return text, nil
-}
-
-// keepRecording saves the audio of dictation id before it is sent. A save that fails is logged; the dictation goes on
-// without a recording to retry.
-func (s *Service) keepRecording(id string, files [][]byte) bool {
-	if s.cfg.Recorder == nil {
-		return false
-	}
-	if err := s.cfg.Recorder.Save(id, files); err != nil {
-		s.warn("dictation.recording-save-failed", err)
-		return false
-	}
-	return true
-}
-
-// discardRecording drops the saved audio of dictation id once its text is confirmed, or when it was cancelled.
-func (s *Service) discardRecording(id string, saved bool) {
-	if !saved {
-		return
-	}
-	if err := s.cfg.Recorder.Remove(id); err != nil {
-		s.warn("dictation.recording-remove-failed", err)
-	}
 }
 
 // Retry transcribes a saved dictation again. The request is new and billable, so every segment gets a fresh operation
@@ -310,7 +290,7 @@ func (s *Service) Retry(ctx context.Context, id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return transcribeFiles(ctx, s.cfg.Transcriber, newRetryOperationID(), false, files)
+	return s.retryRecording(ctx, id, files)
 }
 
 // endRetry returns the service to idle after a retry, unless a dictation has taken it over meanwhile.

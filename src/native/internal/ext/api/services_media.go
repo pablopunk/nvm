@@ -75,6 +75,7 @@ type SavedDictation struct {
 	ID           string `json:"id"`
 	CreatedAtMs  int64  `json:"createdAtMs"`
 	SegmentCount int    `json:"segmentCount"`
+	Failure      string `json:"failure,omitempty"`
 }
 
 // Dictation records speech and returns the hosted transcript. Audio is never exposed to extension code. Start resolves

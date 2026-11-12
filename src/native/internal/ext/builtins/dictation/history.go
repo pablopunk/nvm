@@ -13,19 +13,20 @@ import (
 
 // Copy of the history view: its title, search placeholder and empty state, as 1.x showed them.
 const (
-	historyPlaceholder = "Search dictation history"
-	historyEmptyTitle  = "No dictation history"
-	historyEmptyHint   = "Completed dictations will appear here."
-	recordingTitle     = "Unfinished dictation"
-	clearTitle         = "Clear History"
-	clearMessage       = "Delete all transcripts and saved recordings? This cannot be undone."
-	clearLabel         = "Clear history"
-	deleteRecordHint   = "Delete this saved audio? It cannot be recovered."
-	deleteRecordLabel  = "Delete recording"
-	deleteTextHint     = "Delete this transcript? This cannot be undone."
-	deleteTextLabel    = "Delete transcript"
-	timeLayout         = "2006-01-02 15:04"
-	previewTitle       = "Dictation"
+	historyPlaceholder   = "Search dictation history"
+	historyEmptyTitle    = "No dictation history"
+	historyEmptyHint     = "Completed dictations will appear here."
+	recordingTitle       = "Unfinished dictation"
+	failedRecordingTitle = "Failed dictation"
+	clearTitle           = "Clear History"
+	clearMessage         = "Delete all transcripts and saved recordings? This cannot be undone."
+	clearLabel           = "Clear history"
+	deleteRecordHint     = "Delete this saved audio? It cannot be recovered."
+	deleteRecordLabel    = "Delete recording"
+	deleteTextHint       = "Delete this transcript? This cannot be undone."
+	deleteTextLabel      = "Delete transcript"
+	timeLayout           = "2006-01-02 15:04"
+	previewTitle         = "Dictation"
 )
 
 // readHistory returns the saved transcripts, newest first. Until the built-in saves its own, the app's legacy list answers.
@@ -46,8 +47,12 @@ func (e Extension) saveTranscript(ctx api.Context, text string) {
 
 func (e Extension) addTranscript(ctx api.Context, text string) error {
 	now := ctx.Clock().Now()
-	entry := history.Entry{ID: "dictation-" + strconv.FormatInt(now.UnixNano(), 36), Text: text, CreatedAt: now.UnixMilli()}
-	return writeHistory(ctx, history.Add(e.readHistory(ctx), entry))
+	return e.addEntry(ctx, history.Entry{ID: "dictation-" + strconv.FormatInt(now.UnixNano(), 36), Text: text, CreatedAt: now.UnixMilli()})
+}
+
+// addEntry puts entry in front of the transcripts, replacing the one with its id.
+func (e Extension) addEntry(ctx api.Context, entry history.Entry) error {
+	return writeHistory(ctx, history.Add(history.Remove(e.readHistory(ctx), entry.ID), entry))
 }
 
 func writeHistory(ctx api.Context, entries []history.Entry) error {
@@ -133,15 +138,20 @@ func keptIDs(entries []history.Entry, saved []api.SavedDictation) map[string]boo
 	return kept
 }
 
-// recordingItem is the row of an unfinished dictation: Enter retries it, and its menu deletes the saved audio.
+// recordingItem is the row of an unfinished dictation: Enter retries it, and its menu deletes the saved audio. A
+// dictation whose transcription failed says why.
 func recordingItem(recording api.SavedDictation) api.Item {
 	retry := api.Run(refRetry, "Retry Transcription", map[string]string{argID: recording.ID})
 	remove := api.Destructive(api.WithConfirmation(
 		api.Run(refDeleteRecording, "Delete Recording", map[string]string{argID: recording.ID}),
 		api.Confirmation{Message: deleteRecordHint, ConfirmLabel: deleteRecordLabel, Destructive: true},
 	))
+	title, subtitle := recordingTitle, fmt.Sprintf("%s · %d audio segments", formatTime(recording.CreatedAtMs), recording.SegmentCount)
+	if recording.Failure != "" {
+		title, subtitle = failedRecordingTitle, subtitle+" · "+recording.Failure
+	}
 	return api.Item{
-		ID: recording.ID, Title: recordingTitle, Subtitle: fmt.Sprintf("%s · %d audio segments", formatTime(recording.CreatedAtMs), recording.SegmentCount),
+		ID: recording.ID, Title: title, Subtitle: subtitle,
 		Icon: "mic", Primary: &retry, Actions: []api.Action{remove},
 	}
 }
@@ -185,8 +195,8 @@ func (e Extension) openHistory(ctx api.Context) (api.Result, error) {
 	return pushView(ctx, e.historyView(ctx)), nil
 }
 
-// retry transcribes a saved dictation again. The text joins the history and the audio is dropped; a failed or empty
-// retry keeps the audio and says why.
+// retry transcribes a saved dictation again. The text takes the dictation's place in the history, with its id and time,
+// and the audio is dropped; a failed or empty retry keeps the audio and says why.
 func (e Extension) retry(ctx api.Context, id string) (api.Result, error) {
 	text, err := ctx.Dictation().Retry(id)
 	if err != nil {
@@ -195,7 +205,7 @@ func (e Extension) retry(ctx api.Context, id string) (api.Result, error) {
 	if strings.TrimSpace(text) == "" {
 		return toast("No speech detected", "error"), nil
 	}
-	if err := e.addTranscript(ctx, text); err != nil {
+	if err := e.addEntry(ctx, e.recoveredEntry(ctx, id, text)); err != nil {
 		return api.Result{}, err
 	}
 	if err := ctx.Dictation().DeleteRecording(id); err != nil {
@@ -204,6 +214,20 @@ func (e Extension) retry(ctx api.Context, id string) (api.Result, error) {
 	result := replaceView(ctx, e.historyView(ctx))
 	result.Toast = &api.Toast{Message: "Transcription recovered", Tone: "success"}
 	return result, nil
+}
+
+// recoveredEntry is the transcript of the saved dictation id, dated when the dictation was spoken. A dictation the host no
+// longer lists is dated now.
+func (e Extension) recoveredEntry(ctx api.Context, id, text string) history.Entry {
+	entry := history.Entry{ID: id, Text: text, CreatedAt: ctx.Clock().Now().UnixMilli()}
+	if saved, err := ctx.Dictation().Recordings(); err == nil {
+		for _, recording := range saved {
+			if recording.ID == id {
+				entry.CreatedAt = recording.CreatedAtMs
+			}
+		}
+	}
+	return entry
 }
 
 // deleteRecording removes a saved dictation's audio, and shows the list without it.

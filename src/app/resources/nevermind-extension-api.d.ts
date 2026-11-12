@@ -1314,7 +1314,13 @@ export type ExtensionDictation = {
   cancel(): Promise<void>;
   /** Built-in Dictation only: lists locally saved recordings whose hosted transcription did not complete. Audio stays on this device. */
   recordings?(): Promise<
-    Array<{ id: string; createdAt: number; segmentCount: number }>
+    Array<{
+      id: string;
+      createdAt: number;
+      segmentCount: number;
+      /** Why the last transcription failed, in the words the user reads. Absent when none was answered. */
+      failure?: string;
+    }>
   >;
   /** Built-in Dictation only: retries transcription of a saved recording. Delete the audio after saving the returned transcript. */
   retry?(id: string): Promise<string>;
