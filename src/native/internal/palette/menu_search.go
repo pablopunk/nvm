@@ -48,6 +48,10 @@ func (p *Palette) moveMenuChoice(delta int) {
 func (p *Palette) menuChanged() { p.actChosen = 0; p.menuReveal = true }
 
 func (p *Palette) menuTextKey(key ui.TextKey) bool {
+	if key.Mods == 0 && key.Key == ui.KeyEnter && !p.actionsOpen {
+		p.onEnter() // the menu closed before this key arrived, while its field still held focus: the key is the page's
+		return true
+	}
 	if key.Mods == 0 && key.Key == ui.KeyLeft && key.Text() == "" {
 		p.closeActionMenu()
 		return true
