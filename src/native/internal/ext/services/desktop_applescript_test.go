@@ -78,16 +78,6 @@ func TestAStartFailureIsShownToo(t *testing.T) {
 	}
 }
 
-// TestAppleScriptOffMacOSIsNeverShown: on another OS the extension gets the failure in its result, and the user sees
-// nothing: a macOS feature missing on Linux is not news to them.
-func TestAppleScriptOffMacOSIsNeverShown(t *testing.T) {
-	_, h, shown := notifiedHost(t, "linux")
-	runScript(t, h)
-	if len(*shown) != 0 {
-		t.Fatalf("the HUD showed %q; want nothing off macOS", *shown)
-	}
-}
-
 // TestSuccessfulAppleScriptShowsNothing: a script that works makes no noise.
 func TestSuccessfulAppleScriptShowsNothing(t *testing.T) {
 	commands, h, shown := notifiedHost(t, "darwin")

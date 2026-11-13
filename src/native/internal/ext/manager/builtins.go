@@ -63,9 +63,11 @@ func (m *Manager) builtInServices(manifest api.Manifest) *services.Handler {
 	return services.New(m.serviceDeps, manifest)
 }
 
-// isRunnable reports whether an entry's runtime may answer calls: built-ins always, folder extensions when enabled.
+// isRunnable reports whether an entry's runtime may answer calls: built-ins always, folder extensions when they are
+// enabled and work on this OS. Every listing of commands, rows, shortcuts and menu bars goes through it, so an extension
+// that cannot run here contributes nothing to any of them.
 func (m *Manager) isRunnable(e *entry) bool {
-	return e.builtin || m.isEnabled(e.bundle.Manifest)
+	return e.builtin || (m.isEnabled(e.bundle.Manifest) && m.supportedHere(e))
 }
 
 // IsBuiltIn reports whether id names a built-in extension.

@@ -62,10 +62,11 @@ func TestRefusedKeysReturnThePaletteReadyReason(t *testing.T) {
 	}
 }
 
-func TestSwitchDesktopOffMacOSIsUnavailable(t *testing.T) {
+func TestSwitchDesktopOffMacOSIsUnsupported(t *testing.T) {
 	commands, h := switchHost(t, "linux")
-	if result := switchDesktop(t, h, "next"); result.OK || result.Reason != "unavailable" {
-		t.Fatalf("result = %+v, want unavailable", result)
+	reply := serve(t, h, protocol.ServiceDesktopWindows, protocol.OpSwitchDesktop, protocol.SwitchDesktopArgs{Direction: "next"})
+	if reply.Failure == nil || reply.Failure.Code != api.CodeUnsupported {
+		t.Fatalf("reply = %+v, want an unsupported failure", reply)
 	}
 	if len(commands.Calls()) != 0 {
 		t.Fatalf("osascript ran off macOS: %+v", commands.Calls())

@@ -40,3 +40,23 @@ func TestReferenceDescriptionPreservesMeaningWithoutRepeatingItsIdentifier(t *te
 		t.Fatal(got)
 	}
 }
+
+// TestReferenceListsPlatformAvailability: the model learns which operations are limited to an OS, in the full and the
+// compact reference.
+func TestReferenceListsPlatformAvailability(t *testing.T) {
+	fs := os.DirFS("../../../ext/api")
+	full, err := Render(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	compact, err := RenderCompact(fs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(full, "## Platform availability") || !strings.Contains(full, "Desktop().Shell().AppleScript: macOS only.") {
+		t.Error("the full reference does not say AppleScript is macOS only")
+	}
+	if !strings.Contains(compact, "macOS only: Shell().AppleScript") {
+		t.Error("the compact reference does not say AppleScript is macOS only")
+	}
+}

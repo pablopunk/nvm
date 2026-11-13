@@ -13,7 +13,19 @@ var (
 	ErrInvalidInput  = errors.New("invalid input")
 	ErrNotFound      = errors.New("not found")
 	ErrQuotaExceeded = errors.New("quota exceeded")
+	// ErrUnsupported is the failure of an operation that this operating system does not have (see
+	// PlatformOperations), such as AppleScript off macOS. It is a kind of ErrNotAvailable, so code that checks for
+	// that keeps working. The host never shows it to the user: an extension that needs the operation is not run on
+	// such a system at all, and this is only what a call that still reaches the host gets.
+	ErrUnsupported error = unsupportedError{}
 )
+
+// unsupportedError is ErrUnsupported: its own error, which also answers to ErrNotAvailable.
+type unsupportedError struct{}
+
+func (unsupportedError) Error() string { return "not supported on this operating system" }
+
+func (unsupportedError) Is(target error) bool { return target == ErrNotAvailable }
 
 // ErrorCode classifies a failure for the palette and for diagnostics.
 type ErrorCode string
@@ -21,6 +33,8 @@ type ErrorCode string
 const (
 	CodeInternal    ErrorCode = "internal"
 	CodeUnavailable ErrorCode = "unavailable"
+	// CodeUnsupported is ErrUnsupported on the wire: the operation does not exist on this operating system.
+	CodeUnsupported ErrorCode = "unsupported"
 	CodePermission  ErrorCode = "permission"
 	CodeInvalid     ErrorCode = "invalid-input"
 	CodeNotFound    ErrorCode = "not-found"
@@ -47,6 +61,8 @@ func FailureOf(err error) Failure {
 		return Failure{Code: CodeCancelled, Message: "the operation was cancelled"}
 	case errors.Is(err, context.DeadlineExceeded):
 		return Failure{Code: CodeTimeout, Message: "the operation timed out"}
+	case errors.Is(err, ErrUnsupported):
+		return Failure{Code: CodeUnsupported, Message: err.Error()}
 	case errors.Is(err, ErrNotAvailable):
 		return Failure{Code: CodeUnavailable, Message: err.Error()}
 	case errors.Is(err, ErrPermission):

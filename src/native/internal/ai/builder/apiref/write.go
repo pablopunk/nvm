@@ -39,6 +39,7 @@ func (index *pkgIndex) render(wire, services []string) string {
 	}
 	b.WriteString("## Functions\n\n")
 	index.writeFunctions(&b)
+	index.writePlatforms(&b)
 	return b.String()
 }
 

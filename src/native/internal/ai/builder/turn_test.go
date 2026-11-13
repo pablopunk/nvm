@@ -175,8 +175,9 @@ func toolCallReply(writer io.Writer, id, name string, args any) {
 
 // turnRequestBudgetBytes bounds each request a builder turn sends with the terse reference. It is the size of the one
 // request a turn used to send, with the full reference: a turn's requests must stay under it.
-// Raised by 100 bytes for SavedDictation.Failure, and by 300 for Notes.Search and Notes.CreateWith.
-const turnRequestBudgetBytes = 47227
+// Raised by 100 bytes for SavedDictation.Failure, and by 300 for Notes.Search and Notes.CreateWith,
+// and by 150 for the platform-limited operations the terse reference lists.
+const turnRequestBudgetBytes = 47377
 
 // TestBuilderTurnWritesWithThePreloadedReferenceAndBindsTheChat runs one builder turn end to end on the fake backend:
 // the model writes the extension through write_extension from the terse reference it was given, and then answers in a

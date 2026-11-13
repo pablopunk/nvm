@@ -28,6 +28,9 @@ func drawExtensionDetail(c *ui.Context, l manager.Listing) {
 			if reason := extensionReason(l); reason != "" {
 				ui.Text(c, reason).FontSize(11).TextColor(t.Secondary)
 			}
+			if l.OnlyOn != "" {
+				ui.Text(c, "Works on: "+l.OnlyOn).FontSize(11).TextColor(t.Secondary)
+			}
 			ui.Divider(c)
 			drawDetailSection(c, "Folder", []string{l.Dir}, "")
 			drawDetailSection(c, "Capabilities", capabilityLines(l), "None declared")

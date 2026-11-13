@@ -145,7 +145,11 @@ func (w *Workshop) writeWithReads(ctx context.Context, chatID string, args json.
 	if err != nil {
 		return agent.Result{}, err
 	}
-	return agent.Result{Text: fmt.Sprintf(installedFormat, candidate.Manifest.Title), Outcome: "Installed and enabled"}, nil
+	text := fmt.Sprintf(installedFormat, candidate.Manifest.Title)
+	if note := sourcecheck.PlatformNote(candidate.SourceFiles()); note != "" {
+		text += " " + note
+	}
+	return agent.Result{Text: text, Outcome: "Installed and enabled"}, nil
 }
 
 // step shows a step of the chat on the UI thread while a write runs.

@@ -42,7 +42,8 @@ type Apps interface {
 	// QuitAll asks every running app to quit except Nevermind and the desktop's own apps. It needs the system
 	// declaration as well as desktop.apps. It returns the apps it asked.
 	QuitAll() ([]App, error)
-	// Hide hides the app's windows. Only macOS can; elsewhere the call fails.
+	// Hide hides the app's windows. Platform: macOS only (see PlatformOperations). An extension whose source calls it
+	// is not run on another OS.
 	Hide(path string) error
 	// UninstallReview reviews what uninstalling the app at path would move. Token names the review for UninstallTrash.
 	UninstallReview(path string) (UninstallReview, error)

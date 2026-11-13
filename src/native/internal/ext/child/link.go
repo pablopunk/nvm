@@ -169,6 +169,8 @@ func sentinelFor(code api.ErrorCode) error {
 		return context.Canceled
 	case api.CodeTimeout:
 		return context.DeadlineExceeded
+	case api.CodeUnsupported:
+		return api.ErrUnsupported
 	case api.CodeUnavailable:
 		return api.ErrNotAvailable
 	case api.CodePermission:

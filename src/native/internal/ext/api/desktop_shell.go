@@ -29,6 +29,9 @@ type Shell interface {
 	// fails with a quota error.
 	Exec(command string, args []string, options ShellOptions) (ShellResult, error)
 	Script(script string, options ShellOptions) (ShellResult, error)
+	// AppleScript runs a script with osascript. Platform: macOS only (see PlatformOperations). An extension whose source
+	// calls it is not run on another OS, so it needs no OS check; a call that reaches the host there fails with
+	// ErrUnsupported.
 	AppleScript(script string, options ShellOptions) (ShellResult, error)
 	Which(command string) (ShellResult, error)
 }

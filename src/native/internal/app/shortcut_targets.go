@@ -163,7 +163,7 @@ func (p *App) extensionMayRun(extID string) bool {
 	}
 	for _, listing := range m.List() {
 		if listing.ID == extID {
-			return listing.Enabled
+			return listing.Enabled && !listing.UnsupportedHere
 		}
 	}
 	return false

@@ -156,6 +156,9 @@ func (p *App) runActionCommandOnUI(actionID string) actioncli.Response {
 	if title, off := p.installedButOff(actionID); off {
 		return actioncli.Response{Outcome: actioncli.Rejected, Message: "the extension " + title + " is installed but turned off on this machine; turn it on in Extensions"}
 	}
+	if title, onlyOn, other := p.installedForAnotherOS(actionID); other {
+		return actioncli.Response{Outcome: actioncli.Rejected, Message: "the extension " + title + " is " + onlyOn + " and does not run on this system; nothing ran"}
+	}
 	return actioncli.Response{Outcome: actioncli.Rejected, Message: "no action has the ID " + actionID}
 }
 
@@ -174,6 +177,24 @@ func (p *App) installedButOff(actionID string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// installedForAnotherOS reports whether actionID names a command of an installed extension that is on but only works on
+// other operating systems, with the title and the OSes ("macOS only"). Such an extension lists no commands here, so the
+// refusal says why instead of claiming the action does not exist.
+func (p *App) installedForAnotherOS(actionID string) (title, onlyOn string, other bool) {
+	rest, ok := strings.CutPrefix(actionID, "extension:")
+	m := p.extensionManager()
+	if !ok || m == nil {
+		return "", "", false
+	}
+	extID, _, _ := strings.Cut(rest, ":")
+	for _, listing := range m.List() {
+		if listing.ID == extID {
+			return listing.Title, listing.OnlyOn, listing.Enabled && listing.UnsupportedHere
+		}
+	}
+	return "", "", false
 }
 
 func (p *App) runAppActionCommand(path string) actioncli.Response {

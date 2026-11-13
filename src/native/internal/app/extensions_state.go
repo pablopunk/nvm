@@ -25,6 +25,9 @@ func extensionStateLabel(l manager.Listing) string {
 		return stateInvalid
 	case !l.Enabled:
 		return stateDisabled
+	case l.UnsupportedHere:
+		// Not an error: the extension is on and works on the OS it is for. Here it just does not run.
+		return l.OnlyOn
 	}
 	switch l.Runtime.State {
 	case supervisor.StateRunning, supervisor.StateDormant:
@@ -45,7 +48,7 @@ func extensionReason(l manager.Listing) string {
 	if len(l.Problems) > 0 {
 		return strings.Join(l.Problems, "; ")
 	}
-	if !l.Enabled {
+	if !l.Enabled || l.UnsupportedHere {
 		return ""
 	}
 	switch l.Runtime.State {

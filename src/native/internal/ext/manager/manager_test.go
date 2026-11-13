@@ -45,6 +45,12 @@ type harness struct {
 
 func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 	t.Helper()
+	return newHarnessOnOS(t, "", tweak...)
+}
+
+// newHarnessOnOS is newHarness for a host running goos. The empty OS is unknown and restricts nothing.
+func newHarnessOnOS(t *testing.T, goos string, tweak ...func(*Options)) *harness {
+	t.Helper()
 	dir := t.TempDir()
 	ports := real.NewPorts()
 	root := filepath.Join(dir, "extensions")
@@ -73,6 +79,7 @@ func newHarness(t *testing.T, tweak ...func(*Options)) *harness {
 		Clock:     ports.Clock,
 		Worker:    real.NewWorker(),
 		Processes: ports.Processes,
+		OS:        goos,
 	}, root, set, opts)
 	if err != nil {
 		t.Fatalf("New: %v", err)

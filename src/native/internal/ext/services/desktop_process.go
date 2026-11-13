@@ -16,16 +16,15 @@ import (
 
 // Process limits and the programs the shell operations run. They match the Electron host's defaults.
 const (
-	defaultProcessTimeout  = 30 * time.Second
-	minProcessTimeout      = time.Second
-	maxProcessTimeout      = 120 * time.Second
-	defaultOutputLimit     = 200_000
-	truncatedOutputMarker  = "\n... output truncated ..."
-	posixShellBinary       = "/bin/sh"
-	loginScriptShell       = "/bin/bash"
-	whichBinary            = "/usr/bin/which"
-	osascriptBinary        = "osascript"
-	appleScriptUnavailable = "AppleScript is not available on this OS"
+	defaultProcessTimeout = 30 * time.Second
+	minProcessTimeout     = time.Second
+	maxProcessTimeout     = 120 * time.Second
+	defaultOutputLimit    = 200_000
+	truncatedOutputMarker = "\n... output truncated ..."
+	posixShellBinary      = "/bin/sh"
+	loginScriptShell      = "/bin/bash"
+	whichBinary           = "/usr/bin/which"
+	osascriptBinary       = "osascript"
 )
 
 // homeTilde matches a "~" that stands for the home folder: at the start of a path or before a slash, as the shell does.
@@ -101,15 +100,12 @@ func (h *Handler) expandHomeInScript(script string) string {
 	})
 }
 
-// runAppleScript runs osascript on macOS. Other systems answer the failure the Electron host gives.
+// runAppleScript runs osascript. The operation only exists on macOS (api.PlatformOperations), which platformRefusal
+// enforces before the call gets here.
 func (h *Handler) runAppleScript(ctx context.Context, raw json.RawMessage) (api.ShellResult, error) {
 	var args protocol.ShellScriptArgs
 	if err := decodeArgs(raw, &args); err != nil {
 		return api.ShellResult{}, err
-	}
-	if h.deps.OS != "darwin" {
-		// The extension learns it from the result; the user is never told that another OS's feature is missing.
-		return api.ShellResult{Stderr: appleScriptUnavailable, ExitCode: 1}, nil
 	}
 	result, err := h.run(ctx, platform.CommandSpec{Binary: osascriptBinary, Args: []string{"-e", args.Script}}, args.Options)
 	if err == nil && result.ExitCode != 0 {
