@@ -21,6 +21,8 @@ type hyprlandSession struct {
 	module  string
 	reloads atomic.Int32
 	mu      sync.Mutex
+	// beforeReload, when set, runs inside each reload, so a test can hold a sync at a known point.
+	beforeReload func()
 }
 
 func newHyprlandSession(t *testing.T, owned bool) (*hyprlandSession, *compositor.Service) {
@@ -43,6 +45,9 @@ func newHyprlandSession(t *testing.T, owned bool) (*hyprlandSession, *compositor
 			return []byte("--verify-config"), 0, nil
 		case "hyprctl reload":
 			s.reloads.Add(1)
+			if s.beforeReload != nil {
+				s.beforeReload()
+			}
 		}
 		return []byte("[]"), 0, nil
 	}
@@ -181,25 +186,88 @@ func TestFirstRunHandsEveryRunnableShortcutFromThePortalToTheModule(t *testing.T
 
 // A change made while a sync runs is not lost to it: the sync runs once more from the shortcuts as they are, so the module
 // ends holding the last change.
+// A change made while a sync runs is written by a second sync that starts after the first one finishes. The first sync
+// is held inside its reload, so the change is known to land mid-sync; UI callbacks run on this goroutine, as they do on
+// the UI thread, so the runner's state is never touched from the sync goroutine.
 func TestAChangeDuringASyncIsSyncedAfterIt(t *testing.T) {
 	session, svc := newHyprlandSession(t, true)
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var holdFirstReload sync.Once
+	session.beforeReload = func() {
+		holdFirstReload.Do(func() {
+			close(started)
+			<-release
+		})
+	}
 	p := goldenPalette(t)
 	p.Attach(&testWindow{})
+	queue := make(completionUIQueue, 16)
+	p.uiQueue = queue
 	p.compositor = svc
 	p.shortcutMgr = nil
 	m := p.shortcutsManager()
 	p.compositorReady.Store(true)
-	for _, accelerator := range []string{"Control+Alt+A", "Control+Alt+B", "Control+Alt+C"} {
+	setKeyboardShortcut := func(accelerator string) {
 		if err := m.SetAction(shortcuts.CommandKeyboardShortcuts, accelerator); err != nil {
 			t.Fatal(err)
 		}
 		p.requestCompositorSync()
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for !strings.Contains(session.text(t), "CTRL ALT, C") && time.Now().Before(deadline) {
-		time.Sleep(5 * time.Millisecond)
+
+	setKeyboardShortcut("Control+Alt+A")
+	runNextUICallback(t, queue)
+	awaitSignal(t, started, "the first sync never reached the module")
+
+	setKeyboardShortcut("Control+Alt+B")
+	setKeyboardShortcut("Control+Alt+C")
+	runNextUICallback(t, queue)
+	close(release)
+
+	runUICallbacksUntil(t, queue, func() bool { return strings.Contains(session.text(t), "CTRL ALT, C") })
+	settleCompositorSync(t, p, queue)
+}
+
+// runUICallbacksUntil runs the callbacks the app queues for the UI thread, on this goroutine, until done reports true.
+// The timeout only reports a stuck run; it never decides the order of events.
+func runUICallbacksUntil(t *testing.T, queue completionUIQueue, done func() bool) {
+	t.Helper()
+	deadline := time.After(10 * time.Second)
+	for !done() {
+		select {
+		case callback := <-queue:
+			callback()
+		case <-deadline:
+			t.Fatal("the UI callbacks never reached the expected state")
+		}
 	}
-	if text := session.text(t); !strings.Contains(text, "CTRL + ALT + C") && !strings.Contains(text, "CTRL ALT, C") {
-		t.Fatalf("the last change never reached the module:\n%s", text)
+}
+
+// settleCompositorSync runs the queued callbacks until no sync is in flight, so a test never ends while a sync still
+// writes into its directory.
+func settleCompositorSync(t *testing.T, p *App, queue completionUIQueue) {
+	t.Helper()
+	runUICallbacksUntil(t, queue, func() bool { return !p.compositorSync.running && len(queue) == 0 })
+}
+
+// runNextUICallback runs the next callback the app queued for the UI thread, and fails if none arrives.
+func runNextUICallback(t *testing.T, queue completionUIQueue) {
+	t.Helper()
+	select {
+	case callback := <-queue:
+		callback()
+	case <-time.After(10 * time.Second):
+		t.Fatal("no UI callback was queued")
+	}
+}
+
+// awaitSignal waits for a channel that a test goroutine or the code under test closes. The timeout only reports a stuck
+// run; it never decides the order of events.
+func awaitSignal(t *testing.T, signal <-chan struct{}, message string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(10 * time.Second):
+		t.Fatal(message)
 	}
 }
