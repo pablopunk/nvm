@@ -23,7 +23,16 @@ function limitGateAction(
   };
 }
 
-function NevermindLimitGate({
+function AiChatNotice({ icon, text }: { icon: ReactNode; text: string }) {
+  return (
+    <div className="creditNoticeBanner">
+      {icon}
+      <span>{text}</span>
+    </div>
+  );
+}
+
+export function NevermindLimitGate({
   limit,
   runAction,
 }: {
@@ -37,15 +46,6 @@ function NevermindLimitGate({
       subtitle={limit.message}
       action={limitGateAction(limit, runAction)}
     />
-  );
-}
-
-function AiChatNotice({ icon, text }: { icon: ReactNode; text: string }) {
-  return (
-    <div className="creditNoticeBanner">
-      {icon}
-      <span>{text}</span>
-    </div>
   );
 }
 

@@ -6,11 +6,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { feedbackView } from '../feedback';
 import { MarkdownContent } from '../markdown-content';
 import type { CommandAction, CommandFormField, CommandView } from '../model';
+import { NevermindLimitGate } from './ai-chat-banner';
 import { initialCameraSelection } from './camera-view';
 import {
   ExtensionViewRenderer,
   type ExtensionViewRendererProps,
-  NevermindLimitGate,
 } from './extension-view';
 import {
   EXTENSION_WEBVIEW_ALLOW,
