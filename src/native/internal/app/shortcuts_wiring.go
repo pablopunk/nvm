@@ -34,10 +34,13 @@ func (p *App) shortcutsSetup() shortcuts.Setup {
 // shortcutsDocument keeps the shortcuts in config.json, under the keys 1.x uses. Without a config store it keeps them
 // for the process.
 func (p *App) shortcutsDocument() shortcuts.Persistence {
+	var document shortcuts.Persistence
 	if p.sharedConfig == nil {
-		return shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(""))
+		document = shortcuts.NewMemoryDocument(shortcuts.DefaultDocument(""))
+	} else {
+		document = shortcuts.NewPortableDocument(p.sharedConfig)
 	}
-	return shortcuts.NewPortableDocument(p.sharedConfig)
+	return notifyingDocument{Persistence: document, onChange: p.requestCompositorSync}
 }
 
 // shortcutCommands lists the commands that take a shortcut: the root commands that are visible.

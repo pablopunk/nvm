@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -48,40 +49,66 @@ func (p *App) shortcutHotkeys() platform.Hotkeys {
 
 // requestCompositorSync updates the module after the bound shortcuts change, once for a burst of changes.
 func (p *App) requestCompositorSync() {
-	if os.Getenv("HYPRLAND_INSTANCE_SIGNATURE") == "" {
+	if os.Getenv("HYPRLAND_INSTANCE_SIGNATURE") == "" || !p.compositorReady.Load() {
 		return
 	}
 	p.compositorSync.request(p.onUI, p.syncCompositorModule)
 }
 
-// syncCompositorModule rewrites the module when setup is done and the shortcuts no longer match it. It never adds the
-// include, and it waits for the extensions so no extension shortcut is judged before they exist. A failure is shown as
-// a notification and on the Hyprland page.
+// syncCompositorModule keeps the module in line with the shortcuts without being asked. It waits for the extensions so
+// no extension shortcut is judged before it exists, and it runs on the UI thread. Success is silent; a problem is
+// reported once (see reportCompositorSync).
 func (p *App) syncCompositorModule() {
 	svc := p.compositorService()
-	if !svc.State().OwnsShortcuts || p.extensionManager() == nil {
+	if svc.State().Disabled || p.extensionManager() == nil {
 		return
 	}
 	desired := p.compositorDesired()
 	safego.Go("hyprland.sync", func(ctx context.Context) {
-		plan, err := svc.Preview(ctx, desired)
-		if err == nil && plan.ModuleUnchanged() {
-			return
-		}
-		if err == nil {
-			_, err = svc.Apply(ctx, plan, false)
-		}
-		if err != nil {
-			logx.Default().Warn("hyprland.sync.failed", logx.F{"error": err.Error()})
-			p.onUI(func() { p.notifySystem("Hyprland shortcuts not updated", err.Error()) })
-		}
+		outcome, err := svc.Sync(ctx, desired)
+		p.onUI(func() { p.finishCompositorSync(outcome, err) })
 	})
 }
 
-// compositorDesired is the module for the current shortcuts and appearance choice. It runs on the UI thread.
+// finishCompositorSync rebinds the portal's shortcuts when the compositor took over, and reports a problem once.
+func (p *App) finishCompositorSync(outcome compositor.SyncOutcome, err error) {
+	if outcome.OwnershipChanged {
+		p.resumeShortcutBindings()
+	}
+	if err != nil {
+		logx.Default().Warn("hyprland.sync.failed", logx.F{"error": err.Error()})
+	}
+	if message := compositorProblem(outcome, err); p.compositorReported.shouldReport(message) {
+		p.notifySystem("Hyprland shortcuts", message)
+	}
+}
+
+// compositorProblem names what a sync could not do, in a short sentence, or "" when all went well.
+func compositorProblem(outcome compositor.SyncOutcome, err error) string {
+	switch {
+	case err != nil:
+		return "Not updated, your config was restored: " + err.Error()
+	case len(outcome.Skipped) > 0:
+		s := outcome.Skipped[0]
+		return fmt.Sprintf("%s was not added: %s", s.What, s.Reason)
+	case outcome.Result.Loaded == hyprland.LoadedMissing:
+		return "Hyprland does not list the shortcuts after the reload; check the include in your config"
+	}
+	return ""
+}
+
+// resumeShortcutBindings binds the shortcuts again, so ownership moves between the portal and the compositor.
+func (p *App) resumeShortcutBindings() {
+	if p.shortcutMgr != nil && !p.shortcutMgr.Suspended() {
+		p.shortcutMgr.Suspend()
+		p.summonChanged(p.shortcutMgr.Resume())
+	}
+}
+
+// compositorDesired is the module for the current shortcuts. It runs on the UI thread.
 func (p *App) compositorDesired() hyprland.Desired {
 	m := p.shortcutsManager()
-	return compositor.DesiredFor(m.PaletteAccelerator(), p.runnableActions(m.Accelerators()), compositorIdentity(), p.compositorService().State().Undecorated)
+	return compositor.DesiredFor(m.PaletteAccelerator(), p.runnableActions(m.Accelerators()), compositorIdentity())
 }
 
 // compositorIdentity is the executable bindings run and the app IDs of the app's windows: the executable's name, which

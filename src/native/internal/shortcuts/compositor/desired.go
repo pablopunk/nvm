@@ -17,8 +17,9 @@ type Identity struct {
 }
 
 // DesiredFor is the module for the user's shortcuts: the palette key toggles the palette, and every other bound action
-// runs through the action command line, so a key also starts Nevermind when it is not running.
-func DesiredFor(palette string, actions map[string]string, id Identity, undecorated bool) hyprland.Desired {
+// runs through the action command line, so a key also starts Nevermind when it is not running. The app's windows (matched
+// by their app ID only) carry no compositor border.
+func DesiredFor(palette string, actions map[string]string, id Identity) hyprland.Desired {
 	var d hyprland.Desired
 	if palette != "" {
 		d.Binds = append(d.Binds, bindFor(palette, shortcuts.PaletteToggleID, id.Executable))
@@ -28,7 +29,7 @@ func DesiredFor(palette string, actions map[string]string, id Identity, undecora
 			d.Binds = append(d.Binds, bindFor(accelerator, actionID, id.Executable))
 		}
 	}
-	d.Appearance = hyprland.Appearance{Undecorated: undecorated, Classes: id.Classes}
+	d.Appearance = hyprland.Appearance{Undecorated: true, Classes: id.Classes}
 	return d
 }
 
