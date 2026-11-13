@@ -48,14 +48,18 @@ func (p *App) shortcutHotkeys() platform.Hotkeys {
 
 // requestCompositorSync updates the module after the bound shortcuts change, once for a burst of changes.
 func (p *App) requestCompositorSync() {
+	if os.Getenv("HYPRLAND_INSTANCE_SIGNATURE") == "" {
+		return
+	}
 	p.compositorSync.request(p.onUI, p.syncCompositorModule)
 }
 
 // syncCompositorModule rewrites the module when setup is done and the shortcuts no longer match it. It never adds the
-// include; a failure is shown as a notification and on the Hyprland page.
+// include, and it waits for the extensions so no extension shortcut is judged before they exist. A failure is shown as
+// a notification and on the Hyprland page.
 func (p *App) syncCompositorModule() {
 	svc := p.compositorService()
-	if !svc.State().OwnsShortcuts {
+	if !svc.State().OwnsShortcuts || p.extensionManager() == nil {
 		return
 	}
 	desired := p.compositorDesired()
@@ -77,7 +81,7 @@ func (p *App) syncCompositorModule() {
 // compositorDesired is the module for the current shortcuts and appearance choice. It runs on the UI thread.
 func (p *App) compositorDesired() hyprland.Desired {
 	m := p.shortcutsManager()
-	return compositor.DesiredFor(m.PaletteAccelerator(), m.Accelerators(), compositorIdentity(), p.compositorService().State().Undecorated)
+	return compositor.DesiredFor(m.PaletteAccelerator(), p.runnableActions(m.Accelerators()), compositorIdentity(), p.compositorService().State().Undecorated)
 }
 
 // compositorIdentity is the executable bindings run and the app IDs of the app's windows: the executable's name, which

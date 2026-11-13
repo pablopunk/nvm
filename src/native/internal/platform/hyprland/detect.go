@@ -73,10 +73,18 @@ func Detect(ctx context.Context, env Env) Session {
 		s.Problem, s.Manual = "the Hyprland config is read-only: "+err.Error(), true
 		return s
 	}
-	if help, _, err := run(ctx, env, "Hyprland", "--help"); err == nil {
-		s.VerifyConfig = strings.Contains(string(help), "--verify-config")
+	if s.Format == FormatConf {
+		s.VerifyConfig = verifyConfigAvailable(ctx, env)
 	}
 	return s
+}
+
+// verifyConfigAvailable reports whether Hyprland offers --verify-config. It is used for the classic format only:
+// Hyprland 0.57 segfaults on exit when it checks a Lua config, even a valid one, and every crash shows the user a crash
+// notification. A Lua change is checked by the reload and "hyprctl configerrors" instead, with a rollback.
+func verifyConfigAvailable(ctx context.Context, env Env) bool {
+	help, _, err := run(ctx, env, "Hyprland", "--help")
+	return err == nil && strings.Contains(string(help), "--verify-config")
 }
 
 func run(ctx context.Context, env Env, name string, args ...string) ([]byte, int, error) {

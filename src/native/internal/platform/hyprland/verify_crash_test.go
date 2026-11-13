@@ -11,7 +11,7 @@ import (
 func TestACrashingConfigCheckDoesNotBlockApplyAndIsNotRepeated(t *testing.T) {
 	verifyCrashed.Store(false)
 	t.Cleanup(func() { verifyCrashed.Store(false) })
-	f := newFixture(t, "0.57.0", map[string]string{"hyprland.lua": "-- mine\n"})
+	f := newFixture(t, "0.54.0", map[string]string{"hyprland.conf": "# mine\n"})
 	f.fake.verifyExit = 139
 	plan, _ := Prepare(Detect(context.Background(), f.env), desired)
 	if _, err := Apply(context.Background(), f.env, plan, true); err != nil {
@@ -37,5 +37,28 @@ func TestACrashingConfigCheckDoesNotBlockApplyAndIsNotRepeated(t *testing.T) {
 	}
 	if checks != 0 {
 		t.Fatal("the crashing check ran again")
+	}
+}
+
+// Hyprland 0.57 crashes in --verify-config for every Lua config and shows a crash notification each time, so a Lua
+// config is never checked that way: the reload and "hyprctl configerrors" are its check.
+func TestALuaConfigIsNeverCheckedWithVerifyConfig(t *testing.T) {
+	f := newFixture(t, "0.57.0", map[string]string{"hyprland.lua": "-- mine\n"})
+	f.fake.verifyExit = 139
+	s := Detect(context.Background(), f.env)
+	if !s.Ready() || s.Format != FormatLua || s.VerifyConfig {
+		t.Fatalf("%+v", s)
+	}
+	plan, _ := Prepare(s, desired)
+	if _, err := Apply(context.Background(), f.env, plan, true); err != nil {
+		t.Fatal(err)
+	}
+	for _, call := range f.fake.calls {
+		if strings.Contains(call, "--verify-config --config") {
+			t.Fatalf("a Lua config was checked with --verify-config: %v", f.fake.calls)
+		}
+	}
+	if f.fake.reloads != 1 {
+		t.Fatalf("reloads = %d, want the reload check to run", f.fake.reloads)
 	}
 }

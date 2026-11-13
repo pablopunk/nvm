@@ -225,6 +225,7 @@ const extensionResidentLimit = 1 << 30
 func (p *App) extensionCommandsChanged() {
 	p.extensionCommandRefresh.request(p.onUI, func() {
 		p.refreshGlobalShortcuts()
+		p.requestCompositorSync()
 		p.RefreshTop(isExtensionStateView)
 	})
 }
