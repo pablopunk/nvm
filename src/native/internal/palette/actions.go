@@ -24,8 +24,16 @@ func (p *Palette) actions() []search.Action {
 func (p *Palette) menuActions() []search.Action {
 	all := p.actions()
 	visible := make([]search.Action, 0, len(all))
+	seen := make(map[string]bool)
 	for _, a := range all {
 		if !a.MenuHidden {
+			if a.Label != "" {
+				if seen[a.Label] {
+					a.Label = ""
+				} else {
+					seen[a.Label] = true
+				}
+			}
 			visible = append(visible, a)
 		}
 	}

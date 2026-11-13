@@ -70,7 +70,7 @@ func (s *Session) row(item api.Item) search.Item {
 // but no menu, and a hidden view panel keeps its actions' shortcuts out of the menu.
 func (s *Session) itemActions(item api.Item) []search.Action {
 	own := ItemMenuSections(item)
-	if item.Shortcut != "" && len(own) > 0 && own[0].Actions[0].Shortcut == "" {
+	if item.Shortcut != "" && len(own) > 0 && own[0].Actions[0].Shortcut == "" && !sectionsHaveShortcut(own, item.Shortcut) {
 		own[0].Actions[0].Shortcut = item.Shortcut
 	}
 	out := s.sectionActions(item.ID, 0, own)
@@ -210,4 +210,20 @@ func orDefault(text, fallback string) string {
 		return text
 	}
 	return fallback
+}
+
+func sectionsHaveShortcut(sections []MenuSection, shortcut string) bool {
+	mods, key, ok := parseShortcut(shortcut)
+	if !ok {
+		return false
+	}
+	for _, section := range sections {
+		for _, action := range section.Actions {
+			m, k, valid := parseShortcut(action.Shortcut)
+			if valid && m == mods && k == key {
+				return true
+			}
+		}
+	}
+	return false
 }

@@ -83,3 +83,14 @@ func menuTitlesOf(p *Palette) []string {
 	}
 	return titles
 }
+
+func TestMenuHidesDuplicateShortcutLabels(t *testing.T) {
+	view := &View{Title: "Actions", Search: func(string) []search.Item {
+		return []search.Item{{Title: "Item", Actions: []search.Action{{Title: "First", Label: "⌘F"}, {Title: "Second", Label: "⌘F"}}}}
+	}}
+	h := newHarness(t, view, true)
+	actions := h.p.menuActions()
+	if len(actions) != 2 || actions[0].Label != "⌘F" || actions[1].Label != "" {
+		t.Fatalf("actions = %+v", actions)
+	}
+}
