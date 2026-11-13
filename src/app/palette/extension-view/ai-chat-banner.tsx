@@ -1,5 +1,5 @@
 import { CreditCard, ShieldAlert } from 'lucide-react';
-import type { ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import type { AiLimitState } from '../ai-chat/use-ai-chat';
 import type { CommandAction } from '../model';
 import { EmptyState } from '../ui';
