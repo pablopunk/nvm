@@ -1,0 +1,11 @@
+---
+import type { HTMLAttributes } from 'astro/types';
+
+interface Props extends HTMLAttributes<'section'> { title: string }
+const { title, ...attributes } = Astro.props;
+---
+<section class="model-route-row" {...attributes}>
+  <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status role="status" aria-live="polite"></span></header>
+  <div class="model-route-row__controls"><slot /></div>
+  <p class="model-route-row__details muted"><slot name="details" /></p>
+</section>
