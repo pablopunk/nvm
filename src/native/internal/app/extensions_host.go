@@ -234,6 +234,7 @@ func (p *App) extensionCommandsChanged() {
 func (p *App) redrawExtensionState() {
 	p.rootRows.reset()
 	p.refreshGlobalShortcuts()
+	p.requestCompositorSync() // turning an extension on or off changes which of its shortcuts can run
 	p.RefreshTop(isExtensionStateView)
 	p.syncMenuBarItems()
 }

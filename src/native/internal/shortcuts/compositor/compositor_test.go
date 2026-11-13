@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -269,5 +270,32 @@ func TestSyncDoesNothingAfterTheUserRemovedTheConfigUntilItIsEnabledAgain(t *tes
 	}
 	if outcome, err := f.svc.Sync(context.Background(), f.desired("Alt+N")); err != nil || !outcome.Wrote {
 		t.Fatalf("not synced after enabling: %+v %v", outcome, err)
+	}
+}
+
+// Syncs that overlap (the startup sync and one asked for by a change right after) must not fail against each other: a
+// plan prepared before the other's write is refused as a concurrent edit, which would leave the module as the older
+// sync wrote it with nothing to write it again.
+func TestOverlappingSyncsApplyOneAfterTheOther(t *testing.T) {
+	for round := 0; round < 30; round++ {
+		f := newSyncFixture(t)
+		f.firstSync(t, "Alt+A")
+		var wg sync.WaitGroup
+		errs := make(chan error, 2)
+		for _, accelerator := range []string{"Alt+B", "Alt+C"} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := f.svc.Sync(context.Background(), f.desired(accelerator))
+				errs <- err
+			}()
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("round %d: overlapping sync failed: %v", round, err)
+			}
+		}
 	}
 }
