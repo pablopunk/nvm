@@ -11,8 +11,8 @@ func (p *App) actionRunnable(actionID string) bool {
 	if actionID == shortcuts.PaletteID || actionID == shortcuts.PaletteToggleID {
 		return true
 	}
-	if _, ok := shortcuts.AppPathOf(actionID); ok {
-		return true
+	if path, ok := shortcuts.AppPathOf(actionID); ok {
+		return p.appInstalled(path)
 	}
 	if entry, ok := p.extensionShortcutCommand(actionID); ok {
 		return p.extensionMayRun(entry.extID)
@@ -55,4 +55,15 @@ func (p *App) runnableActions(actions map[string]string) map[string]string {
 		}
 	}
 	return out
+}
+
+// appInstalled reports whether the app a shortcut opens exists on this machine. Shortcuts sync between machines, so a
+// macOS app path can reach Linux, where binding it would give a key that only answers "not installed". The file is
+// checked rather than the app index, which is still empty right after a cold start.
+func (p *App) appInstalled(path string) bool {
+	if p.ports.FS == nil {
+		return false
+	}
+	_, err := p.ports.FS.Stat(path)
+	return err == nil
 }

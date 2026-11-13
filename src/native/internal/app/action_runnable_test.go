@@ -40,3 +40,21 @@ func TestBoundActionsAreTheOnesRunResolves(t *testing.T) {
 		t.Error("a real built-in command is not bound")
 	}
 }
+
+// A shortcut synced from another machine can open an app that is not installed here, such as a macOS app path on
+// Linux. It is not bound, so the key never answers "not installed".
+func TestAnAppShortcutIsBoundOnlyWhenTheAppExistsHere(t *testing.T) {
+	p := goldenPalette(t)
+	p.Attach(&testWindow{})
+	present, missing := "/Applications/Here.app", "/Applications/Gone.app"
+	if err := p.ports.FS.MkdirAll(present, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bound := p.runnableActions(map[string]string{"app:" + present: "Command+Alt+P", "app:" + missing: "Command+Alt+G"})
+	if _, ok := bound["app:"+missing]; ok {
+		t.Error("an app that is not installed here was bound")
+	}
+	if _, ok := bound["app:"+present]; !ok {
+		t.Error("an app that exists here was not bound")
+	}
+}
