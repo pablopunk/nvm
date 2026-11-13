@@ -106,20 +106,40 @@ func textCapabilities(hasOCR, canCaptureScreen bool) []platform.Capability {
 // xdotoolBinary is the X11 input tool: it pastes, reads and restores the focused window, and places windows.
 const xdotoolBinary = "xdotool"
 
+// wtypeBinary is the Wayland input tool: it sends key presses through the virtual-keyboard protocol.
+const wtypeBinary = "wtype"
+
 // x11WindowTools are the X11 programs the window commands call: xprop and xwininfo read windows, xrandr lists the
 // monitors and xdotool places and raises them. A missing one would fail every window command, so all four are needed.
 var x11WindowTools = []string{"xprop", "xwininfo", "xrandr", xdotoolBinary}
 
-// pasteCapable reports whether the paste gesture can run: System Events on macOS, and an X11 session with xdotool on
-// Linux. Windows has no paste helper in this build, and a Wayland session has no key injection here.
+// pasteCapable reports whether the paste gesture can run: System Events on macOS, xdotool in an X11 session and
+// wtype in a Wayland session on Linux. Windows has no paste helper in this build.
 func pasteCapable(goos string, getenv func(string) string, hasTool func(string) bool) bool {
 	switch goos {
 	case "darwin":
 		return true
 	case "linux":
-		return isX11FocusSession(goos, getenv) && hasTool(xdotoolBinary)
+		return linuxPasteTool(goos, getenv, hasTool) != ""
 	}
 	return false
+}
+
+// linuxPasteTool names the program that sends the paste keys in this session, or "" when there is none. xdotool
+// cannot type into native Wayland windows even when XWayland sets DISPLAY, so a Wayland session uses wtype, which
+// talks the virtual-keyboard protocol, and never xdotool.
+func linuxPasteTool(goos string, getenv func(string) string, hasTool func(string) bool) string {
+	switch {
+	case isWaylandSession(goos, getenv):
+		if hasTool(wtypeBinary) {
+			return wtypeBinary
+		}
+	case isX11FocusSession(goos, getenv):
+		if hasTool(xdotoolBinary) {
+			return xdotoolBinary
+		}
+	}
+	return ""
 }
 
 // windowManagementCapable reports whether other apps' windows can be moved. Only an X11 session can, because X11 tools

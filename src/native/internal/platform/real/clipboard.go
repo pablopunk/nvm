@@ -1,6 +1,10 @@
 package real
 
 import (
+	"context"
+	"os"
+	"runtime"
+
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/transfer"
 
@@ -14,12 +18,23 @@ const rtfFormat transfer.Format = "text/rtf"
 // clipboard reads and writes the system clipboard through MyGo. It offers no change notification: MyGo has
 // no change event and the watcher polls adaptively (see features/clipboard), so Changed returns nil and the
 // clipboard.changed capability is not reported. HTML, RTF and file lists are read and written through MyGo's
-// portable formats; see rich_clipboard.go.
-type clipboard struct{}
+// portable formats; see rich_clipboard.go. On Wayland a client cannot read the clipboard while it has no focus, so
+// the clipboard also is a platform.ClipboardFeed that delivers every copy through wl-paste (clipboard_wayland.go).
+type clipboard struct {
+	feed *waylandFeed
+}
+
+var _ platform.ClipboardFeed = (*clipboard)(nil)
 
 // newClipboard returns the production clipboard port.
 func newClipboard() *clipboard {
-	return &clipboard{}
+	return &clipboard{feed: newWaylandFeed(runtime.GOOS, os.Getenv, hasTool, startProcessStream)}
+}
+
+// WatchCopies delivers each copy with its content while the app is in the background. It returns a nil channel
+// off Wayland, where the ordinary reads work.
+func (c *clipboard) WatchCopies(ctx context.Context) (<-chan platform.ClipboardCopy, error) {
+	return c.feed.WatchCopies(ctx)
 }
 
 // ReadText returns the plain text on the clipboard.
