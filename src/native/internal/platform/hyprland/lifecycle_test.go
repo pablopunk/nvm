@@ -92,7 +92,7 @@ func TestDetect(t *testing.T) {
 	}
 	f := newFixture(t, "0.56.0", map[string]string{"hyprland.lua": "-- mine\n"})
 	s := Detect(context.Background(), f.env)
-	if !s.Ready() || s.Format != FormatLua || s.ModulePath != filepath.Join(f.dir, "nevermind.lua") || !s.VerifyConfig {
+	if !s.Ready() || s.Format != FormatLua || s.ModulePath != filepath.Join(f.dir, "nevermind.lua") || s.VerifyConfig {
 		t.Fatalf("%+v", s)
 	}
 	both := newFixture(t, "0.56.0", map[string]string{"hyprland.lua": "", "hyprland.conf": ""})
