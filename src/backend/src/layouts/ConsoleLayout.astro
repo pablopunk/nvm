@@ -1,7 +1,8 @@
 ---
 import '../styles/console.css';
-interface Props { title: string; width?: 'default' | 'wide'; }
-const { title, width = 'default' } = Astro.props;
+import type { DashboardCacheStorage } from '../lib/dashboard-query-client';
+interface Props { title: string; width?: 'default' | 'wide'; cache?: { scope: string; storage: DashboardCacheStorage } }
+const { title, width = 'default', cache } = Astro.props;
 ---
 <html lang="en">
   <head>
@@ -9,6 +10,7 @@ const { title, width = 'default' } = Astro.props;
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title}</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
+    {cache && <meta name="dashboard-cache" content={JSON.stringify(cache)} />}
   </head>
   <body class="console-page">
     <a href="#console-content" class="console-skip-link">Skip to content</a>

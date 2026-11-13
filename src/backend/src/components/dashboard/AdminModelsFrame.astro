@@ -1,10 +1,8 @@
 ---
 import { Card } from '../ui/card';
 
-interface Props { busy?: boolean }
-const { busy = false } = Astro.props;
 ---
-<Card className="section admin-panel admin-model-config" aria-busy={busy ? 'true' : undefined}><section>
+<Card className="section admin-panel admin-model-config"><section>
   <h2>Models</h2>
   <p class="muted">From the models.dev catalog: priced models with image input and function tools. Smart also needs reasoning; Fast runs with thinking off. Dictation uses audio transcription.</p>
   <div class="model-routes"><slot /></div>
