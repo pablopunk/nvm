@@ -32,7 +32,7 @@ func (m *Manager) inheritLocked(bundles []bundle.Bundle) {
 			}
 			legacyOn = enabled
 		}
-		if err := m.enabled.Inherit(id, from, legacyOn[from]); err != nil {
+		if err := m.enabled.Inherit(id, from, legacyOn[from], reviewedCapabilities(b.Manifest)); err != nil {
 			m.warnInheritance("save the inherited state of " + id + ": " + err.Error())
 		}
 	}

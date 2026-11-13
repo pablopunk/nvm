@@ -19,7 +19,7 @@ func openSet(t *testing.T, files *fake.FS) (*Set, *store.Store) {
 func TestDroppedInExtensionsDefaultToDisabled(t *testing.T) {
 	set, s := openSet(t, fake.NewFS())
 	defer s.Close()
-	enabled, err := set.Enabled("acme.good")
+	enabled, err := set.Enabled("acme.good", nil)
 	if err != nil || enabled {
 		t.Fatalf("Enabled = %v, %v; want false, nil", enabled, err)
 	}
@@ -28,7 +28,7 @@ func TestDroppedInExtensionsDefaultToDisabled(t *testing.T) {
 func TestEnableAndDisablePersistAcrossReopen(t *testing.T) {
 	files := fake.NewFS()
 	set, s := openSet(t, files)
-	if err := set.SetEnabled("acme.good", true); err != nil {
+	if err := set.SetEnabled("acme.good", true, nil); err != nil {
 		t.Fatalf("SetEnabled: %v", err)
 	}
 	if err := s.Close(); err != nil {
@@ -36,13 +36,13 @@ func TestEnableAndDisablePersistAcrossReopen(t *testing.T) {
 	}
 	reopened, s2 := openSet(t, files)
 	defer s2.Close()
-	if enabled, _ := reopened.Enabled("acme.good"); !enabled {
+	if enabled, _ := reopened.Enabled("acme.good", nil); !enabled {
 		t.Fatal("enabled state was lost on reopen")
 	}
-	if err := reopened.SetEnabled("acme.good", false); err != nil {
+	if err := reopened.SetEnabled("acme.good", false, nil); err != nil {
 		t.Fatalf("SetEnabled off: %v", err)
 	}
-	if enabled, _ := reopened.Enabled("acme.good"); enabled {
+	if enabled, _ := reopened.Enabled("acme.good", nil); enabled {
 		t.Fatal("disable did not take effect")
 	}
 }
