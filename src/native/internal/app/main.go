@@ -176,7 +176,7 @@ type App struct {
 	extensionCommandRefresh coalescer
 	// compositor keeps the Hyprland module in step with the shortcuts; compositorSync coalesces its updates.
 	compositor     *compositor.Service
-	compositorSync coalescer
+	compositorSync syncRunner
 	configRefresh  coalescer
 	// compositorReported remembers the problem last shown, so one problem is shown once.
 	compositorReported problemReporter

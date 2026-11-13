@@ -56,17 +56,31 @@ func (p *App) requestCompositorSync() {
 }
 
 // syncCompositorModule keeps the module in line with the shortcuts without being asked. It waits for the extensions so
-// no extension shortcut is judged before it exists, and it runs on the UI thread. Success is silent; a problem is
+// no extension shortcut is judged before it exists, and it runs on the UI thread. One sync runs at a time: a request made
+// meanwhile runs once more afterwards, from the shortcuts as they are then, so the last request always wins. Success is silent; a problem is
 // reported once (see reportCompositorSync).
 func (p *App) syncCompositorModule() {
 	svc := p.compositorService()
 	if svc.State().Disabled || p.extensionManager() == nil {
 		return
 	}
+	run := &p.compositorSync
+	if run.running {
+		run.again = true
+		return
+	}
+	run.running = true
 	desired := p.compositorDesired()
 	safego.Go("hyprland.sync", func(ctx context.Context) {
 		outcome, err := svc.Sync(ctx, desired)
-		p.onUI(func() { p.finishCompositorSync(outcome, err) })
+		p.onUI(func() {
+			run.running = false
+			p.finishCompositorSync(outcome, err)
+			if run.again {
+				run.again = false
+				p.syncCompositorModule()
+			}
+		})
 	})
 }
 

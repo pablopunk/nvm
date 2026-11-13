@@ -36,6 +36,7 @@ type Service struct {
 	statePath string
 	now       func() time.Time
 	mu        sync.Mutex
+	syncMu    sync.Mutex
 	session   atomic.Pointer[hyprland.Session]
 	state     atomic.Pointer[State]
 	last      atomic.Pointer[Report]
@@ -105,8 +106,10 @@ type SyncOutcome struct {
 // Sync keeps the module in line with d without being asked: it adds the include to the entry file the first time,
 // writes the module and reloads Hyprland. It writes nothing when the module already holds d. It does nothing after
 // Remove, or where the config cannot be written (a session that is not ready). A module that is in place and current
-// still marks the compositor as the owner of the shortcuts.
+// still marks the compositor as the owner of the shortcuts. Syncs run one at a time, each against the module the previous one wrote.
 func (s *Service) Sync(ctx context.Context, d hyprland.Desired) (SyncOutcome, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
 	if s.State().Disabled {
 		return SyncOutcome{}, nil
 	}
