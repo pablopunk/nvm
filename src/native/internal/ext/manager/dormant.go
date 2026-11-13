@@ -82,6 +82,9 @@ func (s *commandSnapshots) put(id, hash string, commands []api.Command) {
 		return
 	}
 	temp := s.path + ".tmp"
+	if s.files.MkdirAll(filepath.Dir(s.path), 0o700) != nil {
+		return
+	}
 	if s.files.WriteFile(temp, data, 0o600) == nil {
 		_ = s.files.Rename(temp, s.path)
 	}
