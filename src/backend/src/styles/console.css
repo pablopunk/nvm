@@ -331,6 +331,7 @@
 }
 .dashboard-table[data-row-height="action"] { --row-height: 3.5rem; }
 .dashboard-table[data-row-height="double"] { --row-height: 3.75rem; }
+.dashboard-table[data-scrollable] { height: calc(2.5rem + var(--visible-rows) * var(--row-height)); overflow-y: auto; }
 .dashboard-table tbody tr { height: var(--row-height); }
 .dashboard-table td { white-space: nowrap; }
 .dashboard-table:not([data-expanded]) tbody tr[data-overflow] { display: none; }

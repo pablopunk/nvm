@@ -47,8 +47,8 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
     <Card className="section admin-panel"><section>
       <h2>Top users by cost</h2>
-      <DashboardSectionStatus section="users" expandableTable="top-users" />
-      <DashboardTable id="top-users" visibleRows={8} rowHeight="action" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} />
+      <DashboardSectionStatus section="users" />
+      <DashboardTable id="top-users" visibleRows={4} rowHeight="action" scrollable columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} />
       <div class="admin-subpanel">
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
@@ -143,7 +143,8 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     const tableUpdates = createDashboardTableUpdates();
     function fillRows(tableId, rows, columns, onApplied = () => {}) {
       const body = document.querySelector(`#${tableId} tbody`);
-      const visibleRows = Number(body.closest('.dashboard-table').dataset.visibleRows);
+      const container = body.closest('.dashboard-table');
+      const visibleRows = container.hasAttribute('data-scrollable') ? Infinity : Number(container.dataset.visibleRows);
       const html = rows.length
         ? rows.map((row, index) => `<tr${index >= visibleRows ? ' data-overflow' : ''}>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
         : `<tr><td colspan="${columns}" class="muted">Nothing this month.</td></tr>`;

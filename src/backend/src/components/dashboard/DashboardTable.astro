@@ -6,10 +6,11 @@ interface Props {
   columns: string[];
   visibleRows: number;
   rowHeight?: 'single' | 'action' | 'double';
+  scrollable?: boolean;
   class?: string;
 }
-const { id, columns, visibleRows, rowHeight = 'single', class: className } = Astro.props;
+const { id, columns, visibleRows, rowHeight = 'single', scrollable = false, class: className } = Astro.props;
 ---
-<div class:list={['table-scroll dashboard-table', className]} data-visible-rows={visibleRows} data-row-height={rowHeight} style={`--visible-rows: ${visibleRows}`}>
+<div class:list={['table-scroll dashboard-table', className]} data-visible-rows={visibleRows} data-row-height={rowHeight} data-scrollable={scrollable ? '' : undefined} style={`--visible-rows: ${visibleRows}`}>
   <ConsoleTable id={id} columns={columns} />
 </div>
