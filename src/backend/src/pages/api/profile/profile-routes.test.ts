@@ -28,7 +28,13 @@ test('profile refresh endpoints return only the signed-in user data', async () =
   const cookie = `${PREVIEW_SESSION_COOKIE}=${token}`;
   let selects = 0;
   const user = { id: 'user-id', workosUserId: 'workos-user', stripeCustomerId: 'customer' };
+  const transactionWithExistingMonthlyGrant = {
+    select() {
+      return { from() { return this; }, where() { return this; }, limit() { return Promise.resolve([{ id: 'grant' }]); } };
+    },
+  };
   const db = {
+    transaction(run: (tx: unknown) => unknown) { return run(transactionWithExistingMonthlyGrant); },
     select() {
       selects++;
       const rows = selects % 2 === 1 ? [user] : [{ free: 7, paid: 5, status: 'active', currentPeriodEnd: new Date('2026-11-01') }];

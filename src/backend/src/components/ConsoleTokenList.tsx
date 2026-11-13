@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { dashboardFetch } from '../lib/dashboard-fetch';
-import { watchDashboard } from '../lib/dashboard-refresh';
+import { dashboardQueryClient } from '../lib/dashboard-query-client';
+import { useDashboardQuery } from '../lib/use-dashboard-query';
+import { DashboardQueryError } from './dashboard/DashboardQueryError';
 import { Button } from './ui/button';
 import {
   AlertDialog,
@@ -13,40 +14,33 @@ import {
   AlertDialogTrigger,
 } from './ui/alert-dialog';
 
-type Token = {
-  id: string;
-  prefix: string;
-  name: string;
-  created: string;
-  lastUsed: string;
-};
+const TOKENS_URL = '/api/tokens';
 
-export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
-  const [currentTokens, setCurrentTokens] = useState(tokens);
-  const [refreshFailed, setRefreshFailed] = useState(false);
+type ApiToken = { id: string; prefix: string; name: string; createdAt: string; lastUsedAt: string | null };
+type TokenList = { tokens: ApiToken[] };
+
+function tokenLastUsedLabel(token: ApiToken) {
+  return token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used';
+}
+
+function TokenListSkeleton() {
+  return <div aria-busy="true" aria-label="Loading API tokens"><span className="dashboard-skeleton" /><span className="dashboard-skeleton" /><span className="dashboard-skeleton" /></div>;
+}
+
+function forgetRevokedToken(id: string) {
+  const client = dashboardQueryClient();
+  client.setQueryData<TokenList>([TOKENS_URL], (current) => current && { tokens: current.tokens.filter((token) => token.id !== id) });
+  void client.invalidateQueries({ queryKey: [TOKENS_URL] });
+}
+
+export function ConsoleTokenList() {
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [removed, setRemoved] = useState<string[]>([]);
   const [openToken, setOpenToken] = useState<string | null>(null);
-  const remaining = currentTokens.filter((token) => !removed.includes(token.id));
-
-  useEffect(function watchTokens() {
-    let active = true;
-    const stop = watchDashboard(async () => {
-      if (openToken) return;
-      try {
-        const result = await dashboardFetch<{ tokens: Array<{ id: string; prefix: string; name: string; createdAt: string; lastUsedAt: string | null }> }>('/api/tokens');
-        if (!active) return;
-        setCurrentTokens(result.tokens.map((token) => ({
-          id: token.id, prefix: token.prefix, name: token.name,
-          created: new Date(token.createdAt).toLocaleString(),
-          lastUsed: token.lastUsedAt ? `last used ${new Date(token.lastUsedAt).toLocaleString()}` : 'never used',
-        })));
-        setRefreshFailed(false);
-      } catch { if (active) setRefreshFailed(true); }
-    });
-    return () => { active = false; stop(); };
-  }, [openToken]);
+  const query = useDashboardQuery<TokenList>(TOKENS_URL, { paused: openToken !== null });
+  const remaining = query.data?.tokens ?? [];
+  const refreshFailed = Boolean(query.data && query.isError);
 
   useEffect(
     function restoreFocusAfterRevocation() {
@@ -66,6 +60,7 @@ export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
       if (!response.ok)
         throw new Error('Could not revoke this token; try again.');
       setRemoved((current) => [...current, id]);
+      forgetRevokedToken(id);
       setOpenToken(null);
     } catch {
       setError('Could not revoke this token; try again.');
@@ -73,6 +68,8 @@ export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
       setPending(null);
     }
   }
+
+  if (!query.data) return query.isError ? <DashboardQueryError what="API tokens" retry={query.refetch} /> : <TokenListSkeleton />;
 
   return (
     <>
@@ -87,7 +84,7 @@ export function ConsoleTokenList({ tokens }: { tokens: Token[] }) {
                   {token.prefix}…
                 </code>
                 <p>
-                  Created {token.created} · {token.lastUsed}
+                  Created {new Date(token.createdAt).toLocaleString()} · {tokenLastUsedLabel(token)}
                 </p>
               </div>
               <AlertDialog

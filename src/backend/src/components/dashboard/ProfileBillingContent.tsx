@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
-import { dashboardFetch } from '../../lib/dashboard-fetch';
-import { watchDashboard } from '../../lib/dashboard-refresh';
+import { useDashboardQuery } from '../../lib/use-dashboard-query';
+import { DashboardQueryError } from './DashboardQueryError';
 import { MAX_TOP_UP_QUANTITY } from '../../lib/billing-limits';
 import { Button } from '../ui/button';
 
@@ -10,20 +9,17 @@ type Billing = {
   catalog: { subscriptions: Array<{ tier: string; credits: number; priceId: string }>; topUps: Array<{ credits: number; priceId: string }> };
 };
 
-export function ProfileBillingContent({ initial, billingState }: { initial: Billing; billingState: string | null }) {
-  const [billing, setBilling] = useState(initial);
-  const [stale, setStale] = useState(false);
-  useEffect(function watchBilling() {
-    let active = true;
-    const stop = watchDashboard(async () => {
-      try {
-        const value = await dashboardFetch<Billing>('/api/profile/billing');
-        if (active) { setBilling(value); setStale(false); }
-      } catch { if (active) setStale(true); }
-    }, 300_000);
-    return () => { active = false; stop(); };
-  }, []);
-  const { subscription, catalog, hasCustomer } = billing;
+const BILLING_REFRESH_MS = 300_000;
+
+function ProfileBillingSkeleton() {
+  return <div aria-busy="true" aria-label="Loading billing"><span className="dashboard-skeleton" /><span className="dashboard-skeleton" /><span className="dashboard-skeleton" /></div>;
+}
+
+export function ProfileBillingContent({ billingState }: { billingState: string | null }) {
+  const query = useDashboardQuery<Billing>('/api/profile/billing', { refetchInterval: BILLING_REFRESH_MS });
+  if (!query.data) return query.isError ? <DashboardQueryError what="billing" retry={query.refetch} /> : <ProfileBillingSkeleton />;
+  const { subscription, catalog, hasCustomer } = query.data;
+  const stale = query.isError;
   const active = subscription && ['active', 'trialing', 'past_due'].includes(subscription.status);
   return <section className="stack">
     <div><h3>Billing</h3><p className="muted">{subscription ? `${subscription.status} · renews ${new Date(subscription.currentPeriodEnd).toLocaleDateString()}` : 'No active subscription.'}</p></div>
