@@ -78,12 +78,13 @@ func TestAStartFailureIsShownToo(t *testing.T) {
 	}
 }
 
-// TestAppleScriptOffMacOSIsShownInTheHUD: on another OS the call is unavailable, and the HUD says so.
-func TestAppleScriptOffMacOSIsShownInTheHUD(t *testing.T) {
+// TestAppleScriptOffMacOSIsNeverShown: on another OS the extension gets the failure in its result, and the user sees
+// nothing: a macOS feature missing on Linux is not news to them.
+func TestAppleScriptOffMacOSIsNeverShown(t *testing.T) {
 	_, h, shown := notifiedHost(t, "linux")
 	runScript(t, h)
-	if len(*shown) != 1 || (*shown)[0][1] != "AppleScript failed: "+appleScriptUnavailable {
-		t.Fatalf("the HUD showed %q; want the unavailable reason", *shown)
+	if len(*shown) != 0 {
+		t.Fatalf("the HUD showed %q; want nothing off macOS", *shown)
 	}
 }
 

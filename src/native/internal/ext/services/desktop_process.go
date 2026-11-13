@@ -108,9 +108,8 @@ func (h *Handler) runAppleScript(ctx context.Context, raw json.RawMessage) (api.
 		return api.ShellResult{}, err
 	}
 	if h.deps.OS != "darwin" {
-		result := api.ShellResult{Stderr: appleScriptUnavailable, ExitCode: 1}
-		h.reportAppleScriptFailure(result)
-		return result, nil
+		// The extension learns it from the result; the user is never told that another OS's feature is missing.
+		return api.ShellResult{Stderr: appleScriptUnavailable, ExitCode: 1}, nil
 	}
 	result, err := h.run(ctx, platform.CommandSpec{Binary: osascriptBinary, Args: []string{"-e", args.Script}}, args.Options)
 	if err == nil && result.ExitCode != 0 {
