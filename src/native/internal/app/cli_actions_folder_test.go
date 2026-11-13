@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -143,5 +144,20 @@ func TestRunRejectsAnExtensionCommandNobodyListed(t *testing.T) {
 		if r := second.runCLICommand(t, id); r.Outcome != actioncli.Rejected {
 			t.Fatalf("%s: %+v", id, r)
 		}
+	}
+}
+
+// A command of an installed extension that is turned off on this machine is refused with what to do, not as unknown:
+// enablement syncs between machines, so the command can exist and still be off here.
+func TestRunSaysAnInstalledExtensionIsTurnedOff(t *testing.T) {
+	dir := t.TempDir()
+	installCLIFixture(t, dir)
+	second := startCLIInstance(t, dir)
+	if err := second.manager.Disable(cliFixture); err != nil {
+		t.Fatal(err)
+	}
+	r := second.runCLICommand(t, "extension:"+cliFixture+":ping")
+	if r.Outcome != actioncli.Rejected || !strings.Contains(r.Message, "turned off") {
+		t.Fatalf("response %+v, want a refusal that says the extension is off", r)
 	}
 }

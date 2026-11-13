@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -152,7 +153,27 @@ func (p *App) runActionCommandOnUI(actionID string) actioncli.Response {
 		p.Palette.OpenAction(title, action)
 		return actioncli.Response{Outcome: actioncli.Opened}
 	}
+	if title, off := p.installedButOff(actionID); off {
+		return actioncli.Response{Outcome: actioncli.Rejected, Message: "the extension " + title + " is installed but turned off on this machine; turn it on in Extensions"}
+	}
 	return actioncli.Response{Outcome: actioncli.Rejected, Message: "no action has the ID " + actionID}
+}
+
+// installedButOff reports whether actionID names a command of an installed extension that is not enabled here, so
+// the refusal says what to do instead of claiming the action does not exist.
+func (p *App) installedButOff(actionID string) (string, bool) {
+	rest, ok := strings.CutPrefix(actionID, "extension:")
+	m := p.extensionManager()
+	if !ok || m == nil {
+		return "", false
+	}
+	extID, _, _ := strings.Cut(rest, ":")
+	for _, listing := range m.List() {
+		if listing.ID == extID {
+			return listing.Title, !listing.Enabled
+		}
+	}
+	return "", false
 }
 
 func (p *App) runAppActionCommand(path string) actioncli.Response {
