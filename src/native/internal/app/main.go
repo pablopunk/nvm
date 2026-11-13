@@ -177,6 +177,11 @@ type App struct {
 	// compositor keeps the Hyprland module in step with the shortcuts; compositorSync coalesces its updates.
 	compositor     *compositor.Service
 	compositorSync coalescer
+	configRefresh  coalescer
+	// compositorReported remembers the problem last shown, so one problem is shown once.
+	compositorReported problemReporter
+	// compositorReady turns on once startup knows which actions can run; sync requests before that are the startup's job.
+	compositorReady atomic.Bool
 }
 
 // newPalette builds the shell over the app's root view. The window is attached by ready; the goldens render
@@ -268,6 +273,7 @@ func (p *App) ready() {
 	p.shortcutsManager()
 	p.startJobs()
 	go p.startExtensions()
+	p.startCompositorSync()
 	p.setUpMenubar()
 	p.syncCompatibilityAccount()
 	p.runMenubarScheduler()

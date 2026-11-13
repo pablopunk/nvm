@@ -15,10 +15,10 @@ import (
 
 // State is what Nevermind keeps about the compositor between runs, in a machine-local file.
 type State struct {
-	// Undecorated asks for the app's windows without compositor decorations.
-	Undecorated bool `json:"undecorated"`
 	// OwnsShortcuts records that the compositor's module runs the shortcuts, so the portal does not bind them too.
 	OwnsShortcuts bool `json:"ownsShortcuts"`
+	// Disabled records that the user removed the config; Sync leaves Hyprland alone until Enable.
+	Disabled bool `json:"disabled"`
 }
 
 // Report is the outcome of the last lifecycle step, for the palette to show.
@@ -73,12 +73,12 @@ func (s *Service) State() State { return *s.state.Load() }
 // Last is the outcome of the last lifecycle step, or nil.
 func (s *Service) Last() *Report { return s.last.Load() }
 
-// SetUndecorated keeps the appearance choice. It takes effect at the next apply.
-func (s *Service) SetUndecorated(on bool) error {
+// Enable lets Sync manage the Hyprland config again after Remove.
+func (s *Service) Enable() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	next := s.State()
-	next.Undecorated = on
+	next.Disabled = false
 	return s.saveState(next)
 }
 
@@ -92,6 +92,51 @@ func (s *Service) Preview(ctx context.Context, d hyprland.Desired) (hyprland.Pla
 	return hyprland.PrepareAgainstBinds(ctx, s.env, session, d)
 }
 
+// SyncOutcome is what Sync did.
+type SyncOutcome struct {
+	// Wrote says the module was rewritten and Hyprland reloaded.
+	Wrote bool
+	// OwnershipChanged says the compositor started or stopped running the shortcuts, so the portal's must be rebound.
+	OwnershipChanged bool
+	Result           hyprland.Result
+	Skipped          []hyprland.Skipped
+}
+
+// Sync keeps the module in line with d without being asked: it adds the include to the entry file the first time,
+// writes the module and reloads Hyprland. It writes nothing when the module already holds d. It does nothing after
+// Remove, or where the config cannot be written (a session that is not ready). A module that is in place and current
+// still marks the compositor as the owner of the shortcuts.
+func (s *Service) Sync(ctx context.Context, d hyprland.Desired) (SyncOutcome, error) {
+	if s.State().Disabled {
+		return SyncOutcome{}, nil
+	}
+	plan, err := s.Preview(ctx, d)
+	if session, ok := s.Session(); ok && !session.Ready() {
+		return SyncOutcome{}, nil
+	}
+	if err != nil {
+		return SyncOutcome{}, err
+	}
+	owned := s.State().OwnsShortcuts
+	if plan.ModuleUnchanged() && plan.IncludePresent {
+		return SyncOutcome{Skipped: plan.Skipped, OwnershipChanged: s.adopt() && !owned}, nil
+	}
+	result, err := s.Apply(ctx, plan, true)
+	if err != nil {
+		return SyncOutcome{Skipped: plan.Skipped}, err
+	}
+	return SyncOutcome{Wrote: result.Changed, Result: result, Skipped: plan.Skipped, OwnershipChanged: !owned && s.State().OwnsShortcuts}, nil
+}
+
+// adopt records that the compositor runs the shortcuts, for a module that is already in place. It reports success.
+func (s *Service) adopt() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := s.State()
+	next.OwnsShortcuts = true
+	return s.saveState(next) == nil
+}
+
 // Apply writes a previewed plan and records whether the compositor now owns the shortcuts.
 func (s *Service) Apply(ctx context.Context, plan hyprland.Plan, addInclude bool) (hyprland.Result, error) {
 	s.mu.Lock()
@@ -100,7 +145,9 @@ func (s *Service) Apply(ctx context.Context, plan hyprland.Plan, addInclude bool
 	if err == nil {
 		loaded := plan.IncludePresent || addInclude
 		next := s.State()
-		next.OwnsShortcuts = loaded && result.Loaded != hyprland.LoadedMissing
+		// The compositor's own bind list is a check that can lag behind a reload, so a "missing" answer does not take
+		// the shortcuts away from a module that is in place; the caller reports it.
+		next.OwnsShortcuts = loaded
 		err = s.saveState(next)
 	}
 	s.record("apply", result, err)
@@ -129,6 +176,7 @@ func (s *Service) withdraw(ctx context.Context, step string, fn func(context.Con
 	if err == nil || result.Changed {
 		next := s.State()
 		next.OwnsShortcuts = false
+		next.Disabled = next.Disabled || step == "remove"
 		err = errors.Join(err, s.saveState(next))
 	}
 	s.record(step, result, err)

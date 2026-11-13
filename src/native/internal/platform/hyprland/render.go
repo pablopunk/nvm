@@ -15,8 +15,8 @@ type Bind struct {
 
 // Appearance is the window appearance the module asks the compositor for.
 type Appearance struct {
-	// Undecorated removes the compositor's border, rounding, shadow and blur from the app's ordinary windows (not
-	// from the palette, which is a layer surface).
+	// Undecorated removes the compositor's border from the app's windows (a layer surface, such as a panel, has none
+	// to begin with). Opacity is left to the user's setup.
 	Undecorated bool
 	// Classes are the app IDs the app's windows carry; at least one is needed for a window rule.
 	Classes []string
@@ -102,13 +102,10 @@ func renderBind(f Format, support Support, bind Bind) (string, error) {
 	return fmt.Sprintf("bind = %s, %s, exec, %s", strings.Join(c.mods, " "), c.key, bind.Command), nil
 }
 
-// The effects of an undecorated window, with their hyprlang and Lua values.
+// The effects of an undecorated window, with their hyprlang and Lua values. Only the border: opacity, blur, shadow and
+// rounding stay whatever the user's own Hyprland setup says.
 var undecoratedEffects = []struct{ name, conf, lua string }{
 	{"border_size", "0", "0"},
-	{"rounding", "0", "0"},
-	{"no_shadow", "on", "true"},
-	{"no_blur", "on", "true"},
-	{"decorate", "off", "false"},
 }
 
 func renderUndecoratedRule(f Format, support Support, classes []string) (string, error) {
