@@ -11,23 +11,25 @@ import Layout from '../layouts/Layout.astro';
   <p class="muted"><em><!-- HUMAN-REVIEW: Legal copy below is a draft placeholder and must be reviewed by a human before launch. --></em></p>
 
   <div class="section card">
-    <p><em>Last updated: September 2026</em></p>
+    <p><em>Last updated: November 2026</em></p>
 
     <h2>1. Data We Collect</h2>
     <p>We collect only what is necessary to provide the Service:</p>
     <ul>
       <li>Email address (from authentication)</li>
       <li>API usage data (model calls, token counts, audio duration, cost, and timestamps)</li>
+      <li>Prompts, attachments and responses that you send through Nevermind AI, forwarded to model providers to produce a response</li>
       <li>Audio that you submit through Dictate, processed in memory to produce a transcript</li>
       <li>Billing information (handled by Stripe — we do not store full payment details)</li>
       <li>Anonymous website analytics (page views, referrers, device type and performance), collected without cookies</li>
     </ul>
 
     <h2>2. How We Use Data</h2>
-    <p>Your data is used exclusively to operate the Service — to route API calls, track usage for billing, and enforce rate limits. We do not sell data or share it with third parties for their own purposes.</p>
+    <p>Nevermind uses your data only to operate the Service — to route API calls, track usage for billing, and enforce rate limits. We do not sell your data.</p>
+    <p>To answer an AI request, we send your prompts, attachments and conversation context to the model provider that serves the selected model. Some of these models are offered under provider terms that let the provider use prompts and outputs to improve its products and train its models (for example, Meta's Muse Spark "contributor" models). Do not send sensitive or confidential information through Nevermind AI. If you connect your own API key, requests go directly to your provider under your own agreement with that provider.</p>
 
     <h2>3. Data Retention</h2>
-    <p>Usage data is retained while your account is active. Nevermind does not persist Dictate audio or transcript text on its backend. Audio is sent to the configured transcription providers, whose retention policies also apply. API tokens and user records are deleted upon account deletion. Stripe billing records are retained for tax and accounting compliance. Anonymous analytics data is retained in aggregate.</p>
+    <p>Usage data is retained while your account is active. Nevermind does not persist Dictate audio or transcript text on its backend. Prompts, responses and audio are sent to the configured model and transcription providers, whose retention and data-use policies also apply. API tokens and user records are deleted upon account deletion. Stripe billing records are retained for tax and accounting compliance. Anonymous analytics data is retained in aggregate.</p>
 
     <h2>4. Your Rights</h2>
     <p>You may request deletion of your account and associated data at any time from your <a href="/profile">profile</a> page. This includes cancellation of any active subscription and removal of your personal information.</p>
@@ -42,7 +44,8 @@ import Layout from '../layouts/Layout.astro';
       <li><strong>WorkOS</strong> — authentication (<a href="https://workos.com/privacy-policy">privacy policy</a>)</li>
       <li><strong>PostHog</strong> — website analytics, plus error and usage reporting from the app when enabled in its settings (<a href="https://posthog.com/privacy">privacy policy</a>)</li>
       <li><strong>OpenRouter</strong> — model routing, including Dictate transcription (<a href="https://openrouter.ai/privacy">privacy policy</a>)</li>
-      <li><strong>Transcription model providers</strong> — speech processing selected by Nevermind administrators through OpenRouter</li>
+      <li><strong>OpenCode Zen</strong> — model routing (<a href="https://opencode.ai/legal/privacy-policy">privacy policy</a>)</li>
+      <li><strong>AI model providers</strong> — chat, automation and speech models selected by Nevermind administrators through OpenRouter and OpenCode Zen. Some providers may use prompts and outputs to improve their models, as described in section 2.</li>
     </ul>
 
     <h2>7. Contact</h2>

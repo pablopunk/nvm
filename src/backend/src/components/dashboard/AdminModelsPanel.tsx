@@ -1,5 +1,6 @@
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent, ReactNode } from 'react';
 import type { AdminModelConfig, AdminSingleRoute, AdminTextRoute } from '../../lib/admin-model-config';
+import { modelProviderMayTrainOnPrompts, PROVIDER_TRAINS_ON_PROMPTS_LABEL } from '../../lib/model-data-use';
 import { useDashboardQuery } from '../../lib/use-dashboard-query';
 import { ConsoleCombobox } from '../ConsoleCombobox';
 import { ConsoleSelect } from '../ConsoleSelect';
@@ -34,6 +35,11 @@ function RoutePricing({ slot, modelRef }: { slot: string; modelRef: string }) {
   return pricing ? `Input ${perMillion(pricing.inputUsdPerMtok)} · Output ${perMillion(pricing.outputUsdPerMtok)}` : 'Pricing unknown';
 }
 
+function RouteDetails({ modelRef, children }: { modelRef: string | null; children: ReactNode }) {
+  if (!modelRef || !modelProviderMayTrainOnPrompts(modelRef)) return <>{children}</>;
+  return <><strong className="model-route-row__training">{PROVIDER_TRAINS_ON_PROMPTS_LABEL}</strong><br />{children}</>;
+}
+
 function TextRouteCard({ route, thinkingLevels }: { route: AdminTextRoute; thinkingLevels: readonly string[] }) {
   const { status, saving, save } = useAdminRouteSave('/api/admin/model');
   const smart = route.kind === 'smart';
@@ -46,7 +52,7 @@ function TextRouteCard({ route, thinkingLevels }: { route: AdminTextRoute; think
   function chooseModel(modelRef: string) { saveRoute(modelRef, route.thinkingLevel); }
   function chooseThinking(event: ChangeEvent<HTMLSelectElement>) { if (route.ref) saveRoute(route.ref, event.currentTarget.value); }
   return (
-    <AdminModelRouteCard title={route.title} tier={tierForSlot(route.slot)} status={status} details={route.ref ? <RoutePricing slot={route.slot} modelRef={route.ref} /> : null}>
+    <AdminModelRouteCard title={route.title} tier={tierForSlot(route.slot)} status={status} details={<RouteDetails modelRef={route.ref}>{route.ref ? <RoutePricing slot={route.slot} modelRef={route.ref} /> : null}</RouteDetails>}>
       <label className="field">Model<ConsoleCombobox label={`${route.title} model`} value={route.ref ?? ''} options={route.options} disabled={saving} onValueChange={chooseModel} /></label>
       <label className="field">Thinking{smart
         ? <ConsoleSelect className="thinking-select" value={route.thinkingLevel} disabled={saving || !route.ref} onChange={chooseThinking} options={thinkingLevels.map((level) => ({ value: level, label: level }))} />
@@ -61,7 +67,7 @@ function SingleRouteCard({ title, tier, path, route, details, select }: { title:
     void save(splitModelRef(modelRef), (config) => select(config, modelRef));
   }
   return (
-    <AdminModelRouteCard title={title} tier={tier} status={status} details={details}>
+    <AdminModelRouteCard title={title} tier={tier} status={status} details={<RouteDetails modelRef={route.ref}>{details}</RouteDetails>}>
       <label className="field">Model<ConsoleCombobox label={`${title} model`} value={route.ref ?? ''} options={route.options} disabled={saving} onValueChange={chooseModel} /></label>
     </AdminModelRouteCard>
   );
