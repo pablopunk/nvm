@@ -61,7 +61,7 @@ func newSample(t *testing.T, ext api.Extension, serve func(protocol.ServiceCall)
 	if serve == nil {
 		serve = noServices
 	}
-	return New(ext, real.NewPorts().Clock, serve)
+	return New(ext, real.NewPorts().Clock, func(_ context.Context, call protocol.ServiceCall) protocol.ServiceReply { return serve(call) })
 }
 
 func TestProvidesReportsOnlyTheInterfacesTheExtensionImplements(t *testing.T) {

@@ -27,6 +27,14 @@ func (d DirectContext) For(ctx context.Context, launch api.LaunchContext) api.Co
 	return c
 }
 
+// Serving keeps process-local storage and caches while answering this call's services with serve. A built-in uses it to
+// give its services the context of the call they serve.
+func (d DirectContext) Serving(serve func(protocol.ServiceCall) protocol.ServiceReply) DirectContext {
+	next := d
+	next.base.link = newDirectLink(serve)
+	return next
+}
+
 // Observed preserves process-local storage and caches while observing only this call's direct service link.
 func (d DirectContext) Observed(observe func(protocol.ServiceCall, protocol.ServiceReply)) DirectContext {
 	next := d

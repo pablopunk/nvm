@@ -22,14 +22,33 @@ import (
 type Runner struct {
 	ext     api.Extension
 	context child.DirectContext
+	serve   func(context.Context, protocol.ServiceCall) protocol.ServiceReply
 }
 
-// New prepares the runtime of ext. serve answers the extension's service calls in the host process.
-func New(ext api.Extension, clock platform.Clock, serve func(protocol.ServiceCall) protocol.ServiceReply) *Runner {
+// New prepares the runtime of ext. serve answers the extension's service calls in the host process, with the context
+// of the call they serve: it tells a service which method made the call, as a child's supervisor does.
+func New(ext api.Extension, clock platform.Clock, serve func(context.Context, protocol.ServiceCall) protocol.ServiceReply) *Runner {
 	return &Runner{
-		ext:     ext,
-		context: child.NewDirectContext(ext.Manifest().Identity, clock, serve),
+		ext: ext,
+		context: child.NewDirectContext(ext.Manifest().Identity, clock, func(call protocol.ServiceCall) protocol.ServiceReply {
+			return serve(context.Background(), call)
+		}),
+		serve: serve,
 	}
+}
+
+// servingCall returns the runner one call of method runs with: its services see the method, and outlive the call's
+// budget as a child's services do, so a wait for the user is not cut short.
+func (r *Runner) servingCall(ctx context.Context, method string) *Runner {
+	if r.serve == nil {
+		return r
+	}
+	serviceCtx := protocol.WithRequestMethod(context.WithoutCancel(ctx), method)
+	call := *r
+	call.context = r.context.Serving(func(request protocol.ServiceCall) protocol.ServiceReply {
+		return r.serve(serviceCtx, request)
+	})
+	return &call
 }
 
 // Provides reports whether the extension implements the protocol method.
@@ -123,7 +142,7 @@ func (r *Runner) answer(ctx context.Context, method, query string, invocation *a
 			response = protocol.Response{Failure: child.PanicFailure(recovered)}
 		}
 	}()
-	call, finishEvidence := r.observedCall()
+	call, finishEvidence := r.servingCall(ctx, method).observedCall()
 	defer func() { response.SnapshotEvidence = finishEvidence() }()
 	data, err := call.dispatch(ctx, method, query, invocation)
 	if err != nil {

@@ -41,8 +41,8 @@ func (m *Manager) registerBuiltIns(exts []api.Extension) {
 			continue
 		}
 		host := m.builtInServices(manifest)
-		serve := func(call protocol.ServiceCall) protocol.ServiceReply {
-			return host.Serve(context.Background(), call)
+		serve := func(ctx context.Context, call protocol.ServiceCall) protocol.ServiceReply {
+			return host.Serve(ctx, call)
 		}
 		m.entries[builtinKeyPrefix+manifest.ID] = &entry{
 			bundle:  bundle.Bundle{Dir: "", Manifest: manifest},
