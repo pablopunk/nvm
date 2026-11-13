@@ -106,6 +106,9 @@ type turnRun struct {
 	// ended, as a code mode program's late call does; that report is dropped instead of sent on a closed channel.
 	emitMu sync.Mutex
 	closed bool
+	// openSteps counts the nested steps a tool started and has not ended yet. The terminal event waits briefly for
+	// them, so a step a Stop cancelled still reports how it ended before the turn does.
+	openSteps sync.WaitGroup
 	// ended is set once the terminal event is sent; the reader may stop reading then, so later reports are dropped
 	// rather than left blocking.
 	ended bool
@@ -118,6 +121,22 @@ func (r *turnRun) emit(event Event) {
 		return
 	}
 	r.turn.events <- event
+}
+
+// stepSettleWait bounds how long the terminal event waits for nested steps still ending, such as a program's call
+// that a Stop cancelled. A step that has not ended by then is dropped rather than holding the turn open.
+const stepSettleWait = 2 * time.Second
+
+func (r *turnRun) awaitOpenSteps() {
+	settled := make(chan struct{})
+	go func() {
+		r.openSteps.Wait()
+		close(settled)
+	}()
+	select {
+	case <-settled:
+	case <-time.After(stepSettleWait):
+	}
 }
 
 // closeEvents ends the event stream once; later emits are dropped.
@@ -157,6 +176,7 @@ func (r *turnRun) finish(event Event) {
 	}
 	r.finished = true
 	event.Usage = r.usage
+	r.awaitOpenSteps()
 	r.emit(event)
 	r.emitMu.Lock()
 	r.ended = true

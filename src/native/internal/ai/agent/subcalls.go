@@ -53,6 +53,7 @@ func (s *callScope) Begin(label, detail string) SubCall {
 	id := fmt.Sprintf("%s:%d", s.parent.ID, s.next)
 	s.mu.Unlock()
 	info := CallInfo{ID: id, ParentID: s.parent.ID, Name: s.parent.Name + ".step", Label: label, Input: detail}
+	s.run.openSteps.Add(1)
 	s.run.emit(Event{Kind: EventToolStart, Call: info})
 	return &subCall{run: s.run, info: info}
 }
@@ -76,5 +77,6 @@ func (c *subCall) Ask(ctx context.Context) (bool, error) {
 func (c *subCall) End(status CallStatus, outcome, result string) {
 	c.once.Do(func() {
 		c.run.emit(Event{Kind: EventToolEnd, Call: c.info, Status: status, Result: result, Outcome: outcome})
+		c.run.openSteps.Done()
 	})
 }
