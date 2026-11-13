@@ -7,6 +7,7 @@ const buttonClass = buttonVariants({ variant: 'ghost', size: 'sm' });
 ---
 <p class="dashboard-summary-status" aria-live="polite">
   <span class="dashboard-summary-status__text" id={`${section}-status`}></span>
+  <span class="dashboard-summary-status__spinner" aria-hidden="true"></span>
   <button type="button" class={buttonClass} data-retry-section={section} hidden>Retry</button>
   {expandableTable && <button type="button" class={buttonClass} data-table-toggle={expandableTable} aria-expanded="false" hidden></button>}
 </p>

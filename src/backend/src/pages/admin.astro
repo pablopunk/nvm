@@ -298,10 +298,11 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
       if (result.isError) return `${shown ? `Showing ${shown}. ` : ''}Could not load ${month}: ${result.error.message}`;
       if (!result.data) return `Loading ${month}…`;
       if (result.isPlaceholderData) return `Showing ${shown}; loading ${month}…`;
-      return `Showing ${month} · updated ${updatedAtLabel(result.dataUpdatedAt)}${result.isFetching ? ' · refreshing…' : ''}`;
+      return `Showing ${month} · updated ${updatedAtLabel(result.dataUpdatedAt)}`;
     }
     function renderSectionResult(section, result) {
       const status = document.getElementById(`${section}-status`);
+      status.parentElement.toggleAttribute('data-fetching', result.isFetching && Boolean(result.data));
       document.querySelector(`[data-retry-section="${section}"]`).hidden = !result.isError;
       if (!result.data || result.isPlaceholderData) { status.textContent = sectionStatusText(section, result); return; }
       const month = monthInput.value;

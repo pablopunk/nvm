@@ -351,8 +351,26 @@
   border-radius: var(--radius);
 }
 .dashboard-summary-status { display: flex; align-items: center; gap: .5rem; height: 2rem; }
-.dashboard-summary-status__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dashboard-summary-status__text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dashboard-summary-status button { flex-shrink: 0; }
+.dashboard-summary-status__spinner {
+  flex-shrink: 0;
+  width: .75rem;
+  height: .75rem;
+  margin-right: auto;
+  border: 1.5px solid var(--border);
+  border-top-color: var(--muted);
+  border-radius: 999px;
+  visibility: hidden;
+}
+.dashboard-summary-status[data-fetching] .dashboard-summary-status__spinner {
+  visibility: visible;
+  animation: dashboard-spin .8s linear infinite;
+}
+@keyframes dashboard-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-summary-status[data-fetching] .dashboard-summary-status__spinner { animation-duration: 2.4s; }
+}
 
 .profile-stats .stat { height: 5.5rem; overflow: auto; }
 #headline .stat { height: 5.5rem; overflow: hidden; }
