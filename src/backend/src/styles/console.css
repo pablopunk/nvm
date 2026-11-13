@@ -269,6 +269,10 @@
   .model-route-row__details {
     @apply truncate text-xs leading-4;
   }
+  .model-route-row__training {
+    @apply font-medium;
+    color: var(--danger);
+  }
   .model-route-row__skeleton-title {
     @apply h-4 w-24;
   }

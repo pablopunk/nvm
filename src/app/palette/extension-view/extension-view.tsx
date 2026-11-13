@@ -1,14 +1,5 @@
 // biome-ignore-all lint: This established renderer retains existing declarative view conventions.
-import {
-  Check,
-  Copy,
-  CreditCard,
-  LogIn,
-  RotateCw,
-  Search,
-  Square,
-  X,
-} from 'lucide-react';
+import { Check, Copy, LogIn, RotateCw, Search, Square, X } from 'lucide-react';
 import React, {
   type CSSProperties,
   type ReactNode,
@@ -42,6 +33,7 @@ import {
   GridView,
   ListView,
 } from '../ui';
+import { AiChatBanner } from './ai-chat-banner';
 import { CameraView } from './camera-view';
 import { ChatInputForm } from './chat-input-form';
 import { titleFromFirstContentLine } from './editor-title';
@@ -372,31 +364,6 @@ function NevermindSignInGate({
   );
 }
 
-export function NevermindLimitGate({
-  limit,
-  runAction,
-}: {
-  limit: AiLimitState;
-  runAction: (action: CommandAction) => void;
-}) {
-  const action = limit.action
-    ? {
-        value: 'run-limit-action',
-        icon: <CreditCard size={16} />,
-        title: limit.actionTitle || limit.action.title,
-        onSelect: () => runAction(limit.action!),
-      }
-    : undefined;
-  return (
-    <EmptyState
-      icon={<CreditCard size={24} />}
-      title={limit.title}
-      subtitle={limit.message}
-      action={action}
-    />
-  );
-}
-
 function EditorSurface({
   view,
   actions,
@@ -659,15 +626,14 @@ function ChatExtensionView({
         onCancel={onCancelDeviceSignIn}
       />
     );
-  const limitBanner =
-    view.aiChat && aiChat.limit ? (
-      <NevermindLimitGate limit={aiChat.limit} runAction={runAction} />
-    ) : view.aiChat && aiChat.creditNotice ? (
-      <div className="creditNoticeBanner">
-        <CreditCard size={14} />
-        <span>{aiChat.creditNotice}</span>
-      </div>
-    ) : null;
+  const limitBanner = view.aiChat ? (
+    <AiChatBanner
+      limit={aiChat.limit}
+      creditNotice={aiChat.creditNotice}
+      conversationIsEmpty={!aiChat.messages.length}
+      runAction={runAction}
+    />
+  ) : null;
   const selectableModel =
     view.aiChat && view.aiModelSelectable ? aiChat.model : undefined;
   const onModelChange =
