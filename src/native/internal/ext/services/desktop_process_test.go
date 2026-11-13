@@ -121,9 +121,9 @@ func TestAppleScriptRunsOsascriptOnMacOSOnly(t *testing.T) {
 	}
 
 	offMac, other := processHost(t, "linux", api.CapabilitySystem)
-	result = runProcessOp(t, other, protocol.OpAppleScript, protocol.ShellScriptArgs{Script: "return true"})
-	if result.ExitCode != 1 || result.Stderr != appleScriptUnavailable || len(offMac.Calls()) != 0 {
-		t.Fatalf("off macOS result = %+v; want the unavailable answer and no process", result)
+	reply := serve(t, other, protocol.ServiceDesktopShell, protocol.OpAppleScript, protocol.ShellScriptArgs{Script: "return true"})
+	if reply.Failure == nil || reply.Failure.Code != api.CodeUnsupported || len(offMac.Calls()) != 0 {
+		t.Fatalf("off macOS reply = %+v; want an unsupported failure and no process", reply)
 	}
 }
 

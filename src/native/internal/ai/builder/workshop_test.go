@@ -181,3 +181,30 @@ func clockManifestValue(t *testing.T) api.Manifest {
 	}
 	return manifest
 }
+
+// TestWriteReportsAnOSLimitAsInformation: an extension that calls AppleScript installs and is told, not refused, that it
+// is macOS only.
+func TestWriteReportsAnOSLimitAsInformation(t *testing.T) {
+	conversation := newFakeConversation(builderChat("chat-1"))
+	extensions := newFakeExtensions()
+	w := New(conversation, extensions, synchronous)
+	args, err := json.Marshal(map[string]any{
+		"manifest": `{"apiVersion":"1.0","id":"user.calendar","title":"Calendar","capabilities":["system"]}`,
+		"source": "package main\n\nimport \"github.com/pablopunk/nvm/native/internal/ext/api\"\n\n" +
+			"func RunAction(ctx api.Context, in api.Invocation) (api.Result, error) {\n" +
+			"\t_, err := ctx.Desktop().Shell().AppleScript(\"beep\", api.ShellOptions{})\n\treturn api.Result{}, err\n}\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := writeForTest(w, context.Background(), "chat-1", args)
+	if err != nil {
+		t.Fatalf("the write was refused: %v", err)
+	}
+	if !strings.Contains(result.Text, "macOS only") || result.Outcome != "Installed and enabled" {
+		t.Fatalf("result = %+v; want the install with a macOS-only note", result)
+	}
+	if strings.Join(extensions.installs, ",") != "user.calendar" {
+		t.Fatalf("installs = %v; want the extension installed", extensions.installs)
+	}
+}

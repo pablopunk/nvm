@@ -23,6 +23,8 @@ type TypeOptions struct {
 // or Ctrl+Z) to the app the palette was summoned from, and needs a replacement made with Selection.ReplaceText in that
 // window first. Undo requires the desktop.keyboard capability.
 type Keyboard interface {
+	// TypeText types text as key presses. Platform: macOS only (see PlatformOperations). An extension whose source
+	// calls it is not run on another OS.
 	TypeText(text string, options TypeOptions) error
 	Undo() error
 }

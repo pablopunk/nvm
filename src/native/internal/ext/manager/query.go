@@ -192,6 +192,9 @@ func (m *Manager) run(ctx context.Context, id string, invocation api.Invocation,
 		defer func() { finish(outcome) }()
 	}
 	runtime, err := m.runtimeFor(id)
+	if unsupported := (*UnsupportedPlatformError)(nil); errors.As(err, &unsupported) {
+		return api.Result{}, &api.Failure{Code: api.CodeUnsupported, Message: unsupported.Error()}, nil
+	}
 	if err != nil {
 		return api.Result{}, nil, err
 	}
@@ -258,6 +261,9 @@ func (m *Manager) runtimeFor(id string) (runner, error) {
 	}
 	if e.runtime == nil {
 		return nil, ErrUnknownExtension
+	}
+	if !m.supportedHere(e) {
+		return nil, &UnsupportedPlatformError{Title: e.bundle.Manifest.Title, Platforms: e.platforms}
 	}
 	return e.runtime, nil
 }

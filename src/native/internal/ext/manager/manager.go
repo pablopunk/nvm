@@ -21,6 +21,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/ext/enablement"
 	"github.com/pablopunk/nvm/native/internal/ext/install"
 	"github.com/pablopunk/nvm/native/internal/ext/services"
+	"github.com/pablopunk/nvm/native/internal/ext/sourcecheck"
 	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
 	"github.com/pablopunk/nvm/native/internal/features/clipboard"
 	"github.com/pablopunk/nvm/native/internal/features/notes"
@@ -168,6 +169,9 @@ type entry struct {
 	host             *services.Handler
 	// builtin marks an entry compiled into the app: it has no folder, no review and no enabled state.
 	builtin bool
+	// platforms are the OSes the source's OS-specific calls exist on, read from the source alone (see package
+	// sourcecheck). The nil set is every OS.
+	platforms api.Platforms
 	// enabledApplied is the enabled state this entry's runtime was started or left stopped for.
 	enabledApplied bool
 }
@@ -306,13 +310,15 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 		m.commands.forget(old.bundle.Manifest.ID)
 	}
 	m.commands.forget(loaded.Manifest.ID)
-	next := &entry{bundle: loaded}
+	next := &entry{bundle: loaded, platforms: sourcecheck.SupportedPlatforms(loaded.Sources)}
 	if loaded.Runnable() {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
 		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
 		if m.isEnabled(loaded.Manifest) {
 			next.enabledApplied = true
-			m.startEntry(next)
+			if m.supportedHere(next) {
+				m.startEntry(next)
+			}
 		}
 	}
 	m.entries[key] = next

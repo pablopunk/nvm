@@ -34,6 +34,9 @@ type Bundle struct {
 	Dir      string
 	Manifest api.Manifest
 	Source   []byte
+	// Sources is every Go file of the folder by name, main.go included, as the interpreter loads them. The host reads
+	// it to analyse the extension; it never runs from it.
+	Sources  map[string][]byte
 	Hash     string
 	Problems []string
 }
@@ -66,18 +69,34 @@ func Load(files platform.FS, dir string) Bundle {
 		bundle.Problems = append(bundle.Problems, err.Error())
 	}
 	bundle.Source = source
-	bundle.Hash = Hash(manifestBytes, append(source, otherSourceFiles(files, dir)...))
+	others := otherSourceFiles(files, dir)
+	bundle.Sources = map[string][]byte{SourceFile: source}
+	var tail []byte
+	for _, other := range others {
+		bundle.Sources[other.name] = other.data
+		tail = append(tail, 0)
+		tail = append(tail, other.name...)
+		tail = append(tail, 0)
+		tail = append(tail, other.data...)
+	}
+	bundle.Hash = Hash(manifestBytes, append(source, tail...))
 	return bundle
 }
 
-// otherSourceFiles returns the names and text of the folder's other .go files, so a change to any of them changes the
-// hash and a reload runs the new version. The text is the interpreter's input too (see child.loadSource).
-func otherSourceFiles(files platform.FS, dir string) []byte {
+// sourceFile is one extra Go file of an extension folder.
+type sourceFile struct {
+	name string
+	data []byte
+}
+
+// otherSourceFiles returns the folder's other .go files, so a change to any of them changes the hash and a reload runs
+// the new version. The text is the interpreter's input too (see child.loadSource).
+func otherSourceFiles(files platform.FS, dir string) []sourceFile {
 	entries, err := files.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	var extra []byte
+	var extra []sourceFile
 	for _, entry := range entries {
 		name := entry.Name()
 		if entry.IsDir() || name == SourceFile || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
@@ -87,10 +106,7 @@ func otherSourceFiles(files platform.FS, dir string) []byte {
 		if err != nil {
 			continue
 		}
-		extra = append(extra, 0)
-		extra = append(extra, name...)
-		extra = append(extra, 0)
-		extra = append(extra, data...)
+		extra = append(extra, sourceFile{name: name, data: data})
 	}
 	return extra
 }

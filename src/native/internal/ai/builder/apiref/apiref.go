@@ -2,7 +2,7 @@
 // package with go/parser, so the reference is the api's own types and doc comments, and a test fails when the
 // generated copy in package builder no longer matches them.
 //
-// Layer: ai (it imports the standard library only).
+// Layer: ai (it imports the api package for its platform table, and the standard library).
 package apiref
 
 import (

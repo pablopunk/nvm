@@ -28,6 +28,12 @@ type Listing struct {
 	Capabilities        []api.Capability
 	UnknownCapabilities []api.Capability
 	Runtime             supervisor.Status
+	// OnlyOn says which OSes the extension is limited to, such as "macOS only", or is "" when it works everywhere.
+	// It is read from the source, never from the manifest.
+	OnlyOn string
+	// UnsupportedHere is true when the extension cannot run on this OS. It stays enabled in the synced config, so it
+	// keeps working on the OS it is for; here it is not started and contributes nothing.
+	UnsupportedHere bool
 }
 
 // List returns one listing per extension folder, sorted by folder name.
@@ -54,6 +60,8 @@ func (m *Manager) listingLocked(key string, e *entry) Listing {
 		Problems:            e.bundle.Problems,
 		Capabilities:        manifest.Capabilities,
 		UnknownCapabilities: manifest.UnknownCapabilities(),
+		OnlyOn:              e.platforms.Label(),
+		UnsupportedHere:     !m.supportedHere(e),
 	}
 	if e.runtime != nil {
 		listing.Runtime = e.runtime.Status()
@@ -112,8 +120,10 @@ func (m *Manager) Enable(id string) error {
 		m.replaceLocked(filepath.Base(e.bundle.Dir), e.bundle)
 		return nil
 	}
-	e.runtime.Reset()
-	e.runtime.Start()
+	if m.supportedHere(e) {
+		e.runtime.Reset()
+		e.runtime.Start()
+	}
 	return nil
 }
 
