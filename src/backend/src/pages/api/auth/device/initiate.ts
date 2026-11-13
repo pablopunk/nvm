@@ -7,7 +7,7 @@ import { killSwitchResponse, backendKillSwitchEnabled, requestIdFromHeaders } fr
 import { clientIp, rateLimitIp, tooManyRequests } from '../../../../lib/ratelimit';
 import { safeJsonBody } from '../../../../lib/validation';
 import { env } from '../../../../lib/env';
-import { parsePublicOrigin } from '../../../../../../app/shared/public-origin';
+import { parsePublicOrigin } from '../../../../shared/public-origin';
 import { previewOriginMatchesRequest } from '../../../../lib/preview-auth';
 import { localDevelopmentOrigin } from '../../../../lib/local-development-origin';
 

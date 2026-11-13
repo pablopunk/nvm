@@ -1,17 +1,17 @@
 ---
 name: backend-api-compatibility
-description: Use when changing or reviewing Nevermind desktop/backend contracts - Astro API routes used by desktop, Electron backend fetches, auth/device login, token revoke, active-model descriptors, AI proxy routes, billing/rate-limit/error shapes, compatibility manifests, backend deploy policy, desktop release/update interactions, or any request about keeping frontend and backend in sync.
+description: Use when changing or reviewing Nevermind desktop/backend contracts - Astro API routes used by desktop, desktop backend fetches, auth/device login, token revoke, active-model descriptors, AI proxy routes, billing/rate-limit/error shapes, compatibility manifests, backend deploy policy, desktop release/update interactions, or any request about keeping frontend and backend in sync.
 ---
 
 # Backend API Compatibility
 
-Nevermind's Electron desktop app ships on tagged releases while the backend may deploy continuously. Treat the backend as a backwards-compatible service for installed desktop clients.
+Nevermind's desktop app ships on tagged releases while the backend may deploy continuously. Treat the backend as a backwards-compatible service for installed desktop clients.
 
 ## Start here
 
 1. Read `docs/backend-api-compatibility.md`.
 2. Map both sides of the contract, including supported release tags rather than only current `main`, before changing code:
-   - Desktop callers in `src/app/electron/backend/nevermind-auth.ts`, `src/app/electron/ai/ai.ts`, and related main-process flows.
+   - Desktop callers in `src/native/internal/backend` and the account and AI flows that use it.
    - Backend routes in `src/backend/src/pages/api/**` and shared backend libraries in `src/backend/src/lib/**`.
 3. Identify the change type: additive, compatibility shim, API-major change, or intentional unsupported-client block.
 4. Prefer additive fields and compatibility shims over lockstep frontend/backend releases; Nevermind does not use feature flags.

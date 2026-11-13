@@ -1,0 +1,146 @@
+package app
+
+import (
+	"context"
+	"errors"
+
+	"github.com/egoist/mygo"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/logx"
+	"github.com/pablopunk/nvm/native/internal/menubar"
+	"github.com/pablopunk/nvm/native/internal/menubar/extitems"
+)
+
+// setUpMenubar creates the app's menu bar item over the platform's tray host, and the scheduler that renders every
+// status item. A platform without a tray host runs the app without an item; the palette still opens by its shortcut.
+func (p *App) setUpMenubar() {
+	p.menubarJobs = menubar.NewScheduler(p.ports.Clock, p.onUI)
+	p.applyMenuBarIconStyle(p.menuBarIconStyle())
+	p.startExtensionItems()
+}
+
+// applyMenuBarIconStyle makes the app's item match the menuBarIconStyle setting: None removes the item, another style
+// draws it, creating the item again when it was removed. It runs on the UI thread.
+func (p *App) applyMenuBarIconStyle(style string) {
+	if menubar.IconHidden(style) {
+		p.menubar.Close()
+		p.menubar = nil
+		return
+	}
+	if p.menubar != nil {
+		_ = p.menubar.SetIconStyle(style)
+		return
+	}
+	item, err := menubar.New(menubar.Options{
+		Host:      p.ports.Tray,
+		OnUI:      p.onUI,
+		Actions:   p.menubarActions(),
+		IconStyle: style,
+		Menu:      p.menubarMenu(),
+	})
+	if err != nil {
+		logx.Default().Warn("menu bar item unavailable", logx.F{"error": err.Error()})
+		return
+	}
+	p.menubar = item
+}
+
+// startExtensionItems starts the service that shows the menu bar items of extensions. It runs with the scheduler, so
+// its items appear once the extension host has started and close when an extension is disabled.
+func (p *App) startExtensionItems() {
+	service := extitems.New(extitems.Options{
+		Host:      p.ports.Tray,
+		Scheduler: p.menubarJobs,
+		OnUI:      p.onUI,
+		Source:    extensionMenuBars{p: p},
+		Hooks: extitems.Hooks{
+			OpenURL:        func(url string) { _ = mygo.Shell.OpenExternal(url) },
+			CopyText:       func(text string) { mygo.Clipboard.WriteText(text) },
+			ShowExtensions: func(string) { p.Open(p.extensionsView()); p.focusPanel() },
+			Popover:        popoverHost{p: p},
+		},
+	})
+	p.menubarItems.Store(service)
+	service.Start()
+}
+
+// refreshMenuBar re-renders the menu bar items of one extension. An extension's RefreshMenuBar call arrives on the
+// child's exchange goroutine, so it only schedules the render.
+func (p *App) refreshMenuBar(extensionID string) {
+	if service := p.menubarItems.Load(); service != nil {
+		service.Refresh(extensionID)
+	}
+}
+
+// syncMenuBarItems asks the menu bar service to reconcile its items now. It does nothing before the service starts.
+func (p *App) syncMenuBarItems() {
+	if service := p.menubarItems.Load(); service != nil {
+		service.Sync()
+	}
+}
+
+// runMenubarScheduler drives the scheduler until the app quits.
+func (p *App) runMenubarScheduler() {
+	go p.menubarJobs.Run(context.Background())
+}
+
+// errLoading answers a read that came before the extension host started; the next sync finds the extensions then.
+var errLoading = errors.New("extensions are still loading")
+
+// extensionMenuBars reads the menu bar items of the running extensions. Until the extension host has started there
+// are none, so the sync finds nothing and the items appear on a later sync.
+type extensionMenuBars struct{ p *App }
+
+func (e extensionMenuBars) MenuBarExtensions() []extitems.Extension {
+	m := e.p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	var listed []extitems.Extension
+	for _, ext := range m.MenuBarExtensions() {
+		if e.p.visibility.shown(ext.ID) {
+			listed = append(listed, extitems.Extension{ID: ext.ID, Revision: ext.Revision})
+		}
+	}
+	return listed
+}
+
+func (e extensionMenuBars) MenuBars(ctx context.Context, id string) ([]api.MenuBar, *api.Failure, error) {
+	if m := e.p.extensionManager(); m != nil {
+		return m.MenuBars(ctx, id)
+	}
+	return nil, nil, errLoading
+}
+
+func (e extensionMenuBars) MenuBarTriggers(ctx context.Context, id string) ([]api.Trigger, *api.Failure, error) {
+	if m := e.p.extensionManager(); m != nil {
+		return m.MenuBarTriggers(ctx, id)
+	}
+	return nil, nil, errLoading
+}
+
+func (e extensionMenuBars) Run(ctx context.Context, id string, in api.Invocation) (api.Result, *api.Failure, error) {
+	if m := e.p.extensionManager(); m != nil {
+		return m.Run(ctx, id, in)
+	}
+	return api.Result{}, nil, errLoading
+}
+
+// menubarActions maps the menu's rows onto the app. Each runs on the UI thread through the menu's dispatcher.
+func (p *App) menubarActions() menubar.Actions {
+	return menubar.Actions{
+		Open:            func() { p.Show(); p.focusPanel() },
+		CheckForUpdates: p.openUpdatesAndCheck,
+		Settings:        func() { p.Open(p.settingsPage()); p.focusPanel() },
+		Quit:            p.requestQuit,
+	}
+}
+
+// focusPanel gives the palette keyboard focus. A menu closes after its click and hands focus back to the window that
+// had it, so a palette shown from the menu without asking for focus hides on blur at once.
+func (p *App) focusPanel() {
+	if p.panel != nil {
+		p.panel.Focus()
+	}
+}

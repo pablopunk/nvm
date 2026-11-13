@@ -1,0 +1,94 @@
+package app
+
+import (
+	"strings"
+
+	"github.com/pablopunk/nvm/native/internal/search"
+)
+
+// Scores of the root's rows. A higher score sorts first; rows of equal score are ordered as 1.x orders them (compareRows).
+// The values are the bands the prototype used, so the root's order does not change.
+const (
+	scoreExtension    = 960
+	scoreFileFirst    = 75
+	scoreAutomate     = 40
+	scoreCommandAlias = 45
+)
+
+// The empty root scores its rows as 1.x does, on 1.x's scale: a copy 60, an app 30 plus the 25 an app result gets,
+// a conversation 13, a recent file the rest of the band below the commands. A command with no 1.x score sits at the
+// 1.x default for commands.
+const (
+	scoreRootApplication  = 55
+	scoreRootConversation = 13
+	scoreRootCommand      = 12
+)
+
+// checkForUpdatesTitle names the command that checks for an update.
+const checkForUpdatesTitle = "Check for Updates"
+
+// rootCommandScores are the 1.x scores of the commands the empty root lists.
+var rootCommandScores = map[string]int{"Keyboard Shortcuts": 16, "AI Chats": 16,
+	checkForUpdatesTitle: 23, "Log in to Nevermind": 18, "Log out of Nevermind": 18}
+
+// rootCommandScore is the score of a command at the empty root.
+func rootCommandScore(title string) int {
+	if score, ok := rootCommandScores[title]; ok {
+		return score
+	}
+	return scoreRootCommand
+}
+
+// Each row function is one source of the root: it returns the rows for q, or the root rows for "". They run
+// on the search goroutines over a captured rootInput; they touch the UI thread's state only inside actions,
+// which run there.
+
+// commandTitleScore is how well a command named title, with keywords, answers the lowercase query lq. The title scores
+// first, and a query the keywords contain scores as an alias. phraseMatch limits the title to phrases and word prefixes.
+func commandTitleScore(title, keywords string, phraseMatch bool, lq string) int {
+	s := search.Score(title, lq)
+	if phraseMatch && s < search.PhraseScoreFloor {
+		s = 0
+	}
+	if s == 0 && len(lq) >= 2 && strings.Contains(strings.ToLower(keywords), lq) {
+		s = scoreCommandAlias
+	}
+	return s
+}
+
+// commandRows lists the commands: the visible ones at the root, and the matches by title or keyword otherwise.
+func commandRows(p *App, in *rootInput, q string) []search.Item {
+	lq := strings.ToLower(q)
+	var out []search.Item
+	for _, cmd := range p.commandSlots() {
+		if isBuiltInSlot(cmd) {
+			out = append(out, p.builtInRootRows(cmd.builtIn, q, in)...)
+			continue
+		}
+		cmd := cmd
+		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
+		it.Actions = append(it.Actions, cmd.extraActions...)
+		if commandShortcutID(cmd) != "" {
+			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)
+		}
+		if lq == "" {
+			if !cmd.Hidden && !(in.updatePrompt && cmd.Title == checkForUpdatesTitle) {
+				it.Score = rootCommandScore(cmd.Title)
+				if cmd.rootScore != 0 {
+					it.Score = cmd.rootScore
+				}
+				out = append(out, it)
+			}
+			continue
+		}
+		s := commandTitleScore(cmd.Title, cmd.Keywords, cmd.PhraseMatch, lq)
+		if s == 0 {
+			s = aliasMatchScore(in.aliases[commandShortcutID(cmd)], lq)
+		}
+		if s > 0 {
+			it.Score = s
+			out = append(out, it)
+		}
+	}
+	return out
+}

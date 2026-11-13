@@ -1,16 +1,9 @@
 import type { PaletteItem } from './palette-types';
 
-/**
- * Real built-in commands, extracted from the desktop app by
- * `scripts/generate-palette-items.ts`. The glob keeps the page building if the
- * generated file is missing.
- */
-const generatedModules = import.meta.glob<PaletteItem[]>(
-  '../../generated/palette-items.json',
-  { eager: true, import: 'default' },
-);
-const builtinCommands: PaletteItem[] =
-  Object.values(generatedModules)[0] ?? [];
+import builtinCommandsJson from './palette-items.json';
+
+/** Built-in commands of the desktop app, captured as static landing-page content. */
+const builtinCommands = builtinCommandsJson as PaletteItem[];
 
 function sample(
   kind: PaletteItem['kind'],

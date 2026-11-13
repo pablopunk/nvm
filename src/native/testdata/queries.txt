@@ -1,0 +1,20 @@
+
+cl
+clip
+clipboard
+calc
+2+2
+12 km to mi
+timer 5m
+hn rust
+;sig
+fixture
+set
+term
+fire
+meeting
+release
+time
+github.com
+open github.com
+show the current time in tokyo and london

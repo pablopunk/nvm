@@ -1,0 +1,1 @@
+{"apiVersion":"1.0","id":"acme.services","title":"Services fixture","capabilities":["secrets","settings.write","network"],"settings":[{"id":"units","type":"string","value":"metric"},{"id":"compact","type":"boolean","value":false}]}

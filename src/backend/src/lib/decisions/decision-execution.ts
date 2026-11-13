@@ -5,7 +5,7 @@ import { log } from '../log';
 import { reservationMarginFor } from '../pricing';
 import { trustedReportedCostUsd } from '../provider-pricing-contract';
 import { getUpstreamConfig, UpstreamConfigError } from '../upstream';
-import { imageDimensions } from '../../../../app/shared/ai-image-dimensions';
+import { imageDimensions } from '../../shared/ai-image-dimensions';
 import type { DecisionAccount } from './decision-account';
 import { decisionAdapterFor } from './decision-adapter';
 import {

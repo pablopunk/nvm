@@ -1,0 +1,89 @@
+// Package systemcommands is the built-in that finds the operating system's commands (lock, sleep, log out, restart,
+// shut down, empty the trash, open the settings) by title or keyword and runs them through the host. Destructive
+// commands ask first with the copy the palette has always shown.
+//
+// Layer: ext. The package imports api, search and the standard library.
+package systemcommands
+
+import (
+	"strings"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/builtins/commandmatch"
+	"github.com/pablopunk/nvm/native/internal/search"
+)
+
+// ID is the built-in's identity. The root lists its rows at the place the native system commands had, so the app asks for them by it.
+const ID = "nevermind.system-commands"
+
+const keywordMatchScore = commandmatch.KeywordScore
+
+// Extension is the system commands built-in.
+type Extension struct{}
+
+// Manifest identifies the built-in. Its rows are listed under the Commands section, as the native rows were.
+func (Extension) Manifest() api.Manifest {
+	return api.Manifest{APIVersion: "1.1", Identity: api.Identity{ID: ID, Title: "System Commands"}}
+}
+
+// rootScores are the 1.x scores of the commands the empty root lists, by operation, in the order of the catalog.
+var rootScores = map[string]int{"lock-screen": 22, "sleep": 21, "restart": 20, "open-system-settings": 19}
+
+// RootItems declares the commands the empty root shows: lock, sleep, restart and the system settings, at their
+// 1.x scores. The other commands show only for a query.
+func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
+	system := ctx.System()
+	var out []api.Item
+	for _, c := range catalog(system.Labels().SettingsCommand) {
+		score, ok := rootScores[c.op]
+		if ok {
+			out = append(out, commandItem(c, score))
+		}
+	}
+	return out, nil
+}
+
+// SearchItems declares the commands that match the query. Commands show only for a query, never at the empty root.
+func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
+	lq := strings.ToLower(query)
+	if lq == "" {
+		return nil, nil
+	}
+	system := ctx.System()
+	var out []api.Item
+	for _, c := range catalog(system.Labels().SettingsCommand) {
+		if score := matchScore(c, lq); score > 0 {
+			out = append(out, commandItem(c, score))
+		}
+	}
+	return out, nil
+}
+
+// matchScore ranks a command for the lowercased query: its title's score, or the keyword band when only a keyword
+// contains the query. Zero means no match.
+func matchScore(c command, lq string) int {
+	return commandmatch.Score(c.title, c.keywords, lq)
+}
+
+// commandItem is the row of one command: its title, subtitle and tone, a primary action titled with the command that runs
+// it, and its usage key.
+func commandItem(c command, score int) api.Item {
+	item := api.Item{
+		Requires: []api.Operation{c.capability},
+		ID:       c.op, Title: c.title, Subtitle: c.subtitle, Icon: c.icon, Score: float64(score),
+		Section: search.KindCommands, LearnKey: "cmd:" + c.title,
+		Primary: &api.Action{Kind: api.ActionSystem, Op: c.op, Title: c.title, Confirm: confirmationOf(c)},
+	}
+	if c.tone != "" {
+		item.Appearance = &api.Appearance{Foreground: c.tone}
+	}
+	return item
+}
+
+// confirmationOf is the question a destructive command asks, as the palette's confirmation page shows it.
+func confirmationOf(c command) *api.Confirmation {
+	if !c.destructive {
+		return nil
+	}
+	return &api.Confirmation{Title: c.title + "?", ConfirmLabel: c.title, Message: c.confirm, Destructive: true}
+}

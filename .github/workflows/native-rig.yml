@@ -1,0 +1,197 @@
+name: Native (Go) rig
+
+# L4-L6 of the validation ladder (src/native/PLAN.md section 1): the real app launched and driven.
+# linux-rig runs the journeys in the rig container. macos-rig and windows-rig are scaffolds: they
+# build with -tags automation, launch the app, and capture the desktop. They are continue-on-error
+# until they can drive the palette (see the comments in each job).
+
+on:
+  pull_request:
+    paths:
+      - 'src/native/**'
+      - '.github/workflows/native-rig.yml'
+  schedule:
+    - cron: '23 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-rig:
+    name: Linux rig (L4 journeys)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build rig image
+        run: scripts/rig/rig.sh build
+
+      - name: Run journeys in the rig
+        env:
+          RIG_ARTIFACTS: ${{ runner.temp }}/rig-artifacts
+        run: scripts/rig/rig.sh run -run Journey -v
+
+      - name: Upload screenshots and logs
+        # Always: a failing journey must still attach its screenshot, app log and service logs.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-rig-artifacts
+          path: ${{ runner.temp }}/rig-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+  macos-rig:
+    name: macOS rig scaffold (L5)
+    runs-on: macos-15
+    timeout-minutes: 30
+    # Scaffold: the app launches and the desktop is captured, but the palette is not shown yet.
+    # Still needed before this can gate anything:
+    # - Accessibility and Screen Recording permission for the runner's terminal. Hosted runners do
+    #   not grant them, so this needs a self-hosted machine or an MDM profile pre-granting them;
+    #   without Accessibility, hotkey and click injection through CGEvent or System Events fails.
+    # - A hotkey press helper for the default accelerator (Alt+Shift+Space maps to Option+Shift+Space
+    #   here), which the Linux rig does with xdotool.
+    # - The palette assertions: the automation socket works on macOS, so only the injector is missing.
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Build with automation
+        run: go build -tags automation -o "$RUNNER_TEMP/nvm-rig" ./cmd/nvm
+
+      - name: Launch the app and wait for ready
+        env:
+          RIG_ARTIFACTS: ${{ runner.temp }}/rig-artifacts
+        run: |
+          mkdir -p "$RIG_ARTIFACTS"
+          export MYGO_AUTOMATION="$RUNNER_TEMP/auto.sock"
+          nohup "$RUNNER_TEMP/nvm-rig" >"$RIG_ARTIFACTS/app.log" 2>&1 </dev/null &
+          echo "$!" >"$RUNNER_TEMP/nvm-rig.pid"
+          for _ in $(seq 1 60); do
+            if grep -q '"msg":"ready"' "$RIG_ARTIFACTS/app.log"; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RIG_ARTIFACTS/app.log"
+          exit 1
+
+      - name: Capture the desktop
+        if: always()
+        env:
+          RIG_ARTIFACTS: ${{ runner.temp }}/rig-artifacts
+        run: screencapture -x "$RIG_ARTIFACTS/desktop.png"
+
+      - name: Stop the app
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/nvm-rig.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/nvm-rig.pid")" 2>/dev/null || true
+          fi
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-rig-artifacts
+          path: ${{ runner.temp }}/rig-artifacts
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-rig:
+    name: Windows rig scaffold (L6)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    # Scaffold, like macos-rig: launch and desktop capture only. Still needed:
+    # - the hotkey press (SendInput from a helper running in the interactive session),
+    # - a tray check: the notification area exists on the runner, but its items are not read yet,
+    # - the palette assertions through the automation socket (AF_UNIX works on Windows 10 1803+,
+    #   so only the injector is missing).
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: src/native
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: src/native/go.mod
+          cache-dependency-path: src/native/go.sum
+
+      - name: Build with automation
+        shell: pwsh
+        run: go build -tags automation -o "$env:RUNNER_TEMP\nvm-rig.exe" ./cmd/nvm
+
+      - name: Launch the app and wait for ready
+        shell: pwsh
+        env:
+          RIG_ARTIFACTS: ${{ runner.temp }}\rig-artifacts
+        run: |
+          New-Item -ItemType Directory -Force -Path $env:RIG_ARTIFACTS | Out-Null
+          $env:MYGO_AUTOMATION = "$env:RUNNER_TEMP\auto.sock"
+          $app = Start-Process -FilePath "$env:RUNNER_TEMP\nvm-rig.exe" -PassThru `
+            -RedirectStandardOutput "$env:RIG_ARTIFACTS\app.log" `
+            -RedirectStandardError "$env:RIG_ARTIFACTS\app.err.log"
+          $app.Id | Out-File -FilePath "$env:RUNNER_TEMP\nvm-rig.pid"
+          for ($i = 0; $i -lt 60; $i++) {
+            if (Select-String -Path "$env:RIG_ARTIFACTS\app.err.log", "$env:RIG_ARTIFACTS\app.log" -Pattern '"msg":"ready"' -Quiet) {
+              exit 0
+            }
+            Start-Sleep -Seconds 1
+          }
+          Get-Content "$env:RIG_ARTIFACTS\app.log", "$env:RIG_ARTIFACTS\app.err.log"
+          exit 1
+
+      - name: Capture the desktop
+        if: always()
+        shell: pwsh
+        env:
+          RIG_ARTIFACTS: ${{ runner.temp }}\rig-artifacts
+        run: |
+          Add-Type -AssemblyName System.Windows.Forms
+          Add-Type -AssemblyName System.Drawing
+          $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+          $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+          $bitmap.Save("$env:RIG_ARTIFACTS\desktop.png", [System.Drawing.Imaging.ImageFormat]::Png)
+
+      - name: Stop the app
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path "$env:RUNNER_TEMP\nvm-rig.pid") {
+            Stop-Process -Id (Get-Content "$env:RUNNER_TEMP\nvm-rig.pid") -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-rig-artifacts
+          path: ${{ runner.temp }}\rig-artifacts
+          if-no-files-found: warn
+          retention-days: 14

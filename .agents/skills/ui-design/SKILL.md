@@ -1,11 +1,11 @@
 ---
 name: ui-design
-description: Use when designing, building, or reviewing UI in Nevermind — the command palette, extension UIs, settings, onboarding, or any visual surface. Covers visual fundamentals (Refactoring UI), command-palette UX patterns, desktop/Electron/macOS conventions, motion, dark mode, and accessibility. Trigger on requests like "design X", "make this look better", "review the UI", "polish this screen", or any change to a `.tsx`/`.css` file under `src/renderer` or `src/ui`.
+description: Use when designing, building, or reviewing UI in Nevermind — the command palette, extension UIs, settings, onboarding, or any visual surface. Covers visual fundamentals (Refactoring UI), command-palette UX patterns, desktop/macOS conventions, motion, dark mode, and accessibility. Trigger on requests like "design X", "make this look better", "review the UI", "polish this screen", or any change to a `.tsx`/`.css` file under `src/renderer` or `src/ui`.
 ---
 
 # UI Design
 
-Nevermind is an AI-native desktop command palette built on Electron + Vite + React. Its UI must feel keyboard-first, fast, native on macOS, and polished at the level of Raycast, Linear, and Arc. This skill is the curated knowledge base for designing and reviewing that UI.
+Nevermind is an AI-native desktop command palette built in Go (`src/native`). Its UI must feel keyboard-first, fast, native on macOS, and polished at the level of Raycast, Linear, and Arc. This skill is the curated knowledge base for designing and reviewing that UI.
 
 ## How to use this skill
 
@@ -15,7 +15,6 @@ When the task is to design or review UI:
 2. Pull deeper guidance from supporting docs on demand:
    - `fundamentals.md` — typography, spacing, color, hierarchy, dark mode (Refactoring UI distilled).
    - `command-palette.md` — keyboard-first palette UX, search, results, shortcuts, empty/loading states.
-   - `desktop-electron.md` — macOS HIG + Electron conventions to avoid the uncanny valley.
    - `laws-of-ux.md` — heuristics (Fitts, Hick, Jakob, Miller, Tesler, etc.) with concrete applications.
    - `motion.md` — durations, easing, when to animate, when not to.
 3. Never invent design tokens. If Nevermind already defines spacing, color, or type scales, reuse them. If it doesn't, propose adding them once and use them everywhere.

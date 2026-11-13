@@ -1,0 +1,119 @@
+# Native rewrite: remaining-work execution plan
+
+Status: active; user authorized execution. Initial workers: search cancellation, builder safety, and secrets/residual verification.
+Target: Nevermind Next on Pablo's Mac. PR https://github.com/pablopunk/nvm/pull/282 merged on 2026-11-10 at 10:40:40 UTC. Remaining work proceeds as follow-ups based on t3/investigate-mygo-docs, preserving the merged rewrite and later installed fixes.
+Work classification: repository changes plus separate packaged Mac acceptance. Backend deployment, releases, external configuration and destructive operations are not implicit parts of this plan.
+
+## Baseline and scope
+
+Execution baseline: clean fee3e3ad, also origin/t3/investigate-mygo-docs and origin/install/mac. It includes the merge of PR 282 (original PR head c7b5451bfaf15b73fc0d2b201fa14217506a2ffd) and later menu-bar/icon fixes. The earlier plan incorrectly treated that merged PR as active; follow-up PRs will carry remaining work. All checks returned by `gh pr checks 282` reported SUCCESS, including Go units/static checks, platform tests, Linux journeys and packages. The earlier failing-CI report is historical; do not repair those failures unless they reproduce on the chosen baseline. Green CI does not prove the installed Mac journeys.
+
+The coordinator first reconciles local/remote heads, actual branch ancestry, current PR ledger, active owners, outstanding candidate branches and installed build identity. No reset, overwrite, bulk cherry-pick or replay of already integrated repairs. Read AGENTS.md, src/native/PLAN.md and relevant docs/solutions before each domain's work. Treat spike reports as hypotheses until traced against current source and behavior. In particular, the wake mechanism's failure mode needs investigation, not an assumed timer replacement.
+
+Include every item from the latest spike below. Preserve user-confirmed working outcomes and the dropped Override with AI. Keep installer repair deferred; do not accumulate app backups. Preserve user data, installed extensions, the protected dictation fixture and the explicitly paused overlay branch. Do not resume the overlay as part of builder work.
+
+Cross-platform feature expansion and ops work remain outside this Mac-focused batch, subject to the user's earlier scope direction. Existing Windows/Linux compilation and regression checks remain required. Deep links, compatibility headers, backend environments, analytics, config export and other-platform OCR stay explicitly listed in the ledger; do not silently declare them complete or delete their existing tests.
+
+## Team and ownership
+
+One coordinator/integrator owns the authoritative checklist, integration branch, conflict resolution, CI evidence and release/delivery queue. It does not edit a worker's active files.
+
+Persistent domain owners, activated in waves:
+
+- Runtime/search owner: cancellation, activation/ranking, scheduler/wake, background triggers.
+- AI/builder owner: Learnings, safe tools, prompts, routing, warmup and large-download API where used by AI/extensions.
+- Palette/chat owner: message actions, onboarding/help, accessibility, text rendering and review/source UX.
+- Verification/review owner: inventory and evidence audit, independent reviews and CI diagnosis. This owner does not approve its own implementations.
+
+Use Terra Medium as requested, with tool availability verified before assignment. Maximum three active subagents, including review; normally two implementers plus one reviewer. Other owners remain idle and are resumed with their existing context. A review slot must not become a fourth worker. Reuse the existing Mac delivery owner; only one installer operates at a time.
+
+Implementation tasks use tool-managed isolated worktrees from the explicitly chosen current integration base. Shared files such as Session/Deps, invocation routing, builder prompt composition, generated API exports and platform ports have a named temporary owner. Another task needing one waits or sends an interface proposal; it does not patch around that owner. Integrate one reviewed slice at a time, then rebase dependent work and verify conflicts semantically.
+
+## Work packages and terminal acceptance
+
+| ID | Owner / order | Work and acceptance |
+|---|---|---|
+| P0 | Coordinator + verification, first | Reconcile ledger/head/ownership and installed artifact. Convert vague labels into named cases and evidence states. Identify the exact four missing builder read tools and three MyGo text bugs from 1.x/source findings. Inventory residual API/checklist entries so the spike is not mistaken for the whole PR. Exit: every item has an owner, current evidence, dependency and terminal check. |
+| P1 | Runtime, wave 1 | Search cancellation: trace query context, supervisor slot and result publication for each result family. Superseded searches stop or release promptly under the supported runtime contract; newest query is not blocked, stale output never paints or learns, navigation cancels work, and normal typing does not cause avoidable kill/restart churn. Preserve installation authority in context values. Use a held search regression and packaged rapid typing/cancel logs. |
+| P2 | Runtime, after P1 contract | Ranking: define one successful-activation event and route Enter, mouse, shortcuts and secondary actions through it, including file/provider results. Successful execution learns exactly once; cancelled, failed or stale actions never learn. Demonstrate changed ordering and persistence across restart. Keep usage ranking separate from builder Learnings. |
+| P3 | Runtime, wave 2 | Wake/background triggers: inspect wall/monotonic clocks and existing OS capabilities; reproduce the claimed defect. Verify enabled triggers, disable/re-enable, shutdown, sleep across multiple intervals and long-running jobs. One wake event per actual wake, bounded/coalesced overdue work, no duplicate execution or burst. Deterministic clock/port tests plus repeated real Mac sleep/wake are separate required evidence. |
+| P4 | Verification, wave 1 | Secrets: verify set/get/update/delete, restart persistence, extension namespace isolation, cancelled prompts, denied/unavailable keychain, index-read failure and installation replacement. Use disposable test secrets, never real secret values in output, logs, prompts or artifacts. Reuse the existing secret-index repair; change code only for a demonstrated remaining defect. Source inspection alone cannot close this item. |
+| P5 | AI, wave 1 | Builder safety and tools: map 1.x parity before changing prompts. Existing files must be read in the current edit context before modification; reject unread/stale writes safely. Add the specifically missing bounded read tools and prompt rules through the normal API. Cover traversal, symlinks, atomic failed writes, cancellation, truncation/size bounds and preservation of unrelated files. Complete a create and an existing-extension tweak journey. No separate native backdoor or paused-overlay dependency. |
+| P6 | AI, after P5 read/write contract | Learnings: specify builder memory semantics, separate from ranking and command snapshots. Define scope, capture/update rules, inspect/edit/delete UI, bounded context inclusion, persistence and compatibility. Store no secrets. Test restart, write failure, interrupted save, conflicting updates and deletion. Terminal journey: record a preference, start a later builder chat, show that the builder uses it, then delete it and show it is no longer supplied. First deliver the design for review; do not treat the old 'missing' claim as permission for arbitrary automatic memory capture or migration. |
+| P7 | AI, after P5 | Model routing and warmup: inspect the actual conversation and builder paths separately. Pass bounded prompt-size/context estimates through supported routing fields, with released-client compatibility maintained if backend changes are needed. No hardcoded model IDs. Warmup stays off first paint/typing, is deduplicated/cancellable and uses the selected configured model. Demonstrate long/short prompt routing and cold/warm latency with artifact-bound traces; state any provider cost explicitly before an external paid experiment. |
+| P8 | Palette/chat, wave 2 | Per-message copy/retry: bind actions to the selected message and conversation revision. Copy exact intended message content; retry the intended turn with a documented history policy. Handle active streaming, failed and cancelled turns, persisted history and safe subsequent turns. Keyboard, action panel, dismissal and original-target focus remain usable. Verify a real chat journey as well as fixtures. |
+| P9 | Palette, wave 1/2 | Polish and accessibility: confirm no-shortcut banner, Welcome and Tab-to-ask-AI behavior rather than rebuilding them. Identify when guide becomes Help; add Back label and code-block padding if current behavior is missing. Enumerate all three MyGo text issues before changes, and reproduce each. Cover selection/editing, Unicode/multiline text, keyboard navigation, focus, reduced motion, readable contrast and accessible names. Use existing UI fixtures/goldens and packaged Mac checks; source presence is not an accessibility pass. |
+| P10 | AI/API then palette, wave 3 | Large downloads: establish the actual missing capability and measured curl dependency. If needed, introduce a host-owned streaming-to-file primitive with bounded memory/disk, size limits, progress, cancellation, partial cleanup and atomic finalization. Preserve redirect/destination and extension permission policies. Dogfood in online wallpapers; verify completion, interruption, failure, oversized input and cleanup. Do not merely buffer the response under a 'streaming' name or remove the working fallback before parity. |
+| P11 | Palette + verification, wave 3 | Review and source: verify source inspection, review state, installation identity, disabled/reinstalled extensions and stale confirmation. The prior assistant's suggestion to skip review is not a user deferral. Propose how changes remain inspectable while respecting immediate-apply preferences; settle that UX decision before a large implementation. Add fixtures/API reference changes for any new UI endpoint. |
+| P12 | Verification + domain owner, wave 2 | Usage boosts, model selection controls and clipboard retention: define each vague term from 1.x; map current Go implementation. Verify retention limits and cleanup across restart, disk quota/full/error conditions and boundary values without deleting user data. Establish boosts/admission behavior using supported configuration and disposable accounts where needed; no billing/account mutations. Implement only evidenced gaps. |
+| P13 | Coordinator + verification, after each wave | Reconcile remaining internal API and validation entries against the current PR ledger. Check chat/builder history, approval/cancellation, menus/auth/telemetry and other existing open items for already-recorded evidence before repeating work. Keep deferred ops/platform items visible. Exit: no uncategorized 'rest' bucket and no closed item based solely on source inclusion. |
+| P14 | Coordinator + Mac owner, final | Integrate reviewed commits, obtain full exact-head CI and deliver the verified signed build. Run the agreed Mac journey matrix below, bind evidence to the installed hash/commit and record any explicit user deferrals. Follow-up work remains active until all in-scope criteria are verified or explicitly deferred. |
+
+## Execution waves and dependencies
+
+1. Baseline P0; then runtime P1 and AI P5 in parallel, with verification P4. Review replaces an idle worker slot as each slice becomes concrete.
+2. Runtime P2/P3, AI P6/P7 and palette P8/P9/P12 rotate through two implementation slots. Learnings consumes the builder's agreed context contract; chat UI consumes the settled retry/lifecycle contract. No simultaneous edits to shared prompt/session files.
+3. P10/P11 and the residual audit P13. Resolve product ambiguities with concrete proposals rather than inventing parity requirements. Small independent polish can land earlier; streaming and review UX must not delay the urgent runtime fixes.
+4. Final integration P14. Keep at least one full validation run intact. Fast preview packaging runs separately and must not cancel the regression suite.
+
+## Task packet and handoff contract
+
+Each assignment includes: exact base SHA; the single behavior to deliver; owned files and reserved shared interfaces; existing owner/paused paths; reproduction and expected terminal outcome; relevant skill/guidance; required tests and fixtures; prohibited user-data effects; and an explicit stop point if the contract needs widening.
+
+Each return includes: commit SHA and diff, smallest behavior-preserving fix, tests written, commands actually run and their results, independent review findings/resolution, artifact links and remaining validation. 'Read source' is not 'works'; tests written are not tests passed. After two symptom patches in the same path, stop and audit the architecture before another patch. No opportunistic unrelated cleanup, silent feature dropping or broad 'PR ready' claim.
+
+Use statuses: needs verification, reproduces, implementing, ready for review, changes requested, integrated awaiting CI, CI verified, packaged/user verified, explicitly deferred. The merged PR ledger remains historical evidence; the follow-up ledger is authoritative and is updated after integration or new terminal evidence, preserving user confirmations.
+
+## Verification and delivery gates
+
+- Local runtime tests, typechecks, builds and app launches remain prohibited by AGENTS.md. Local formatting/lint checks are allowed. Runtime tests run in CI; rig journeys use the rig/CI. Use mise for pnpm; before push run `mise exec -- pnpm check:changed <actual PR base SHA>` and blocking changed-file checks. No fabricated quota/reset data; if usage limits are exhausted, stop until a confirmed reset under the user's standing instruction.
+- Match tests to behavior: cancellation/late callbacks, authority/reinstallation, safe writes and failure cleanup need adversarial regression coverage. UI changes need fixtures/goldens plus navigation/action-panel/shortcut/dismissal checks. API changes update canonical declarations, generated exports/reference and existing clients' compatibility checks.
+- Independent review covers the actual integration base and final changed behavior. Repair small findings directly; use a fresh independent review task when a new review is required. A worker never approves itself. Rebase/conflict resolutions that alter behavior earn new checks.
+- Require a complete full CI run at the final integrated SHA, retaining existing platform checks. Investigate failures on that SHA; use a baseline comparison before calling a failure pre-existing. Do not cancel CI to speed installations. Do not watch the PR or automated comments under the standing user instruction.
+- Mac acceptance: rapid search/cancel; all activation routes and ranking restart; sleep/wake; disposable extension secrets; builder create/tweak/read-before-write; Learnings reuse/delete after restart; warmup and routing; message copy/retry/stream cancellation; large-download cleanup; source/review; keyboard/focus/accessibility/text cases. Preserve the separate outstanding dictation microphone/held-release/paste/focus journey if the ledger has not since closed it. Reconcile Screenshots/Wallpapers and icon user confirmations; don't reopen accepted outcomes merely because old logs exist. Measure any remaining Screenshots latency with actual command-to-grid and image completion timestamps.
+- Use the existing linked Mac delivery owner for one pinned signed artifact at a time. Verify signature/identity/hash before replacement, preserve data/extensions, remove temporary staging after success and retain no routine backup accumulation. Startup establishes startup only. Hardware/permission steps that cannot be automated safely get a short exact script and remain outstanding until the outcome is observed.
+
+## Completion
+
+P8 checkpoint (2026-11-10): individual message copying is implemented on
+`followup/native-message-copy`, pending independent review, CI and packaged interaction validation.
+Copy actions retain the displayed transcript revision and exact text; the chat action menu preserves
+both extension and host actions. Copy metadata is cached per view revision, and preview work is
+bounded. The user chose targeted retry in a separate conversation, preserving the original and its
+later messages. The integrated action follows that policy for ordinary chats; builder forks remain
+unavailable because extension ownership is not transferable. Packaged validation remains outstanding.
+The user chose automatic builder learning, with a list to inspect, edit and delete rules. Manual-only
+capture is not the accepted design, and no opt-in or feature flag is planned.
+
+Integration checkpoint (2026-11-11): follow-ups are consolidated into PR 280 on
+`t3/investigate-mygo-docs`; local integration uses `t3/native-integration`. At remote `3300794d`,
+the complete Native Go, general CI, selected-text helper and package workflows succeeded. Screenshots
+preview and J15 broken-extension journeys passed; WP34 form submit/draft persistence failed. The separate
+diagnostic run on `6b97dae9` is still in progress. These results do not validate
+later local commits or packaged Mac journeys.
+
+P6 remains implementing. Local prerequisites provide durable conditional writes, bounded trace
+capture, revision-checked rules, deletion fingerprints, immutable context snapshots and review
+coordination. Review of `9f502330` found duplicate per-chat requests and an unbounded busy-chat
+queue. Those repairs and nonblocking automatic model, prompt and palette wiring remain with the
+AI owner. Primitives alone do not establish automatic learning.
+
+P10 candidate `9112aa2f` integrates bounded real/fake stream staging, pinned-volume space checks
+and the host network download operation with Online Wallpapers dogfooding. Generated API symbols
+and reference, independent review, CI and packaged completion/cancellation/cleanup are outstanding.
+Byte progress is a host primitive: `DownloadRequest.IndicatorID` makes the host throttle updates of the
+extension's indicator (bytes of total, or bytes only without a length) and hide it on failure or cancellation.
+A host that answers `network.download` as an unknown operation is mapped to `ErrNotAvailable` in the child.
+A host lacking the new API types still fails at compile time in the interpreter; that case is not covered.
+
+P5 implementation checkpoint (2026-11-10): the rooted bounded snapshot and manager revision prerequisites
+are integrated on `followup/native-source-snapshot`. Static review found no source-snapshot defect and
+one manager cancellation gap; the repair checks cancellation after staging and cleans up before a swap.
+Builder tools now share per-turn snapshot paging and use conditional installation through the app
+adapter. Existing targets require complete sequential reads; creation requires confirmed absence.
+Target reservations carry the originating turn identity. Publication is reported separately from later
+errors, and ownership is recorded before the tool returns, including while chat deletion is pending.
+These integrated changes await independent review and their own CI; regression tests are written,
+not locally run. Signed Mac create/edit journeys and the remaining builder tool parity stay open.
+
+For this plan, completion means all in-scope work packages have exact-head automated evidence and the relevant packaged terminal journeys, or explicit user deferral. Full green CI is necessary but not sufficient. The coordinator presents a short final ledger of accepted outcomes, exact installed artifact, residual risks and separately deferred work before merge is considered.

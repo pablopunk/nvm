@@ -1,0 +1,47 @@
+//go:build !automation
+
+package app
+
+import (
+	"testing"
+
+	"github.com/pablopunk/nvm/native/internal/backend"
+	"github.com/pablopunk/nvm/native/internal/backend/auth"
+	"github.com/pablopunk/nvm/native/internal/platform/fake"
+)
+
+// A packaged build ignores NVM_RIG_BACKEND: the account still starts on production, packaged, so a loopback origin
+// is refused. No request leaves the test.
+func TestDefaultBuildIgnoresTheRigBackendOverride(t *testing.T) {
+	asPackagedBuild(t)
+	t.Setenv("NVM_RIG_BACKEND", "http://127.0.0.1:9")
+	set := fake.NewSet()
+	deps := (&App{}).accountDeps(set.Ports(), nil)
+	if deps.Origin != nil || !deps.Packaged || deps.Browser == nil {
+		t.Fatalf("default build wiring: origin %v packaged %v browser set %v", deps.Origin, deps.Packaged, deps.Browser != nil)
+	}
+	session, err := auth.New(deps)
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	if snapshot := session.Snapshot(); snapshot.Environment != backend.EnvironmentProduction || snapshot.BaseURL != "https://api.nvm.fyi" {
+		t.Fatalf("default build starts on %s %q, want production", snapshot.Environment, snapshot.BaseURL)
+	}
+	if err := session.SwitchEnvironment(backend.EnvironmentDevelopment, "http://127.0.0.1:9"); err == nil {
+		t.Fatal("default build accepted a loopback backend")
+	}
+}
+
+// A default build can still switch to production: the rig's pin is only set in automation builds.
+func TestDefaultBuildCanSwitchToProduction(t *testing.T) {
+	t.Setenv("NVM_RIG_BACKEND", "")
+	deps := (&App{}).accountDeps(fake.NewSet().Ports(), nil)
+	deps.OnChange = nil
+	session, err := auth.New(deps)
+	if err != nil {
+		t.Fatalf("auth.New: %v", err)
+	}
+	if err := session.SwitchEnvironment(backend.EnvironmentProduction, ""); err != nil {
+		t.Fatalf("default build switch to production: %v", err)
+	}
+}

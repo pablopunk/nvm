@@ -1,8 +1,8 @@
-import baseCss from '../../../../app/palette/styles/base.css?inline';
-import extensionWindowsCss from '../../../../app/palette/styles/extension-windows.css?inline';
-import paletteCss from '../../../../app/palette/styles/palette.css?inline';
-import themeCss from '../../../../app/palette/styles/theme.css?inline';
-import viewsCss from '../../../../app/palette/styles/views.css?inline';
+import baseCss from '../../palette-ui/styles/base.css?inline';
+import extensionWindowsCss from '../../palette-ui/styles/extension-windows.css?inline';
+import paletteCss from '../../palette-ui/styles/palette.css?inline';
+import themeCss from '../../palette-ui/styles/theme.css?inline';
+import viewsCss from '../../palette-ui/styles/views.css?inline';
 
 /**
  * The desktop app's own palette stylesheets, rebound for a shadow root: `:root`

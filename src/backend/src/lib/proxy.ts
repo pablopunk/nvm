@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { waitUntil } from '@vercel/functions';
 import { and, eq, sql } from 'drizzle-orm';
-import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
+import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
 import { db } from '../db/client';
 import { creditReservations, requestDedup } from '../db/schema';
 import { analyzeAiImageInputs } from './ai-image-input';

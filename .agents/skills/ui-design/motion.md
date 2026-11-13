@@ -48,7 +48,7 @@ Avoid animating:
 
 - `width`, `height`, `top`, `left`, `margin` — layout thrash.
 - `box-shadow` — repaint cost.
-- `background-color` of large surfaces — flicker on Electron.
+- `background-color` of large surfaces — flicker on some GPUs.
 
 If you must resize, animate `transform: scale` and adjust the layout silently after.
 

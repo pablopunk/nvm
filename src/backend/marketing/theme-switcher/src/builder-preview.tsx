@@ -2,7 +2,7 @@ import { Command } from 'cmdk';
 import { ArrowUp, Zap } from 'lucide-react';
 import React from 'react';
 import { AbsoluteFill, staticFile } from 'remotion';
-import { ChatView, CommandTile, GridView } from '../../../../app/palette/ui';
+import { ChatView, CommandTile, GridView } from '../../../src/palette-ui/ui';
 import { WALLPAPERS } from './product-ui';
 
 function ignore() {}

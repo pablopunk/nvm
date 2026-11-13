@@ -1,4 +1,4 @@
-import { PRODUCTION_WEB_ORIGIN } from '../../../../app/shared/public-origin';
+import { PRODUCTION_WEB_ORIGIN } from '../../shared/public-origin';
 import type { CreditKind } from '../credit-reservations';
 import { decideProxyModel } from '../proxy';
 import {

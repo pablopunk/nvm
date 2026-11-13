@@ -1,0 +1,6 @@
+{
+  "error": {
+    "type": "unsupported_request_shape",
+    "message": "Images are not available for this model route because no configured provider has a reviewed image billing and request-format contract."
+  }
+}

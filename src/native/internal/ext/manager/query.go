@@ -1,0 +1,296 @@
+package manager
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sort"
+	"time"
+
+	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/ext/protocol"
+	"github.com/pablopunk/nvm/native/internal/ext/supervisor"
+)
+
+// SearchResult is one enabled extension's answer to a query. Failure is set when the extension timed out,
+// crashed, was not running, or returned an error; Items is then empty. A failure never hides other results.
+type SearchResult struct {
+	ExtensionID string
+	Title       string
+	Items       []api.Item
+	Failure     *api.Failure
+}
+
+// Search asks every enabled, running extension that declares SearchItems for its rows for query. Its calls are
+// bounded by the Search budget (B8: 100 ms hard). It returns sorted by extension id; see fanOut.
+func (m *Manager) Search(ctx context.Context, query string) []SearchResult {
+	return m.fanOut(ctx, protocol.MethodSearch, query)
+}
+
+// SearchBuiltIn asks one built-in extension for its rows of query, within the Search budget. A root source that places a
+// built-in among other rows of the same tie order asks for it alone; ok is false when no such built-in is running.
+func (m *Manager) SearchBuiltIn(ctx context.Context, id, query string) (result SearchResult, ok bool) {
+	targets, budget := m.targetsFor(protocol.MethodSearch)
+	for _, target := range targets {
+		if target.id == id && m.IsBuiltIn(id) {
+			return m.callOne(ctx, target, protocol.MethodSearch, query, budget), true
+		}
+	}
+	return SearchResult{}, false
+}
+
+// Roots asks every enabled, running extension that declares RootItems for its empty-query rows, the rows the
+// palette's root shows. Its calls and failures are those of Search.
+func (m *Manager) Roots(ctx context.Context) []SearchResult {
+	return m.fanOut(ctx, protocol.MethodRoot, "")
+}
+
+// RootsOf asks only the extensions marked true in only for their empty-query rows. An unmarked extension is not called,
+// so a refresh of one extension leaves the others' rows as they were.
+func (m *Manager) RootsOf(ctx context.Context, only map[string]bool) []SearchResult {
+	return m.fanOutWhere(ctx, protocol.MethodRoot, "", func(id string) bool { return only[id] })
+}
+
+// fanOut calls method on every target that declares it. The calls run in parallel, each bounded by the budget of
+// method, so one hanging extension cannot delay the others past that budget. It returns when every call has
+// answered or timed out, sorted by extension id.
+func (m *Manager) fanOut(ctx context.Context, method, query string) []SearchResult {
+	return m.fanOutWhere(ctx, method, query, everyTarget)
+}
+
+// SearchEach is Search with each answer handed to each as it arrives, so an extension that answers late does not hold
+// back the others. Each is called on the caller's goroutine.
+func (m *Manager) SearchEach(ctx context.Context, query string, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodSearch, query, everyTarget, each)
+}
+
+// RootsEach is Roots with each answer handed to each as it arrives, as SearchEach does for Search.
+func (m *Manager) RootsEach(ctx context.Context, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodRoot, "", everyTarget, each)
+}
+
+// RootsOfEach is RootsOf with each answer handed to each as it arrives, as SearchEach does for Search.
+func (m *Manager) RootsOfEach(ctx context.Context, only map[string]bool, each func(SearchResult)) {
+	m.eachWhere(ctx, protocol.MethodRoot, "", func(id string) bool { return only[id] }, each)
+}
+
+func everyTarget(string) bool { return true }
+
+// fanOutWhere is fanOut for the targets that keep accepts by extension id.
+func (m *Manager) fanOutWhere(ctx context.Context, method, query string, keep func(id string) bool) []SearchResult {
+	collected := []SearchResult{}
+	m.eachWhere(ctx, method, query, keep, func(result SearchResult) { collected = append(collected, result) })
+	sort.Slice(collected, func(i, j int) bool { return collected[i].ExtensionID < collected[j].ExtensionID })
+	return collected
+}
+
+// eachWhere calls method on the targets that keep accepts, in parallel, each bounded by the budget of method, and hands
+// every answer to each in the order the answers arrive.
+func (m *Manager) eachWhere(ctx context.Context, method, query string, keep func(id string) bool, each func(SearchResult)) {
+	all, budget := m.targetsFor(method)
+	targets := all[:0:0]
+	for _, target := range all {
+		if keep(target.id) {
+			targets = append(targets, target)
+		}
+	}
+	results := make(chan SearchResult, len(targets))
+	for _, target := range targets {
+		go func(target runtimeTarget) {
+			results <- m.callOne(ctx, target, method, query, budget)
+		}(target)
+	}
+	for range targets {
+		each(<-results)
+	}
+}
+
+// runtimeTarget is one enabled runtime and the extension it belongs to.
+type runtimeTarget struct {
+	id            string
+	title         string
+	commandTitles map[string]string
+	runtime       runner
+}
+
+// targetsFor snapshots the enabled runtimes that declare method, and the budget of method. An extension that is
+// still starting, was never started, or does not declare method is left out: none of those is an error to show in
+// the palette.
+func (m *Manager) targetsFor(method string) ([]runtimeTarget, supervisor.Budget) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var targets []runtimeTarget
+	for _, key := range m.sortedKeysLocked() {
+		e := m.entries[key]
+		if e.runtime != nil && m.isRunnable(e) && offersMethod(e.runtime, e.runtime.Status().State, method) {
+			targets = append(targets, runtimeTarget{id: e.bundle.Manifest.ID, title: e.bundle.Manifest.Title, commandTitles: e.bundle.Manifest.CommandTitles, runtime: e.runtime})
+		}
+	}
+	return targets, m.config.BudgetFor(method)
+}
+
+// offersMethod is true when a running child declares method, and when the runtime is not running at all: then the
+// call answers with why it is not running, which is how a failed extension shows its pointer row.
+func offersMethod(runtime runner, state supervisor.State, method string) bool {
+	return isAnswerable(state) && ((state != supervisor.StateRunning && state != supervisor.StateDormant) || runtime.Provides(method))
+}
+
+func isAnswerable(state supervisor.State) bool {
+	return state != supervisor.StateIdle && state != supervisor.StateStarting
+}
+
+func (m *Manager) callOne(ctx context.Context, target runtimeTarget, method, query string, budget supervisor.Budget) SearchResult {
+	result := SearchResult{ExtensionID: target.id, Title: target.title}
+	callCtx, cancel := m.callContext(ctx, target.id, budget)
+	defer cancel()
+	response, err := target.runtime.Call(callCtx, method, query, nil)
+	if err != nil {
+		result.Failure = failureOf(err)
+		return result
+	}
+	if response.Failure != nil {
+		result.Failure = response.Failure
+		return result
+	}
+	if err := json.Unmarshal(response.Data, &result.Items); err != nil {
+		result.Failure = &api.Failure{Code: api.CodeInternal, Message: "search returned items that are not valid"}
+	}
+	return result
+}
+
+// backgroundRunBudget bounds an action declared background, such as a dictation that waits for the microphone or for
+// a transcription. It is the budget of a background job's run.
+var backgroundRunBudget = supervisor.Budget{Hard: 2 * time.Minute}
+
+// budgetSlack lets a call's context outlive the hard budget by a few milliseconds, so the child's own timeout
+// reports first and the caller sees a timeout failure rather than a bare context error.
+const budgetSlack = 10 * time.Millisecond
+
+// Run executes one action on an enabled extension and returns its result. The invocation carries the action
+// reference and its arguments as data; nothing executable crosses the boundary.
+func (m *Manager) Run(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+	return m.run(ctx, id, invocation, false)
+}
+
+// RunCommand executes a host-selected durable command. Command requirements never apply to
+// an ordinary action reference, even when it shares a command's local ID.
+func (m *Manager) RunCommand(ctx context.Context, id string, invocation api.Invocation) (api.Result, *api.Failure, error) {
+	return m.run(ctx, id, invocation, true)
+}
+
+func (m *Manager) run(ctx context.Context, id string, invocation api.Invocation, command bool) (api.Result, *api.Failure, error) {
+	if command && !m.commandSupported(id, invocation.Ref.ID) {
+		return api.Result{}, &api.Failure{Code: api.CodeUnavailable, Message: "This command requires an operation unavailable on this system."}, nil
+	}
+	var finish func(RunOutcome)
+	observedCtx := ctx
+	if m.runObserver != nil {
+		observedCtx, finish = m.runObserver.BeginRun(ctx)
+	}
+	outcome := RunOutcomeFailed
+	if finish != nil {
+		defer func() { finish(outcome) }()
+	}
+	runtime, err := m.runtimeFor(id)
+	if unsupported := (*UnsupportedPlatformError)(nil); errors.As(err, &unsupported) {
+		return api.Result{}, &api.Failure{Code: api.CodeUnsupported, Message: unsupported.Error()}, nil
+	}
+	if err != nil {
+		return api.Result{}, nil, err
+	}
+	budget := m.config.BudgetFor(protocol.MethodRun)
+	if invocation.Background {
+		budget = backgroundRunBudget
+	}
+	callCtx, cancel := m.callContext(observedCtx, id, budget)
+	defer cancel()
+	response, err := runtime.Call(callCtx, protocol.MethodRun, "", &invocation)
+	if err != nil {
+		outcome = runOutcomeForError(err)
+		return api.Result{}, failureOf(err), nil
+	}
+	if response.Failure != nil {
+		outcome = runOutcomeForFailure(response.Failure)
+		var partial api.Result
+		if len(response.Data) > 0 {
+			_ = json.Unmarshal(response.Data, &partial)
+		}
+		return api.Result{DataChanged: partial.DataChanged, SnapshotEvidence: response.SnapshotEvidence}, response.Failure, nil
+	}
+	var result api.Result
+	if err := json.Unmarshal(response.Data, &result); err != nil {
+		return api.Result{}, &api.Failure{Code: api.CodeInternal, Message: "run returned a result that is not valid"}, nil
+	}
+	result.SnapshotEvidence = response.SnapshotEvidence
+	outcome = RunOutcomeSuccess
+	return result, nil, nil
+}
+
+func runOutcomeForError(err error) RunOutcome {
+	var callErr *supervisor.CallError
+	if errors.As(err, &callErr) {
+		return runOutcomeForFailure(&callErr.Failure)
+	}
+	switch {
+	case errors.Is(err, context.DeadlineExceeded):
+		return RunOutcomeTimedOut
+	case errors.Is(err, context.Canceled):
+		return RunOutcomeCancelled
+	default:
+		return RunOutcomeFailed
+	}
+}
+
+func runOutcomeForFailure(failure *api.Failure) RunOutcome {
+	switch failure.Code {
+	case api.CodeTimeout:
+		return RunOutcomeTimedOut
+	case api.CodeCancelled:
+		return RunOutcomeCancelled
+	default:
+		return RunOutcomeFailed
+	}
+}
+
+func (m *Manager) runtimeFor(id string) (runner, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, err := m.findLocked(id)
+	if err != nil {
+		return nil, err
+	}
+	if e.runtime == nil {
+		return nil, ErrUnknownExtension
+	}
+	if !m.supportedHere(e) {
+		return nil, &UnsupportedPlatformError{Title: e.bundle.Manifest.Title, Platforms: e.platforms}
+	}
+	return e.runtime, nil
+}
+
+// WaitFor blocks until the runtime of extension id reports a status that satisfies pred, or until ctx ends.
+// It exists for the manager view and for tests; the palette never waits on an extension.
+func (m *Manager) WaitFor(ctx context.Context, id string, pred func(supervisor.Status) bool) error {
+	runtime, err := m.runtimeFor(id)
+	if err != nil {
+		return err
+	}
+	return runtime.WaitFor(ctx, pred)
+}
+
+// failureOf converts a host-side call error into the wire failure the palette shows. A context that ended is a
+// timeout or a cancellation, never an internal error.
+func failureOf(err error) *api.Failure {
+	var callErr *supervisor.CallError
+	switch {
+	case errors.As(err, &callErr):
+		failure := callErr.Failure
+		return &failure
+	case errors.Is(err, context.DeadlineExceeded):
+		return &api.Failure{Code: api.CodeTimeout, Message: "the extension did not answer in time"}
+	case errors.Is(err, context.Canceled):
+		return &api.Failure{Code: api.CodeCancelled, Message: "the request was cancelled"}
+	}
+	failure := api.FailureOf(err)
+	return &failure
+}
