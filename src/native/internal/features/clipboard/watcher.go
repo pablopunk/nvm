@@ -108,10 +108,13 @@ func (w *Watcher) Start(ctx context.Context) <-chan struct{} {
 	return done
 }
 
-// Run captures clipboard changes until ctx is done. It records the baseline first, then waits for change
-// notifications or polls with backoff.
+// Run captures clipboard changes until ctx is done. It records the baseline first, then takes copies from the
+// clipboard feed where the system has one (Wayland), waits for change notifications, or polls with backoff.
 func (w *Watcher) Run(ctx context.Context) {
 	w.prime()
+	if w.runFeed(ctx) {
+		return
+	}
 	if w.notify != nil {
 		w.runOnChange(ctx)
 		return
@@ -208,19 +211,24 @@ func (w *Watcher) pollOnce(notified bool) bool {
 	candidate := w.readCandidate(state, readImage)
 	id := candidateID(candidate)
 	changed := w.observe(id)
+	w.capture(candidate)
+	return changed
+}
+
+// capture stores a candidate unless it is nothing, the same content as last time, or suppressed.
+func (w *Watcher) capture(candidate *candidate) {
 	if candidate == nil || candidate.entry.ID == w.lastID {
-		return changed
+		return
 	}
 	if w.takeSuppression(candidate.entry.ID) {
 		w.lastID = candidate.entry.ID
-		return changed
+		return
 	}
 	if err := w.store(candidate); err != nil {
 		w.deps.Log.Warn("clipboard.store.failed", logx.F{"error": err.Error()})
-		return changed
+		return
 	}
 	w.lastID = candidate.entry.ID
-	return changed
 }
 
 // observe records the observed content key and reports whether it changed.

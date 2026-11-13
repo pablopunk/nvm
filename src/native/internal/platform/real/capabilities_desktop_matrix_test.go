@@ -26,9 +26,8 @@ var linuxDesktopMatrix = []linuxDesktopSession{
 }
 
 // x11OnlyCapabilities are the frontmost-app intents that need X11 tools: they are offered on an X11 display and
-// omitted on every Wayland session.
+// omitted on every Wayland session. Paste is not among them: Wayland sends it with wtype (paste_capability_test.go).
 var x11OnlyCapabilities = []platform.Capability{
-	platform.CapabilityClipboardPaste,
 	platform.CapabilitySelectionCopy,
 	platform.CapabilityFocusReturn,
 	platform.CapabilityFrontmostApp,

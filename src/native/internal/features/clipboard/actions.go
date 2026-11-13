@@ -61,6 +61,10 @@ func (a *Actions) markUsed(id string) {
 // until a formatted RTF write exists.
 func (a *Actions) write(e Entry) error {
 	a.suppress.Suppress(e.ID)
+	if e.Kind == KindHTML || e.Kind == KindRTF {
+		// A clipboard feed reports only the plain text of a rich copy, so the text form is the app's own too.
+		a.suppress.Suppress(TextID(e.Text))
+	}
 	switch e.Kind {
 	case KindText, KindRTF:
 		return a.clip.WriteText(e.Text)

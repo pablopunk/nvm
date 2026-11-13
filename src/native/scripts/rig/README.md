@@ -134,6 +134,7 @@ The renderer in the report is the one the app logs (`OpenGL draws on the CPU (..
 
 - Timing comes from xdotool and the automation socket, which add a few milliseconds of latency of their own. B2 is therefore an upper bound, and B1 includes the xdotool spawn as PLAN's "key press" wording implies.
 - The rig renders with Mesa software GL under Xvfb (llvmpipe). Frame times are not GPU frame times; B5 is about whether frames stop, which holds regardless.
+- The rig is X11 only (Xvfb, openbox). The Wayland clipboard watch (`wl-paste --watch`) and the Wayland paste (`wtype`) have unit tests with fake command runners and no journey here; no journey needed a change.
 - Other processes on a shared box change CPU and latency numbers. Run the perf script when the box is quiet, and repeat it before comparing numbers across runs.
 - The first hotkey press after `ready` can be lost; B1 repeats it after one second and counts the repeat, so a lost press shows in the percentiles.
 - macOS and Windows numbers (the 100 ms B1 budget there) are not measured by this harness.

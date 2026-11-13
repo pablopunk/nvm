@@ -13,23 +13,31 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/x11"
 )
 
-// pasteGesture sends Ctrl+V to the focused X11 window with xdotool. Ctrl+V is the 1.x gesture; terminals that paste
-// with Ctrl+Shift+V are not covered.
+// pasteGesture sends Ctrl+V to the focused window: with xdotool in an X11 session, with wtype in a Wayland one.
+// Ctrl+V is the 1.x gesture; terminals that paste with Ctrl+Shift+V are not covered.
 func pasteGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
 	return keyGesture(ctx, helper, expectedAppID, "ctrl+v")
 }
 
-// undoGesture sends Ctrl+Z to the focused X11 window with xdotool.
+// undoGesture sends Ctrl+Z to the focused window the same way.
 func undoGesture(ctx context.Context, helper platform.Helper, expectedAppID string) error {
 	return keyGesture(ctx, helper, expectedAppID, "ctrl+z")
 }
 
-// keyGesture sends one key chord to the focused X11 window with xdotool, after checking the focused window's class
-// when expectedAppID is set.
+// keyGesture sends one key chord to the focused window with the session's tool, after checking the focused window's
+// class when expectedAppID is set.
 func keyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chord string) error {
-	if !pasteCapable("linux", os.Getenv, programInstalled) {
-		return platform.ErrUnsupported
+	switch linuxPasteTool("linux", os.Getenv, programInstalled) {
+	case wtypeBinary:
+		return waylandKeyGesture(ctx, helper, expectedAppID, chord)
+	case xdotoolBinary:
+		return x11KeyGesture(ctx, helper, expectedAppID, chord)
 	}
+	return platform.ErrUnsupported
+}
+
+// x11KeyGesture sends the chord with xdotool.
+func x11KeyGesture(ctx context.Context, helper platform.Helper, expectedAppID, chord string) error {
 	if expectedAppID != "" {
 		focused, err := focusedWindowClass(ctx, helper)
 		if err != nil {
@@ -59,12 +67,16 @@ func runXdotool(ctx context.Context, helper platform.Helper, args ...string) (st
 	return strings.TrimSpace(string(result.Stdout)), nil
 }
 
-// frontmostAppID names the focused X11 window's class, the identity keyGesture checks before it types.
+// frontmostAppID names the focused window's class, the identity keyGesture checks before it types: the X11 window
+// class, or the Hyprland window class in a Wayland session that runs Hyprland.
 func frontmostAppID(ctx context.Context, helper platform.Helper, _ int) (string, error) {
-	if !pasteCapable("linux", os.Getenv, programInstalled) {
-		return "", platform.ErrUnsupported
+	switch linuxPasteTool("linux", os.Getenv, programInstalled) {
+	case wtypeBinary:
+		return hyprlandActiveClass(ctx, helper)
+	case xdotoolBinary:
+		return focusedWindowClass(ctx, helper)
 	}
-	return focusedWindowClass(ctx, helper)
+	return "", platform.ErrUnsupported
 }
 
 // focusedWindowClass resolves the EWMH active window first and falls back to the X server's input focus when
