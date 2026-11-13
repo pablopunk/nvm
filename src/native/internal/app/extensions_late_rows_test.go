@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -71,7 +72,9 @@ func TestSlowExtensionDoesNotHideBuiltInsOrCommands(t *testing.T) {
 func startExtensionsQuery(p *App, q string) (<-chan search.Snapshot, int) {
 	snaps := make(chan search.Snapshot, 256)
 	c := search.NewCoordinator(search.Options{Clock: real.NewPorts().Clock, OnSnapshot: func(s search.Snapshot) { snaps <- s }})
-	c.Query(q, []search.Provider{extensionProvider(p, &rootInput{})})
+	in := &rootInput{}
+	commands := search.NewRowsProvider("extension-commands", func(_ context.Context, q string) []search.Item { return extensionCommandRows(p, in, q) })
+	c.Query(q, []search.Provider{commands, extensionProvider(p, in)})
 	return snaps, c.Gen()
 }
 

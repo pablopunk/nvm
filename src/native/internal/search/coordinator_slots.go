@@ -50,7 +50,7 @@ func (c *Coordinator) deliver(gen, idx int, b Batch) {
 	if b.Final {
 		c.finishLocked(s)
 	}
-	if c.opts.Synchronous {
+	if c.opts.Synchronous || !c.readyLocked() {
 		c.mu.Unlock()
 		return
 	}
@@ -82,6 +82,10 @@ func (c *Coordinator) complete(gen, idx int, returned bool) {
 		s.refreshing = false
 	}
 	c.finishLocked(s)
+	if !c.readyLocked() {
+		c.mu.Unlock()
+		return
+	}
 	snap := c.snapshotLocked()
 	c.mu.Unlock()
 	c.publish(snap)
@@ -111,6 +115,11 @@ func (c *Coordinator) cutOff(gen, idx int) {
 	c.finishLocked(s)
 	if !s.selfBudgeted && s.cancel != nil {
 		s.cancel()
+	}
+	if !c.readyLocked() {
+		c.mu.Unlock()
+		logx.Default().Warn("search provider cut off at its hard budget", logx.F{"provider": s.id, "hard_ms": s.budget.Hard.Milliseconds()})
+		return
 	}
 	snap := c.snapshotLocked()
 	c.mu.Unlock()

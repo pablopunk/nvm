@@ -25,21 +25,39 @@ type commandCache struct {
 
 // CachedCommands returns known commands immediately and discovers unknown commands independently in the background.
 // Built-ins use the same path as folder extensions; neither can block palette input or another extension's commands.
+// A known command stays listed while its extension restarts, starts or idles: what an extension declares does not
+// depend on whether its process is up right now.
 func (m *Manager) CachedCommands() []CommandResult {
-	targets, _ := m.targetsFor(protocol.MethodCommands)
-	out := make([]CommandResult, 0, len(targets))
-	for _, target := range targets {
-		if result, ok := m.commands.lookup(target.id); ok {
+	ids := m.runnableIDs()
+	out := make([]CommandResult, 0, len(ids))
+	for _, id := range ids {
+		if result, ok := m.commands.lookup(id); ok {
 			out = append(out, result)
-			if isDormant(target) {
-				continue
-			}
+		}
+	}
+	targets, _ := m.targetsFor(protocol.MethodCommands)
+	for _, target := range targets {
+		if _, known := m.commands.lookup(target.id); known && isDormant(target) {
+			continue
 		}
 		if generation, ok := m.commands.begin(target.id, m.config.Clock.Now()); ok {
 			go m.learnCommands(target, generation)
 		}
 	}
 	return out
+}
+
+// runnableIDs lists, in manager order, every enabled extension whatever its runtime state.
+func (m *Manager) runnableIDs() []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var ids []string
+	for _, key := range m.sortedKeysLocked() {
+		if e := m.entries[key]; m.isRunnable(e) {
+			ids = append(ids, e.bundle.Manifest.ID)
+		}
+	}
+	return ids
 }
 
 func (m *Manager) learnCommands(target runtimeTarget, generation uint64) {

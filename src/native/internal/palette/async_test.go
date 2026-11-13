@@ -20,7 +20,7 @@ func withClock(clock *fake.Clock) func(*Options) {
 }
 
 // TestBlockedProviderDoesNotDelayRowsOrTyping runs a root with a provider that waits two seconds of fake time.
-// The rows of the other provider reach the screen, and the keys are taken, before the clock moves.
+// The keys are taken at once, and the rows of the other provider reach the screen once the first-snapshot wait ends.
 func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 	clock := fake.NewClock()
 	blocked := search.NewRowsProvider("blocked", func(context.Context, string) []search.Item {
@@ -33,6 +33,8 @@ func TestBlockedProviderDoesNotDelayRowsOrTyping(t *testing.T) {
 
 	h.typeText("q")
 	clock.AwaitTimerDueIn(search.HardBudget)
+	clock.AwaitTimerDueIn(search.FirstSnapshot)
+	clock.Advance(search.FirstSnapshot)
 	h.awaitRows(func(titles []string) bool { return slices.Contains(titles, "Quick") })
 	if h.p.Query() != "q" {
 		t.Fatalf("typing waited for the blocked provider: query = %q", h.p.Query())

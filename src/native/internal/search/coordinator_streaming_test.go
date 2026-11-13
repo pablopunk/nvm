@@ -54,12 +54,13 @@ func TestLateRowsOfACutOffProviderMergeIntoItsQuery(t *testing.T) {
 	slow := gatedProvider{id: "slow", first: Item{Kind: KindFiles, Title: "early row", Score: 1}, late: Item{Kind: KindFiles, Title: "late row", Score: 2}, release: release}
 	c.Query("q", []Provider{slow})
 	gen := c.Gen()
+	passFirstSnapshot(t, c, clock)
 
 	if first := sink.next(t); first.Settled || !equalStrings(titles(first.Items), []string{"early row"}) {
 		t.Fatalf("first snapshot: settled=%v rows=%v, want the early row while the provider runs", first.Settled, titles(first.Items))
 	}
-	clock.AwaitTimerDueIn(HardBudget)
-	clock.Advance(HardBudget)
+	clock.AwaitTimerDueIn(HardBudget - FirstSnapshot)
+	clock.Advance(HardBudget - FirstSnapshot)
 	settled := sink.untilSettled(t, gen)
 	if got := titles(settled[len(settled)-1].Items); !equalStrings(got, []string{"early row"}) {
 		t.Fatalf("settled rows after the hard budget = %v, want only the early row", got)
@@ -83,11 +84,13 @@ func TestLateRowsOfACutOffProviderMergeIntoItsQuery(t *testing.T) {
 // TestRootStreamShowsEachSourceAsItAnswers checks that a streamed root shows the first source's rows before the second
 // source answers, and settles once both have.
 func TestRootStreamShowsEachSourceAsItAnswers(t *testing.T) {
+	clock := fake.NewClock()
 	sink := newSnapshotSink()
-	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot})
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot})
 	release := make(chan struct{})
 	root := streamedRoot{first: Item{Kind: KindApplications, Title: "fast row", Score: 1}, second: Item{Kind: KindFiles, Title: "slow row", Score: 2}, release: release}
 	c.Query("", []Provider{root})
+	passFirstSnapshot(t, c, clock)
 
 	if first := sink.next(t); first.Settled || !equalStrings(titles(first.Items), []string{"fast row"}) {
 		t.Fatalf("first root snapshot: settled=%v rows=%v, want the fast row while the second source runs", first.Settled, titles(first.Items))

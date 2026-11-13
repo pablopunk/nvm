@@ -11,9 +11,10 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// extensionSearch is the root's extension source: rows from every running extension's SearchItems, and the
-// durable commands the extensions declare. Each extension answers within its own budget (see package manager),
-// so the coordinator never waits on a hanging extension for longer than that budget.
+// extensionSearch is the root's live extension source: rows from every running extension's SearchItems. Each extension
+// answers within its own budget (see package manager), so the coordinator never waits on a hanging extension for longer
+// than that budget. The commands extensions declare are a separate source (extensionCommandRows): they are known
+// without asking any extension, so a slow extension can never hold them back.
 type extensionSearch struct {
 	p  *App
 	in *rootInput
@@ -38,44 +39,41 @@ func (e extensionSearch) Root(ctx context.Context) []search.Item {
 	return out
 }
 
-// RootStream emits the durable commands at once, then each extension's rows as that extension answers. Nothing shows
-// while extensions load, and a slow extension never holds back the rows of the others.
+// RootStream emits the rows remembered from each extension at once, then each extension's rows as that extension
+// answers. A slow extension never holds back the rows of the others.
 func (e extensionSearch) RootStream(ctx context.Context, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m != nil {
-		commands := e.commandRows(m, "")
 		rows := map[string][]search.Item{}
 		for _, result := range e.p.rootRows.cachedOutside(nil) {
 			rows[result.ExtensionID] = rootRowsFor(e.p, m, result, e.in.shortcuts)
 		}
-		emit(search.Batch{Items: mergedExtensionRows(commands, rows), Replace: true})
+		emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		e.p.rootRows.stream(ctx, m, func(result manager.SearchResult) {
 			rows[result.ExtensionID] = rootRowsFor(e.p, m, result, e.in.shortcuts)
-			emit(search.Batch{Items: mergedExtensionRows(commands, rows), Replace: true})
+			emit(search.Batch{Items: mergedExtensionRows(rows), Replace: true})
 		})
 	}
 	emit(search.Batch{Final: true})
 }
 
-func mergedExtensionRows(commands []search.Item, rows map[string][]search.Item) []search.Item {
+func mergedExtensionRows(rows map[string][]search.Item) []search.Item {
 	ids := make([]string, 0, len(rows))
 	for id := range rows {
 		ids = append(ids, id)
 	}
 	sort.Strings(ids)
-	out := append([]search.Item(nil), commands...)
+	var out []search.Item
 	for _, id := range ids {
 		out = append(out, rows[id]...)
 	}
 	return out
 }
 
-// Search emits, for q, the matching commands at once and then each extension's search rows as that extension answers. A
-// command is found by its title, its aliases or its keywords, as a built-in command is by its title.
+// Search emits, for q, each extension's search rows as that extension answers.
 func (e extensionSearch) Search(ctx context.Context, q string, emit func(search.Batch)) {
 	m := e.p.extensionManager()
 	if m != nil {
-		emit(search.Batch{Items: e.commandRows(m, q)})
 		m.SearchEach(ctx, q, func(result manager.SearchResult) {
 			if isCommandPlacedBuiltIn(result.ExtensionID) {
 				return // listed by commandRows, at the place of its command
@@ -216,4 +214,14 @@ func builtInRow(row search.Item, item api.Item) search.Item {
 		row.IconPath = item.File.Path
 	}
 	return row
+}
+
+// extensionCommandRows lists the extension commands q finds, by title, alias or keyword, or the commands the root lists
+// for the empty query. It reads only what the manager already knows, so it answers at once whatever the extensions do.
+func extensionCommandRows(p *App, in *rootInput, q string) []search.Item {
+	m := p.extensionManager()
+	if m == nil {
+		return nil
+	}
+	return extensionSearch{p: p, in: in}.commandRows(m, q)
 }

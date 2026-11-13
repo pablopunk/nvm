@@ -27,10 +27,12 @@ func (p pendingProvider) Search(ctx context.Context, _ string, emit func(Batch))
 // TestPendingCallIsSnapshotUntilTheProviderFinishes checks a provider's in-flight call shows as Pending on the
 // snapshot, and that the snapshot is complete and not pending once its Final batch arrives.
 func TestPendingCallIsSnapshotUntilTheProviderFinishes(t *testing.T) {
+	clock := fake.NewClock()
 	sink := newSnapshotSink()
-	c := NewCoordinator(Options{Clock: fake.NewClock(), OnSnapshot: sink.OnSnapshot})
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot})
 	release := make(chan struct{})
 	c.Query("ca", []Provider{pendingProvider{release: release}})
+	passFirstSnapshot(t, c, clock)
 
 	first := sink.next(t)
 	if !first.Pending || first.Settled {

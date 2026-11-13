@@ -17,9 +17,10 @@ const (
 	// HardBudget is how long a provider call may run before it is marked slow and stops holding up the snapshot.
 	// Its rows that arrive later still merge into the same query.
 	HardBudget = 100 * time.Millisecond
-	// FirstSnapshot is the longest a query waits for its first snapshot: one frame. When no provider has
-	// answered by then, the snapshot is empty and not settled, and the rows arrive as the providers finish.
-	FirstSnapshot = 8 * time.Millisecond
+	// FirstSnapshot is the longest a query waits for its ranked providers before its first snapshot. Until then the
+	// screen keeps the previous rows, so a keystroke changes the list once instead of once per provider. When a
+	// provider has not answered by then, the snapshot shows what has, and its rows follow the rows on screen.
+	FirstSnapshot = 40 * time.Millisecond
 
 	defaultCacheSize = 32
 )
@@ -87,8 +88,10 @@ type Coordinator struct {
 	warmSettled       bool               // this query had a complete snapshot before refresh
 	cache             *queryCache
 	stats             map[string]*ProviderStats
-	shown             map[string][]Item // rows of the last snapshot, by provider
-	superseded        map[string][]Item // rows of the snapshot the previous query ended on
+	shown             map[string][]Item        // rows of the last snapshot, by provider
+	superseded        map[string][]Item        // rows of the snapshot the previous query ended on
+	committed         []Item                   // rows on screen for this generation, in screen order
+	committedFrom     map[cachedItemKey]string // the provider of each committed row
 }
 
 // slot is one provider's part of the current generation.
@@ -137,6 +140,7 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 	}
 	c.pending = len(providers)
 	c.emitted = false
+	c.committed, c.committedFrom = nil, nil
 	c.superseded = c.shown
 	remembered, hit := c.cache.get(q)
 	c.warmSettled = hit && remembered.settled
@@ -146,6 +150,10 @@ func (c *Coordinator) Query(q string, providers []Provider) (Snapshot, bool) {
 			s.items = append([]Item(nil), remembered.providers[s.id]...)
 		}
 		warm = Snapshot{Gen: gen, Query: q, Items: mergeCached(c.slots, c.limit(), q != "", c.opts.Flat, remembered.settled), Settled: remembered.settled}
+		if !c.opts.Synchronous {
+			c.emitted = true
+			c.commitLocked(warm.Items)
+		}
 	}
 	c.mu.Unlock()
 
@@ -283,14 +291,16 @@ func (c *Coordinator) snapshotLocked() Snapshot {
 		}
 	}
 	settled := c.pending == 0
-	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled), Settled: settled, Pending: c.pendingCallsLocked()}
+	fresh := mergeAppended(ranked, appended, c.limit(), c.query != "", c.opts.Flat, settled || c.warmSettled)
+	snap := Snapshot{revision: c.revision, Gen: c.gen, Query: c.query, Items: c.stableLocked(fresh), Settled: settled, Pending: c.pendingCallsLocked()}
 	c.emitted = true
-	providerRows := c.providerCache(snap.Items)
-	c.shown = providerRows
+	c.commitLocked(snap.Items)
+	providerRows := c.providerCache(fresh)
+	c.shown = c.providerCache(snap.Items)
 	if len(snap.Items) == 0 && !settled {
 		snap.Carried = c.carriedLocked()
 	}
-	c.cache.put(c.query, cachedRows{items: snap.Items, providers: providerRows, settled: snap.Settled || c.warmSettled})
+	c.cache.put(c.query, cachedRows{items: fresh, providers: providerRows, settled: snap.Settled || c.warmSettled})
 	return snap
 }
 

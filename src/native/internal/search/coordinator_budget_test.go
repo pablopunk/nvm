@@ -2,6 +2,7 @@ package search
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -17,22 +18,21 @@ func blockingProvider(id string) Provider {
 }
 
 // TestBlockedProviderDoesNotDelayTheFirstSnapshot checks that a provider that never answers within the budget
-// neither holds back the rows of the others nor the snapshot that carries them. The clock is not advanced until
-// the first snapshot has arrived.
+// holds back the rows of the others no longer than FirstSnapshot.
 func TestBlockedProviderDoesNotDelayTheFirstSnapshot(t *testing.T) {
 	clock := fake.NewClock()
 	sink := newSnapshotSink()
 	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot})
 	fast := fixedRows("fast", Item{Kind: KindFiles, Title: "fast row", Score: 1})
 	c.Query("q", []Provider{blockingProvider("blocked"), fast})
+	passFirstSnapshot(t, c, clock, "blocked")
 
 	first := sink.next(t)
 	if first.Settled || !equalStrings(titles(first.Items), []string{"fast row"}) {
 		t.Fatalf("first snapshot: settled=%v rows=%v, want the fast row while the other provider is pending", first.Settled, titles(first.Items))
 	}
 
-	clock.AwaitTimers(5)
-	clock.Advance(HardBudget)
+	clock.Advance(HardBudget - FirstSnapshot)
 	last := sink.untilSettled(t, c.Gen())
 	if got := titles(last[len(last)-1].Items); !equalStrings(got, []string{"fast row"}) {
 		t.Fatalf("settled rows after the hard budget = %v", got)
@@ -117,4 +117,30 @@ func TestProvidersWithoutADeclaredBudgetUseTheDefault(t *testing.T) {
 	if DefaultBudget.Hard != HardBudget || DefaultBudget.Soft != SoftBudget {
 		t.Fatalf("default budget %+v does not match the PLAN.md limits", DefaultBudget)
 	}
+}
+
+// passFirstSnapshot waits until every provider of the query just started has answered or blocked without answering,
+// then moves the clock past the wait for the first snapshot.
+func passFirstSnapshot(t *testing.T, c *Coordinator, clock *fake.Clock, blocked ...string) {
+	t.Helper()
+	clock.AwaitTimerDueIn(FirstSnapshot)
+	deadline := time.Now().Add(5 * time.Second)
+	for !answeredExcept(c, blocked) {
+		if time.Now().After(deadline) {
+			t.Fatal("providers never answered")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	clock.Advance(FirstSnapshot)
+}
+
+func answeredExcept(c *Coordinator, blocked []string) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, s := range c.slots {
+		if s.refreshing && !s.finished && !s.pending && !slices.Contains(blocked, s.id) {
+			return false
+		}
+	}
+	return true
 }
