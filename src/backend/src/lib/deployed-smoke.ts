@@ -1,5 +1,5 @@
 type JsonRecord = Record<string, unknown>;
-import { parsePublicOrigin } from '../../../app/shared/public-origin';
+import { parsePublicOrigin } from '../shared/public-origin';
 import { isFullCommitSha } from './deployment-identity';
 
 type CompatibilityManifest = {

@@ -1,4 +1,4 @@
-import { DEFAULT_NEVERMIND_MAX_INPUT_TOKENS } from '../../../app/shared/ai-context-window';
+import { DEFAULT_NEVERMIND_MAX_INPUT_TOKENS } from '../shared/ai-context-window';
 import { analyzeAiImageInputs, imagePayloadIntent } from './ai-image-input';
 import { computeUsdCost, type ModelCost, usdToCredits } from './cost';
 import {

@@ -25,5 +25,3 @@ pnpm-debug.log*
 .idea/
 .vercel
 
-# generated landing palette data (scripts/generate-palette-items.ts)
-src/generated/

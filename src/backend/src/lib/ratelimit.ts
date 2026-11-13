@@ -1,7 +1,7 @@
 import { Ratelimit } from '@upstash/ratelimit';
 import { Redis } from '@upstash/redis';
 import { log } from './log';
-import { PRODUCTION_WEB_ORIGIN } from '../../../app/shared/public-origin';
+import { PRODUCTION_WEB_ORIGIN } from '../shared/public-origin';
 
 function isProduction(): boolean {
   const vercelEnv = process.env.VERCEL_ENV;

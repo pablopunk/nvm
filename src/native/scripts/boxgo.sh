@@ -41,9 +41,6 @@ COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/src.tgz" -C "$root/src/native" --e
 COPYFILE_DISABLE=1 tar --no-xattrs -czf "$tmp/api.tgz" -C "$root/src/backend/src/pages" api
 # Many agents share the box's Go build cache, which grows without bound: trim old entries when space runs low.
 box_retry exec "$BOX" -- 'mkdir -p /root/wp; [ "$(df --output=avail -k / | tail -1)" -gt 1572864 ] || find /root/.cache/go-build -type f -amin +120 -delete' >/dev/null
-# The emoji generator test reads the Electron catalog next to src/native (../app), so the box keeps a copy there.
-box_retry exec "$BOX" -- "mkdir -p /root/wp/app/extensions" >/dev/null
-box_retry cp "$root/src/app/extensions/emoji-symbol-data.ts" "$BOX:/root/wp/app/extensions/emoji-symbol-data.ts" >/dev/null
 box_retry cp "$tmp/src.tgz" "$BOX:/root/wp/$slot.tgz" >/dev/null
 box_retry cp "$tmp/api.tgz" "$BOX:/root/wp/$slot-api.tgz" >/dev/null
 box_retry exec "$BOX" -- "rm -rf /root/wp/$slot-backend && mkdir -p /root/wp/$slot-backend && tar xzf /root/wp/$slot-api.tgz -C /root/wp/$slot-backend && rm -f /root/wp/$slot-api.tgz" >/dev/null

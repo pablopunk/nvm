@@ -4,7 +4,7 @@ import {
   AI_CHAT_IMAGE_LIMIT,
   AI_CHAT_IMAGE_MAX_BYTES,
   AI_CHAT_IMAGE_TOTAL_MAX_BYTES,
-} from '../../../app/shared/ai-chat-images';
+} from '../shared/ai-chat-images';
 import { analyzeAiImageInputs, imagePayloadIntent } from './ai-image-input';
 
 function png(width = 1, height = 1, payloadBytes = 0) {

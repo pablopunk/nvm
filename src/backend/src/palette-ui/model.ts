@@ -17,7 +17,7 @@ import type {
   ExtensionPermission as PublicExtensionPermission,
   ViewPresentation,
   ViewSize,
-} from '../resources/nevermind-extension-api';
+} from '../../../native/testdata/parity/nevermind-extension-api';
 import type { AiChatMessage } from '../shared/ai-chat-images';
 import type { AiChatModel } from '../shared/ai-chat-model';
 import type { CameraViewFields } from './camera-view-fields';

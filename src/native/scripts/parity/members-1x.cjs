@@ -5,9 +5,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const repo = path.resolve(__dirname, '../../../..');
-const source = path.join(repo, 'src/app/resources/nevermind-extension-api.d.ts');
-const output = path.join(repo, 'src/native/testdata/parity/api-1x-members.json');
+const parity = path.resolve(__dirname, '../../testdata/parity');
+const source = path.join(parity, 'nevermind-extension-api.d.ts');
+const output = path.join(parity, 'api-1x-members.json');
 
 const OPENERS = '{([<';
 const CLOSERS = '})]>';

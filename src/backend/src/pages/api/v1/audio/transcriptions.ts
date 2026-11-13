@@ -3,7 +3,7 @@ import { waitUntil } from '@vercel/functions';
 import type { APIRoute } from 'astro';
 import { z } from 'zod';
 import { AUDIO_RESERVATION_CREDITS as RESERVATION_CREDITS } from '../../../../lib/audio-reservation-policy';
-import { PRODUCTION_WEB_ORIGIN } from '../../../../../../app/shared/public-origin';
+import { PRODUCTION_WEB_ORIGIN } from '../../../../shared/public-origin';
 import {
   backendKillSwitchEnabled,
   compatibilityError,

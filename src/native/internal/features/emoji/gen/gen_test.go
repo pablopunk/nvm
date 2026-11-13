@@ -16,7 +16,7 @@ export const SKIN_TONE_VARIANTS: Readonly<Record<string, SkinToneVariants>> = Ob
 `
 
 // repositoryDataPath is the TypeScript catalog relative to this test's package directory.
-const repositoryDataPath = "../../../../../app/extensions/emoji-symbol-data.ts"
+const repositoryDataPath = "emoji-symbol-data.ts"
 
 // checkedInPath is the generated file relative to this test's package directory.
 const checkedInPath = "../catalog_data.go"

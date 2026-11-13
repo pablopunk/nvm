@@ -9,7 +9,6 @@ on:
   pull_request:
     paths:
       - 'src/native/**'
-      - 'src/app/resources/macos-helper/**'
       - '.github/workflows/native-package.yml'
   workflow_dispatch:
     inputs:
@@ -79,7 +78,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: src/native/resources/darwin-${{ matrix.arch }}
-          key: natives-darwin-${{ matrix.arch }}-${{ hashFiles('src/native/scripts/natives/**', 'src/app/resources/macos-helper/**', 'src/native/sidecar/pi-host/host.mjs', 'src/native/sidecar/pi-host/package-lock.json') }}
+          key: natives-darwin-${{ matrix.arch }}-${{ hashFiles('src/native/scripts/natives/**', 'src/native/sidecar/macos-helper/**', 'src/native/sidecar/pi-host/host.mjs', 'src/native/sidecar/pi-host/package-lock.json') }}
 
       - name: Build the natives for this Mac
         if: steps.natives.outputs.cache-hit != 'true'
