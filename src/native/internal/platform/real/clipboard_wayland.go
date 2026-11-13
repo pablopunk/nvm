@@ -10,6 +10,7 @@ import (
 	"io"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/pablopunk/nvm/native/internal/platform"
 )
@@ -36,10 +37,12 @@ const (
 // waylandWatchScript runs once per clipboard change inside `wl-paste --watch`, with the copy on its standard
 // input. wl-paste waits for it to exit, so runs never interleave. It writes one line, "<state> <mime-type> <base64>".
 // The state is data, sensitive (a password manager asked not to be recorded; the content is discarded unread) or
-// nil (the clipboard was emptied).
-const waylandWatchScript = `case "$CLIPBOARD_STATE" in
-data) printf 'data %s ' "$CLIPBOARD_TYPE"; base64 -w0; printf '\n';;
-*) cat >/dev/null; printf '%s - \n' "$CLIPBOARD_STATE";;
+// nil (the clipboard was emptied). wl-clipboard releases differ in what they export: a missing state means data,
+// and a missing type is written as "-" so the host recognises the content from its bytes.
+const waylandWatchScript = `case "${CLIPBOARD_STATE:-data}" in
+sensitive) cat >/dev/null; printf 'sensitive - \n';;
+nil|clear) cat >/dev/null; printf 'nil - \n';;
+*) printf 'data %s ' "${CLIPBOARD_TYPE:--}"; base64 -w0; printf '\n';;
 esac`
 
 // streamStarter starts a long-running command and returns its standard output. Closing the stream stops the
@@ -203,7 +206,11 @@ func parseWaylandCopy(line []byte) (platform.ClipboardCopy, bool) {
 	if err != nil || len(data) == 0 {
 		return platform.ClipboardCopy{}, false
 	}
-	switch kind := feedContentKind(fields[1]); kind {
+	kind := feedContentKind(fields[1])
+	if fields[1] == "-" || fields[1] == "" {
+		kind = sniffedContentKind(data)
+	}
+	switch kind {
 	case feedText:
 		return platform.ClipboardCopy{Text: string(data)}, true
 	case feedPNG:
@@ -239,4 +246,18 @@ func feedContentKind(mime string) feedContent {
 		return feedText
 	}
 	return feedOther
+}
+
+// sniffedContentKind recognises a copy whose MIME type wl-paste did not report: PNG by its signature, a file-manager
+// copy by its file URIs, and any other valid UTF-8 as text.
+func sniffedContentKind(data []byte) feedContent {
+	switch {
+	case bytes.HasPrefix(data, []byte("\x89PNG\r\n\x1a\n")):
+		return feedPNG
+	case !utf8.Valid(data):
+		return feedOther
+	case len(localFilePaths(string(data))) > 0:
+		return feedURIList
+	}
+	return feedText
 }
