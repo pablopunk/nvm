@@ -24,6 +24,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/logx"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform/real"
+	"github.com/pablopunk/nvm/native/internal/safego"
 	"github.com/pablopunk/nvm/native/internal/shortcuts"
 	"github.com/pablopunk/nvm/native/internal/store"
 	"github.com/pablopunk/nvm/native/internal/windowmgmt"
@@ -135,7 +136,7 @@ func (p *App) newExtensionManager() (*manager.Manager, error) {
 		Apps:            p.appsvc,
 		Dictation:       p.dictationEngine(),
 		Notes:           p.extensionNotes,
-	}, extensionsDir(), enablement.Open(state), manager.Options{
+	}, extensionsDir(), enablement.OpenSynced(state, p.sharedConfig), manager.Options{
 		Executable:      exe,
 		DataRoot:        filepath.Join(dataDir(), "extension-data"),
 		Home:            userHomeDir(),
@@ -328,4 +329,19 @@ func (p *App) prepareFilePicture(path string) {
 	if p.files != nil {
 		p.files.prepareGridPicture(path)
 	}
+}
+
+// reconcileExtensionEnablement picks up enabled choices another machine synced into config.json while the app ran.
+// It runs after the palette shows, off the UI thread, so reading the file never delays the first paint.
+func (p *App) reconcileExtensionEnablement() {
+	m := p.exts.mgr.Load()
+	if m == nil {
+		return
+	}
+	safego.Go("extensions.reconcile-enablement", func(context.Context) {
+		if m.ReconcileEnablement() {
+			p.extensionCommandsChanged()
+			p.extensionsStateChanged()
+		}
+	})
 }

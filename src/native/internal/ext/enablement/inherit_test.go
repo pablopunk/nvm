@@ -12,19 +12,19 @@ func TestInheritTakesTheOneFirstStateAndKeepsALaterChoice(t *testing.T) {
 	files := fake.NewFS()
 	set, s := openSet(t, files)
 	defer s.Close()
-	if err := set.Inherit("acme.theme", "acme-theme.ts", true); err != nil {
+	if err := set.Inherit("acme.theme", "acme-theme.ts", true, nil); err != nil {
 		t.Fatal(err)
 	}
-	if on, _ := set.Enabled("acme.theme"); !on {
+	if on, _ := set.Enabled("acme.theme", nil); !on {
 		t.Fatal("the inherited on state was not applied")
 	}
-	if err := set.SetEnabled("acme.theme", false); err != nil {
+	if err := set.SetEnabled("acme.theme", false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := set.Inherit("acme.theme", "acme-theme.ts", true); err != nil {
+	if err := set.Inherit("acme.theme", "acme-theme.ts", true, nil); err != nil {
 		t.Fatal(err)
 	}
-	if on, _ := set.Enabled("acme.theme"); on {
+	if on, _ := set.Enabled("acme.theme", nil); on {
 		t.Fatal("a second inheritance turned a disabled extension back on")
 	}
 	if done, _ := set.Inherited("acme.theme"); !done {
@@ -36,10 +36,10 @@ func TestInheritTakesTheOneFirstStateAndKeepsALaterChoice(t *testing.T) {
 func TestInheritingAnOffFileRecordsWithoutEnabling(t *testing.T) {
 	set, s := openSet(t, fake.NewFS())
 	defer s.Close()
-	if err := set.Inherit("acme.theme", "acme-theme.ts", false); err != nil {
+	if err := set.Inherit("acme.theme", "acme-theme.ts", false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if on, _ := set.Enabled("acme.theme"); on {
+	if on, _ := set.Enabled("acme.theme", nil); on {
 		t.Fatal("an off 1.x file turned the folder on")
 	}
 	if done, _ := set.Inherited("acme.theme"); !done {

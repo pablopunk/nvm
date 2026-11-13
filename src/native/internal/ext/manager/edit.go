@@ -107,10 +107,7 @@ func (m *Manager) InstallEdit(ctx context.Context, id string, contents map[strin
 	if err != nil {
 		return published, err
 	}
-	if err := m.enabled.SetEnabled(id, enable); err != nil {
-		return true, fmt.Errorf("save enabled state: %w", err)
-	}
-	return true, m.reloadLocked()
+	return true, m.applyInstalledLocked(id, enable)
 }
 
 func cloneEditFiles(files map[string][]byte) map[string][]byte {

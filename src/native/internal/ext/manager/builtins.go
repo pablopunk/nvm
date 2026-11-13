@@ -65,7 +65,7 @@ func (m *Manager) builtInServices(manifest api.Manifest) *services.Handler {
 
 // isRunnable reports whether an entry's runtime may answer calls: built-ins always, folder extensions when enabled.
 func (m *Manager) isRunnable(e *entry) bool {
-	return e.builtin || m.isEnabled(e.bundle.Manifest.ID)
+	return e.builtin || m.isEnabled(e.bundle.Manifest)
 }
 
 // IsBuiltIn reports whether id names a built-in extension.

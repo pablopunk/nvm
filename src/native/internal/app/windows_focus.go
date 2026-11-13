@@ -52,6 +52,7 @@ func (p *App) onPaletteShown() {
 	}
 	p.showApps()
 	p.warmAIOnShow()
+	p.reconcileExtensionEnablement()
 }
 
 // captureWindowFocus records the frontmost app before the palette appears. It runs only where the palette has no focus

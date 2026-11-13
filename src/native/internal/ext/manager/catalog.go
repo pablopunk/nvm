@@ -30,7 +30,7 @@ func (m *Manager) Catalog() []CatalogEntry {
 			ID:       manifest.ID,
 			Title:    manifest.Title,
 			Subtitle: manifest.Subtitle,
-			Enabled:  m.isEnabled(manifest.ID),
+			Enabled:  m.isEnabled(manifest),
 			Titles:   sourcecheck.DisplayTitles(map[string][]byte{"main.go": e.bundle.Source}),
 		})
 	}

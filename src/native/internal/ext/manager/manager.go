@@ -168,6 +168,8 @@ type entry struct {
 	host             *services.Handler
 	// builtin marks an entry compiled into the app: it has no folder, no review and no enabled state.
 	builtin bool
+	// enabledApplied is the enabled state this entry's runtime was started or left stopped for.
+	enabledApplied bool
 }
 
 // New opens the extensions folder root, removes leftovers of interrupted installs, and loads every extension.
@@ -308,7 +310,8 @@ func (m *Manager) replaceLocked(key string, loaded bundle.Bundle) {
 	if loaded.Runnable() {
 		next.host = services.New(m.serviceDeps, loaded.Manifest)
 		next.runtime = supervisor.New(m.config, loaded.Manifest.Identity, filepath.Join(loaded.Dir, bundle.SourceFile), next.host)
-		if m.isEnabled(loaded.Manifest.ID) {
+		if m.isEnabled(loaded.Manifest) {
+			next.enabledApplied = true
 			m.startEntry(next)
 		}
 	}
@@ -326,9 +329,18 @@ func stopEntry(e *entry) {
 }
 
 // isEnabled reads the enabled state. A load error counts as disabled, so a damaged file never turns code on.
-func (m *Manager) isEnabled(id string) bool {
-	enabled, err := m.enabled.Enabled(id)
+func (m *Manager) isEnabled(manifest api.Manifest) bool {
+	enabled, err := m.enabled.Enabled(manifest.ID, reviewedCapabilities(manifest))
 	return err == nil && enabled
+}
+
+// reviewedCapabilities is what a choice to enable is pinned to: the capabilities the manifest declares.
+func reviewedCapabilities(manifest api.Manifest) []string {
+	names := make([]string, len(manifest.Capabilities))
+	for i, capability := range manifest.Capabilities {
+		names[i] = string(capability)
+	}
+	return names
 }
 
 // sortedKeysLocked returns the entry keys in order, for stable listings.

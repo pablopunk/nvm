@@ -50,7 +50,7 @@ func (m *Manager) listingLocked(key string, e *entry) Listing {
 		Title:               manifest.Title,
 		Subtitle:            manifest.Subtitle,
 		Dir:                 e.bundle.Dir,
-		Enabled:             m.isEnabled(manifest.ID),
+		Enabled:             m.isEnabled(manifest),
 		Problems:            e.bundle.Problems,
 		Capabilities:        manifest.Capabilities,
 		UnknownCapabilities: manifest.UnknownCapabilities(),
@@ -101,8 +101,8 @@ func (m *Manager) Enable(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
-	wasEnabled := m.isEnabled(id)
-	if err := m.enabled.SetEnabled(id, true); err != nil {
+	wasEnabled := m.isEnabled(e.bundle.Manifest)
+	if err := m.enabled.SetEnabled(id, true, reviewedCapabilities(e.bundle.Manifest)); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	if e.runtime == nil {
@@ -129,10 +129,11 @@ func (m *Manager) Disable(id string) error {
 	if e.builtin {
 		return ErrBuiltIn
 	}
-	if err := m.enabled.SetEnabled(id, false); err != nil {
+	if err := m.enabled.SetEnabled(id, false, nil); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	e.snapshotIdentity = nil
+	e.enabledApplied = false
 	m.commands.forget(id)
 	stopEntry(e)
 	return nil
@@ -147,10 +148,7 @@ func (m *Manager) Install(id string, contents map[string][]byte, enable bool) er
 	if err := install.Install(m.ports.Files, m.ports.Clock, m.root, id, contents); err != nil {
 		return err
 	}
-	if err := m.enabled.SetEnabled(id, enable); err != nil {
-		return fmt.Errorf("save enabled state: %w", err)
-	}
-	return m.reloadLocked()
+	return m.applyInstalledLocked(id, enable)
 }
 
 // Check runs the candidate files the way a child would load them, without publishing anything. It returns the
@@ -205,10 +203,30 @@ func (m *Manager) Uninstall(id string) error {
 	if err := install.Uninstall(m.ports.Files, m.ports.Clock, m.root, filepath.Base(e.bundle.Dir)); err != nil {
 		return err
 	}
-	if err := m.enabled.SetEnabled(id, false); err != nil {
+	if err := m.enabled.SetEnabled(id, false, nil); err != nil {
 		return fmt.Errorf("save enabled state: %w", err)
 	}
 	return m.reloadLocked()
+}
+
+// applyInstalledLocked records the enabled choice for a folder just written, pinned to the capabilities its new
+// manifest declares, and applies the rescanned folder.
+func (m *Manager) applyInstalledLocked(id string, enable bool) error {
+	bundles, err := bundle.Scan(m.ports.Files, m.root)
+	if err != nil {
+		return err
+	}
+	var capabilities []string
+	for _, b := range bundles {
+		if b.Manifest.ID == id {
+			capabilities = reviewedCapabilities(b.Manifest)
+		}
+	}
+	if err := m.enabled.SetEnabled(id, enable, capabilities); err != nil {
+		return fmt.Errorf("save enabled state: %w", err)
+	}
+	m.refreshLocked(bundles)
+	return nil
 }
 
 // reloadLocked rescans the folder and applies it. A scan error changes nothing, so a failed read never looks
