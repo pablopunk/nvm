@@ -4,10 +4,12 @@ import { Button, buttonVariants } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { ConsoleSelect } from '../components/ConsoleSelect';
-import { ConsoleTable } from '../components/ConsoleTable';
 import { ConsoleNavigation } from '../components/ConsoleNavigation';
 import { getCurrentUser, isAdmin } from '../lib/admin';
 import AdminModels from '../components/dashboard/AdminModels.astro';
+import AdminModelsSkeleton from '../components/dashboard/AdminModelsSkeleton.astro';
+import DashboardTable from '../components/dashboard/DashboardTable.astro';
+import DashboardSectionStatus from '../components/dashboard/DashboardSectionStatus.astro';
 
 const user = await getCurrentUser(Astro.request);
 if (!user) return Astro.redirect('/api/auth/signin?return_to=/admin');
@@ -30,25 +32,23 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     <div class="admin-alerts" aria-live="polite"><div id="problems"></div><span id="alerts-status"></span> <button type="button" id="alerts-retry" hidden>Retry alerts</button></div>
 
     <Card className="section admin-panel"><section>
-      <p class="dashboard-summary-status" aria-live="polite"><span id="overview-status"></span> <button type="button" data-retry-section="overview" hidden>Retry</button></p>
+      <DashboardSectionStatus section="overview" />
       <div class="stat-grid" id="headline" aria-label="Loading summary"><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div></div>
-      <div class="table-scroll admin-subpanel dashboard-table">
-        <ConsoleTable id="segments" columns={['', 'Users', 'Active', 'Requests', 'Provider cost', 'Revenue', 'Net', 'Cost / active user']} />
-      </div>
+      <DashboardTable class="admin-subpanel" id="segments" visibleRows={2} columns={['', 'Users', 'Active', 'Requests', 'Provider cost', 'Revenue', 'Net', 'Cost / active user']} />
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Pricing</h2>
-      <p class="dashboard-summary-status" aria-live="polite"><span id="pricing-status"></span> <button type="button" data-retry-section="pricing" hidden>Retry</button></p>
+      <DashboardSectionStatus section="pricing" expandableTable="knobs" />
       <p class="muted">Set in Vercel env (<code>CREDIT_MARKUP</code>, <code>CREDIT_USD</code>, <code>MONTHLY_FREE_CREDITS</code>, <code>STRIPE_SUBSCRIPTION_TIERS</code>, <code>STRIPE_TOP_UP_PACKS</code>). Worst case means the user spends every credit they get.</p>
-      <div class="table-scroll dashboard-table"><ConsoleTable id="knobs" columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} /></div>
+      <DashboardTable id="knobs" visibleRows={6} columns={['Plan', 'Price', 'Credits / month', 'Worst-case cost', 'Worst-case net']} />
       <p class="muted" id="knobs-note"></p>
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Top users by cost</h2>
-      <p class="dashboard-summary-status" aria-live="polite"><span id="users-status"></span> <button type="button" data-retry-section="users" hidden>Retry</button></p>
-      <div class="table-scroll dashboard-table"><ConsoleTable id="top-users" columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} /></div>
+      <DashboardSectionStatus section="users" />
+      <DashboardTable id="top-users" visibleRows={4} rowHeight="action" scrollable columns={['Email', 'Plan', 'Requests', 'Cost', 'Revenue', 'Net']} />
       <div class="admin-subpanel">
         <h3>Give or remove credits</h3>
         <div class="row admin-grant">
@@ -64,19 +64,19 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
 
     <Card className="section admin-panel"><section>
       <h2>Cost by model</h2>
-      <p class="dashboard-summary-status" aria-live="polite"><span id="models-status"></span> <button type="button" data-retry-section="models" hidden>Retry</button></p>
-      <div class="table-scroll dashboard-table"><ConsoleTable id="models" columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} /></div>
+      <DashboardSectionStatus section="models" expandableTable="models" />
+      <DashboardTable id="models" visibleRows={8} columns={['Model', 'Provider', 'Who', 'Requests', 'Cost']} />
     </section></Card>
 
     <Card className="section admin-panel"><section>
       <h2>Model performance</h2>
-      <p class="dashboard-summary-status" aria-live="polite"><span id="performance-status"></span> <button type="button" data-retry-section="performance" hidden>Retry</button></p>
+      <DashboardSectionStatus section="performance" expandableTable="performance" />
       <p class="muted">Successful HTTP requests this month, measured at the backend rather than the desktop. TTFT starts at request admission and ends at the first parsed text, reasoning or tool output, ignoring keepalives. Turn time ends when the response finishes. Tokens/s is the mean per-request output rate after TTFT, estimated when provider token counts are missing; partial streams may contribute. Sample counts appear below each mean; historical requests have no TTFT.</p>
-      <div class="table-scroll dashboard-table"><ConsoleTable id="performance" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} /></div>
+      <DashboardTable id="performance" visibleRows={6} rowHeight="double" columns={['Model', 'Provider', 'Requests', 'Mean TTFT', 'Mean turn time', 'Mean tokens/s (est.)']} />
     </section></Card>
 
     <AdminModels server:defer>
-      <Card slot="fallback" className="section admin-panel admin-model-config" aria-busy="true" aria-label="Loading model configuration"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></Card>
+      <AdminModelsSkeleton slot="fallback" />
     </AdminModels>
 
     <Card className="section admin-panel"><section>
@@ -143,15 +143,33 @@ if (!isAdmin(user)) return new Response('Forbidden', { status: 403 });
     const tableUpdates = createDashboardTableUpdates();
     function fillRows(tableId, rows, columns, onApplied = () => {}) {
       const body = document.querySelector(`#${tableId} tbody`);
+      const container = body.closest('.dashboard-table');
+      const visibleRows = container.hasAttribute('data-scrollable') ? Infinity : Number(container.dataset.visibleRows);
       const html = rows.length
-        ? rows.map((row) => `<tr>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
+        ? rows.map((row, index) => `<tr${index >= visibleRows ? ' data-overflow' : ''}>${row.map((cell) => `<td>${cell}</td>`).join('')}</tr>`).join('')
         : `<tr><td colspan="${columns}" class="muted">Nothing this month.</td></tr>`;
       if (body.innerHTML === html) { tableUpdates.cancel(body); onApplied(); return true; }
       return tableUpdates.update(body, body.contains(document.activeElement), () => {
         body.innerHTML = html;
+        syncTableToggle(tableId);
         onApplied();
       });
     }
+    function syncTableToggle(tableId) {
+      const toggle = document.querySelector(`[data-table-toggle="${tableId}"]`);
+      if (!toggle) return;
+      const container = document.getElementById(tableId).closest('.dashboard-table');
+      const rowCount = container.querySelectorAll('tbody tr').length;
+      const expanded = container.hasAttribute('data-expanded');
+      toggle.hidden = rowCount <= Number(container.dataset.visibleRows);
+      toggle.textContent = expanded ? 'Show fewer' : `Show all ${integer.format(rowCount)}`;
+      toggle.setAttribute('aria-expanded', String(expanded));
+    }
+    document.querySelectorAll('[data-table-toggle]').forEach((toggle) => toggle.addEventListener('click', () => {
+      const tableId = toggle.dataset.tableToggle;
+      document.getElementById(tableId).closest('.dashboard-table').toggleAttribute('data-expanded');
+      syncTableToggle(tableId);
+    }));
 
     document.getElementById('admin-console').addEventListener('focusout', (event) => {
       const body = event.target.closest('tbody');

@@ -2,6 +2,8 @@
 import { Card } from '../ui/card';
 import { ConsoleSelect } from '../ConsoleSelect';
 import { ConsoleCombobox } from '../ConsoleCombobox';
+import AdminModelsFrame from './AdminModelsFrame.astro';
+import AdminModelRoute from './AdminModelRoute.astro';
 import { getCurrentUser, isAdmin } from '../../lib/admin';
 import {
   DEFAULT_THINKING_LEVEL,
@@ -75,30 +77,23 @@ decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
 } catch (error) { console.error('Admin models unavailable', error); }
 ---
 {available ? (
-    <Card className="section admin-panel admin-model-config"><section>
-      <h2>Models</h2>
-      <p class="muted">From the models.dev catalog: priced models with image input and function tools. Smart also needs reasoning; Fast runs with thinking off. Dictation uses audio transcription.</p>
-      <div class="model-routes">
-        {modelRows.map(({ slot, title, route, kind, options }) => (
-          <section class="model-route-row" data-model-route={slot}>
-            <header class="model-route-row__header"><strong>{title}</strong><span class="status" data-status role="status" aria-live="polite"></span></header>
-            <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
-            {kind === 'smart'
-              ? <label class="field model-route-row__thinking">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
-              : <span class="muted model-route-row__thinking">Thinking off</span>}
-            <div class="route-details muted" data-pricing></div>
-          </section>
-        ))}
-        <section class="model-route-row" data-audio-model-route>
-          <header class="model-route-row__header"><strong>Dictation</strong><span class="status" data-status role="status" aria-live="polite"></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? ''} options={[...(!audioRouteRef ? [{ value: '', label: 'Select a dictation model', disabled: true }] : []), ...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (provider, pricing, or budget unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
-          <p class="muted">Models are checked against the budget for a typical one-minute recording segment. If a longer segment exceeds the budget, try a shorter recording.</p>
-        </section>
-        <section class="model-route-row" data-decision-model-route>
-          <header class="model-route-row__header"><strong>Decisions</strong><span class="status" data-status role="status" aria-live="polite"></span></header>
-          <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: `${modelRouteToRef(model)} · images` }))]} /></label>
-          <p class="muted">Only models that support images can be selected.</p>
-        </section>
-      </div>
-    </section></Card>
+    <AdminModelsFrame>
+      {modelRows.map(({ slot, title, route, kind, options }) => (
+        <AdminModelRoute title={title} tier={slot.startsWith('pro') ? 'pro' : 'free'} data-model-route={slot}>
+          <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
+          {kind === 'smart'
+            ? <label class="field">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
+            : <label class="field">Thinking<ConsoleSelect className="thinking-select" disabled defaultValue="off" options={[{ value: 'off', label: 'off' }]} /></label>}
+          <span slot="details" data-pricing></span>
+        </AdminModelRoute>
+      ))}
+      <AdminModelRoute title="Dictation" tier="dictation" data-audio-model-route>
+        <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? ''} options={[...(!audioRouteRef ? [{ value: '', label: 'Select a dictation model', disabled: true }] : []), ...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (provider, pricing, or budget unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
+        <span slot="details">Budget-checked for a one-minute recording; longer ones can exceed it.</span>
+      </AdminModelRoute>
+      <AdminModelRoute title="Decisions" tier="decisions" data-decision-model-route>
+        <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: modelRouteToRef(model) }))]} /></label>
+        <span slot="details">Only image-capable models.</span>
+      </AdminModelRoute>
+    </AdminModelsFrame>
 ) : <Card className="section admin-panel admin-model-config"><p role="alert">Could not load model configuration. <a href="/admin">Retry</a></p></Card>}
