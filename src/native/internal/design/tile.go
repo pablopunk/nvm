@@ -9,10 +9,6 @@ import (
 // TileSize is the side of a row's icon tile, in DIPs.
 const TileSize = 32
 
-// FileIconSize is the side a file or app icon is drawn at. System icons keep about a tenth of their canvas as
-// transparent margin on each side, so drawn at this size their visible body matches a TileSize key beside them.
-const FileIconSize = 40
-
 // TileData is the icon of a row. The first of these that is set wins: a preview image, the file's own icon,
 // a Lucide icon, then the one or two letters of Glyph (or of Title).
 type TileData struct {
