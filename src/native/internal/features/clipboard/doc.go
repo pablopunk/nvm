@@ -2,7 +2,7 @@
 // stored, searched and retained, the image store and its garbage collection, the copy and paste actions,
 // and the row and action data the palette renders.
 //
-// The behavior contract is the 1.x code in src/app/electron/clipboard/*.ts and its tests, ported case for
+// The behavior contract is the 1.x code in electron/clipboard/*.ts and its tests, ported case for
 // case (see the test files for the mapping). Entry points:
 //
 //   - History holds entries newest first, enforces retention and persists through Persistence.

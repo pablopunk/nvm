@@ -24,7 +24,7 @@ reports that exact commit. Do not continue if health, compatibility, or aliases 
 1. In a fresh browser session, sign in at `https://nvm.fyi` with WorkOS. Pass only
    when the real callback completes and the profile/dashboard loads; merely
    reaching AuthKit is not sufficient.
-2. Launch the packaged Electron release against the production backend, sign out
+2. Launch the packaged desktop release against the production backend, sign out
    any cached session, and sign in again. Complete the browser verification page
    and confirm the app consumes the device approval and shows the production
    account.

@@ -33,7 +33,7 @@ The 2.x extension API replaces 1.x with no loss. Each of the four promises below
 
 ## 2. Where it stands
 
-From a static comparison of `src/app/resources/nevermind-extension-api.d.ts` and `internal/ext/api`, plus one measurement on the owner's Mac. The comparison matched names, so a match does not prove equal behavior. WP3.11 settles that.
+From a static comparison of `src/native/testdata/parity/nevermind-extension-api.d.ts` and `internal/ext/api`, plus one measurement on the owner's Mac. The comparison matched names, so a match does not prove equal behavior. WP3.11 settles that.
 
 **Covered by name or a direct rename:** all view kinds, form field types, trigger types, menu bar rows and popovers, windows, shell, files, clipboard, OCR, dictation, indicators, AI, global shortcuts.
 

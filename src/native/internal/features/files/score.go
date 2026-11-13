@@ -5,7 +5,7 @@ import (
 	"unicode/utf8"
 )
 
-// The score bands of the palette ranking contract (src/app/palette/search-ranking.ts). This package scores file
+// The score bands of the palette ranking contract (src/backend/src/palette-ui/search-ranking.ts). This package scores file
 // names with the same bands; WP1.1's shared search package replaces this copy.
 //
 //	100 exact; 95 ordered word prefixes starting at the first word; 90 whole-word phrase; 80 starts with;

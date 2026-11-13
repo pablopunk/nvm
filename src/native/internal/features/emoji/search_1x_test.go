@@ -4,7 +4,7 @@ import "testing"
 
 // oneXGrid is the grid of 1.x's Emoji & Symbols picker for each query: total is how many entries its filter keeps, at
 // the 50 minimum score of the grid, and head is the first of them in 1.x's order. The expected values come from running
-// 1.x's own picker view (src/app/extensions/emoji-symbols.ts) through its grid filter (src/app/palette/filtering.ts),
+// 1.x's own picker view (extensions/emoji-symbols.ts) through its grid filter (1.x/palette/filtering.ts),
 // not from this port. "copy" matches every entry because 1.x searches the titles of the actions a row carries.
 var oneXGrid = []struct {
 	query string

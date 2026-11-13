@@ -140,7 +140,7 @@ and `src/native/internal/backend/compat.go`:
 7. **Routes both clients depend on.** `POST /api/auth/device/initiate`, `POST /api/auth/device/exchange`,
    `GET /api/compatibility`, `DELETE /api/tokens/current`, `GET /api/v1/active-model`, `POST /api/v1/decisions`,
    `POST` and `DELETE /api/v1/audio/transcription-preparations`, and `POST /api/v1/audio/transcriptions` (1.x dictation,
-   confirmed in `src/app/electron/dictation/dictation-transcription.ts`). 2.0 also calls `POST /api/v1/chat/completions`.
+   confirmed in `1.x/electron/dictation/dictation-transcription.ts`). 2.0 also calls `POST /api/v1/chat/completions`.
    It no longer calls `GET /api/me` (item 5). Every backend change to these routes follows the checklist in `docs/backend-api-compatibility.md`.
 8. **Idempotency and dictation headers.** Optional dictation headers stay optional. Neither app's billing identity
    changes.

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-layout-catalog.test.ts.
+// Ported from 1.x/electron/os/window-layout-catalog.test.ts.
 
 const catalogEpsilon = 1e-9
 

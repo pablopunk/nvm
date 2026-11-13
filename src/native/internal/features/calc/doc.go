@@ -17,5 +17,5 @@
 // go calc.Refresh(ctx) in a background goroutine with the search context, so a later keystroke finds the quote.
 // Query and Refresh never block on the network, so typing and command execution stay off the critical path.
 //
-// The behavior contract is src/app/electron/search/calculator.ts and its tests, ported case for case.
+// The behavior contract is 1.x/electron/search/calculator.ts and its tests, ported case for case.
 package calc

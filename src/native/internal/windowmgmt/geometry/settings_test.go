@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/extensions/window-management-specs.test.ts. The TypeScript cases use the
+// Ported from 1.x/extensions/window-management-specs.test.ts. The TypeScript cases use the
 // settings model's defaults; Settings here carries the same fields and DefaultSettings the same values.
 
 var settingsDependentPresets = map[PresetID]bool{

@@ -8,7 +8,7 @@ import (
 // maxStackWords sizes the word buffers that keep multi-word matching allocation-free for typical fields.
 const maxStackWords = 16
 
-// The grid's matching comes from 1.x's grid filter (src/app/palette/filtering.ts): a searched value matches when it
+// The grid's matching comes from 1.x's grid filter (palette/filtering.ts): a searched value matches when it
 // contains the query, or when the query has several words and each one starts a word of the value, in order or in any
 // order. Scattered letters never match.
 

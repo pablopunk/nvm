@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-layouts.test.ts.
+// Ported from 1.x/electron/os/window-layouts.test.ts.
 
 var primaryWorkArea = rectOf(0, 0, 1440, 900)
 var probeWindow = rectOf(100, 120, 800, 500)

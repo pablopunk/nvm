@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-layout-gaps.test.ts.
+// Ported from 1.x/electron/os/window-layout-gaps.test.ts.
 
 var (
 	gapsWorkArea     = rectOf(0, 0, 1440, 900)

@@ -2,7 +2,7 @@ package search
 
 import "testing"
 
-// The vectors below are ported verbatim from src/app/palette/search-ranking.test.ts (the scoreNormalized
+// The vectors below are ported verbatim from 1.x/palette/search-ranking.test.ts (the scoreNormalized
 // cases that depend on TypeScript normalization are left out: Score trims and lowercases on its own).
 // Scores are for lowercase input, as ScoreFuzzy requires.
 

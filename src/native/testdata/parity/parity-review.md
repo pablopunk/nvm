@@ -1,6 +1,6 @@
 # Parity review sheet: Electron 1.x to Go 2.0
 
-First pass, built from the progress table in [PLAN.md](../../PLAN.md) and by reading `src/app` (the 1.x source) and
+First pass, built from the progress table in [PLAN.md](../../PLAN.md) and by reading the 1.x app (the 1.x source) and
 `src/native/internal`. It is the input to the parity review of PLAN section 3.3 and cutover.md section 6. It is not
 the review itself: no side-by-side run, no 20-query comparison and no owner sign-off has happened yet.
 
@@ -36,16 +36,16 @@ Gap column before deciding a row.
 
 | ID | Electron feature (1.x source) | Go status | Platforms run | Go code / WP / proof | Gap |
 |---|---|---|---|---|---|
-| A1 | Palette window, summon hotkey, placement on the cursor's display (`src/app/electron/app/palette-window.ts`, `palette-shortcuts.ts`) | partial | Linux; macOS and Windows compile | WP1.3; `internal/shortcuts`, `internal/palette/placement.go`; rig J01, J11 | J25 and J26 (multi-display, Spaces, full screen), focus return to the previous app, remembered offset (owner decision), tiling-manager check, hotkey does not hide a shown palette |
-| A2 | Command-K action panel and keyboard contract (`src/app/palette/action-panel.tsx`) | done | Linux (L1, L2) | WP1.1; `internal/palette/actions.go`, `keys.go`, `focus.go` | none listed |
+| A1 | Palette window, summon hotkey, placement on the cursor's display (`1.x/electron/app/palette-window.ts`, `palette-shortcuts.ts`) | partial | Linux; macOS and Windows compile | WP1.3; `internal/shortcuts`, `internal/palette/placement.go`; rig J01, J11 | J25 and J26 (multi-display, Spaces, full screen), focus return to the previous app, remembered offset (owner decision), tiling-manager check, hotkey does not hide a shown palette |
+| A2 | Command-K action panel and keyboard contract (`1.x/palette/action-panel.tsx`) | done | Linux (L1, L2) | WP1.1; `internal/palette/actions.go`, `keys.go`, `focus.go` | none listed |
 | A3 | Search coordinator: cached results first, cancellation, stale-result guard (`electron/search/search-coordinator.ts`) | done | Linux (L2) | WP1.1; `internal/search`; provider that blocks 2 s does not delay typing | none listed |
-| A4 | Ranking and the 20 canned queries (`src/app/palette/search-ranking.ts`, `testdata/queries.txt`) | partial | Linux (L1) | WP1.2; `internal/search` ranking tests | The 20 queries are in `testdata/queries.txt`, read by the root table test; the 20-query comparison with 1.x has not run |
+| A4 | Ranking and the 20 canned queries (`src/backend/src/palette-ui/search-ranking.ts`, `testdata/queries.txt`) | partial | Linux (L1) | WP1.2; `internal/search` ranking tests | The 20 queries are in `testdata/queries.txt`, read by the root table test; the 20-query comparison with 1.x has not run |
 | A5 | Usage learning, frecency, query history of 100 entries (`electron/state/learning-store.ts`) | done | Linux (L1, L2) | WP1.2; `internal/search/usage` | none listed |
 | A6 | "No shortcut set" banner (`palette-hotkey-notice.tsx`) | partial | Linux (rig) | WP1.3; `internal/palette/notice.go` | saving a taken shortcut in the rig is not done |
 | A7 | Keyboard shortcuts manager and recorder (`electron/shortcuts/*`, `palette/shortcut-manager.tsx`) | partial | Linux (rig J01, J11, J22) | WP1.11; `internal/shortcuts` | extension-declared shortcuts (no extension host shortcut path), J11 launch-at-login, macOS and Windows runs |
-| A8 | Rotating placeholders and empty states | unknown | none | not tracked by PLAN | check against `src/app/palette/App.tsx` |
+| A8 | Rotating placeholders and empty states | unknown | none | not tracked by PLAN | check against `1.x/palette/App.tsx` |
 
-## B. Built-in extensions (`src/app/extensions/index.ts`, 24 factories)
+## B. Built-in extensions (`1.x/extensions/index.ts`, 24 factories)
 
 | ID | Electron feature (1.x source) | Go status | Platforms run | Go code / WP / proof | Gap |
 |---|---|---|---|---|---|
@@ -63,7 +63,7 @@ Gap column before deciding a row.
 | B12 | Files: find, preview, reveal, open, drag out, Quick Look, open with (`files.ts`, `electron/files/*`) | partial | Linux (L1, L2, box checks) | WP1.7 (library), WP1.7b (wiring); `internal/features/files` | open-with, Quick Look, folders, rig J07 not run, drag-out untested at runtime, macOS and Windows watch unverified |
 | B13 | Find Files by Meaning (`files-semantic-search.ts`) | partial | Linux (L1, L2 goldens) | WP4.2; `internal/app/files_meaning.go` | no embeddings (same as 1.x); sends the 16 most recent file names to the decision route; macOS L5 not run; root command only while signed in |
 | B14 | Floating notes: Markdown, autosave, conflict resolution, floating windows restored at launch (`floating-notes.ts`) | partial | Linux (L1, L2; rig J09, J10 smokes) | WP1.9; `internal/features/notes` | real paste not implemented (copy fallback); macOS and Windows not run; crash-recovery and two-instance tests exist |
-| B15 | Snippets: keywords, placeholders, paste (PLAN WP1.9 treats this as parity) | unknown | Linux (L1, L2; rig J09 smoke) | WP1.9; `internal/features/snippets` | no snippets built-in found in `src/app`; the 1.x API docs mention snippets only as extension examples. Owner to confirm whether 1.x had snippets. Real paste is not implemented (copy fallback); macOS and Windows not run |
+| B15 | Snippets: keywords, placeholders, paste (PLAN WP1.9 treats this as parity) | unknown | Linux (L1, L2; rig J09 smoke) | WP1.9; `internal/features/snippets` | no snippets built-in found in the 1.x app; the 1.x API docs mention snippets only as extension examples. Owner to confirm whether 1.x had snippets. Real paste is not implemented (copy fallback); macOS and Windows not run |
 | B16 | Extensions manager: list, enable, disable, review, delete, failure rows (`extensions.ts`) | partial | Linux (rig J15, J16 on :88) | WP3.2; `internal/app/extensions_*.go`, `internal/ext/manager` | macOS and Windows runs; memory-bomb and three-failure disable paths not rig-tested; a file dropped while the app runs not rig-tested; 100 ms keystroke budget not measured |
 | B17 | AI builder: Automate, write, check, fix loop, install, Edit with AI (`ai-builder.ts`, `electron/ai/ai-builder-*.ts`) | partial | Linux (rig J14 and edit journey green) | WP3.9; `internal/ai/builder`, `internal/ext/manager` | 30-prompt eval harness not built, read-page, file and preview tools, proposals and PR submitter, window-management guidance, author-experience metrics |
 | B18 | Permissions view and prompts (`permissions.ts`, `electron/os/*`) | partial | Linux (L1, L2) | WP1.10 | permission state reads are unknown on every OS; prompts only when a command needs them (J25) not verified |
@@ -81,16 +81,16 @@ Gap column before deciding a row.
 
 | ID | Electron feature (1.x source) | Go status | Platforms run | Go code / WP / proof | Gap |
 |---|---|---|---|---|---|
-| C1 | AI chat: Tab to ask, streaming, stop, regenerate, chat list, model tiers, 24 h retention (`src/app/electron/ai/ai-chat-*.ts`, `palette/ai-chat/*`) | partial | Linux (L1, L2, L3 goldens) | WP2.3; `internal/ai/chat`, `internal/palette/aichat` | rig J13 and J28 not run (packaged builds refuse the fake origin), images and thumbnails, per-message copy and retry, macOS and Windows runs, live smoke |
-| C2 | Agent tools in chat: search and read files, open apps and links, read and copy the clipboard, move to Trash, with approvals (`src/app/electron/ai/ai-tool-policy.ts`) | partial | Linux (L1, L2, goldens) | WP2.4; `internal/ai/agent`, `internal/ai/tools` | web search and fetch with egress approval, Responses and Messages wires, compaction, window and quit tools, rig J13 and J14, live backend smoke |
+| C1 | AI chat: Tab to ask, streaming, stop, regenerate, chat list, model tiers, 24 h retention (`1.x/electron/ai/ai-chat-*.ts`, `palette/ai-chat/*`) | partial | Linux (L1, L2, L3 goldens) | WP2.3; `internal/ai/chat`, `internal/palette/aichat` | rig J13 and J28 not run (packaged builds refuse the fake origin), images and thumbnails, per-message copy and retry, macOS and Windows runs, live smoke |
+| C2 | Agent tools in chat: search and read files, open apps and links, read and copy the clipboard, move to Trash, with approvals (`1.x/electron/ai/ai-tool-policy.ts`) | partial | Linux (L1, L2, goldens) | WP2.4; `internal/ai/agent`, `internal/ai/tools` | web search and fetch with egress approval, Responses and Messages wires, compaction, window and quit tools, rig J13 and J14, live backend smoke |
 | C3 | Compatibility and update-recommended notices from the backend (`src/backend/src/lib/compatibility.ts`) | partial | Linux (L1) | WP2.1; `internal/backend/compat.go` | live smoke not run; the manifest's `latestVersion` and `updateUrl` are not read until the 2.0 client name ships (cutover.md section 4) |
 | C4 | Ask-AI image classification and OCR command (`electron/files/ocr.ts`) | partial | Linux (L1, L2, goldens; Tesseract when installed) | WP4.2; `internal/features/ocr` | macOS Vision and screen capture unrun (L5), Windows OCR missing, rig journeys |
 | C5 | Camera and webview views (`camera-view.tsx`, `extension-webview.tsx`) | partial | Linux (rig camera refusal, webview paints) | WP4.3; `internal/palette/extview` | capture to file or clipboard (no 1.x parity), saved camera not kept on disk, macOS and Windows runs, camera permission copy (WP5.1) |
 | C6 | Launch at login (`electron/app/settings-service.ts`) | partial | Linux (rig J11 not run) | WP1.10 (Autostart port) | J11 launch-at-login not run; macOS and Windows runs |
 | C7 | Tray and menu bar placement per OS (`electron/os/menubar-status-items.ts`) | partial | Linux (rig tray registration) | WP1.12, WP3.5 | macOS and Windows runs; the 1.x menu bar window placement is not ported |
-| C8 | Feedback indicator (`src/app/extensions/feedback.ts`, an extension indicator) | missing | none | no `indicators` service in `internal/ext/services` | extension indicators are not in the Go services (WP3.7 lists indicators as not done) |
+| C8 | Feedback indicator (`1.x/extensions/feedback.ts`, an extension indicator) | missing | none | no `indicators` service in `internal/ext/services` | extension indicators are not in the Go services (WP3.7 lists indicators as not done) |
 
-## D. Extension API: context namespaces (`src/app/resources/nevermind-extension-api.d.ts`, `ExtensionContext`)
+## D. Extension API: context namespaces (`src/native/testdata/parity/nevermind-extension-api.d.ts`, `ExtensionContext`)
 
 The 1.x context has 31 namespaces. The Go `api.Context` interface has the same set except `state`, `extensions` and
 `ui` (its UI is `Views`, `Navigation`, `Input`). Go adds `Identity`, `Clock`, `Network` and `Indicators`, which 1.x
@@ -147,7 +147,7 @@ does not expose here. Service handlers live in `src/native/internal/ext/services
 | E11 | Failure isolation: panic, hang, flood, memory (`extension-rate-limits.ts`) | partial | Linux (rig J15 fixtures) | WP3.2 | memory-bomb and three-failure disable paths not rig-tested; macOS and Windows memory cap missing (resident watch only) |
 | E12 | Atomic install, uninstall and hot reload (`extension-runtime-transaction.ts`) | partial | Linux (L1) | WP3.2, WP3.9 | a file dropped while the app runs is not rig-tested |
 | E13 | Dropped-in extensions disabled by default (`docs/extension-trust-model.md`) | partial | Linux (rig J16) | WP3.2 | enable after review on macOS and Windows |
-| E14 | API reference and AI builder context (`src/app/resources/nevermind-extension-api.d.ts`, SKILL.md) | done | Linux (L1, drift test) | WP3.9; `internal/ai/builder/apiref` generated from the Go api, size budget and drift test | the 1.x `.d.ts` remains the source of truth in AGENTS.md until cutover (a doc decision, not a gap) |
+| E14 | API reference and AI builder context (`src/native/testdata/parity/nevermind-extension-api.d.ts`, SKILL.md) | done | Linux (L1, drift test) | WP3.9; `internal/ai/builder/apiref` generated from the Go api, size budget and drift test | the 1.x `.d.ts` remains the source of truth in AGENTS.md until cutover (a doc decision, not a gap) |
 | E15 | Shortcuts declared on extension commands | partial | Linux | WP1.11 (model in place) | extension shortcuts not wired to the host (no extension host shortcuts in the palette) |
 
 ## F. Test assets and evidence

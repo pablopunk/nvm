@@ -54,7 +54,7 @@ it before relying on it.
 
 ## Open problem: the transparent palette does not show on Linux
 
-The palette window is created with `transparent: true` (`src/app/electron/app/palette-window.ts`, line 136), so
+The palette window is created with `transparent: true` (`1.x/electron/app/palette-window.ts`, line 136), so
 its rounded corners should show the desktop outside the pane. In the Linux box runs during the Electron
 investigation that did not happen: `root-search-automate.png` shows an opaque paper pane, with the wallpaper
 visible only outside it. The same investigation used a minimal probe (a `BrowserWindow` with `transparent: true`,

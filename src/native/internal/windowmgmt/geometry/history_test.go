@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-management-memory.test.ts (the two pure cases; the third
+// Ported from 1.x/electron/os/window-management-memory.test.ts (the two pure cases; the third
 // case drives the service and is deferred to WP4.1b). The remaining tests cover the restore-history
 // rules of window-management-history.ts, which have no separate TypeScript test file.
 

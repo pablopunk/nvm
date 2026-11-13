@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-management-options.test.ts and the defaults-to-options
-// cases of src/app/extensions/window-management-options.test.ts. In Go the partial-options
+// Ported from 1.x/electron/os/window-management-options.test.ts and the defaults-to-options
+// cases of 1.x/extensions/window-management-options.test.ts. In Go the partial-options
 // resolution is expressed by starting from DefaultOptions() and overriding fields; TypeScript
 // undefined fields have no Go equivalent (see the report).
 

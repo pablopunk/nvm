@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-display-geometry.test.ts (31 cases) and the pure parts of
-// src/app/electron/os/window-management-display.test.ts (the service-harness cases are deferred).
+// Ported from 1.x/electron/os/window-display-geometry.test.ts (31 cases) and the pure parts of
+// 1.x/electron/os/window-management-display.test.ts (the service-harness cases are deferred).
 
 var (
 	geoPrimary = Display{ID: "primary", Main: true, Scale: 1, Frame: rectOf(0, 0, 1440, 900), WorkArea: rectOf(0, 0, 1440, 900)}

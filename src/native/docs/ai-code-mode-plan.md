@@ -33,7 +33,7 @@ First slice: notes only (create, append, delete with approval). It forces all th
 | Destructive calls already ask the user from inside the host | `internal/ext/services/confirm.go:37`, `services/notes.go:85` (`noteDelete`: requires a `run` request, then confirms) | Right idea, wrong surface: it asks in the palette (`internal/app/extensions_host.go:272`) with only "Delete note". |
 | Generated API reference from the api package, with a compact form and a size ratchet | `internal/ai/builder/apiref`, `builder/reference_gen.go`, `reference_test.go:61` (`maxCompactReferenceBytes = 39 << 10`) | Reuse for model guidance (section 5). |
 | Native agent loop spike and its tool policy design | `docs/agent-loop-spike.md` | Policy, cancellation and "every call gets one answer" rules carry over. |
-| 1.x prior art | `src/app/electron/ai/ai.ts:1868`, `pi-session-tool-policy.ts:69` | 1.x **disabled** pi's `codemode`, `mcp` and `tool-search` extensions and rejected any tool named like them. 1.x conversations could read files and use the web, never act on the app. There is no 1.x code mode to port. `host.mjs:181` keeps the same `disabledBuiltinExtensions`. |
+| 1.x prior art | `electron/ai/ai.ts:1868`, `pi-session-tool-policy.ts:69` | 1.x **disabled** pi's `codemode`, `mcp` and `tool-search` extensions and rejected any tool named like them. 1.x conversations could read files and use the web, never act on the app. There is no 1.x code mode to port. `host.mjs:181` keeps the same `disabledBuiltinExtensions`. |
 
 A search of `docs/` and `src/native/docs` for "code mode" finds only the 1.x policy above. This document is the first design for it.
 

@@ -13,7 +13,7 @@ Scope: PLAN.md decision D2 (AI agent loop), section 0 table, WP2.4a and WP3.9.
 
 ## 1. Inventory of the 1.x agent
 
-Source: `src/app/electron/ai/`. "pi" is `@earendil-works/pi-coding-agent` 1.4.0 with `pi-ai` 1.4.0 and `pi-web-access` 0.24.0 (`package.json`).
+Source: `1.x/electron/ai/`. "pi" is `@earendil-works/pi-coding-agent` 1.4.0 with `pi-ai` 1.4.0 and `pi-web-access` 0.24.0 (`package.json`).
 
 ### 1.1 Tools
 
@@ -71,7 +71,7 @@ Terminal events are deduplicated (`ai-chat-send.ts` `terminalEvent`). The termin
 ### 1.6 Retention
 
 - Conversation chats expire 24 hours after their last update (`ai-chat-retention.ts`, `AI_CONVERSATION_RETENTION_MS`). Builder chats are not expired by this module.
-- Chat images are capped at 8 per message, 2048 px, 2 MB each (`src/app/shared/ai-chat-images.ts`). Removing a chat removes its image directory (`ai-chat-lifecycle.ts`).
+- Chat images are capped at 8 per message, 2048 px, 2 MB each (`1.x/shared/ai-chat-images.ts`). Removing a chat removes its image directory (`ai-chat-lifecycle.ts`).
 
 ### 1.7 Learnings
 

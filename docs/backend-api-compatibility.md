@@ -1,6 +1,6 @@
 # Backend API compatibility
 
-Nevermind's desktop app and backend do not deploy at the same cadence. Desktop users install tagged Electron releases when they choose to update; the backend may deploy continuously from `main`. The backend must therefore treat every supported desktop release as an active client.
+Nevermind's desktop app and backend do not deploy at the same cadence. Desktop users install tagged desktop releases when they choose to update; the backend may deploy continuously from `main`. The backend must therefore treat every supported desktop release as an active client.
 
 ## Product contract
 

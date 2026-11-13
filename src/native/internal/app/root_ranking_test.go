@@ -9,7 +9,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search/usage"
 )
 
-// The cases below are the root-level ports of src/app/electron/search/action-ranking.test.ts. The 1.x fallbacks
+// The cases below are the root-level ports of 1.x/electron/search/action-ranking.test.ts. The 1.x fallbacks
 // are the Automate and web search rows here, whose fixed scores stand in for the 1.x query-fallback band.
 
 // TestPortedLeadingQueryWordsOutrankFallbacks ports "leading query words in a command outrank generated search

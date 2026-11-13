@@ -1,8 +1,8 @@
 # Command-K action menu parity: 1.x inventory
 
-Source of truth for the ⌘K (Ctrl+K) action menu of every row kind in 2.0. Built from the 1.x source (`src/app`), not from
+Source of truth for the ⌘K (Ctrl+K) action menu of every row kind in 2.0. Built from the 1.x source (the 1.x app), not from
 memory. Each row is the menu of one kind; the menu lists the row's primary action first, then the row's own actions, then
-the generic options that 1.x adds to every row (`src/app/palette/App.tsx`, `getOptionActionRows`).
+the generic options that 1.x adds to every row (`palette/App.tsx`, `getOptionActionRows`).
 
 Status values: **done** (2.0 matches the 1.x title, order, shortcut and condition), **partial** (2.0 has the action with a
 different title, shortcut or condition), **missing** (not in 2.0), **extra** (2.0 has it, 1.x does not: removed for parity),
@@ -31,7 +31,7 @@ Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias fo
 
 ## B. Per row kind
 
-### B1. Applications (`src/app/extensions/apps.ts:199`, customizable: true at :214)
+### B1. Applications (`1.x/extensions/apps.ts:199`, customizable: true at :214)
 
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
@@ -45,7 +45,7 @@ Alias sub-flow (opened by G5, App.tsx:3955-3990 and 4215-4250): header "Alias fo
 
 Total for an app row: Open, Uninstall (when supported), Show in Finder (⌘↵, new), Set keyboard shortcut, Remove keyboard shortcut (when bound), Set alias.
 
-### B2. Files (`src/app/extensions/files.ts:33`)
+### B2. Files (`1.x/extensions/files.ts:33`)
 
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
@@ -59,7 +59,7 @@ Total for an app row: Open, Uninstall (when supported), Show in Finder (⌘↵, 
 
 File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 
-### B3. Clipboard entries (`src/app/electron/clipboard/clipboard-history.ts:372-470`)
+### B3. Clipboard entries (`1.x/electron/clipboard/clipboard-history.ts:372-470`)
 
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
@@ -74,7 +74,7 @@ File rows have no keyboard shortcut and no alias in 1.x (no `customizable`).
 
 Clipboard entries have no keyboard shortcut or alias in 1.x.
 
-### B4. Calculator results (`src/app/extensions/calculator.ts:86-136`)
+### B4. Calculator results (`1.x/extensions/calculator.ts:86-136`)
 
 | # | 1.x file:line | Title | Shortcut | Condition | 2.0 status |
 |---|---|---|---|---|---|
@@ -84,7 +84,7 @@ Clipboard entries have no keyboard shortcut or alias in 1.x.
 | K4 | calculator.ts:117 | Copy Unformatted Result | none | formatted result differs from raw | done |
 | K5 | calculator.ts:123 | Paste Result | none | always | done (2.0 label ⌃↵) |
 
-### B5. Commands and built-in extension rows (extension-action, `src/app/extensions/*.ts`)
+### B5. Commands and built-in extension rows (extension-action, `1.x/extensions/*.ts`)
 
 Commands are durable actions (`commandFromItem`, extension-action-builders.ts:2) and are customizable unless the item sets `customizable: false` (view-normalizer.ts:100). Their menu is the generic set G1, G2, G5 after the command's own primary action (titled with the command title).
 
@@ -126,7 +126,7 @@ Root items are customizable only when the item sets `customizable` or it has a p
 
 Extension authoring actions (G6-G12) are missing in 2.0. See the report for the implementation status.
 
-### B7. AI chats (`src/app/electron/ai/ai-chat-views.ts`, `ai-chat-store.ts:190-212`)
+### B7. AI chats (`1.x/electron/ai/ai-chat-views.ts`, `ai-chat-store.ts:190-212`)
 
 | # | 1.x file:line | Title | Condition | 2.0 status |
 |---|---|---|---|---|

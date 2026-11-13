@@ -13,7 +13,7 @@ import (
 // the debt is visible without being hidden; the design owner decides whether the tokens change or the pair stays. A
 // waiver whose pair starts passing fails the test, so it must be removed.
 //
-// Measured with the tokens of src/app/palette/styles/theme.css as ported to tokens.go, before WP0.8: the muted and
+// Measured with the tokens of src/backend/src/palette-ui/styles/theme.css as ported to tokens.go, before WP0.8: the muted and
 // tertiary text and the tone colors fall below 4.5:1 on the selected plate, and the two faintest texts also fall
 // below it on the interactive fill in light.
 var knownFailures = map[string]knownFailure{

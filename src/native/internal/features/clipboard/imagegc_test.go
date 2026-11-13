@@ -15,7 +15,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// Cases ported from src/app/electron/clipboard/clipboard-image-sweeper.test.ts, one test per 1.x case in the
+// Cases ported from 1.x/electron/clipboard/clipboard-image-sweeper.test.ts, one test per 1.x case in the
 // same order, plus the link and folder rules the port adds.
 
 // hashedName returns the file name of the n-th test image: forty hex digits and .png, as the store creates.

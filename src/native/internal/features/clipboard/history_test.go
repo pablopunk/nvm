@@ -10,7 +10,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// Cases ported from src/app/electron/clipboard/clipboard-history.test.ts, history-level only. Each test
+// Cases ported from 1.x/electron/clipboard/clipboard-history.test.ts, history-level only. Each test
 // names the 1.x case it ports.
 
 // TestRememberPrependsItem ports 'rememberClipboardItem prepends item to history'.

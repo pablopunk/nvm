@@ -7,7 +7,7 @@ import (
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
 )
 
-// The cases below are ported from src/app/electron/search/action-ranking.test.ts (the ones that are about
+// The cases below are ported from 1.x/electron/search/action-ranking.test.ts (the ones that are about
 // title scoring and boosts; the rest concern aliases, markers and the 1.x app priority, which the Go root
 // does not have). The root-level cases live in internal/app/root_ranking_test.go.
 

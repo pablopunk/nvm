@@ -1,7 +1,7 @@
-# Main sync log: 1.x (`src/app`) to 2.0 (`src/native`)
+# Main sync log: 1.x (the 1.x app) to 2.0 (`src/native`)
 
 Each sync appends a section. It lists every non-merge commit that `main` gained since the previous merge base, limited to
-`src/app` and `src/backend`, and says where 2.0 stands on it.
+the 1.x app and `src/backend`, and says where 2.0 stands on it.
 
 **2.0 status**
 
@@ -32,10 +32,10 @@ No port was needed from this window, so this sync adds no Go code or tests.
 ### Follow-ups
 
 - **F1. Extension action visibility is not consumed in 2.0 (WP3.3, pre-window).** 1.x honors `actionPanelVisibility`:
-  an item marked `hidden` loses its Command-K action menu except the persistent action (`src/app/palette/App.tsx`,
+  an item marked `hidden` loses its Command-K action menu except the persistent action (`1.x/palette/App.tsx`,
   `itemActionPanelIsVisible`); a view marked `hidden` drops its view actions from the menu
-  (`src/app/palette/local-actions.ts`, `viewActionsForItem`); `menu` and `hidden` drop inline panels
-  (`src/app/palette/extension-view/inline-view-actions.tsx`). 2.0 reads neither `ActionPanelVisibility` nor a view-level
+  (`1.x/palette/local-actions.ts`, `viewActionsForItem`); `menu` and `hidden` drop inline panels
+  (`1.x/palette/extension-view/inline-view-actions.tsx`). 2.0 reads neither `ActionPanelVisibility` nor a view-level
   `ActionPanel` in `internal/palette/extview`; `itemActions` in `rows.go` builds from `Primary` and `Actions` only.
   Plan: first define `menu` and `hidden` for items and views in `docs/extension-api.md` and the API types
   (`internal/ext/api/enums.go`); then, in `extview/rows.go` `row()`, keep the primary action for `hidden` and drop the
@@ -50,9 +50,9 @@ No port was needed from this window, so this sync adds no Go code or tests.
 - Previous merge base: `4c4c0425` (main at the prior sync).
 - Branch: `native/main-sync` (worktree `/Users/pablopunk/.t3/worktrees/nvm/native-main-sync`).
 - Merge commit: `e5f6d9a7` (`Merge origin/main into native/main-sync`). Clean, with no conflicts: main changed only
-  `src/app` and the root docs, and this branch changed only `src/native`.
+  the 1.x app and the root docs, and this branch changed only `src/native`.
 - Commits in window: one, `e5f13458` (PR #283: AI-ranked second batch in emoji and symbol search). It touches
-  `src/app` and `src/backend`; the rest of its files are `.agents/`, `scripts/file-size-baseline.json` and tests.
+  the 1.x app and `src/backend`; the rest of its files are `.agents/`, `scripts/file-size-baseline.json` and tests.
 - `scripts/lint-changed.cjs origin/main` (Biome on changed files, the Windows platform inventory and the extension
   fixture coverage check) passed on the merged tree.
 
@@ -69,7 +69,7 @@ No port was needed from this window, so this sync adds no Go code or tests.
 | 2026-11-04 | e5f13458 | #283 i | `selectionAfterPatch` moved from `App.tsx` to `extension-view/view-patches.ts`. | not applicable | Refactor only: the rule is pre-window 1.x behavior and moved without change. The 2.0 cursor after patches is the palette's (`internal/palette/search.go`, `showRows`), a question from before this window, not new work here. |
 | 2026-11-04 | e5f13458 | #283 j | `view-normalizer.ts` normalizes the `onSearchChange` action for the Electron IPC action cache. | not applicable | Electron IPC clone-safety. 2.0's `ActionRef` is data in the Go view and is looked up by ID in the child, so nothing needs normalizing. |
 | 2026-11-04 | e5f13458 | #283 k | Formatting: numeric separators in a test, import order in `emoji-symbols.ts`, `actionPanelFromActions` brace style, `use-view-search-results` hook placement in `App.tsx`. | not applicable | TypeScript and Biome formatting only; no behavior. |
-| 2026-11-04 | e5f13458 | #283 l | `.agents/skills/nevermind-box-signin/SKILL.md` (a skill for running 1.x signed in on a disposable box). Outside the `src/app` and `src/backend` filter. | not applicable | 1.x agent tooling for the Electron app. The 2.0 equivalent of a signed-in run is the rig (`src/native/PLAN.md`, WP0.3). |
+| 2026-11-04 | e5f13458 | #283 l | `.agents/skills/nevermind-box-signin/SKILL.md` (a skill for running 1.x signed in on a disposable box). Outside the the 1.x app and `src/backend` filter. | not applicable | 1.x agent tooling for the Electron app. The 2.0 equivalent of a signed-in run is the rig (`src/native/PLAN.md`, WP0.3). |
 | 2026-11-04 | e5f13458 | #283 m | `scripts/file-size-baseline.json` raised one entry and lowered another. Outside the filter. | not applicable | 1.x size ratchet. 2.0's ratchet is `internal/layers/size-baseline.json` (empty; no file over 400 lines). |
 
 Counts for this sync (thirteen rows): already in 2.0: 0. needs a port: 8 (all ported in this branch). not applicable: 5 (a

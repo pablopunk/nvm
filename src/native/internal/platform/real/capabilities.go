@@ -146,7 +146,7 @@ func frontmostAppCapable(goos string, getenv func(string) string, hasTool func(s
 	return false
 }
 
-// notificationsCapable is false on Windows: the desktop inventory (docs/windows-platform-inventory.json) has no
+// notificationsCapable is false on Windows: the 1.x desktop inventory has no
 // notification surface, so the capability is omitted there rather than claimed through MyGo's untested toast path.
 func notificationsCapable(goos string) bool {
 	return goos != "windows"

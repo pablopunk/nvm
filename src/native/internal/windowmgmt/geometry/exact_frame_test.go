@@ -2,7 +2,7 @@ package geometry
 
 import "testing"
 
-// Ported from src/app/electron/os/window-layout-exact.test.ts.
+// Ported from 1.x/electron/os/window-layout-exact.test.ts.
 
 var (
 	menuBarWorkArea        = rectOf(0, 25, 1440, 875)

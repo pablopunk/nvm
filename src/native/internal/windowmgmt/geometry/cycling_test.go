@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-management-cycling.test.ts. The TypeScript cases drive the
+// Ported from 1.x/electron/os/window-management-cycling.test.ts. The TypeScript cases drive the
 // service through a simulated window. Here the same press sequence runs as pure geometry: resolve the
 // cycle step, resolve the frame, remember the application. The service-level variant is WP4.1b.
 

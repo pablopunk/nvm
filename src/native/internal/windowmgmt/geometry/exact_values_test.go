@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/extensions/window-management-exact-values.test.ts.
+// Ported from 1.x/extensions/window-management-exact-values.test.ts.
 
 const (
 	unitPointsText  = "points"

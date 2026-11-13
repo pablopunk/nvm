@@ -1,5 +1,7 @@
 # Plan: rewrite Nevermind in Go, safely
 
+> The 1.x Electron app was removed from this tree in the rewrite PR. File names in the "Read first" lists below refer to its sources (and to docs removed with it): read them from git history before the removal.
+
 Companion to the parity checklist in the PR description (#280). The checklist says **what** is left; this says **how to do it without breaking things**: the validation ladder, the UX and UI validation protocols, the safety rules, and the work packages (WPs), each sized and written so one agent can take it with no other context.
 
 If you are an agent picking up a WP: read sections 0 to 4, then your WP, then only the files its "Read first" lists. Do not widen scope.
@@ -46,7 +48,7 @@ client, and 1.x release strings (`2026.MMDD.N`) sort above 2.0 (cutover.md secti
 | D1 | Extension runtime | **Spiked (WP3.1, `docs/extension-runtime-spike.md`):** Yaegi-interpreted Go in a supervised child process (per-call deadline 20/100 ms, kill and restart, address-space cap); sobek JS is the fallback behind the same protocol; in-process Yaegi cannot be interrupted or memory-capped. Final runtime choice at the author-experience gate | WP3.* |
 | D2 | AI agent loop | **Spiked (WP2.4a, `docs/agent-loop-spike.md`):** native Go loop behind `ai.Agent`; the proxy forwards tools and tool-call deltas; owner must check each tier's `api` via `GET /api/v1/active-model` (Responses-format tiers need an adapter); pi sidecar stays a builder-only fallback; pi-in-JS-runtime rejected | WP2.4, WP3.9 |
 | D3 | Backend | Unchanged TypeScript/Astro; Go is a client | WP2.* |
-| D4 | macOS helper | Reuse `src/app/resources/macos-helper/*.swift` as a child process, same CLI contract | WP1.6, WP2.5, WP4.1 |
+| D4 | macOS helper | Reuse `src/native/sidecar/macos-helper/*.swift` as a child process, same CLI contract | WP1.6, WP2.5, WP4.1 |
 | D5 | 1.x state | No migration | WP0.6, WP5.5 |
 | D6 | Architecture order | Design the extension API early (WP3.1) and keep providers shaped for it; migrate built-ins at WP3.10 | WP1.*, WP3.* |
 
@@ -151,7 +153,7 @@ One package, `internal/fixtures`, owns deterministic data: fake apps with icons,
 
 ## 2. UI validation protocol
 
-Goal: the product looks like Nevermind (warm paper and gold in light; cool slate in dark, with panel #1a1f28 and selected #343d4d as in Electron's dark tokens in `src/app/palette/styles/theme.css`, which the Go dark set matches; flat fills with a lit top edge and soft shadow; no gradients beyond the faint gold key) and feels native on each OS.
+Goal: the product looks like Nevermind (warm paper and gold in light; cool slate in dark, with panel #1a1f28 and selected #343d4d as in Electron's dark tokens in `src/backend/src/palette-ui/styles/theme.css`, which the Go dark set matches; flat fills with a lit top edge and soft shadow; no gradients beyond the faint gold key) and feels native on each OS.
 
 **Reference.** WP0.4 captures reference sheets of the Electron palette (the repo already has `report-linux-palette-screenshot.yml` and `tests/electron/palette.smoke.spec.ts`; reuse them) and stores them under `testdata/reference/`. References are for human review, not pixel diffing across toolkits. Our own goldens are the regression net.
 
@@ -352,7 +354,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP0.4 Golden harness, references, contrast tests  `[M]`
 - **Goal:** visual regression net and the Electron reference sheets.
 - **Depends on:** WP0.2, WP0.8 can follow in parallel.
-- **Read first:** `src/app/palette/styles/theme.css`, `palette.css`; `tests/electron/palette.smoke.spec.ts`; MyGo `ui.Render`, `Tester.Image()`.
+- **Read first:** `src/backend/src/palette-ui/styles/theme.css`, `palette.css`; `tests/electron/palette.smoke.spec.ts`; MyGo `ui.Render`, `Tester.Image()`.
 - **Build:** `internal/design/golden` (render a view at light/dark × 1x/2x with a fake clock and fixtures, compare with tolerance, `-update` flag writes new goldens, diff image on failure); `testdata/reference/` Electron screenshots via a script that drives the Electron app in the rig; token contrast test (WCAG AA for each text/surface pair in both themes); hex-literal lint outside `design`.
 - **Acceptance:** goldens for the current palette root, search, clipboard + preview, action menu, form, chat; a one-pixel change fails; updating is one command.
 - **Rungs:** L2, L3.
@@ -370,7 +372,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP0.6 Persistence layer v2  `[M]`
 - **Goal:** the only way data reaches disk.
 - **Depends on:** WP0.2.
-- **Read first:** `src/app/electron/platform/atomic-file.ts`, `private-file.ts`, `state-write-guard.ts`, `shared-state-lease.ts`, `electron/state/state-safe-quit.ts`, `docs/solutions/` (search for state corruption notes).
+- **Read first:** `1.x/electron/platform/atomic-file.ts`, `private-file.ts`, `state-write-guard.ts`, `shared-state-lease.ts`, `electron/state/state-safe-quit.ts`, `docs/solutions/` (search for state corruption notes).
 - **Build:** `internal/store`: typed JSON collections with schema version, atomic write, N backups, quarantine on corrupt, debounced writes with flush on quit and on crash signal, single-writer lease, per-file mode, change events; migration framework (version N → N+1 functions, tested); replace the prototype's `store.go`.
 - **Acceptance:** tests for crash between write and rename (fault-injecting FS fake), corrupt file, two processes, unknown newer version (refuse to overwrite, warn), large file performance; J30 in the rig.
 - **Rungs:** L1, L4.
@@ -399,7 +401,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP1.1 Palette core: navigation, actions, search coordinator  `[L]`
 - **Goal:** the architecture every feature plugs into.
 - **Depends on:** WP0.2, WP0.7, WP0.8.
-- **Read first:** `src/app/palette/App.tsx` (navigation, query handling), `palette/model.ts`, `electron/search/search-coordinator.ts`, `search-snapshot.ts`, `action-ranker.ts`, `palette/search-session.ts`, `palette/shortcuts.ts`, `palette/action-panel.tsx`, `electron/actions/*`.
+- **Read first:** `1.x/palette/App.tsx` (navigation, query handling), `palette/model.ts`, `electron/search/search-coordinator.ts`, `search-snapshot.ts`, `action-ranker.ts`, `palette/search-session.ts`, `palette/shortcuts.ts`, `palette/action-panel.tsx`, `electron/actions/*`.
 - **Build:** `internal/search`: `Provider` interface (`Root(ctx)`, `Search(ctx, q) <-chan Batch`), result snapshots (cached first, refreshed in place), scoring merge (ranking from the prototype), cancellation on keystroke, off-UI-thread execution with partial results; `internal/palette`: view stack with presentations (root, stacked, preview, side-preview), view patching (patch/replace/prepend/append), pending-view loading, back/forward, focus restoration; `Action`/`ActionPanel` with sections, local vs global shortcuts, confirmation as a palette view, `dismissAfterRun` policy; keyboard contract (Command-K never strands focus).
 - **Interfaces:** `Provider`, `Item` (maps to `ExtensionItem`), `Action` (maps to `ExtensionAction`), `View` (maps to `ExtensionView`); WP3.1 reviews these before they freeze.
 - **Acceptance:** L2 suite for navigation, focus, shortcuts, Esc semantics, action panel; provider that blocks 2 s does not delay typing (tester with fake clock); stale results never overwrite newer queries.
@@ -508,7 +510,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP2.1 Backend client  `[M]`
 - **Goal:** the one typed gateway to the backend.
 - **Depends on:** WP0.2, WP0.7.
-- **Read first:** `src/app/electron/backend/*.ts` (all), `docs/backend-api-compatibility.md`, `docs/production-auth-proxy-smoke.md`, `src/backend/src/pages/api/**` (routes: `v1/chat/completions`, `messages`, `responses`, `decisions`, `audio`, `models`, `active-model`, `me`, `auth`, `compatibility`), `src/backend/src/pages/api/contract-routes.test.ts`.
+- **Read first:** `1.x/electron/backend/*.ts` (all), `docs/backend-api-compatibility.md`, `docs/production-auth-proxy-smoke.md`, `src/backend/src/pages/api/**` (routes: `v1/chat/completions`, `messages`, `responses`, `decisions`, `audio`, `models`, `active-model`, `me`, `auth`, `compatibility`), `src/backend/src/pages/api/contract-routes.test.ts`.
 - **Build:** `internal/backend` with typed methods, environment selection (development, production, PR preview, custom), compatibility headers and sunset handling, SSE reader with robust parsing (comments, partial lines, error events, usage), retries for idempotent calls, mapped errors (401, 402 with credits info, 429, 5xx, offline); a fake backend server for tests with recorded responses.
 - **Acceptance:** contract tests run against recorded fixtures derived from the backend's own contract tests; fuzzed SSE input; `deployed-smoke` equivalent in Go (opt-in, uses a staging token).
 - **Rungs:** L1, L4, plus a live smoke (documented credentials flow, not in default CI).
@@ -525,7 +527,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP2.3 AI chat core and UI  `[L]`
 - **Goal:** the full chat experience.
 - **Depends on:** WP2.1, WP1.1, WP0.6, WP0.8.
-- **Read first:** `src/app/electron/ai/ai-chat-*.ts`, `ai-limit-*.ts`, `ai-pricing-notice.ts`, `ai-model-route-eligibility.md`, `palette/ai-chat/*`, `extensions/ai-commands.ts`, `docs/ai-model-route-eligibility.md`.
+- **Read first:** `1.x/electron/ai/ai-chat-*.ts`, `ai-limit-*.ts`, `ai-pricing-notice.ts`, `ai-model-route-eligibility.md`, `palette/ai-chat/*`, `extensions/ai-commands.ts`, `docs/ai-model-route-eligibility.md`.
 - **Build:** sessions store with retention and migration of schema, model tiers via active-model, streaming render with the MyGo markdown, stop/regenerate, message actions (copy, retry), attachments and images (store, thumbnails), limit and pricing notices, "Continue conversation" items, conversation list view, keyboard flow; chat composer pill per design.
 - **Acceptance:** scripted SSE transcripts (including malformed and mid-stream error) render correctly; retention deletes only per settings; L2 tests for stop and resume; golden for long markdown, code block, table.
 - **Rungs:** L1-L4. **UX:** J13, J28. **UI:** goldens for each message type and notice.
@@ -561,7 +563,7 @@ Size: S ≤ 1 day, M a few days, L a week or two, XL several weeks. Sources are 
 ### WP3.1 Extension API v1 design and spikes  `[L]`
 - **Goal:** the Go API surface, reviewed before anyone builds on it.
 - **Depends on:** WP1.1 (interfaces), none otherwise.
-- **Read first:** `src/app/resources/nevermind-extension-api.d.ts` (all 2,400 lines), `docs/extension-trust-model.md`, `palette-first-extension-ui.md`, `list-first-extension-ui.md`, `extension-api-ui-fixtures.md`, `extension-host/extension-manifest.ts`, `extension-capabilities.ts`.
+- **Read first:** `src/native/testdata/parity/nevermind-extension-api.d.ts` (all 2,400 lines), `docs/extension-trust-model.md`, `palette-first-extension-ui.md`, `list-first-extension-ui.md`, `extension-api-ui-fixtures.md`, `extension-host/extension-manifest.ts`, `extension-capabilities.ts`.
 - **Build:** a design doc `src/native/docs/extension-api.md` and Go types in `internal/ext/api`: items, accessories, metadata, detail, appearance, sections, actions and panels, shortcuts, views (list, grid, collection, preview, progress, form with 16 fields, editor, camera, webview), commands, triggers, menu bar contributions, context services, capabilities. Version field and compatibility rules. Spikes with numbers: Yaegi stdlib coverage and generics, per-call overhead, memory per extension, isolation options (in-process vs subprocess with RPC), what happens on Go version bumps; decision recorded for D1.
 - **Acceptance:** owner review of the doc; sample extensions (10 real use cases from existing built-ins) written against the types and compiled; spike report.
 - **Rungs:** L1.

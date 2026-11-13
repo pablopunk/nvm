@@ -21,7 +21,7 @@ type iconStyle struct {
 	emojiTitle bool
 }
 
-// iconStyles mirrors APP_MENU_BAR_ICON_STYLES in src/app/shared/menubar-icons.ts, in the same order.
+// iconStyles mirrors APP_MENU_BAR_ICON_STYLES in 1.x/shared/menubar-icons.ts, in the same order.
 var iconStyles = []iconStyle{
 	{value: "bolt-filled", glyph: "bolt-filled", template: true},
 	{value: "bolt-outline", glyph: "bolt-outline", template: true},

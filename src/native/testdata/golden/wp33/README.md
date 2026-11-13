@@ -44,7 +44,7 @@ Ticked by the author from the goldens above, on Linux (the box), not on macOS or
 
 ## Electron parity (per view type)
 
-Reference: `src/app/palette/extension-view/*` and `src/app/electron/extension-host/extension-ui-api.ts` (behaviour
+Reference: `1.x/palette/extension-view/*` and `1.x/electron/extension-host/extension-ui-api.ts` (behaviour
 read in the WP3.3 review). "Same" means the same rows, actions and shortcuts for the same extension input.
 
 | View | Same | Differences |

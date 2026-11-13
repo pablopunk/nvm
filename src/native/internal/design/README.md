@@ -9,7 +9,7 @@ imports it. `REVIEW.md` records which checklist items each component meets, with
 
 ## Tokens
 
-`tokens.go` holds the two token sets, ported from `src/app/palette/styles/theme.css`: warm paper and a gold accent
+`tokens.go` holds the two token sets, ported from `src/backend/src/palette-ui/styles/theme.css`: warm paper and a gold accent
 in light, ink blue-grey with the same gold in dark. Read them with:
 
 - `design.Tokens(c)` for the appearance the context renders in (the feature-code path);

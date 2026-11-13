@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// golden_test replays testdata/golden.json, which the TypeScript geometry (src/app/electron/os/window-*.ts)
+// golden_test replays testdata/golden.json, which the TypeScript geometry (1.x/electron/os/window-*.ts)
 // produced over seeded random inputs. Each case states the TypeScript answer; the Go port must agree.
 
 type goldenRect struct {

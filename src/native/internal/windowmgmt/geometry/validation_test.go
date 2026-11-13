@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Ported from src/app/electron/os/window-management-validation.test.ts (layout and option cases),
+// Ported from 1.x/electron/os/window-management-validation.test.ts (layout and option cases),
 // window-management-exact-validation.test.ts, and the option validation parts of
 // window-management-options-validation.ts. Cases the TypeScript expresses only with undefined or a
 // non-boolean value are not representable in the typed Go model and are listed in the report.

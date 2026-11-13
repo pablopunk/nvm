@@ -2,7 +2,7 @@ package menubar
 
 import "embed"
 
-// iconFiles holds the glyphs an item draws, copied from src/app/resources/menubar-icons at their @2x size. MyGo takes
+// iconFiles holds the glyphs an item draws, copied from 1.x/resources/menubar-icons at their @2x size. MyGo takes
 // one PNG per icon, so the 1x files are not embedded.
 //
 //go:embed icons/*.png

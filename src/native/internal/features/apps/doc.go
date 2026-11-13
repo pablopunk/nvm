@@ -1,8 +1,8 @@
 // Package apps is the applications feature: the index of installed apps and its persisted cache, the
 // icon service, running-app status, quitting, and the safe uninstall flow.
 //
-// The behavior contract is the 1.x code in src/app/extensions/apps.ts, quit-apps.ts, src/app/electron/app/*.ts
-// and src/app/electron/os/app-quit.ts, app-uninstall-search.ts, windows-app-icons.ts and their tests, ported
+// The behavior contract is the 1.x code in extensions/apps.ts, quit-apps.ts, 1.x/electron/app/*.ts
+// and 1.x/electron/os/app-quit.ts, app-uninstall-search.ts, windows-app-icons.ts and their tests, ported
 // case for case (each test file names its 1.x source). Entry points:
 //
 //   - Index lists the apps from the Shell port, keeps first-seen dates, dedupes by name, and persists the

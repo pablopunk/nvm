@@ -4,7 +4,7 @@ import (
 	"github.com/egoist/mygo/ui"
 )
 
-// TokenSet is one appearance of Nevermind's palette, ported from src/app/palette/styles/theme.css: warm
+// TokenSet is one appearance of Nevermind's palette, ported from src/backend/src/palette-ui/styles/theme.css: warm
 // paper surfaces and a gold accent in light, ink blue-grey with the same gold in dark. Feature code reads
 // colors only from a TokenSet, never from a literal.
 type TokenSet struct {

@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-// Cases ported from src/app/electron/clipboard/link-preview.test.ts. The fetcher is a fake: this package
+// Cases ported from 1.x/electron/clipboard/link-preview.test.ts. The fetcher is a fake: this package
 // never touches the network, and the app's implementation enforces the public-address rules.
 
 // TestSingleWebURLAcceptsOnlyOnePublicURL ports 'singleWebUrl accepts only one public http(s) URL'.

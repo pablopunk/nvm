@@ -10,7 +10,7 @@ var ErrNonPublicAddress = errors.New("platform: destination is not a public addr
 
 // nonPublicPrefixes are the ranges the public network port never contacts: loopback, private, link-local
 // (which holds the cloud metadata address 169.254.169.254), carrier NAT, multicast, documentation and reserved
-// space. They mirror the 1.x public-address policy of src/app/electron/platform/public-http-fetch.ts.
+// space. They mirror the 1.x public-address policy of electron/platform/public-http-fetch.ts.
 var nonPublicPrefixes = mustPrefixes(
 	"0.0.0.0/8", "10.0.0.0/8", "100.64.0.0/10", "127.0.0.0/8", "169.254.0.0/16", "172.16.0.0/12",
 	"192.0.0.0/24", "192.0.2.0/24", "192.168.0.0/16", "198.18.0.0/15", "198.51.100.0/24",

@@ -34,7 +34,7 @@ type chatHead struct {
 }
 
 // chatLastUsed is the later of a chat's creation and its last change, the time 1.x sorts AI builder rows by
-// (src/app/extensions/ai-builder.ts:31). A chat with no time has none.
+// (1.x/extensions/ai-builder.ts:31). A chat with no time has none.
 func chatLastUsed(created, updated time.Time) int64 {
 	latest := created
 	if updated.After(latest) {

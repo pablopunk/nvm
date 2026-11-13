@@ -2,8 +2,8 @@
 // restart, shut down, log out, empty the Trash), the system settings and their panes, the user's folders, and
 // the OS permissions the app asks for.
 //
-// The behavior contract is the 1.x code in src/app/extensions/system.ts, permissions.ts, getting-started.ts and
-// src/app/electron/os/os.ts and system-settings.ts, ported case for case. Entry points:
+// The behavior contract is the 1.x code in extensions/system.ts, permissions.ts, getting-started.ts and
+// 1.x/electron/os/os.ts and system-settings.ts, ported case for case. Entry points:
 //
 //   - Commands lists the palette commands the OS supports. An unsupported command is omitted, never shown
 //     disabled. Destructive commands carry the confirmation the palette shows before Run is called.

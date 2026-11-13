@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// compareRows orders the ranked rows of the root as 1.x's compareRankedActions does (src/app/electron/search/
+// compareRows orders the ranked rows of the root as 1.x's compareRankedActions does (electron/search/
 // action-ranking.ts:113-119): score, then tie priority, then last use, all highest first, then title ascending.
 func compareRows(a, b Item) int {
 	return cmp.Or(

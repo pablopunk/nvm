@@ -2,8 +2,8 @@ package geometry
 
 import "testing"
 
-// Ported from src/app/electron/os/window-neighbors.test.ts (29 cases) and
-// src/app/electron/os/window-neighbors-displays.test.ts (15 cases).
+// Ported from 1.x/electron/os/window-neighbors.test.ts (29 cases) and
+// 1.x/electron/os/window-neighbors-displays.test.ts (15 cases).
 
 type neighborOverrides struct {
 	zIndex       int

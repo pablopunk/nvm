@@ -74,7 +74,7 @@ type LinkDeps struct {
 
 // LinkService serves link previews without blocking. Peek never touches the network; Load starts one
 // background fetch per URL and reports each settlement through OnSettled, so an open view refreshes in place.
-// The refetch rule is the 1.x one (src/app/electron/clipboard/link-preview.ts): a URL is fetched once per
+// The refetch rule is the 1.x one (electron/clipboard/link-preview.ts): a URL is fetched once per
 // session, a settled preview (ready or unavailable) is never fetched again, and a failure is never retried.
 // A ready preview is also kept with its history entry and is not fetched again after a restart; FetchedAt
 // records when it was fetched.

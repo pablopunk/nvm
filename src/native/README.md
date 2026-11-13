@@ -1,10 +1,10 @@
 # Nevermind Go app (2.0, MyGo)
 
 The Go rewrite of Nevermind on [MyGo](https://mygo.egoist.dev): a native command palette with no Electron and no web
-view. It ships as **Nevermind Next** beside the Electron app (1.x), with its own bundle identifier, data folder, keychain
-entry and update feed. It never reads or writes 1.x data. It is not shipped yet. The current state and gaps are in
-[PLAN.md](PLAN.md); the feature-by-feature comparison with 1.x is in
-[testdata/parity/parity-review.md](testdata/parity/parity-review.md).
+view. It replaces the Electron app (1.x), which was removed from this tree; until the cutover it ships as **Nevermind
+Next** with its own bundle identifier, data folder, keychain entry and update feed ([docs/cutover.md](docs/cutover.md)).
+It never reads or writes 1.x data. It is not shipped yet. The current state and gaps are in [PLAN.md](PLAN.md); the
+feature-by-feature comparison with 1.x is in [testdata/parity/parity-review.md](testdata/parity/parity-review.md).
 
 ## Features
 

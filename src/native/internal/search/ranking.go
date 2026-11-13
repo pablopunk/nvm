@@ -6,7 +6,7 @@ import (
 	"unicode"
 )
 
-// Port of src/app/palette/search-ranking.ts and search-utils.ts: the score bands are the ranking contract.
+// Port of src/backend/src/palette-ui/search-ranking.ts and search-utils.ts: the score bands are the ranking contract.
 // Exported: ScoreFuzzy, Score and URLFromQuery; the rest is the band logic they share.
 
 func words(s string) []string {

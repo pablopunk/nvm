@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// These tests port src/app/extensions/emoji-symbols.test.ts and src/app/electron/app/emoji-symbol-catalog.test.ts.
+// These tests port 1.x/extensions/emoji-symbols.test.ts and 1.x/electron/app/emoji-symbol-catalog.test.ts.
 // Grid, action, capability and view assertions are not ported: this package holds data and logic only,
 // and the picker view that owns those shapes arrives in a later work package. Each such assertion is
 // noted where it would sit.
