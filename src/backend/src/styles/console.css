@@ -331,7 +331,6 @@
 .model-route-row[data-tier] {
   border-color: color-mix(in srgb, var(--route-accent) 30%, var(--border));
   background: color-mix(in srgb, var(--route-accent) 4%, transparent);
-  box-shadow: inset 3px 0 0 var(--route-accent);
 }
 .model-route-row__title { display: inline-flex; align-items: center; gap: .5rem; }
 .model-route-row__title::before { content: ''; width: .5rem; height: .5rem; border-radius: 999px; background: var(--route-accent); }
