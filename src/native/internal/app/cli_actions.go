@@ -89,7 +89,8 @@ func (p *App) dispatchActionCommand(ctx context.Context, actionID string) action
 
 // runActionCommand waits until the extensions have loaded, so an extension action is not rejected while it is still
 // starting, then runs the action on the UI thread. An action the cached commands do not know yet is looked up again
-// once the extensions have listed their commands.
+// in the commands the extensions list now. Those are used as listed: the manager's cache refuses them while its own
+// background discovery of the same extension is still running, so reading the cache again would miss them.
 func (p *App) runActionCommand(ctx context.Context, actionID string) actioncli.Response {
 	select {
 	case <-p.exts.settled.wait():
@@ -98,21 +99,13 @@ func (p *App) runActionCommand(ctx context.Context, actionID string) actioncli.R
 	}
 	response := p.onUIAnswer(ctx, func() actioncli.Response { return p.runActionCommandOnUI(actionID) })
 	if m := p.extensionManager(); response.Outcome == actioncli.Rejected && m != nil {
-		m.Commands(ctx)
-		p.refreshGlobalShortcutsNow()
-		response = p.onUIAnswer(ctx, func() actioncli.Response { return p.runActionCommandOnUI(actionID) })
+		table := globalShortcutTableOf(m.Commands(ctx))
+		response = p.onUIAnswer(ctx, func() actioncli.Response {
+			p.globalShortcuts = table
+			return p.runActionCommandOnUI(actionID)
+		})
 	}
 	return response
-}
-
-// refreshGlobalShortcutsNow rebuilds the extension command table from the commands the extensions just listed.
-func (p *App) refreshGlobalShortcutsNow() {
-	m := p.extensionManager()
-	if m == nil {
-		return
-	}
-	table := globalShortcutTableOf(m.CachedCommands())
-	p.onUI(func() { p.globalShortcuts = table })
 }
 
 // errNoAnswer is the failure of a dispatch the UI thread did not take in time; the action may still run.
