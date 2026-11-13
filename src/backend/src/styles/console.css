@@ -324,6 +324,17 @@
 .profile-billing { height: 14rem; overflow: auto; }
 .dashboard-skeleton { display: block; min-height: 1rem; border-radius: var(--radius); background: var(--border-light); }
 .dashboard-skeleton + .dashboard-skeleton { margin-top: .75rem; }
+.model-route-row[data-tier="pro"] { --route-accent: var(--tier-pro); }
+.model-route-row[data-tier="free"] { --route-accent: var(--tier-free); }
+.model-route-row[data-tier="dictation"] { --route-accent: var(--tier-dictation); }
+.model-route-row[data-tier="decisions"] { --route-accent: var(--tier-decisions); }
+.model-route-row[data-tier] {
+  border-color: color-mix(in srgb, var(--route-accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--route-accent) 4%, transparent);
+  box-shadow: inset 3px 0 0 var(--route-accent);
+}
+.model-route-row__title { display: inline-flex; align-items: center; gap: .5rem; }
+.model-route-row__title::before { content: ''; width: .5rem; height: .5rem; border-radius: 999px; background: var(--route-accent); }
 .dashboard-table {
   --row-height: 2.75rem;
   position: relative;

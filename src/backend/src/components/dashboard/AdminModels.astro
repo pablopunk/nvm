@@ -79,7 +79,7 @@ decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
 {available ? (
     <AdminModelsFrame>
       {modelRows.map(({ slot, title, route, kind, options }) => (
-        <AdminModelRoute title={title} data-model-route={slot}>
+        <AdminModelRoute title={title} tier={slot.startsWith('pro') ? 'pro' : 'free'} data-model-route={slot}>
           <label class="field">Model<ConsoleCombobox client:load label={`${title} model`} defaultValue={route?.ref} options={[...(route && !options.includes(route.ref) ? [{ value: route.ref, label: `${route.ref} (not selectable)`, disabled: true }] : []), ...options.map((ref) => ({ value: ref, label: ref }))]} /></label>
           {kind === 'smart'
             ? <label class="field">Thinking<ConsoleSelect className="thinking-select" defaultValue={route?.thinkingLevel ?? DEFAULT_THINKING_LEVEL} options={THINKING_LEVELS.map((level) => ({ value: level, label: level }))} /></label>
@@ -87,11 +87,11 @@ decisionModelRefs = decisionModels.map((model) => modelRouteToRef(model));
           <span slot="details" data-pricing></span>
         </AdminModelRoute>
       ))}
-      <AdminModelRoute title="Dictation" data-audio-model-route>
+      <AdminModelRoute title="Dictation" tier="dictation" data-audio-model-route>
         <label class="field">Model<ConsoleCombobox client:load label="Dictation model" defaultValue={audioRouteRef ?? ''} options={[...(!audioRouteRef ? [{ value: '', label: 'Select a dictation model', disabled: true }] : []), ...(audioRouteRef && !audioModelRefs.includes(audioRouteRef) ? [{ value: audioRouteRef, label: `${audioRouteRef} (provider, pricing, or budget unavailable)`, disabled: true }] : []), ...audioModelRefs.map((ref) => ({ value: ref, label: ref }))]} /></label>
         <span slot="details">Budget-checked for a one-minute recording; longer ones can exceed it.</span>
       </AdminModelRoute>
-      <AdminModelRoute title="Decisions" data-decision-model-route>
+      <AdminModelRoute title="Decisions" tier="decisions" data-decision-model-route>
         <label class="field">Model<ConsoleCombobox client:load label="Decision model" defaultValue={decisionRouteRef ?? ''} options={[...(!decisionRouteRef ? [{ value: '', label: 'Select a decision model', disabled: true }] : []), ...(decisionRouteRef && !decisionModelRefs.includes(decisionRouteRef) ? [{ value: decisionRouteRef, label: `${decisionRouteRef} (not eligible)`, disabled: true }] : []), ...decisionModels.map((model) => ({ value: modelRouteToRef(model), label: modelRouteToRef(model) }))]} /></label>
         <span slot="details">Only image-capable models.</span>
       </AdminModelRoute>

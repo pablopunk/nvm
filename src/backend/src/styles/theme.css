@@ -10,6 +10,10 @@
   --accent-highlight: #3b82f6;
   --danger: #b91c1c;
   --success: #15803d;
+  --tier-pro: #7c3aed;
+  --tier-free: #0d9488;
+  --tier-dictation: #d97706;
+  --tier-decisions: #2563eb;
   --radius: 8px;
   --radius-lg: 12px;
   --space: 16px;
@@ -29,5 +33,9 @@
     --accent-fg: #0c0a09;
     --danger: #f87171;
     --success: #4ade80;
+    --tier-pro: #a78bfa;
+    --tier-free: #2dd4bf;
+    --tier-dictation: #fbbf24;
+    --tier-decisions: #60a5fa;
   }
 }
