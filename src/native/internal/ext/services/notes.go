@@ -22,6 +22,12 @@ func (h *Handler) serveNotes(ctx context.Context, call protocol.ServiceCall) (an
 		}
 	}
 	store := h.notesOrNil()
+	// The store lookup may wait; a caller or runtime that ended meanwhile must not reach the store.
+	if call.Op != protocol.OpDelete {
+		if err := h.admitDesktopEffect(ctx); err != nil {
+			return nil, err
+		}
+	}
 	if store == nil {
 		return nil, unavailable("notes are not available yet")
 	}

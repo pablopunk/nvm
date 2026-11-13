@@ -2,7 +2,7 @@ package search
 
 // A flat result changes once per keystroke. The first snapshot of a query waits until every ranked provider has
 // answered or FirstSnapshot has passed; after that, rows already on screen keep their order. Rows that arrive later
-// follow them, and a row leaves only when its provider's newer answer no longer has it. The remembered result of a
+// follow them, above the query fallbacks, and a row leaves only when its provider's newer answer no longer has it. The remembered result of a
 // query keeps the full ranking, so the next visit shows the rows in their best order at once.
 
 // readyLocked reports whether the current generation may publish: a snapshot is already on screen, or every ranked
@@ -46,7 +46,22 @@ func (c *Coordinator) stableLocked(fresh []Item) []Item {
 			out, placed[key] = append(out, item), true
 		}
 	}
-	return firstN(out, c.limit())
+	return firstN(fallbacksLast(out), c.limit())
+}
+
+// fallbacksLast moves the query fallbacks (web search, Automate) below every other row, keeping each group's order:
+// a late answer never lands under the rows that only echo the query.
+func fallbacksLast(items []Item) []Item {
+	out := make([]Item, 0, len(items))
+	var fallbacks []Item
+	for _, item := range items {
+		if item.QueryFallback {
+			fallbacks = append(fallbacks, item)
+		} else {
+			out = append(out, item)
+		}
+	}
+	return append(out, fallbacks...)
 }
 
 // unansweredLocked lists the providers that have not answered this generation yet. The caller holds c.mu.

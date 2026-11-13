@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/platform/fake"
@@ -52,5 +53,30 @@ func TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers(t *testing.T) {
 	c.opts.OnSnapshot = sink2.OnSnapshot
 	if warm, hit := c.Query("q", []Provider{fixedRows("late", Item{ID: "best", Kind: KindFiles, Title: "Best", Score: 99}), fast}); !hit || titles(warm.Items)[0] != "Best" {
 		t.Fatalf("revisited query rows = %v, want the remembered result in its best order", titles(warm.Items))
+	}
+}
+
+// TestALateAnswerLandsAboveTheQueryFallbacks checks that rows arriving after the first snapshot go above the web search
+// and Automate rows, so Return never runs a fallback while a real match is on screen.
+func TestALateAnswerLandsAboveTheQueryFallbacks(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot, Flat: true})
+	release := make(chan struct{})
+	late := gatedProvider{id: "late", first: Item{ID: "web", Kind: KindSearch, Title: "Search the web", Score: 1, QueryFallback: true}, late: Item{ID: "match", Kind: KindCommands, Title: "Match", Score: 90}, release: release}
+	c.Query("q", []Provider{late})
+	passFirstSnapshot(t, c, clock)
+	clock.AwaitTimerDueIn(HardBudget - FirstSnapshot)
+	clock.Advance(HardBudget - FirstSnapshot)
+	if settled := sink.untilSettled(t, c.Gen()); !containsTitle(settled[len(settled)-1].Items, "Search the web") {
+		t.Fatalf("the cut-off query should show its fallback, got %v", titles(settled[len(settled)-1].Items))
+	}
+	close(release)
+	var got []string
+	for !slices.Contains(got, "Match") {
+		got = titles(sink.next(t).Items)
+	}
+	if len(got) == 0 || got[0] != "Match" {
+		t.Fatalf("rows = %v, want the late match above the fallback", got)
 	}
 }
