@@ -1,9 +1,9 @@
 ---
 import Layout from '../layouts/ConsoleLayout.astro';
 import { Button, buttonVariants } from '../components/ui/button';
-import ProfileBalances from '../components/dashboard/ProfileBalances.astro';
-import ProfileTokens from '../components/dashboard/ProfileTokens.astro';
-import ProfileBilling from '../components/dashboard/ProfileBilling.astro';
+import { ProfileBalanceValues } from '../components/dashboard/ProfileBalanceValues';
+import { ProfileBillingContent } from '../components/dashboard/ProfileBillingContent';
+import { ConsoleTokenList } from '../components/ConsoleTokenList';
 import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { ConsoleNavigation } from '../components/ConsoleNavigation';
@@ -19,7 +19,7 @@ const [user] = await db.select().from(users).where(eq(users.workosUserId, sessio
 const isAdmin = user?.role === 'admin';
 const billingState = Astro.url.searchParams.get('billing');
 ---
-<Layout title="Nevermind · Profile">
+<Layout title="Nevermind · Profile" cache={user ? { scope: user.id, storage: 'local' } : undefined}>
   <ConsoleNavigation email={user?.email ?? ""} admin={isAdmin} current="profile" />
   <header class="profile-header">
     <div>
@@ -28,9 +28,11 @@ const billingState = Astro.url.searchParams.get('billing');
     </div>
   </header>
 
-  <ProfileBalances server:defer>
-    <div slot="fallback" class="section profile-balance-container" aria-busy="true" aria-label="Loading credits"><div class="stat-grid profile-stats"><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div></div></div>
-  </ProfileBalances>
+  <div class="section profile-balance-container">
+    <ProfileBalanceValues client:only="react">
+      <div slot="fallback" class="stat-grid profile-stats" aria-busy="true" aria-label="Loading credits"><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div><div class="stat"><span class="dashboard-skeleton"></span></div></div>
+    </ProfileBalanceValues>
+  </div>
 
   <Card className="section profile-panel" id="connect-desktop">
     <h3>Connect desktop app</h3>
@@ -86,9 +88,11 @@ const billingState = Astro.url.searchParams.get('billing');
     </script>
   </Card>
 
-  <ProfileBilling server:defer billingState={billingState}>
-    <Card slot="fallback" className="section profile-panel profile-billing" aria-busy="true" aria-label="Loading billing"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></Card>
-  </ProfileBilling>
+  <Card className="section profile-panel profile-billing">
+    <ProfileBillingContent client:only="react" billingState={billingState}>
+      <div slot="fallback" aria-busy="true" aria-label="Loading billing"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></div>
+    </ProfileBillingContent>
+  </Card>
 
   <Card className="section profile-panel">
     <h2 id="tokens-heading" tabindex="-1">API tokens</h2>
@@ -110,9 +114,11 @@ const billingState = Astro.url.searchParams.get('billing');
       </div>
     </Card>
     <p id="token-status" class="status" aria-live="polite"></p>
-    <ProfileTokens server:defer>
-      <div slot="fallback" class="profile-token-list" aria-busy="true" aria-label="Loading API tokens"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></div>
-    </ProfileTokens>
+    <div class="profile-token-list">
+      <ConsoleTokenList client:only="react">
+        <div slot="fallback" aria-busy="true" aria-label="Loading API tokens"><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span><span class="dashboard-skeleton"></span></div>
+      </ConsoleTokenList>
+    </div>
   </Card>
 
   <script is:inline>

@@ -1,29 +1,29 @@
-import { useEffect, useState } from 'react';
 import { TextMorph } from 'torph/react';
-import { dashboardFetch } from '../../lib/dashboard-fetch';
-import { watchDashboard } from '../../lib/dashboard-refresh';
+import { useDashboardQuery } from '../../lib/use-dashboard-query';
+import { DashboardQueryError } from './DashboardQueryError';
 
 type Balances = { total: number; free: number; paid: number };
 
-export function ProfileBalanceValues({ initial }: { initial: Balances }) {
-  const [balances, setBalances] = useState(initial);
-  const [stale, setStale] = useState(false);
-  useEffect(function watchBalances() {
-    let active = true;
-    const stop = watchDashboard(async () => {
-      try {
-        const value = await dashboardFetch<Balances>('/api/profile/balances');
-        if (active) { setBalances(value); setStale(false); }
-      } catch { if (active) setStale(true); }
-    });
-    return () => { active = false; stop(); };
-  }, []);
+const BALANCE_LABELS = ['Credits', 'Free', 'Paid'] as const;
+
+function balanceValues(balances: Balances) {
+  return [balances.total, balances.free, balances.paid];
+}
+
+export function ProfileBalanceValues() {
+  const query = useDashboardQuery<Balances>('/api/profile/balances');
+  if (!query.data && query.isError) return <DashboardQueryError what="credits" retry={query.refetch} />;
+  const values = query.data ? balanceValues(query.data) : null;
   return <>
-    <div className="stat-grid profile-stats">
-      {([['Credits', balances.total], ['Free', balances.free], ['Paid', balances.paid]] as const).map(([label, value]) => (
-        <div className="stat" key={label}><div className="v"><TextMorph duration={180} scale={false}>{value}</TextMorph></div><div className="l">{label}</div></div>
+    <div className="stat-grid profile-stats" aria-busy={values ? undefined : 'true'}>
+      {BALANCE_LABELS.map((label, index) => (
+        <div className="stat" key={label}>
+          {values
+            ? <><div className="v"><TextMorph duration={180} scale={false}>{values[index]}</TextMorph></div><div className="l">{label}</div></>
+            : <span className="dashboard-skeleton" />}
+        </div>
       ))}
     </div>
-    {stale && <span className="status status--err" role="status">Could not refresh credits; showing the last balance.</span>}
+    {query.data && query.isError && <span className="status status--err" role="status">Could not refresh credits; showing the last balance.</span>}
   </>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { Button } from './ui/button';
 import {
@@ -13,64 +13,24 @@ import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import { cn } from '../lib/utils';
 
 type Option = { value: string; label: string; disabled?: boolean };
-type Props = { options: Option[]; defaultValue?: string; label: string };
+type Props = {
+  options: Option[];
+  value: string;
+  onValueChange: (value: string) => void;
+  label: string;
+  disabled?: boolean;
+};
 
-export function ConsoleCombobox({ options, defaultValue, label }: Props) {
-  const initial =
-    defaultValue ?? options.find((option) => !option.disabled)?.value ?? '';
-  const [value, setValue] = useState(initial);
+export function ConsoleCombobox({ options, value, onValueChange, label, disabled = false }: Props) {
   const [open, setOpen] = useState(false);
-  const [hydrated, setHydrated] = useState(false);
-  const select = useRef<HTMLSelectElement>(null);
-
-  useEffect(
-    function activateSearch() {
-      setValue(select.current?.value ?? initial);
-      setHydrated(true);
-    },
-    [initial],
-  );
-
-  useEffect(function syncHostSelection() {
-    const element = select.current;
-    if (!element) return;
-    function sync() { setValue(element!.value); }
-    element.addEventListener('host-selection-reset', sync);
-    return () => element.removeEventListener('host-selection-reset', sync);
-  }, []);
 
   function choose(next: string) {
-    setValue(next);
     setOpen(false);
-    // Keep the host-owned save handler on the native select as the single writer.
-    if (select.current && select.current.value !== next) {
-      select.current.value = next;
-      select.current.dispatchEvent(new Event('change', { bubbles: true }));
-    }
+    if (next !== value) onValueChange(next);
   }
 
   return (
     <div className="min-w-0 w-full">
-      <select
-        ref={select}
-        defaultValue={initial}
-        hidden={hydrated}
-        className="model-select console-fallback-select"
-        aria-label={label}
-      >
-        {options.map(function renderNativeOption(option) {
-          return (
-            <option
-              key={option.value}
-              value={option.value}
-              disabled={option.disabled}
-            >
-              {option.label}
-            </option>
-          );
-        })}
-      </select>
-      {hydrated && (
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -78,7 +38,7 @@ export function ConsoleCombobox({ options, defaultValue, label }: Props) {
               role="combobox"
               aria-expanded={open}
               aria-label={label}
-              disabled={options.length === 0}
+              disabled={disabled || options.length === 0}
               className="w-full min-w-0 justify-between"
             >
               <span className="truncate">
@@ -126,7 +86,6 @@ export function ConsoleCombobox({ options, defaultValue, label }: Props) {
             </Command>
           </PopoverContent>
         </Popover>
-      )}
     </div>
   );
 }

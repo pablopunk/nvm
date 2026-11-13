@@ -19,6 +19,7 @@ export const POST: APIRoute = ({ request, url }) => {
     'Set-Cookie',
     `${PREVIEW_SESSION_COOKIE}=; Path=/; HttpOnly; ${isHttps ? 'Secure; ' : ''}SameSite=Lax; Max-Age=0`,
   );
+  headers.set('Clear-Site-Data', '"storage"');
   headers.set('Location', '/');
   return new Response(null, { status: 302, headers });
 };
