@@ -22,10 +22,11 @@ func TestTierOfTitle(t *testing.T) {
 		{"initials of a longer title", "Visual Studio Code", "vsc", nil, nil, TierWordStart},
 		{"query words start successive words", "Fix Selected Text with AI", "fix with ai", nil, nil, TierWordStart},
 		{"substring", "Terminal", "mina", nil, nil, TierSubstring},
-		{"scattered from a word start", "Log out of Nevermind", "loom", nil, nil, TierScattered},
-		{"scattered needs two letters", "Terminal", "z", nil, nil, TierContent},
-		{"scattered needs a word start", "Bottom Half", "loom", nil, nil, TierContent},
-		{"scattered must start a word", "Settings", "es", nil, nil, TierContent},
+		{"scattered letters from a word start are no match", "Log out of Nevermind", "loom", nil, nil, TierContent},
+		{"scattered letters inside a word are no match", "Adobe Lightroom", "loom", nil, nil, TierContent},
+		{"letters in the names of a file are no match", "aurora_helix_homerow_mods.uf2", "loom", nil, nil, TierContent},
+		{"a single letter that is absent is no match", "Terminal", "z", nil, nil, TierContent},
+		{"a query inside a word is a substring", "Settings", "ett", nil, nil, TierSubstring},
 		{"no match is content", "Terminal", "xyz", nil, nil, TierContent},
 		{"a bag of letters is no match", "Gmail", "gmial", nil, nil, TierContent},
 	}
@@ -61,10 +62,13 @@ func TestScoreNoLongerMatchesLooseLetters(t *testing.T) {
 	}{
 		{"gmail", "gmial", 0},
 		{"Bottom Half", "loom", 0},
-		{"Log out of Nevermind", "loom", 20},
-		{"hello", "hlo", 20},
+		{"Log out of Nevermind", "loom", 0},
+		{"Google Chrome", "gc", 20},
+		{"Visual Studio Code", "vsc", 20},
+		{"Google Chrome", "gg", 0},
+		{"hello", "hlo", 0},
 		{"hello", "elo", 0},
-		{"typescript", "ts", 20},
+		{"typescript", "ts", 0},
 		{"a", "a", 100},
 	}
 	for _, tt := range tests {

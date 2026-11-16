@@ -23,10 +23,8 @@ const (
 	TierWordStart
 	// TierSubstring: the title contains the query.
 	TierSubstring
-	// TierScattered: the query's letters occur in order in the title, the first at the start of a word. Only for
-	// queries of two letters or more.
-	TierScattered
-	// TierContent: the row matches in something other than its name: its subtitle, or the content it stands for.
+	// TierContent: the row matches in something other than its name: its subtitle, a keyword, its path, or the content it
+	// stands for. Letters scattered through a name never match.
 	TierContent
 	// TierFallback: a row that echoes the query, such as a web search. It follows every other row.
 	TierFallback
@@ -70,8 +68,6 @@ func (m *queryMatcher) tierOf(title string, names []string) Tier {
 		return TierWordStart
 	case bytes.Contains(m.title, m.query):
 		return TierSubstring
-	case m.scatteredInWords(m.title):
-		return TierScattered
 	}
 	return TierContent
 }
@@ -140,37 +136,6 @@ func (m *queryMatcher) startsWordsInOrder(t []byte) bool {
 	return true
 }
 
-// scatteredInWords reports whether the letters of the query, spaces left out, occur in order in t with the first at
-// the start of a word. The earliest such start leaves the most room for the rest, so it alone is tried.
-func (m *queryMatcher) scatteredInWords(t []byte) bool {
-	if utf8.RuneCount(m.compact) < 2 {
-		return false
-	}
-	first, size := utf8.DecodeRune(m.compact)
-	rest := m.compact[size:]
-	for i := 0; i < len(t); {
-		r, width := utf8.DecodeRune(t[i:])
-		if r == first && atWordStart(t, i) {
-			return inOrder(t[i+width:], rest)
-		}
-		i += width
-	}
-	return false
-}
-
-// inOrder reports whether every rune of letters occurs in t, each after the one before.
-func inOrder(t, letters []byte) bool {
-	for len(letters) > 0 {
-		r, size := utf8.DecodeRune(letters)
-		at := bytes.IndexRune(t, r)
-		if at < 0 {
-			return false
-		}
-		t, letters = t[at+utf8.RuneLen(r):], letters[size:]
-	}
-	return true
-}
-
 // atWordStart reports whether position i of t starts a word: it is the start of t, or follows a character that is no
 // letter or digit.
 func atWordStart(t []byte, i int) bool {
@@ -189,3 +154,20 @@ func isWordByte(c byte) bool {
 }
 
 func isWordRune(r rune) bool { return unicode.IsLetter(r) || unicode.IsNumber(r) }
+
+// NameTier is the tier the name of a row, with the other names it answers to, has for query: TierExact to TierSubstring
+// when the name answers the query, TierContent when it does not, and TierNone for a blank query.
+func NameTier(query, title string, names ...string) Tier {
+	m := newQueryMatcher(query)
+	if m == nil {
+		return TierNone
+	}
+	return m.tierOf(title, names)
+}
+
+// MatchesName reports whether the name of a row answers query: it is equal to it, starts with it, has a word that starts
+// with it, has it as initials, or contains it. Letters scattered through the name do not answer a query.
+func MatchesName(query, title string) bool {
+	tier := NameTier(query, title)
+	return tier != TierNone && tier < TierContent
+}

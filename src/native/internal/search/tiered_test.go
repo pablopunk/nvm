@@ -59,8 +59,8 @@ func TestExactAppNameLeadsWhateverTheUsage(t *testing.T) {
 	learner.uses["cmd:logout"] = Use{Count: 500, LastUsed: now.UnixMilli()}
 	got := tieredTitles(t, learner, "loom", loomRows()...)
 	assertTitles(t, got,
-		"Loom", "Loom Settings", "Log out of Nevermind",
-		"Bottom Half", "loom.com/share/abc", "Notes from the loom call",
+		"Loom", "Loom Settings", "Bottom Half", "Log out of Nevermind",
+		"loom.com/share/abc", "Notes from the loom call",
 		`Automate "loom"`, `Search the web for "loom"`)
 }
 
@@ -134,24 +134,50 @@ func TestTieBreakByIDWhenTitlesAreEqual(t *testing.T) {
 	}
 }
 
-func TestChosenRowLeadsWhenItStillMatchesByName(t *testing.T) {
+func TestChosenRowLeadsOnlyItsOwnTier(t *testing.T) {
 	rows := func() []Item {
 		return []Item{
-			{Title: "Loom", Kind: KindApplications, LearnKey: "app:loom"},
-			{Title: "Studio Loom Helper", Kind: KindFiles, LearnKey: "file:helper"},
-			{Title: "Log out of Nevermind", Kind: KindCommands, LearnKey: "cmd:logout"},
+			{Title: "Loom", Kind: KindApplications, LearnKey: "app:loom"},               // tier 1
+			{Title: "Studio Loom Helper", Kind: KindFiles, LearnKey: "file:helper"},     // tier 3, class other
+			{Title: "Notes about Loom", Kind: KindCommands, LearnKey: "cmd:notes"},      // tier 3, class command
+			{Title: "Gloomy", Kind: KindFiles, LearnKey: "file:gloomy"},                 // tier 4
+			{Title: "Log out of Nevermind", Kind: KindCommands, LearnKey: "cmd:logout"}, // tier 5: the letters are scattered
 		}
 	}
-	chosenFile := func(choice Choice) Learner {
-		return tieredLearner{uses: map[string]Use{"file:helper": {Count: 1, Choice: choice}, "cmd:logout": {Count: 1, Choice: ChoiceExact}}}
+	learner := func(uses map[string]Use) Learner { return tieredLearner{uses: uses} }
+	exact := Use{Count: 1, Choice: ChoiceExact}
+	extends := Use{Count: 1, Choice: ChoiceExtends}
+
+	// No choice: the class decides inside tier 3.
+	assertTitles(t, tieredTitles(t, nil, "loom", rows()...),
+		"Loom", "Notes about Loom", "Studio Loom Helper", "Gloomy", "Log out of Nevermind")
+	// A choice for this query moves a row to the top of its own tier and no further.
+	got := tieredTitles(t, learner(map[string]Use{"file:helper": exact, "file:gloomy": exact, "cmd:logout": exact}), "loom", rows()...)
+	assertTitles(t, got, "Loom", "Studio Loom Helper", "Notes about Loom", "Gloomy", "Log out of Nevermind")
+	// A choice for a shorter query this one extends counts too, and yields to a choice for this very query.
+	got = tieredTitles(t, learner(map[string]Use{"file:helper": extends, "cmd:notes": exact}), "loom", rows()...)
+	assertTitles(t, got, "Loom", "Notes about Loom", "Studio Loom Helper", "Gloomy", "Log out of Nevermind")
+	got = tieredTitles(t, learner(map[string]Use{"file:helper": extends}), "loom", rows()...)
+	assertTitles(t, got, "Loom", "Studio Loom Helper", "Notes about Loom", "Gloomy", "Log out of Nevermind")
+}
+
+// TestNothingBeatsAnExactMatch is the reported bug: rows chosen for "lo" and "loo", however often and recently, stay
+// below the exact name that "loom" is.
+func TestNothingBeatsAnExactMatch(t *testing.T) {
+	now := time.Unix(0, 0).UnixMilli()
+	heavy := func(choice Choice) Use { return Use{Count: 900, LastUsed: now, Choice: choice} }
+	learner := tieredLearner{uses: map[string]Use{
+		"cmd:login": heavy(ChoiceExtends), "cmd:logout": heavy(ChoiceExact), "file:gloomy": heavy(ChoiceExact),
+	}}
+	got := tieredTitles(t, learner, "loom",
+		Item{Title: "Log in to Nevermind", Kind: KindCommands, LearnKey: "cmd:login"},
+		Item{Title: "Log out of Nevermind", Kind: KindCommands, LearnKey: "cmd:logout"},
+		Item{Title: "Gloomy", Kind: KindFiles, LearnKey: "file:gloomy"},
+		Item{Title: "Loom", Kind: KindApplications, LearnKey: "app:loom"},
+	)
+	if got[0] != "Loom" {
+		t.Fatalf("rows = %q, want Loom first", got)
 	}
-	// A substring match chosen for this query leads even the exact app.
-	assertTitles(t, tieredTitles(t, chosenFile(ChoiceExact), "loom", rows()...), "Studio Loom Helper", "Loom", "Log out of Nevermind")
-	// A query it extends counts too, but yields to an exact choice.
-	got := tieredTitles(t, tieredLearner{uses: map[string]Use{"file:helper": {Count: 1, Choice: ChoiceExtends}, "app:loom": {Count: 1, Choice: ChoiceExact}}}, "loom", rows()...)
-	assertTitles(t, got, "Loom", "Studio Loom Helper", "Log out of Nevermind")
-	// A row that only matches by scattered letters, or by content, is never lifted by a choice.
-	assertTitles(t, tieredTitles(t, chosenFile(ChoiceNone), "loom", rows()...), "Loom", "Studio Loom Helper", "Log out of Nevermind")
 }
 
 func TestDirectRowsLeadAndFallbacksStayLast(t *testing.T) {

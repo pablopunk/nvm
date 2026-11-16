@@ -1,9 +1,16 @@
 package search
 
+import (
+	"cmp"
+	"slices"
+)
+
 // A flat result changes once per keystroke. The first snapshot of a query waits until every ranked provider has
-// answered or FirstSnapshot has passed; after that, rows already on screen keep their order. Rows that arrive later
-// follow them, above the query fallbacks, and a row leaves only when its provider's newer answer no longer has it. The remembered result of a
-// query keeps the full ranking, so the next visit shows the rows in their best order at once.
+// answered or FirstSnapshot has passed; after that, rows already on screen keep their order inside their tier. Rows that
+// arrive later follow them in their tier, and a better tier always goes above a worse one: a late exact match leads the
+// rows already shown. The query fallbacks stay last. A row leaves only when its provider's newer answer no longer has
+// it. The remembered result of a query keeps the full ranking, so the next visit shows the rows in their best order at
+// once.
 
 // readyLocked reports whether the current generation may publish: a snapshot is already on screen, or every ranked
 // provider has finished. Appended providers never hold up the first snapshot. The caller holds c.mu.
@@ -46,7 +53,15 @@ func (c *Coordinator) stableLocked(fresh []Item) []Item {
 			out, placed[key] = append(out, item), true
 		}
 	}
-	return firstN(fallbacksLast(out), c.limit())
+	return firstN(fallbacksLast(byTier(out)), c.limit())
+}
+
+// byTier keeps the order of the rows inside each tier and puts a better tier above a worse one, so a row that arrives
+// after the first snapshot still lands above every row of a lower tier, however long those have been on screen. The
+// rows of an untiered result all have TierNone and keep their order.
+func byTier(rows []Item) []Item {
+	slices.SortStableFunc(rows, func(a, b Item) int { return cmp.Compare(a.ranked.tier, b.ranked.tier) })
+	return rows
 }
 
 // fallbacksLast moves the query fallbacks (web search, Automate) below every other row, keeping each group's order:

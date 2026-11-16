@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
+	"github.com/pablopunk/nvm/native/internal/search"
 )
 
 // ID is the built-in's identity.
@@ -19,6 +20,7 @@ const ID = "nevermind.files"
 // empty query, the Search Files view a longer list, and Find Files by Meaning the recent names the model judges.
 const (
 	rootLimit         = 6
+	rootCandidates    = 8 * rootLimit
 	viewLimit         = 100
 	meaningLocal      = 16
 	meaningCandidates = 16
@@ -66,16 +68,24 @@ func (Extension) RootItems(ctx api.Context) ([]api.Item, error) {
 	return items, nil
 }
 
-// SearchItems finds the files whose names match a typed query at the root, scored as the recent files are. Queries
-// shorter than two characters find nothing, as 1.x's file search waits for them.
+// SearchItems finds the files whose names answer a typed query at the root, scored as the recent files are. The index
+// also lists names that hold the query's letters scattered or in any order; the root keeps only the names that equal the
+// query, start with it, have a word that starts with it, have it as initials, or contain it, so a file never shows
+// for letters that merely occur in its name. The index answers best first, so it is asked for more files than the root
+// shows to leave room after the unrelated ones are dropped. Queries shorter than two characters find nothing, as 1.x's
+// file search waits for them.
 func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) {
 	if len(query) < minQueryChars {
 		return nil, nil
 	}
-	found := searchFiles(ctx, rootLimit, query, "")
-	items := make([]api.Item, 0, len(found))
-	for i, file := range found {
-		items = append(items, fileItem(ctx, file, float64(rootLimit-i)))
+	items := make([]api.Item, 0, rootLimit)
+	for _, file := range searchFiles(ctx, rootCandidates, query, "") {
+		if len(items) == rootLimit {
+			break
+		}
+		if search.MatchesName(query, file.Name) {
+			items = append(items, fileItem(ctx, file, float64(rootLimit-len(items))))
+		}
 	}
 	return items, nil
 }

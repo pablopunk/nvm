@@ -56,6 +56,31 @@ func TestRowsOnScreenKeepTheirOrderWhenALateProviderAnswers(t *testing.T) {
 	}
 }
 
+// TestALateExactMatchLeadsTheRowsOnScreenOfAWorseTier checks that the stable order holds inside a tier only: the first
+// snapshot of "loom" lacks the slow provider's exact match, and when it arrives it goes above the worse rows shown, while
+// the rows of one tier keep their order.
+func TestALateExactMatchLeadsTheRowsOnScreenOfAWorseTier(t *testing.T) {
+	clock := fake.NewClock()
+	sink := newSnapshotSink()
+	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot, Flat: true, Tiered: true, Learner: tieredLearner{}})
+	release := make(chan struct{})
+	late := gatedProvider{id: "late", first: Item{ID: "helper", Kind: KindFiles, Title: "Studio Loom Helper"}, late: Item{ID: "loom", Kind: KindApplications, Title: "Loom"}, release: release}
+	fast := fixedRows("fast", Item{ID: "gloomy", Kind: KindCommands, Title: "Gloomy"})
+	c.Query("loom", []Provider{late, fast})
+	passFirstSnapshot(t, c, clock)
+
+	first := sink.next(t)
+	if !equalStrings(titles(first.Items), []string{"Studio Loom Helper", "Gloomy"}) {
+		t.Fatalf("first snapshot rows = %v", titles(first.Items))
+	}
+	close(release)
+	snaps := sink.untilSettled(t, c.Gen())
+	want := []string{"Loom", "Studio Loom Helper", "Gloomy"}
+	if got := titles(snaps[len(snaps)-1].Items); !equalStrings(got, want) {
+		t.Fatalf("rows after the late answer = %v, want %v", got, want)
+	}
+}
+
 // TestALateAnswerLandsAboveTheQueryFallbacks checks that rows arriving after the first snapshot go above the web search
 // and Automate rows, so Return never runs a fallback while a real match is on screen.
 func TestALateAnswerLandsAboveTheQueryFallbacks(t *testing.T) {

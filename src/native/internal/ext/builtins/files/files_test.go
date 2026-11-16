@@ -1,6 +1,7 @@
 package files
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -93,7 +94,7 @@ func TestRootShowsTheSixNewestFilesWithTheirOwnMenu(t *testing.T) {
 }
 
 func TestRootTypedQueryNeedsTwoCharactersAndScoresLikeTheRecentFiles(t *testing.T) {
-	files := &fakeFiles{matches: []api.IndexedFile{indexed("/h/x.md", "x.md", "file"), indexed("/h/y.md", "y.md", "file")}}
+	files := &fakeFiles{matches: []api.IndexedFile{indexed("/h/xy.md", "xy.md", "file"), indexed("/h/xylophone.md", "xylophone.md", "file")}}
 	ctx := fakeContext{files: files}
 	if items, _ := (Extension{}).SearchItems(ctx, "x"); items != nil {
 		t.Fatalf("one character searched the index: %+v", items)
@@ -101,6 +102,41 @@ func TestRootTypedQueryNeedsTwoCharactersAndScoresLikeTheRecentFiles(t *testing.
 	items, _ := Extension{}.SearchItems(ctx, "xy")
 	if files.lastText != "xy" || len(items) != 2 || items[0].Score != 6 || items[1].Score != 5 {
 		t.Fatalf("search = %+v for %q, want two rows scored 6 and 5", items, files.lastText)
+	}
+}
+
+// TestRootKeepsOnlyFilesWhoseNameAnswersTheQuery is the reported bug: the index also answers names that hold the letters of
+// "loom" scattered or in any order, and none of them is a match.
+func TestRootKeepsOnlyFilesWhoseNameAnswersTheQuery(t *testing.T) {
+	names := []string{
+		"Adobe Lightroom.png", "Asombroso_estrellas_de_la_nebulosa-1.png", "aurora_helix_homerow_mods.uf2",
+		"Apple_Developer_Program_License_Agreement_2024.pdf", "Apple_Developer_Program_License_Agreement_2025.pdf",
+		"CARTA ANULACION A VTO firmado seguro axa coche audi s3 .pdf",
+		"loom-recording.mp4", "Weekly Loom notes.md", "bloomberg.pdf",
+	}
+	matches := make([]api.IndexedFile, len(names))
+	for i, name := range names {
+		matches[i] = indexed("/h/"+name, name, "file")
+	}
+	items, _ := Extension{}.SearchItems(fakeContext{files: &fakeFiles{matches: matches}}, "loom")
+	var got []string
+	for _, item := range items {
+		got = append(got, item.Title)
+	}
+	want := []string{"loom-recording.mp4", "Weekly Loom notes.md", "bloomberg.pdf"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("files = %q, want %q", got, want)
+	}
+	if items[0].Score != rootLimit || items[2].Score != rootLimit-2 {
+		t.Fatalf("scores = %v %v, want the index order kept", items[0].Score, items[2].Score)
+	}
+}
+
+func TestRootFilesKeepInitialsOfAName(t *testing.T) {
+	files := &fakeFiles{matches: []api.IndexedFile{indexed("/h/Google Chrome.dmg", "Google Chrome.dmg", "file"), indexed("/h/gnome-crash.txt", "gnome-crash.txt", "file")}}
+	items, _ := Extension{}.SearchItems(fakeContext{files: files}, "gc")
+	if len(items) != 2 {
+		t.Fatalf("files = %+v, want both initials matches", items)
 	}
 }
 

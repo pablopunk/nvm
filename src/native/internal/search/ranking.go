@@ -2,10 +2,8 @@ package search
 
 import (
 	"regexp"
-	"slices"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 )
 
 // Port of src/backend/src/palette-ui/search-ranking.ts and search-utils.ts: the score bands are the ranking contract.
@@ -107,7 +105,7 @@ func scoreSequential(text, query string) int {
 const ExactScore = 100
 
 // PhraseScoreFloor is the lowest score of a query that occurs in the text as a phrase, a substring or a word
-// prefix. Lower bands are scattered letters: the in-order band (20) and the bag-of-letters fallback (10).
+// prefix. Lower bands are scattered letters: the in-order band (20, which the root keeps only for initials) and the bag-of-letters fallback (10).
 const PhraseScoreFloor = 50
 
 // ScoreFuzzy scores lowercase text against a lowercase, non-empty query: a sequential band when one
@@ -139,47 +137,36 @@ func ScoreText(text, query string) int {
 }
 
 // Score is ScoreFuzzy for text and query in any case, trimmed of surrounding space, without the loose bands the root does
-// not list: the bag of letters (10) never matches, and scattered letters (20) match only for a query of two letters or
-// more whose first letter starts a word of the text, as a tiered search's last title tier does (TierScattered).
+// not list: the bag of letters (10) never matches, and scattered letters match only as initials (20): a query of two
+// letters or more that starts the initials of the text's words, "gc" for Google Chrome, as a tiered search's word-start
+// tier does (TierWordStart). Letters scattered through a word never match.
 func Score(text, query string) int {
 	text, query = strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query))
 	s := scoreSequential(text, query)
-	if s == scatteredBand && !scatteredFromWordStart(text, query) {
+	if s == initialsBand && !startsInitials(text, query) {
 		return 0
 	}
 	return s
 }
 
-// scatteredBand is the score of letters that occur in order but do not form a phrase.
-const scatteredBand = 20
+// initialsBand is the score of a query that is the initials of the text and no phrase of it.
+const initialsBand = 20
 
-// scatteredFromWordStart reports whether the letters of query, at least two, occur in order in text with the first at the
-// start of a word. The caller has checked that they occur in order.
-func scatteredFromWordStart(text, query string) bool {
-	letters := strings.ReplaceAll(query, " ", "")
-	if len([]rune(letters)) < 2 {
+// startsInitials reports whether the letters of query, spaces left out and at least two, are the first letters of the
+// text's words, from its first word on.
+func startsInitials(text, query string) bool {
+	letters := []rune(strings.ReplaceAll(query, " ", ""))
+	if len(letters) < 2 {
 		return false
 	}
-	first, _ := utf8.DecodeRuneInString(letters)
+	var initials []rune
 	rt := []rune(text)
 	for i, r := range rt {
-		if r == first && (i == 0 || !isWordChar(rt[i-1])) {
-			return inOrderRunes(rt[i+1:], []rune(letters)[1:])
+		if isWordChar(r) && (i == 0 || !isWordChar(rt[i-1])) {
+			initials = append(initials, r)
 		}
 	}
-	return false
-}
-
-// inOrderRunes reports whether every rune of letters occurs in text, each after the one before.
-func inOrderRunes(text, letters []rune) bool {
-	for _, want := range letters {
-		at := slices.Index(text, want)
-		if at < 0 {
-			return false
-		}
-		text = text[at+1:]
-	}
-	return true
+	return strings.HasPrefix(string(initials), string(letters))
 }
 
 var urlRe = regexp.MustCompile(`(?i)^[\w-]+(\.[\w-]+)+([/:?#].*)?$`)

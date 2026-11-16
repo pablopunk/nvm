@@ -33,12 +33,12 @@ func TestQueryFallbackIsOfferedForAnyQueryInTheFallbackBand(t *testing.T) {
 	}
 }
 
-func TestQueryFallbackBandSitsBetweenSubstringAndLetterMatches(t *testing.T) {
+func TestQueryFallbackBandSitsBelowSubstringMatchesAndLetterMatchesDoNotList(t *testing.T) {
 	if search.Score("Keyboard Shortcuts", "shortcut") <= scoreQueryFallback {
 		t.Fatalf("a substring match must outrank the query-fallback band (%d)", scoreQueryFallback)
 	}
-	if loose := search.Score("Rename Screenshots by Date and Location", "rnm scrnshts"); loose <= 0 || loose >= scoreQueryFallback {
-		t.Fatalf("a loose letter match scores %d, want a match below the query-fallback band (%d)", loose, scoreQueryFallback)
+	if loose := search.Score("Rename Screenshots by Date and Location", "rnm scrnshts"); loose != 0 {
+		t.Fatalf("a loose letter match scores %d, want no match", loose)
 	}
 }
 

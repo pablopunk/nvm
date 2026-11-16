@@ -58,15 +58,12 @@ func TestPortedFrequentFallbackUseDoesNotOvertakeAStrongCommand(t *testing.T) {
 	}
 }
 
-// TestPortedQueryFallbacksStayAboveLooseMatches ports "query fallbacks stay above loose character matches for
-// open-ended prompts": the Automate row outranks a loose match of the prompt's letters.
-func TestPortedQueryFallbacksStayAboveLooseMatches(t *testing.T) {
-	loose := search.Score("Rename Screenshots by Date and Location", "rnm scrnshts")
-	if loose <= 0 {
-		t.Fatalf("the loose match should match, got %d", loose)
-	}
-	if loose >= scoreAutomate {
-		t.Fatalf("a loose match (%d) must stay below the Automate row (%d)", loose, scoreAutomate)
+// TestLooseLetterMatchesDoNotListBesideTheQueryFallbacks ports "query fallbacks stay above loose character matches for
+// open-ended prompts" to the root without loose matches: the letters of a prompt scattered through a title list nothing,
+// so only the fallbacks answer it.
+func TestLooseLetterMatchesDoNotListBesideTheQueryFallbacks(t *testing.T) {
+	if loose := search.Score("Rename Screenshots by Date and Location", "rnm scrnshts"); loose != 0 {
+		t.Fatalf("a loose match scores %d, want none", loose)
 	}
 }
 

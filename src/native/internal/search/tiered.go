@@ -7,8 +7,9 @@ import (
 
 // A tiered search ranks a typed query by the match tier of each row, then by what the row is worth inside its tier:
 //
-//  1. a row the user chose for this query, or for one this query extends, when it matches at TierExact to TierSubstring;
-//  2. the tier, best first (tiers.go);
+//  1. the tier, best first (tiers.go). Nothing outranks it: a lower tier never passes a higher one;
+//  2. inside a tier, a row the user chose for this query, or for one this query extends, when its name matches at
+//     TierExact to TierSubstring;
 //  3. the rank: the class base plus the frecency (frecency.go);
 //  4. the shorter title, then the title in alphabetical order, then the ID.
 //
@@ -62,8 +63,8 @@ func rankOf(it *Item, m *queryMatcher, query string, learner Learner, nowMs int6
 // compareTiered orders two rows ranked by rankTiered, best first.
 func compareTiered(a, b Item) int {
 	return cmp.Or(
-		cmp.Compare(b.ranked.chosen, a.ranked.chosen),
 		cmp.Compare(a.ranked.tier, b.ranked.tier),
+		cmp.Compare(b.ranked.chosen, a.ranked.chosen),
 		cmp.Compare(b.ranked.rank, a.ranked.rank),
 		cmp.Compare(a.ranked.titleLen, b.ranked.titleLen),
 		compareTitles(a.Title, b.Title),
