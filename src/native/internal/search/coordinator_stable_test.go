@@ -90,6 +90,7 @@ func TestALateAnswerLandsAboveTheQueryFallbacks(t *testing.T) {
 	release := make(chan struct{})
 	late := gatedProvider{id: "late", first: Item{ID: "web", Kind: KindSearch, Title: "Search the web", Score: 1, QueryFallback: true}, late: Item{ID: "match", Kind: KindCommands, Title: "Match", Score: 90}, release: release}
 	c.Query("q", []Provider{late})
+	clock.AwaitTimerDueIn(HardBudget) // the budget watch has started, so advancing below moves its timer too
 	passFirstSnapshot(t, c, clock)
 	clock.AwaitTimerDueIn(HardBudget - FirstSnapshot)
 	clock.Advance(HardBudget - FirstSnapshot)

@@ -25,6 +25,7 @@ func TestBlockedProviderDoesNotDelayTheFirstSnapshot(t *testing.T) {
 	c := NewCoordinator(Options{Clock: clock, OnSnapshot: sink.OnSnapshot})
 	fast := fixedRows("fast", Item{Kind: KindFiles, Title: "fast row", Score: 1})
 	c.Query("q", []Provider{blockingProvider("blocked"), fast})
+	clock.AwaitTimers(5) // both budget watches (soft and hard) and the first-snapshot wait have started
 	passFirstSnapshot(t, c, clock, "blocked")
 
 	first := sink.next(t)

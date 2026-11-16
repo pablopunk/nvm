@@ -54,6 +54,7 @@ func TestLateRowsOfACutOffProviderMergeIntoItsQuery(t *testing.T) {
 	slow := gatedProvider{id: "slow", first: Item{Kind: KindFiles, Title: "early row", Score: 1}, late: Item{Kind: KindFiles, Title: "late row", Score: 2}, release: release}
 	c.Query("q", []Provider{slow})
 	gen := c.Gen()
+	clock.AwaitTimerDueIn(HardBudget) // the budget watch has started, so advancing below moves its timer too
 	passFirstSnapshot(t, c, clock)
 
 	if first := sink.next(t); first.Settled || !equalStrings(titles(first.Items), []string{"early row"}) {
