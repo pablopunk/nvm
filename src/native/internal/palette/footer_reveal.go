@@ -25,13 +25,15 @@ func (p *Palette) prepareFooterReveal(c *ui.Context, list ui.Element, v *View) {
 	}
 	r := &p.footerReveal
 	if now != r.selection || key != r.key || bounds != r.viewport {
-		r.selection, r.key, r.viewport, r.pending = now, key, bounds, true
+		pointed := p.pointerChose && bounds == r.viewport
+		r.selection, r.key, r.viewport, r.pending = now, key, bounds, !pointed
 		r.clearance = p.footerOverlayClearance()
-		if p.chosen >= 0 && p.chosen < len(p.results) {
-			p.list.ScrollIntoView(p.rowOf(p.chosen))
+		if !pointed {
+			p.scrollChoiceIntoView()
+			c.Invalidate()
 		}
-		c.Invalidate()
 	}
+	p.pointerChose = false
 }
 
 func (p *Palette) revealFooterRow(c *ui.Context, row ui.Element) {

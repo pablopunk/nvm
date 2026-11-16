@@ -44,7 +44,8 @@ type MenuSearch struct {
 	OnKey     func(ui.TextKey) bool
 }
 
-// SearchableActionMenu builds rows after the field changes, so filtering, selection and Enter share one snapshot.
+// SearchableActionMenu builds rows after the field changes, so filtering, selection and Enter share one snapshot. The
+// host chooses the row under a moving pointer, so a row the pointer merely rests on takes no plate of its own.
 func SearchableActionMenu(c *ui.Context, search MenuSearch, rows func() []MenuRow) MenuEvents {
 	return actionMenu(c, rows, &search)
 }
@@ -85,7 +86,7 @@ func actionMenu(c *ui.Context, rowsFor func() []MenuRow, search *MenuSearch) Men
 				switch {
 				case r.Selected:
 					SelectedFill(rowEl, k, false)
-				case hovered:
+				case hovered && search == nil:
 					rowEl.Background(k.Wash)
 				}
 				if hovered {

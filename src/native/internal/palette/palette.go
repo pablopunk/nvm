@@ -105,6 +105,8 @@ type Palette struct {
 	results      []search.Item
 	chosen       int
 	choicePinned bool
+	// pointerChose is set when the pointer moved the cursor in this frame, so the footer reveal leaves the scroll alone.
+	pointerChose bool
 	list         ui.ListState
 	footerReveal footerRevealState
 	listChoice   ui.Selection[string]
@@ -228,13 +230,26 @@ func (p *Palette) Results() []search.Item { return p.results }
 // Chosen returns the index of the row the cursor is on.
 func (p *Palette) Chosen() int { return p.chosen }
 
+// choose moves the cursor to row i from the keyboard or a program, and scrolls the row into view.
 func (p *Palette) choose(i int) {
 	p.choicePinned = true
 	p.clampChoice(i)
+	p.scrollChoiceIntoView()
+}
+
+// choosePointed moves the cursor to the row under a moving pointer. The pointer chose a row it can already see, so
+// the list never scrolls for it: hovering the last or first visible row leaves the offset alone.
+func (p *Palette) choosePointed(i int) {
+	p.choicePinned = true
+	p.clampChoice(i)
+	p.pointerChose = true
 }
 
 func (p *Palette) clampChoice(i int) {
 	p.chosen = p.enabledNear(max(0, min(i, len(p.results)-1)), i)
+}
+
+func (p *Palette) scrollChoiceIntoView() {
 	if len(p.results) > 0 {
 		p.list.ScrollIntoView(p.rowOf(p.chosen))
 	}

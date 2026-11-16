@@ -46,6 +46,7 @@ func (p *Palette) gridBody(c *ui.Context, g *Grid) {
 		g = &measured
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
+		quiet.SurfaceHover = ui.Transparent // the cursor plate is the only highlight; a hover plate would be a second one
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed = ui.Transparent, ui.Transparent, ui.Transparent
 		ui.Themed(c, &quiet).Grow(1).FillHeight().Children(func() {
 			list := ui.List(c, &p.list, rows, func(r int) { p.gridRow(c, g, r, slots) }).Grow(1).FillHeight().Padding(6, 6, 6+p.footerOverlayClearance(), 6)
@@ -103,13 +104,9 @@ func (p *Palette) gridCell(c *ui.Context, g *Grid, i int) {
 	if i == p.chosen {
 		p.revealFooterRow(c, cell)
 	}
-	hovered := cell.Hovered()
-	switch {
-	case i == p.chosen:
+	if i == p.chosen {
 		cell.Background(k.AccentMuted)
-	case hovered:
-		cell.Background(k.Selected)
-	default:
+	} else {
 		cell.Background(ui.Transparent)
 	}
 	clickTarget := cell

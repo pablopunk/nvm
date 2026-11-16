@@ -159,6 +159,7 @@ func (p *Palette) listBody(c *ui.Context) {
 		k := design.Tokens(c)
 		quiet := *c.Theme()
 		quiet.Background = ui.Transparent
+		quiet.SurfaceHover = ui.Transparent // the cursor plate is the only highlight; a hover plate would be a second one
 		quiet.Accent, quiet.AccentHover, quiet.AccentPressed, quiet.AccentText = ui.Transparent, ui.Transparent, ui.Transparent, k.Strong
 		previousChoice := p.chosen
 		var list ui.Element
@@ -260,17 +261,18 @@ func (p *Palette) row(c *ui.Context, i int) {
 	it := p.results[i]
 	sel := i == p.chosen
 	data := design.RowData{
-		Title:      it.Title,
-		Subtitle:   it.Subtitle,
-		Accessory:  it.Accessory,
-		Tile:       p.tileData(it),
-		Tone:       it.Tone,
-		TintTitle:  it.TintTitle,
-		Prominent:  it.Prominent,
-		Selected:   sel,
-		Disabled:   it.Disabled,
-		Contextual: it.Contextual,
-		ShowEnter:  sel && hasDefaultAction(it) && !it.Disabled,
+		Title:       it.Title,
+		Subtitle:    it.Subtitle,
+		Accessory:   it.Accessory,
+		Tile:        p.tileData(it),
+		Tone:        it.Tone,
+		TintTitle:   it.TintTitle,
+		Prominent:   it.Prominent,
+		Selected:    sel,
+		NoHoverWash: true,
+		Disabled:    it.Disabled,
+		Contextual:  it.Contextual,
+		ShowEnter:   sel && hasDefaultAction(it) && !it.Disabled,
 	}
 	if it.Section != "" && (i == 0 || p.results[i-1].Section != it.Section) {
 		data.Section = it.Section

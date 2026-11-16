@@ -88,6 +88,7 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 		return
 	}
 	newQuery := p.shownView != v || p.shownQuery != q
+	before := p.chosen
 	if newQuery {
 		p.chosen, p.choicePinned = 0, false
 	} else if selected := p.chosenItem(); p.choicePinned && selected != nil && selected.ID != "" {
@@ -104,6 +105,9 @@ func (p *Palette) showRows(v *View, q string, rows []search.Item, settled, pendi
 	p.results, p.settled, p.pending = rows, settled, pending
 	p.chooseRequested(v)
 	p.clampChoice(p.chosen)
+	if newQuery || p.chosen != before {
+		p.scrollChoiceIntoView()
+	}
 	if p.actionsOpen && p.menuOwner != p.menuOwnerKey() {
 		p.closeActionMenu()
 	}

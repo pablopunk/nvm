@@ -23,6 +23,10 @@ type RowData struct {
 	Contextual bool
 	// ShowEnter draws the return glyph at the end of a selected row that has actions.
 	ShowEnter bool
+	// NoHoverWash leaves a plain row under the pointer undrawn. A list whose pointer movement chooses the row under it
+	// shows that choice as the selection, so a second plate on a row the pointer merely rests on would be a second
+	// highlight beside the cursor.
+	NoHoverWash bool
 }
 
 // Row draws one list row: tile, title over subtitle, an accessory at the end. A selected row sits on the warm
@@ -58,7 +62,7 @@ func Row(c *ui.Context, d RowData) {
 			SelectedFill(rowEl, k, d.Prominent)
 		case d.Prominent:
 			rowEl.Background(k.AccentSoft)
-		case hovered:
+		case hovered && !d.NoHoverWash:
 			rowEl.Background(k.Wash)
 		}
 		tile := d.Tile
