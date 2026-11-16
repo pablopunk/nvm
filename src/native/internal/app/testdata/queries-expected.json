@@ -810,52 +810,6 @@
     "query": "cl",
     "rows": [
       {
-        "kind": "Commands",
-        "title": "Classify Image with AI",
-        "subtitle": "Choose an image and identify its category",
-        "section": "",
-        "id": "",
-        "icon": "image",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Classify Image with AI",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Clipboard History",
-        "subtitle": "Browse and paste what you copied",
-        "section": "",
-        "id": "ext:nevermind.clipboard:command:clipboard-history",
-        "icon": "clipboard",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Clipboard History",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "Applications",
         "title": "Clocks",
         "subtitle": "",
@@ -892,19 +846,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Quit All Apps",
-        "subtitle": "Closes all visible GUI applications",
+        "title": "Clipboard History",
+        "subtitle": "Browse and paste what you copied",
         "section": "",
-        "id": "ext:nevermind.apps:command:quit-all-apps",
-        "icon": "power",
-        "tone": "red",
+        "id": "ext:nevermind.clipboard:command:clipboard-history",
+        "icon": "clipboard",
+        "tone": "blue",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Quit All Apps",
+            "title": "Clipboard History",
             "label": ""
           },
           {
@@ -918,39 +872,109 @@
         ]
       },
       {
-        "kind": "Search",
-        "title": "Automate \"cl\"",
-        "subtitle": "Build a reusable command with AI",
-        "section": "",
-        "id": "automate",
-        "icon": "zap",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": true,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Automate \"cl\"",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"cl\"",
-        "subtitle": "Search instead",
+        "kind": "Commands",
+        "title": "Classify Image with AI",
+        "subtitle": "Choose an image and identify its category",
         "section": "",
         "id": "",
-        "icon": "search",
-        "tone": "blue",
+        "icon": "image",
+        "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Search the Web",
+            "title": "Classify Image with AI",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "cloud-setup.jpg",
+        "subtitle": "~/Pictures/cloud-setup.jpg",
+        "section": "",
+        "id": "$HOME/Pictures/cloud-setup.jpg",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Pictures/cloud-setup.jpg",
+        "actions": [
+          {
+            "title": "Open cloud-setup.jpg",
+            "label": ""
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads/clipboard-export.csv",
+        "section": "",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open clipboard-export.csv",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Applications",
+        "title": "Calendar",
+        "subtitle": "",
+        "section": "",
+        "id": "",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
+        "actions": [
+          {
+            "title": "Open Calendar",
+            "label": ""
+          },
+          {
+            "title": "Uninstall Calendar…",
+            "label": ""
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
             "label": ""
           }
         ]
@@ -974,41 +998,6 @@
           },
           {
             "title": "Uninstall Calculator…",
-            "label": ""
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Applications",
-        "title": "Calendar",
-        "subtitle": "",
-        "section": "",
-        "id": "",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "/usr/share/applications/org.gnome.Calendar.desktop",
-        "actions": [
-          {
-            "title": "Open Calendar",
-            "label": ""
-          },
-          {
-            "title": "Uninstall Calendar…",
             "label": ""
           },
           {
@@ -1085,50 +1074,19 @@
       },
       {
         "kind": "Commands",
-        "title": "Focus Window Left",
-        "subtitle": "Window Management",
+        "title": "Quit All Apps",
+        "subtitle": "Closes all visible GUI applications",
         "section": "",
-        "id": "ext:nevermind.window-management:command:layout.focus-left",
-        "icon": "arrow-left",
-        "tone": "",
+        "id": "ext:nevermind.apps:command:quit-all-apps",
+        "icon": "power",
+        "tone": "red",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Focus Window Left",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
-        "section": "",
-        "id": "ext:nevermind.files:command:search-files",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search Files",
+            "title": "Quit All Apps",
             "label": ""
           },
           {
@@ -1169,64 +1127,6 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Lock Screen",
-        "subtitle": "Secure this computer",
-        "section": "",
-        "id": "lock-screen",
-        "icon": "lock",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Lock Screen",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Toggle Full Screen",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.toggle-full-screen",
-        "icon": "fullscreen",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Toggle Full Screen",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "AI Commands",
         "title": "Triage Selected Text with AI",
         "subtitle": "Reply needed, category and urgency in one call",
@@ -1241,6 +1141,76 @@
         "actions": [
           {
             "title": "Triage Selected Text with AI",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"cl\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "automate",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate \"cl\"",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"cl\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "query": "clip",
+    "rows": [
+      {
+        "kind": "Commands",
+        "title": "Clipboard History",
+        "subtitle": "Browse and paste what you copied",
+        "section": "",
+        "id": "ext:nevermind.clipboard:command:clipboard-history",
+        "icon": "clipboard",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Clipboard History",
             "label": ""
           },
           {
@@ -1277,65 +1247,6 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "cloud-setup.jpg",
-        "subtitle": "~/Pictures/cloud-setup.jpg",
-        "section": "",
-        "id": "$HOME/Pictures/cloud-setup.jpg",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Pictures/cloud-setup.jpg",
-        "actions": [
-          {
-            "title": "Open cloud-setup.jpg",
-            "label": ""
-          },
-          {
-            "title": "Preview",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
-      }
-    ]
-  },
-  {
-    "query": "clip",
-    "rows": [
-      {
-        "kind": "Commands",
-        "title": "Clipboard History",
-        "subtitle": "Browse and paste what you copied",
-        "section": "",
-        "id": "ext:nevermind.clipboard:command:clipboard-history",
-        "icon": "clipboard",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Clipboard History",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
           }
         ]
       },
@@ -1376,33 +1287,6 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Files",
-        "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads/clipboard-export.csv",
-        "section": "",
-        "id": "$HOME/Downloads/clipboard-export.csv",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Downloads/clipboard-export.csv",
-        "actions": [
-          {
-            "title": "Open clipboard-export.csv",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
       }
     ]
   },
@@ -1433,6 +1317,33 @@
           {
             "title": "Set alias",
             "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads/clipboard-export.csv",
+        "section": "",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open clipboard-export.csv",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           }
         ]
       },
@@ -1471,33 +1382,6 @@
           {
             "title": "Search the Web",
             "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "clipboard-export.csv",
-        "subtitle": "~/Downloads/clipboard-export.csv",
-        "section": "",
-        "id": "$HOME/Downloads/clipboard-export.csv",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Downloads/clipboard-export.csv",
-        "actions": [
-          {
-            "title": "Open clipboard-export.csv",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
           }
         ]
       }
@@ -1542,44 +1426,6 @@
         ]
       },
       {
-        "kind": "Search",
-        "title": "Automate \"calc\"",
-        "subtitle": "Build a reusable command with AI",
-        "section": "",
-        "id": "automate",
-        "icon": "zap",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": true,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Automate \"calc\"",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"calc\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
         "kind": "AI Commands",
         "title": "Triage Selected Text with AI",
         "subtitle": "Reply needed, category and urgency in one call",
@@ -1594,33 +1440,6 @@
         "actions": [
           {
             "title": "Triage Selected Text with AI",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Create Quicklink",
-        "subtitle": "",
-        "section": "",
-        "id": "ext:nevermind.quicklinks:command:create",
-        "icon": "link",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Create Quicklink",
             "label": ""
           },
           {
@@ -1657,6 +1476,44 @@
           {
             "title": "Show in File Manager",
             "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"calc\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "automate",
+        "icon": "zap",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": true,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Automate \"calc\"",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Search the web for \"calc\"",
+        "subtitle": "Search instead",
+        "section": "",
+        "id": "",
+        "icon": "search",
+        "tone": "blue",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Search the Web",
+            "label": ""
           }
         ]
       }
@@ -1851,68 +1708,6 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Focus Window Right",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.focus-right",
-        "icon": "arrow-right",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Focus Window Right",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Second Fourth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.second-fourth",
-        "icon": "columns-4",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Second Fourth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
       }
     ]
   },
@@ -2068,6 +1863,33 @@
         ]
       },
       {
+        "kind": "Files",
+        "title": "Settings.png",
+        "subtitle": "~/Desktop/Settings.png",
+        "section": "",
+        "id": "$HOME/Desktop/Settings.png",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Desktop/Settings.png",
+        "actions": [
+          {
+            "title": "Open Settings.png",
+            "label": ""
+          },
+          {
+            "title": "Preview",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
         "kind": "Commands",
         "title": "Open Settings",
         "subtitle": "Open system preferences",
@@ -2122,115 +1944,39 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Move Window…",
-        "subtitle": "Window Management",
+        "kind": "Files",
+        "title": "cloud-setup.jpg",
+        "subtitle": "~/Pictures/cloud-setup.jpg",
         "section": "",
-        "id": "ext:nevermind.window-management:command:move-window",
-        "icon": "move",
+        "id": "$HOME/Pictures/cloud-setup.jpg",
+        "icon": "",
         "tone": "",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
-        "iconPath": "",
+        "iconPath": "$HOME/Pictures/cloud-setup.jpg",
         "actions": [
           {
-            "title": "Move Window…",
+            "title": "Open cloud-setup.jpg",
             "label": ""
           },
           {
-            "title": "Set keyboard shortcut",
-            "label": ""
+            "title": "Preview",
+            "label": "⌃Y"
           },
           {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Automate \"set\"",
-        "subtitle": "Build a reusable command with AI",
-        "section": "",
-        "id": "automate",
-        "icon": "zap",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": true,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Automate \"set\"",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Search",
-        "title": "Search the web for \"set\"",
-        "subtitle": "Search instead",
-        "section": "",
-        "id": "",
-        "icon": "search",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Release notes",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-release",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
+            "title": "Show in File Manager",
+            "label": "⌃↵"
           }
         ]
       },
       {
         "kind": "Commands",
-        "title": "Classify Image with AI",
-        "subtitle": "Choose an image and identify its category",
+        "title": "Snippets",
+        "subtitle": "Saved text you paste often",
         "section": "",
-        "id": "",
-        "icon": "image",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Classify Image with AI",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Create Snippet",
-        "subtitle": "",
-        "section": "",
-        "id": "ext:nevermind.snippets:command:create",
-        "icon": "plus",
+        "id": "ext:nevermind.snippets:command:snippets",
+        "icon": "type",
         "tone": "teal",
         "accessory": "",
         "prominent": false,
@@ -2238,123 +1984,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Create Snippet",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "AI Commands",
-        "title": "Fix Selected Text with AI",
-        "subtitle": "Correct grammar, spelling, and punctuation",
-        "section": "",
-        "id": "ext:nevermind.ai-commands:command:fix-selected-text-with-ai",
-        "icon": "sparkles",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Fix Selected Text with AI",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Focus Window Left",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.focus-left",
-        "icon": "arrow-left",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Focus Window Left",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Switch Backend Environment",
-        "subtitle": "Switch Development, Preview, Production, or custom backend",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Switch Backend Environment",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Previous Desktop",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:previous-desktop",
-        "icon": "arrow-left",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Previous Desktop",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
+            "title": "Snippets",
             "label": ""
           },
           {
@@ -2400,6 +2030,33 @@
       },
       {
         "kind": "Commands",
+        "title": "Create Snippet",
+        "subtitle": "",
+        "section": "",
+        "id": "ext:nevermind.snippets:command:create",
+        "icon": "plus",
+        "tone": "teal",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Create Snippet",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
         "title": "Show Recent Errors",
         "subtitle": "Find and copy safe error references",
         "section": "",
@@ -2426,20 +2083,20 @@
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Snippets",
-        "subtitle": "Saved text you paste often",
+        "kind": "AI Commands",
+        "title": "Fix Selected Text with AI",
+        "subtitle": "Correct grammar, spelling, and punctuation",
         "section": "",
-        "id": "ext:nevermind.snippets:command:snippets",
-        "icon": "type",
-        "tone": "teal",
+        "id": "ext:nevermind.ai-commands:command:fix-selected-text-with-ai",
+        "icon": "sparkles",
+        "tone": "purple",
         "accessory": "",
         "prominent": false,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Snippets",
+            "title": "Fix Selected Text with AI",
             "label": ""
           },
           {
@@ -2480,182 +2137,166 @@
         ]
       },
       {
-        "kind": "Conversations",
-        "title": "Continue conversation: Time zones",
-        "subtitle": "AI conversation",
+        "kind": "Commands",
+        "title": "Nevermind: Switch Backend Environment",
+        "subtitle": "Switch Development, Preview, Production, or custom backend",
         "section": "",
-        "id": "chat:c-tokyo",
-        "icon": "message-circle",
+        "id": "",
+        "icon": "globe",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Nevermind: Switch Backend Environment",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Move Window…",
+        "subtitle": "Window Management",
+        "section": "",
+        "id": "ext:nevermind.window-management:command:move-window",
+        "icon": "move",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Move Window…",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "meeting-notes.md",
+        "subtitle": "~/Documents/meeting-notes.md",
+        "section": "",
+        "id": "$HOME/Documents/meeting-notes.md",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/meeting-notes.md",
+        "actions": [
+          {
+            "title": "Open meeting-notes.md",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "release-plan.txt",
+        "subtitle": "~/Documents/release-plan.txt",
+        "section": "",
+        "id": "$HOME/Documents/release-plan.txt",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/release-plan.txt",
+        "actions": [
+          {
+            "title": "Open release-plan.txt",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "clipboard-export.csv",
+        "subtitle": "~/Downloads/clipboard-export.csv",
+        "section": "",
+        "id": "$HOME/Downloads/clipboard-export.csv",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Downloads/clipboard-export.csv",
+        "actions": [
+          {
+            "title": "Open clipboard-export.csv",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Search",
+        "title": "Automate \"set\"",
+        "subtitle": "Build a reusable command with AI",
+        "section": "",
+        "id": "automate",
+        "icon": "zap",
         "tone": "yellow",
         "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Almost Maximize",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.almost-maximize",
-        "icon": "expand",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
+        "prominent": true,
         "tintTitle": false,
         "iconPath": "",
         "actions": [
           {
-            "title": "Almost Maximize",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
+            "title": "Automate \"set\"",
             "label": ""
           }
         ]
       },
       {
-        "kind": "Commands",
-        "title": "Bottom Center Sixth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-center-sixth",
-        "icon": "grid-3x3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Center Sixth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Left Sixth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-left-sixth",
-        "icon": "grid-3x3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Left Sixth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Center Two Thirds",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.center-two-thirds",
-        "icon": "columns-2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Center Two Thirds",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Check for Updates",
-        "subtitle": "Current version: ",
+        "kind": "Search",
+        "title": "Search the web for \"set\"",
+        "subtitle": "Search instead",
         "section": "",
         "id": "",
-        "icon": "rotate-ccw",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Check for Updates",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Desktop",
-        "subtitle": "$HOME/Desktop",
-        "section": "",
-        "id": "",
-        "icon": "folder",
+        "icon": "search",
         "tone": "blue",
         "accessory": "",
         "prominent": false,
@@ -2663,169 +2304,7 @@
         "iconPath": "",
         "actions": [
           {
-            "title": "Open Desktop",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Dictation History",
-        "subtitle": "Browse and copy previous dictations",
-        "section": "",
-        "id": "ext:nevermind.dictation:command:dictation-history",
-        "icon": "history",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Dictation History",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Documents",
-        "subtitle": "$HOME/Documents",
-        "section": "",
-        "id": "",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open Documents",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Empty Trash",
-        "subtitle": "Permanently delete trashed files",
-        "section": "",
-        "id": "empty-trash",
-        "icon": "trash-2",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Empty Trash",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Extensions",
-        "subtitle": "Manage and create extensions",
-        "section": "",
-        "id": "",
-        "icon": "puzzle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Extensions",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Floating Notes",
-        "subtitle": "Jot something down",
-        "section": "",
-        "id": "ext:nevermind.floating-notes:command:floating-notes",
-        "icon": "sticky-note",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Floating Notes",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Force Quit Apps",
-        "subtitle": "Force quit running applications",
-        "section": "",
-        "id": "ext:nevermind.apps:command:force-quit-apps",
-        "icon": "stop-circle",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Force Quit Apps",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
+            "title": "Search the Web",
             "label": ""
           }
         ]
@@ -2871,6 +2350,33 @@
         ]
       },
       {
+        "kind": "Commands",
+        "title": "Log in to Nevermind",
+        "subtitle": "Connect this device to your Nevermind account",
+        "section": "",
+        "id": "",
+        "icon": "user",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Log in to Nevermind",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"term\"",
         "subtitle": "Build a reusable command with AI",
@@ -2904,400 +2410,6 @@
         "actions": [
           {
             "title": "Search the Web",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Log in to Nevermind",
-        "subtitle": "Connect this device to your Nevermind account",
-        "section": "",
-        "id": "",
-        "icon": "user",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Log in to Nevermind",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Switch Backend Environment",
-        "subtitle": "Switch Development, Preview, Production, or custom backend",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Switch Backend Environment",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Quit Nevermind",
-        "subtitle": "",
-        "section": "",
-        "id": "quit",
-        "icon": "x",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Center Sixth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-center-sixth",
-        "icon": "grid-3x3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Center Sixth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Left Quarter",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-left-quarter",
-        "icon": "grid-2x2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Left Quarter",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Right Quarter",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-right-quarter",
-        "icon": "grid-2x2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Right Quarter",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Empty Trash",
-        "subtitle": "Permanently delete trashed files",
-        "section": "",
-        "id": "empty-trash",
-        "icon": "trash-2",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Empty Trash",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Middle Third",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.middle-third",
-        "icon": "rows-3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Middle Third",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Middle Two Thirds",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.middle-two-thirds",
-        "icon": "rows-2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Middle Two Thirds",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Move Right",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.move-right",
-        "icon": "move-right",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Move Right",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Backend Status",
-        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Backend Status",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Diagnostics",
-        "title": "Report a Problem",
-        "subtitle": "Record a problem reference without screen content",
-        "section": "",
-        "id": "ext:nevermind.diagnostics:command:report-problem",
-        "icon": "message-circle",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Report a Problem",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Restart Computer",
-        "subtitle": "Restart this computer",
-        "section": "",
-        "id": "restart",
-        "icon": "rotate-ccw",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Restart Computer",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Start Timer",
-        "subtitle": "Type e.g. “timer 5m”",
-        "section": "",
-        "id": "ext:nevermind.timers:command:start",
-        "icon": "timer",
-        "tone": "orange",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Start Timer",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
             "label": ""
           }
         ]
@@ -3379,66 +2491,66 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Force Quit Apps",
-        "subtitle": "Force quit running applications",
-        "section": "",
-        "id": "ext:nevermind.apps:command:force-quit-apps",
-        "icon": "stop-circle",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Force Quit Apps",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Search Files",
-        "subtitle": "Find files in your home folder",
-        "section": "",
-        "id": "ext:nevermind.files:command:search-files",
-        "icon": "folder",
-        "tone": "blue",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Search Files",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
       }
     ]
   },
   {
     "query": "meeting",
     "rows": [
+      {
+        "kind": "Files",
+        "title": "meeting-notes.md",
+        "subtitle": "~/Documents/meeting-notes.md",
+        "section": "",
+        "id": "$HOME/Documents/meeting-notes.md",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/meeting-notes.md",
+        "actions": [
+          {
+            "title": "Open meeting-notes.md",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Commands",
+        "title": "Window Management Settings",
+        "subtitle": "Gaps, cycling, and sizes for window layouts",
+        "section": "",
+        "id": "ext:nevermind.window-management:command:settings",
+        "icon": "settings",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Window Management Settings",
+            "label": ""
+          },
+          {
+            "title": "Set keyboard shortcut",
+            "label": ""
+          },
+          {
+            "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
       {
         "kind": "Clipboard",
         "title": "Meeting notes: ship the design package by Friday and review the goldens …",
@@ -3511,112 +2623,12 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:settings",
-        "icon": "settings",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Log in to Nevermind",
-        "subtitle": "Connect this device to your Nevermind account",
-        "section": "",
-        "id": "",
-        "icon": "user",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Log in to Nevermind",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "meeting-notes.md",
-        "subtitle": "~/Documents/meeting-notes.md",
-        "section": "",
-        "id": "$HOME/Documents/meeting-notes.md",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Documents/meeting-notes.md",
-        "actions": [
-          {
-            "title": "Open meeting-notes.md",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
       }
     ]
   },
   {
     "query": "release",
     "rows": [
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Release notes",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-release",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
       {
         "kind": "Commands",
         "title": "Check for Updates",
@@ -3640,6 +2652,52 @@
           },
           {
             "title": "Set alias",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "release-plan.txt",
+        "subtitle": "~/Documents/release-plan.txt",
+        "section": "",
+        "id": "$HOME/Documents/release-plan.txt",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/release-plan.txt",
+        "actions": [
+          {
+            "title": "Open release-plan.txt",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
+        "kind": "Conversations",
+        "title": "Continue conversation: Release notes",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "chat:c-release",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
             "label": ""
           }
         ]
@@ -3681,116 +2739,12 @@
             "label": ""
           }
         ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Reasonable Size",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.reasonable-size",
-        "icon": "app-window",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Reasonable Size",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "AI Commands",
-        "title": "Triage Selected Text with AI",
-        "subtitle": "Reply needed, category and urgency in one call",
-        "section": "",
-        "id": "ext:nevermind.ai-commands:command:triage-selected-text-with-ai",
-        "icon": "sparkles",
-        "tone": "purple",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Triage Selected Text with AI",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "release-plan.txt",
-        "subtitle": "~/Documents/release-plan.txt",
-        "section": "",
-        "id": "$HOME/Documents/release-plan.txt",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Documents/release-plan.txt",
-        "actions": [
-          {
-            "title": "Open release-plan.txt",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          }
-        ]
       }
     ]
   },
   {
     "query": "time",
     "rows": [
-      {
-        "kind": "Conversations",
-        "title": "Continue conversation: Time zones",
-        "subtitle": "AI conversation",
-        "section": "",
-        "id": "chat:c-tokyo",
-        "icon": "message-circle",
-        "tone": "yellow",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": true,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          }
-        ]
-      },
       {
         "kind": "Commands",
         "title": "Start Timer",
@@ -3850,6 +2804,52 @@
         ]
       },
       {
+        "kind": "Conversations",
+        "title": "Continue conversation: Time zones",
+        "subtitle": "AI conversation",
+        "section": "",
+        "id": "chat:c-tokyo",
+        "icon": "message-circle",
+        "tone": "yellow",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": true,
+        "iconPath": "",
+        "actions": [
+          {
+            "title": "Open",
+            "label": ""
+          }
+        ]
+      },
+      {
+        "kind": "Files",
+        "title": "meeting-notes.md",
+        "subtitle": "~/Documents/meeting-notes.md",
+        "section": "",
+        "id": "$HOME/Documents/meeting-notes.md",
+        "icon": "",
+        "tone": "",
+        "accessory": "",
+        "prominent": false,
+        "tintTitle": false,
+        "iconPath": "$HOME/Documents/meeting-notes.md",
+        "actions": [
+          {
+            "title": "Open meeting-notes.md",
+            "label": ""
+          },
+          {
+            "title": "Preview Contents",
+            "label": "⌃Y"
+          },
+          {
+            "title": "Show in File Manager",
+            "label": "⌃↵"
+          }
+        ]
+      },
+      {
         "kind": "Search",
         "title": "Automate \"time\"",
         "subtitle": "Build a reusable command with AI",
@@ -3884,501 +2884,6 @@
           {
             "title": "Search the Web",
             "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Almost Maximize",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.almost-maximize",
-        "icon": "expand",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Almost Maximize",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Switch Backend Environment",
-        "subtitle": "Switch Development, Preview, Production, or custom backend",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Switch Backend Environment",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Applications",
-        "title": "Terminal",
-        "subtitle": "",
-        "section": "",
-        "id": "",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "/usr/share/applications/org.gnome.Terminal.desktop",
-        "actions": [
-          {
-            "title": "Open Terminal",
-            "label": ""
-          },
-          {
-            "title": "Uninstall Terminal…",
-            "label": ""
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Center Sixth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-center-sixth",
-        "icon": "grid-3x3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Center Sixth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Left Sixth",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-left-sixth",
-        "icon": "grid-3x3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Left Sixth",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Bottom Right Quarter",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.bottom-right-quarter",
-        "icon": "grid-2x2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Bottom Right Quarter",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Classify Image with AI",
-        "subtitle": "Choose an image and identify its category",
-        "section": "",
-        "id": "",
-        "icon": "image",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Classify Image with AI",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Log in to Nevermind",
-        "subtitle": "Connect this device to your Nevermind account",
-        "section": "",
-        "id": "",
-        "icon": "user",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Log in to Nevermind",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Maximize Height",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.maximize-height",
-        "icon": "move-vertical",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Maximize Height",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Maximize Width",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.maximize-width",
-        "icon": "move-horizontal",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Maximize Width",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Middle Third",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.middle-third",
-        "icon": "rows-3",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Middle Third",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Middle Two Thirds",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.middle-two-thirds",
-        "icon": "rows-2",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Middle Two Thirds",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Move Right",
-        "subtitle": "Window Management",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:layout.move-right",
-        "icon": "move-right",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Move Right",
-            "label": ""
-          },
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Nevermind: Backend Status",
-        "subtitle": "Client production · Active production · https://api.nvm.fyi · Server unavailable",
-        "section": "",
-        "id": "",
-        "icon": "globe",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Nevermind: Backend Status",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Quit Nevermind",
-        "subtitle": "",
-        "section": "",
-        "id": "quit",
-        "icon": "x",
-        "tone": "red",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Open",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Commands",
-        "title": "Window Management Settings",
-        "subtitle": "Gaps, cycling, and sizes for window layouts",
-        "section": "",
-        "id": "ext:nevermind.window-management:command:settings",
-        "icon": "settings",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "",
-        "actions": [
-          {
-            "title": "Window Management Settings",
-            "label": ""
-          },
-          {
-            "title": "Set keyboard shortcut",
-            "label": ""
-          },
-          {
-            "title": "Set alias",
-            "label": ""
-          }
-        ]
-      },
-      {
-        "kind": "Files",
-        "title": "meeting-notes.md",
-        "subtitle": "~/Documents/meeting-notes.md",
-        "section": "",
-        "id": "$HOME/Documents/meeting-notes.md",
-        "icon": "",
-        "tone": "",
-        "accessory": "",
-        "prominent": false,
-        "tintTitle": false,
-        "iconPath": "$HOME/Documents/meeting-notes.md",
-        "actions": [
-          {
-            "title": "Open meeting-notes.md",
-            "label": ""
-          },
-          {
-            "title": "Preview Contents",
-            "label": "⌃Y"
-          },
-          {
-            "title": "Show in File Manager",
-            "label": "⌃↵"
           }
         ]
       }

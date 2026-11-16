@@ -57,6 +57,9 @@ type Options struct {
 	// Learner raises the score of the rows that carry a LearnKey by what the user chose for them. Nil means
 	// no row is learned.
 	Learner Learner
+	// Tiered ranks typed queries by match tier, then class and usage, as tiered.go describes. Without it the rows rank by the
+	// Score their provider gives them. The root is tiered; a view that orders its own rows is not.
+	Tiered bool
 	// Flat lists the rows in score order with no section labels, as 1.x's root list does, for every query.
 	Flat bool
 }
@@ -92,6 +95,8 @@ type Coordinator struct {
 	superseded        map[string][]Item        // rows of the snapshot the previous query ended on
 	committed         []Item                   // rows on screen for this generation, in screen order
 	committedFrom     map[cachedItemKey]string // the provider of each committed row
+	matcher           *queryMatcher            // matches the rows of matcherQuery; nil for a blank query
+	matcherQuery      string
 }
 
 // slot is one provider's part of the current generation.

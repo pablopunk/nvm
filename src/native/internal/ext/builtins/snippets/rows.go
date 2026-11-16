@@ -23,7 +23,7 @@ func snippetRow(sn Snippet, score float64, canPaste bool) api.Item {
 	row := api.Item{
 		ID: sn.ID, Title: sn.Name, Subtitle: rowSubtitle(sn), Icon: "type",
 		Appearance: &api.Appearance{Foreground: api.ColorTeal},
-		Section:    search.KindSnippets, LearnKey: "snippet:" + sn.ID, Score: score,
+		Section:    search.KindSnippets, LearnKey: "snippet:" + sn.ID, Score: score, Keywords: snippetKeywords(sn),
 		Detail: snippetDetail(sn),
 	}
 	paste := api.Run(refPaste, pasteTitle, map[string]string{argID: sn.ID})
@@ -83,4 +83,12 @@ func listItems(all []Snippet, canPaste bool) []api.Item {
 		items = append(items, snippetRow(sn, 0, canPaste))
 	}
 	return items
+}
+
+// snippetKeywords is the snippet's keyword when it has one: typing the whole keyword finds the snippet exactly.
+func snippetKeywords(sn Snippet) []string {
+	if sn.Keyword == "" {
+		return nil
+	}
+	return []string{sn.Keyword}
 }

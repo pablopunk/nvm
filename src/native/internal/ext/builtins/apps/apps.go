@@ -93,7 +93,7 @@ func (Extension) SearchItems(ctx api.Context, query string) ([]api.Item, error) 
 			scores = append(scores, float64(score))
 		}
 	}
-	return appItemsScored(ctx, matched, scores), nil
+	return appItemsScored(ctx, matched, scores, aliases), nil
 }
 
 // aliasScore is how well the best of an app's aliases answers the query, 0 when none does.
@@ -111,29 +111,30 @@ func appItems(ctx api.Context, list []api.App, score func(api.App) float64) []ap
 	for i, app := range list {
 		scores[i] = score(app)
 	}
-	return appItemsScored(ctx, list, scores)
+	return appItemsScored(ctx, list, scores, nil)
 }
 
-// appItemsScored builds one row per app, with its score. Running state is read once for the whole list.
-func appItemsScored(ctx api.Context, list []api.App, scores []float64) []api.Item {
+// appItemsScored builds one row per app, with its score and its aliases, which are keyed by the app's alias target.
+// Running state is read once for the whole list.
+func appItemsScored(ctx api.Context, list []api.App, scores []float64, aliases map[string][]string) []api.Item {
 	running := runningAmong(ctx, list)
 	uninstallable := ctx.System().HasCapability(uninstallCapability)
 	items := make([]api.Item, 0, len(list))
 	for i, app := range list {
-		items = append(items, appItem(app, running[app.Path], uninstallable, scores[i]))
+		items = append(items, appItem(app, running[app.Path], uninstallable, scores[i], aliases[aliasPrefix+app.Path]))
 	}
 	return items
 }
 
 // appItem is the row of one app: its name, Running while it runs, its icon, and the actions of its menu.
-func appItem(app api.App, running, uninstallable bool, score float64) api.Item {
+func appItem(app api.App, running, uninstallable bool, score float64, aliases []string) api.Item {
 	open := api.Run(refOpen, "Open "+app.Name, map[string]string{argPath: app.Path})
 	open.DismissAfterRun = true
 	item := api.Item{
 		Title: app.Name, Section: search.KindApplications, LearnKey: "app:" + app.ID,
 		CustomizeAs: aliasPrefix + app.Path,
 		File:        &api.FileRef{Path: app.Path, Name: app.Name, Kind: "file"},
-		Score:       score, LastUsedMs: app.FirstSeenMs,
+		Aliases:     aliases, Score: score, LastUsedMs: app.FirstSeenMs,
 		Primary: &open,
 	}
 	if running {

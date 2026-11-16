@@ -29,6 +29,7 @@ func matchingCommandRows(p *App, m *manager.Manager, result manager.CommandResul
 		}
 		p.shortcutTitles.remember(actionID, command.Title)
 		row := commandRow(p, m, result, command, score)
+		row.Names = slices.Concat(command.Aliases, command.Keywords, aliases[actionID])
 		if commandTakesShortcuts(command) {
 			row = p.withShortcutActions(row, actionID, bound)
 		}
@@ -49,8 +50,10 @@ func commandRow(p *App, m *manager.Manager, result manager.CommandResult, comman
 	}
 	row.ID = folderLearnKey(result.ExtensionID, "command:"+command.ID)
 	row.LearnKey = row.ID
+	row.Class = search.ClassExtensionCommand
 	if m.IsBuiltIn(result.ExtensionID) {
 		row = builtInCommandRow(row, command)
+		row.Class = search.ClassCommand
 	}
 	return row
 }

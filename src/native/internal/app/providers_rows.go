@@ -1,6 +1,7 @@
 package app
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -66,7 +67,8 @@ func commandRows(p *App, in *rootInput, q string) []search.Item {
 			continue
 		}
 		cmd := cmd
-		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title, Actions: []search.Action{{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
+		it := search.Item{Kind: search.KindCommands, Title: cmd.Title, Subtitle: cmd.Subtitle, Icon: cmd.Icon, Tone: cmd.Tone, LearnKey: "cmd:" + cmd.Title,
+			Names: slices.Concat(strings.Fields(cmd.Keywords), in.aliases[commandShortcutID(cmd)]), Actions: []search.Action{{Title: cmd.Title, Run: p.trackedRun(cmd), Dismiss: cmd.Dismiss}}}
 		it.Actions = append(it.Actions, cmd.extraActions...)
 		if commandShortcutID(cmd) != "" {
 			it = p.withShortcutActions(it, commandShortcutID(cmd), in.shortcuts)

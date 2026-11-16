@@ -46,6 +46,7 @@ func (p *Palette) coordinator(v *View) *search.Coordinator {
 			Learner:     p.opts.Learner,
 			Limit:       v.Limit,
 			Flat:        v.Flat,
+			Tiered:      v.Tiered,
 			OnSnapshot: func(s search.Snapshot) {
 				p.win.Update(func() { p.applySnapshot(v, s) })
 			},

@@ -136,3 +136,5 @@ func TestCoordinatorRaisesOnlyLearnedRows(t *testing.T) {
 }
 
 func (l *fixedLearner) LastUsed(string) int64 { return 0 }
+
+func (l *fixedLearner) Usage(string, string) Use { return Use{} }

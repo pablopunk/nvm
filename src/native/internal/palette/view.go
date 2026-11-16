@@ -46,6 +46,8 @@ type View struct {
 	Limit int
 	// Flat lists the rows in score order with no section labels, as 1.x's root list does.
 	Flat bool
+	// Tiered ranks typed queries by match tier, then class and usage (search.Options.Tiered).
+	Tiered bool
 	// OnSubmit receives the input text when Enter is pressed in a Body view.
 	OnSubmit  func(q string)
 	HideInput bool

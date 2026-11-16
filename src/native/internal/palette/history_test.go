@@ -234,6 +234,8 @@ type recordingLearner struct{ calls []string }
 
 func (l *recordingLearner) Boost(string, string) int { return 0 }
 
+func (l *recordingLearner) Usage(string, string) search.Use { return search.Use{} }
+
 func (l *recordingLearner) Record(key, query string) { l.calls = append(l.calls, key+"|"+query) }
 
 func TestSubViewsDoNotWalkTheRootHistory(t *testing.T) {

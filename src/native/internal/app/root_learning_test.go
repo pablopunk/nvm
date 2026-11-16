@@ -79,17 +79,30 @@ func TestRootTableWithRecordedUsageMatchesExpected(t *testing.T) {
 }
 
 // TestRecordedUsageReordersTheRoot checks the reordering the second table is meant to show, against the first
-// table: Calendar and Calculator both start with "cal", so they tie on the match and the usage decides. Chosen for
-// "cal", Calendar moves above Calculator, which the golden order lists first. At the empty root every app is listed,
-// and an app chosen there ranks above one never chosen.
+// table: Calendar and Calculator both start with "cal", so they tie on the match and the usage decides. Without usage
+// the shorter title, Calendar, leads; chosen for "cal" more often, Calculator moves above it. At the empty root every
+// app is listed, and an app chosen there ranks above one never chosen.
 func TestRecordedUsageReordersTheRoot(t *testing.T) {
 	calendar := indexOfRow(t, learnedUsageFixture(t), "cal", "Calendar")
 	calculator := indexOfRow(t, learnedUsageFixture(t), "cal", "Calculator")
 	if calendar < 0 || calculator < 0 || calendar >= calculator {
 		t.Fatalf("for cal, Calendar (chosen for cal) should outrank Calculator: calendar %d, calculator %d", calendar, calculator)
 	}
-	if plain := indexOfRow(t, rootTableFixture(t), "cal", "Calendar"); plain < indexOfRow(t, rootTableFixture(t), "cal", "Calculator") {
-		t.Fatalf("without usage Calculator should come first: calendar %d", plain)
+	if plain := indexOfRow(t, rootTableFixture(t), "cal", "Calendar"); plain > indexOfRow(t, rootTableFixture(t), "cal", "Calculator") {
+		t.Fatalf("without usage the shorter Calendar should come first: calendar %d", plain)
+	}
+	// The learned table's learner is on the fake clock, so its uses are long past and only the chosen query counts. This
+	// one is recorded now, as a user's are, so the number of uses decides.
+	now := usage.NewMemory(searchClock)
+	for range 3 {
+		now.Record("app:org.gnome.Calendar.desktop", "cal")
+	}
+	for range 6 {
+		now.Record("app:org.gnome.Calculator.desktop", "cal")
+	}
+	busier := withLearner(rootTableFixture(t), now)
+	if indexOfRow(t, busier, "cal", "Calculator") > indexOfRow(t, busier, "cal", "Calendar") {
+		t.Fatal("Calculator, chosen for cal more often, should outrank Calendar")
 	}
 	terminal := indexOfRow(t, learnedUsageFixture(t), "", "Terminal")
 	firefox := indexOfRow(t, learnedUsageFixture(t), "", "Firefox")

@@ -19,6 +19,19 @@ const (
 	KindSearch        = "Search"
 )
 
+// Class is the kind of row a tiered search orders within a tier: applications first, then extension commands, then built-in
+// commands and settings, then every other row. The zero value takes the class its Kind implies.
+type Class uint8
+
+const (
+	// ClassDefault takes its class from the row's Kind: an application, a command, or any other row.
+	ClassDefault Class = iota
+	ClassApplication
+	ClassExtensionCommand
+	ClassCommand
+	ClassOther
+)
+
 // Dismissal says whether the palette closes once an action has run.
 type Dismissal int
 
@@ -110,6 +123,19 @@ type Item struct {
 	// LastUsed is the Unix milliseconds of the row's last use: the usage learner's for a LearnKey, or the extension's own
 	// LastUsedMs. The root breaks score ties by it, most recent first, as 1.x does. Zero means never used.
 	LastUsed int64
+	// Names are other names of the row: its aliases and keywords. A tiered search finds the row exactly when the query equals
+	// one; otherwise only the Title is matched. They are not shown.
+	Names []string
+	// Content marks a row that stands for content, such as a copy of the clipboard. A tiered search puts it in the content
+	// tier, below every row that matches by name, whatever its title says.
+	Content bool
+	// Class orders rows of the same tier in a tiered search. Empty takes the class of the Kind.
+	Class Class
+	// Direct marks a row that acts on the whole query, such as a calculation, a timer or a quicklink. A tiered search ranks it
+	// in the exact tier ahead of every other row, by Score.
+	Direct bool
+	// ranked is what a tiered search worked out for the row: see tiered.go. Its zero value is an untiered row.
+	ranked rankKey
 	// TiePriority orders rows of equal score and last use, higher first. 1.x gives builder chats -1, so they follow the
 	// other rows.
 	TiePriority int

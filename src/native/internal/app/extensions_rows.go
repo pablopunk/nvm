@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"slices"
 	"sort"
 
 	"github.com/pablopunk/nvm/native/internal/ext/api"
@@ -150,7 +151,7 @@ func extensionRow(p *App, m *manager.Manager, extID, title string, item api.Item
 	row := search.Item{
 		Kind: title, Title: item.Title, Subtitle: item.Subtitle, Icon: iconOr(item.Icon, "puzzle"), Tone: "purple",
 		Score: scoreExtension, LastUsed: item.LastUsedMs, Detail: extview.DetailFor(deps, extID, item.Detail),
-		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery,
+		QueryFallback: item.QueryFallback, Answers: item.AnswersQuery, Names: slices.Concat(item.Aliases, item.Keywords),
 		DragPaths: api.DragPaths(item), DragImage: api.DragImagePath(item),
 	}
 	if m.IsBuiltIn(extID) {
@@ -205,6 +206,8 @@ func builtInRow(row search.Item, item api.Item) search.Item {
 	if item.Score != 0 {
 		row.Score = int(item.Score)
 	}
+	row.Direct = item.Score > search.ExactScore
+	row.Content = row.Kind == search.KindClipboard
 	row.LearnKey = item.LearnKey
 	row.TintTitle = item.TintTitle
 	row.TiePriority = item.TiePriority

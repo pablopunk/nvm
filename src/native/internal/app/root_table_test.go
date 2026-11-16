@@ -11,6 +11,7 @@ import (
 
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/quicklinks"
 	"github.com/pablopunk/nvm/native/internal/ext/builtins/websearch"
+	appfeat "github.com/pablopunk/nvm/native/internal/features/apps"
 	"github.com/pablopunk/nvm/native/internal/palette"
 	"github.com/pablopunk/nvm/native/internal/platform"
 	"github.com/pablopunk/nvm/native/internal/search"
@@ -70,7 +71,16 @@ const rootTableFile = "testdata/queries-expected.json"
 // extension, and an indexed file tree under the fixture home, so every provider has something to say.
 func rootTableFixture(t *testing.T) *App {
 	t.Helper()
+	return rootTableFixtureWithApps(t, nil)
+}
+
+// rootTableFixtureWithApps is rootTableFixture with apps installed beside the golden ones. Nil adds none.
+func rootTableFixtureWithApps(t *testing.T, extra []appfeat.App) *App {
+	t.Helper()
 	p := goldenPalette(t)
+	if extra != nil {
+		p.appsvc = newFixtureAppServices(append(goldenApps(), extra...))
+	}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		t.Fatal(err)

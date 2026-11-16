@@ -49,6 +49,7 @@ func (p *App) builtInRootRows(builtIn, q string, in *rootInput) []search.Item {
 	for _, row := range builtInRows(p, builtIn, q) {
 		if id := builtInRowActionID(builtIn, row); id != "" {
 			row = p.withShortcutActions(row, id, in.shortcuts)
+			row.Names = append(row.Names, in.aliases[id]...)
 			found[id] = true
 		}
 		out = append(out, row)
@@ -62,7 +63,9 @@ func (p *App) builtInRootRows(builtIn, q string, in *rootInput) []search.Item {
 		}
 		for _, row := range builtInRows(p, builtIn, entry.title) {
 			if builtInRowActionID(builtIn, row) == entry.actionID {
-				out = append(out, p.withShortcutActions(row, entry.actionID, in.shortcuts))
+				row = p.withShortcutActions(row, entry.actionID, in.shortcuts)
+				row.Names = append(row.Names, in.aliases[entry.actionID]...)
+				out = append(out, row)
 				break
 			}
 		}

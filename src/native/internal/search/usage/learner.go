@@ -130,6 +130,35 @@ func (l *Learner) Boost(id, query string) int {
 	return usage + affinity + recencyBoost(it.LastUsed, now)
 }
 
+// Usage returns what is remembered of row id for query: its uses, its last use, and whether it was chosen for this query
+// (search.ChoiceExact) or for a query this one extends (search.ChoiceExtends). The empty query, which every root visit
+// starts from, extends nothing.
+func (l *Learner) Usage(id, query string) search.Use {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	it, ok := l.items[id]
+	if !ok {
+		return search.Use{}
+	}
+	return search.Use{Count: it.Count, LastUsed: it.LastUsed, Choice: it.choiceFor(queryKey(query))}
+}
+
+// choiceFor says how the row was chosen for key: exactly, for a shorter query that key extends, or not.
+func (it item) choiceFor(key string) search.Choice {
+	if key == "" {
+		return search.ChoiceNone
+	}
+	if it.Queries[key].Count > 0 {
+		return search.ChoiceExact
+	}
+	for earlier, use := range it.Queries {
+		if earlier != "" && use.Count > 0 && strings.HasPrefix(key, earlier) {
+			return search.ChoiceExtends
+		}
+	}
+	return search.ChoiceNone
+}
+
 // Uses returns how many times row id was recorded.
 func (l *Learner) Uses(id string) int {
 	l.mu.RLock()

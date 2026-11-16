@@ -6,8 +6,8 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty pins the root's layout for the empty query and a typed one: rows in
-// 1.x score order, no section labels, and the 30-row cap.
+// TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty pins the root's layout for the empty query and a typed one: no
+// section labels and the 30-row cap, with the empty root's rows in 1.x score order and a typed query's rows by match tier.
 func TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty(t *testing.T) {
 	for _, q := range []string{"", "meeting"} {
 		rows := rootResultsForTable(goldenPalette(t), q)
@@ -18,8 +18,11 @@ func TestRootRowsSortByScoreWithNoSectionsAndAtMostThirty(t *testing.T) {
 			if it.Section != "" {
 				t.Fatalf("%q row %d %q carries section %q; the root has no section labels", q, i, it.Title, it.Section)
 			}
-			if i > 0 && rows[i-1].Score < it.Score {
+			if q == "" && i > 0 && rows[i-1].Score < it.Score {
 				t.Fatalf("%q row %d %q scores %d above the row before it (%d)", q, i, it.Title, it.Score, rows[i-1].Score)
+			}
+			if q != "" && i > 0 && rows[i-1].MatchTier() > it.MatchTier() {
+				t.Fatalf("%q row %d %q is in tier %d above the row before it (tier %d)", q, i, it.Title, it.MatchTier(), rows[i-1].MatchTier())
 			}
 		}
 	}

@@ -1,12 +1,15 @@
 package search
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/pablopunk/nvm/native/internal/fixtures"
+	"github.com/pablopunk/nvm/native/internal/platform/real"
 )
 
 // benchNameSizes are the name counts the ranking benchmark scores: the 10k, 50k and 100k ranges of
@@ -56,5 +59,29 @@ func BenchmarkScoreFuzzy(b *testing.B) {
 				b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(len(names)), "ns/name")
 			})
 		}
+	}
+}
+
+// BenchmarkTieredKeystroke measures the tiered ranking of one keystroke over the rows of two in-memory sources and a
+// learner that knows every row: the match tiers, the frecency and the sort.
+func BenchmarkTieredKeystroke(b *testing.B) {
+	rows := make([]Item, 0, 200)
+	uses := map[string]Use{}
+	for i := range 200 {
+		title := fmt.Sprintf("Google Chrome Canary %d", i)
+		key := fmt.Sprintf("app:%d", i)
+		rows = append(rows, Item{Kind: KindApplications, Title: title, LearnKey: key, Names: []string{"chrome"}})
+		uses[key] = Use{Count: i % 7, LastUsed: 1}
+	}
+	provider := NewRowsProvider("apps", func(context.Context, string) []Item { return slices.Clone(rows) })
+	for _, query := range []string{"g", "gc", "chrome", "canary 1"} {
+		b.Run("query="+query, func(b *testing.B) {
+			co := NewCoordinator(Options{Clock: real.NewPorts().Clock, Synchronous: true, Flat: true, Tiered: true, Learner: tieredLearner{uses: uses}})
+			b.ReportAllocs()
+			for range b.N {
+				snap, _ := co.Query(query, []Provider{provider})
+				benchSink += len(snap.Items)
+			}
+		})
 	}
 }

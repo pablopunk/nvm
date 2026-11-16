@@ -19,8 +19,8 @@ func paletteWithLearnFixture(t *testing.T, learn *usage.Learner) *App {
 	return p
 }
 
-// TestFolderExtensionRowClimbsWhenItsKeyIsUsed records a use of the second row's learning key and expects that row to
-// rank above the first, which has the same score and no use.
+// TestFolderExtensionRowClimbsWhenItsKeyIsUsed records a use of the longer-titled row's learning key and expects that
+// row to rank above the other, which matches as well and has no use. Unused rows tie by shorter title.
 func TestFolderExtensionRowClimbsWhenItsKeyIsUsed(t *testing.T) {
 	learn := usage.NewMemory(fake.NewClock())
 	p := paletteWithLearnFixture(t, learn)
@@ -28,12 +28,12 @@ func TestFolderExtensionRowClimbsWhenItsKeyIsUsed(t *testing.T) {
 	if indexOfItem(before, "Learn Alpha") < 0 || indexOfItem(before, "Learn Beta") < 0 {
 		t.Fatalf("the fixture rows are missing, got %v", rowTitlesOf(before))
 	}
-	if indexOfItem(before, "Learn Alpha") > indexOfItem(before, "Learn Beta") {
-		t.Fatalf("unused rows must keep the extension's order, got %v", rowTitles(p))
+	if indexOfItem(before, "Learn Beta") > indexOfItem(before, "Learn Alpha") {
+		t.Fatalf("unused rows must tie by shorter title, got %v", rowTitles(p))
 	}
-	learn.Record("ext:acme.learn:beta", "learn")
+	learn.Record("ext:acme.learn:alpha", "learn")
 	after := rootResultsForTable(p, "learn")
-	if indexOfItem(after, "Learn Beta") > indexOfItem(after, "Learn Alpha") {
+	if indexOfItem(after, "Learn Alpha") > indexOfItem(after, "Learn Beta") {
 		t.Fatalf("the used row must climb above the unused one, got %v", rowTitles(p))
 	}
 }
@@ -43,9 +43,9 @@ func TestFolderExtensionRowClimbsWhenItsKeyIsUsed(t *testing.T) {
 func TestFolderExtensionLearningKeysAreNamespacedByTheExtension(t *testing.T) {
 	learn := usage.NewMemory(fake.NewClock())
 	p := paletteWithLearnFixture(t, learn)
-	learn.Record("beta", "learn")
+	learn.Record("alpha", "learn")
 	rows := rootResultsForTable(p, "learn")
-	if indexOfItem(rows, "Learn Alpha") > indexOfItem(rows, "Learn Beta") {
+	if indexOfItem(rows, "Learn Beta") > indexOfItem(rows, "Learn Alpha") {
 		t.Fatalf("a bare key must not boost a folder row, got %v", rowTitles(p))
 	}
 }

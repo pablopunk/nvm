@@ -366,3 +366,32 @@ func TestOversizedFileIsBounded(t *testing.T) {
 		t.Fatal("the least recently used row should be dropped on load")
 	}
 }
+
+func TestUsageReportsTheChoiceForAnExactQueryAndForOneItExtends(t *testing.T) {
+	l := NewMemory(fake.NewClock())
+	l.Record("app:loom", "lo")
+	l.Record("app:loom", "")
+	tests := []struct {
+		query string
+		want  search.Choice
+	}{
+		{"lo", search.ChoiceExact},
+		{"LO ", search.ChoiceExact},
+		{"loo", search.ChoiceExtends},
+		{"loom", search.ChoiceExtends},
+		{"l", search.ChoiceNone},
+		{"xlo", search.ChoiceNone},
+		{"", search.ChoiceNone},
+	}
+	for _, tt := range tests {
+		if got := l.Usage("app:loom", tt.query).Choice; got != tt.want {
+			t.Errorf("choice for %q = %d, want %d", tt.query, got, tt.want)
+		}
+	}
+	if use := l.Usage("app:loom", "loo"); use.Count != 2 || use.LastUsed == 0 {
+		t.Errorf("usage = %+v, want two uses with a last use", use)
+	}
+	if use := l.Usage("app:never", "lo"); use != (search.Use{}) {
+		t.Errorf("an unused row has usage %+v", use)
+	}
+}

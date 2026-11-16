@@ -2,8 +2,10 @@ package search
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // Port of src/backend/src/palette-ui/search-ranking.ts and search-utils.ts: the score bands are the ranking contract.
@@ -100,6 +102,10 @@ func scoreSequential(text, query string) int {
 	return 20
 }
 
+// ExactScore is the score of a text that equals the query. A built-in row that declares a score above it acts on the
+// whole query, as a calculation or a timer does, and a tiered search ranks it first (Item.Direct).
+const ExactScore = 100
+
 // PhraseScoreFloor is the lowest score of a query that occurs in the text as a phrase, a substring or a word
 // prefix. Lower bands are scattered letters: the in-order band (20) and the bag-of-letters fallback (10).
 const PhraseScoreFloor = 50
@@ -132,9 +138,48 @@ func ScoreText(text, query string) int {
 	return scoreSequential(strings.ToLower(text), query)
 }
 
-// Score is ScoreFuzzy for text and query in any case, trimmed of surrounding space.
+// Score is ScoreFuzzy for text and query in any case, trimmed of surrounding space, without the loose bands the root does
+// not list: the bag of letters (10) never matches, and scattered letters (20) match only for a query of two letters or
+// more whose first letter starts a word of the text, as a tiered search's last title tier does (TierScattered).
 func Score(text, query string) int {
-	return ScoreFuzzy(strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query)))
+	text, query = strings.ToLower(strings.TrimSpace(text)), strings.ToLower(strings.TrimSpace(query))
+	s := scoreSequential(text, query)
+	if s == scatteredBand && !scatteredFromWordStart(text, query) {
+		return 0
+	}
+	return s
+}
+
+// scatteredBand is the score of letters that occur in order but do not form a phrase.
+const scatteredBand = 20
+
+// scatteredFromWordStart reports whether the letters of query, at least two, occur in order in text with the first at the
+// start of a word. The caller has checked that they occur in order.
+func scatteredFromWordStart(text, query string) bool {
+	letters := strings.ReplaceAll(query, " ", "")
+	if len([]rune(letters)) < 2 {
+		return false
+	}
+	first, _ := utf8.DecodeRuneInString(letters)
+	rt := []rune(text)
+	for i, r := range rt {
+		if r == first && (i == 0 || !isWordChar(rt[i-1])) {
+			return inOrderRunes(rt[i+1:], []rune(letters)[1:])
+		}
+	}
+	return false
+}
+
+// inOrderRunes reports whether every rune of letters occurs in text, each after the one before.
+func inOrderRunes(text, letters []rune) bool {
+	for _, want := range letters {
+		at := slices.Index(text, want)
+		if at < 0 {
+			return false
+		}
+		text = text[at+1:]
+	}
+	return true
 }
 
 var urlRe = regexp.MustCompile(`(?i)^[\w-]+(\.[\w-]+)+([/:?#].*)?$`)
