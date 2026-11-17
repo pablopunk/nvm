@@ -8,15 +8,15 @@ import (
 	"github.com/pablopunk/nvm/native/internal/search"
 )
 
-// TestExtensionRowWithoutAnAuthorOffersRenameAndTweak checks an installed extension the builder did not make: 1.x
-// offers Rename and Tweak with AI for any file-backed extension, and Duplicate, Submit as PR and Remove action only for
+// TestExtensionRowWithoutAnAuthorOffersRenameTweakAndRemove checks an installed extension the builder did not make: it
+// offers Rename, Tweak with AI and Remove extension for any file-backed extension, and Duplicate and Submit as PR only for
 // generated ones. Each one that is listed runs.
 const tweakWithAITitle = "Tweak with AI"
 
-func TestExtensionRowWithoutAnAuthorOffersRenameAndTweak(t *testing.T) {
+func TestExtensionRowWithoutAnAuthorOffersRenameTweakAndRemove(t *testing.T) {
 	p := goldenPalette(t)
 	actions := p.extensionAuthoringActions("acme.notes", "", "Notes")
-	if got, want := searchActionTitles(actions), []string{renameTitle, tweakWithAITitle}; !slices.Equal(got, want) {
+	if got, want := searchActionTitles(actions), []string{renameTitle, tweakWithAITitle, removeActionTitle}; !slices.Equal(got, want) {
 		t.Fatalf("authoring actions = %v, want %v", got, want)
 	}
 	for _, a := range actions {

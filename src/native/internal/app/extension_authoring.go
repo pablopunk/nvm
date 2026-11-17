@@ -19,12 +19,12 @@ const (
 	duplicateTitle    = "Duplicate"
 	renameTitle       = "Rename"
 	submitPRTitle     = "Submit as PR"
-	removeActionTitle = "Remove action"
+	removeActionTitle = "Remove extension"
 )
 
 // extensionAuthoringActions are the actions 1.x adds to the menu of an extension row, after its shortcut and alias, in
-// 1.x order: Duplicate and Submit as PR for an extension the AI builder made, Rename and Tweak with AI for any
-// extension, and Remove action for an extension the builder made. Override with AI and Restore original are not listed:
+// 1.x order: Duplicate and Submit as PR for an extension the AI builder made, then Rename, Tweak with AI and Remove
+// extension for any extension the user installed, whoever wrote it. Override with AI and Restore original are not listed:
 // 1.x shows them only for a row with a default action, which no extension row has.
 func (p *App) extensionAuthoringActions(extID, commandID, title string) []search.Action {
 	owned := p.ownedByBuilder(extID)
@@ -39,11 +39,9 @@ func (p *App) extensionAuthoringActions(extID, commandID, title string) []search
 		}
 	}
 	out = append(out, p.builtInRowActions(extID, commandID, title)...)
-	if owned {
-		out = append(out, search.Action{Title: removeActionTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
-			h.Push(p.removeActionConfirmation(extID, title))
-		}})
-	}
+	out = append(out, search.Action{Title: removeActionTitle, Dismiss: search.DismissNever, Run: func(h search.Host) {
+		h.Push(p.removeActionConfirmation(extID, title))
+	}})
 	return out
 }
 
