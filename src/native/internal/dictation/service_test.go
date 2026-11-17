@@ -107,8 +107,14 @@ func newHarness(t *testing.T) harness {
 		Transcriber: h.transcriber,
 		OnLevel:     func(level float64, _ func() bool) { h.levels <- level },
 		Background:  func(_ string, fn func()) { fn() },
+		Retry:       RetryPolicy{Sleep: noWait},
 	})
 	return h
+}
+
+// noWait is the retry pause of the tests: none, so every retry runs at once.
+func noWait(ctx context.Context, _ time.Duration) error {
+	return ctx.Err()
 }
 
 // speech returns seconds of a constant-level signal, enough to exercise the frame and segment logic.
@@ -220,8 +226,8 @@ func TestAFailedPreparationIsNotSentAsPrepared(t *testing.T) {
 	}
 }
 
-func TestStartReportsTheMicrophoneFailureAndStaysIdle(t *testing.T) {
-	for _, want := range []error{platform.ErrNotFound, platform.ErrDenied, platform.ErrUnsupported} {
+func TestStartReportsAPermanentMicrophoneFailureAtOnceAndStaysIdle(t *testing.T) {
+	for _, want := range []error{platform.ErrDenied, platform.ErrUnsupported} {
 		h := newHarness(t)
 		h.mic.FailNext(fake.OpMicrophoneOpen, want)
 		if err := h.service.Start(""); !errors.Is(err, want) {
@@ -229,6 +235,9 @@ func TestStartReportsTheMicrophoneFailureAndStaysIdle(t *testing.T) {
 		}
 		if got := h.service.Snapshot().Phase; got != PhaseIdle {
 			t.Fatalf("phase after a refused microphone = %s, want idle", got)
+		}
+		if opened := h.mic.Opened(); len(opened) != 0 {
+			t.Fatalf("a permanent failure was retried: opened %v", opened)
 		}
 	}
 }

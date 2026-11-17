@@ -60,7 +60,8 @@ func writeHistory(ctx api.Context, entries []history.Entry) error {
 }
 
 // historyView is the Dictation History list: the unfinished dictations with Retry, then the transcripts with Copy and
-// Delete. A list over the cap drops the oldest, as the history keeps MaxEntries of each kind.
+// Delete. Transcripts past the cap drop the oldest; saved recordings are never dropped here, since their words exist
+// nowhere else until a retry succeeds.
 func (e Extension) historyView(ctx api.Context) api.View {
 	entries, saved := e.retainedHistory(ctx)
 	items := make([]api.Item, 0, len(saved)+len(entries))
@@ -82,60 +83,21 @@ func (e Extension) historyView(ctx api.Context) api.View {
 	return view
 }
 
-// retainedHistory returns the transcripts and saved dictations to show. Together they stay within the cap; the dictations
-// past it are deleted, and so are the transcripts.
+// retainedHistory returns the transcripts and saved dictations to show. The transcripts stay within the cap, and the
+// ones past it are deleted; every saved dictation is shown until it is transcribed or the user deletes it.
 func (e Extension) retainedHistory(ctx api.Context) ([]history.Entry, []api.SavedDictation) {
 	entries := e.readHistory(ctx)
 	saved, err := ctx.Dictation().Recordings()
 	if err != nil {
 		saved = nil
 	}
-	kept := keptIDs(entries, saved)
-	var dropped []api.SavedDictation
-	var shownRecordings []api.SavedDictation
-	for _, recording := range saved {
-		if kept[recording.ID] {
-			shownRecordings = append(shownRecordings, recording)
-		} else {
-			dropped = append(dropped, recording)
-		}
+	if len(entries) <= history.MaxEntries {
+		return entries, saved
 	}
-	for _, recording := range dropped {
-		_ = ctx.Dictation().DeleteRecording(recording.ID)
-	}
-	var shownEntries []history.Entry
-	for _, entry := range entries {
-		if kept[entry.ID] {
-			shownEntries = append(shownEntries, entry)
-		}
-	}
-	if len(shownEntries) != len(entries) {
-		_ = writeHistory(ctx, shownEntries)
-	}
-	return shownEntries, shownRecordings
-}
-
-// keptIDs returns the ids within the cap, newest first across transcripts and saved dictations.
-func keptIDs(entries []history.Entry, saved []api.SavedDictation) map[string]bool {
-	type stamped struct {
-		id        string
-		createdAt int64
-	}
-	all := make([]stamped, 0, len(entries)+len(saved))
-	for _, entry := range entries {
-		all = append(all, stamped{entry.ID, entry.CreatedAt})
-	}
-	for _, recording := range saved {
-		all = append(all, stamped{recording.ID, recording.CreatedAtMs})
-	}
-	sort.SliceStable(all, func(i, j int) bool { return all[i].createdAt > all[j].createdAt })
-	kept := map[string]bool{}
-	for i, item := range all {
-		if i < history.MaxEntries {
-			kept[item.id] = true
-		}
-	}
-	return kept
+	sort.SliceStable(entries, func(i, j int) bool { return entries[i].CreatedAt > entries[j].CreatedAt })
+	shown := entries[:history.MaxEntries]
+	_ = writeHistory(ctx, shown)
+	return shown, saved
 }
 
 // recordingItem is the row of an unfinished dictation: Enter retries it, and its menu deletes the saved audio. A

@@ -28,6 +28,7 @@ func TestAFailedChosenDeviceFallsBackToTheDefaultAndWarns(t *testing.T) {
 
 func TestAFailedFallbackReportsTheChosenDevicesError(t *testing.T) {
 	h := newHarness(t)
+	h.service.cfg.Retry.Attempts = 1
 	h.mic.FailNext(fake.OpMicrophoneOpen, platform.ErrNotFound)
 	h.mic.FailNext(fake.OpMicrophoneOpen, platform.ErrUnsupported)
 	if err := h.service.Start("usb-mic"); !errors.Is(err, platform.ErrNotFound) {

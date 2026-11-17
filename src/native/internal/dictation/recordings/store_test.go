@@ -86,22 +86,6 @@ func TestAnIncompleteSaveIsNotListed(t *testing.T) {
 	}
 }
 
-func TestTheOldestRecordingsGoPastTheLimit(t *testing.T) {
-	store, _ := newStore(t)
-	for index := range MaxRecordings + 2 {
-		if err := store.Save(fmt.Sprintf("dictation-%03d", index), [][]byte{[]byte("a")}); err != nil {
-			t.Fatalf("Save %d: %v", index, err)
-		}
-	}
-	list, _ := store.List()
-	if len(list) != MaxRecordings {
-		t.Fatalf("kept %d recordings, want %d", len(list), MaxRecordings)
-	}
-	if list[len(list)-1].ID != "dictation-002" {
-		t.Fatalf("oldest kept = %s, want dictation-002", list[len(list)-1].ID)
-	}
-}
-
 func TestIdentifiersOutsideTheDictationPatternAreRefused(t *testing.T) {
 	store, files := newStore(t)
 	for _, id := range []string{"", "../escape", "dictation-../x", "notes-1", "dictation-"} {
@@ -125,36 +109,6 @@ func TestSegmentCountIsBounded(t *testing.T) {
 	}
 }
 
-func TestTheNewestRecordingsStayWithinTheTotalSize(t *testing.T) {
-	store, files := newStore(t)
-	store.maxBytes = 30
-	chunk := make([]byte, 11)
-	for _, id := range []string{"dictation-a", "dictation-b", "dictation-c", "dictation-d"} {
-		if err := store.Save(id, [][]byte{chunk}); err != nil {
-			t.Fatalf("Save(%s): %v", id, err)
-		}
-	}
-	list, _ := store.List()
-	if len(list) != 2 || list[0].ID != "dictation-d" || list[1].ID != "dictation-c" {
-		t.Fatalf("kept %+v, want only the two newest within the size bound", list)
-	}
-	entries, _ := files.ReadDir(folder)
-	if len(entries) != 4 {
-		t.Fatalf("%d files left, want two records and two segments", len(entries))
-	}
-}
-
-func TestTheNewestRecordingIsKeptEvenWhenItAloneIsOverTheSize(t *testing.T) {
-	store, _ := newStore(t)
-	store.maxBytes = 30
-	if err := store.Save("dictation-huge", [][]byte{make([]byte, 31)}); err != nil {
-		t.Fatalf("Save: %v", err)
-	}
-	if list, _ := store.List(); len(list) != 1 {
-		t.Fatalf("kept %+v, want the one recording the user can retry", list)
-	}
-}
-
 func TestAFailureReasonSurvivesARestart(t *testing.T) {
 	store, files := newStore(t)
 	if err := store.Save("dictation-failed", [][]byte{[]byte("a")}); err != nil {
@@ -173,18 +127,68 @@ func TestAFailureReasonSurvivesARestart(t *testing.T) {
 	}
 }
 
-func TestSegmentsOfAnIncompleteSaveAreSweptOnTheNextSave(t *testing.T) {
+func TestADictationIsListedFromItsFirstSegmentAndGrowsInPlace(t *testing.T) {
+	store, _ := newStore(t)
+	if err := store.SaveSegment("dictation-live", 0, []byte("first sec")); err != nil {
+		t.Fatalf("SaveSegment: %v", err)
+	}
+	list, err := store.List()
+	if err != nil || len(list) != 1 || list[0].SegmentCount != 1 || list[0].Failure != "" {
+		t.Fatalf("List = %+v, %v; want the dictation listed as unfinished from its first segment", list, err)
+	}
+	created := list[0].CreatedAt
+	if err := store.SaveSegment("dictation-live", 0, []byte("first minute")); err != nil {
+		t.Fatalf("SaveSegment again: %v", err)
+	}
+	if err := store.SaveSegment("dictation-live", 1, []byte("second")); err != nil {
+		t.Fatalf("SaveSegment 1: %v", err)
+	}
+	got, err := store.Load("dictation-live")
+	if err != nil || len(got) != 2 || string(got[0]) != "first minute" || string(got[1]) != "second" {
+		t.Fatalf("Load = %q, %v; want the replaced first segment and the second", got, err)
+	}
+	if list, _ := store.List(); list[0].CreatedAt != created {
+		t.Fatalf("CreatedAt moved from %d to %d; a dictation keeps the time it started", created, list[0].CreatedAt)
+	}
+}
+
+func TestRecordingsAreNeverPruned(t *testing.T) {
+	store, _ := newStore(t)
+	for index := range 150 {
+		if err := store.Save(fmt.Sprintf("dictation-%03d", index), [][]byte{make([]byte, 1<<10)}); err != nil {
+			t.Fatalf("Save %d: %v", index, err)
+		}
+	}
+	if list, _ := store.List(); len(list) != 150 {
+		t.Fatalf("kept %d recordings, want all 150: unfinished audio is never dropped", len(list))
+	}
+}
+
+func TestARecordWithoutAudioIsNotListed(t *testing.T) {
 	store, files := newStore(t)
 	if err := files.MkdirAll(folder, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := files.WriteFile(folder+"/dictation-half.0.webm", []byte("audio"), 0o600); err != nil {
+	if err := files.WriteFile(folder+"/dictation-empty.json", []byte(`{"id":"dictation-empty","createdAt":1}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Save("dictation-next", [][]byte{[]byte("a")}); err != nil {
+	if list, err := store.List(); err != nil || len(list) != 0 {
+		t.Fatalf("List = %+v, %v; want a record with no segment skipped", list, err)
+	}
+	if _, err := store.Load("dictation-empty"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("Load = %v, want ErrNotFound", err)
+	}
+}
+
+func TestALeftoverTemporaryFileIsNotASegment(t *testing.T) {
+	store, files := newStore(t)
+	if err := store.SaveSegment("dictation-cut", 0, []byte("a")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := files.Stat(folder + "/dictation-half.0.webm"); err == nil {
-		t.Fatal("the orphan segment is still on disk")
+	if err := files.WriteFile(folder+"/dictation-cut.1.webm.tmp", []byte("half"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := store.Load("dictation-cut"); err != nil || len(got) != 1 {
+		t.Fatalf("Load = %q, %v; want only the complete segment", got, err)
 	}
 }

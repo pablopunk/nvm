@@ -11,6 +11,9 @@ import (
 // SavedRecordingNotice follows a failure whose recording was kept, so the user knows where to retry it.
 const SavedRecordingNotice = "Your recording was saved. Open Dictation History to retry."
 
+// cancelledRecordingNote is the reason the history shows for a dictation the user cancelled after speaking.
+const cancelledRecordingNote = "Cancelled before it was transcribed."
+
 // FailureMessage says what went wrong in a dictation, in words the user can act on. It is the single copy source
 // for dictation failures, so the indicator, the toast and the account notice agree.
 func FailureMessage(err error) string {
@@ -33,10 +36,17 @@ func FailureMessage(err error) string {
 	if errors.Is(err, ErrNotReady) {
 		return "The microphone did not start picking up sound. Check that it is connected, then try again."
 	}
+	if errors.Is(err, ErrNoTranscriber) {
+		return "Cloud transcription is not set up. Sign in to use API dictation."
+	}
+	var typed *backend.Error
+	if errors.As(err, &typed) {
+		return backendFailureMessage(typed)
+	}
 	if message, ok := microphoneFailureMessage(err); ok {
 		return message
 	}
-	return backendFailureMessage(err)
+	return "Dictation failed. Try again."
 }
 
 func microphoneFailureMessage(err error) (string, bool) {
@@ -45,17 +55,17 @@ func microphoneFailureMessage(err error) (string, bool) {
 		return "No microphone was found. Connect one, or choose another in Dictation settings.", true
 	case errors.Is(err, platform.ErrDenied):
 		return "Microphone access is denied. Enable it in System Settings → Privacy & Security → Microphone.", true
-	case errors.Is(err, platform.ErrUnsupported):
+	case unsupportedSystem(err):
 		return "Dictation is not available on this system yet.", true
+	case errors.Is(err, platform.ErrUnsupported):
+		return "The microphone could not be used just now. Try again.", true
 	}
 	return "", false
 }
 
-func backendFailureMessage(err error) string {
-	var typed *backend.Error
-	if !errors.As(err, &typed) {
-		return "Dictation failed. Try again."
-	}
+// backendFailureMessage explains a failed backend call. It is checked before the microphone's errors because a lost
+// connection carries the OS error behind it, which must not read as a microphone or system failure.
+func backendFailureMessage(typed *backend.Error) string {
 	switch typed.Kind {
 	case backend.KindUnauthorized:
 		return "Sign in to use API dictation."

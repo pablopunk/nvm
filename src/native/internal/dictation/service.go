@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math"
 	"sync"
 	"sync/atomic"
@@ -33,6 +32,8 @@ var (
 	ErrCodec        = errors.New("dictation needs the Opus codec")
 	ErrNoRecordings = errors.New("dictation has no recording store")
 	ErrNotReady     = errors.New("dictation microphone did not become ready")
+	// ErrNoTranscriber is a dictation with audio and no backend to send it to; the audio is kept.
+	ErrNoTranscriber = errors.New("dictation has no transcription service")
 )
 
 // defaultReadyTimeout bounds the wait for a Bluetooth microphone to start picking up sound.
@@ -49,9 +50,11 @@ type Config struct {
 	OnLevel     func(level float64, current func() bool)
 	Background  func(name string, fn func())
 	Warn        func(event string, fields map[string]any)
-	// Recorder keeps the audio until the text is in. Nil keeps no audio, so nothing can be retried.
+	// Recorder keeps the audio on disk from the first frame until the text is in. Nil keeps no audio, so nothing can
+	// be retried.
 	Recorder Recorder
-	// Retry bounds the automatic retries of a transient transcription failure; the zero value is the default policy.
+	// Retry bounds the automatic retries of every step that fails for a passing reason: opening the microphone, the
+	// readiness wait, reopening a stream that failed mid-recording and each transcription. The zero value is the default.
 	Retry RetryPolicy
 	// ReadyTimeout bounds the readiness wait; zero means defaultReadyTimeout.
 	ReadyTimeout time.Duration
@@ -87,6 +90,16 @@ func supervisedBackground(name string, fn func()) {
 	safego.Go(name, func(context.Context) { fn() })
 }
 
+// ActiveRecordingID names the dictation that is recording or being transcribed now, or "" when there is none.
+func (s *Service) ActiveRecordingID() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cur == nil {
+		return ""
+	}
+	return s.cur.id
+}
+
 // Snapshot returns the phase and the latest level.
 func (s *Service) Snapshot() Snapshot {
 	s.mu.Lock()
@@ -96,9 +109,10 @@ func (s *Service) Snapshot() Snapshot {
 }
 
 // Start prepares the backend, opens deviceID (or the default device when it is "") and starts capturing. It returns
-// once the stream is open, so a missing or refused microphone is reported here and not later. A Bluetooth microphone
-// also has to start delivering sound first (ErrNotReady when it does not), so its first words are not lost. A Cancel
-// while the microphone is still opening ends the start with ErrCancelled, and the stream that opened late is closed.
+// once the stream is open, so a missing or refused microphone is reported here and not later. Opening is retried under
+// the retry policy while it fails for a passing reason. A Bluetooth microphone also has to start delivering sound first
+// (ErrNotReady when it does not), so its first words are not lost. A Cancel while the microphone is still opening ends
+// the start with ErrCancelled, and the stream that opened late is closed.
 func (s *Service) Start(deviceID string) error {
 	return s.StartWithLevel(deviceID, nil)
 }
@@ -115,15 +129,18 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	op := newOperation()
 	op.levelSink = sink
 	op.onLevel = func(level float64) { s.publishOperationLevel(op, level) }
+	op.retry = s.cfg.Retry
+	op.onRetry = s.retryWarning("dictation.capture-retry")
+	op.reopen = func(ctx context.Context) (platform.MicrophoneStream, error) { return s.openMicrophone(ctx, deviceID) }
 	s.starting = op
 	s.mu.Unlock()
 
-	if s.needsReadiness(deviceID) {
+	if s.needsReadiness(op.ctx, deviceID) {
 		op.ready = make(chan struct{})
 		op.tracker = &readinessTracker{}
 	}
 	s.prepare(op)
-	stream, encoder, err := s.openCapture(op.ctx, deviceID)
+	stream, encoder, err := s.openCaptureWithRetry(op, deviceID)
 
 	s.mu.Lock()
 	if s.starting != op {
@@ -142,6 +159,9 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 		return err
 	}
 	op.stream, op.encoder = stream, encoder
+	if s.cfg.Recorder != nil {
+		op.journal = newJournal(s.cfg.Recorder, op.id, op.track(), s.warn)
+	}
 	s.cur = op
 	safego.Go("dictation.capture", func(context.Context) { op.capture() })
 	s.mu.Unlock()
@@ -151,37 +171,13 @@ func (s *Service) StartWithLevel(deviceID string, sink func(float64, string, fun
 	return s.awaitReady(op)
 }
 
-// openCapture opens the microphone and the encoder for one dictation. Either failure closes what was opened.
-func (s *Service) openCapture(ctx context.Context, deviceID string) (platform.MicrophoneStream, platform.OpusEncoder, error) {
-	stream, err := s.openMicrophone(ctx, deviceID)
-	if err != nil {
-		return nil, nil, err
-	}
-	encoder, err := s.cfg.Codec.NewEncoder(Format())
-	if err != nil {
-		_ = stream.Close()
-		return nil, nil, fmt.Errorf("%w: %w", ErrCodec, err)
-	}
-	return stream, encoder, nil
-}
-
-// openMicrophone opens deviceID. When a chosen device fails for a reason other than a refusal, the default device
-// stands in, as the desktop app does; if that fails too, the chosen device's error is returned.
-func (s *Service) openMicrophone(ctx context.Context, deviceID string) (platform.MicrophoneStream, error) {
-	stream, err := s.cfg.Microphone.Open(ctx, deviceID, Format())
-	if err == nil || deviceID == "" || errors.Is(err, platform.ErrDenied) {
-		return stream, err
-	}
-	s.warn("dictation.device-fallback", err)
-	if fallback, fallbackErr := s.cfg.Microphone.Open(ctx, "", Format()); fallbackErr == nil {
-		return fallback, nil
-	}
-	return nil, err
-}
-
-func (s *Service) warn(event string, err error) {
-	if s.cfg.Warn != nil {
-		s.cfg.Warn(event, map[string]any{"error": err.Error()})
+// retryWarning returns the hook that logs each automatic retry of one step, so a failure the user never sees still
+// names the call that failed.
+func (s *Service) retryWarning(event string) func(attempt int, err error) {
+	return func(attempt int, err error) {
+		if s.cfg.Warn != nil {
+			s.cfg.Warn(event, map[string]any{"error": err.Error(), "attempt": attempt})
+		}
 	}
 }
 
@@ -213,7 +209,8 @@ func (s *Service) releasePreparation(op *operation, userCancelled bool) {
 }
 
 // Stop ends the recording, sends the segments to the backend and returns the joined text. An empty text means no
-// speech was captured or the speech was silent; the caller shows that as a state, not as an error.
+// speech was captured or the speech was silent; the caller shows that as a state, not as an error. Whatever happens,
+// audio that holds sound stays in the recorder until its text is in.
 func (s *Service) Stop() (string, error) {
 	s.mu.Lock()
 	op := s.cur
@@ -225,7 +222,7 @@ func (s *Service) Stop() (string, error) {
 	s.level.Store(0)
 	s.mu.Unlock()
 
-	_ = op.stream.Close()
+	op.endCapture()
 	<-op.done
 	text, err := s.finish(op)
 	if err != nil && !errors.Is(err, ErrCancelled) || !op.hasSpeechAudio() {
@@ -236,38 +233,36 @@ func (s *Service) Stop() (string, error) {
 	return text, err
 }
 
-// finish turns a captured operation into text. A microphone that failed mid-recording fails the dictation.
+// finish turns a captured operation into text. The recording is on disk before anything is sent, and it stays there on
+// every failure: a microphone that failed mid-recording, no backend, a cancellation, or a transcription that failed
+// after its retries.
 func (s *Service) finish(op *operation) (string, error) {
 	defer func() { _ = op.encoder.Close() }()
-	if op.failure != nil {
+	saved := op.journal.finish(op.segments)
+	if !op.hasSpeechAudio() {
 		return "", op.failure
 	}
-	if !op.hasSpeechAudio() {
-		return "", nil
+	if op.failure != nil {
+		return "", s.keepFailed(op, saved, op.failure)
 	}
 	if s.cfg.Transcriber == nil {
-		return "", errors.New("dictation has no transcription service")
+		return "", s.keepFailed(op, saved, ErrNoTranscriber)
 	}
 	select {
 	case <-op.prepared:
 	case <-op.ctx.Done():
+		s.keepCancelled(op, saved)
 		return "", ErrCancelled
 	}
-	files := segmentFiles(op)
-	saved := s.keepRecording(op.id, files)
-	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, s.cfg.Retry, op.id, op.preparedOK, files)
+	text, err := transcribeFiles(op.ctx, s.cfg.Transcriber, s.cfg.Retry, op.id, op.preparedOK, segmentFiles(op), s.retryWarning("dictation.transcribe-retry"))
 	if op.ctx.Err() != nil {
-		s.discardRecording(op.id, saved)
+		s.keepCancelled(op, saved)
 		return "", ErrCancelled
 	}
 	if err != nil {
-		if saved {
-			s.markFailed(op.id, err)
-			return "", &SavedError{Err: err}
-		}
-		return "", err
+		return "", s.keepFailed(op, saved, err)
 	}
-	s.discardRecording(op.id, saved)
+	s.discardRecording(op.id)
 	return text, nil
 }
 
@@ -312,34 +307,14 @@ func (s *Service) release(op *operation) {
 	}
 }
 
-// Cancel drops the current dictation, or the one still opening: the microphone closes, nothing more is sent, the
-// backend's preparation is released as a user cancel, and a Stop that is waiting on the backend returns ErrCancelled.
-// Cancel on an idle service does nothing.
-func (s *Service) Cancel() {
-	s.mu.Lock()
-	op, stream := s.cur, platform.MicrophoneStream(nil)
-	if op != nil {
-		stream = op.stream
-	} else {
-		op = s.starting
-	}
-	s.cur, s.starting = nil, nil
-	s.phase = PhaseIdle
-	s.level.Store(0)
-	s.mu.Unlock()
-	if op == nil {
-		return
-	}
-	s.releasePreparation(op, true)
-	if stream != nil {
-		_ = stream.Close()
-	}
-}
-
 // newOperation returns a dictation that has not opened its microphone yet.
 func newOperation() *operation {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &operation{id: newOperationID(), ctx: ctx, cancel: cancel, done: make(chan struct{})}
+	captureCtx, stopCapture := context.WithCancel(ctx)
+	return &operation{
+		id: newOperationID(), ctx: ctx, cancel: cancel, captureCtx: captureCtx, stopCapture: stopCapture,
+		done: make(chan struct{}),
+	}
 }
 
 // newOperationID returns a random key for one dictation, short enough for the backend's idempotency header.

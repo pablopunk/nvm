@@ -22,12 +22,17 @@ func newFakeRecorder() *fakeRecorder {
 	return &fakeRecorder{saved: map[string][][]byte{}, failed: map[string]string{}}
 }
 
-func (r *fakeRecorder) Save(id string, segments [][]byte) error {
+func (r *fakeRecorder) SaveSegment(id string, index int, audio []byte) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.saveErr != nil {
 		return r.saveErr
 	}
+	segments := r.saved[id]
+	for len(segments) <= index {
+		segments = append(segments, nil)
+	}
+	segments[index] = audio
 	r.saved[id] = segments
 	return nil
 }
