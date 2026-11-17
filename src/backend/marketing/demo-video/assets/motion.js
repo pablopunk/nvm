@@ -73,8 +73,11 @@ function state(group, k, count, t) {
 }
 
 // A theme is a look, a wallpaper and a Dock tint. The tint sweeps across the Dock from left to right.
+// The menu bar text flips at the midpoint instead of fading, so it never sits grey on a grey bar mid-change.
 function setTheme(to, t, dur) {
-  tl.to("#stage", { ...to, duration: dur, ease: "power1.inOut" }, t);
+  const { "--bar-fg": barText, "--bar-glow": barGlow, ...rest } = to;
+  tl.to("#stage", { ...rest, duration: dur, ease: "power1.inOut" }, t);
+  tl.set("#stage", { "--bar-fg": barText, "--bar-glow": barGlow }, t + dur / 2);
 }
 function tintDock(color, t) {
   tl.to(".dk .tint", { backgroundColor: color, duration: 0.28, ease: "power1.inOut", stagger: 0.04 }, t);

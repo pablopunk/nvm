@@ -18,6 +18,8 @@ body { font-family: "Inter", sans-serif; -webkit-font-smoothing: antialiased; fo
 #menubar {
   position: absolute; left: 0; right: 0; top: 0; height: 24px; z-index: 50; display: flex; align-items: center; gap: 19px;
   padding: 0 10px 0 16px; font-size: 13px; color: var(--bar-fg); text-shadow: 0 0 4px var(--bar-glow);
+  /* The macOS menu bar material: frosted, tinted light or dark with the appearance, with a hairline under it. */
+  background: var(--bar-bg); backdrop-filter: blur(30px) saturate(1.8); box-shadow: 0 0.5px 0 var(--bar-edge);
 }
 #menubar .app { font-weight: 700; }
 #menubar .spacer { flex: 1; }

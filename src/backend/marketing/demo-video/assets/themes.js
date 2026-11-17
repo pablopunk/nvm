@@ -14,6 +14,7 @@ const DARK = {
   "--tone-yellow": "rgba(223, 206, 132, 1)", "--tone-blue": "rgba(169, 201, 223, 1)", "--tone-purple": "rgba(200, 182, 223, 1)",
   "--tone-green": "rgba(172, 209, 178, 1)", "--tone-red": "rgba(224, 170, 170, 1)", "--tone-orange": "rgba(223, 189, 150, 1)",
   "--bar-fg": "rgba(255, 255, 255, 1)", "--bar-glow": "rgba(0, 0, 0, 0.3)", "--bar-hl": "rgba(255, 255, 255, 0.2)",
+  "--bar-bg": "rgba(28, 28, 32, 0.62)", "--bar-edge": "rgba(255, 255, 255, 0.08)",
   "--dock-bg": "rgba(48, 48, 54, 0.5)", "--dock-edge": "rgba(255, 255, 255, 0.16)", "--dock-hi": "rgba(255, 255, 255, 0.1)",
 };
 const LIGHT = {
@@ -28,6 +29,7 @@ const LIGHT = {
   "--tone-yellow": "rgba(116, 93, 0, 1)", "--tone-blue": "rgba(40, 93, 130, 1)", "--tone-purple": "rgba(101, 76, 134, 1)",
   "--tone-green": "rgba(55, 107, 69, 1)", "--tone-red": "rgba(152, 70, 70, 1)", "--tone-orange": "rgba(135, 83, 37, 1)",
   "--bar-fg": "rgba(29, 29, 31, 1)", "--bar-glow": "rgba(255, 255, 255, 0.25)", "--bar-hl": "rgba(0, 0, 0, 0.12)",
+  "--bar-bg": "rgba(246, 246, 248, 0.68)", "--bar-edge": "rgba(0, 0, 0, 0.1)",
   "--dock-bg": "rgba(255, 255, 255, 0.3)", "--dock-edge": "rgba(255, 255, 255, 0.55)", "--dock-hi": "rgba(255, 255, 255, 0.45)",
 };
 
