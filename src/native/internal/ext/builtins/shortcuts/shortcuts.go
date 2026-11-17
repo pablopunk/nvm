@@ -53,7 +53,8 @@ func (Extension) RunAction(ctx api.Context, in api.Invocation) (api.Result, erro
 // shortcutsView is the page: one row per bound shortcut, with its label as the accessory.
 func shortcutsView(ctx api.Context) api.View {
 	records := ctx.Shortcuts().List()
-	rows := make([]api.Item, 0, len(records))
+	rows := make([]api.Item, 0, len(records)+1)
+	rows = append(rows, paletteRow(ctx.Shortcuts().Palette()))
 	for _, record := range records {
 		rows = append(rows, shortcutRow(record))
 	}

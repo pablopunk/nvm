@@ -13,8 +13,8 @@ const PaletteID = "palette"
 // palette, or hides it when it is showing, as the summon shortcut does. PaletteID opens it.
 const PaletteToggleID = "palette-toggle"
 
-// PaletteTitle names the palette hotkey in its recorder, as 1.x does. The palette hotkey is not a row of the list: it
-// changes in Settings.
+// PaletteTitle names the palette hotkey in its recorder, as 1.x does. The Keyboard Shortcuts list shows the palette
+// hotkey as its first row, and Settings changes it too.
 const PaletteTitle = "Set Nevermind shortcut"
 
 // Action is an action the user can give a shortcut: its stable ID, and the title the list shows.

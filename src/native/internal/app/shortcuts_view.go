@@ -37,6 +37,9 @@ func (p *App) runShortcutAction(h search.Host, op, target string) {
 
 // shortcutEntry is the table's entry for an action. An action the table does not list is named by its ID.
 func (p *App) shortcutEntry(actionID string) shortcuts.Entry {
+	if actionID == shortcuts.PaletteID {
+		return shortcuts.Entry{ActionID: shortcuts.PaletteID, Title: shortcuts.PaletteTitle}
+	}
 	for _, entry := range p.shortcutsManager().Entries() {
 		if entry.ActionID == actionID {
 			return entry

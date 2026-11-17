@@ -34,3 +34,25 @@ func removeAction(actionID string) api.Action {
 func copyCommandAction(actionID string) api.Action {
 	return api.Action{Kind: api.ActionShortcut, Op: api.ShortcutOpCopyCommand, Target: actionID, Title: "Copy Command Line"}
 }
+
+// Title, subtitle and accessory of the palette's own shortcut, the first row of the list.
+const (
+	paletteRowTitle    = "Open Nevermind"
+	paletteRowSubtitle = "Shows and hides the palette from anywhere"
+	paletteUnsetLabel  = "Not set"
+)
+
+// paletteRow is the shortcut that opens Nevermind. It is listed first, set or not, and can be changed but not removed
+// here: without it the palette has no way to open.
+func paletteRow(record api.ShortcutRecord) api.Item {
+	label := record.Label
+	if label == "" {
+		label = paletteUnsetLabel
+	}
+	change := recordAction(record.ActionID)
+	return api.Item{
+		ID: "shortcut:" + record.ActionID, Title: paletteRowTitle, Subtitle: paletteRowSubtitle, Icon: "keyboard",
+		Accessories: []api.Accessory{{Text: label}},
+		Primary:     api.Primary(change), Actions: []api.Action{change, copyCommandAction(record.ActionID)},
+	}
+}
