@@ -53,5 +53,13 @@ if grep -q '\.manifest\.json' "$models/all.js"; then
   echo "pi host: pi-ai still imports a dotfile" >&2
   exit 1
 fi
+# Native prebuilds for other systems are dead weight, and macOS signing refuses a binary built for another arch.
+while IFS= read -r dir; do
+  name="$(basename "$dir")"
+  case "$name" in
+    "$goos-$nodearch"|"$goos-$goarch"|"$goos-"*"$nodearch"*|"$goos-universal") ;;
+    *) rm -rf "$dir" ;;
+  esac
+done < <(find "$out/node_modules" -type d -path '*/prebuilds/*' -prune)
 rm -f "$out/package.json" "$out/package-lock.json"
 echo "pi host: $out ($(du -sh "$out" | cut -f1))"
