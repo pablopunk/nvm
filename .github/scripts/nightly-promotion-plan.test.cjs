@@ -134,7 +134,14 @@ test('a candidate needs both the repository CI and the Go app CI to pass on its 
   const sha = 'c'.repeat(40);
   const run = (conclusion) => ({
     workflow_runs: [
-      { head_sha: sha, event: 'push', run_number: 1, id: 1, status: 'completed', conclusion },
+      {
+        head_sha: sha,
+        event: 'push',
+        run_number: 1,
+        id: 1,
+        status: 'completed',
+        conclusion,
+      },
     ],
   });
   const probeFor = (failing) =>
@@ -144,10 +151,23 @@ test('a candidate needs both the repository CI and the Go app CI to pass on its 
       gh: (endpoint) =>
         endpoint.includes('/commits/')
           ? { sha }
-          : run(endpoint.includes(`/workflows/${failing}/`) ? 'failure' : 'success'),
+          : run(
+              endpoint.includes(`/workflows/${failing}/`)
+                ? 'failure'
+                : 'success',
+            ),
       identity: () => ({ status: 'verified' }),
     });
-  assert.equal(planNightlyPromotion([release(candidate)], probeFor('native.yml')).selected, null);
-  assert.equal(planNightlyPromotion([release(candidate)], probeFor('ci.yml')).selected, null);
-  assert.equal(planNightlyPromotion([release(candidate)], probeFor('none')).selected.tag, candidate);
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('native.yml')).selected,
+    null,
+  );
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('ci.yml')).selected,
+    null,
+  );
+  assert.equal(
+    planNightlyPromotion([release(candidate)], probeFor('none')).selected.tag,
+    candidate,
+  );
 });

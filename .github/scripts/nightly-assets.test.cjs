@@ -32,8 +32,10 @@ function stagedRelease({ tag, privateKey, deltas = [] }) {
     if (!NIGHTLY_UPDATER_METADATA.includes(name) && name !== 'SHA256SUMS')
       files.set(name, Buffer.from(`bytes:${name}`));
   for (const delta of deltas) files.set(delta, Buffer.from(`bytes:${delta}`));
-  const digest = (name) => crypto.createHash('sha256').update(files.get(name)).digest();
-  const sign = (name) => crypto.sign(null, digest(name), privateKey).toString('base64');
+  const digest = (name) =>
+    crypto.createHash('sha256').update(files.get(name)).digest();
+  const sign = (name) =>
+    crypto.sign(null, digest(name), privateKey).toString('base64');
   for (const metadata of NIGHTLY_UPDATER_METADATA) {
     const target = /^update-(.+)\.json$/.exec(metadata)[1];
     const archive = `nevermind-next-${VERSION}-${target}.tar.gz`;
@@ -53,7 +55,8 @@ function stagedRelease({ tag, privateKey, deltas = [] }) {
     };
     files.set(metadata, Buffer.from(JSON.stringify(manifest)));
   }
-  const hex = (name) => crypto.createHash('sha256').update(files.get(name)).digest('hex');
+  const hex = (name) =>
+    crypto.createHash('sha256').update(files.get(name)).digest('hex');
   files.set('SHA256SUMS', Buffer.from(checksumsFor([...files.keys()], hex)));
   return files;
 }
@@ -66,7 +69,8 @@ function verify(files, { tag, publicKey, name = 'update-darwin-arm64.json' }) {
     repository: REPOSITORY,
     tag,
     assetNames: [...files.keys()],
-    sha256Of: (asset) => crypto.createHash('sha256').update(files.get(asset)).digest(),
+    sha256Of: (asset) =>
+      crypto.createHash('sha256').update(files.get(asset)).digest(),
     sizeOf: (asset) => files.get(asset).length,
     publicKey,
   });
@@ -80,15 +84,27 @@ test('the release holds exactly the Go packages, with or without deltas', () => 
     VERSION,
   );
   assert.throws(
-    () => validateNightlyAssetSet(names.filter((name) => name !== 'update-linux-arm64.json'), VERSION),
+    () =>
+      validateNightlyAssetSet(
+        names.filter((name) => name !== 'update-linux-arm64.json'),
+        VERSION,
+      ),
     /Missing: \[update-linux-arm64\.json\]/,
   );
   assert.throws(
-    () => validateNightlyAssetSet([...names, 'nevermind-next-fast.zip'], VERSION),
+    () =>
+      validateNightlyAssetSet([...names, 'nevermind-next-fast.zip'], VERSION),
     /Unexpected: \[nevermind-next-fast\.zip\]/,
   );
   assert.throws(
-    () => validateNightlyAssetSet([...names, `nevermind-next-2026.1110.1-to-2026.1117.2-linux-amd64.delta`], VERSION),
+    () =>
+      validateNightlyAssetSet(
+        [
+          ...names,
+          `nevermind-next-2026.1110.1-to-2026.1117.2-linux-amd64.delta`,
+        ],
+        VERSION,
+      ),
     /Unexpected/,
   );
 });
@@ -99,9 +115,15 @@ test('a manifest must name its release, its archive and signed files', () => {
   const delta = `nevermind-next-2026.1110.1-to-${VERSION}-darwin-arm64.delta`;
   const files = stagedRelease({ tag, privateKey, deltas: [delta] });
   verify(files, { tag, publicKey });
-  assert.throws(() => verify(files, { tag: `v${VERSION}-nightly`, publicKey }), /is not in the release/);
+  assert.throws(
+    () => verify(files, { tag: `v${VERSION}-nightly`, publicKey }),
+    /is not in the release/,
+  );
   const other = signingKeys();
-  assert.throws(() => verify(files, { tag, publicKey: other.publicKey }), /not signed with the update key/);
+  assert.throws(
+    () => verify(files, { tag, publicKey: other.publicKey }),
+    /not signed with the update key/,
+  );
   const changed = JSON.parse(files.get('update-darwin-arm64.json'));
   changed.size += 1;
   files.set('update-darwin-arm64.json', Buffer.from(JSON.stringify(changed)));
@@ -111,7 +133,11 @@ test('a manifest must name its release, its archive and signed files', () => {
 test('promotion retargets the manifests and keeps their signatures valid', () => {
   const { publicKey, privateKey } = signingKeys();
   const delta = `nevermind-next-2026.1110.1-to-${VERSION}-linux-amd64.delta`;
-  const files = stagedRelease({ tag: `v${VERSION}`, privateKey, deltas: [delta] });
+  const files = stagedRelease({
+    tag: `v${VERSION}`,
+    privateKey,
+    deltas: [delta],
+  });
   for (const tag of [`v${VERSION}-dev`, `v${VERSION}-nightly`, `v${VERSION}`]) {
     for (const metadata of NIGHTLY_UPDATER_METADATA) {
       const text = retargetUpdaterMetadata({
@@ -139,17 +165,34 @@ test('promotion retargets the manifests and keeps their signatures valid', () =>
 test('SHA256SUMS lists every asset but the retargeted manifests', () => {
   const { privateKey } = signingKeys();
   const files = stagedRelease({ tag: `v${VERSION}-dev`, privateKey });
-  const hex = (name) => crypto.createHash('sha256').update(files.get(name)).digest('hex');
+  const hex = (name) =>
+    crypto.createHash('sha256').update(files.get(name)).digest('hex');
   const text = files.get('SHA256SUMS').toString('utf8');
   verifyChecksums({ text, names: [...files.keys()], sha256Hex: hex });
   assert.doesNotMatch(text, /update-.*\.json|SHA256SUMS/);
   files.set('install.sh', Buffer.from('changed'));
-  assert.throws(() => verifyChecksums({ text, names: [...files.keys()], sha256Hex: hex }), /SHA256SUMS/);
+  assert.throws(
+    () => verifyChecksums({ text, names: [...files.keys()], sha256Hex: hex }),
+    /SHA256SUMS/,
+  );
 });
 
 test('only publishable package files are release assets', () => {
-  for (const name of ['nevermind-next-1.2.3-arm64.dmg', 'nevermind-next_1.2.3_amd64.deb', 'nevermind-next-setup-1.2.3-amd64.exe', 'update-linux-arm64.json', 'install.sh', 'install.ps1'])
+  for (const name of [
+    'nevermind-next-1.2.3-arm64.dmg',
+    'nevermind-next_1.2.3_amd64.deb',
+    'nevermind-next-setup-1.2.3-amd64.exe',
+    'update-linux-arm64.json',
+    'install.sh',
+    'install.ps1',
+  ])
     assert.equal(isReleaseAsset(name), true, name);
-  for (const name of ['Nevermind Next.exe', 'nevermind-next', 'SHA256SUMS', 'PKGBUILD', 'nevermind-next-fast.zip'])
+  for (const name of [
+    'Nevermind Next.exe',
+    'nevermind-next',
+    'SHA256SUMS',
+    'PKGBUILD',
+    'nevermind-next-fast.zip',
+  ])
     assert.equal(isReleaseAsset(name), false, name);
 });

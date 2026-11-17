@@ -26,12 +26,24 @@ test('nightly selection and retention share the promotion lock', () => {
   assert.match(dev, /publish-dev:[\s\S]*?group: channel-promotion/);
 });
 test('the dev build packages the Go app for release and a dry run never publishes', () => {
-  assert.match(dev, /uses: \.\/\.github\/workflows\/native-package\.yml[\s\S]*?release: true[\s\S]*?secrets: inherit/);
-  assert.match(dev, /retarget-metadata --dir dist-nightly --version "\$VERSION" --tag "v\$\{VERSION\}-dev"/);
+  assert.match(
+    dev,
+    /uses: \.\/\.github\/workflows\/native-package\.yml[\s\S]*?release: true[\s\S]*?secrets: inherit/,
+  );
+  assert.match(
+    dev,
+    /retarget-metadata --dir dist-nightly --version "\$VERSION" --tag "v\$\{VERSION\}-dev"/,
+  );
   assert.match(dev, /publish-dev:[\s\S]*?if: \$\{\{ !inputs\.dry_run \}\}/);
   assert.match(dev, /repair-dev-pointer:[\s\S]*?!inputs\.dry_run/);
-  assert.match(nightly, /retarget-metadata --dir dev --version "\$VERSION" --tag "v\$\{VERSION\}-nightly"/);
-  assert.match(stable, /retarget-metadata --dir dev --version "\$VERSION" --tag "v\$VERSION"/);
+  assert.match(
+    nightly,
+    /retarget-metadata --dir dev --version "\$VERSION" --tag "v\$\{VERSION\}-nightly"/,
+  );
+  assert.match(
+    stable,
+    /retarget-metadata --dir dev --version "\$VERSION" --tag "v\$VERSION"/,
+  );
   for (const workflow of [nightly, stable])
     assert.match(workflow, /for workflow in ci\.yml native\.yml/);
 });

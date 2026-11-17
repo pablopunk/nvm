@@ -2,10 +2,7 @@
 
 const { compareVersions, parseVersion } = require('./nightly-versioning.cjs');
 const { selectNewestDev } = require('./promotion-selection.cjs');
-const {
-  CI_WORKFLOWS,
-  evaluateCiGate,
-} = require('./nightly-release-gates.cjs');
+const { CI_WORKFLOWS, evaluateCiGate } = require('./nightly-release-gates.cjs');
 const { execFileSync } = require('node:child_process');
 const path = require('node:path');
 

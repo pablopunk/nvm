@@ -51,7 +51,10 @@ function expectedNightlyAssetNames(version) {
 // A delta updates an earlier published version to this one; MyGo makes up to three per target when an earlier
 // version is published, and none for the first.
 function deltaAsset(name, version) {
-  const match = /^nevermind-next-(\d+\.\d+\.\d+)-to-(\d+\.\d+\.\d+)-([a-z]+-[a-z0-9]+)\.delta$/.exec(name);
+  const match =
+    /^nevermind-next-(\d+\.\d+\.\d+)-to-(\d+\.\d+\.\d+)-([a-z]+-[a-z0-9]+)\.delta$/.exec(
+      name,
+    );
   if (!match || match[2] !== version || !UPDATE_TARGETS.includes(match[3]))
     return null;
   return { from: match[1], target: match[3] };
@@ -93,9 +96,7 @@ function verifySignature(publicKey, digest, signature, label) {
     format: 'der',
     type: 'spki',
   });
-  if (
-    !crypto.verify(null, digest, key, Buffer.from(signature ?? '', 'base64'))
-  )
+  if (!crypto.verify(null, digest, key, Buffer.from(signature ?? '', 'base64')))
     throw new Error(`${label} is not signed with the update key`);
 }
 
@@ -127,20 +128,38 @@ function verifyUpdaterMetadata({
       throw new Error(`${label} ${url} is not in the release ${tag}`);
     const file = decodeURIComponent(url.slice(prefix.length));
     if (!assetNames.includes(file))
-      throw new Error(`${label} references ${file}, which is not a release asset`);
+      throw new Error(
+        `${label} references ${file}, which is not a release asset`,
+      );
     if (Number(size) !== sizeOf(file))
-      throw new Error(`${label} size for ${file} does not match the staged file`);
+      throw new Error(
+        `${label} size for ${file} does not match the staged file`,
+      );
     verifySignature(publicKey, sha256Of(file), signature, `${label} ${file}`);
     return file;
   };
-  const archive = checkFile(manifest.url, manifest.size, manifest.signature, name);
+  const archive = checkFile(
+    manifest.url,
+    manifest.size,
+    manifest.signature,
+    name,
+  );
   if (archive !== updateArchiveName(version, target))
-    throw new Error(`${name} must update to ${updateArchiveName(version, target)}`);
+    throw new Error(
+      `${name} must update to ${updateArchiveName(version, target)}`,
+    );
   for (const delta of manifest.deltas ?? []) {
-    const file = checkFile(delta.url, delta.size, delta.signature, `${name} delta`);
+    const file = checkFile(
+      delta.url,
+      delta.size,
+      delta.signature,
+      `${name} delta`,
+    );
     const parsed = deltaAsset(file, version);
     if (!parsed || parsed.target !== target || parsed.from !== delta.from)
-      throw new Error(`${name} delta ${file} does not update ${delta.from} on ${target}`);
+      throw new Error(
+        `${name} delta ${file} does not update ${delta.from} on ${target}`,
+      );
   }
   return manifest;
 }
@@ -151,7 +170,9 @@ function retargetUpdaterMetadata({ text, repository, version, tag }) {
   requireReleaseVersion(version);
   const manifest = JSON.parse(text);
   if (manifest.version !== version)
-    throw new Error(`Manifest version ${manifest.version} does not match ${version}`);
+    throw new Error(
+      `Manifest version ${manifest.version} does not match ${version}`,
+    );
   const sources = [`v${version}`, `v${version}-dev`, `v${version}-nightly`].map(
     (sourceTag) => releaseDownloadPrefix(repository, sourceTag),
   );
@@ -160,7 +181,8 @@ function retargetUpdaterMetadata({ text, repository, version, tag }) {
     throw new Error(`${tag} is not a release of ${version}`);
   const retarget = (url) => {
     const source = sources.find((prefix) => url?.startsWith?.(prefix));
-    if (!source) throw new Error(`${url} is not a file of a release of ${version}`);
+    if (!source)
+      throw new Error(`${url} is not a file of a release of ${version}`);
     return destination + url.slice(source.length);
   };
   manifest.url = retarget(manifest.url);
@@ -171,7 +193,9 @@ function retargetUpdaterMetadata({ text, repository, version, tag }) {
 // SHA256SUMS lists every asset but itself and the manifests, which promotion retargets, in sha256sum's format.
 function checksumsFor(names, sha256Hex) {
   return `${names
-    .filter((name) => name !== CHECKSUMS && !NIGHTLY_UPDATER_METADATA.includes(name))
+    .filter(
+      (name) => name !== CHECKSUMS && !NIGHTLY_UPDATER_METADATA.includes(name),
+    )
     .sort()
     .map((name) => `${sha256Hex(name)}  ${name}`)
     .join('\n')}\n`;

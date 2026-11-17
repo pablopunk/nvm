@@ -200,7 +200,8 @@ function commandValidateAssets(options) {
   verifyChecksums({
     text: fs.readFileSync(path.join(directory, CHECKSUMS), 'utf8'),
     names,
-    sha256Hex: (assetName) => sha256(path.join(directory, assetName)).toString('hex'),
+    sha256Hex: (assetName) =>
+      sha256(path.join(directory, assetName)).toString('hex'),
   });
   return { valid: true, assetCount: names.length, version, tag };
 }
@@ -228,7 +229,9 @@ function commandAssembleAssets(options) {
   const names = fileNames(directory);
   fs.writeFileSync(
     path.join(directory, CHECKSUMS),
-    checksumsFor(names, (name) => sha256(path.join(directory, name)).toString('hex')),
+    checksumsFor(names, (name) =>
+      sha256(path.join(directory, name)).toString('hex'),
+    ),
   );
   return { assetCount: names.length + 1 };
 }
