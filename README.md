@@ -7,7 +7,7 @@
 <p align="center">
   <i align="center">The command palette that extends itself</i>
   <br/>
-  <span><img src="https://cdn-icons-png.flaticon.com/512/9205/9205302.png" width="12" /> <a href="https://github.com/pablopunk/nvm/releases">Get the latest release</a></span>
+  <span><img src="https://cdn-icons-png.flaticon.com/512/9205/9205302.png" width="12" /> <a href="https://github.com/pablopunk/nvm/releases/latest">Get the latest release</a></span>
 </p>
 
 

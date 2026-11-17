@@ -3,6 +3,7 @@ package real
 import (
 	"context"
 	"errors"
+	"runtime"
 	"strings"
 	"sync"
 
@@ -26,6 +27,12 @@ func NewSelfUpdater() platform.SelfUpdater {
 
 func (u *selfUpdater) Enabled() bool {
 	return mygo.Updater.Enabled()
+}
+
+// ManagedByPackageManager: a Linux release build that MyGo cannot update was installed where only the package
+// manager writes, as the .deb installs it.
+func (u *selfUpdater) ManagedByPackageManager() bool {
+	return runtime.GOOS == "linux" && updateRepository != "" && !mygo.Updater.Enabled()
 }
 
 // SetChannel points the checks at the channel's releases. Stable reads MyGo's feed, the repository's latest release;

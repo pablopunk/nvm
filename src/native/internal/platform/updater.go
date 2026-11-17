@@ -20,6 +20,9 @@ type Release struct {
 type SelfUpdater interface {
 	// Enabled reports whether this build can update itself at all.
 	Enabled() bool
+	// ManagedByPackageManager reports that this build has updates but was installed by the system's package manager,
+	// such as a .deb, which updates it instead.
+	ManagedByPackageManager() bool
 	// SetChannel chooses the release line Check follows, by the update channel's name: "stable" (the repository's
 	// latest release), "nightly" (the newest of the nightly pointer's releases and the latest release) or "dev" (the
 	// dev pointer's releases), as 1.x does.

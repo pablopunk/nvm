@@ -130,6 +130,19 @@ func TestNoNewerVersionIsUpToDate(t *testing.T) {
 	}
 }
 
+// A .deb install has updates but its package manager owns the files, so the page says who updates it.
+func TestPackageManagedInstallSaysThePackageManagerUpdatesIt(t *testing.T) {
+	e := updatefake.Disabled()
+	e.SetManagedByPackageManager(true)
+	svc, _ := newService(e, nil)
+	if got := svc.State(); got.Status != update.StatusUnsupported || update.Message(got) != "Your package manager updates Nevermind" {
+		t.Fatalf("state = %+v", got)
+	}
+	if got := svc.Check(context.Background()); update.Message(got) != "Your package manager updates Nevermind" || e.Checks() != 0 {
+		t.Fatalf("check = %+v after %d checks", got, e.Checks())
+	}
+}
+
 // TestBuildThatCannotUpdateSaysSoBeforeAnyCheck: the page must not show "up to date" or "not checked" in a build with no
 // updater, and a channel switch there is refused with the reason instead of being saved silently.
 func TestBuildThatCannotUpdateSaysSoBeforeAnyCheck(t *testing.T) {

@@ -59,6 +59,9 @@ type NoUpdates struct {
 // unsupportedMessage is what the person reads when a check is asked of a build that cannot update.
 const unsupportedMessage = "Updates are not available in this build yet"
 
+// packageManagedMessage is what the person reads when the system's package manager installed the app and updates it.
+const packageManagedMessage = "Your package manager updates Nevermind"
+
 // State reports the unsupported status with the running version.
 func (u NoUpdates) State() State {
 	return unsupportedState(u.Version)
@@ -71,6 +74,15 @@ func (u NoUpdates) Check(context.Context) State {
 
 func unsupportedState(current string) State {
 	return State{Status: StatusUnsupported, CurrentVersion: current, Message: unsupportedMessage}
+}
+
+// engineUnsupportedState is the unsupported state of an engine that cannot update, saying when a package manager does.
+func engineUnsupportedState(engine Engine, current string) State {
+	state := unsupportedState(current)
+	if engine.ManagedByPackageManager() {
+		state.Message = packageManagedMessage
+	}
+	return state
 }
 
 // Message is the one line the person reads after a check or while an update moves. An available version is named,
@@ -90,6 +102,9 @@ func Message(s State) string {
 	case StatusFailed:
 		return failurePrefix(s.Stage) + s.Message
 	case StatusUnsupported:
+		if s.Message != "" {
+			return s.Message
+		}
 		return unsupportedMessage
 	case StatusCurrent:
 		return "Nevermind is up to date"

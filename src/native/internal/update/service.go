@@ -58,7 +58,7 @@ func NewService(o Options) *Service {
 // initialState is unsupported in a build that cannot update, so the page never waits for a check to say so.
 func initialState(engine Engine, current string) State {
 	if !engine.Enabled() {
-		return unsupportedState(current)
+		return engineUnsupportedState(engine, current)
 	}
 	return State{Status: StatusIdle, CurrentVersion: current}
 }
@@ -89,7 +89,7 @@ func (s *Service) Check(ctx context.Context) State {
 // returned for callers that need the legacy snapshot behavior of Check.
 func (s *Service) CheckOwned(ctx context.Context) (State, bool) {
 	if !s.engine.Enabled() {
-		return s.publish(unsupportedState(s.currentVersion())), true
+		return s.publish(engineUnsupportedState(s.engine, s.currentVersion())), true
 	}
 	epoch, started := s.beginCheck()
 	if !started {

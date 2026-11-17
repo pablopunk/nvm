@@ -26,14 +26,15 @@ type Install struct {
 // Engine is a scripted update.Engine. Checks answer in order and the last one repeats; installs run in order, and
 // once they are used up an install succeeds. It records what the service asked of it.
 type Engine struct {
-	mu         sync.Mutex
-	enabled    bool
-	checks     []Check
-	installs   []Install
-	channel    string
-	checkCount int
-	installCnt int
-	relaunches int
+	mu             sync.Mutex
+	enabled        bool
+	checks         []Check
+	installs       []Install
+	channel        string
+	packageManaged bool
+	checkCount     int
+	installCnt     int
+	relaunches     int
 }
 
 var _ update.Engine = (*Engine)(nil)
@@ -53,6 +54,20 @@ func (e *Engine) Enabled() bool {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return e.enabled
+}
+
+// ManagedByPackageManager reports the scripted install: a package manager's, when SetManagedByPackageManager said so.
+func (e *Engine) ManagedByPackageManager() bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.packageManaged
+}
+
+// SetManagedByPackageManager scripts an install that the system's package manager owns.
+func (e *Engine) SetManagedByPackageManager(on bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.packageManaged = on
 }
 
 // SetChannel records the channel the checks follow.
