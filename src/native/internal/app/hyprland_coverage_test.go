@@ -20,7 +20,6 @@ import (
 type hyprlandSession struct {
 	module  string
 	reloads atomic.Int32
-	mu      sync.Mutex
 	// beforeReload, when set, runs inside each reload, so a test can hold a sync at a known point.
 	beforeReload func()
 }

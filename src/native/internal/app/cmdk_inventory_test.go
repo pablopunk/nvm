@@ -66,13 +66,13 @@ func menuCases(t *testing.T) []menuCase {
 		}, menu: []string{"Open Downloads", setShortcutTitle, setAliasTitle}},
 		{kind: "extension root item", row: func(t *testing.T) search.Item {
 			return extensionRootItemRow(t)
-		}, menu: []string{"Copy note", "Copy Text", renameTitle, tweakWithAITitle}, skipPrimary: true},
+		}, menu: []string{"Copy note", "Copy Text", renameTitle, tweakWithAITitle, removeActionTitle}, skipPrimary: true},
 		{kind: "extension root item with text", row: func(t *testing.T) search.Item {
 			return rootItemRowOf(t, "acme.preview")
-		}, menu: []string{"Copy note", api.PreviewTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
+		}, menu: []string{"Copy note", api.PreviewTitle, renameTitle, tweakWithAITitle, removeActionTitle}, skipPrimary: true},
 		{kind: "extension command", row: func(t *testing.T) search.Item {
 			return extensionCommandRow(t, goldenPalette(t), "")
-		}, menu: []string{"New Note", setShortcutTitle, setAliasTitle, renameTitle, tweakWithAITitle}, skipPrimary: true},
+		}, menu: []string{"New Note", setShortcutTitle, setAliasTitle, renameTitle, tweakWithAITitle, removeActionTitle}, skipPrimary: true},
 	}
 }
 
